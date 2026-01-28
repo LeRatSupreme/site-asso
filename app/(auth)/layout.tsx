@@ -6,7 +6,13 @@ export default async function AuthLayout({
 }: {
   children: React.ReactNode
 }) {
-  const siteName = await getSetting('site_name')
+  let siteName = 'Association'
+  
+  try {
+    siteName = await getSetting('site_name') || 'Association'
+  } catch {
+    // Fallback pendant le build statique
+  }
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center relative overflow-hidden">
