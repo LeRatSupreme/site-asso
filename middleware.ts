@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { auth } from '@/app/lib/auth'
+import { auth } from '@/app/lib/auth.config'
 
 // Routes publiques (accessibles sans authentification)
 const publicRoutes = [

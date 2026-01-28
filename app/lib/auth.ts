@@ -3,40 +3,11 @@ import { PrismaAdapter } from '@auth/prisma-adapter'
 import Credentials from 'next-auth/providers/credentials'
 import { compare } from 'bcryptjs'
 import { prisma } from './prisma'
-import type { Role } from '@prisma/client'
-
-declare module 'next-auth' {
-  interface Session {
-    user: {
-      id: string
-      email: string
-      name: string | null
-      image: string | null
-      role: Role
-      isActive: boolean
-    }
-  }
-  interface User {
-    role: Role
-    isActive: boolean
-  }
-}
-
-declare module '@auth/core/jwt' {
-  interface JWT {
-    id: string
-    role: Role
-    isActive: boolean
-  }
-}
+import { authConfig } from './auth.config'
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
+  ...authConfig,
   adapter: PrismaAdapter(prisma),
-  session: { strategy: 'jwt' },
-  pages: {
-    signIn: '/login',
-    error: '/login',
-  },
   providers: [
     Credentials({
       name: 'credentials',
@@ -78,22 +49,4 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       },
     }),
   ],
-  callbacks: {
-    async jwt({ token, user }) {
-      if (user) {
-        token.id = user.id
-        token.role = user.role
-        token.isActive = user.isActive
-      }
-      return token
-    },
-    async session({ session, token }) {
-      if (token && session.user) {
-        session.user.id = token.id
-        session.user.role = token.role
-        session.user.isActive = token.isActive
-      }
-      return session
-    },
-  },
 })
