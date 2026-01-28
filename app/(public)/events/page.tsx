@@ -2,6 +2,8 @@ import { Metadata } from 'next'
 import { EventCard } from '@/app/components/EventCard'
 import { prisma } from '@/app/lib/prisma'
 
+export const dynamic = 'force-dynamic'
+
 export const metadata: Metadata = {
   title: 'Événements',
   description: 'Découvrez tous nos événements à venir et passés',

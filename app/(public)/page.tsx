@@ -7,6 +7,9 @@ import { EventCard } from '@/app/components/EventCard'
 import { prisma } from '@/app/lib/prisma'
 import { getSettings } from '@/app/lib/config'
 
+// Force le rendu dynamique (pas de pré-rendu statique)
+export const dynamic = 'force-dynamic'
+
 export default async function HomePage() {
   const settings = await getSettings([
     'site_name',

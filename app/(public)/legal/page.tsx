@@ -1,6 +1,8 @@
 import { Metadata } from 'next'
 import { prisma } from '@/app/lib/prisma'
 
+export const dynamic = 'force-dynamic'
+
 export const metadata: Metadata = {
   title: 'Mentions légales',
   description: 'Mentions légales du site',

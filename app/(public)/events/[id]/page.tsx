@@ -11,6 +11,8 @@ import { formatDateTime } from '@/app/lib/utils'
 import { getAuthSession } from '@/app/lib/permissions'
 import { EventRegistrationButton } from './EventRegistrationButton'
 
+export const dynamic = 'force-dynamic'
+
 interface EventPageProps {
   params: Promise<{ id: string }>
 }
