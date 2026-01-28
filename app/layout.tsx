@@ -9,15 +9,26 @@ import { getSetting } from '@/app/lib/config'
 const inter = Inter({ subsets: ['latin'] })
 
 export async function generateMetadata(): Promise<Metadata> {
-  const siteName = await getSetting('site_name')
-  const siteDescription = await getSetting('site_description')
-  
-  return {
-    title: {
-      default: siteName || 'Association',
-      template: `%s | ${siteName || 'Association'}`,
-    },
-    description: siteDescription || 'Site web associatif',
+  try {
+    const siteName = await getSetting('site_name')
+    const siteDescription = await getSetting('site_description')
+    
+    return {
+      title: {
+        default: siteName || 'Association',
+        template: `%s | ${siteName || 'Association'}`,
+      },
+      description: siteDescription || 'Site web associatif',
+    }
+  } catch {
+    // Fallback pendant le build statique (DB non accessible)
+    return {
+      title: {
+        default: 'Association',
+        template: '%s | Association',
+      },
+      description: 'Site web associatif',
+    }
   }
 }
 

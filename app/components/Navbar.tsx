@@ -7,8 +7,15 @@ import { ThemeToggle } from './ThemeToggle'
 import { MobileNav } from './MobileNav'
 
 export async function Navbar() {
-  const siteName = await getSetting('site_name')
-  const session = await getAuthSession()
+  let siteName = 'Association'
+  let session = null
+  
+  try {
+    siteName = await getSetting('site_name') || 'Association'
+    session = await getAuthSession()
+  } catch {
+    // Fallback pendant le build statique
+  }
 
   const navLinks = [
     { href: '/', label: 'Accueil' },

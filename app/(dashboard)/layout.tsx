@@ -8,15 +8,27 @@ export default async function DashboardLayout({
 }: {
   children: React.ReactNode
 }) {
-  const maintenanceMode = await isMaintenanceMode()
+  let maintenanceMode = false
+  
+  try {
+    maintenanceMode = await isMaintenanceMode()
+  } catch {
+    // Fallback pendant le build statique
+    maintenanceMode = false
+  }
   
   // Si mode maintenance activé, vérifier si l'utilisateur est admin
   if (maintenanceMode) {
-    const session = await auth()
-    const isAdmin = session?.user?.role === 'ADMIN'
-    
-    // Seuls les admins peuvent accéder au dashboard en mode maintenance
-    if (!isAdmin) {
+    try {
+      const session = await auth()
+      const isAdmin = session?.user?.role === 'ADMIN'
+      
+      // Seuls les admins peuvent accéder au dashboard en mode maintenance
+      if (!isAdmin) {
+        return <MaintenancePage />
+      }
+    } catch {
+      // En cas d'erreur, afficher la page de maintenance
       return <MaintenancePage />
     }
   }

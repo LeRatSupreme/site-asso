@@ -3,14 +3,27 @@ import { Facebook, Instagram, Twitter, Linkedin, Mail, Heart } from 'lucide-reac
 import { getSettings } from '@/app/lib/config'
 
 export async function Footer() {
-  const settings = await getSettings([
-    'site_name',
-    'facebook_url',
-    'instagram_url',
-    'twitter_url',
-    'linkedin_url',
-    'contact_email',
-  ])
+  let settings: Record<string, string | null> = {
+    site_name: 'Association',
+    facebook_url: null,
+    instagram_url: null,
+    twitter_url: null,
+    linkedin_url: null,
+    contact_email: null,
+  }
+  
+  try {
+    settings = await getSettings([
+      'site_name',
+      'facebook_url',
+      'instagram_url',
+      'twitter_url',
+      'linkedin_url',
+      'contact_email',
+    ])
+  } catch {
+    // Fallback pendant le build statique
+  }
 
   const socialLinks = [
     { url: settings.facebook_url, icon: Facebook, label: 'Facebook', color: 'hover:text-blue-600' },
