@@ -61,6 +61,16 @@ docker-compose up -d || {
     exit 1
 }
 
+# Attendre que la base de données soit prête
+log_info "Attente du démarrage de la base de données..."
+sleep 15
+
+# Initialiser le schéma de base de données (si première installation)
+log_info "Vérification/Initialisation du schéma de base de données..."
+docker-compose exec -T app npx prisma db push --skip-generate || {
+    log_warning "Le schéma existe déjà ou erreur Prisma (normal si déjà initialisé)"
+}
+
 # Attendre que l'application soit prête
 log_info "Attente du démarrage de l'application..."
 sleep 10
