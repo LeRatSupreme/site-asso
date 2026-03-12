@@ -1,5 +1,11 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  devServer: {
+    allowedHosts: [
+      'jrcan.dev',
+      '.jrcan.dev',
+    ],
+  },
   output: 'standalone',
   images: {
     remotePatterns: [
