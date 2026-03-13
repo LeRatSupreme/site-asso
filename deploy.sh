@@ -5,7 +5,7 @@
 
 set -e
 
-echo "🚀 Début du déploiement..."
+echo "Début du déploiement..."
 
 # Couleurs pour les logs
 GREEN='\033[0;32m'
@@ -41,7 +41,7 @@ git pull origin main || {
 
 # Arrêter les conteneurs existants
 log_info "Arrêt des conteneurs existants..."
-docker-compose down || log_warning "Aucun conteneur à arrêter"
+docker compose down || log_warning "Aucun conteneur à arrêter"
 
 # Supprimer les anciennes images (optionnel)
 log_info "Nettoyage des anciennes images..."
@@ -49,42 +49,29 @@ docker image prune -f
 
 # Construire la nouvelle image
 log_info "Construction de la nouvelle image Docker..."
-docker-compose build --no-cache || {
+docker compose build --no-cache || {
     log_error "Échec de la construction"
     exit 1
 }
 
 # Démarrer les nouveaux conteneurs
 log_info "Démarrage des conteneurs..."
-docker-compose up -d || {
+docker compose up -d || {
     log_error "Échec du démarrage"
     exit 1
 }
 
-# Attendre que la base de données soit prête
-log_info "Attente du démarrage de la base de données..."
-sleep 15
-
-# Initialiser le schéma de base de données (si première installation)
-log_info "Vérification/Initialisation du schéma de base de données..."
-docker-compose exec -T app npx prisma db push --skip-generate || {
-    log_warning "Le schéma existe déjà ou erreur Prisma (normal si déjà initialisé)"
-}
-
-# Attendre que l'application soit prête
-log_info "Attente du démarrage de l'application..."
-sleep 10
 
 # Vérifier que le conteneur fonctionne
-if docker-compose ps | grep -q "Up"; then
-    log_info "✅ Déploiement réussi !"
+if docker compose ps | grep -q "Up"; then
+    log_info ":white_check_mark: Déploiement réussi !"
     
     # Afficher les logs des 20 dernières lignes
     log_info "Derniers logs :"
-    docker-compose logs --tail=20
+    docker compose logs --tail=20
 else
-    log_error "❌ Le conteneur ne démarre pas correctement"
-    docker-compose logs --tail=50
+    log_error "Le conteneur ne démarre pas correctement"
+    docker compose logs --tail=50
     exit 1
 fi
 
@@ -92,4 +79,4 @@ fi
 log_info "Nettoyage des ressources inutilisées..."
 docker system prune -f
 
-log_info "🎉 Déploiement terminé avec succès !"
+log_info "Déploiement terminé avec succès !"
