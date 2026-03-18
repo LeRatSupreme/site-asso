@@ -69,6 +69,28 @@ services:
       - app-network
       - web
 
+  # phpMyAdmin
+  phpmyadmin:
+    image: phpmyadmin:latest
+    container_name: site-asso-phpmyadmin
+    restart: unless-stopped
+    environment:
+      PMA_HOST: db
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.${NAME}-pma.entryPoints=websecure"
+      - "traefik.http.services.${NAME}-pma.loadbalancer.server.port=80"
+      - "traefik.http.routers.${NAME}-pma.rule=Host(`phpmyadmin-${NAME}.jrcan.dev`)"
+      - "traefik.http.routers.${NAME}-pma.tls=true"
+      - "traefik.http.routers.${NAME}-pma.tls.certresolver=myresolver"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - app-network
+      - web
+
 networks:
   app-network:
     driver: bridge
