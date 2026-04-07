@@ -57,7 +57,7 @@ export function SettingsForm({ settings: initialSettings }: SettingsFormProps) {
   }
 
   return (
-    <form onSubmit={handleSubmit}>
+    <form method="post" onSubmit={handleSubmit}>
       <Tabs defaultValue="general" className="space-y-6">
         <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="general">Général</TabsTrigger>

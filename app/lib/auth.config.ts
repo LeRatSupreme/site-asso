@@ -41,6 +41,22 @@ export const authConfig: NextAuthConfig = {
       // Cette fonction n'est pas utilisée car on gère l'autorisation dans le middleware
       return true
     },
+    redirect({ url, baseUrl }) {
+      if (url.startsWith('/')) {
+        return `${baseUrl}${url}`
+      }
+
+      try {
+        const callbackUrl = new URL(url)
+        if (callbackUrl.origin === baseUrl) {
+          return callbackUrl.toString()
+        }
+      } catch {
+        // URL invalide, on applique le fallback sécurisé.
+      }
+
+      return baseUrl
+    },
     jwt({ token, user }) {
       if (user) {
         token.id = user.id!

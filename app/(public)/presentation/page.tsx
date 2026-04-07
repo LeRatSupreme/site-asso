@@ -9,9 +9,15 @@ export const metadata: Metadata = {
 }
 
 export default async function PresentationPage() {
-  const page = await prisma.page.findUnique({
-    where: { slug: 'presentation', isPublished: true },
-  })
+  let page: Awaited<ReturnType<typeof prisma.page.findUnique>> = null
+
+  try {
+    page = await prisma.page.findUnique({
+      where: { slug: 'presentation', isPublished: true },
+    })
+  } catch (error) {
+    console.error('Public presentation page query failed:', error)
+  }
 
   return (
     <div className="container py-8">

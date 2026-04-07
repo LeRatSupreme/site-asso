@@ -11,10 +11,35 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { toast } from '@/app/components/ui/use-toast'
 import { Loader2 } from 'lucide-react'
 
+const DEFAULT_CALLBACK_URL = '/dashboard'
+
+function sanitizeCallbackUrl(rawCallbackUrl: string | null): string {
+  if (!rawCallbackUrl) {
+    return DEFAULT_CALLBACK_URL
+  }
+
+  if (rawCallbackUrl.startsWith('/') && !rawCallbackUrl.startsWith('//')) {
+    return rawCallbackUrl
+  }
+
+  if (typeof window !== 'undefined') {
+    try {
+      const parsedUrl = new URL(rawCallbackUrl, window.location.origin)
+      if (parsedUrl.origin === window.location.origin) {
+        return `${parsedUrl.pathname}${parsedUrl.search}${parsedUrl.hash}`
+      }
+    } catch {
+      // URL invalide, on applique le fallback sécurisé.
+    }
+  }
+
+  return DEFAULT_CALLBACK_URL
+}
+
 export function LoginForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const callbackUrl = searchParams.get('callbackUrl') || '/dashboard'
+  const callbackUrl = sanitizeCallbackUrl(searchParams.get('callbackUrl'))
   const error = searchParams.get('error')
 
   const [isLoading, setIsLoading] = useState(false)
@@ -38,6 +63,7 @@ export function LoginForm() {
       const result = await signIn('credentials', {
         email,
         password,
+        callbackUrl,
         redirect: false,
       })
 
@@ -80,13 +106,14 @@ export function LoginForm() {
           Entrez vos identifiants pour accéder à votre compte
         </CardDescription>
       </CardHeader>
-      <form onSubmit={handleSubmit}>
+      <form method="post" onSubmit={handleSubmit}>
         <CardContent className="space-y-5">
           <div className="space-y-2">
             <Label htmlFor="email" className="text-sm font-medium">Email</Label>
             <Input
               id="email"
               type="email"
+              autoComplete="email"
               placeholder="prenom.nom@etu.univ-littoral.fr"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -100,6 +127,7 @@ export function LoginForm() {
             <Input
               id="password"
               type="password"
+              autoComplete="current-password"
               placeholder="••••••••"
               value={password}
               onChange={(e) => setPassword(e.target.value)}

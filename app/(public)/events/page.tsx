@@ -12,23 +12,30 @@ export const metadata: Metadata = {
 export default async function EventsPage() {
   const now = new Date()
 
-  const [upcomingEvents, pastEvents] = await Promise.all([
-    prisma.event.findMany({
-      where: {
-        isPublished: true,
-        date: { gte: now },
-      },
-      orderBy: { date: 'asc' },
-    }),
-    prisma.event.findMany({
-      where: {
-        isPublished: true,
-        date: { lt: now },
-      },
-      orderBy: { date: 'desc' },
-      take: 10,
-    }),
-  ])
+  let upcomingEvents: Awaited<ReturnType<typeof prisma.event.findMany>> = []
+  let pastEvents: Awaited<ReturnType<typeof prisma.event.findMany>> = []
+
+  try {
+    ;[upcomingEvents, pastEvents] = await Promise.all([
+      prisma.event.findMany({
+        where: {
+          isPublished: true,
+          date: { gte: now },
+        },
+        orderBy: { date: 'asc' },
+      }),
+      prisma.event.findMany({
+        where: {
+          isPublished: true,
+          date: { lt: now },
+        },
+        orderBy: { date: 'desc' },
+        take: 10,
+      }),
+    ])
+  } catch (error) {
+    console.error('Public events page query failed:', error)
+  }
 
   return (
     <div className="container py-8">

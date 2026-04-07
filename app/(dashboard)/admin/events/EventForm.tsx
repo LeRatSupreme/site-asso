@@ -100,7 +100,7 @@ export function EventForm({ event }: EventFormProps) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
+    <form method="post" onSubmit={handleSubmit} className="space-y-6">
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Contenu principal */}
         <div className="lg:col-span-2 space-y-6">

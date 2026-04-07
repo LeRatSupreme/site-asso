@@ -119,7 +119,7 @@ export function RegisterForm() {
           Créez votre compte pour accéder à l&apos;espace membre
         </CardDescription>
       </CardHeader>
-      <form onSubmit={handleSubmit}>
+      <form method="post" onSubmit={handleSubmit}>
         <CardContent className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="name" className="text-sm font-medium">Nom complet</Label>
@@ -127,6 +127,7 @@ export function RegisterForm() {
               id="name"
               name="name"
               type="text"
+              autoComplete="name"
               placeholder="Jean Dupont"
               value={formData.name}
               onChange={handleChange}
@@ -141,6 +142,7 @@ export function RegisterForm() {
               id="email"
               name="email"
               type="email"
+              autoComplete="email"
               placeholder="prenom.nom@etu.univ-littoral.fr"
               value={formData.email}
               onChange={handleChange}
@@ -161,6 +163,7 @@ export function RegisterForm() {
               id="password"
               name="password"
               type="password"
+              autoComplete="new-password"
               placeholder="••••••••"
               value={formData.password}
               onChange={handleChange}
@@ -176,6 +179,7 @@ export function RegisterForm() {
               id="confirmPassword"
               name="confirmPassword"
               type="password"
+              autoComplete="new-password"
               placeholder="••••••••"
               value={formData.confirmPassword}
               onChange={handleChange}
