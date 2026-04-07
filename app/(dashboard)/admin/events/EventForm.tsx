@@ -25,7 +25,7 @@ export function EventForm({ event }: EventFormProps) {
     description: event?.description || '',
     image: event?.image || '',
     date: event?.date 
-      ? new Date(event.date).toISOString().slice(0, 16)
+      ? new Date(new Date(event.date).getTime() - new Date(event.date).getTimezoneOffset() * 60000).toISOString().slice(0, 16)
       : '',
     location: event?.location || '',
     sumupLink: event?.sumupLink || '',
