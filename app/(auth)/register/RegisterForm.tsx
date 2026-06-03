@@ -49,7 +49,7 @@ export function RegisterForm() {
       })
       return
     }
-
+/*
     if (!formData.email.endsWith('@etu.univ-littoral.fr')) {
       toast({
         title: 'Erreur',
@@ -58,7 +58,7 @@ export function RegisterForm() {
       })
       return
     }
-
+*/
     setIsLoading(true)
 
     try {
@@ -137,25 +137,27 @@ export function RegisterForm() {
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="email" className="text-sm font-medium">Email universitaire</Label>
+            {/* <Label htmlFor="email" className="text-sm font-medium">Email universitaire</Label> */}
+            <Label htmlFor="email" className="text-sm font-medium">Email</Label>
             <Input
               id="email"
               name="email"
               type="email"
               autoComplete="email"
-              placeholder="prenom.nom@etu.univ-littoral.fr"
+              // placeholder="prenom.nom@etu.univ-littoral.fr"
+              placeholder="prenom.nom@example.com"
               value={formData.email}
               onChange={handleChange}
               required
               disabled={isLoading}
               className="h-12 rounded-xl border-2 focus:border-violet-500 transition-colors"
             />
-            <p className="text-xs text-muted-foreground flex items-center gap-1">
+            {/* <p className="text-xs text-muted-foreground flex items-center gap-1">
               <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
                 <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
               </svg>
               Utilisez votre adresse @etu.univ-littoral.fr
-            </p>
+            </p> */}
           </div>
           <div className="space-y-2">
             <Label htmlFor="password" className="text-sm font-medium">Mot de passe</Label>
