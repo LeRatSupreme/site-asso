@@ -48,11 +48,11 @@ export function UserNav({ user }: UserNavProps) {
       <DropdownMenuTrigger asChild>
         <Button 
           variant="ghost" 
-          className="relative flex items-center gap-2 h-10 px-2 rounded-xl hover:bg-blue-50 dark:hover:bg-blue-950/50 transition-colors"
+          className="relative flex items-center gap-2 h-10 px-2 rounded-xl hover:bg-white/[0.05] transition-colors"
         >
           <Avatar className="h-8 w-8 ring-2 ring-blue-500/20">
             <AvatarImage src={user.image || ''} alt={user.name || ''} />
-            <AvatarFallback className="bg-gradient-to-br from-blue-500 to-violet-500 text-white text-sm font-medium">
+            <AvatarFallback className="bg-gradient-to-br from-violet-500 to-teal-400 text-white text-sm font-medium">
               {initials}
             </AvatarFallback>
           </Avatar>
@@ -63,11 +63,11 @@ export function UserNav({ user }: UserNavProps) {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent className="w-64 p-2" align="end" forceMount>
-        <DropdownMenuLabel className="font-normal p-3 bg-gradient-to-br from-blue-50 to-violet-50 dark:from-blue-950/50 dark:to-violet-950/50 rounded-xl mb-2">
+        <DropdownMenuLabel className="font-normal p-3 bg-white/[0.04] rounded-xl mb-2">
           <div className="flex items-center gap-3">
             <Avatar className="h-12 w-12 ring-2 ring-white shadow-lg">
               <AvatarImage src={user.image || ''} alt={user.name || ''} />
-              <AvatarFallback className="bg-gradient-to-br from-blue-500 to-violet-500 text-white font-medium">
+              <AvatarFallback className="bg-gradient-to-br from-violet-500 to-teal-400 text-white font-medium">
                 {initials}
               </AvatarFallback>
             </Avatar>
@@ -88,16 +88,16 @@ export function UserNav({ user }: UserNavProps) {
         <DropdownMenuGroup>
           <DropdownMenuItem asChild className="rounded-lg cursor-pointer">
             <Link href={dashboardUrl} className="flex items-center gap-3 p-2">
-              <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/50">
-                <LayoutDashboard className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+              <div className="p-2 rounded-lg bg-primary/10">
+                <LayoutDashboard className="h-4 w-4 text-primary" />
               </div>
               <span className="font-medium">Dashboard</span>
             </Link>
           </DropdownMenuItem>
           <DropdownMenuItem asChild className="rounded-lg cursor-pointer">
             <Link href="/eleve/profile" className="flex items-center gap-3 p-2">
-              <div className="p-2 rounded-lg bg-violet-100 dark:bg-violet-900/50">
-                <User className="h-4 w-4 text-violet-600 dark:text-violet-400" />
+              <div className="p-2 rounded-lg bg-primary/10">
+                <User className="h-4 w-4 text-primary" />
               </div>
               <span className="font-medium">Mon profil</span>
             </Link>

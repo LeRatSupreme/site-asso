@@ -2,9 +2,10 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Trash2, User, Mail, Calendar } from 'lucide-react'
+import { Trash2 } from 'lucide-react'
 import { Button } from '@/app/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/app/components/ui/avatar'
+import { Badge } from '@/app/components/ui/badge'
 import {
   Table,
   TableBody,
@@ -27,6 +28,12 @@ import { toast } from '@/app/components/ui/use-toast'
 import { formatDate } from '@/app/lib/utils'
 import { removeEventRegistration } from '@/app/actions/events.actions'
 
+type RegistrationChoice = {
+  id: string
+  variant: { label: string }
+  choice: { label: string }
+}
+
 interface Registration {
   id: string
   createdAt: Date
@@ -36,134 +43,134 @@ interface Registration {
     email: string | null
     image: string | null
   }
+  choices: RegistrationChoice[]
 }
 
 interface RegistrationsTableProps {
   registrations: Registration[]
   eventId: string
+  hasVariants: boolean
 }
 
-export function RegistrationsTable({ registrations, eventId }: RegistrationsTableProps) {
+export function RegistrationsTable({ registrations, eventId, hasVariants }: RegistrationsTableProps) {
   const router = useRouter()
-  const [deleteRegistration, setDeleteRegistration] = useState<Registration | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<Registration | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
 
   const handleDelete = async () => {
-    if (!deleteRegistration) return
-
+    if (!deleteTarget) return
     setIsDeleting(true)
     try {
-      const result = await removeEventRegistration(deleteRegistration.id)
+      const result = await removeEventRegistration(deleteTarget.id)
       if (result.success) {
         toast({
           title: 'Inscription supprimée',
-          description: `${deleteRegistration.user.name || deleteRegistration.user.email} a été désinscrit de l'événement`,
+          description: `${deleteTarget.user.name || deleteTarget.user.email} a été désinscrit`,
           variant: 'success',
         })
         router.refresh()
       } else {
-        toast({
-          title: 'Erreur',
-          description: result.error,
-          variant: 'destructive',
-        })
+        toast({ title: 'Erreur', description: result.error, variant: 'destructive' })
       }
     } catch {
-      toast({
-        title: 'Erreur',
-        description: 'Une erreur est survenue',
-        variant: 'destructive',
-      })
+      toast({ title: 'Erreur', description: 'Une erreur est survenue', variant: 'destructive' })
     } finally {
       setIsDeleting(false)
-      setDeleteRegistration(null)
+      setDeleteTarget(null)
     }
   }
 
-  const getInitials = (name: string | null, email: string | null) => {
-    if (name) {
-      return name
-        .split(' ')
-        .map(n => n[0])
-        .join('')
-        .toUpperCase()
-        .slice(0, 2)
-    }
-    if (email) {
-      return email[0].toUpperCase()
-    }
-    return 'U'
+  function getInitials(name: string | null, email: string | null) {
+    if (name) return name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2)
+    return email?.[0]?.toUpperCase() ?? 'U'
   }
 
   return (
     <>
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Utilisateur</TableHead>
-            <TableHead>Email</TableHead>
-            <TableHead>Date d&apos;inscription</TableHead>
-            <TableHead className="w-[100px]">Actions</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {registrations.map((registration) => (
-            <TableRow key={registration.id}>
-              <TableCell>
-                <div className="flex items-center gap-3">
-                  <Avatar className="h-8 w-8">
-                    <AvatarImage 
-                      src={registration.user.image || undefined} 
-                      alt={registration.user.name || 'Utilisateur'} 
-                    />
-                    <AvatarFallback className="text-xs">
-                      {getInitials(registration.user.name, registration.user.email)}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <p className="font-medium">
-                      {registration.user.name || 'Sans nom'}
-                    </p>
-                  </div>
-                </div>
-              </TableCell>
-              <TableCell>
-                <span className="text-muted-foreground">
-                  {registration.user.email || '-'}
-                </span>
-              </TableCell>
-              <TableCell>
-                <span className="text-muted-foreground text-sm">
-                  {formatDate(registration.createdAt)}
-                </span>
-              </TableCell>
-              <TableCell>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                  onClick={() => setDeleteRegistration(registration)}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </TableCell>
+      <div className="overflow-x-auto -mx-6">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="pl-6">Participant</TableHead>
+              <TableHead>Email</TableHead>
+              {hasVariants && <TableHead>Options choisies</TableHead>}
+              <TableHead>Inscrit le</TableHead>
+              <TableHead className="w-[60px] pr-6" />
             </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+          </TableHeader>
+          <TableBody>
+            {registrations.map((reg) => (
+              <TableRow key={reg.id}>
+                {/* User */}
+                <TableCell className="pl-6">
+                  <div className="flex items-center gap-3">
+                    <Avatar className="h-8 w-8 flex-shrink-0">
+                      <AvatarImage src={reg.user.image ?? undefined} alt={reg.user.name ?? ''} />
+                      <AvatarFallback className="text-xs bg-primary/10 text-primary">
+                        {getInitials(reg.user.name, reg.user.email)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <span className="font-medium text-sm">{reg.user.name || 'Sans nom'}</span>
+                  </div>
+                </TableCell>
 
-      {/* Dialog de confirmation de suppression */}
-      <AlertDialog 
-        open={!!deleteRegistration} 
-        onOpenChange={(open) => !open && setDeleteRegistration(null)}
-      >
+                {/* Email */}
+                <TableCell className="text-sm text-muted-foreground">
+                  {reg.user.email || '—'}
+                </TableCell>
+
+                {/* Choices */}
+                {hasVariants && (
+                  <TableCell>
+                    {reg.choices.length === 0 ? (
+                      <span className="text-xs text-muted-foreground italic">Aucun choix</span>
+                    ) : (
+                      <div className="flex flex-wrap gap-1.5">
+                        {reg.choices.map((c) => (
+                          <Badge
+                            key={c.id}
+                            variant="secondary"
+                            className="text-xs gap-1 font-normal"
+                          >
+                            <span className="text-muted-foreground">{c.variant.label}:</span>
+                            <span className="font-semibold">{c.choice.label}</span>
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+                  </TableCell>
+                )}
+
+                {/* Date */}
+                <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                  {formatDate(reg.createdAt)}
+                </TableCell>
+
+                {/* Actions */}
+                <TableCell className="pr-6">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                    onClick={() => setDeleteTarget(reg)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Supprimer cette inscription ?</AlertDialogTitle>
             <AlertDialogDescription>
-              Êtes-vous sûr de vouloir désinscrire{' '}
-              <strong>{deleteRegistration?.user.name || deleteRegistration?.user.email}</strong>{' '}
-              de cet événement ? Cette action est irréversible.
+              Désinscription de{' '}
+              <strong>{deleteTarget?.user.name || deleteTarget?.user.email}</strong>.
+              Cette action est irréversible.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

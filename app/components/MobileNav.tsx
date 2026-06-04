@@ -1,9 +1,8 @@
 'use client'
 
-import { useState } from 'react'
 import Link from 'next/link'
-import { Menu, X } from 'lucide-react'
-import { Button } from '@/app/components/ui/button'
+import { usePathname } from 'next/navigation'
+import { Calendar, Home, Info, LogIn, UserRound } from 'lucide-react'
 import { cn } from '@/app/lib/utils'
 
 interface MobileNavProps {
@@ -11,75 +10,41 @@ interface MobileNavProps {
   isLoggedIn: boolean
 }
 
+const icons: Record<string, React.ElementType> = {
+  '/': Home,
+  '/events': Calendar,
+  '/presentation': Info,
+  '/team': UserRound,
+}
+
 export function MobileNav({ navLinks, isLoggedIn }: MobileNavProps) {
-  const [isOpen, setIsOpen] = useState(false)
+  const pathname = usePathname()
+  const links = isLoggedIn
+    ? navLinks
+    : [...navLinks.slice(0, 3), { href: '/login', label: 'Connexion' }]
 
   return (
-    <div className="md:hidden">
-      <Button
-        variant="ghost"
-        size="icon"
-        onClick={() => setIsOpen(!isOpen)}
-        className="relative z-50"
-        aria-label="Toggle menu"
-      >
-        {isOpen ? (
-          <X className="h-5 w-5" />
-        ) : (
-          <Menu className="h-5 w-5" />
-        )}
-      </Button>
-
-      {/* Mobile Menu Overlay */}
-      <div
-        className={cn(
-          'fixed inset-0 z-40 bg-background/80 backdrop-blur-sm transition-opacity duration-300',
-          isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
-        )}
-        onClick={() => setIsOpen(false)}
-      />
-
-      {/* Mobile Menu Panel */}
-      <div
-        className={cn(
-          'fixed top-16 right-0 z-40 h-[calc(100vh-4rem)] w-full sm:w-80 bg-background border-l shadow-2xl transition-transform duration-300 ease-out',
-          isOpen ? 'translate-x-0' : 'translate-x-full'
-        )}
-      >
-        <div className="flex flex-col h-full">
-          {/* Navigation Links */}
-          <nav className="flex-1 p-6 space-y-2">
-            {navLinks.map((link, index) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                onClick={() => setIsOpen(false)}
-                className={cn(
-                  'flex items-center px-4 py-3 text-lg font-medium rounded-xl transition-all duration-200',
-                  'hover:bg-gradient-to-r hover:from-blue-50 hover:to-violet-50 hover:text-blue-600',
-                  'dark:hover:from-blue-950/50 dark:hover:to-violet-950/50',
-                  'animate-slide-in-right'
-                )}
-                style={{ animationDelay: `${index * 50}ms` }}
-              >
-                {link.label}
-              </Link>
-            ))}
-          </nav>
-
-          {/* Auth Buttons */}
-          {!isLoggedIn && (
-            <div className="p-6 border-t space-y-3 animate-fade-in" style={{ animationDelay: '200ms' }}>
-              <Button variant="outline" className="w-full" asChild onClick={() => setIsOpen(false)}>
-                <Link href="/login">Connexion</Link>
-              </Button>
-              <Button className="w-full" asChild onClick={() => setIsOpen(false)}>
-                <Link href="/register">S&apos;inscrire</Link>
-              </Button>
-            </div>
-          )}
-        </div>
+    <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-white/[0.08] bg-[#08172d]/95 backdrop-blur-xl md:hidden">
+      <div className="mx-auto grid max-w-md grid-cols-4">
+        {links.map((link) => {
+          const active = link.href === '/' ? pathname === '/' : pathname.startsWith(link.href)
+          const Icon = link.href === '/login' ? LogIn : icons[link.href] || Home
+          return (
+            <Link
+              key={link.href}
+              href={link.href}
+              className={cn(
+                'relative flex min-w-0 flex-col items-center justify-center gap-1 px-1 py-2.5 transition-colors',
+                active ? 'text-primary' : 'text-white/40'
+              )}
+            >
+              {active && <span className="absolute inset-x-3 top-0 h-0.5 rounded-b-full bg-primary" />}
+              <Icon className={cn('size-5 transition-transform', active && 'scale-110')} />
+              <span className="max-w-full truncate text-[8px] font-bold uppercase tracking-[0.06em]">{link.label}</span>
+            </Link>
+          )
+        })}
       </div>
-    </div>
+    </nav>
   )
 }

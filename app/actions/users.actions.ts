@@ -7,9 +7,17 @@ import { requireAuth, requireAdmin } from '@/app/lib/permissions'
 import { z } from 'zod'
 import type { Role } from '@prisma/client'
 
+const ALLOWED_EMAIL_DOMAINS = ['etu.univ-littoral.fr', 'univ-littoral.fr']
+
 const registerSchema = z.object({
   name: z.string().min(2, 'Le nom doit contenir au moins 2 caractères'),
-  email: z.string().email('Email invalide'),
+  email: z
+    .string()
+    .email('Email invalide')
+    .refine(
+      (email) => ALLOWED_EMAIL_DOMAINS.some((domain) => email.toLowerCase().endsWith(`@${domain}`)),
+      'Seules les adresses @etu.univ-littoral.fr et @univ-littoral.fr sont acceptées'
+    ),
   password: z.string().min(6, 'Le mot de passe doit contenir au moins 6 caractères'),
 })
 
@@ -198,7 +206,7 @@ export async function deleteUser(userId: string) {
       include: {
         _count: {
           select: {
-            orders: true,
+            cafeteriaOrders: true,
             eventRegistrations: true,
           },
         },
@@ -209,7 +217,7 @@ export async function deleteUser(userId: string) {
       return { success: false, error: 'Utilisateur non trouvé' }
     }
 
-    if (user._count.orders > 0 || user._count.eventRegistrations > 0) {
+    if (user._count.cafeteriaOrders > 0 || user._count.eventRegistrations > 0) {
       return {
         success: false,
         error: 'Impossible de supprimer un utilisateur avec des commandes ou inscriptions',

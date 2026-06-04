@@ -27,27 +27,23 @@ export default async function RegistrationsPage({ params }: RegistrationsPagePro
   const event = await prisma.event.findUnique({
     where: { id },
     include: {
+      variants: { orderBy: { order: 'asc' } },
       registrations: {
         include: {
           user: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-              image: true,
-            }
-          }
+            select: { id: true, name: true, email: true, image: true },
+          },
+          choices: {
+            include: {
+              variant: { select: { label: true } },
+              choice:  { select: { label: true } },
+            },
+          },
         },
-        orderBy: {
-          createdAt: 'desc'
-        }
+        orderBy: { createdAt: 'desc' },
       },
-      _count: {
-        select: {
-          registrations: true
-        }
-      }
-    }
+      _count: { select: { registrations: true } },
+    },
   })
 
   if (!event) {
@@ -122,9 +118,10 @@ export default async function RegistrationsPage({ params }: RegistrationsPagePro
         </CardHeader>
         <CardContent>
           {event.registrations.length > 0 ? (
-            <RegistrationsTable 
-              registrations={event.registrations} 
+            <RegistrationsTable
+              registrations={event.registrations}
               eventId={event.id}
+              hasVariants={event.variants.length > 0}
             />
           ) : (
             <div className="text-center py-8 text-muted-foreground">

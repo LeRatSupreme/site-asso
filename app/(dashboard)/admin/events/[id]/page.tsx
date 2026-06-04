@@ -5,6 +5,7 @@ import { ArrowLeft } from 'lucide-react'
 import { Button } from '@/app/components/ui/button'
 import { prisma } from '@/app/lib/prisma'
 import { EventForm } from '../EventForm'
+import { VariantsManager } from '../VariantsManager'
 
 interface EditEventPageProps {
   params: Promise<{ id: string }>
@@ -20,11 +21,18 @@ export async function generateMetadata({ params }: EditEventPageProps): Promise<
 
 export default async function EditEventPage({ params }: EditEventPageProps) {
   const { id } = await params
-  const event = await prisma.event.findUnique({ where: { id } })
 
-  if (!event) {
-    notFound()
-  }
+  const event = await prisma.event.findUnique({
+    where: { id },
+    include: {
+      variants: {
+        orderBy: { order: 'asc' },
+        include: { choices: { orderBy: { order: 'asc' } } },
+      },
+    },
+  })
+
+  if (!event) notFound()
 
   return (
     <div className="space-y-6">
@@ -36,11 +44,15 @@ export default async function EditEventPage({ params }: EditEventPageProps) {
         </Button>
         <div>
           <h1 className="text-3xl font-bold">Modifier l&apos;événement</h1>
-          <p className="text-muted-foreground mt-2">{event.title}</p>
+          <p className="text-muted-foreground mt-1">{event.title}</p>
         </div>
       </div>
 
+      {/* Formulaire principal */}
       <EventForm event={event} />
+
+      {/* Variantes / Options */}
+      <VariantsManager eventId={event.id} initialVariants={event.variants} />
     </div>
   )
 }

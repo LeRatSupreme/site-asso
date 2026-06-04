@@ -1,210 +1,133 @@
 import Link from 'next/link'
-import Image from 'next/image'
-import { ArrowRight, Calendar, Users, Heart, Sparkles, Zap } from 'lucide-react'
+import { ArrowRight, CalendarDays, Coffee, Users, Zap } from 'lucide-react'
 import { Button } from '@/app/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/card'
 import { EventCard } from '@/app/components/EventCard'
 import { prisma } from '@/app/lib/prisma'
 import { getSettings } from '@/app/lib/config'
+import { getAuthSession } from '@/app/lib/permissions'
 
-// Force le rendu dynamique (pas de pré-rendu statique)
 export const dynamic = 'force-dynamic'
 
 export default async function HomePage() {
-  const settings = await getSettings([
-    'site_name',
-    'site_description',
-    'hero_image',
-  ])
-
-  // Récupérer le contenu de la page d'accueil
-  const homePage = await prisma.page.findUnique({
-    where: { slug: 'home' },
-  })
-
-  // Récupérer les prochains événements
-  const upcomingEvents = await prisma.event.findMany({
-    where: {
-      isPublished: true,
-      date: { gte: new Date() },
-    },
-    orderBy: { date: 'asc' },
-    take: 3,
-  })
-
-  // Statistiques
-  const [eventsCount, usersCount] = await Promise.all([
+  const [settings, session, upcomingEvents, eventsCount, usersCount] = await Promise.all([
+    getSettings(['site_name', 'site_description']),
+    getAuthSession(),
+    prisma.event.findMany({
+      where: { isPublished: true, date: { gte: new Date() } },
+      orderBy: { date: 'asc' },
+      take: 3,
+    }),
     prisma.event.count({ where: { isPublished: true } }),
     prisma.user.count({ where: { isActive: true } }),
   ])
+  const dashboardUrl = session?.user?.role === 'ADMIN' ? '/admin' : '/eleve'
 
   return (
     <div className="overflow-hidden">
-      {/* Hero Section */}
-      <section className="relative min-h-[85vh] flex items-center justify-center overflow-hidden">
-        {/* Background Gradient */}
-        <div className="absolute inset-0 bg-gradient-to-br from-blue-50 via-violet-50/50 to-background dark:from-blue-950/30 dark:via-violet-950/20 dark:to-background" />
-        
-        {/* Animated Blobs */}
-        <div className="absolute top-20 -left-20 w-72 h-72 bg-blue-500/20 rounded-full blur-3xl animate-float" />
-        <div className="absolute bottom-20 -right-20 w-96 h-96 bg-violet-500/20 rounded-full blur-3xl animate-float animation-delay-400" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-gradient-radial from-blue-500/10 via-violet-500/5 to-transparent rounded-full blur-2xl" />
-        
-        {settings.hero_image && (
-          <div className="absolute inset-0 z-0">
-            <Image
-              src={settings.hero_image}
-              alt="Hero"
-              fill
-              className="object-cover opacity-10"
-            />
-          </div>
-        )}
-        
-        <div className="container relative z-10">
-          <div className="max-w-4xl mx-auto text-center">
-            {/* Badge */}
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-blue-500/10 to-violet-500/10 border border-blue-500/20 mb-8 animate-fade-in">
-              <Sparkles className="h-4 w-4 text-violet-500" />
-              <span className="text-sm font-medium text-foreground">Association étudiante</span>
-            </div>
-            
-            <h1 className="text-5xl md:text-7xl lg:text-8xl font-bold tracking-tight mb-6 animate-fade-in-up">
-              <span className="bg-gradient-to-r from-blue-600 via-violet-600 to-blue-600 bg-clip-text text-transparent bg-[length:200%_auto] animate-shimmer">
-                {settings.site_name || 'Bienvenue'}
-              </span>
+      <section className="relative border-b border-white/[0.07]">
+        <div className="pointer-events-none absolute -right-40 -top-52 size-[48rem] rounded-full bg-[radial-gradient(circle,rgba(72,189,211,.16),transparent_65%)]" />
+        <div className="pointer-events-none absolute -bottom-40 -left-36 size-[32rem] rounded-full bg-[radial-gradient(circle,rgba(97,80,170,.13),transparent_65%)]" />
+
+        <div className="mx-auto grid max-w-7xl gap-12 px-4 py-16 lg:grid-cols-[1.1fr_.9fr] lg:px-8 lg:py-24">
+          <div className="relative z-10">
+            <span className="eyebrow">Association étudiante · Informatique · Calais</span>
+            <h1 className="mt-5 max-w-3xl text-5xl font-black uppercase leading-[.93] tracking-[-.065em] text-white sm:text-6xl lg:text-7xl">
+              Plus qu&apos;une asso.
+              <span className="block text-primary">Ton campus, en mieux.</span>
             </h1>
-            
-            <p className="text-xl md:text-2xl text-muted-foreground mb-10 max-w-2xl mx-auto leading-relaxed animate-fade-in-up animation-delay-200">
-              {settings.site_description || 'Découvrez notre association et rejoignez-nous !'}
+            <p className="mt-5 max-w-lg text-base leading-7 text-muted-foreground">
+              {settings.site_description || 'Événements, cafétéria et vie étudiante. L’AEIC rassemble les étudiants en informatique de Calais.'}
             </p>
-            
-            <div className="flex flex-col sm:flex-row gap-4 justify-center animate-fade-in-up animation-delay-400">
-              <Button asChild size="xl" variant="gradient">
-                <Link href="/events">
-                  Voir les événements
-                  <ArrowRight className="ml-2 h-5 w-5" />
+            <div className="mt-8 flex flex-wrap gap-3">
+              <Button asChild size="lg">
+                <Link href={session?.user ? dashboardUrl : '/register'}>
+                  {session?.user ? 'Accéder à mon espace' : "Rejoindre l'AEIC"}
+                  <ArrowRight className="size-4" />
                 </Link>
               </Button>
-              <Button asChild variant="outline" size="xl">
-                <Link href="/presentation">En savoir plus</Link>
-              </Button>
+              <Button asChild variant="outline" size="lg"><Link href="/events">Voir les événements</Link></Button>
             </div>
           </div>
-        </div>
-        
-        {/* Scroll Indicator */}
-        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 animate-bounce">
-          <div className="w-6 h-10 rounded-full border-2 border-muted-foreground/30 flex items-start justify-center p-2">
-            <div className="w-1 h-2 bg-muted-foreground/50 rounded-full" />
+
+          <div className="relative hidden min-h-[360px] items-center justify-center lg:flex">
+            <div className="absolute inset-0 rotate-[-3deg] rounded-[2rem] border border-primary/15 bg-gradient-to-br from-primary/[0.06] to-transparent" />
+            <div className="surface relative w-full rotate-[1.5deg] p-7">
+              <span className="eyebrow">L&apos;AEIC en quelques chiffres</span>
+              <h2 className="mt-5 text-4xl font-black uppercase leading-[.95] tracking-[-.055em] text-white">
+                Fait par les étudiants.
+                <span className="block text-primary">Pour les étudiants.</span>
+              </h2>
+              <div className="mt-8 grid grid-cols-2 gap-2">
+                {[
+                  ['100 %', 'Étudiant'],
+                  [usersCount, 'Membres actifs'],
+                  [eventsCount, 'Événements'],
+                  ['0 %', 'Prise de tête'],
+                ].map(([value, label], index) => (
+                  <div
+                    key={label}
+                    className={index === 0 ? 'rounded-xl border border-primary/35 bg-primary/[0.08] p-4' : 'rounded-xl border border-white/[0.08] bg-white/[0.03] p-4'}
+                  >
+                    <p className="text-2xl font-black text-white">{value}</p>
+                    <p className="mt-2 text-[9px] font-bold uppercase tracking-[.16em] text-muted-foreground">{label}</p>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-8 flex items-center gap-3 border-t border-white/[0.07] pt-5">
+                <div className="grid size-9 place-items-center rounded-full bg-gradient-to-br from-violet-500 to-teal-400 text-xs font-black text-white">AE</div>
+                <div>
+                  <p className="text-xs font-black uppercase tracking-[.12em] text-white">AEIC Calais</p>
+                  <p className="mt-1 text-[9px] font-bold uppercase tracking-[.14em] text-primary">Depuis le campus, pour le campus</p>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
 
-      {/* Stats Section */}
-      <section className="py-20 relative">
-        <div className="absolute inset-0 bg-gradient-to-b from-muted/50 to-background" />
-        <div className="container relative">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <section className="mx-auto max-w-7xl px-4 py-14 lg:px-8">
+        <div className="flex items-end justify-between gap-4">
+          <div><span className="eyebrow">À l&apos;agenda</span><h2 className="section-title mt-2">Prochains événements</h2></div>
+          <Link href="/events" className="text-[11px] font-black uppercase tracking-[.18em] text-primary">Tout voir →</Link>
+        </div>
+        {upcomingEvents.length > 0 ? (
+          <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {upcomingEvents.map((event) => <EventCard key={event.id} event={event} />)}
+          </div>
+        ) : (
+          <div className="surface mt-6 p-10 text-center text-muted-foreground">Aucun événement annoncé pour le moment.</div>
+        )}
+      </section>
+
+      <section className="border-y border-white/[0.07] bg-white/[0.02]">
+        <div className="mx-auto grid max-w-7xl gap-10 px-4 py-14 lg:grid-cols-[.8fr_1.2fr] lg:px-8">
+          <div>
+            <span className="eyebrow">Tout au même endroit</span>
+            <h2 className="section-title mt-2">La vie étudiante, sans friction.</h2>
+            <p className="mt-5 max-w-sm text-sm leading-7 text-muted-foreground">
+              Participe aux événements, commande à la cafétéria et retrouve toutes les informations de l&apos;association.
+            </p>
+            <Button asChild className="mt-8">
+              <Link href={session?.user ? dashboardUrl : '/register'}>
+                {session?.user ? 'Accéder à mon espace' : 'Créer mon compte'}
+              </Link>
+            </Button>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-3">
             {[
-              { icon: Calendar, value: eventsCount, label: 'événements organisés', color: 'from-blue-500 to-cyan-500' },
-              { icon: Users, value: usersCount, label: 'membres inscrits', color: 'from-violet-500 to-purple-500' },
-              { icon: Heart, value: '100%', label: 'bénévole et passionné', color: 'from-pink-500 to-rose-500' },
-            ].map((stat, index) => (
-              <Card key={index} className="group overflow-hidden">
-                <CardHeader className="flex flex-row items-center gap-4 pb-2">
-                  <div className={`p-3 rounded-xl bg-gradient-to-br ${stat.color} shadow-lg`}>
-                    <stat.icon className="h-6 w-6 text-white" />
-                  </div>
-                  <div>
-                    <CardTitle className="text-4xl font-bold bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text">
-                      {stat.value}
-                    </CardTitle>
-                    <p className="text-sm text-muted-foreground">{stat.label}</p>
-                  </div>
-                </CardHeader>
-              </Card>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Contenu de la page */}
-      {homePage?.content && (
-        <section className="py-20">
-          <div className="container">
-            <div 
-              className="prose prose-lg max-w-none dark:prose-invert prose-headings:font-bold prose-a:text-blue-500 hover:prose-a:text-violet-500"
-              dangerouslySetInnerHTML={{ __html: homePage.content }}
-            />
-          </div>
-        </section>
-      )}
-
-      {/* Prochains événements */}
-      {upcomingEvents.length > 0 && (
-        <section className="py-20 relative">
-          <div className="absolute inset-0 bg-gradient-to-br from-blue-50/50 via-transparent to-violet-50/50 dark:from-blue-950/20 dark:to-violet-950/20" />
-          <div className="container relative">
-            <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-12 gap-4">
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <Zap className="h-5 w-5 text-violet-500" />
-                  <span className="text-sm font-semibold text-violet-500 uppercase tracking-wider">À venir</span>
+              [CalendarDays, 'Événements', 'Découvre et rejoins les prochains rendez-vous.'],
+              [Coffee, 'Cafétéria', 'Commande rapidement depuis ton espace membre.'],
+              [Users, 'Communauté', 'Retrouve les étudiants qui font vivre le campus.'],
+            ].map(([Icon, title, text]) => {
+              const FeatureIcon = Icon as typeof Zap
+              return (
+                <div key={title as string} className="surface p-5">
+                  <FeatureIcon className="size-5 text-primary" />
+                  <h3 className="mt-8 text-sm font-black uppercase tracking-[-.02em] text-white">{title as string}</h3>
+                  <p className="mt-3 text-xs leading-6 text-muted-foreground">{text as string}</p>
                 </div>
-                <h2 className="text-4xl font-bold">Prochains événements</h2>
-                <p className="text-muted-foreground mt-2 text-lg">
-                  Ne manquez pas nos prochaines activités
-                </p>
-              </div>
-              <Button asChild variant="outline" size="lg">
-                <Link href="/events">
-                  Voir tous les événements
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Link>
-              </Button>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {upcomingEvents.map((event, index) => (
-                <div 
-                  key={event.id}
-                  className="animate-fade-in-up"
-                  style={{ animationDelay: `${index * 100}ms` }}
-                >
-                  <EventCard event={event} />
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-      )}
-
-      {/* CTA Section */}
-      <section className="py-20">
-        <div className="container">
-          <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-blue-600 via-violet-600 to-violet-700 p-10 md:p-16 text-center text-white shadow-2xl shadow-violet-500/25">
-            {/* Decorative elements */}
-            <div className="absolute top-0 left-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2" />
-            <div className="absolute bottom-0 right-0 w-96 h-96 bg-blue-500/20 rounded-full blur-3xl translate-x-1/2 translate-y-1/2" />
-            
-            <div className="relative z-10">
-              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 backdrop-blur-sm mb-6">
-                <Sparkles className="h-4 w-4" />
-                <span className="text-sm font-medium">Rejoignez l&apos;aventure</span>
-              </div>
-              
-              <h2 className="text-4xl md:text-5xl font-bold mb-6">Rejoignez-nous !</h2>
-              <p className="text-lg md:text-xl opacity-90 mb-8 max-w-2xl mx-auto leading-relaxed">
-                Inscrivez-vous pour participer à nos événements, passer des commandes 
-                et rester informé de nos activités.
-              </p>
-              <Button asChild size="xl" className="bg-white text-violet-600 hover:bg-white/90 shadow-xl">
-                <Link href="/register">
-                  Créer un compte gratuitement
-                  <ArrowRight className="ml-2 h-5 w-5" />
-                </Link>
-              </Button>
-            </div>
+              )
+            })}
           </div>
         </div>
       </section>

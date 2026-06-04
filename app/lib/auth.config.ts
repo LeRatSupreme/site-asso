@@ -1,7 +1,7 @@
 import NextAuth from 'next-auth'
 import type { NextAuthConfig } from 'next-auth'
 
-// Types pour la session
+// Types pour la session — alignés sur l'enum Prisma Role (ADMIN | ELEVE)
 declare module 'next-auth' {
   interface Session {
     user: {
@@ -9,12 +9,12 @@ declare module 'next-auth' {
       email: string
       name: string | null
       image: string | null
-      role: 'ADMIN' | 'MEMBER' | 'STUDENT'
+      role: 'ADMIN' | 'ELEVE'
       isActive: boolean
     }
   }
   interface User {
-    role: 'ADMIN' | 'MEMBER' | 'STUDENT'
+    role: 'ADMIN' | 'ELEVE'
     isActive: boolean
   }
 }
@@ -22,7 +22,7 @@ declare module 'next-auth' {
 declare module '@auth/core/jwt' {
   interface JWT {
     id: string
-    role: 'ADMIN' | 'MEMBER' | 'STUDENT'
+    role: 'ADMIN' | 'ELEVE'
     isActive: boolean
   }
 }
@@ -68,7 +68,7 @@ export const authConfig: NextAuthConfig = {
     session({ session, token }) {
       if (token && session.user) {
         session.user.id = token.id as string
-        session.user.role = token.role as 'ADMIN' | 'MEMBER' | 'STUDENT'
+        session.user.role = token.role as 'ADMIN' | 'ELEVE'
         session.user.isActive = token.isActive as boolean
       }
       return session

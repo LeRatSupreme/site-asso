@@ -75,11 +75,13 @@ export function EventForm({ event }: EventFormProps) {
         toast({
           title: event ? 'Événement modifié' : 'Événement créé',
           description: event
-            ? 'L\'événement a été modifié avec succès'
-            : 'L\'événement a été créé avec succès',
+            ? "L'événement a été modifié avec succès"
+            : "Événement créé — vous pouvez maintenant ajouter des options/variantes.",
           variant: 'success',
         })
-        router.push('/admin/events')
+        // Après création → page d'édition pour ajouter des variantes
+        // Après modification → retour à la liste
+        router.push(event ? '/admin/events' : `/admin/events/${result.event?.id}`)
         router.refresh()
       } else {
         toast({

@@ -94,9 +94,9 @@ export function LoginForm() {
   }
 
   return (
-    <Card className="w-full max-w-md border-0 shadow-2xl shadow-blue-500/10">
+    <Card className="w-full max-w-md border border-white/[0.08] shadow-none">
       <CardHeader className="space-y-1 pb-8">
-        <div className="mx-auto w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500 to-violet-500 flex items-center justify-center mb-4 shadow-lg shadow-blue-500/30">
+        <div className="mx-auto w-16 h-16 rounded-2xl bg-primary flex items-center justify-center mb-4 shadow-none">
           <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
           </svg>
@@ -119,7 +119,7 @@ export function LoginForm() {
               onChange={(e) => setEmail(e.target.value)}
               required
               disabled={isLoading}
-              className="h-12 rounded-xl border-2 focus:border-blue-500 transition-colors"
+              className="h-12 rounded-xl border-2 focus:border-primary transition-colors"
             />
           </div>
           <div className="space-y-2">
@@ -133,7 +133,7 @@ export function LoginForm() {
               onChange={(e) => setPassword(e.target.value)}
               required
               disabled={isLoading}
-              className="h-12 rounded-xl border-2 focus:border-blue-500 transition-colors"
+              className="h-12 rounded-xl border-2 focus:border-primary transition-colors"
             />
           </div>
         </CardContent>
@@ -150,7 +150,7 @@ export function LoginForm() {
           </Button>
           <p className="text-sm text-muted-foreground text-center">
             Pas encore de compte ?{' '}
-            <Link href="/register" className="text-blue-500 hover:text-violet-500 font-medium transition-colors">
+            <Link href="/register" className="text-primary hover:text-white font-medium transition-colors">
               S&apos;inscrire
             </Link>
           </p>

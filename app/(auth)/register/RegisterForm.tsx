@@ -49,16 +49,17 @@ export function RegisterForm() {
       })
       return
     }
-/*
-    if (!formData.email.endsWith('@etu.univ-littoral.fr')) {
+
+    const allowedDomains = ['etu.univ-littoral.fr', 'univ-littoral.fr']
+    const emailLower = formData.email.toLowerCase()
+    if (!allowedDomains.some((d) => emailLower.endsWith(`@${d}`))) {
       toast({
-        title: 'Erreur',
-        description: 'Seules les adresses email @etu.univ-littoral.fr sont acceptées',
+        title: 'Email non autorisé',
+        description: 'Utilisez votre adresse @etu.univ-littoral.fr ou @univ-littoral.fr',
         variant: 'destructive',
       })
       return
     }
-*/
     setIsLoading(true)
 
     try {
@@ -107,9 +108,9 @@ export function RegisterForm() {
   }
 
   return (
-    <Card className="w-full max-w-md border-0 shadow-2xl shadow-violet-500/10">
+    <Card className="w-full max-w-md border border-white/[0.08] shadow-none">
       <CardHeader className="space-y-1 pb-6">
-        <div className="mx-auto w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-500 to-blue-500 flex items-center justify-center mb-4 shadow-lg shadow-violet-500/30">
+        <div className="mx-auto w-16 h-16 rounded-2xl bg-primary flex items-center justify-center mb-4 shadow-none">
           <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
           </svg>
@@ -133,31 +134,29 @@ export function RegisterForm() {
               onChange={handleChange}
               required
               disabled={isLoading}
-              className="h-12 rounded-xl border-2 focus:border-violet-500 transition-colors"
+              className="h-12 rounded-xl border-2 focus:border-primary transition-colors"
             />
           </div>
           <div className="space-y-2">
-            {/* <Label htmlFor="email" className="text-sm font-medium">Email universitaire</Label> */}
-            <Label htmlFor="email" className="text-sm font-medium">Email</Label>
+            <Label htmlFor="email" className="text-sm font-medium">Email universitaire</Label>
             <Input
               id="email"
               name="email"
               type="email"
               autoComplete="email"
-              // placeholder="prenom.nom@etu.univ-littoral.fr"
-              placeholder="prenom.nom@example.com"
+              placeholder="prenom.nom@etu.univ-littoral.fr"
               value={formData.email}
               onChange={handleChange}
               required
               disabled={isLoading}
-              className="h-12 rounded-xl border-2 focus:border-violet-500 transition-colors"
+              className="h-12 rounded-xl border-2 focus:border-primary transition-colors"
             />
-            {/* <p className="text-xs text-muted-foreground flex items-center gap-1">
-              <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+            <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+              <svg className="w-3 h-3 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                 <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
               </svg>
-              Utilisez votre adresse @etu.univ-littoral.fr
-            </p> */}
+              Adresses acceptées&nbsp;: @etu.univ-littoral.fr et @univ-littoral.fr
+            </p>
           </div>
           <div className="space-y-2">
             <Label htmlFor="password" className="text-sm font-medium">Mot de passe</Label>
@@ -172,7 +171,7 @@ export function RegisterForm() {
               required
               disabled={isLoading}
               minLength={6}
-              className="h-12 rounded-xl border-2 focus:border-violet-500 transition-colors"
+              className="h-12 rounded-xl border-2 focus:border-primary transition-colors"
             />
           </div>
           <div className="space-y-2">
@@ -188,7 +187,7 @@ export function RegisterForm() {
               required
               disabled={isLoading}
               minLength={6}
-              className="h-12 rounded-xl border-2 focus:border-violet-500 transition-colors"
+              className="h-12 rounded-xl border-2 focus:border-primary transition-colors"
             />
           </div>
         </CardContent>
@@ -205,7 +204,7 @@ export function RegisterForm() {
           </Button>
           <p className="text-sm text-muted-foreground text-center">
             Déjà un compte ?{' '}
-            <Link href="/login" className="text-violet-500 hover:text-blue-500 font-medium transition-colors">
+            <Link href="/login" className="text-primary hover:text-white font-medium transition-colors">
               Se connecter
             </Link>
           </p>

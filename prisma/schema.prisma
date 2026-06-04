@@ -85,6 +85,7 @@ model Event {
 
   registrations EventRegistration[]
   photos        Photo[]
+  variants      EventVariant[]
 
   @@map("events")
 }
@@ -95,11 +96,56 @@ model EventRegistration {
   eventId   String
   createdAt DateTime @default(now())
 
-  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
-  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user    User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  event   Event                     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  choices EventRegistrationChoice[]
 
   @@unique([userId, eventId])
   @@map("event_registrations")
+}
+
+// ============================================
+// VARIANTES D'ÉVÉNEMENT
+// ============================================
+
+model EventVariant {
+  id       String  @id @default(cuid())
+  eventId  String
+  label    String  // ex: "Menu", "Type de repas"
+  required Boolean @default(true)
+  order    Int     @default(0)
+
+  event               Event                     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  choices             EventVariantChoice[]
+  registrationChoices EventRegistrationChoice[]
+
+  @@map("event_variants")
+}
+
+model EventVariantChoice {
+  id        String @id @default(cuid())
+  variantId String
+  label     String // ex: "Halal", "Végétarien", "Standard"
+  order     Int    @default(0)
+
+  variant             EventVariant              @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  registrationChoices EventRegistrationChoice[]
+
+  @@map("event_variant_choices")
+}
+
+model EventRegistrationChoice {
+  id             String @id @default(cuid())
+  registrationId String
+  variantId      String
+  choiceId       String
+
+  registration EventRegistration  @relation(fields: [registrationId], references: [id], onDelete: Cascade)
+  variant      EventVariant       @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  choice       EventVariantChoice @relation(fields: [choiceId], references: [id], onDelete: Cascade)
+
+  @@unique([registrationId, variantId])
+  @@map("event_registration_choices")
 }
 
 model Photo {
