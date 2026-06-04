@@ -302,7 +302,7 @@ export function SumUpDashboard() {
   return (
     <div className="container max-w-7xl mx-auto px-4 py-6 space-y-6">
       {/* Header */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-blue-600 via-violet-600 to-purple-600 p-6 sm:p-8 text-white">
+      <div className="relative overflow-hidden rounded-2xl panel-brand p-6 sm:p-8 text-white shadow-soft-lg">
         <div className="absolute top-0 right-0 -mt-8 -mr-8 h-40 w-40 rounded-full bg-white/10 blur-2xl" />
         <div className="absolute bottom-0 left-0 -mb-8 -ml-8 h-32 w-32 rounded-full bg-white/10 blur-2xl" />
         <div className="relative">
@@ -329,7 +329,7 @@ export function SumUpDashboard() {
                 Actualiser
               </Button>
               <Button
-                className="bg-white/95 text-violet-700 hover:bg-white shadow-lg font-semibold border border-white/50"
+                className="bg-primary text-primary-foreground hover:bg-white"
                 onClick={handleExportCSV}
                 disabled={isExporting || isLoading}
               >
@@ -355,7 +355,7 @@ export function SumUpDashboard() {
                   key={p}
                   size="sm"
                   variant={period === p ? 'secondary' : 'ghost'}
-                  className={period === p ? 'bg-white text-violet-700' : 'text-white hover:bg-white/20'}
+                  className={period === p ? 'bg-primary text-primary-foreground' : 'text-white hover:bg-white/20'}
                   onClick={() => setPeriod(p)}
                 >
                   {p === 'today' ? "Aujourd'hui" : 
@@ -383,7 +383,7 @@ export function SumUpDashboard() {
                 <Button
                   size="sm"
                   variant="secondary"
-                  className="bg-white text-violet-700"
+                  className="bg-primary text-primary-foreground"
                   onClick={loadData}
                   disabled={!customStartDate || !customEndDate}
                 >

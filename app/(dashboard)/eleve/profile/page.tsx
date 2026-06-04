@@ -11,7 +11,7 @@ export default async function ProfilePage() {
   const session = await requireAuth()
 
   return (
-    <div className="container py-8">
+    <div className="container max-w-5xl py-6 md:py-10">
       <div className="max-w-2xl mx-auto">
         <div className="mb-8">
           <h1 className="text-3xl font-bold">Mon profil</h1>

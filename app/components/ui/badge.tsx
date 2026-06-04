@@ -3,24 +3,24 @@ import { cva, type VariantProps } from 'class-variance-authority'
 import { cn } from '@/app/lib/utils'
 
 const badgeVariants = cva(
-  'inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2',
+  'inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-bold tracking-wide transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2',
   {
     variants: {
       variant: {
         default:
-          'border-transparent bg-gradient-to-r from-blue-500 to-violet-500 text-white shadow-sm',
+          'border-transparent bg-primary text-primary-foreground',
         secondary:
-          'border-transparent bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300',
+          'border-white/10 bg-white/[0.06] text-white/70',
         destructive:
-          'border-transparent bg-gradient-to-r from-red-500 to-red-600 text-white',
+          'border-transparent bg-red-600 text-white',
         outline: 
-          'border-2 border-blue-500 text-blue-600 bg-transparent',
+          'border-white/15 bg-transparent text-white/70',
         success:
-          'border-transparent bg-gradient-to-r from-emerald-500 to-green-500 text-white',
+          'border-transparent bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300',
         warning:
-          'border-transparent bg-gradient-to-r from-amber-400 to-orange-500 text-white',
+          'border-transparent bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300',
         info:
-          'border-transparent bg-gradient-to-r from-cyan-500 to-blue-500 text-white',
+          'border-primary/20 bg-primary/10 text-primary',
         ghost:
           'border-transparent bg-muted text-muted-foreground hover:bg-muted/80',
       },

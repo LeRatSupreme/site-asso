@@ -2,7 +2,14 @@
 
 import { revalidatePath } from 'next/cache'
 import { prisma } from '@/app/lib/prisma'
+import { clearSettingsCache } from '@/app/lib/config'
 import { requireAdmin } from '@/app/lib/permissions'
+
+function revalidateSettingsConsumers() {
+  clearSettingsCache()
+  revalidatePath('/', 'layout')
+  revalidatePath('/admin/settings')
+}
 
 export async function updateSetting(key: string, value: string) {
   try {
@@ -14,8 +21,7 @@ export async function updateSetting(key: string, value: string) {
       create: { key, value },
     })
 
-    revalidatePath('/admin/settings')
-    revalidatePath('/')
+    revalidateSettingsConsumers()
 
     return { success: true }
   } catch (error) {
@@ -39,8 +45,7 @@ export async function updateSettings(settings: Record<string, string>) {
 
     await Promise.all(promises)
 
-    revalidatePath('/admin/settings')
-    revalidatePath('/')
+    revalidateSettingsConsumers()
 
     return { success: true }
   } catch (error) {

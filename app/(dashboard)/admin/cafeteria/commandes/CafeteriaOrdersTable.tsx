@@ -241,7 +241,7 @@ export function CafeteriaOrdersTable({ orders }: CafeteriaOrdersTableProps) {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
-                          <div className="h-8 w-8 rounded-full bg-gradient-to-br from-blue-500 to-violet-500 flex items-center justify-center text-white text-sm font-medium">
+                          <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center text-white text-sm font-medium">
                             {order.user.name?.charAt(0) || order.user.email.charAt(0).toUpperCase()}
                           </div>
                           <div>
@@ -292,7 +292,7 @@ export function CafeteriaOrdersTable({ orders }: CafeteriaOrdersTableProps) {
                               size="sm"
                               disabled={isUpdating === order.id}
                               onClick={() => handleStatusChange(order.id, nextStatus)}
-                              className="bg-gradient-to-r from-blue-500 to-violet-500 hover:from-blue-600 hover:to-violet-600"
+                              className="bg-primary hover:from-blue-600 hover:to-violet-600"
                             >
                               {isUpdating === order.id ? (
                                 <RefreshCw className="h-4 w-4 animate-spin" />
@@ -341,7 +341,7 @@ export function CafeteriaOrdersTable({ orders }: CafeteriaOrdersTableProps) {
             <div className="space-y-4">
               {/* Client */}
               <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
-                <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500 to-violet-500 flex items-center justify-center text-white font-medium">
+                <div className="h-10 w-10 rounded-full bg-primary flex items-center justify-center text-white font-medium">
                   {selectedOrder.user.name?.charAt(0) || selectedOrder.user.email.charAt(0).toUpperCase()}
                 </div>
                 <div>
@@ -377,7 +377,7 @@ export function CafeteriaOrdersTable({ orders }: CafeteriaOrdersTableProps) {
               )}
 
               {/* Total */}
-              <div className="flex items-center justify-between p-3 rounded-lg bg-gradient-to-r from-blue-500/10 to-violet-500/10 border">
+              <div className="flex items-center justify-between p-3 rounded-lg border-primary/20 bg-primary/5 border">
                 <span className="font-semibold">Total à payer</span>
                 <span className="text-xl font-bold">{formatPrice(selectedOrder.total)}</span>
               </div>

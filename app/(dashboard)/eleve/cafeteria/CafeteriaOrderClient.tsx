@@ -247,7 +247,7 @@ export function CafeteriaOrderClient({ products, categories }: CafeteriaOrderCli
                       )}
                       {cartQty > 0 && (
                         <Badge 
-                          className="absolute top-2 left-2 bg-gradient-to-r from-blue-500 to-violet-500"
+                          className="absolute top-2 left-2 bg-primary"
                         >
                           {cartQty} dans le panier
                         </Badge>
@@ -299,7 +299,7 @@ export function CafeteriaOrderClient({ products, categories }: CafeteriaOrderCli
                         </div>
                       ) : (
                         <Button
-                          className="w-full bg-gradient-to-r from-blue-500 to-violet-500 hover:from-blue-600 hover:to-violet-600"
+                          className="w-full bg-primary hover:from-blue-600 hover:to-violet-600"
                           onClick={() => addToCart(product)}
                           disabled={isOutOfStock}
                         >
@@ -389,7 +389,7 @@ export function CafeteriaOrderClient({ products, categories }: CafeteriaOrderCli
                       <span className="text-xl font-bold">{formatPrice(total)}</span>
                     </div>
                     <Button
-                      className="w-full bg-gradient-to-r from-blue-500 to-violet-500 hover:from-blue-600 hover:to-violet-600"
+                      className="w-full bg-primary hover:from-blue-600 hover:to-violet-600"
                       onClick={handleOrder}
                       disabled={isSubmitting}
                     >
@@ -423,7 +423,7 @@ export function CafeteriaOrderClient({ products, categories }: CafeteriaOrderCli
         <div className="fixed bottom-4 left-4 right-4 lg:hidden z-50">
           <Sheet>
             <SheetTrigger asChild>
-              <Button className="w-full bg-gradient-to-r from-blue-500 to-violet-500 h-14 text-lg shadow-lg">
+              <Button className="w-full bg-primary h-14 text-lg shadow-lg">
                 <ShoppingCart className="h-5 w-5 mr-2" />
                 Voir le panier ({totalItems}) • {formatPrice(total)}
               </Button>
@@ -503,7 +503,7 @@ export function CafeteriaOrderClient({ products, categories }: CafeteriaOrderCli
                     <span className="text-xl font-bold">{formatPrice(total)}</span>
                   </div>
                   <Button
-                    className="w-full bg-gradient-to-r from-blue-500 to-violet-500 hover:from-blue-600 hover:to-violet-600 h-12"
+                    className="w-full bg-primary hover:from-blue-600 hover:to-violet-600 h-12"
                     onClick={handleOrder}
                     disabled={isSubmitting}
                   >

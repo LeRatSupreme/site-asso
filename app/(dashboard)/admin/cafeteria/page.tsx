@@ -79,7 +79,7 @@ export default async function CafeteriaPage() {
         <Card>
           <CardHeader className="flex flex-row items-center gap-3 pb-2">
             <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/50">
-              <Package className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+              <Package className="h-5 w-5 text-primary" />
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Total produits</p>
@@ -127,7 +127,7 @@ export default async function CafeteriaPage() {
         <Card>
           <CardHeader className="flex flex-row items-center gap-3 pb-2">
             <div className="p-2 rounded-lg bg-violet-100 dark:bg-violet-900/50">
-              <Tags className="h-5 w-5 text-violet-600 dark:text-violet-400" />
+              <Tags className="h-5 w-5 text-primary" />
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Catégories</p>

@@ -67,9 +67,9 @@ export default async function EleveDashboardPage() {
   }
 
   return (
-    <div className="container py-8">
+    <div className="container max-w-7xl py-6 md:py-10">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold">
+        <h1 className="text-3xl md:text-4xl font-black">
           Bonjour, {session.user.name || 'Élève'} 👋
         </h1>
         <p className="text-muted-foreground mt-2">

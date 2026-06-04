@@ -96,7 +96,7 @@ export default async function OrdersPage() {
   return (
     <div className="container max-w-5xl mx-auto px-4 py-6 space-y-8">
       {/* Header */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-blue-600 via-violet-600 to-purple-600 p-8 text-white">
+      <div className="relative overflow-hidden rounded-2xl panel-brand p-8 text-white shadow-soft-lg">
         <div className="absolute top-0 right-0 -mt-8 -mr-8 h-40 w-40 rounded-full bg-white/10 blur-2xl" />
         <div className="absolute bottom-0 left-0 -mb-8 -ml-8 h-32 w-32 rounded-full bg-white/10 blur-2xl" />
         <div className="relative">
@@ -112,7 +112,7 @@ export default async function OrdersPage() {
                 Suivez l&apos;état de vos commandes cafétéria
               </p>
             </div>
-            <Button asChild size="lg" className="bg-white/95 text-violet-700 hover:bg-white shadow-lg font-semibold w-full sm:w-auto border border-white/50">
+            <Button asChild size="lg" className="bg-primary text-primary-foreground hover:bg-white">
               <Link href="/eleve/cafeteria">
                 <Coffee className="mr-2 h-5 w-5" />
                 Nouvelle commande
@@ -185,7 +185,7 @@ export default async function OrdersPage() {
                         </p>
                       </div>
                       <div className="text-right">
-                        <div className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-violet-600 bg-clip-text text-transparent">
+                        <div className="text-2xl font-bold text-primary">
                           {formatPrice(order.total)}
                         </div>
                         <div className="text-xs text-muted-foreground">
@@ -295,14 +295,14 @@ export default async function OrdersPage() {
       {serializedOrders.length === 0 && (
         <Card className="border-dashed">
           <CardContent className="py-16 text-center">
-            <div className="inline-flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-blue-100 to-violet-100 dark:from-blue-900/30 dark:to-violet-900/30 mb-6">
-              <Coffee className="h-10 w-10 text-violet-500" />
+            <div className="inline-flex h-20 w-20 items-center justify-center rounded-full bg-primary/10 mb-6">
+              <Coffee className="h-10 w-10 text-primary" />
             </div>
             <h3 className="text-xl font-semibold mb-2">Aucune commande</h3>
             <p className="text-muted-foreground mb-6 max-w-sm mx-auto">
               Vous n&apos;avez pas encore passé de commande. Découvrez notre cafétéria !
             </p>
-            <Button asChild size="lg" className="bg-gradient-to-r from-blue-600 to-violet-600 hover:from-blue-700 hover:to-violet-700">
+            <Button asChild size="lg" className="bg-primary hover:bg-white">
               <Link href="/eleve/cafeteria">
                 <Coffee className="mr-2 h-5 w-5" />
                 Découvrir la cafétéria

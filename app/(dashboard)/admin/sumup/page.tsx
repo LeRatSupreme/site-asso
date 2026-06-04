@@ -25,7 +25,7 @@ export default async function SumUpPage() {
     return (
       <div className="container max-w-5xl mx-auto px-4 py-6 space-y-8">
         {/* Header */}
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-blue-600 via-violet-600 to-purple-600 p-8 text-white">
+        <div className="relative overflow-hidden rounded-2xl panel-brand p-8 text-white shadow-soft-lg">
           <div className="absolute top-0 right-0 -mt-8 -mr-8 h-40 w-40 rounded-full bg-white/10 blur-2xl" />
           <div className="absolute bottom-0 left-0 -mb-8 -ml-8 h-32 w-32 rounded-full bg-white/10 blur-2xl" />
           <div className="relative">

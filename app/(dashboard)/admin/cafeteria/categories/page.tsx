@@ -26,7 +26,7 @@ export default async function CategoriesPage() {
           </Button>
           <div>
             <div className="flex items-center gap-3 mb-1">
-              <div className="p-2 rounded-xl bg-gradient-to-br from-violet-500 to-purple-500 shadow-lg">
+              <div className="p-2 rounded-xl bg-primary">
                 <Tags className="h-5 w-5 text-white" />
               </div>
               <h1 className="text-3xl font-bold">Catégories</h1>
