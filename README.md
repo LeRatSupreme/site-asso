@@ -1,5 +1,7 @@
 # Site associatif
 
+Projet en ligne : https://aeic.jrcan.dev/
+
 Application web complète pour gérer la vie d'une association étudiante : site public, inscriptions aux événements, cafétéria, commandes, médiathèque, contenus éditables et espace d'administration.
 
 Le projet est construit avec Next.js 15, React 19, Prisma, MySQL et Auth.js. Il peut tourner en local pour le développement ou en production avec Docker Compose.
@@ -220,3 +222,9 @@ openssl rand -base64 32
 
 - Remplacer les comptes de test après le premier déploiement.
 - Vérifier les règles Traefik dans `docker-compose.yml` avant d'exposer l'application publiquement.
+
+## Licence
+
+Tous droits réservés.
+
+Ce projet est privé. Aucune utilisation, copie, modification, distribution, publication ou réutilisation du code n'est autorisée sans accord écrit préalable du propriétaire du projet.
