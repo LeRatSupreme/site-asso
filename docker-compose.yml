@@ -43,13 +43,8 @@ services:
       dockerfile: Dockerfile
     container_name: ${NAME}
     restart: unless-stopped
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.${NAME}.entryPoints=websecure"
-      - "traefik.http.services.${NAME}.loadbalancer.server.port=3000"
-      - "traefik.http.routers.${NAME}.rule=Host(`${DOMAIN}`)"
-      - "traefik.http.routers.${NAME}.tls=true"
-      - "traefik.http.routers.${NAME}.tls.certresolver=myresolver"
+    ports:
+      - "127.0.0.1:3000:3000"
     environment:
       DATABASE_URL: mysql://${MYSQL_USER}:${MYSQL_PASSWORD}@db:3306/${MYSQL_DATABASE}
       NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
@@ -67,7 +62,6 @@ services:
         condition: service_completed_successfully
     networks:
       - app-network
-      - web
 
   # phpMyAdmin
   phpmyadmin:
@@ -77,25 +71,17 @@ services:
     environment:
       PMA_HOST: db
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.${NAME}-pma.entryPoints=websecure"
-      - "traefik.http.services.${NAME}-pma.loadbalancer.server.port=80"
-      - "traefik.http.routers.${NAME}-pma.rule=Host(`phpmyadmin-${DOMAIN}`)"
-      - "traefik.http.routers.${NAME}-pma.tls=true"
-      - "traefik.http.routers.${NAME}-pma.tls.certresolver=myresolver"
+    ports:
+      - "127.0.0.1:8081:80"
     depends_on:
       db:
         condition: service_healthy
     networks:
       - app-network
-      - web
 
 networks:
   app-network:
     driver: bridge
-  web:
-    external: true
 
 volumes:
   mysql-data:
