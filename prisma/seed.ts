@@ -6,13 +6,14 @@ const prisma = new PrismaClient()
 async function main() {
   console.log('🌱 Seeding database...')
 
-  // Créer l'admin par défaut
-  const adminPassword = await hash('admin123', 12)
+  // Créer l'admin depuis les variables d'environnement (jamais coder en dur)
+  const adminEmail = process.env.ADMIN_EMAIL || 'admin@asso.fr'
+  const adminPassword = await hash(process.env.ADMIN_PASSWORD || 'admin123', 12)
   const admin = await prisma.user.upsert({
-    where: { email: 'admin@asso.fr' },
+    where: { email: adminEmail },
     update: {},
     create: {
-      email: 'admin@asso.fr',
+      email: adminEmail,
       name: 'Administrateur',
       password: adminPassword,
       role: 'ADMIN',
@@ -146,7 +147,7 @@ async function main() {
   console.log('✅ Seed terminé avec succès!')
   console.log('')
   console.log('📧 Comptes de test:')
-  console.log('   Admin: admin@asso.fr / admin123')
+  console.log('   Admin: ' + adminEmail + ' / (mot de passe dans .env)')
   console.log('   Élève: eleve@asso.fr / eleve123')
 }
 

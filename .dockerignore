@@ -57,3 +57,9 @@ docker-compose.yml
 # Uploads (seront montés en volume)
 public/uploads/*
 !public/uploads/.gitkeep
+
+# Docs locales (non versionnees)
+CHANGELOG.md
+changelog.md
+rules
+

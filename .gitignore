@@ -42,3 +42,6 @@ prisma/*.db-journal
 # Uploads
 public/uploads/*
 !public/uploads/.gitkeep
+
+# Local rules (non versionné)
+rules/
