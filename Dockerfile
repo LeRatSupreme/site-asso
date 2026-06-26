@@ -23,6 +23,12 @@ COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
 
+# Stage de migration Prisma (s'exécute une fois puis se termine)
+FROM base AS migrate
+COPY --from=base /app/node_modules ./node_modules
+COPY --from=base /app/prisma ./prisma
+CMD ["npx", "prisma", "migrate", "deploy"]
+
 # Stage de production
 FROM node:20-alpine AS runner
 WORKDIR /app
