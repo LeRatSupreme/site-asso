@@ -11,7 +11,11 @@ async function main() {
   const adminPassword = await hash(process.env.ADMIN_PASSWORD || 'admin123', 12)
   const admin = await prisma.user.upsert({
     where: { email: adminEmail },
-    update: {},
+    update: {
+      password: adminPassword,
+      role: 'ADMIN',
+      isActive: true,
+    },
     create: {
       email: adminEmail,
       name: 'Administrateur',
@@ -22,8 +26,7 @@ async function main() {
   })
   console.log('✅ Admin créé:', admin.email)
 
-  // Créer un élève de test
-  const elevePassword = await hash('eleve123', 12)
+  // Créer un élève de test  const elevePassword = await hash('eleve123', 12)
   const eleve = await prisma.user.upsert({
     where: { email: 'eleve@asso.fr' },
     update: {},

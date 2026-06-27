@@ -30,19 +30,15 @@ COPY --from=base /app/prisma ./prisma
 CMD ["npx", "prisma", "migrate", "deploy"]
 
 # Stage de production
-FROM node:20-alpine AS runner
-WORKDIR /app
+FROM node:20-alpine AS runnerWORKDIR /app
 
-# Installation d'openssl pour Prisma
-RUN apk add --no-cache openssl
+# Installation d'openssl pour PrismaRUN apk add --no-cache openssl
 
-ENV NODE_ENV=production
-ENV NEXT_TELEMETRY_DISABLED=1
+ENV NODE_ENV=productionENV NEXT_TELEMETRY_DISABLED=1
 
 # Créer un utilisateur non-root
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
-
 # Copier les fichiers nécessaires depuis le build
 COPY --from=base /app/public ./public
 COPY --from=base /app/.next/standalone ./
@@ -57,10 +53,8 @@ COPY --from=base /app/node_modules/.bin/prisma ./node_modules/.bin/prisma
 RUN mkdir -p ./public/uploads && chown -R nextjs:nodejs ./public/uploads
 
 USER nextjs
-
 EXPOSE 3000
 
-ENV PORT=3000
-ENV HOSTNAME="0.0.0.0"
+ENV PORT=3000ENV HOSTNAME="0.0.0.0"
 
 CMD ["node", "server.js"]
