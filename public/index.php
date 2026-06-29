@@ -31,6 +31,7 @@ use App\Controllers\Admin\AdminTeamController;
 use App\Controllers\Admin\AdminPageController;
 use App\Controllers\Admin\AdminMediaController;
 use App\Controllers\Admin\AdminSettingController;
+use App\Controllers\Admin\AdminComptaController;
 use App\Controllers\SeoController;
 use App\Controllers\TwoFactorController;
 use App\Core\Auth;
@@ -149,6 +150,21 @@ $router->post('/admin/media/{id}/delete', [AdminMediaController::class, 'delete'
 
 $router->get('/admin/settings', [AdminSettingController::class, 'index']);
 $router->post('/admin/settings/save', [AdminSettingController::class, 'save']);
+
+// Comptabilité & gestion des achats (rôle ADMIN ou TRESORERIE).
+$router->get('/admin/compta', [AdminComptaController::class, 'dashboard']);
+$router->get('/admin/compta/import', [AdminComptaController::class, 'importForm']);
+$router->post('/admin/compta/import', [AdminComptaController::class, 'import']);
+$router->get('/admin/compta/ventes', [AdminComptaController::class, 'sales']);
+$router->get('/admin/compta/produits', [AdminComptaController::class, 'products']);
+$router->get('/admin/compta/categories', [AdminComptaController::class, 'categories']);
+$router->get('/admin/compta/couts', [AdminComptaController::class, 'costs']);
+$router->post('/admin/compta/couts/save', [AdminComptaController::class, 'saveCost']);
+$router->post('/admin/compta/couts/{id}/close', [AdminComptaController::class, 'closeCost']);
+$router->get('/admin/compta/aliases', [AdminComptaController::class, 'aliases']);
+$router->post('/admin/compta/aliases/save', [AdminComptaController::class, 'saveAlias']);
+$router->post('/admin/compta/aliases/{id}/delete', [AdminComptaController::class, 'deleteAlias']);
+$router->get('/admin/compta/reappro', [AdminComptaController::class, 'reorder']);
 
 // 3. Dispatch.
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';

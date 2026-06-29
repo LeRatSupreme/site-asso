@@ -1,0 +1,131 @@
+/* =========================================================
+   AEIC — Comptabilité (Phase 9)
+   Compléments au CSS admin (admin.css).
+   ========================================================= */
+
+.compta-kpis {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.compta-kpis .kpi {
+    padding: 1.25rem;
+}
+
+.kpi-label {
+    margin: 0;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-size: 11px;
+    color: var(--muted);
+}
+
+.kpi-value {
+    margin: 0.35rem 0 0;
+    font-size: 1.9rem;
+    font-weight: 900;
+    letter-spacing: -0.03em;
+}
+
+.kpi-value.is-positive { color: var(--accent-success); }
+.kpi-value.is-negative { color: var(--accent-danger); }
+
+.kpi-sub {
+    margin: 0.35rem 0 0;
+    font-size: 12px;
+    color: var(--muted);
+}
+
+.compta-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.card-title {
+    margin: 0 0 0.85rem;
+    font-size: 1rem;
+    font-weight: 800;
+    letter-spacing: -0.01em;
+}
+
+.compta-monthselect,
+.compta-filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.compta-monthselect select,
+.compta-filters select,
+.compta-filters input {
+    padding: 0.4rem 0.6rem;
+    border-radius: 0.5rem;
+    border: 1px solid var(--border);
+    background: rgba(255, 255, 255, 0.04);
+    color: inherit;
+}
+
+/* Carte / Liquide */
+.split-list {
+    list-style: none;
+    margin: 0 0 0.85rem;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+.split-list li {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.95rem;
+}
+
+.split-bar {
+    height: 10px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.08);
+    overflow: hidden;
+}
+.split-bar-card {
+    height: 100%;
+    background: linear-gradient(135deg, var(--secondary), var(--primary));
+}
+
+/* File « à classer » */
+.alias-form { margin-bottom: 0.5rem; }
+.alias-row {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    padding: 0.6rem;
+    border: 1px solid var(--border);
+    border-radius: 0.6rem;
+    background: rgba(255, 255, 255, 0.02);
+}
+.alias-row code {
+    background: rgba(255, 255, 255, 0.08);
+    padding: 0.1rem 0.35rem;
+    border-radius: 0.3rem;
+}
+.alias-row input {
+    padding: 0.35rem 0.5rem;
+    border-radius: 0.4rem;
+    border: 1px solid var(--border);
+    background: rgba(255, 255, 255, 0.04);
+    color: inherit;
+    margin-right: 0.3rem;
+}
+
+/* Ligne d'alerte réappro */
+.table tr.row-alert {
+    background: rgba(245, 158, 11, 0.08);
+}
+
+.muted { color: var(--muted); }
+.is-positive { color: var(--accent-success); }
+.is-negative { color: var(--accent-danger); }
