@@ -112,10 +112,6 @@ function aeic_register_routes(Router $router): void
     $router->get('/admin/cafeteria/categories', [AdminCafeteriaController::class, 'categories']);
     $router->post('/admin/cafeteria/categories/save', [AdminCafeteriaController::class, 'saveCategory']);
     $router->post('/admin/cafeteria/categories/{id}/delete', [AdminCafeteriaController::class, 'deleteCategory']);
-    $router->get('/admin/cafeteria/commandes', [AdminCafeteriaController::class, 'orders']);
-    $router->post('/admin/cafeteria/commandes/{id}/status', [AdminCafeteriaController::class, 'changeStatus']);
-    $router->get('/admin/cafeteria/pos', [AdminCafeteriaController::class, 'pos']);
-    $router->post('/admin/cafeteria/pos', [AdminCafeteriaController::class, 'posCheckout']);
 
     $router->get('/admin/users', [AdminUserController::class, 'index']);
     $router->post('/admin/users/{id}/role', [AdminUserController::class, 'changeRole']);
