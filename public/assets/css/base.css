@@ -29,7 +29,7 @@
     --radius-sm: 0.625rem;
     --radius-lg: 1.5rem;
 
-    --container: 1100px;
+    --container: 1320px;
 
     --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
 
@@ -96,7 +96,7 @@ ul, ol { list-style: none; }
     width: 100%;
     max-width: var(--container);
     margin: 0 auto;
-    padding: 0 1.5rem;
+    padding: 0 0.75rem;
     position: relative;
 }
 .container.narrow { max-width: 760px; }

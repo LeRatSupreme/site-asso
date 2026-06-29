@@ -63,8 +63,8 @@ $twitterHandle = Setting::get('twitter_handle', '');
     <?php endif; ?>
 
     <link rel="icon" href="<?= e(asset('img/favicon.svg')) ?>" type="image/svg+xml">
-    <link rel="stylesheet" href="<?= e(asset('css/base.css')) ?>">
-    <link rel="stylesheet" href="<?= e(asset('css/pages.css')) ?>">
+    <link rel="stylesheet" href="<?= e(assetVersioned('css/base.css')) ?>">
+    <link rel="stylesheet" href="<?= e(assetVersioned('css/pages.css')) ?>">
     <link rel="stylesheet" href="<?= e(rootAssetVersioned('/css/payments.css')) ?>">
 </head>
 <body>
