@@ -80,7 +80,8 @@ function reorder_qty(float $v): string {
                         <td><strong><?= e($key) ?></strong></td>
                         <td><?= e((string) $r['category']) ?></td>
                         <td class="num">
-                            <input type="number" class="stock-input" name="stocks[<?= e($key) ?>]"
+                            <input type="hidden" name="keys[]" value="<?= e($key) ?>">
+                            <input type="number" class="stock-input" name="values[]"
                                    value="<?= e($stockVal) ?>" min="0" step="1"
                                    placeholder="—" style="width:5.5rem" inputmode="numeric">
                         </td>
