@@ -124,6 +124,19 @@ final class Mailer
     }
 
     /**
+     * Indique si on est en mode test (constante APP_TESTING définie à true
+     * par le bootstrap des tests / config.php, ou variable d'env 'true').
+     */
+    private static function isTesting(): bool
+    {
+        if (defined('APP_TESTING')) {
+            return (bool) APP_TESTING;
+        }
+
+        return getenv('APP_TESTING') === 'true';
+    }
+
+    /**
      * Cœur d'envoi : applique la priorité des transports.
      */
     private static function dispatchRaw(string $to, string $subject, string $text, string $html): bool
@@ -144,7 +157,7 @@ final class Mailer
             return $ok;
         }
 
-        if (getenv('APP_TESTING') === 'true') {
+        if (self::isTesting()) {
             self::$captured[] = ['to' => $to, 'subject' => $subject];
             self::$log[] = 'captured: ' . $to . ' / ' . $subject;
 

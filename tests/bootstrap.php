@@ -27,7 +27,9 @@ if (!defined('APP_DEBUG')) {
     define('APP_DEBUG', false);
 }
 if (!defined('APP_TESTING')) {
-    define('APP_TESTING', getenv('APP_TESTING') === 'true');
+    // Bootstrap réservé aux tests : on force le mode test (capture e-mails,
+    // CSRF/2FA neutralisés) quoi qu'il arrive.
+    define('APP_TESTING', true);
 }
 
 /**
