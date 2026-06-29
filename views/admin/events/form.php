@@ -40,6 +40,14 @@ declare(strict_types=1);
         <div class="field">
             <label for="location">Lieu</label>
             <input type="text" id="location" name="location" value="<?= e($event['location'] ?? '') ?>">
+            <p class="field-help">Adresse utilisée pour la carte (si activée ci-dessous).</p>
+        </div>
+        <div class="field">
+            <label class="checkbox-inline">
+                <input type="checkbox" name="show_map" value="1" <?= !empty($event['show_map']) ? 'checked' : '' ?>>
+                Afficher une carte du lieu
+            </label>
+            <p class="field-help">Coche pour afficher une carte interactive sur la page de l'événement (le lieu est géocodé automatiquement à l'enregistrement).</p>
         </div>
     </div>
 

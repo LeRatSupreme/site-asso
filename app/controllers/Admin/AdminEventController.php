@@ -50,6 +50,30 @@ final class AdminEventController extends AdminBaseController
         $data['price'] = ($data['price'] ?? '') !== '' ? parseFrenchFloat((string) $data['price']) : null;
         $data['max_capacity'] = ($data['max_capacity'] ?? '') !== '' ? (int) $data['max_capacity'] : null;
 
+        // Carte : si demandée et qu'on a un lieu, on géocode (une seule fois
+        // par enregistrement ; les coords sont réutilisées à l'affichage).
+        if (!empty($data['show_map']) && trim((string) ($data['location'] ?? '')) !== '') {
+            $existing = !empty($data['id']) ? Event::find((string) $data['id']) : null;
+            $needGeocode = ($existing === null)
+                || empty($existing['map_lat'])
+                || empty($existing['map_lon'])
+                || ((string) ($existing['location'] ?? '') !== trim((string) $data['location']));
+            if ($needGeocode) {
+                $coords = Event::geocode((string) $data['location']);
+                if ($coords !== null) {
+                    $data['map_lat'] = $coords['lat'];
+                    $data['map_lon'] = $coords['lon'];
+                }
+            } else {
+                $data['map_lat'] = $existing['map_lat'];
+                $data['map_lon'] = $existing['map_lon'];
+            }
+        } else {
+            // Pas de carte : on conserve les coords éventuelles mais on n'affichera pas.
+            $data['map_lat'] = $data['map_lat'] ?? null;
+            $data['map_lon'] = $data['map_lon'] ?? null;
+        }
+
         $id = Event::save($data);
 
         $this->audit($isNew ? 'event.create' : 'event.update', 'event', $id);
