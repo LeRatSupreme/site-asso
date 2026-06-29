@@ -104,81 +104,95 @@ declare(strict_types=1);
             <span class="costs-count muted" id="c-count"></span>
         </div>
 
-        <div id="c-list" class="cost-cards">
-            <?php foreach ($items as $it): 
-                $name = (string) $it['name'];
-                $hasCost = $it['currentCost'] !== null;
+        <div id="c-list">
+            <?php
+                // Regroupement par catégorie pour la lisibilité.
+                $byCat = [];
+                foreach ($items as $it) {
+                    $byCat[(string) $it['category']][] = $it;
+                }
+                ksort($byCat);
             ?>
-                <article
-                    class="cost-card <?= $hasCost ? 'has-cost' : 'no-cost' ?>"
-                    data-name="<?= e(strtolower($name)) ?>"
-                    data-cat="<?= e(strtolower((string) $it['category'])) ?>"
-                    data-nocost="<?= $hasCost ? '0' : '1' ?>">
+            <?php foreach ($byCat as $catName => $catItems): ?>
+                <section class="cost-group" data-cat="<?= e(strtolower((string) $catName)) ?>">
+                    <h2 class="cost-group-title"><?= e($catName) ?> <span class="muted">(<?= count($catItems) ?>)</span></h2>
+                    <div class="cost-cards">
+                        <?php foreach ($catItems as $it):
+                            $name = (string) $it['name'];
+                            $hasCost = $it['currentCost'] !== null;
+                        ?>
+                            <article
+                                class="cost-card <?= $hasCost ? 'has-cost' : 'no-cost' ?>"
+                                data-name="<?= e(strtolower($name)) ?>"
+                                data-cat="<?= e(strtolower((string) $it['category'])) ?>"
+                                data-nocost="<?= $hasCost ? '0' : '1' ?>">
 
-                    <div class="cost-card-head">
-                        <div class="cost-card-id">
-                            <h3><?= e($name) ?></h3>
-                            <div class="cost-card-meta">
-                                <span class="badge badge-muted"><?= e($it['category']) ?></span>
-                                <?php if ((int) $it['qty'] > 0): ?>
-                                    <span class="muted"><?= (int) $it['qty'] ?> vendus</span>
-                                <?php endif; ?>
+                                <div class="cost-card-head">
+                                    <div class="cost-card-id">
+                                        <h3><?= e($name) ?></h3>
+                                        <div class="cost-card-meta">
+                                            <?php if ((int) $it['qty'] > 0): ?>
+                                                <span class="muted"><?= (int) $it['qty'] ?> vendus</span>
+                                            <?php endif; ?>
+                                            <?php if ($it['lotsCount'] > 0): ?>
+                                                <span class="muted"><?= (int) $it['lotsCount'] ?> lot<?= $it['lotsCount'] > 1 ? 's' : '' ?></span>
+                                            <?php endif; ?>
+                                        </div>
+                                    </div>
+                                    <div class="cost-card-current">
+                                        <?php if ($hasCost): ?>
+                                            <span class="badge badge-success">Lot en cours</span>
+                                            <strong class="cost-card-price"><?= e(formatPrice($it['currentCost'])) ?><span class="muted"> /unité</span></strong>
+                                        <?php else: ?>
+                                            <span class="badge badge-warning">Aucun coût</span>
+                                        <?php endif; ?>
+                                    </div>
+                                </div>
+
                                 <?php if ($it['lotsCount'] > 0): ?>
-                                    <span class="muted"><?= (int) $it['lotsCount'] ?> lot<?= $it['lotsCount'] > 1 ? 's' : '' ?></span>
+                                    <details class="cost-card-lots">
+                                        <summary>Voir les <?= (int) $it['lotsCount'] ?> lot<?= $it['lotsCount'] > 1 ? 's' : '' ?></summary>
+                                        <table class="table">
+                                            <thead><tr><th>Coût unit.</th><th>Du</th><th>Au</th><th>Fournisseur</th><th>Actions</th></tr></thead>
+                                            <tbody>
+                                                <?php foreach ($it['lots'] as $c): ?>
+                                                    <tr class="<?= empty($c['valid_to']) ? 'row-current' : '' ?>">
+                                                        <td><strong><?= e(formatPrice($c['cost_price'])) ?></strong></td>
+                                                        <td><?= e(formatDate($c['valid_from'])) ?></td>
+                                                        <td>
+                                                            <?php if (!empty($c['valid_to'])): ?>
+                                                                <?= e(formatDate($c['valid_to'])) ?>
+                                                            <?php else: ?>
+                                                                <span class="badge badge-success">en cours</span>
+                                                            <?php endif; ?>
+                                                        </td>
+                                                        <td><?= e((string) ($c['supplier'] ?? '—')) ?></td>
+                                                        <td class="row-actions">
+                                                            <?php if (empty($c['valid_to'])): ?>
+                                                                <form method="post" action="<?= e(url('/admin/compta/couts/' . rawurlencode((string) $c['id']) . '/close')) ?>" onsubmit="return confirm('Clôturer ce lot maintenant ?');">
+                                                                    <?= csrf_field() ?>
+                                                                    <button type="submit" class="btn btn-outline btn-sm">Clôturer</button>
+                                                                </form>
+                                                            <?php endif; ?>
+                                                            <form method="post" action="<?= e(url('/admin/compta/couts/' . rawurlencode((string) $c['id']) . '/delete')) ?>" onsubmit="return confirm('Supprimer ce lot ? Action irréversible.');">
+                                                                <?= csrf_field() ?>
+                                                                <button type="submit" class="btn btn-danger btn-sm" aria-label="Supprimer">🗑</button>
+                                                            </form>
+                                                        </td>
+                                                    </tr>
+                                                <?php endforeach; ?>
+                                            </tbody>
+                                        </table>
+                                    </details>
                                 <?php endif; ?>
-                            </div>
-                        </div>
-                        <div class="cost-card-current">
-                            <?php if ($hasCost): ?>
-                                <span class="badge badge-success">Lot en cours</span>
-                                <strong class="cost-card-price"><?= e(formatPrice($it['currentCost'])) ?><span class="muted"> /unité</span></strong>
-                            <?php else: ?>
-                                <span class="badge badge-warning">Aucun coût</span>
-                            <?php endif; ?>
-                        </div>
-                    </div>
 
-                    <?php if ($it['lotsCount'] > 0): ?>
-                        <details class="cost-card-lots">
-                            <summary>Voir les <?= (int) $it['lotsCount'] ?> lot<?= $it['lotsCount'] > 1 ? 's' : '' ?></summary>
-                            <table class="table">
-                                <thead><tr><th>Coût unit.</th><th>Du</th><th>Au</th><th>Fournisseur</th><th>Actions</th></tr></thead>
-                                <tbody>
-                                    <?php foreach ($it['lots'] as $c): ?>
-                                        <tr class="<?= empty($c['valid_to']) ? 'row-current' : '' ?>">
-                                            <td><strong><?= e(formatPrice($c['cost_price'])) ?></strong></td>
-                                            <td><?= e(formatDate($c['valid_from'])) ?></td>
-                                            <td>
-                                                <?php if (!empty($c['valid_to'])): ?>
-                                                    <?= e(formatDate($c['valid_to'])) ?>
-                                                <?php else: ?>
-                                                    <span class="badge badge-success">en cours</span>
-                                                <?php endif; ?>
-                                            </td>
-                                            <td><?= e((string) ($c['supplier'] ?? '—')) ?></td>
-                                            <td class="row-actions">
-                                                <?php if (empty($c['valid_to'])): ?>
-                                                    <form method="post" action="<?= e(url('/admin/compta/couts/' . rawurlencode((string) $c['id']) . '/close')) ?>" onsubmit="return confirm('Clôturer ce lot maintenant ?');">
-                                                        <?= csrf_field() ?>
-                                                        <button type="submit" class="btn btn-outline btn-sm">Clôturer</button>
-                                                    </form>
-                                                <?php endif; ?>
-                                                <form method="post" action="<?= e(url('/admin/compta/couts/' . rawurlencode((string) $c['id']) . '/delete')) ?>" onsubmit="return confirm('Supprimer ce lot ? Action irréversible.');">
-                                                    <?= csrf_field() ?>
-                                                    <button type="submit" class="btn btn-danger btn-sm" aria-label="Supprimer">🗑</button>
-                                                </form>
-                                            </td>
-                                        </tr>
-                                    <?php endforeach; ?>
-                                </tbody>
-                            </table>
-                        </details>
-                    <?php endif; ?>
-
-                    <div class="cost-card-add">
-                        <a class="btn btn-ghost btn-sm" href="<?= e(url('/admin/compta/couts?product_key=' . rawurlencode($name))) ?>">＋ Ajouter un lot pour <?= e($name) ?></a>
+                                <div class="cost-card-add">
+                                    <a class="btn btn-ghost btn-sm" href="<?= e(url('/admin/compta/couts?product_key=' . rawurlencode($name))) ?>">＋ Ajouter un lot pour <?= e($name) ?></a>
+                                </div>
+                            </article>
+                        <?php endforeach; ?>
                     </div>
-                </article>
+                </section>
             <?php endforeach; ?>
 
             <?php if ($items === []): ?>
@@ -248,6 +262,12 @@ declare(strict_types=1);
             var visible = okSearch && okCat && okCost;
             card.style.display = visible ? '' : 'none';
             if (visible) shown++;
+        });
+        // Masque les groupes de catégorie devenus vides.
+        var groups = document.querySelectorAll('.cost-group');
+        groups.forEach(function (g){
+            var anyVisible = Array.prototype.some.call(g.querySelectorAll('.cost-card'), function (c){ return c.style.display !== 'none'; });
+            g.style.display = anyVisible ? '' : 'none';
         });
         countEl.textContent = shown + ' / ' + total + ' produit' + (total>1?'s':'');
     }
