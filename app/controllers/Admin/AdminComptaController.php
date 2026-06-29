@@ -573,13 +573,30 @@ final class AdminComptaController extends AdminBaseController
     {
         $user = $this->guardCompta();
 
-        $data = $this->reorderData();
+        // Période cible d'approvisionnement (combien de temps on veut couper).
+        $periods = [
+            '1w' => ['label' => '1 semaine',  'days' => 7],
+            '2w' => ['label' => '2 semaines', 'days' => 14],
+            '1m' => ['label' => '1 mois',     'days' => 30],
+            '2m' => ['label' => '2 mois',     'days' => 60],
+            '3m' => ['label' => '3 mois',     'days' => 90],
+        ];
+        $periodKey = $_GET['period'] ?? '1m';
+        if (!isset($periods[$periodKey])) {
+            $periodKey = '1m';
+        }
+        $targetDays = $periods[$periodKey]['days'];
+
+        $data = $this->reorderData($targetDays);
 
         $this->renderAdmin('admin/compta/reorder', [
-            'title'  => 'Réapprovisionnement',
-            'user'   => $user,
-            'rows'   => $data['rows'],
-            'alerts' => $data['alerts'],
+            'title'        => 'Réapprovisionnement',
+            'user'         => $user,
+            'rows'         => $data['rows'],
+            'alerts'       => $data['alerts'],
+            'periods'      => $periods,
+            'currentPeriod'=> $periodKey,
+            'targetDays'   => $targetDays,
         ]);
     }
 
@@ -588,11 +605,12 @@ final class AdminComptaController extends AdminBaseController
      *
      * Pour chaque produit cafétéria (table products), on rapproche le stock
      * actuel de la consommation moyenne (moyenne mobile 3 mois lue depuis
-     * sales, rapprochée par nom = product_key).
+     * sales) exprimée par jour / semaine / mois, et on en déduit la quantité
+     * à commander pour couvrir la période cible.
      *
      * @return array{rows:list<array<string,mixed>>, alerts:int}
      */
-    private function reorderData(): array
+    private function reorderData(int $targetDays): array
     {
         $products = Product::allForAdmin();
         $consumption = Sale::consumptionByProductKey(3);
@@ -608,10 +626,17 @@ final class AdminComptaController extends AdminBaseController
 
             $monthlyData = $consumption[$key] ?? null;
             $monthly = $monthlyData['monthly'] ?? [];
-            $avg = ComptaCalc::movingAverage($monthly, 3);
+            $avgMonth = ComptaCalc::movingAverage($monthly, 3);   // unités / mois
+            $avgDay   = $avgMonth / 30.0;                          // unités / jour
+            $avgWeek  = $avgDay * 7.0;                             // unités / semaine
+
             $stock = (int) ($p['stock'] ?? 0);
-            $autonomy = ComptaCalc::autonomyDays($stock, $avg);
-            $suggested = ComptaCalc::suggestedReorder($avg, 1, $stock);
+            $autonomy = ComptaCalc::autonomyDays($stock, $avgMonth);
+
+            // Quantité consommée sur la période cible, puis quantité à
+            // commander = besoin - stock (ne pas descendre sous 0).
+            $needForPeriod = (int) ceil($avgDay * $targetDays);
+            $toOrder = max(0, $needForPeriod - $stock);
 
             $isAlert = ($autonomy !== null && $autonomy < 7) || $stock <= 0;
             if ($isAlert) {
@@ -619,17 +644,25 @@ final class AdminComptaController extends AdminBaseController
             }
 
             $rows[] = [
-                'name'        => $key,
-                'category'    => $p['category_name'] ?? '—',
-                'stock'       => $stock,
-                'avg_month'   => $avg,
-                'autonomy'    => $autonomy,
-                'suggested'   => $suggested,
-                'is_alert'    => $isAlert,
+                'name'      => $key,
+                'category'  => $p['category_name'] ?? '—',
+                'stock'     => $stock,
+                'avg_day'   => $avgDay,
+                'avg_week'  => $avgWeek,
+                'avg_month' => $avgMonth,
+                'autonomy'  => $autonomy,
+                'need'      => $needForPeriod,
+                'to_order'  => $toOrder,
+                'is_alert'  => $isAlert,
             ];
         }
 
+        // Tri : quantité à commander décroissante (les plus urgents d'abord),
+        // puis autonomie croissante.
         usort($rows, static function (array $a, array $b): int {
+            if ($b['to_order'] !== $a['to_order']) {
+                return $b['to_order'] <=> $a['to_order'];
+            }
             $aa = $a['autonomy'] ?? PHP_INT_MAX;
             $bb = $b['autonomy'] ?? PHP_INT_MAX;
 
