@@ -609,18 +609,25 @@ final class AdminComptaController extends AdminBaseController
     {
         $this->guardCompta();
 
-        $stocks = $_POST['stocks'] ?? [];
-        if (!is_array($stocks)) {
-            $stocks = [];
+        // Deux listes parallèles (keys[] + values[]) pour éviter que PHP ne
+        // transforme les espaces/points des noms de produits en '_' dans les
+        // clés d'un tableau indexé.
+        $keys   = $_POST['keys'] ?? [];
+        $values = $_POST['values'] ?? [];
+        if (!is_array($keys)) {
+            $keys = [];
+        }
+        if (!is_array($values)) {
+            $values = [];
         }
 
         $count = 0;
-        foreach ($stocks as $key => $value) {
+        foreach ($keys as $i => $key) {
             $productKey = trim((string) $key);
-            if ($productKey === '') {
+            if ($productKey === '' || !isset($values[$i])) {
                 continue;
             }
-            $value = trim((string) $value);
+            $value = trim((string) $values[$i]);
             if ($value === '') {
                 // Champ vide : on n'écrase pas (stock laissé inconnu).
                 continue;
