@@ -229,6 +229,7 @@
 .map-actions { display: flex; flex-direction: column; gap: 0.6rem; margin-top: auto; }
 
 .map-frame {
+    position: relative;
     border: 1px solid var(--border);
     border-radius: var(--radius);
     overflow: hidden;
@@ -243,6 +244,39 @@
     display: block;
     filter: none;
 }
+.map-expand {
+    position: absolute;
+    top: 0.6rem;
+    right: 0.6rem;
+    z-index: 5;
+    width: 40px;
+    height: 40px;
+    display: grid;
+    place-items: center;
+    background: rgba(8, 23, 45, 0.85);
+    color: #fff;
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    font-size: 1.15rem;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s, transform 0.1s;
+}
+.map-expand:hover {
+    background: var(--primary);
+    color: #08172d;
+}
+.map-expand:active { transform: scale(0.92); }
+
+/* Mode plein écran */
+.map-frame.is-fullscreen {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    border-radius: 0;
+    border: none;
+    min-height: 100vh;
+}
+.map-frame.is-fullscreen iframe { min-height: 100vh; }
 @media (max-width: 600px) {
     .map-frame, .map-frame iframe { min-height: 280px; }
 }
