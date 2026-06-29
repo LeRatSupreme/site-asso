@@ -306,11 +306,34 @@ final class AdminComptaController extends AdminBaseController
     {
         $user = $this->guardCompta();
 
+        // Liste des produits connus pour éviter les fautes de frappe
+        // (clés déjà utilisées dans les ventes + produits cafétéria + lots existants).
+        $keys = Sale::distinctProducts();
+        foreach (Product::allForAdmin() as $p) {
+            $keys[] = (string) ($p['name'] ?? '');
+        }
+        foreach (ProductCost::all() as $c) {
+            $keys[] = (string) ($c['product_key'] ?? '');
+        }
+        $keys = array_values(array_filter(array_unique($keys)));
+        sort($keys, SORT_STRING | SORT_FLAG_CASE);
+
+        // Lots regroupés par produit (les plus récents en premier).
+        $costs = ProductCost::all();
+        $grouped = [];
+        foreach ($costs as $c) {
+            $k = (string) ($c['product_key'] ?? '—');
+            $grouped[$k][] = $c;
+        }
+        uksort($grouped, 'strnatcasecmp');
+
         $this->renderAdmin('admin/compta/costs', [
-            'title' => 'Coûts de revient',
-            'user'  => $user,
-            'costs' => ProductCost::all(),
-            'form'  => [
+            'title'       => 'Coûts de revient',
+            'user'        => $user,
+            'costs'       => $costs,
+            'grouped'     => $grouped,
+            'productKeys' => $keys,
+            'form'        => [
                 'product_key' => $_GET['product_key'] ?? '',
                 'cost_price'  => '',
                 'valid_from'  => date('Y-m-d'),
