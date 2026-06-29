@@ -407,5 +407,81 @@
 }
 .cost-tips p { margin: 0; font-size: 0.9rem; }
 
+/* ---- Liste produits (vue gestion des coûts) ---- */
+.costs-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.6rem;
+    margin-bottom: 1rem;
+    padding: 0.75rem;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+}
+.costs-toolbar .search-box { flex: 1 1 200px; }
+.costs-toolbar .search-box input,
+.costs-toolbar select {
+    width: 100%;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--foreground);
+    padding: 0.5rem 0.7rem;
+    font-size: 0.9rem;
+}
+.costs-toolbar select { width: auto; }
+.costs-toolbar .search-box input:focus,
+.costs-toolbar select:focus { outline: none; border-color: var(--primary); }
+.filter-check {
+    display: inline-flex; align-items: center; gap: 0.35rem;
+    font-size: 0.85rem; color: var(--muted); cursor: pointer; white-space: nowrap;
+}
+.costs-count { margin-left: auto; font-size: 0.8rem; }
+
+.cost-cards { display: flex; flex-direction: column; gap: 0.85rem; }
+
+.cost-card {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 1rem 1.15rem;
+    transition: border-color 0.15s, background 0.15s;
+}
+.cost-card.has-cost { border-left: 3px solid rgba(72, 189, 211, 0.5); }
+.cost-card.no-cost  { border-left: 3px solid rgba(245, 158, 11, 0.5); }
+
+.cost-card-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+.cost-card-id h3 { margin: 0 0 0.3rem; font-size: 1.05rem; font-weight: 800; }
+.cost-card-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; font-size: 0.8rem; }
+.cost-card-current { display: flex; flex-direction: column; align-items: flex-end; gap: 0.25rem; }
+.cost-card-price { font-size: 1.15rem; font-weight: 800; color: var(--primary); }
+
+.cost-card-lots { margin-top: 0.85rem; }
+.cost-card-lots summary {
+    cursor: pointer; font-size: 0.82rem; color: var(--muted);
+    padding: 0.3rem 0; user-select: none;
+}
+.cost-card-lots summary:hover { color: var(--primary); }
+.cost-card-lots .table { font-size: 0.88rem; margin-top: 0.4rem; }
+.cost-card-lots .table th { background: rgba(0,0,0,0.18); }
+
+.cost-card-add { margin-top: 0.7rem; }
+.cost-card-add .btn { font-size: 0.8rem; }
+
+.btn-danger {
+    background: rgba(239, 68, 68, 0.14);
+    border-color: rgba(239, 68, 68, 0.4);
+    color: var(--accent-danger, #ef4444);
+}
+.btn-danger:hover { background: rgba(239, 68, 68, 0.25); }
+
+
 
 

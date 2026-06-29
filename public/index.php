@@ -161,6 +161,7 @@ $router->get('/admin/compta/categories', [AdminComptaController::class, 'categor
 $router->get('/admin/compta/couts', [AdminComptaController::class, 'costs']);
 $router->post('/admin/compta/couts/save', [AdminComptaController::class, 'saveCost']);
 $router->post('/admin/compta/couts/{id}/close', [AdminComptaController::class, 'closeCost']);
+$router->post('/admin/compta/couts/{id}/delete', [AdminComptaController::class, 'deleteCost']);
 $router->get('/admin/compta/aliases', [AdminComptaController::class, 'aliases']);
 $router->post('/admin/compta/aliases/save', [AdminComptaController::class, 'saveAlias']);
 $router->post('/admin/compta/aliases/{id}/delete', [AdminComptaController::class, 'deleteAlias']);

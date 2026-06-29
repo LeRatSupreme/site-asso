@@ -137,4 +137,15 @@ final class ProductCost extends Model
 
         return $stmt->rowCount() === 1;
     }
+
+    /**
+     * Supprime un lot (utile pour nettoyer les doublons / saisies erronées).
+     */
+    public static function delete(string $id): bool
+    {
+        $stmt = self::pdo()->prepare('DELETE FROM product_costs WHERE id = ?');
+        $stmt->execute([$id]);
+
+        return $stmt->rowCount() === 1;
+    }
 }
