@@ -74,6 +74,20 @@ final class PageController extends Controller
     }
 
     /**
+     * Conditions Générales d'Utilisation (slug `cgu`).
+     */
+    public function cgu(): void
+    {
+        $page = Page::findBySlug('cgu');
+
+        $this->render('pages/cgu', [
+            'title'       => 'Conditions d\'utilisation — AEIC',
+            'description' => 'Conditions Générales d\'Utilisation du site AEIC.',
+            'page'        => $page,
+        ]);
+    }
+
+    /**
      * Page CMS générique (/p/{slug}).
      */
     public function show(string $slug): void

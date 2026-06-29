@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+use App\Core\Auth;
+
 /**
  * Détail d'un événement.
  *
@@ -11,6 +13,7 @@ declare(strict_types=1);
  * @var list<array<string,mixed>> $participants
  * @var list<array<string,mixed>> $photos
  * @var bool $isPast
+ * @var bool $isRegistered
  */
 
 $event     = $event ?? [];
@@ -18,6 +21,7 @@ $variants  = $variants ?? [];
 $participants = $participants ?? [];
 $photos    = $photos ?? [];
 $isPast    = $isPast ?? false;
+$isRegistered = $isRegistered ?? false;
 
 $title       = (string) ($event['title'] ?? '');
 $excerpt     = (string) ($event['excerpt'] ?? '');
@@ -105,23 +109,56 @@ $priceLabel = ($price === null || (float) $price <= 0)
             <?php if (!$isPast): ?>
                 <div class="card surface glass sidebar-card">
                     <h2 class="card-title">Participer</h2>
-                    <p class="card-excerpt">
-                        Les inscriptions ouvriront bientôt. En attendant, sécurisez votre place
-                        en ligne si un paiement est demandé.
-                    </p>
                     <p class="sidebar-price">
                         <span class="eyebrow">Prix</span>
                         <strong class="stat-value"><?= e($priceLabel) ?></strong>
                     </p>
                     <?php if ($maxCapacity !== null): ?>
-                        <p class="card-meta">Capacité : <?= e((string) $maxCapacity) ?> places</p>
+                        <p class="card-meta">Capacité : <?= e((string) $maxCapacity) ?> places · <?= e((string) $registrationsCount) ?> inscrits</p>
                     <?php endif; ?>
+
+                    <?php if (Auth::check()): ?>
+                        <?php if ($isRegistered): ?>
+                            <p class="badge badge-success">Vous êtes inscrit·e</p>
+                            <form method="post" action="<?= e(url('/events/' . rawurlencode((string) $event['slug']) . '/unregister')) ?>">
+                                <?= csrf_field() ?>
+                                <button type="submit" class="btn btn-outline btn-block">Se désinscrire</button>
+                            </form>
+                        <?php else: ?>
+                            <form method="post" action="<?= e(url('/events/' . rawurlencode((string) $event['slug']) . '/register')) ?>">
+                                <?= csrf_field() ?>
+
+                                <?php if (!empty($variants)): ?>
+                                    <?php foreach ($variants as $variant): ?>
+                                        <div class="field">
+                                            <label for="variant-<?= e((string) $variant['id']) ?>">
+                                                <?= e($variant['label'] ?? '') ?>
+                                                <?php if (!empty($variant['required'])): ?><span class="badge badge-warning">Obligatoire</span><?php endif; ?>
+                                            </label>
+                                            <select id="variant-<?= e((string) $variant['id']) ?>"
+                                                    name="variants[<?= e((string) $variant['id']) ?>]"
+                                                    <?= !empty($variant['required']) ? 'required' : '' ?>>
+                                                <option value="">— Choisir —</option>
+                                                <?php foreach ($variant['choices'] ?? [] as $choice): ?>
+                                                    <option value="<?= e((string) $choice['id']) ?>"><?= e($choice['label'] ?? '') ?></option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                        </div>
+                                    <?php endforeach; ?>
+                                <?php endif; ?>
+
+                                <button type="submit" class="btn btn-primary btn-lg btn-block">Je m'inscris</button>
+                            </form>
+                        <?php endif; ?>
+                    <?php else: ?>
+                        <p class="card-excerpt">Connectez-vous pour vous inscrire à cet événement.</p>
+                        <a class="btn btn-primary btn-block" href="<?= e(url('/login?callbackUrl=') . rawurlencode('/events/' . ($event['slug'] ?? ''))) ?>">Se connecter</a>
+                        <a class="btn btn-outline btn-block" href="<?= e(url('/register')) ?>">Créer un compte</a>
+                    <?php endif; ?>
+
                     <?php if ($sumupLink !== ''): ?>
-                        <a class="btn btn-primary btn-lg sidebar-cta" href="<?= e($sumupLink) ?>" rel="noopener" target="_blank">
-                            Payer en ligne
-                        </a>
+                        <a class="btn btn-ghost btn-block" href="<?= e($sumupLink) ?>" rel="noopener" target="_blank">Payer en ligne</a>
                     <?php endif; ?>
-                    <a class="btn btn-outline" href="<?= e(url('/presentation')) ?>">Rejoindre l'AEIC</a>
                 </div>
             <?php endif; ?>
 
@@ -141,31 +178,6 @@ $priceLabel = ($price === null || (float) $price <= 0)
                     <p class="card-meta">Soyez les premiers à vous inscrire !</p>
                 <?php endif; ?>
             </div>
-
-            <?php if (!empty($variants)): ?>
-                <div class="card surface glass sidebar-card">
-                    <span class="eyebrow">Options</span>
-                    <h2 class="card-title">Variantes</h2>
-                    <?php foreach ($variants as $variant): ?>
-                        <div class="variant-block">
-                            <p class="variant-label">
-                                <?= e($variant['label'] ?? '') ?>
-                                <?php if (!empty($variant['required'])): ?>
-                                    <span class="badge badge-warning">Obligatoire</span>
-                                <?php endif; ?>
-                            </p>
-                            <?php if (!empty($variant['choices'])): ?>
-                                <ul class="variant-choices">
-                                    <?php foreach ($variant['choices'] as $choice): ?>
-                                        <li><?= e($choice['label'] ?? '') ?></li>
-                                    <?php endforeach; ?>
-                                </ul>
-                            <?php endif; ?>
-                        </div>
-                    <?php endforeach; ?>
-                    <p class="card-meta">Affichage en lecture seule. La sélection arrive à la phase d'inscription.</p>
-                </div>
-            <?php endif; ?>
         </aside>
     </div>
 </section>

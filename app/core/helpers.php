@@ -181,3 +181,29 @@ function initial(?string $name): string
 
     return $name === '' ? '?' : mb_strtoupper(mb_substr($name, 0, 1));
 }
+
+/**
+ * Renvoie l'adresse IP du client (premier de la chaîne X-Forwarded-For, sinon REMOTE_ADDR).
+ */
+function client_ip(): string
+{
+    $forwarded = $_SERVER['HTTP_X_FORWARDED_FOR'] ?? '';
+    if ($forwarded !== '') {
+        $first = trim(explode(',', $forwarded)[0]);
+        if ($first !== '') {
+            return $first;
+        }
+    }
+
+    return $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
+}
+
+/**
+ * Renvoie le user-agent du client (tronqué).
+ */
+function user_agent(): string
+{
+    $ua = (string) ($_SERVER['HTTP_USER_AGENT'] ?? '');
+
+    return mb_substr($ua, 0, 255);
+}

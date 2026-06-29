@@ -13,11 +13,12 @@ namespace App\Core;
 abstract class Controller
 {
     /**
-     * Rend une vue dans le layout public et termine le script.
+     * Rend une vue dans un layout et termine le script.
      *
      * @param array<string,mixed> $data Variables injectées dans la vue.
+     * @param string $layout Nom du layout (sans extension) dans views/layouts.
      */
-    protected function render(string $view, array $data = []): void
+    protected function render(string $view, array $data = [], string $layout = 'public'): void
     {
         $viewFile = AEIC_VIEWS . '/' . $view . '.php';
         if (!is_file($viewFile)) {
@@ -31,9 +32,9 @@ abstract class Controller
         require $viewFile;
         $content = (string) ob_get_clean();
 
-        $layoutPath = AEIC_VIEWS . '/layouts/public.php';
+        $layoutPath = AEIC_VIEWS . '/layouts/' . $layout . '.php';
         if (!is_file($layoutPath)) {
-            throw new \RuntimeException('Layout public introuvable.');
+            throw new \RuntimeException(sprintf('Layout introuvable : %s', $layout));
         }
 
         require $layoutPath;

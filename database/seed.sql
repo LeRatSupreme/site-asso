@@ -33,7 +33,15 @@ INSERT INTO settings (id, `key`, value, type, label, `group`) VALUES
     ('set_logo_url',             'logo_url',             '',                                                           'text',    'Logo',             'general'),
     ('set_maintenance_mode',     'maintenance_mode',     'false',                                                      'boolean', 'Mode maintenance', 'features'),
     ('set_orders_enabled',       'orders_enabled',       'true',                                                       'boolean', 'Commandes activées','features'),
-    ('set_registrations_enabled','registrations_enabled','true',                                                       'boolean', 'Inscriptions activées','features')
+    ('set_registrations_enabled','registrations_enabled','true',                                                       'boolean', 'Inscriptions activées','features'),
+    ('set_og_image',             'og_image',             '',                                                           'text',    'Image Open Graph par défaut', 'seo'),
+    ('set_twitter_handle',       'twitter_handle',       '',                                                           'text',    'Compte Twitter/X (@handle)', 'seo'),
+    ('set_mailer_from',          'mailer_from',          'noreply@aeic.fr',                                            'text',    'Adresse expéditrice', 'email'),
+    ('set_mailer_from_name',     'mailer_from_name',     'AEIC',                                                       'text',    'Nom expéditeur', 'email'),
+    ('set_smtp_host',            'smtp_host',            '',                                                           'text',    'Hôte SMTP (vide = mail() natif)', 'email'),
+    ('set_smtp_port',            'smtp_port',            '587',                                                        'text',    'Port SMTP', 'email'),
+    ('set_smtp_user',            'smtp_user',            '',                                                           'text',    'Utilisateur SMTP', 'email'),
+    ('set_smtp_pass',            'smtp_pass',            '',                                                           'text',    'Mot de passe SMTP', 'email')
 ON DUPLICATE KEY UPDATE value = VALUES(value);
 
 -- -------------------------------------------------------------------
@@ -80,8 +88,29 @@ INSERT INTO pages (id, slug, title, content, meta_title, meta_description, is_pu
      'privacy',
      'Politique de confidentialité',
      '<h2>Données collectées</h2><p>Nom, prénom, adresse e-mail, inscriptions et commandes.</p><h2>Vos droits</h2><p>Droit d''accès, de rectification, d''effacement et d''opposition (RGPD).</p><h2>Contact</h2><p>calais.aeic@gmail.com</p>',
-     'Politique de confidentialité — AEIC', 'Protection des données (RGPD).', 1)
+     'Politique de confidentialité — AEIC', 'Protection des données (RGPD).', 1),
+    ('page_cgu',
+     'cgu',
+     'Conditions d''utilisation',
+     '<h2>Objet</h2><p>Les présentes conditions régissent l''utilisation du site de l''AEIC et de l''espace membre.</p><h2>Inscription</h2><p>L''inscription est réservée aux étudiants. Les informations fournies doivent être exactes.</p><h2>Responsabilité</h2><p>L''AEIC s''efforce de maintenir le site accessible mais ne saurait être tenue responsable des interruptions de service.</p>',
+     'Conditions d''utilisation — AEIC', 'Conditions Générales d''Utilisation du site AEIC.', 1)
 ON DUPLICATE KEY UPDATE title = VALUES(title);
+
+-- -------------------------------------------------------------------
+--  Cafétéria : catégories & produits d''exemple
+-- -------------------------------------------------------------------
+INSERT INTO product_categories (id, name, description, `order`, is_active) VALUES
+    ('cat_boissons', 'Boissons', 'Sodas, jus, eau.', 1, 1),
+    ('cat_snacks',   'Snacks',   'Barres, biscuits, sucré.', 2, 1)
+ON DUPLICATE KEY UPDATE name = VALUES(name);
+
+INSERT INTO products (id, name, description, price, category_id, stock, is_available, is_active, `order`) VALUES
+    ('prod_coca',   'Coca-Cola',     '33cl',  1.50, 'cat_boissons', 50, 1, 1, 1),
+    ('prod_oasis',  'Oasis',         '33cl',  1.50, 'cat_boissons', 40, 1, 1, 2),
+    ('prod_eau',    'Cristaline',    '50cl',  1.00, 'cat_boissons', 60, 1, 1, 3),
+    ('prod_bueno',  'Kinder Bueno',  '',      1.00, 'cat_snacks',   30, 1, 1, 1),
+    ('prod_chips',  'Chips',         'Paquet',1.00, 'cat_snacks',   25, 1, 1, 2)
+ON DUPLICATE KEY UPDATE name = VALUES(name);
 
 -- -------------------------------------------------------------------
 --  Événements d''exemple (publiés)

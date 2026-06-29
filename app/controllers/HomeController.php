@@ -16,10 +16,22 @@ final class HomeController extends Controller
 {
     public function index(): void
     {
+        $siteName = Setting::get('site_name', 'AEIC');
+
+        $orgLd = json_encode([
+            '@context'     => 'https://schema.org',
+            '@type'        => 'Organization',
+            'name'         => $siteName,
+            'url'          => APP_URL,
+            'description'  => Setting::get('site_description'),
+            'email'        => Setting::get('contact_email', ''),
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
         $this->render('home', [
-            'title'           => Setting::get('site_name', 'AEIC'),
+            'title'           => $siteName,
             'description'     => Setting::get('site_description'),
-            'siteName'        => Setting::get('site_name', 'AEIC'),
+            'jsonLd'          => $orgLd,
+            'siteName'        => $siteName,
             'upcoming'        => Event::featured(3),
             'eventsCount'     => Event::count(),
             'usersCount'      => User::countActive(),

@@ -568,3 +568,111 @@ ul, ol { list-style: none; }
     outline-offset: 2px;
     border-radius: 4px;
 }
+
+/* ----------------------------- Formulaires ----------------------------- */
+.btn-block { width: 100%; }
+
+.field { display: flex; flex-direction: column; gap: 0.4rem; margin-bottom: 1.1rem; }
+.field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+.field-row .field { margin-bottom: 1.1rem; }
+.field > label { font-weight: 700; font-size: 0.85rem; color: var(--foreground); }
+.field-hint { color: var(--muted); font-size: 0.78rem; }
+
+.field input[type="text"],
+.field input[type="email"],
+.field input[type="password"],
+.field input[type="search"],
+.field input[type="url"],
+.field input[type="tel"],
+.field textarea,
+.field select {
+    width: 100%;
+    padding: 0.7rem 0.9rem;
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    border-radius: 0.6rem;
+    color: var(--foreground);
+    font-size: 0.95rem;
+    font-family: inherit;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.field input:focus,
+.field textarea:focus,
+.field select:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(72, 189, 211, 0.18);
+}
+.field input::placeholder { color: var(--muted); }
+
+.field-checkbox label { display: flex; align-items: flex-start; gap: 0.6rem; font-size: 0.9rem; color: var(--foreground); cursor: pointer; }
+.field-checkbox input[type="checkbox"] { width: 1.1rem; height: 1.1rem; margin-top: 0.15rem; accent-color: var(--primary); flex-shrink: 0; }
+
+.auth-form { padding: 2rem; display: flex; flex-direction: column; margin-top: -3rem; position: relative; z-index: 2; }
+.auth-form .btn-block { margin-top: 0.5rem; }
+.auth-alt { text-align: center; color: var(--muted); font-size: 0.9rem; margin-top: 1rem; margin-bottom: 0; }
+.auth-alt a { color: var(--primary); font-weight: 700; }
+
+@media (max-width: 540px) {
+    .field-row { grid-template-columns: 1fr; }
+}
+
+/* Alertes */
+.alert { padding: 0.9rem 1rem; border-radius: 0.6rem; font-size: 0.9rem; margin-bottom: 1rem; }
+.alert-danger { background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.4); color: #fca5a5; }
+.card-danger { border-color: rgba(239, 68, 68, 0.3); }
+
+/* ----------------------------- Espace membre (dashboard) ----------------------------- */
+.dash-head { margin-bottom: 1.5rem; }
+.dash-head .page-title { font-size: clamp(1.6rem, 4vw, 2.5rem); }
+
+.dashboard { display: grid; grid-template-columns: 240px 1fr; gap: 2rem; align-items: start; padding: 2rem 0; }
+.dash-sidebar { position: sticky; top: 90px; display: flex; flex-direction: column; gap: 0.25rem; }
+.dash-hello { font-weight: 900; color: #fff; text-transform: uppercase; letter-spacing: -0.02em; margin-bottom: 0.75rem; font-size: 0.9rem; }
+.dash-link {
+    display: block; padding: 0.6rem 0.85rem; border-radius: 0.6rem;
+    color: var(--muted); font-weight: 700; font-size: 0.9rem;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+.dash-link:hover { background: rgba(255,255,255,0.05); color: var(--foreground); }
+.dash-link.is-active { background: rgba(72,189,211,0.14); color: var(--primary); }
+
+.dash-content { min-width: 0; }
+.dash-content .card { margin-bottom: 1.25rem; }
+
+.list-rows { list-style: none; margin: 0 0 1rem; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; }
+.list-rows li { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap; padding: 0.5rem 0; border-bottom: 1px solid var(--border); }
+.list-rows li:last-child { border-bottom: none; }
+
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; }
+
+/* Tableaux */
+.table-wrap { overflow-x: auto; }
+.table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+.table th, .table td { text-align: left; padding: 0.7rem 0.85rem; border-bottom: 1px solid var(--border); }
+.table th { color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.72rem; font-weight: 800; }
+.table tbody tr:hover { background: rgba(255,255,255,0.03); }
+
+/* Commandes */
+.orders-list { display: flex; flex-direction: column; gap: 1rem; }
+.order-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 0.5rem; }
+.order-total { text-align: right; font-size: 1rem; margin: 0.5rem 0 0; }
+
+/* Cafétéria */
+.cafeteria-layout { display: grid; grid-template-columns: 1fr 320px; gap: 1.5rem; align-items: start; }
+.cafeteria-catalog { display: flex; flex-direction: column; gap: 1.25rem; }
+.cafeteria-cart { position: sticky; top: 90px; padding: 1.5rem; }
+.product-card { display: flex; flex-direction: column; gap: 0.6rem; padding: 1rem; border: 1px solid var(--border); border-radius: 0.7rem; background: rgba(255,255,255,0.02); }
+.product-info { display: flex; flex-direction: column; gap: 0.2rem; }
+.product-price { color: var(--primary); font-weight: 800; }
+.product-card form { display: flex; align-items: center; gap: 0.4rem; }
+.qty-input { width: 4.5rem; padding: 0.4rem 0.5rem; }
+
+@media (max-width: 900px) {
+    .dashboard { grid-template-columns: 1fr; }
+    .dash-sidebar { position: static; flex-direction: row; flex-wrap: wrap; }
+    .dash-link { flex: 1 1 auto; }
+    .grid-2, .cafeteria-layout { grid-template-columns: 1fr; }
+    .cafeteria-cart { position: static; }
+}
+

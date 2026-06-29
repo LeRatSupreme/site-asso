@@ -14,26 +14,53 @@ use App\Core\Auth;
 use App\Models\Setting;
 
 $siteName     = Setting::get('site_name', 'AEIC');
+$siteDesc     = Setting::get('site_description', 'Association Étudiante Informatique de Calais.');
 $currentYear  = date('Y');
 $currentPath  = $_SERVER['REQUEST_URI'] ?? '/';
 $canonical    = APP_URL . strtok($currentPath, '?');
 $user         = Auth::check() ? Auth::user() : null;
+
+// SEO : titres et descriptions par défaut + Open Graph.
+$pageTitle    = $title ?? $siteName;
+$pageDesc     = $description ?? $siteDesc;
+$ogImage      = !empty($ogImage)
+    ? (is_absolute_url($ogImage) ? $ogImage : APP_URL . '/' . ltrim($ogImage, '/'))
+    : (!empty(Setting::get('og_image'))
+        ? (is_absolute_url(Setting::get('og_image')) ? Setting::get('og_image') : APP_URL . '/' . ltrim(Setting::get('og_image'), '/'))
+        : APP_URL . asset('img/og-default.svg'));
+$twitterHandle = Setting::get('twitter_handle', '');
 ?>
 <!DOCTYPE html>
 <html lang="fr">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title><?= e($title ?? $siteName) ?></title>
-    <meta name="description" content="<?= e($description ?? '') ?>">
+    <meta name="theme-color" content="#08172d">
+    <title><?= e($pageTitle) ?></title>
+    <meta name="description" content="<?= e($pageDesc) ?>">
     <link rel="canonical" href="<?= e($canonical) ?>">
 
     <!-- Open Graph -->
-    <meta property="og:type" content="website">
-    <meta property="og:title" content="<?= e($title ?? $siteName) ?>">
-    <meta property="og:description" content="<?= e($description ?? '') ?>">
+    <meta property="og:type" content="<?= e($ogType ?? 'website') ?>">
+    <meta property="og:title" content="<?= e($pageTitle) ?>">
+    <meta property="og:description" content="<?= e($pageDesc) ?>">
     <meta property="og:url" content="<?= e($canonical) ?>">
     <meta property="og:site_name" content="<?= e($siteName) ?>">
+    <meta property="og:image" content="<?= e($ogImage) ?>">
+    <meta property="og:locale" content="fr_FR">
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="<?= e($pageTitle) ?>">
+    <meta name="twitter:description" content="<?= e($pageDesc) ?>">
+    <meta name="twitter:image" content="<?= e($ogImage) ?>">
+    <?php if ($twitterHandle !== ''): ?>
+        <meta name="twitter:site" content="<?= e($twitterHandle) ?>">
+    <?php endif; ?>
+
+    <?php if (!empty($jsonLd)): ?>
+        <script type="application/ld+json"><?= $jsonLd ?></script>
+    <?php endif; ?>
 
     <link rel="icon" href="<?= e(asset('img/favicon.svg')) ?>" type="image/svg+xml">
     <link rel="stylesheet" href="<?= e(asset('css/base.css')) ?>">
@@ -61,10 +88,11 @@ $user         = Auth::check() ? Auth::user() : null;
 
             <div class="nav-actions">
                 <?php if ($user !== null): ?>
-                    <a class="btn btn-outline btn-sm" href="<?= e(url('/')) ?>"><?= e($user['prenom'] ?? 'Mon compte') ?></a>
+                    <a class="btn btn-outline btn-sm" href="<?= e(url('/account/privacy')) ?>"><?= e($user['prenom'] ?? 'Mon compte') ?></a>
+                    <a class="btn btn-ghost btn-sm" href="<?= e(url('/logout')) ?>">Déconnexion</a>
                 <?php else: ?>
-                    <a class="btn btn-ghost btn-sm" href="<?= e(url('/')) ?>">Connexion</a>
-                    <a class="btn btn-primary btn-sm" href="<?= e(url('/')) ?>">S'inscrire</a>
+                    <a class="btn btn-ghost btn-sm" href="<?= e(url('/login')) ?>">Connexion</a>
+                    <a class="btn btn-primary btn-sm" href="<?= e(url('/register')) ?>">S'inscrire</a>
                 <?php endif; ?>
             </div>
 
@@ -80,7 +108,13 @@ $user         = Auth::check() ? Auth::user() : null;
             <a href="<?= e(url('/presentation')) ?>">L'association</a>
             <a href="<?= e(url('/team')) ?>">Équipe</a>
             <hr>
-            <a class="btn btn-primary" href="<?= e(url('/')) ?>">S'inscrire</a>
+            <?php if ($user !== null): ?>
+                <a class="btn btn-outline" href="<?= e(url('/account/privacy')) ?>">Mes données</a>
+                <a class="btn btn-ghost" href="<?= e(url('/logout')) ?>">Déconnexion</a>
+            <?php else: ?>
+                <a class="btn btn-ghost" href="<?= e(url('/login')) ?>">Connexion</a>
+                <a class="btn btn-primary" href="<?= e(url('/register')) ?>">S'inscrire</a>
+            <?php endif; ?>
         </nav>
     </header>
 
@@ -102,6 +136,7 @@ $user         = Auth::check() ? Auth::user() : null;
                 <a href="<?= e(url('/team')) ?>">Équipe</a>
                 <a href="<?= e(url('/legal')) ?>">Mentions légales</a>
                 <a href="<?= e(url('/privacy')) ?>">Confidentialité</a>
+                <a href="<?= e(url('/cgu')) ?>">CGU</a>
             </nav>
             <p class="footer-copy">© <?= e($currentYear) ?> <?= e($siteName) ?> · Fait par les étudiants, pour les étudiants.</p>
         </div>

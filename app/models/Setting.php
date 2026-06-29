@@ -82,4 +82,17 @@ final class Setting extends Model
 
         return $result;
     }
+
+    /**
+     * Met à jour la valeur d'un setting et invalide le cache.
+     */
+    public static function set(string $key, string $value): void
+    {
+        $stmt = static::pdo()->prepare(
+            'UPDATE settings SET value = ? WHERE `key` = ?'
+        );
+        $stmt->execute([$value, $key]);
+
+        self::clearCache();
+    }
 }

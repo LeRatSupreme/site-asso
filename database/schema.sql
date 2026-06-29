@@ -344,4 +344,32 @@ CREATE TABLE IF NOT EXISTS sale_adjustments (
     CONSTRAINT fk_adjustments_sale FOREIGN KEY (sale_id) REFERENCES sales(id) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- -------------------------------------------------------------------
+--  Réinitialisation de mot de passe (tokens à usage unique)
+-- -------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS password_resets (
+    id         VARCHAR(255) NOT NULL PRIMARY KEY,
+    user_id    VARCHAR(255) NOT NULL,
+    token_hash CHAR(64)     NOT NULL,
+    expires_at DATETIME     NOT NULL,
+    used_at    DATETIME     NULL,
+    created_at DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_reset_token (token_hash),
+    KEY idx_reset_user (user_id),
+    CONSTRAINT fk_reset_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -------------------------------------------------------------------
+--  Authentification à deux facteurs (TOTP) + codes de récupération
+-- -------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS two_factor (
+    user_id         VARCHAR(255) NOT NULL PRIMARY KEY,
+    secret          VARCHAR(255) NOT NULL,
+    enabled         TINYINT(1)   NOT NULL DEFAULT 0,
+    recovery_codes  TEXT         NULL,
+    enabled_at      DATETIME     NULL,
+    updated_at      DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_twofactor_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 SET FOREIGN_KEY_CHECKS = 1;

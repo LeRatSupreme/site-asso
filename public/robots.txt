@@ -1,0 +1,11 @@
+User-agent: *
+Allow: /
+
+# L'espace d'administration et les espaces privés ne sont pas indexés.
+Disallow: /admin
+Disallow: /eleve
+Disallow: /account
+Disallow: /login
+Disallow: /register
+
+Sitemap: https://asso.aremond.ovh/sitemap.xml
