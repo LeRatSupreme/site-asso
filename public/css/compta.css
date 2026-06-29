@@ -166,6 +166,20 @@
 .table td.is-positive,
 .table td.is-negative { font-weight: 800; }
 
+/* ---- Page Réappro ---- */
+.reorder-table th, .reorder-table td { vertical-align: middle; }
+.reorder-table tfoot th { padding-top: 1rem; border-top: 2px solid var(--border); }
+.reorder-table .num { text-align: right; }
+.alert-warning {
+    background: rgba(245, 158, 11, 0.14);
+    border: 1px solid rgba(245, 158, 11, 0.4);
+    color: var(--accent-warning, #f59e0b);
+    padding: 0.8rem 1rem;
+    border-radius: 10px;
+    margin-bottom: 1.25rem;
+    font-size: 0.92rem;
+}
+
 /* =========================================================
    Page « Coûts de revient »
    ========================================================= */
