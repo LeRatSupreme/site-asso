@@ -165,3 +165,75 @@
 /* Numeros monétaires : mono-lisible pour aligner les montants */
 .table td.is-positive,
 .table td.is-negative { font-weight: 800; }
+
+/* =========================================================
+   Page « Coûts de revient »
+   ========================================================= */
+
+.compta-head { margin-bottom: 1.5rem; }
+.compta-head .page-title { font-size: 1.6rem; font-weight: 900; margin: 0.2rem 0 0.4rem; }
+.compta-head .muted { max-width: 70ch; }
+
+.costs-layout {
+    display: grid;
+    grid-template-columns: 360px 1fr;
+    gap: 1.5rem;
+    align-items: start;
+}
+@media (max-width: 980px) { .costs-layout { grid-template-columns: 1fr; } }
+
+.costs-form { position: sticky; top: 1rem; }
+.costs-form .card-title,
+.costs-list .card-title { margin: 0 0 1rem; }
+
+.costs-list-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-bottom: 1.25rem;
+}
+.costs-list-head .card-title { margin: 0; }
+
+.field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+@media (max-width: 540px) { .field-row { grid-template-columns: 1fr; } }
+
+.field-help { font-size: 0.78rem; color: var(--muted); margin: 0.3rem 0 0; }
+
+.empty-state {
+    text-align: center;
+    padding: 2.5rem 1rem;
+    border: 1px dashed var(--border);
+    border-radius: var(--radius, 1rem);
+}
+.empty-state .muted { max-width: 50ch; margin: 0.3rem auto; }
+
+.cost-product {
+    border: 1px solid var(--border);
+    border-radius: var(--radius, 1rem);
+    padding: 1rem 1.1rem 0.8rem;
+    margin-bottom: 1rem;
+    background: rgba(255, 255, 255, 0.02);
+}
+.cost-product.has-current { border-left: 3px solid rgba(72, 189, 211, 0.5); }
+.cost-product.has-none { border-left: 3px solid rgba(245, 158, 11, 0.5); }
+
+.cost-product-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.6rem;
+    margin-bottom: 0.75rem;
+}
+.cost-product-head h3 { margin: 0; font-size: 1.05rem; font-weight: 800; }
+
+.cost-product .table { font-size: 0.9rem; }
+.cost-product .table th { background: rgba(0, 0, 0, 0.18); }
+
+.table tr.row-current { background: rgba(72, 189, 211, 0.10); }
+.table tr.row-current strong { color: var(--primary); }
+
+.cost-product-add { margin: 0.6rem 0 0; text-align: right; }
+.cost-product-add .btn { font-size: 0.8rem; }
+
