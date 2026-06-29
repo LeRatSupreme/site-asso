@@ -28,6 +28,21 @@ abstract class AdminBaseController extends Controller
     }
 
     /**
+     * Garde-fou spécifique au module comptabilité.
+     *
+     * Les routes /admin/compta/* sont accessibles aux rôles ADMIN et
+     * TRESORERIE ; toutes les autres routes /admin/* restent réservées à ADMIN.
+     *
+     * @return array<string,mixed>
+     */
+    protected function guardCompta(): array
+    {
+        Middleware::requireRole([Auth::ROLE_ADMIN, Auth::ROLE_TRESORERIE]);
+
+        return Auth::user();
+    }
+
+    /**
      * Journalise une action sensible (audit log).
      */
     protected function audit(

@@ -33,11 +33,26 @@ $sections = [
         'Commandes'    => '/admin/cafeteria/commandes',
         'Caisse (POS)' => '/admin/cafeteria/pos',
     ],
+    'Comptabilité' => [
+        'Dashboard'      => '/admin/compta',
+        'Importer CSV'   => '/admin/compta/import',
+        'Journal ventes' => '/admin/compta/ventes',
+        'Produits'       => '/admin/compta/produits',
+        'Catégories'     => '/admin/compta/categories',
+        'Coûts de revient' => '/admin/compta/couts',
+        'Mapping libellés' => '/admin/compta/aliases',
+        'Réappro'        => '/admin/compta/reappro',
+    ],
     'Système' => [
         'Utilisateurs' => '/admin/users',
         'Paramètres'   => '/admin/settings',
     ],
 ];
+
+// Le rôle TRESORERIE n'a accès qu'à la comptabilité : on masque le reste.
+if (($user['role'] ?? null) === 'TRESORERIE') {
+    $sections = ['Comptabilité' => $sections['Comptabilité']];
+}
 ?>
 <!DOCTYPE html>
 <html lang="fr">
@@ -49,6 +64,7 @@ $sections = [
     <link rel="icon" href="<?= e(asset('img/favicon.svg')) ?>" type="image/svg+xml">
     <link rel="stylesheet" href="<?= e(asset('css/base.css')) ?>">
     <link rel="stylesheet" href="<?= e(APP_URL . '/css/admin.css') ?>">
+    <link rel="stylesheet" href="<?= e(APP_URL . '/css/compta.css') ?>">
 </head>
 <body class="admin-body">
     <a class="skip-link" href="#contenu">Aller au contenu</a>
