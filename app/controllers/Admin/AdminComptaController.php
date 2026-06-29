@@ -649,51 +649,29 @@ final class AdminComptaController extends AdminBaseController
      */
     private function reorderData(int $targetDays): array
     {
-        $consumption = Sale::consumptionByProductKey(3); // tous les produits des ventes
-        $products    = Product::allForAdmin();
-        $stocksInput = ProductStock::allMap();           // stocks saisis sur Réappro
-
-        // Stock + catégorie par nom de produit (depuis la table cafétéria).
-        $stockByName = [];
-        $catByName   = [];
-        foreach ($products as $p) {
-            $name = (string) ($p['name'] ?? '');
-            if ($name === '') {
-                continue;
-            }
-            $stockByName[$name] = (int) ($p['stock'] ?? 0);
-            $catByName[$name]   = $p['category_name'] ?? '—';
-        }
+        // 100 % basé sur les ventes SumUp : chaque produit du CSV est listé,
+        // sa catégorie vient du CSV, et son stock est celui saisi sur Réappro
+        // (table product_stocks). Plus aucun mélange avec l'ancienne cafétéria.
+        $consumption = Sale::consumptionByProductKey(3);
+        $stocksInput = ProductStock::allMap();
 
         $rows = [];
         $alerts = 0;
-        $seen = [];
 
-        // 1) Tous les produits présents dans les ventes (CSV).
         foreach ($consumption as $key => $data) {
             $key = (string) $key;
             if ($key === '') {
                 continue;
             }
-            $seen[$key] = true;
 
             $monthly  = $data['monthly'] ?? [];
             $avgMonth = ComptaCalc::movingAverage($monthly, 3);
-            // Jours d'ouverture : CAF ouvert lun-ven (5 j/sem) ≈ 21,77 j/mois.
-            // Les ventes n'ayant lieu qu'en semaine, la conso mensuelle est
-            // répartie sur ces jours d'ouverture (et non sur 30 j calendaires).
-            $openDaysPerMonth = 21.77;
-            $avgDay   = $avgMonth / $openDaysPerMonth;   // par jour d'ouverture
-            $avgWeek  = $avgDay * 5.0;                   // par semaine d'ouverture (lun-ven)
+            // Jours d'ouverture : CAF ouvert lun-ven ≈ 21,77 j/mois.
+            $avgDay   = $avgMonth / 21.77;
+            $avgWeek  = $avgDay * 5.0;
 
-            // Priorité du stock : valeur saisie sur Réappro > stock cafétéria > inconnu.
-            if (array_key_exists($key, $stocksInput)) {
-                $stock = $stocksInput[$key];
-            } elseif (array_key_exists($key, $stockByName)) {
-                $stock = $stockByName[$key];
-            } else {
-                $stock = null;
-            }
+            $hasStock = array_key_exists($key, $stocksInput);
+            $stock    = $hasStock ? $stocksInput[$key] : null;
 
             $autonomy = ($stock !== null && $avgDay > 0)
                 ? (int) floor($stock / $avgDay)
@@ -702,8 +680,6 @@ final class AdminComptaController extends AdminBaseController
             $need   = (int) ceil($avgDay * $targetDays);
             $toOrder = max(0, $need - ($stock ?? 0));
 
-            // État : à définir (stock inconnu), à racheter (stock <= 0 ou
-            // autonomie < 7 j), ou OK.
             if ($stock === null) {
                 $state = 'unknown';
             } elseif ($stock <= 0 || ($autonomy !== null && $autonomy < 7)) {
@@ -718,8 +694,8 @@ final class AdminComptaController extends AdminBaseController
 
             $rows[] = [
                 'name'      => $key,
-                'category'  => $catByName[$key] ?? (string) ($data['category'] ?? '—'),
-                'stock'     => $stock,        // null = inconnu
+                'category'  => (string) ($data['category'] ?? '—'),
+                'stock'     => $stock,
                 'avg_day'   => $avgDay,
                 'avg_week'  => $avgWeek,
                 'avg_month' => $avgMonth,
@@ -728,32 +704,6 @@ final class AdminComptaController extends AdminBaseController
                 'to_order'  => $toOrder,
                 'state'     => $state,
                 'is_alert'  => $isAlert,
-            ];
-        }
-
-        // 2) Produits cafétéria sans ventes enregistrées (stock mais conso 0).
-        foreach ($stockByName as $name => $stk) {
-            if (isset($seen[$name])) {
-                continue;
-            }
-            // Stock saisi prioritaire si présent.
-            $finalStock = array_key_exists($name, $stocksInput) ? $stocksInput[$name] : $stk;
-            $state = ($finalStock !== null && $finalStock <= 0) ? 'reorder' : 'ok';
-            if ($state === 'reorder') {
-                $alerts++;
-            }
-            $rows[] = [
-                'name'      => $name,
-                'category'  => $catByName[$name] ?? '—',
-                'stock'     => $finalStock,
-                'avg_day'   => 0.0,
-                'avg_week'  => 0.0,
-                'avg_month' => 0.0,
-                'autonomy'  => null,
-                'need'      => 0,
-                'to_order'  => 0,
-                'state'     => $state,
-                'is_alert'  => $state === 'reorder',
             ];
         }
 
