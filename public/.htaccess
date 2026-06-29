@@ -1,0 +1,23 @@
+# AEIC — Routage front controller (PHP)
+# Toute requête qui ne correspond pas à un fichier/dossier existant est
+# envoyée vers index.php (le routeur PHP s'occupe du reste).
+
+Options -Indexes
+DirectoryIndex index.php
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Ne pas réécrire les fichiers réels (CSS, JS, images, favicon...)
+    RewriteCond %{REQUEST_FILENAME} -f [OR]
+    RewriteCond %{REQUEST_FILENAME} -d
+    RewriteRule ^ - [L]
+
+    # Tout le reste -> index.php
+    RewriteRule ^ index.php [L]
+</IfModule>
+
+<IfModule !mod_rewrite.c>
+    # Secours si mod_rewrite indisponible
+    ErrorDocument 404 /index.php
+</IfModule>
