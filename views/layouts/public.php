@@ -88,6 +88,9 @@ $twitterHandle = Setting::get('twitter_handle', '');
 
             <div class="nav-actions">
                 <?php if ($user !== null): ?>
+                    <?php if (($user['role'] ?? '') === 'ADMIN' || ($user['role'] ?? '') === 'TRESORERIE'): ?>
+                        <a class="btn btn-primary btn-sm" href="<?= e(url('/admin')) ?>">Admin</a>
+                    <?php endif; ?>
                     <a class="btn btn-outline btn-sm" href="<?= e(url('/account/privacy')) ?>"><?= e($user['prenom'] ?? 'Mon compte') ?></a>
                     <a class="btn btn-ghost btn-sm" href="<?= e(url('/logout')) ?>">Déconnexion</a>
                 <?php else: ?>
@@ -109,6 +112,9 @@ $twitterHandle = Setting::get('twitter_handle', '');
             <a href="<?= e(url('/team')) ?>">Équipe</a>
             <hr>
             <?php if ($user !== null): ?>
+                <?php if (($user['role'] ?? '') === 'ADMIN' || ($user['role'] ?? '') === 'TRESORERIE'): ?>
+                    <a class="btn btn-primary" href="<?= e(url('/admin')) ?>">Admin</a>
+                <?php endif; ?>
                 <a class="btn btn-outline" href="<?= e(url('/account/privacy')) ?>">Mes données</a>
                 <a class="btn btn-ghost" href="<?= e(url('/logout')) ?>">Déconnexion</a>
             <?php else: ?>
