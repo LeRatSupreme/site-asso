@@ -179,6 +179,15 @@
     margin-bottom: 1.25rem;
     font-size: 0.92rem;
 }
+.alert-info {
+    background: rgba(72, 189, 211, 0.12);
+    border: 1px solid rgba(72, 189, 211, 0.35);
+    color: var(--primary, #48bdd3);
+    padding: 0.8rem 1rem;
+    border-radius: 10px;
+    margin-bottom: 1.25rem;
+    font-size: 0.92rem;
+}
 
 /* =========================================================
    Page « Coûts de revient »

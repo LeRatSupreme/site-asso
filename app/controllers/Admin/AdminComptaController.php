@@ -574,13 +574,14 @@ final class AdminComptaController extends AdminBaseController
     {
         $user = $this->guardCompta();
 
-        // Période cible d'approvisionnement (combien de temps on veut couper).
+        // Période cible d'approvisionnement, exprimée en JOURS D'OUVERTURE
+        // (la cafétéria est ouverte du lundi au vendredi : 5 j/semaine).
         $periods = [
-            '1w' => ['label' => '1 semaine',  'days' => 7],
-            '2w' => ['label' => '2 semaines', 'days' => 14],
-            '1m' => ['label' => '1 mois',     'days' => 30],
-            '2m' => ['label' => '2 mois',     'days' => 60],
-            '3m' => ['label' => '3 mois',     'days' => 90],
+            '1w' => ['label' => '1 semaine',  'days' => 5],   // 5 j d'ouverture
+            '2w' => ['label' => '2 semaines', 'days' => 10],
+            '1m' => ['label' => '1 mois',     'days' => 22],  // ≈ 22 j ouvrés
+            '2m' => ['label' => '2 mois',     'days' => 43],
+            '3m' => ['label' => '3 mois',     'days' => 65],
         ];
         $periodKey = $_GET['period'] ?? '1m';
         if (!isset($periods[$periodKey])) {
@@ -678,8 +679,12 @@ final class AdminComptaController extends AdminBaseController
 
             $monthly  = $data['monthly'] ?? [];
             $avgMonth = ComptaCalc::movingAverage($monthly, 3);
-            $avgDay   = $avgMonth / 30.0;
-            $avgWeek  = $avgDay * 7.0;
+            // Jours d'ouverture : CAF ouvert lun-ven (5 j/sem) ≈ 21,77 j/mois.
+            // Les ventes n'ayant lieu qu'en semaine, la conso mensuelle est
+            // répartie sur ces jours d'ouverture (et non sur 30 j calendaires).
+            $openDaysPerMonth = 21.77;
+            $avgDay   = $avgMonth / $openDaysPerMonth;   // par jour d'ouverture
+            $avgWeek  = $avgDay * 5.0;                   // par semaine d'ouverture (lun-ven)
 
             // Priorité du stock : valeur saisie sur Réappro > stock cafétéria > inconnu.
             if (array_key_exists($key, $stocksInput)) {
