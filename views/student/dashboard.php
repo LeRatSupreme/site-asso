@@ -35,25 +35,6 @@ declare(strict_types=1);
         <?php endif; ?>
         <a class="btn btn-ghost btn-sm" href="<?= e(url('/eleve/inscriptions')) ?>">Voir mes inscriptions</a>
     </section>
-
-    <section class="card surface glass">
-        <h2 class="card-title">Mes dernières commandes</h2>
-        <?php if (!empty($recentOrders)): ?>
-            <ul class="list-rows">
-                <?php foreach ($recentOrders as $o): ?>
-                    <li>
-                        <strong><?= e(formatPrice($o['total'] ?? 0)) ?></strong>
-                        <?php $statusBadge = \App\Models\OrderWorkflow::isTerminal((string) $o['status']) ? 'badge-muted' : 'badge-warning'; ?>
-                        <span class="badge <?= e($statusBadge) ?>"><?= e((string) $o['status']) ?></span>
-                        <span class="card-meta"><?= e(formatDateTime((string) ($o['created_at'] ?? ''))) ?></span>
-                    </li>
-                <?php endforeach; ?>
-            </ul>
-        <?php else: ?>
-            <p class="card-meta">Aucune commande pour le moment.</p>
-        <?php endif; ?>
-        <a class="btn btn-ghost btn-sm" href="<?= e(url('/eleve/commandes')) ?>">Voir mes commandes</a>
-    </section>
 </div>
 
 <section class="card surface glass">
@@ -71,7 +52,6 @@ declare(strict_types=1);
 
 <section class="cta">
     <div class="container cta-inner">
-        <a class="btn btn-primary btn-lg" href="<?= e(url('/eleve/cafeteria')) ?>">Commander à la cafétéria</a>
         <a class="btn btn-outline btn-lg" href="<?= e(url('/eleve/profile')) ?>">Mon profil</a>
     </div>
 </section>

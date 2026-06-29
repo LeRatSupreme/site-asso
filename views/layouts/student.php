@@ -25,8 +25,6 @@ $user         = Auth::check() ? Auth::user() : null;
 $nav = [
     '/eleve'                 => 'Tableau de bord',
     '/eleve/inscriptions'    => 'Mes inscriptions',
-    '/eleve/commandes'       => 'Mes commandes',
-    '/eleve/cafeteria'       => 'Commander à la cafétéria',
     '/eleve/profile'         => 'Mon profil',
     '/account/privacy'       => 'Mes données (RGPD)',
 ];
