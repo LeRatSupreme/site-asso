@@ -32,8 +32,6 @@ $sections = [
     'Cafétéria' => [
         'Produits'     => '/admin/cafeteria',
         'Catégories'   => '/admin/cafeteria/categories',
-        'Commandes'    => '/admin/cafeteria/commandes',
-        'Caisse (POS)' => '/admin/cafeteria/pos',
     ],
     'Comptabilité' => [
         'Dashboard'      => '/admin/compta',

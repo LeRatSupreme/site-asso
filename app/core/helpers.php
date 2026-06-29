@@ -10,6 +10,15 @@ declare(strict_types=1);
  */
 
 /**
+ * Signal de redirection levé par redirect() en mode APP_TESTING à la place
+ * de exit(), afin que le harness d'intégration puisse capturer l'en-tête
+ * `Location` (voir tests/Integration/runner.php).
+ */
+final class RedirectSignal extends \RuntimeException
+{
+}
+
+/**
  * Échappe une valeur pour un affichage HTML sûr (anti-XSS).
  */
 function e(mixed $value): string
@@ -92,11 +101,21 @@ function parseFrenchFloat(string $s): float
 
 /**
  * Redirige vers une URL et termine le script.
+ *
+ * En mode test (APP_TESTING), on dépile la pile d'exécution en levant une
+ * exception dédiée plutôt qu'en appelant exit() : cela permet au harness
+ * d'intégration (tests/Integration/runner.php) de capturer l'en-tête
+ * `Location` via headers_list() tout en interrompant le contrôleur comme
+ * le ferait un exit() en production.
  */
 function redirect(string $url): void
 {
     if (!headers_sent()) {
         header('Location: ' . $url);
+    }
+
+    if (defined('APP_TESTING') && APP_TESTING) {
+        throw new RedirectSignal();
     }
 
     exit;
