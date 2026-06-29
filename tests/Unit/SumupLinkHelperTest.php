@@ -73,7 +73,7 @@ final class SumupLinkHelperTest extends TestCase
         self::assertNull(sumup_link(null));
     }
 
-    public function test_sumup_link_event_prend_le dessus_sur_defaut(): void
+    public function test_sumup_link_event_prend_le_dessus_sur_defaut(): void
     {
         Setting::set('sumup_default_link', 'https://pay.example/def');
 
