@@ -361,6 +361,7 @@ final class Sale extends Model
 
         // Quantités par produit × mois sur les N derniers mois.
         $sql = 'SELECT COALESCE(product_key, description) AS product_key,
+                       MAX(NULLIF(category, \'\')) AS category,
                        YEAR(sold_at) AS y, MONTH(sold_at) AS m,
                        SUM(quantity) AS qty
                 FROM sales
@@ -379,6 +380,10 @@ final class Sale extends Model
             $key = (string) $row['product_key'];
             $byProduct[$key]['monthly'][] = (int) $row['qty'];
             $byProduct[$key]['qty'] = ($byProduct[$key]['qty'] ?? 0) + (int) $row['qty'];
+            // Catégorie (cohérente pour un même produit ; on prend la 1ère non vide).
+            if (!isset($byProduct[$key]['category']) && !empty($row['category'])) {
+                $byProduct[$key]['category'] = (string) $row['category'];
+            }
         }
 
         return $byProduct;
