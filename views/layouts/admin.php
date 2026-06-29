@@ -20,7 +20,9 @@ $currentPath = $_SERVER['REQUEST_URI'] ?? '/';
 $user        = Auth::user();
 
 $sections = [
-    'Tableau de bord' => ['/' => ['Tableau de bord', '/admin']],
+    'Tableau de bord' => [
+        'Tableau de bord' => '/admin',
+    ],
     'Contenu' => [
         'Événements'   => '/admin/events',
         'Pages'        => '/admin/pages',
