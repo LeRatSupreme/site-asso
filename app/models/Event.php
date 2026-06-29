@@ -131,7 +131,7 @@ final class Event extends Model
     }
 
     /**
-     * Nombre total d'événements publiés.
+     * Nombre d'événements publiés.
      */
     public static function count(): int
     {
@@ -143,6 +143,107 @@ final class Event extends Model
         } catch (\Throwable) {
             return 0;
         }
+    }
+
+    // -----------------------------------------------------------------
+    //  Méthodes d'administration (tous statuts confondus).
+    // -----------------------------------------------------------------
+
+    /**
+     * Tous les événements (publiés et brouillons), triés par date décroissante.
+     *
+     * @return list<array<string,mixed>>
+     */
+    public static function allForAdmin(): array
+    {
+        try {
+            $stmt = static::pdo()->query('SELECT * FROM events ORDER BY date DESC');
+
+            /** @var list<array<string,mixed>> $result */
+            return $stmt->fetchAll();
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    /**
+     * Recherche un événement par son slug, sans filtre de publication (admin).
+     *
+     * @return array<string,mixed>|null
+     */
+    public static function findBySlugAny(string $slug): ?array
+    {
+        try {
+            $stmt = static::pdo()->prepare('SELECT * FROM events WHERE slug = ? LIMIT 1');
+            $stmt->execute([$slug]);
+
+            $row = $stmt->fetch();
+        } catch (\Throwable) {
+            return null;
+        }
+
+        return $row ?: null;
+    }
+
+    /**
+     * Crée ou met à jour un événement (upsert par id).
+     *
+     * @param array<string,mixed> $data
+     * @return string L'identifiant de l'événement.
+     */
+    public static function save(array $data): string
+    {
+        $id = (string) ($data['id'] ?? '');
+        $isNew = $id === '' || self::find($id) === null;
+        if ($isNew) {
+            $id = 'evt_' . bin2hex(random_bytes(10));
+        }
+
+        $fields = [
+            'id'            => $id,
+            'slug'          => $data['slug'] ?? '',
+            'title'         => $data['title'] ?? '',
+            'excerpt'       => $data['excerpt'] ?? null,
+            'description'   => $data['description'] ?? null,
+            'image'         => $data['image'] ?? null,
+            'date'          => $data['date'] ?? date('Y-m-d H:i:s'),
+            'end_date'      => $data['end_date'] ?? null,
+            'location'      => $data['location'] ?? null,
+            'sumup_link'    => $data['sumup_link'] ?? null,
+            'price'         => $data['price'] !== '' && $data['price'] !== null ? $data['price'] : null,
+            'max_capacity'  => $data['max_capacity'] !== '' && $data['max_capacity'] !== null ? $data['max_capacity'] : null,
+            'is_featured'   => !empty($data['is_featured']) ? 1 : 0,
+            'is_published'  => !empty($data['is_published']) ? 1 : 0,
+        ];
+
+        if ($isNew) {
+            $cols = implode(', ', array_keys($fields));
+            $placeholders = implode(', ', array_fill(0, count($fields), '?'));
+            $stmt = static::pdo()->prepare(
+                'INSERT INTO events (' . $cols . ') VALUES (' . $placeholders . ')'
+            );
+            $stmt->execute(array_values($fields));
+        } else {
+            $set = [];
+            foreach (array_keys($fields) as $col) {
+                if ($col === 'id') {
+                    continue;
+                }
+                $set[] = $col . ' = ?';
+            }
+            $values = array_values(array_diff_key($fields, ['id' => null]));
+            $values[] = $id;
+            $stmt = static::pdo()->prepare('UPDATE events SET ' . implode(', ', $set) . ' WHERE id = ?');
+            $stmt->execute($values);
+        }
+
+        return $id;
+    }
+
+    public static function deleteRow(string $id): void
+    {
+        $stmt = static::pdo()->prepare('DELETE FROM events WHERE id = ?');
+        $stmt->execute([$id]);
     }
 
     /**

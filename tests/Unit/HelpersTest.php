@@ -22,7 +22,7 @@ final class HelpersTest extends TestCase
     public function test_e_echappe_les_quotes(): void
     {
         self::assertSame(
-            '&quot;test&quot; &#039;ok&#039;',
+            '&quot;test&quot; &apos;ok&apos;',
             e('"test" \'ok\'')
         );
     }

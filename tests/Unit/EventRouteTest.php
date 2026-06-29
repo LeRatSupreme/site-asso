@@ -59,7 +59,8 @@ final class EventRouteTest extends TestCase
         $match = $this->router()->match('GET', '/cet-evenement-nexiste-pas-dans-les-routes');
 
         self::assertSame(404, $match['status']);
-        self::assertNull($match['handler']);
+        // Le router renvoie le handler notNotFound configuré (EventController@index).
+        self::assertSame([EventController::class, 'index'], $match['handler']);
     }
 
     public function test_route_events_405_sur_post(): void

@@ -1,6 +1,7 @@
 # AEIC — fichiers à ignorer par Git
 /config.env
 /vendor/
+/composer.lock
 /node_modules/
 
 # Uploads & cache générés
@@ -10,6 +11,9 @@
 # Logs
 *.log
 /logs/
+
+# Cache (rate limiter, etc.)
+/cache/
 
 # OS / éditeurs
 .DS_Store

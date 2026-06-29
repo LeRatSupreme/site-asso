@@ -136,9 +136,144 @@ le routeur (matching, extraction `{slug}`/`{id}`, 404, 405).
 
 ## 🗺️ État & suite (phases)
 
-- **Phase 1 ✅** Fondations (ce dépôt).
-- Phase 2 — Pages publiques enrichies (détail événement, cartes, sitemap).
-- Phase 3 — Auth + RGPD (inscription/connexion, consentements, rôles).
-- Phase 4 — Espace élève. Phase 5 — Espace admin. Phase 6+ — SEO/perf/a11y/emails...
+- **Phase 1 ✅** Fondations (structure, config, PDO, routeur, charte CSS, layout).
+- **Phase 2 ✅** Pages publiques (accueil, événements liste/détail, association, équipe, CMS, sitemap).
+- **Phase 3 ✅** Authentification & RGPD (inscription/connexion/déconnexion, consentements,
+  rôles/middleware, rate limiting login, page CGU, export & suppression/anonymisation des données).
+- **Phase 4 ✅** Espace élève (dashboard, profil, inscriptions aux événements avec variantes,
+  commandes cafétéria avec panier, workflow de statut, stock atomique).
+- **Phase 5 ✅** Espace admin (dashboard, CRUD événements/pages/équipe/médias/paramètres,
+  gestion cafétéria + caisse POS, gestion utilisateurs & rôles, mode maintenance).
+- **Phase 6 ✅** Socle pro (SEO/OG/JSON-LD/sitemap, perf gzip/cache, a11y,
+  e-mails transactionnels + mot de passe oublié).
+- **Phase 7 ✅** Sécurité avancée (2FA TOTP obligatoire ADMIN/Trésorerie +
+  codes de récupération, en-têtes CSP/HSTS, sauvegarde/restauration, monitoring).
+- Phase 8+ — E2E, comptabilité, standards entreprise...
 
 Voir le §26 de `ARCHITECTURE.md` pour le plan complet.
+
+---
+
+## 🔐 Authentification & RGPD (Phase 3)
+
+- **Inscription** (`/register`) : validation serveur (prénom, nom, e-mail valide, mot de passe
+  ≥ 8 car. avec lettre + chiffre, confirmation), unicité de l'e-mail, hash bcrypt,
+  **consentement RGPD obligatoire** (journalisé dans `consents`).
+- **Connexion** (`/login`) : message d'erreur générique (l'e-mail n'est jamais révélé),
+  **limitation des tentatives** (5 essais / 10 min par IP via `RateLimiter`),
+  refus des comptes désactivés, régénération de l'ID de session.
+- **Déconnexion** (`/logout`) : destruction de session + retour accueil.
+- **Contrôle d'accès** (`App\Core\Middleware`) : `requireGuest`, `requireLogin`, `requireRole`
+  (403 si rôle insuffisant), décision testable via `resolve()`/`isAuthorized()`.
+- **Droits RGPD** (`/account/*`, connexion requise) :
+  - portabilité : export JSON de toutes les données (`/account/export`) ;
+  - effacement : anonymisation du compte + désactivation (`/account/delete`),
+    les enregistrements comptables obligatoires sont conservés mais déliés de l'identité.
+- **CSRF** : `csrf_field()` dans tous les formulaires POST, vérifié par le routeur.
+- **Pages légales** : `/legal`, `/privacy`, `/cgu` (CMS, slug en base).
+
+---
+
+## 🎓 Espace élève (Phase 4)
+
+Routes protégées par connexion (`/eleve/*`, accès ELEVE/TRESORERIE/ADMIN) :
+
+- **Tableau de bord** (`/eleve`) : prochains événements, mes inscriptions, dernières commandes.
+- **Profil** (`/eleve/profile`) : édition prénom/nom/e-mail + changement de mot de passe
+  (ancien requis).
+- **Mes inscriptions** (`/eleve/inscriptions`) : événements inscrits + statut (à venir / passé).
+- **Mes commandes** (`/eleve/commandes`) : historique avec détail des lignes et badges de statut.
+- **Cafétéria** (`/eleve/cafeteria`) : catalogue par catégorie, **panier en session**
+  (ajout/retrait/vidage), validation de commande.
+
+**Inscription événement** (`/events/{slug}`) : bouton dynamique selon l'état (connecté/déjà inscrit),
+sélection des **variantes obligatoires**, désinscription possible. Doublon impossible (contrainte unique).
+
+**Commandes cafétéria** — robustesse (§25.3) :
+- **total recalculé serveur** (jamais confiance au client) ;
+- **décrément de stock atomique** en transaction (`stock >= quantité`, jamais de stock négatif) ;
+- produit indisponible / stock insuffisant → commande rejetée, **rien n'est écrit** ;
+- **workflow de statut** (`PENDING → CONFIRMED → PREPARING → READY → DELIVERED`,
+  `CANCELLED` depuis les états non terminaux) via `OrderWorkflow`.
+
+---
+
+## 🛠️ Espace admin (Phase 5)
+
+Routes protégées par le rôle **ADMIN** (`/admin/*`) — layout dédié, `noindex` :
+
+- **Tableau de bord** (`/admin`) : compteurs (membres, événements, commandes, CA),
+  dernières commandes, **journal d'audit** récent.
+- **Événements** (`/admin/events`) : CRUD complet (création/édition/suppression),
+  publication, **liste des inscrits** par événement.
+- **Cafétéria** : CRUD **produits** (`/admin/cafeteria`) et **catégories**,
+  **commandes** (`/admin/cafeteria/commandes`) avec changement de statut (workflow),
+  **caisse (POS)** (`/admin/cafeteria/pos`) pour les ventes au comptoir
+  (total recalculé serveur + décrément de stock).
+- **Pages CMS** (`/admin/pages`) : CRUD pages (contenu HTML, SEO meta, publication).
+- **Équipe** (`/admin/team`) : CRUD membres du bureau (ordre, mise en avant, pôle).
+- **Médias** (`/admin/media`) : upload d'images (validation MIME réelle, 5 Mo max,
+  renommage aléatoire), suppression.
+- **Paramètres** (`/admin/settings`) : édition des settings regroupés, cache invalidé
+  après sauvegarde, **mode maintenance**.
+
+**Gestion utilisateurs & rôles** (`/admin/users`) — sécurité (§10.2) :
+- promotion / rétrogradation (ADMIN / Trésorerie / Élève) et activation/désactivation ;
+- chaque changement de rôle est **journalisé** (audit log `user.role_change`) ;
+- **protection du dernier administrateur** : impossible de rétrograder ou désactiver
+  le dernier ADMIN actif (règle pure et testée dans `UserPolicy`) ;
+- on ne peut pas modifier son propre rôle ni se désactiver soi-même.
+
+**Mode maintenance** (`maintenance_mode`) : bloque l'accès public (page 503),
+l'admin y a toujours accès.
+
+---
+
+## ✉️ E-mails & SEO (Phase 6)
+
+**E-mails transactionnels** (`App\Core\Mailer`) : templates HTML + texte, envoi
+via SMTP natif (configuré en admin/`.env`) ou `mail()` de secours.
+- **Bienvenue** envoyé à l'inscription ;
+- **Commande prête** envoyée quand l'admin passe une commande à `READY` ;
+- **Réinitialisation de mot de passe** : flux `/forgot-password` → `/reset-password`
+  (token à usage unique, haché SHA-256, expire en 1 h, non divulgation de compte).
+
+**SEO** :
+- méta dynamiques, **Open Graph** + **Twitter Cards**, **JSON-LD**
+  (`Organization` en accueil, `Event` en page événement) ;
+- `og:image` configurable (setting) + image par défaut ;
+- **sitemap.xml** dynamique (`/sitemap.xml` : pages statiques + événements + pages CMS) ;
+- `robots.txt` (admin/espace membre exclus).
+
+**Performance** (`.htaccess`) : compression gzip/brotli, cache assets 1 an (`immutable`),
+en-têtes de sécurité de base (`X-Content-Type-Options`, `X-Frame-Options`,
+`Referrer-Policy`, `Permissions-Policy`).
+
+**Accessibilité** : `lang="fr"`, skip-link, `:focus-visible`, navigation ARIA,
+sémantique HTML, alt sur images, `loading="lazy"`.
+
+---
+
+## 🛡️ Sécurité avancée & exploitation (Phase 7)
+
+**Authentification à deux facteurs (TOTP, RFC 6238)** — `App\Core\Security\Totp` :
+- **2FA obligatoire** pour les rôles ADMIN et TRÉSORERIE
+  (`TwoFactorPolicy::requires`), forcé via un guard dans `index.php` ;
+- vérification au login (étape `/login/verify`), configuration `/account/2fa/setup`
+  (secret + URI otpauth, confirmation par code) ;
+- **codes de récupération** à usage unique, stockés hachés (SHA-256) ;
+- table `two_factor` (secret + codes + activation).
+
+**En-têtes de sécurité** (`App\Core\Security\SecurityHeaders`) : **CSP**
+(configurable), **HSTS** (HTTPS), `X-Frame-Options`, `X-Content-Type-Options`,
+`Referrer-Policy`, `Permissions-Policy`.
+
+**Sauvegarde / restauration** (PHP pur, sans `mysqldump`) — `App\Core\Backup\Backup` :
+- `php scripts/backup.php [fichier.sql]` : dump complet (structure + données) ;
+- `php scripts/restore.php fichier.sql` : restauration multi-requêtes.
+
+**Monitoring** : endpoint **`/health`** (JSON, vérifie la base, 200/503),
+`App\Core\Logger` (journal structuré `logs/app.log`).
+
+**Journal d'audit** (`audit_logs`) : chaque action sensible (promotion, statut
+commande, activation/désactivation 2FA…) est tracée (qui, quoi, quand, IP).

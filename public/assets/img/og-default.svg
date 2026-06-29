@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#161a22"/>
+      <stop offset="1" stop-color="#2a0d12"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <rect x="60" y="60" width="120" height="120" rx="28" fill="#c8102e"/>
+  <text x="120" y="148" font-family="Arial, sans-serif" font-size="56" font-weight="700" fill="#fff" text-anchor="middle">AE</text>
+  <text x="60" y="320" font-family="Arial, sans-serif" font-size="86" font-weight="800" fill="#ffffff">AEIC</text>
+  <text x="62" y="390" font-family="Arial, sans-serif" font-size="40" fill="#c7cdd9">Association Étudiante Informatique de Calais</text>
+  <text x="62" y="470" font-family="Arial, sans-serif" font-size="30" fill="#9aa3b2">Fait par les étudiants, pour les étudiants.</text>
+</svg>
