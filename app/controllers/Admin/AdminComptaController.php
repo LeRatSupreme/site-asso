@@ -603,62 +603,98 @@ final class AdminComptaController extends AdminBaseController
     /**
      * Calcule l'analyse de réapprovisionnement.
      *
-     * Pour chaque produit cafétéria (table products), on rapproche le stock
-     * actuel de la consommation moyenne (moyenne mobile 3 mois lue depuis
-     * sales) exprimée par jour / semaine / mois, et on en déduit la quantité
-     * à commander pour couvrir la période cible.
+     * Basée sur TOUTES les ventes importées (table sales) : chaque produit
+     * présent dans les rapports SumUp est listé, avec sa consommation moyenne
+     * (moyenne mobile 3 mois) par jour / semaine / mois et la quantité à
+     * commander pour couvrir la période cible. Le stock n'est connu que pour
+     * les produits présents dans la table cafétéria (sinon : « — »).
      *
      * @return array{rows:list<array<string,mixed>>, alerts:int}
      */
     private function reorderData(int $targetDays): array
     {
-        $products = Product::allForAdmin();
-        $consumption = Sale::consumptionByProductKey(3);
+        $consumption = Sale::consumptionByProductKey(3); // tous les produits des ventes
+        $products    = Product::allForAdmin();
+
+        // Stock + catégorie par nom de produit (depuis la table cafétéria).
+        $stockByName = [];
+        $catByName   = [];
+        foreach ($products as $p) {
+            $name = (string) ($p['name'] ?? '');
+            if ($name === '') {
+                continue;
+            }
+            $stockByName[$name] = (int) ($p['stock'] ?? 0);
+            $catByName[$name]   = $p['category_name'] ?? '—';
+        }
 
         $rows = [];
         $alerts = 0;
+        $seen = [];
 
-        foreach ($products as $p) {
-            $key = (string) ($p['name'] ?? '');
+        // 1) Tous les produits présents dans les ventes (CSV).
+        foreach ($consumption as $key => $data) {
+            $key = (string) $key;
             if ($key === '') {
                 continue;
             }
+            $seen[$key] = true;
 
-            $monthlyData = $consumption[$key] ?? null;
-            $monthly = $monthlyData['monthly'] ?? [];
-            $avgMonth = ComptaCalc::movingAverage($monthly, 3);   // unités / mois
-            $avgDay   = $avgMonth / 30.0;                          // unités / jour
-            $avgWeek  = $avgDay * 7.0;                             // unités / semaine
+            $monthly  = $data['monthly'] ?? [];
+            $avgMonth = ComptaCalc::movingAverage($monthly, 3);
+            $avgDay   = $avgMonth / 30.0;
+            $avgWeek  = $avgDay * 7.0;
 
-            $stock = (int) ($p['stock'] ?? 0);
-            $autonomy = ComptaCalc::autonomyDays($stock, $avgMonth);
+            $hasStock = array_key_exists($key, $stockByName);
+            $stock    = $hasStock ? $stockByName[$key] : null;
 
-            // Quantité consommée sur la période cible, puis quantité à
-            // commander = besoin - stock (ne pas descendre sous 0).
-            $needForPeriod = (int) ceil($avgDay * $targetDays);
-            $toOrder = max(0, $needForPeriod - $stock);
+            $autonomy = ($stock !== null && $avgDay > 0)
+                ? (int) floor($stock / $avgDay)
+                : null;
 
-            $isAlert = ($autonomy !== null && $autonomy < 7) || $stock <= 0;
+            $need   = (int) ceil($avgDay * $targetDays);
+            $toOrder = max(0, $need - ($stock ?? 0));
+
+            // Alerte si autonomie connue < 7 j, ou stock nul connu.
+            $isAlert = ($autonomy !== null && $autonomy < 7) || ($hasStock && $stock <= 0);
             if ($isAlert) {
                 $alerts++;
             }
 
             $rows[] = [
                 'name'      => $key,
-                'category'  => $p['category_name'] ?? '—',
-                'stock'     => $stock,
+                'category'  => $catByName[$key] ?? (string) ($data['category'] ?? '—'),
+                'stock'     => $stock,        // null = inconnu
                 'avg_day'   => $avgDay,
                 'avg_week'  => $avgWeek,
                 'avg_month' => $avgMonth,
                 'autonomy'  => $autonomy,
-                'need'      => $needForPeriod,
+                'need'      => $need,
                 'to_order'  => $toOrder,
                 'is_alert'  => $isAlert,
             ];
         }
 
-        // Tri : quantité à commander décroissante (les plus urgents d'abord),
-        // puis autonomie croissante.
+        // 2) Produits cafétéria sans ventes enregistrées (stock mais conso 0).
+        foreach ($stockByName as $name => $stk) {
+            if (isset($seen[$name])) {
+                continue;
+            }
+            $rows[] = [
+                'name'      => $name,
+                'category'  => $catByName[$name] ?? '—',
+                'stock'     => $stk,
+                'avg_day'   => 0.0,
+                'avg_week'  => 0.0,
+                'avg_month' => 0.0,
+                'autonomy'  => null,
+                'need'      => 0,
+                'to_order'  => 0,
+                'is_alert'  => false,
+            ];
+        }
+
+        // Tri : quantité à commander décroissante (les plus urgents d'abord).
         usort($rows, static function (array $a, array $b): int {
             if ($b['to_order'] !== $a['to_order']) {
                 return $b['to_order'] <=> $a['to_order'];
