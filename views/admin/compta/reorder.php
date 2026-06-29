@@ -24,9 +24,10 @@ foreach ($rows as $r) {
         <div>
             <p class="eyebrow">Comptabilité</p>
             <h1 class="page-title">Réapprovisionnement</h1>
-            <p class="muted">Quantités à racheter calculées à partir des ventes réelles (moyenne mobile 3 mois). Choisis la période à couvrir : la colonne « À commander » s'ajuste automatiquement.</p>
+            <p class="muted">Basé sur <strong>toutes les ventes importées</strong> (rapports SumUp) : tous les produits sont listés, avec leur consommation moyenne et la quantité à racheter. Stock affiché seulement pour les produits connus de la cafétéria.</p>
         </div>
         <form method="get" class="compta-monthselect">
+            <?php if (($search ?? '') !== ''): ?><input type="hidden" name="search" value="<?= e((string)($search ?? '')) ?>"><?php endif; ?>
             <label for="period" class="muted" style="display:block;font-size:0.75rem;margin-bottom:0.3rem">Couvrir pour :</label>
             <select name="period" id="period" onchange="this.form.submit()">
                 <?php foreach ($periods as $k => $p): ?>
@@ -35,6 +36,13 @@ foreach ($rows as $r) {
             </select>
         </form>
     </div>
+</div>
+
+<div class="costs-toolbar">
+    <div class="search-box">
+        <input type="text" id="reorder-search" placeholder="🔎 Rechercher un produit…" autocomplete="off">
+    </div>
+    <span class="costs-count muted" id="reorder-count"></span>
 </div>
 
 <?php if ($alerts > 0): ?>
@@ -61,10 +69,16 @@ foreach ($rows as $r) {
         </thead>
         <tbody>
             <?php foreach ($rows as $r): ?>
-                <tr class="<?= !empty($r['is_alert']) ? 'row-alert' : '' ?>">
+                <tr class="<?= !empty($r['is_alert']) ? 'row-alert' : '' ?>" data-name="<?= e(strtolower((string) $r['name'])) ?>">
                     <td><strong><?= e((string) $r['name']) ?></strong></td>
                     <td><?= e((string) $r['category']) ?></td>
-                    <td class="num"><?= e((string) $r['stock']) ?></td>
+                    <td class="num">
+                        <?php if ($r['stock'] === null): ?>
+                            <span class="muted">—</span>
+                        <?php else: ?>
+                            <?= e((string) $r['stock']) ?>
+                        <?php endif; ?>
+                    </td>
                     <td class="num muted"><?= reorder_qty((float) $r['avg_day']) ?></td>
                     <td class="num muted"><?= reorder_qty((float) $r['avg_week']) ?></td>
                     <td class="num muted"><?= reorder_qty((float) $r['avg_month']) ?></td>
@@ -78,9 +92,10 @@ foreach ($rows as $r) {
                     <td class="num"><?= e((string) $r['need']) ?></td>
                     <td class="num">
                         <?php if ((int) $r['to_order'] > 0): ?>
-                            <strong class="is-positive" style="color:var(--primary)"><?= e((string) $r['to_order']) ?></strong>
+                            <strong style="color:var(--primary)"><?= e((string) $r['to_order']) ?></strong>
+                            <?php if ($r['stock'] === null): ?><span class="muted" title="Stock inconnu → on suggère la conso complète">*</span><?php endif; ?>
                         <?php else: ?>
-                            <span class="muted">0 (stock OK)</span>
+                            <span class="muted">0</span>
                         <?php endif; ?>
                     </td>
                     <td>
@@ -110,5 +125,31 @@ foreach ($rows as $r) {
 
 <p class="card-meta">
     Conso / jour = moyenne mensuelle ÷ 30 · Conso / semaine = conso / jour × 7 · Moyenne mobile 3 mois (ventes réelles SumUp).
-    « À commander » = besoin sur la période − stock restant (minimum 0).
+    « À commander » = besoin sur la période − stock restant (minimum 0). <strong>*</strong> = stock inconnu (produit non référencé en cafétéria) → suggestion = conso complète de la période.
 </p>
+
+<script>
+(function () {
+    var search = document.getElementById('reorder-search');
+    var countEl = document.getElementById('reorder-count');
+    var rows = Array.prototype.slice.call(document.querySelectorAll('.reorder-table tbody tr[data-name]'));
+    var total = rows.length;
+    if (!search) return;
+
+    function norm(s) { return String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim(); }
+
+    function apply() {
+        var q = norm(search.value);
+        var shown = 0;
+        rows.forEach(function (tr) {
+            var visible = q === '' || norm(tr.getAttribute('data-name')).indexOf(q) !== -1;
+            tr.style.display = visible ? '' : 'none';
+            if (visible) shown++;
+        });
+        countEl.textContent = shown + ' / ' + total + ' produit' + (total > 1 ? 's' : '');
+    }
+
+    search.addEventListener('input', apply);
+    apply();
+})();
+</script>
