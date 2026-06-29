@@ -1,10 +1,20 @@
 /* ==========================================================================
-   Espace administration AEIC
+   Espace administration AEIC — thème sombre navy/teal/violet
+   Réutilise les variables définies dans base.css (:root).
+   Ne redéfinit aucune couleur en dur déjà couverte par une variable.
    ========================================================================== */
 
+/* ---- Variables spécifiques à l'admin (dérivées de la charte) ----------- */
 .admin-body {
-    background: var(--gradient-bg, #f5f7fb);
-    color: var(--text, #1a1d24);
+    --admin-bg: #0a1b33;
+    --admin-sidebar: #0b1a30;
+    --admin-sidebar-deep: #091628;
+    --admin-link: hsl(204 25% 65%);
+    --admin-active-bg: rgba(72, 189, 211, 0.12);
+    --admin-active-bar: var(--primary);
+
+    background: var(--admin-bg);
+    color: var(--foreground);
     margin: 0;
 }
 
@@ -19,8 +29,8 @@
 /* ---- Sidebar ----------------------------------------------------------- */
 
 .admin-sidebar {
-    background: #161a22;
-    color: #c7cdd9;
+    background: var(--admin-sidebar);
+    color: var(--admin-link);
     display: flex;
     flex-direction: column;
     padding: 1.25rem 0.75rem;
@@ -29,6 +39,7 @@
     top: 0;
     height: 100vh;
     overflow-y: auto;
+    border-right: 1px solid var(--border);
 }
 
 .admin-sidebar .brand {
@@ -40,6 +51,8 @@
     text-decoration: none;
     padding: 0.5rem 0.5rem 1.1rem;
 }
+
+.admin-sidebar .brand:hover { color: #fff; }
 
 .admin-sidebar .brand-logo {
     width: 36px;
@@ -57,42 +70,48 @@
 .admin-group {
     font-size: 0.7rem;
     text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: #6b7280;
-    margin: 1rem 0.5rem 0.35rem;
+    letter-spacing: 0.12em;
+    color: hsl(204 20% 45%);
+    margin: 1.1rem 0.5rem 0.35rem;
+    font-weight: 800;
 }
 
 .admin-link {
+    position: relative;
     display: block;
-    color: #c7cdd9;
+    color: var(--admin-link);
     text-decoration: none;
-    padding: 0.5rem 0.75rem;
-    border-radius: 8px;
+    padding: 0.55rem 0.8rem;
+    border-radius: var(--radius-sm);
     font-size: 0.9rem;
-    transition: background 0.15s, color 0.15s;
+    font-weight: 600;
+    transition: background 0.15s ease, color 0.15s ease;
 }
 
 .admin-link:hover {
-    background: rgba(255, 255, 255, 0.06);
-    color: #fff;
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--foreground);
 }
 
 .admin-link.is-active {
-    background: var(--accent, #c8102e);
-    color: #fff;
+    background: var(--admin-active-bg);
+    color: var(--primary);
+    box-shadow: inset 3px 0 0 var(--admin-active-bar);
+    font-weight: 700;
 }
 
 .admin-sidebar-foot {
     margin-top: auto;
     padding-top: 1rem;
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    border-top: 1px solid var(--border);
 }
 
-/* ---- Main -------------------------------------------------------------- */
+/* ---- Main / topbar ----------------------------------------------------- */
 
 .admin-main {
     padding: 1.5rem 2rem 3rem;
     min-width: 0;
+    background: var(--admin-bg);
 }
 
 .admin-topbar {
@@ -100,20 +119,27 @@
     align-items: center;
     gap: 1rem;
     margin-bottom: 1.5rem;
+    padding-bottom: 1.25rem;
+    border-bottom: 1px solid var(--border);
 }
 
 .admin-title {
     font-size: clamp(1.4rem, 3vw, 1.9rem);
     margin: 0;
+    color: #fff;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: -0.03em;
+    line-height: 1;
 }
 
 .admin-toggle {
     display: none;
     width: 42px;
     height: 42px;
-    border: 1px solid var(--border, #e5e7eb);
-    background: #fff;
-    border-radius: 10px;
+    border: 1px solid var(--border-strong);
+    background: var(--card);
+    border-radius: var(--radius-sm);
     cursor: pointer;
     position: relative;
 }
@@ -125,29 +151,51 @@
     left: 11px;
     right: 11px;
     height: 2px;
-    background: #1a1d24;
+    background: var(--foreground);
 }
 
-.admin-toggle::before { top: 14px; box-shadow: 0 6px 0 #1a1d24; }
+.admin-toggle::before { top: 14px; box-shadow: 0 6px 0 var(--foreground); }
 .admin-toggle::after { bottom: 14px; }
 
-/* ---- Cartes & stats ---------------------------------------------------- */
+/* ---- Contenu & cartes -------------------------------------------------- */
 
 .admin-content { display: flex; flex-direction: column; gap: 1.5rem; }
 
+/* Les cartes du contenu utilisent déjà .card .surface .glass de base.css.
+   On ne fait qu'ajouter un léger hover admin pour les surfaces interactives. */
+.admin-content .card.surface {
+    transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+.admin-content .card.surface:hover {
+    border-color: rgba(72, 189, 211, 0.28);
+}
+
+/* ---- Stat-cards (dashboard) -------------------------------------------- */
+
 .stat-cards { gap: 1rem; }
 .stat-card {
-    padding: 1.25rem;
+    padding: 1.35rem;
     display: flex;
     flex-direction: column;
-    gap: 0.25rem;
+    gap: 0.3rem;
 }
-.stat-value { font-size: 1.8rem; font-weight: 800; }
-.stat-label { color: var(--muted, #6b7280); font-size: 0.85rem; }
+.stat-value {
+    font-size: 1.85rem;
+    font-weight: 900;
+    color: #fff;
+    letter-spacing: -0.03em;
+}
+.stat-label {
+    color: var(--muted);
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    font-weight: 700;
+}
 
 /* ---- Tableaux ---------------------------------------------------------- */
 
-.table-wrap { overflow-x: auto; }
+.table-wrap { overflow-x: auto; border-radius: var(--radius); }
 
 .table {
     width: 100%;
@@ -158,21 +206,28 @@
 .table th,
 .table td {
     text-align: left;
-    padding: 0.7rem 0.8rem;
-    border-bottom: 1px solid var(--border, #e5e7eb);
+    padding: 0.75rem 0.85rem;
+    border-bottom: 1px solid var(--border);
     vertical-align: middle;
 }
 
-.table th {
-    font-size: 0.75rem;
+.table thead th {
+    font-size: 0.72rem;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--muted, #6b7280);
-    background: rgba(0, 0, 0, 0.02);
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    font-weight: 800;
+    background: var(--admin-sidebar-deep);
 }
 
+.table tbody tr { transition: background 0.12s ease; }
+.table tbody tr:nth-child(even) { background: rgba(255, 255, 255, 0.018); }
+.table tbody tr:hover { background: rgba(72, 189, 211, 0.07); }
+.table tbody tr:last-child td { border-bottom: none; }
+
 .row-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
-.row-self { background: rgba(200, 16, 46, 0.04); }
+.row-self { background: rgba(97, 80, 170, 0.12); }
+.row-self:hover { background: rgba(97, 80, 170, 0.18); }
 
 /* ---- Formulaires admin ------------------------------------------------- */
 
@@ -186,6 +241,41 @@
 .inline-form input,
 .inline-form select { flex: 1 1 160px; min-width: 120px; }
 
+/* Champs de formulaire hors .field (selects inline, recherches admin) */
+.admin-main select,
+.admin-main input[type="text"],
+.admin-main input[type="search"],
+.admin-main input[type="number"] {
+    width: 100%;
+    padding: 0.55rem 0.75rem;
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--foreground);
+    font-size: 0.9rem;
+    font-family: inherit;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+/* On laisse .field (base.css) garder la priorité sur les champs labellisés */
+.field input[type="text"],
+.field input[type="search"],
+.field input[type="number"],
+.field select {
+    padding: 0.7rem 0.9rem;
+}
+.admin-main select:focus,
+.admin-main input[type="text"]:focus,
+.admin-main input[type="search"]:focus,
+.admin-main input[type="number"]:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(72, 189, 211, 0.18);
+}
+.admin-main select option {
+    background: var(--card);
+    color: var(--foreground);
+}
+
 .checkbox-inline { display: inline-flex; gap: 0.35rem; align-items: center; font-size: 0.9rem; }
 
 .admin-actions {
@@ -196,38 +286,58 @@
 }
 
 .admin-section-head { display: flex; flex-direction: column; gap: 0.25rem; }
-.admin-section-head a { color: var(--accent, #c8102e); text-decoration: none; }
+.admin-section-head a { color: var(--primary); text-decoration: none; }
 
-/* ---- Badges ------------------------------------------------------------ */
-
+/* ---- Badges admin (compléments sémantiques) ---------------------------- */
+/* base.css fournit déjà .badge .badge-success .badge-warning .badge-danger
+   .badge-muted .badge-secondary en version sombre translucide. On ajoute
+   seulement .badge-info (teal) non présent dans la base. */
 .badge {
-    display: inline-block;
-    padding: 0.15rem 0.55rem;
+    display: inline-flex;
+    align-items: center;
+    padding: 0.22rem 0.65rem;
     border-radius: 999px;
     font-size: 0.72rem;
-    font-weight: 700;
-    letter-spacing: 0.02em;
+    font-weight: 800;
+    letter-spacing: 0.03em;
+    border: 1px solid transparent;
 }
-.badge-success { background: #dcfce7; color: #166534; }
-.badge-muted   { background: #e5e7eb; color: #374151; }
-.badge-info    { background: #dbeafe; color: #1e40af; }
-.badge-warning { background: #fef3c7; color: #92400e; }
+.badge-info {
+    background: rgba(72, 189, 211, 0.16);
+    color: var(--primary);
+    border-color: rgba(72, 189, 211, 0.4);
+}
 
 /* ---- Listes en lignes -------------------------------------------------- */
 
-.list-rows { list-style: none; margin: 0 0 1rem; padding: 0; display: flex; flex-direction: column; gap: 0.4rem; }
+.list-rows {
+    list-style: none;
+    margin: 0 0 1rem;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
 .list-rows li {
     display: flex;
     justify-content: space-between;
     align-items: center;
     gap: 0.75rem;
-    padding: 0.5rem 0;
-    border-bottom: 1px solid var(--border, #e5e7eb);
+    padding: 0.55rem 0;
+    border-bottom: 1px solid var(--border);
     font-size: 0.9rem;
 }
+.list-rows li:last-child { border-bottom: none; }
 
-.audit-list code { background: rgba(0,0,0,0.05); padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.8rem; }
-.audit-list li { flex-wrap: wrap; gap: 0.35rem; }
+.audit-list code {
+    background: rgba(72, 189, 211, 0.12);
+    color: var(--primary);
+    padding: 0.12rem 0.45rem;
+    border-radius: 0.3rem;
+    font-size: 0.8rem;
+    font-family: ui-monospace, 'SF Mono', Consolas, monospace;
+}
+.audit-list li { flex-wrap: wrap; gap: 0.45rem; }
 
 /* ---- Médias ------------------------------------------------------------ */
 
@@ -239,20 +349,31 @@
 
 .media-card {
     margin: 0;
-    padding: 0.6rem;
-    border-radius: 12px;
+    padding: 0.65rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--input-bg);
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
+    transition: border-color 0.18s ease;
 }
+.media-card:hover { border-color: rgba(72, 189, 211, 0.3); }
 .media-card img {
     width: 100%;
     aspect-ratio: 1;
     object-fit: cover;
-    border-radius: 8px;
-    background: #f3f4f6;
+    border-radius: 0.5rem;
+    background: var(--admin-sidebar-deep);
 }
-.media-card figcaption { display: flex; flex-direction: column; gap: 0.4rem; font-size: 0.75rem; word-break: break-all; }
+.media-card figcaption {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    font-size: 0.75rem;
+    color: var(--muted);
+    word-break: break-all;
+}
 
 /* ---- POS --------------------------------------------------------------- */
 
@@ -263,7 +384,14 @@
     align-items: start;
 }
 
-.pos-cat-title { font-size: 0.95rem; margin: 1rem 0 0.5rem; color: var(--muted, #6b7280); }
+.pos-cat-title {
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    margin: 1rem 0 0.5rem;
+    color: var(--muted);
+    font-weight: 800;
+}
 
 .pos-products {
     display: grid;
@@ -278,20 +406,39 @@
     align-items: stretch;
     text-align: left;
     cursor: pointer;
-    border: 1px solid var(--border, #e5e7eb);
-    background: #fff;
-    border-radius: 10px;
-    padding: 0.7rem;
-    transition: transform 0.1s, box-shadow 0.15s;
+    border: 1px solid var(--border);
+    background: var(--input-bg);
+    color: var(--foreground);
+    border-radius: var(--radius-sm);
+    padding: 0.75rem;
+    transition: transform 0.12s ease, border-color 0.15s ease, box-shadow 0.15s ease;
 }
-.pos-product:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(0,0,0,0.1); }
-.pos-product-name { font-weight: 700; font-size: 0.9rem; }
-.pos-product-price { color: var(--accent, #c8102e); font-weight: 700; }
-.pos-product-stock { font-size: 0.72rem; color: var(--muted, #6b7280); }
+.pos-product:hover {
+    transform: translateY(-2px);
+    border-color: rgba(72, 189, 211, 0.45);
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.35);
+}
+.pos-product-name { font-weight: 700; font-size: 0.9rem; color: #fff; }
+.pos-product-price { color: var(--primary); font-weight: 800; }
+.pos-product-stock { font-size: 0.72rem; color: var(--muted); }
 
 .pos-cart { position: sticky; top: 1.5rem; }
-.pos-total { font-size: 1.2rem; margin: 0.5rem 0 1rem; }
-.pos-total strong { color: var(--accent, #c8102e); }
+.pos-total { font-size: 1.25rem; margin: 0.5rem 0 1rem; color: var(--foreground); }
+.pos-total strong { color: var(--primary); }
+
+/* Boutons quantité panier (POS) */
+.list-rows button {
+    width: 1.7rem;
+    height: 1.7rem;
+    border: 1px solid var(--border-strong);
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--foreground);
+    border-radius: 0.4rem;
+    font-weight: 800;
+    cursor: pointer;
+    transition: background 0.12s ease;
+}
+.list-rows button:hover { background: rgba(72, 189, 211, 0.15); color: var(--primary); }
 
 .btn-block { width: 100%; }
 
@@ -301,15 +448,18 @@
     .admin-shell { grid-template-columns: 1fr; }
     .admin-sidebar {
         position: fixed;
-        z-index: 50;
+        z-index: 60;
         left: 0;
         top: 0;
-        width: 260px;
+        width: 280px;
+        height: 100vh;
         transform: translateX(-100%);
-        transition: transform 0.25s;
+        transition: transform 0.25s ease;
+        box-shadow: 0 0 40px rgba(0, 0, 0, 0.5);
     }
     .admin-sidebar.is-open { transform: translateX(0); }
     .admin-toggle { display: block; }
     .admin-main { padding: 1rem; }
     .pos-grid { grid-template-columns: 1fr; }
+    .pos-cart { position: static; }
 }

@@ -1,6 +1,6 @@
 /* =========================================================
    AEIC — Comptabilité (Phase 9)
-   Compléments au CSS admin (admin.css).
+   Compléments au CSS admin (admin.css) — thème sombre.
    ========================================================= */
 
 .compta-kpis {
@@ -11,32 +11,36 @@
 }
 
 .compta-kpis .kpi {
-    padding: 1.25rem;
+    padding: 1.35rem;
+    border-left: 3px solid rgba(72, 189, 211, 0.5);
 }
 
 .kpi-label {
     margin: 0;
     text-transform: uppercase;
-    letter-spacing: 0.12em;
+    letter-spacing: 0.14em;
     font-size: 11px;
     color: var(--muted);
+    font-weight: 800;
 }
 
 .kpi-value {
-    margin: 0.35rem 0 0;
-    font-size: 1.9rem;
+    margin: 0.4rem 0 0;
+    font-size: 1.95rem;
     font-weight: 900;
     letter-spacing: -0.03em;
+    color: #fff;
 }
 
 .kpi-value.is-positive { color: var(--accent-success); }
 .kpi-value.is-negative { color: var(--accent-danger); }
 
 .kpi-sub {
-    margin: 0.35rem 0 0;
+    margin: 0.4rem 0 0;
     font-size: 12px;
     color: var(--muted);
 }
+.kpi-sub a { color: var(--primary); font-weight: 700; }
 
 .compta-grid {
     display: grid;
@@ -45,13 +49,12 @@
     margin-bottom: 1.5rem;
 }
 
-.card-title {
+.compta-grid .card-title,
+.compta-kpis + .compta-grid .card-title {
     margin: 0 0 0.85rem;
-    font-size: 1rem;
-    font-weight: 800;
-    letter-spacing: -0.01em;
 }
 
+/* Sélecteurs de période / filtres (hors .field) */
 .compta-monthselect,
 .compta-filters {
     display: flex;
@@ -60,14 +63,31 @@
     gap: 0.5rem;
 }
 
+.compta-monthselect label { color: var(--muted); font-weight: 700; font-size: 0.85rem; }
+
 .compta-monthselect select,
 .compta-filters select,
 .compta-filters input {
-    padding: 0.4rem 0.6rem;
-    border-radius: 0.5rem;
+    padding: 0.5rem 0.7rem;
+    border-radius: var(--radius-sm);
     border: 1px solid var(--border);
-    background: rgba(255, 255, 255, 0.04);
-    color: inherit;
+    background: var(--input-bg);
+    color: var(--foreground);
+    font-family: inherit;
+    font-size: 0.9rem;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.compta-monthselect select:focus,
+.compta-filters select:focus,
+.compta-filters input:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(72, 189, 211, 0.18);
+}
+.compta-monthselect select option,
+.compta-filters select option {
+    background: var(--card);
+    color: var(--foreground);
 }
 
 /* Carte / Liquide */
@@ -77,13 +97,16 @@
     padding: 0;
     display: flex;
     flex-direction: column;
-    gap: 0.35rem;
+    gap: 0.4rem;
 }
 .split-list li {
     display: flex;
     justify-content: space-between;
     font-size: 0.95rem;
+    color: var(--foreground);
 }
+.split-list li span { color: var(--muted); }
+.split-list li strong { color: #fff; }
 
 .split-bar {
     height: 10px;
@@ -94,6 +117,7 @@
 .split-bar-card {
     height: 100%;
     background: linear-gradient(135deg, var(--secondary), var(--primary));
+    box-shadow: 0 0 12px rgba(72, 189, 211, 0.35);
 }
 
 /* File « à classer » */
@@ -101,31 +125,43 @@
 .alias-row {
     display: flex;
     flex-direction: column;
-    gap: 0.35rem;
-    padding: 0.6rem;
+    gap: 0.45rem;
+    padding: 0.75rem;
     border: 1px solid var(--border);
-    border-radius: 0.6rem;
-    background: rgba(255, 255, 255, 0.02);
+    border-radius: var(--radius-sm);
+    background: var(--input-bg);
 }
 .alias-row code {
-    background: rgba(255, 255, 255, 0.08);
-    padding: 0.1rem 0.35rem;
+    background: rgba(72, 189, 211, 0.14);
+    color: var(--primary);
+    padding: 0.12rem 0.4rem;
     border-radius: 0.3rem;
+    font-family: ui-monospace, 'SF Mono', Consolas, monospace;
 }
 .alias-row input {
-    padding: 0.35rem 0.5rem;
-    border-radius: 0.4rem;
+    flex: 1;
+    padding: 0.45rem 0.6rem;
+    border-radius: var(--radius-sm);
     border: 1px solid var(--border);
     background: rgba(255, 255, 255, 0.04);
-    color: inherit;
-    margin-right: 0.3rem;
+    color: var(--foreground);
+    font-family: inherit;
+}
+.alias-row input:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(72, 189, 211, 0.18);
 }
 
 /* Ligne d'alerte réappro */
-.table tr.row-alert {
-    background: rgba(245, 158, 11, 0.08);
-}
+.table tr.row-alert { background: rgba(245, 158, 11, 0.1); }
+.table tr.row-alert:hover { background: rgba(245, 158, 11, 0.16); }
 
+/* Utilitaires couleur compta */
 .muted { color: var(--muted); }
 .is-positive { color: var(--accent-success); }
 .is-negative { color: var(--accent-danger); }
+
+/* Numeros monétaires : mono-lisible pour aligner les montants */
+.table td.is-positive,
+.table td.is-negative { font-weight: 800; }
