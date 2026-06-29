@@ -17,11 +17,16 @@
         <env name="APP_ENV" value="dev"/>
         <env name="APP_DEBUG" value="true"/>
         <env name="APP_URL" value="https://example.test"/>
+        <!-- Désactive CSRF + 2FA + envoi réel d'e-mails dans les tests d'intégration. -->
+        <env name="APP_TESTING" value="true"/>
     </php>
 
     <testsuites>
         <testsuite name="Unit">
             <directory>tests/Unit</directory>
+        </testsuite>
+        <testsuite name="Integration">
+            <directory>tests/Integration</directory>
         </testsuite>
     </testsuites>
 

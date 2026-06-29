@@ -26,6 +26,9 @@ if (!defined('APP_URL')) {
 if (!defined('APP_DEBUG')) {
     define('APP_DEBUG', false);
 }
+if (!defined('APP_TESTING')) {
+    define('APP_TESTING', getenv('APP_TESTING') === 'true');
+}
 
 /**
  * Lecture d'une variable d'environnement (équivalent minimal de config.php,
