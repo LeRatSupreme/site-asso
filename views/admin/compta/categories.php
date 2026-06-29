@@ -8,34 +8,96 @@ declare(strict_types=1);
  * @var bool $all
  */
 ?>
-<div class="admin-actions">
-    <form method="get" class="compta-monthselect">
-        <select name="month" onchange="this.form.submit()">
-            <option value="all" <?= $all ? 'selected' : '' ?>>Toute l'année</option>
-            <?php foreach ($months as $m): ?>
-                <option value="<?= e($m['value']) ?>" <?= (!$all && $m['value'] === ($_GET['month'] ?? '')) ? 'selected' : '' ?>><?= e($m['label']) ?></option>
-            <?php endforeach; ?>
-        </select>
-    </form>
+<div class="compta-head">
+    <div class="compta-head-row">
+        <div>
+            <p class="eyebrow">Comptabilité</p>
+            <h1 class="page-title">Bénéfice par catégorie</h1>
+            <p class="muted">Vue d'ensemble par grand regroupement (Boisson, Nourriture, Spécial…).</p>
+        </div>
+        <form method="get" class="compta-monthselect">
+            <select name="month" onchange="this.form.submit()">
+                <option value="all" <?= $all ? 'selected' : '' ?>>Toute l'année</option>
+                <?php foreach ($months as $m): ?>
+                    <option value="<?= e($m['value']) ?>" <?= (!$all && $m['value'] === ($_GET['month'] ?? '')) ? 'selected' : '' ?>><?= e($m['label']) ?></option>
+                <?php endforeach; ?>
+            </select>
+        </form>
+    </div>
 </div>
 
-<div class="card surface glass table-wrap">
-    <table class="table">
-        <thead><tr><th>Catégorie</th><th>Qté</th><th>CA</th><th>Bénéfice</th><th>Marge</th></tr></thead>
-        <tbody>
-            <?php foreach ($rows as $r): ?>
-                <?php $ca = (float) $r['ca']; $profit = (float) $r['profit']; $marg = $ca > 0 ? round($profit / $ca * 100, 1) : 0.0; ?>
-                <tr>
-                    <td><strong><?= e((string) $r['category']) ?></strong></td>
-                    <td><?= e((string) $r['qty']) ?></td>
-                    <td><?= e(formatPrice($ca)) ?></td>
-                    <td class="<?= $profit >= 0 ? 'is-positive' : 'is-negative' ?>"><?= e(formatPrice($profit)) ?></td>
-                    <td><?= e(number_format($marg, 1, ',', ' ')) ?> %</td>
-                </tr>
-            <?php endforeach; ?>
-            <?php if ($rows === []): ?>
-                <tr><td colspan="5" class="muted">Aucune vente sur cette période.</td></tr>
-            <?php endif; ?>
-        </tbody>
-    </table>
-</div>
+<?php
+    $totQty = 0;
+    $totCa = 0.0;
+    $totProfit = 0.0;
+    foreach ($rows as $r) {
+        $totQty    += (int) $r['qty'];
+        $totCa     += (float) $r['ca'];
+        $totProfit += (float) $r['profit'];
+    }
+    $totMargin = $totCa > 0 ? round($totProfit / $totCa * 100, 1) : 0.0;
+?>
+
+<!-- Total global -->
+<section class="cat-total card surface glass">
+    <div class="cat-total-item">
+        <span class="cat-total-label">Quantité vendue</span>
+        <strong class="cat-total-value"><?= $totQty ?></strong>
+    </div>
+    <span class="cat-total-sep"></span>
+    <div class="cat-total-item">
+        <span class="cat-total-label">Chiffre d'affaires</span>
+        <strong class="cat-total-value"><?= e(formatPrice($totCa)) ?></strong>
+    </div>
+    <span class="cat-total-sep"></span>
+    <div class="cat-total-item">
+        <span class="cat-total-label">Bénéfice</span>
+        <strong class="cat-total-value is-positive"><?= e(formatPrice($totProfit)) ?></strong>
+    </div>
+    <span class="cat-total-sep"></span>
+    <div class="cat-total-item">
+        <span class="cat-total-label">Marge globale</span>
+        <strong class="cat-total-value"><?= e(number_format($totMargin, 1, ',', ' ')) ?> %</strong>
+    </div>
+</section>
+
+<?php if ($rows === []): ?>
+    <div class="empty-state card surface glass">
+        <p class="muted">Aucune vente sur cette période.</p>
+    </div>
+<?php else: ?>
+    <div class="cat-grid">
+        <?php foreach ($rows as $r):
+            $ca     = (float) $r['ca'];
+            $profit = (float) $r['profit'];
+            $marg   = $ca > 0 ? round($profit / $ca * 100, 1) : 0.0;
+        ?>
+            <article class="cat-card card surface glass <?= $profit >= 0 ? 'is-positive' : 'is-negative' ?>">
+                <header class="cat-card-head">
+                    <h2 class="cat-card-title"><?= e((string) $r['category']) ?></h2>
+                    <span class="cat-card-qty muted"><?= (int) $r['qty'] ?> vendus</span>
+                </header>
+
+                <div class="cat-card-metrics">
+                    <div class="cat-metric">
+                        <span class="cat-metric-label">Chiffre d'affaires</span>
+                        <strong class="cat-metric-value"><?= e(formatPrice($ca)) ?></strong>
+                    </div>
+                    <div class="cat-metric">
+                        <span class="cat-metric-label">Bénéfice</span>
+                        <strong class="cat-metric-value <?= $profit >= 0 ? 'is-positive' : 'is-negative' ?>"><?= e(formatPrice($profit)) ?></strong>
+                    </div>
+                    <div class="cat-metric">
+                        <span class="cat-metric-label">Marge</span>
+                        <span class="cat-metric-badge <?= $marg >= 50 ? 'badge-success' : ($marg >= 20 ? 'badge-info' : 'badge-warning') ?>"><?= e(number_format($marg, 1, ',', ' ')) ?> %</span>
+                    </div>
+                </div>
+
+                <div class="cat-card-bar" title="Part du chiffre d'affaires">
+                    <div class="cat-card-bar-fill" style="width: <?= $totCa > 0 ? max(2, round($ca / $totCa * 100)) : 0 ?>%"></div>
+                </div>
+                <p class="cat-card-share muted"><?= $totCa > 0 ? e(number_format($ca / $totCa * 100, 1, ',', ' ')) : '0,0' ?> % du CA total</p>
+            </article>
+        <?php endforeach; ?>
+    </div>
+<?php endif; ?>
