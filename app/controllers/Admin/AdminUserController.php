@@ -97,4 +97,43 @@ final class AdminUserController extends AdminBaseController
             $isActive ? 'désactivé' : 'activé'));
         redirect(url('/admin/users'));
     }
+
+    /**
+     * Supprime un compte (droit à l'effacement RGPD).
+     *
+     * Garde-fous :
+     *  - impossible de supprimer son propre compte depuis ici ( passer par
+     *    « Mon compte » /account/privacy) ;
+     *  - impossible de supprimer le dernier administrateur actif ;
+     *  - les commandes (comptabilité) sont conservées mais anonymisées
+     *    (ON DELETE SET NULL).
+     */
+    public function delete(string $id): void
+    {
+        $this->guard();
+
+        $target = User::find($id);
+        if ($target === null) {
+            $this->abort(404);
+        }
+
+        if ($id === Auth::id()) {
+            $this->setFlash('error', 'Vous ne pouvez pas supprimer votre propre compte depuis ici.');
+            redirect(url('/admin/users'));
+        }
+
+        if ((string) $target['role'] === Auth::ROLE_ADMIN && User::countActiveAdmins() <= 1) {
+            $this->setFlash('error', 'Impossible : c\'est le dernier administrateur actif.');
+            redirect(url('/admin/users'));
+        }
+
+        User::delete($id);
+        AuditLog::log('user.delete', Auth::id(), 'user', $id, [
+            'email' => $target['email'] ?? null,
+            'role'  => (string) $target['role'],
+        ]);
+
+        $this->setFlash('success', sprintf('Compte de %s supprimé.', e($target['prenom'] . ' ' . $target['nom'])));
+        redirect(url('/admin/users'));
+    }
 }
