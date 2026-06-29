@@ -83,6 +83,7 @@ final class SecurityHeaders
             "img-src 'self' data: blob: https:",
             "font-src 'self'",
             "connect-src 'self'",
+            "frame-src 'self' https://www.openstreetmap.org",
             "frame-ancestors 'self'",
             "base-uri 'self'",
             "form-action 'self'",
