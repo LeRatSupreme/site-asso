@@ -697,8 +697,16 @@ final class AdminComptaController extends AdminBaseController
             $need   = (int) ceil($avgDay * $targetDays);
             $toOrder = max(0, $need - ($stock ?? 0));
 
-            // Alerte si autonomie connue < 7 j, ou stock nul connu.
-            $isAlert = ($autonomy !== null && $autonomy < 7) || ($stock !== null && $stock <= 0);
+            // État : à définir (stock inconnu), à racheter (stock <= 0 ou
+            // autonomie < 7 j), ou OK.
+            if ($stock === null) {
+                $state = 'unknown';
+            } elseif ($stock <= 0 || ($autonomy !== null && $autonomy < 7)) {
+                $state = 'reorder';
+            } else {
+                $state = 'ok';
+            }
+            $isAlert = ($state === 'reorder');
             if ($isAlert) {
                 $alerts++;
             }
@@ -713,6 +721,7 @@ final class AdminComptaController extends AdminBaseController
                 'autonomy'  => $autonomy,
                 'need'      => $need,
                 'to_order'  => $toOrder,
+                'state'     => $state,
                 'is_alert'  => $isAlert,
             ];
         }
@@ -724,6 +733,10 @@ final class AdminComptaController extends AdminBaseController
             }
             // Stock saisi prioritaire si présent.
             $finalStock = array_key_exists($name, $stocksInput) ? $stocksInput[$name] : $stk;
+            $state = ($finalStock !== null && $finalStock <= 0) ? 'reorder' : 'ok';
+            if ($state === 'reorder') {
+                $alerts++;
+            }
             $rows[] = [
                 'name'      => $name,
                 'category'  => $catByName[$name] ?? '—',
@@ -734,7 +747,8 @@ final class AdminComptaController extends AdminBaseController
                 'autonomy'  => null,
                 'need'      => 0,
                 'to_order'  => 0,
-                'is_alert'  => false,
+                'state'     => $state,
+                'is_alert'  => $state === 'reorder',
             ];
         }
 
