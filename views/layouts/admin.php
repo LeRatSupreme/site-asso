@@ -45,15 +45,21 @@ $sections = [
         'Mapping libellés' => '/admin/compta/aliases',
         'Réappro'        => '/admin/compta/reappro',
     ],
+    'SumUp' => [
+        'Dashboard SumUp' => '/admin/sumup',
+    ],
     'Système' => [
         'Utilisateurs' => '/admin/users',
         'Paramètres'   => '/admin/settings',
     ],
 ];
 
-// Le rôle TRESORERIE n'a accès qu'à la comptabilité : on masque le reste.
+// Le rôle TRESORERIE n'a accès qu'à la comptabilité et au dashboard SumUp.
 if (($user['role'] ?? null) === 'TRESORERIE') {
-    $sections = ['Comptabilité' => $sections['Comptabilité']];
+    $sections = [
+        'Comptabilité' => $sections['Comptabilité'],
+        'SumUp' => $sections['SumUp'],
+    ];
 }
 ?>
 <!DOCTYPE html>
@@ -66,6 +72,7 @@ if (($user['role'] ?? null) === 'TRESORERIE') {
     <link rel="icon" href="<?= e(asset('img/favicon.svg')) ?>" type="image/svg+xml">
     <link rel="stylesheet" href="<?= e(assetVersioned('css/base.css')) ?>">
     <link rel="stylesheet" href="<?= e(rootAssetVersioned('/css/admin.css')) ?>">
+    <link rel="stylesheet" href="<?= e(rootAssetVersioned('/css/payments.css')) ?>">
     <?php if (($loadComptaCss ?? false) || str_contains($currentPath ?? '', '/compta')): ?>
         <link rel="stylesheet" href="<?= e(rootAssetVersioned('/css/compta.css')) ?>">
     <?php endif; ?>

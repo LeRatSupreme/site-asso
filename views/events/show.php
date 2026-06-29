@@ -31,7 +31,7 @@ $dateRaw     = (string) ($event['date'] ?? '');
 $endDateRaw  = (string) ($event['end_date'] ?? '');
 $image       = (string) ($event['image'] ?? '');
 $price       = $event['price'] ?? null;
-$sumupLink   = (string) ($event['sumup_link'] ?? '');
+$sumupLink   = sumup_link((string) ($event['sumup_link'] ?? ''));
 $maxCapacity = $event['max_capacity'] ?? null;
 
 $imageUrl = '';
@@ -156,8 +156,8 @@ $priceLabel = ($price === null || (float) $price <= 0)
                         <a class="btn btn-outline btn-block" href="<?= e(url('/register')) ?>">Créer un compte</a>
                     <?php endif; ?>
 
-                    <?php if ($sumupLink !== ''): ?>
-                        <a class="btn btn-ghost btn-block" href="<?= e($sumupLink) ?>" rel="noopener" target="_blank">Payer en ligne</a>
+                    <?php if ($sumupLink !== null): ?>
+                        <a class="btn btn-sumup btn-block" href="<?= e($sumupLink) ?>" rel="noopener noreferrer" target="_blank">Payer en ligne (SumUp)</a>
                     <?php endif; ?>
                 </div>
             <?php endif; ?>

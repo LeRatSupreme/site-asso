@@ -198,6 +198,7 @@ final class StudentController extends Controller
             'products'      => Product::available(),
             'cart'          => $this->cart(),
             'ordersEnabled' => $ordersEnabled,
+            'sumupLink'     => sumup_enabled() ? sumup_link() : null,
         ], 'student');
     }
 

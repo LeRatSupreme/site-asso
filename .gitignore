@@ -15,6 +15,9 @@
 # Cache (rate limiter, etc.)
 /cache/
 
+# Sauvegardes (scripts/backup.sh)
+/backups/
+
 # OS / éditeurs
 .DS_Store
 Thumbs.db

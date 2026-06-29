@@ -330,3 +330,106 @@ sémantique HTML, alt sur images, `loading="lazy"`.
 
 **Journal d'audit** (`audit_logs`) : chaque action sensible (promotion, statut
 commande, activation/désactivation 2FA…) est tracée (qui, quoi, quand, IP).
+
+---
+
+## 💳 SumUp (paiement en ligne par lien)
+
+Le site utilise le **paiement par lien SumUp** (aucune intégration API complexe,
+aucun token/secret à stocker) :
+
+1. **Paramètres → « SumUp (paiement en ligne) »** :
+   - `sumup_enabled` : active/désactive l'affichage des boutons de paiement ;
+   - `sumup_default_link` : URL de paiement SumUp par défaut (collez ici le lien
+     généré depuis l'app/dashboard SumUp).
+2. **Détail d'un événement** (`/events/{slug}`) : si l'événement possède son
+   propre `sumup_link`, celui-ci est utilisé ; sinon c'est le lien par défaut.
+   Un bouton teal **« Payer en ligne (SumUp) »** ouvre le lien dans un nouvel onglet.
+3. **Cafétéria (espace élève)** : un bouton **« Payer ma commande (SumUp) »**
+   apparaît sous le panier (optionnel — les commandes restent réglées au comptoir).
+4. **Caisse (POS) admin** : un bouton **« Encaisser par SumUp »** ouvre le lien
+   par défaut (à côté de la validation comptant).
+5. **Dashboard SumUp** (`/admin/sumup`) : synthèse mensuelle (carte vs espèces,
+   nombre de transactions) **fondée sur les ventes déjà importées** dans la
+   comptabilité (rapports SumUp). Aucun appel réseau à SumUp.
+
+> Aucun identifiant de compte SumUp n'est stocké : seule une URL publique de
+> paiement est utilisée.
+
+---
+
+## ✉️ Emails : délivrabilité (SPF / DKIM / DMARC)
+
+Le site envoie des e-mails transactionnels via SMTP (voir
+*Admin → Paramètres → Emails / SMTP*). Pour qu'ils arrivent en boîte de
+réception (et non en spam), configurez ces enregistrements DNS chez le
+**registaire du domaine** `asso.aremond.ovh`.
+
+### SPF (autorise le serveur/fournisseur à envoyer)
+
+Si vous passez par **Brevo** (recommandé) :
+
+```
+asso.aremond.ovh.  IN  TXT  "v=spf1 include:spf.brevo.com ~all"
+```
+
+Si le serveur envoie lui-même (fallback `mail()`) :
+
+```
+asso.aremond.ovh.  IN  TXT  "v=spf1 mx a -all"
+```
+
+### DKIM (signature, fournie par le fournisseur SMTP)
+
+DKIM dépend du prestataire SMTP. **Brevo** fournit une clé publique à publier
+sous la forme :
+
+```
+brevo._domainkey.aso.aremond.ovh.  IN  TXT  "v=DKIM1; p=<clé-fournie-par-brevo>"
+```
+
+Récupérez la clé et le sélecteur dans le dashboard Brevo (ou de votre
+fournisseur SMTP) et publiez-les tels quels.
+
+### DMARC (politique de réception — progressive)
+
+Commencez en mode **observatoire** (aucun impact, collecte des rapports) :
+
+```
+_dmarc.aso.aremond.ovh.  IN  TXT  "v=DMARC1; p=none; rua=mailto:tresorerie@aeic.fr"
+```
+
+Après quelques semaines de rapports sans anomalie, passez en mode **quarantaine** :
+
+```
+_dmarc.aso.aremond.ovh.  IN  TXT  "v=DMARC1; p=quarantine; pct=100; rua=mailto:tresorerie@aeic.fr"
+```
+
+> Remplacez `tresorerie@aeic.fr` par l'adresse qui recevra les rapports DMARC.
+> La propagation DNS peut prendre de quelques minutes à 48 h.
+
+---
+
+## 📈 Monitoring
+
+### Endpoint `/health`
+
+Le site expose `GET /health` (JSON) : renvoie `200 OK` si la base est joignable,
+`503` sinon (charge/DB indisponible). Réponse type :
+
+```json
+{ "status": "ok", "db": "ok" }
+```
+
+### Surveillance externe (UptimeRobot & co.)
+
+Créer un check **HTTPS** sur :
+
+```
+https://asso.aremond.ovh/health
+```
+
+- Intervalle : 5 min ;
+- Alertes sur statut `!= 200` ou temps de réponse > seuil ;
+- Surveiller en parallèle `logs/app.log` et `logs/php-error.log` côté serveur.
+

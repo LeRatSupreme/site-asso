@@ -44,6 +44,7 @@ $nav = [
     <link rel="icon" href="<?= e(asset('img/favicon.svg')) ?>" type="image/svg+xml">
     <link rel="stylesheet" href="<?= e(asset('css/base.css')) ?>">
     <link rel="stylesheet" href="<?= e(asset('css/pages.css')) ?>">
+    <link rel="stylesheet" href="<?= e(rootAssetVersioned('/css/payments.css')) ?>">
 </head>
 <body>
     <a class="skip-link" href="#contenu">Aller au contenu</a>

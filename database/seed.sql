@@ -42,7 +42,9 @@ INSERT INTO settings (id, `key`, value, type, label, `group`) VALUES
     ('set_smtp_port',            'smtp_port',            '587',                                                        'text',    'Port SMTP', 'email'),
     ('set_smtp_encryption',      'smtp_encryption',      '',                                                           'text',    'Chiffrement SMTP (none / tls / ssl ; vide = auto)', 'email'),
     ('set_smtp_user',            'smtp_user',            '',                                                           'text',    'Utilisateur SMTP', 'email'),
-    ('set_smtp_pass',            'smtp_pass',            '',                                                           'text',    'Mot de passe SMTP', 'email')
+    ('set_smtp_pass',            'smtp_pass',            '',                                                           'text',    'Mot de passe SMTP', 'email'),
+    ('set_sumup_enabled',        'sumup_enabled',        '0',                                                          'boolean', 'Paiements par lien SumUp activés', 'sumup'),
+    ('set_sumup_default_link',   'sumup_default_link',   '',                                                           'text',    'Lien de paiement SumUp par défaut', 'sumup')
 ON DUPLICATE KEY UPDATE value = VALUES(value);
 
 -- -------------------------------------------------------------------

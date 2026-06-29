@@ -11,6 +11,9 @@ declare(strict_types=1);
     <div class="card surface glass">
         <h2 class="card-title">File « à classer »</h2>
         <p class="muted">Libellés CSV rencontrés non encore rattachés à un produit canonique. Rattachez-les une fois pour toutes : ils seront résolus automatiquement aux prochains imports.</p>
+        <p class="admin-actions">
+            <a class="btn btn-primary" href="<?= e(url('/admin/compta/aliases/auto')) ?>">Auto-détecter les doublons</a>
+        </p>
         <?php if ($unmapped === []): ?>
             <p class="muted">Aucun libellé à classer. 🎉</p>
         <?php endif; ?>
