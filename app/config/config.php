@@ -10,7 +10,7 @@ declare(strict_types=1);
  * constantes et configure le reporting d'erreurs selon l'environnement.
  */
 
-define('AEIC_ROOT', dirname(__DIR__));
+define('AEIC_ROOT', dirname(__DIR__, 2));
 define('AEIC_PUBLIC', AEIC_ROOT . '/public');
 define('AEIC_VIEWS', AEIC_ROOT . '/views');
 
