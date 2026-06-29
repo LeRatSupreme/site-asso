@@ -177,5 +177,21 @@ function reorder_qty(float $v): string {
 
     search.addEventListener('input', apply);
     apply();
+
+    // Conserve la position de défilement après une sauvegarde (rechargement).
+    var SS_KEY = 'reorder_scroll';
+    var form = document.getElementById('reorder-form');
+    if (form) {
+        form.addEventListener('submit', function () {
+            try { sessionStorage.setItem(SS_KEY, String(window.scrollY)); } catch (e) {}
+        });
+    }
+    try {
+        var y = parseInt(sessionStorage.getItem(SS_KEY) || '0', 10);
+        if (y > 0) {
+            window.scrollTo(0, y);
+            sessionStorage.removeItem(SS_KEY);
+        }
+    } catch (e) {}
 })();
 </script>
