@@ -48,7 +48,8 @@ $gmapsLink = 'https://www.google.com/maps/search/?api=1&query=' . rawurlencode($
                 </div>
             </div>
 
-            <div class="map-frame">
+            <div class="map-frame" id="mapFrame">
+                <button type="button" class="map-expand" id="mapExpand" aria-label="Agrandir la carte" title="Agrandir la carte">⛶</button>
                 <iframe
                     title="Carte interactive — IUT de Calais"
                     src="<?= e($embedSrc) ?>"
@@ -58,3 +59,27 @@ $gmapsLink = 'https://www.google.com/maps/search/?api=1&query=' . rawurlencode($
         </div>
     </div>
 </section>
+
+<script>
+(function () {
+    var frame = document.getElementById('mapFrame');
+    var btn = document.getElementById('mapExpand');
+    if (!frame || !btn) return;
+
+    function setOpen(open) {
+        frame.classList.toggle('is-fullscreen', open);
+        btn.textContent = open ? '✕' : '⛶';
+        btn.setAttribute('aria-label', open ? 'Réduire la carte' : 'Agrandir la carte');
+        btn.title = open ? 'Réduire' : 'Agrandir la carte';
+    }
+
+    btn.addEventListener('click', function () {
+        setOpen(!frame.classList.contains('is-fullscreen'));
+    });
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && frame.classList.contains('is-fullscreen')) {
+            setOpen(false);
+        }
+    });
+})();
+</script>
