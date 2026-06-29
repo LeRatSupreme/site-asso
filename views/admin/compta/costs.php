@@ -3,8 +3,8 @@
 declare(strict_types=1);
 
 /**
- * @var list<array<string,mixed>>                $costs
- * @var array<string, list<array<string,mixed>>> $grouped
+ * @var list<array<string,mixed>>                $items
+ * @var list<string>                             $categories
  * @var list<string>                             $productKeys
  * @var array<string,mixed>                      $form
  */
@@ -13,15 +13,13 @@ declare(strict_types=1);
     <div>
         <p class="eyebrow">Comptabilité</p>
         <h1 class="page-title">Coûts de revient</h1>
-        <p class="muted">C'est ici que tu dis <strong>combien chaque produit t'a coûté à l'achat</strong>. Sans ça, on connaît le chiffre d'affaires mais pas le vrai bénéfice.</p>
+        <p class="muted">Dis <strong>combien chaque produit t'a coûté à l'achat</strong>. Sans ça, on a le chiffre d'affaires mais pas le vrai bénéfice.</p>
     </div>
 </div>
 
-<!-- Explication : le lien Produit ↔ Coût unitaire ↔ Bénéfice -->
+<!-- Explication -->
 <section class="card surface glass cost-explain">
     <h2 class="card-title">Comment ça marche ?</h2>
-    <p class="muted">Pour chaque produit, le bénéfice se calcule ainsi :</p>
-
     <div class="cost-formula">
         <div class="cost-formula-item">
             <span class="cost-formula-label">Prix de vente TTC</span>
@@ -30,7 +28,7 @@ declare(strict_types=1);
         </div>
         <span class="cost-formula-op">−</span>
         <div class="cost-formula-item cost-formula-cost">
-            <span class="cost-formula-label">Coût de revient unitaire</span>
+            <span class="cost-formula-label">Coût d'achat unitaire</span>
             <span class="cost-formula-value">ce que TU achètes 1 unité</span>
             <span class="cost-formula-eg">ex : 0,60 €</span>
         </div>
@@ -41,271 +39,221 @@ declare(strict_types=1);
             <span class="cost-formula-eg">ex : 0,40 € (40 %)</span>
         </div>
     </div>
-
     <div class="cost-tips">
-        <p>📌 <strong>Le « coût de revient » = ton prix d'achat</strong> pour une unité (un Bueno, une canette…), pas le prix de vente.</p>
-        <p>📌 Tu achètes à <strong>plusieurs endroits</strong> → le prix peut changer. On utilise donc des <strong>lots datés</strong> : crée un nouveau lot quand le prix d'achat change, l'ancien est clôturé automatiquement la veille.</p>
-        <p>📌 Le système applique automatiquement le <strong>bon lot</strong> à chaque vente selon sa date.</p>
+        <p>📌 Le « coût d'achat » = ton prix pour <strong>une unité</strong> (un Bueno, une canette…), pas le prix de vente.</p>
+        <p>📌 Dès qu'au moins un lot est saisi pour un produit, le bénéfice se calcule automatiquement (le lot le plus pertinent est appliqué selon la date de vente).</p>
+        <p>📌 Tu peux <strong>supprimer</strong> un lot erroné (icône corbeille) ou le <strong>clôturer</strong>.</p>
     </div>
 </section>
 
-
 <div class="costs-layout">
 
-    <!-- Formulaire d'ajout -->
+    <!-- Formulaire d'ajout (sticky) -->
     <section class="card surface glass costs-form">
         <h2 class="card-title">Ajouter un lot</h2>
-
         <form method="post" action="<?= e(url('/admin/compta/couts/save')) ?>">
             <?= csrf_field() ?>
 
             <div class="field">
-                <label for="product_key">Produit canonique</label>
+                <label for="product_key">Produit</label>
                 <div class="combobox" id="pk-combobox">
-                    <input
-                        type="text"
-                        id="product_key"
-                        name="product_key"
-                        class="combobox-input"
-                        value="<?= e((string) $form['product_key']) ?>"
-                        placeholder="Rechercher un produit (ex: bueno)…"
-                        autocomplete="off"
-                        role="combobox"
-                        aria-autocomplete="list"
-                        aria-expanded="false"
-                        aria-controls="pk-listbox"
-                        required>
+                    <input type="text" id="product_key" name="product_key" class="combobox-input"
+                        value="<?= e((string) $form['product_key']) ?>" placeholder="Rechercher un produit…"
+                        autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="pk-listbox" required>
                     <span class="combobox-badge" id="pk-count" hidden></span>
                     <ul class="combobox-list" id="pk-listbox" role="listbox" hidden></ul>
                 </div>
-                <p class="field-help">Tape pour filtrer la liste des produits connus (ventes SumUp + cafétéria + lots existants). Clique pour sélectionner — ou garde ta saisie pour créer une nouvelle clé.</p>
+                <p class="field-help">Choisis dans la liste (mêmes noms que dans les ventes) pour éviter les fautes.</p>
             </div>
 
             <div class="field-row">
                 <div class="field">
-                    <label for="cost_price">Coût d'achat unitaire (€)</label>
+                    <label for="cost_price">Coût d'achat (€)</label>
                     <input type="text" id="cost_price" name="cost_price" value="<?= e((string) $form['cost_price']) ?>" placeholder="ex: 0,60" inputmode="decimal" required>
-                    <p class="field-help">Prix auquel <strong>tu achètes</strong> une unité (pas le prix de vente).</p>
                 </div>
                 <div class="field">
-                    <label for="valid_from">Début de validité</label>
+                    <label for="valid_from">Du</label>
                     <input type="date" id="valid_from" name="valid_from" value="<?= e((string) $form['valid_from']) ?>" required>
                 </div>
             </div>
 
             <div class="field">
                 <label for="supplier">Fournisseur <span class="muted">(optionnel)</span></label>
-                <input type="text" id="supplier" name="supplier" value="<?= e((string) $form['supplier']) ?>" placeholder="ex: Metro, Carrefour…">
+                <input type="text" id="supplier" name="supplier" value="<?= e((string) $form['supplier']) ?>" placeholder="ex: Metro…">
             </div>
 
-            <div class="field">
-                <label for="notes">Notes <span class="muted">(optionnel)</span></label>
-                <textarea id="notes" name="notes" rows="2" placeholder="ex: Promotion, conditionnement…"></textarea>
-            </div>
-
-            <button type="submit" class="btn btn-primary btn-block">Enregistrer le lot</button>
+            <button type="submit" class="btn btn-primary btn-block">Enregistrer</button>
         </form>
     </section>
 
-    <!-- Lots existants, regroupés par produit -->
-    <section class="card surface glass costs-list">
-        <div class="costs-list-head">
-            <h2 class="card-title">Lots existants</h2>
-            <?php if ($costs !== []): ?>
-                <span class="badge badge-muted"><?= count($costs) ?> lot<?= count($costs) > 1 ? 's' : '' ?></span>
-            <?php endif; ?>
+    <!-- Liste des produits -->
+    <section class="costs-list">
+        <div class="costs-toolbar">
+            <div class="search-box">
+                <input type="text" id="c-search" placeholder="🔎 Rechercher un produit…" autocomplete="off">
+            </div>
+            <select id="c-cat" aria-label="Filtrer par catégorie">
+                <option value="">Toutes les catégories</option>
+                <?php foreach ($categories as $cat): ?>
+                    <option value="<?= e(strtolower($cat)) ?>"><?= e($cat) ?></option>
+                <?php endforeach; ?>
+            </select>
+            <label class="filter-check">
+                <input type="checkbox" id="c-nocost"> Sans coût uniquement
+            </label>
+            <span class="costs-count muted" id="c-count"></span>
         </div>
 
-        <?php if ($costs === []): ?>
-            <div class="empty-state">
-                <p class="muted">Aucun lot défini pour le moment.</p>
-                <p class="muted">Importe d'abord un rapport SumUp, puis ajoute un coût pour chaque produit pour calculer les bénéfices.</p>
-            </div>
-        <?php else: ?>
-            <?php foreach ($grouped as $productName => $lots): ?>
-                <?php
-                // Lot en cours = sans valid_to, le plus récent.
-                $current = null;
-                foreach ($lots as $l) {
-                    if (empty($l['valid_to'])) { $current = $l; break; }
-                }
-                ?>
-                <article class="cost-product <?= $current ? 'has-current' : 'has-none' ?>">
-                    <header class="cost-product-head">
-                        <h3><?= e($productName) ?></h3>
-                        <?php if ($current !== null): ?>
-                            <span class="badge badge-success">Lot en cours : <?= e(formatPrice($current['cost_price'])) ?> / unité</span>
-                        <?php else: ?>
-                            <span class="badge badge-warning">Aucun lot actif</span>
-                        <?php endif; ?>
-                    </header>
+        <div id="c-list" class="cost-cards">
+            <?php foreach ($items as $it): 
+                $name = (string) $it['name'];
+                $hasCost = $it['currentCost'] !== null;
+            ?>
+                <article
+                    class="cost-card <?= $hasCost ? 'has-cost' : 'no-cost' ?>"
+                    data-name="<?= e(strtolower($name)) ?>"
+                    data-cat="<?= e(strtolower((string) $it['category'])) ?>"
+                    data-nocost="<?= $hasCost ? '0' : '1' ?>">
 
-                    <table class="table">
-                        <thead>
-                            <tr><th>Coût unit.</th><th>Du</th><th>Au</th><th>Fournisseur</th><th>Action</th></tr>
-                        </thead>
-                        <tbody>
-                            <?php foreach ($lots as $c): ?>
-                                <tr class="<?= empty($c['valid_to']) ? 'row-current' : '' ?>">
-                                    <td><strong><?= e(formatPrice($c['cost_price'])) ?></strong></td>
-                                    <td><?= e(formatDate($c['valid_from'])) ?></td>
-                                    <td>
-                                        <?php if (!empty($c['valid_to'])): ?>
-                                            <?= e(formatDate($c['valid_to'])) ?>
-                                        <?php else: ?>
-                                            <span class="badge badge-success">en cours</span>
-                                        <?php endif; ?>
-                                    </td>
-                                    <td><?= e((string) ($c['supplier'] ?? '—')) ?></td>
-                                    <td>
-                                        <?php if (empty($c['valid_to'])): ?>
-                                            <form method="post" action="<?= e(url('/admin/compta/couts/' . rawurlencode((string) $c['id']) . '/close')) ?>" onsubmit="return confirm('Clôturer ce lot maintenant ? Un nouveau lot devra être créé ensuite.');">
-                                                <?= csrf_field() ?>
-                                                <button type="submit" class="btn btn-outline btn-sm">Clôturer</button>
-                                            </form>
-                                        <?php else: ?>
-                                            <span class="muted">—</span>
-                                        <?php endif; ?>
-                                    </td>
-                                </tr>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
+                    <div class="cost-card-head">
+                        <div class="cost-card-id">
+                            <h3><?= e($name) ?></h3>
+                            <div class="cost-card-meta">
+                                <span class="badge badge-muted"><?= e($it['category']) ?></span>
+                                <?php if ((int) $it['qty'] > 0): ?>
+                                    <span class="muted"><?= (int) $it['qty'] ?> vendus</span>
+                                <?php endif; ?>
+                                <?php if ($it['lotsCount'] > 0): ?>
+                                    <span class="muted"><?= (int) $it['lotsCount'] ?> lot<?= $it['lotsCount'] > 1 ? 's' : '' ?></span>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                        <div class="cost-card-current">
+                            <?php if ($hasCost): ?>
+                                <span class="badge badge-success">Lot en cours</span>
+                                <strong class="cost-card-price"><?= e(formatPrice($it['currentCost'])) ?><span class="muted"> /unité</span></strong>
+                            <?php else: ?>
+                                <span class="badge badge-warning">Aucun coût</span>
+                            <?php endif; ?>
+                        </div>
+                    </div>
 
-                    <p class="cost-product-add">
-                        <a class="btn btn-ghost btn-sm" href="<?= e(url('/admin/compta/couts?product_key=' . rawurlencode($productName))) ?>">＋ Ajouter un lot pour <?= e($productName) ?></a>
-                    </p>
+                    <?php if ($it['lotsCount'] > 0): ?>
+                        <details class="cost-card-lots">
+                            <summary>Voir les <?= (int) $it['lotsCount'] ?> lot<?= $it['lotsCount'] > 1 ? 's' : '' ?></summary>
+                            <table class="table">
+                                <thead><tr><th>Coût unit.</th><th>Du</th><th>Au</th><th>Fournisseur</th><th>Actions</th></tr></thead>
+                                <tbody>
+                                    <?php foreach ($it['lots'] as $c): ?>
+                                        <tr class="<?= empty($c['valid_to']) ? 'row-current' : '' ?>">
+                                            <td><strong><?= e(formatPrice($c['cost_price'])) ?></strong></td>
+                                            <td><?= e(formatDate($c['valid_from'])) ?></td>
+                                            <td>
+                                                <?php if (!empty($c['valid_to'])): ?>
+                                                    <?= e(formatDate($c['valid_to'])) ?>
+                                                <?php else: ?>
+                                                    <span class="badge badge-success">en cours</span>
+                                                <?php endif; ?>
+                                            </td>
+                                            <td><?= e((string) ($c['supplier'] ?? '—')) ?></td>
+                                            <td class="row-actions">
+                                                <?php if (empty($c['valid_to'])): ?>
+                                                    <form method="post" action="<?= e(url('/admin/compta/couts/' . rawurlencode((string) $c['id']) . '/close')) ?>" onsubmit="return confirm('Clôturer ce lot maintenant ?');">
+                                                        <?= csrf_field() ?>
+                                                        <button type="submit" class="btn btn-outline btn-sm">Clôturer</button>
+                                                    </form>
+                                                <?php endif; ?>
+                                                <form method="post" action="<?= e(url('/admin/compta/couts/' . rawurlencode((string) $c['id']) . '/delete')) ?>" onsubmit="return confirm('Supprimer ce lot ? Action irréversible.');">
+                                                    <?= csrf_field() ?>
+                                                    <button type="submit" class="btn btn-danger btn-sm" aria-label="Supprimer">🗑</button>
+                                                </form>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </details>
+                    <?php endif; ?>
+
+                    <div class="cost-card-add">
+                        <a class="btn btn-ghost btn-sm" href="<?= e(url('/admin/compta/couts?product_key=' . rawurlencode($name))) ?>">＋ Ajouter un lot pour <?= e($name) ?></a>
+                    </div>
                 </article>
             <?php endforeach; ?>
-        <?php endif; ?>
+
+            <?php if ($items === []): ?>
+                <div class="empty-state">
+                    <p class="muted">Aucun produit. Importe d'abord un rapport SumUp (<code>/admin/compta/import</code>), puis reviens ici.</p>
+                </div>
+            <?php endif; ?>
+        </div>
     </section>
 </div>
 
 <script type="application/json" id="pk-data"><?= json_encode($productKeys, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?></script>
 <script>
+/* Combobox produit (recherche du champ d'ajout) */
 (function () {
     var dataEl = document.getElementById('pk-data');
     var keys = [];
     try { keys = JSON.parse(dataEl.textContent) || []; } catch (e) { keys = []; }
     keys = keys.filter(function (k) { return typeof k === 'string' && k.trim() !== ''; });
-
-    var input    = document.getElementById('product_key');
-    var listbox  = document.getElementById('pk-listbox');
-    var countEl  = document.getElementById('pk-count');
+    var input = document.getElementById('product_key');
+    var listbox = document.getElementById('pk-listbox');
+    var countEl = document.getElementById('pk-count');
     if (!input || !listbox) return;
 
-    var active = -1;
-    var current = [];
-
     function norm(s) { return String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim(); }
-
-    function escapeHtml(s) {
-        return String(s).replace(/[&<>"']/g, function (c) {
-            return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c];
-        });
-    }
-
+    function escapeHtml(s) { return String(s).replace(/[&<>"']/g, function (c) { return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]; }); }
     function highlight(text, q) {
         if (!q) return escapeHtml(text);
-        var i = norm(text).indexOf(norm(q));
-        if (i === -1) return escapeHtml(text);
-        var before = text.substring(0, i);
-        var match  = text.substring(i, i + q.length);
-        var after  = text.substring(i + q.length);
-        return escapeHtml(before) + '<mark>' + escapeHtml(match) + '</mark>' + escapeHtml(after);
+        var i = norm(text).indexOf(norm(q)); if (i === -1) return escapeHtml(text);
+        return escapeHtml(text.substring(0,i)) + '<mark>' + escapeHtml(text.substring(i,i+q.length)) + '</mark>' + escapeHtml(text.substring(i+q.length));
     }
-
-    function buildList(q) {
+    function build(q) {
         var nq = norm(q);
-        var matches = nq === ''
-            ? keys.slice(0, 100)
-            : keys.filter(function (k) { return norm(k).indexOf(nq) !== -1; });
-
-        matches.sort(function (a, b) {
-            var na = norm(a), nb = norm(b);
-            if (nq !== '') {
-                var ai = na.indexOf(nq), bi = nb.indexOf(nq);
-                if (ai !== bi) return ai - bi;
-            }
-            return a.localeCompare(b);
-        });
-
-        var exact = nq !== '' && keys.some(function (k) { return norm(k) === nq; });
-        current = matches.slice();
-
-        var html = '';
-        current.forEach(function (k, idx) {
-            html += '<li class="combobox-option" role="option" data-value="' + escapeHtml(k) + '" id="pk-opt-' + idx + '">' + highlight(k, q) + '</li>';
-        });
-        if (nq !== '' && !exact) {
-            html += '<li class="combobox-option combobox-new" role="option" data-value="' + escapeHtml(q) + '" id="pk-opt-new">＋ Créer la clé « <strong>' + escapeHtml(q) + '</strong> »</li>';
-            current.push(q);
-        }
-        if (current.length === 0) {
-            html = '<li class="combobox-empty">Aucun produit. Saisis un nom pour en créer un.</li>';
-        }
-
+        var matches = nq === '' ? keys.slice(0,100) : keys.filter(function (k){ return norm(k).indexOf(nq)!==-1; });
+        matches.sort(function (a,b){ var ai=norm(a).indexOf(nq), bi=norm(b).indexOf(nq); if(nq!==''&&ai!==bi) return ai-bi; return a.localeCompare(b); });
+        var html=''; matches.forEach(function(k,idx){ html += '<li class="combobox-option" role="option" data-value="'+escapeHtml(k)+'">'+highlight(k,q)+'</li>'; });
+        if (html==='') html = '<li class="combobox-empty">Aucun produit. Saisis un nom pour le créer.</li>';
         listbox.innerHTML = html;
-        active = -1;
-        var total = matches.length;
-        countEl.textContent = total + ' produit' + (total > 1 ? 's' : '');
-        countEl.hidden = total === 0;
+        countEl.hidden = true;
+        Array.prototype.forEach.call(listbox.querySelectorAll('.combobox-option'), function (li){ li.addEventListener('mousedown', function (e){ e.preventDefault(); input.value=li.getAttribute('data-value'); listbox.hidden=true; input.focus(); }); });
+    }
+    input.addEventListener('focus', function(){ listbox.hidden=false; build(input.value); input.setAttribute('aria-expanded','true'); });
+    input.addEventListener('input', function(){ listbox.hidden=false; build(input.value); input.setAttribute('aria-expanded','true'); });
+    input.addEventListener('blur', function(){ setTimeout(function(){ listbox.hidden=true; input.setAttribute('aria-expanded','false'); }, 150); });
+})();
 
-        Array.prototype.forEach.call(listbox.querySelectorAll('.combobox-option'), function (li) {
-            li.addEventListener('mousedown', function (e) { e.preventDefault(); selectOption(li); });
+/* Filtres de la liste des produits */
+(function () {
+    var search = document.getElementById('c-search');
+    var catSel = document.getElementById('c-cat');
+    var noCost = document.getElementById('c-nocost');
+    var countEl = document.getElementById('c-count');
+    var cards = Array.prototype.slice.call(document.querySelectorAll('.cost-card'));
+    var total = cards.length;
+    if (!search) return;
+
+    function norm(s){ return String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim(); }
+    function apply(){
+        var q = norm(search.value);
+        var cat = catSel.value;
+        var onlyNoCost = noCost.checked;
+        var shown = 0;
+        cards.forEach(function (card){
+            var okSearch = q==='' || norm(card.getAttribute('data-name')).indexOf(q)!==-1;
+            var okCat = cat==='' || card.getAttribute('data-cat')===cat;
+            var okCost = !onlyNoCost || card.getAttribute('data-nocost')==='1';
+            var visible = okSearch && okCat && okCost;
+            card.style.display = visible ? '' : 'none';
+            if (visible) shown++;
         });
+        countEl.textContent = shown + ' / ' + total + ' produit' + (total>1?'s':'');
     }
-
-    function open(q) {
-        buildList(q || input.value);
-        listbox.hidden = false;
-        input.setAttribute('aria-expanded', 'true');
-    }
-    function close() {
-        listbox.hidden = true;
-        input.setAttribute('aria-expanded', 'false');
-        active = -1;
-    }
-
-    function setActive(idx) {
-        var opts = listbox.querySelectorAll('.combobox-option');
-        opts.forEach(function (o) { o.classList.remove('is-active'); });
-        if (idx < 0) { active = -1; return; }
-        if (idx >= opts.length) idx = opts.length - 1;
-        active = idx;
-        if (opts[idx]) {
-            opts[idx].classList.add('is-active');
-            opts[idx].scrollIntoView({ block: 'nearest' });
-        }
-    }
-
-    function selectOption(li) {
-        input.value = li.getAttribute('data-value') || '';
-        close();
-        input.focus();
-    }
-
-    input.addEventListener('focus', function () { open(''); });
-    input.addEventListener('input', function () { open(input.value); });
-    input.addEventListener('blur', function () { setTimeout(close, 150); });
-
-    input.addEventListener('keydown', function (e) {
-        var opts = listbox.querySelectorAll('.combobox-option');
-        if (e.key === 'ArrowDown') {
-            e.preventDefault();
-            if (listbox.hidden) { open(input.value); }
-            setActive(Math.min(active + 1, opts.length - 1));
-        } else if (e.key === 'ArrowUp') {
-            e.preventDefault();
-            setActive(Math.max(active - 1, 0));
-        } else if (e.key === 'Enter') {
-            if (!listbox.hidden && active >= 0 && opts[active]) {
-                e.preventDefault();
-                selectOption(opts[active]);
-            }
-        } else if (e.key === 'Escape') {
-            close();
-        }
-    });
+    search.addEventListener('input', apply);
+    catSel.addEventListener('change', apply);
+    noCost.addEventListener('change', apply);
+    apply();
 })();
 </script>

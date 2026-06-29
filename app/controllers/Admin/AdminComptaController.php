@@ -306,8 +306,7 @@ final class AdminComptaController extends AdminBaseController
     {
         $user = $this->guardCompta();
 
-        // Liste des produits connus pour éviter les fautes de frappe
-        // (clés déjà utilisées dans les ventes + produits cafétéria + lots existants).
+        // Liste des produits connus pour l'autocomplétion (anti-fautes de frappe).
         $keys = Sale::distinctProducts();
         foreach (Product::allForAdmin() as $p) {
             $keys[] = (string) ($p['name'] ?? '');
@@ -318,20 +317,52 @@ final class AdminComptaController extends AdminBaseController
         $keys = array_values(array_filter(array_unique($keys)));
         sort($keys, SORT_STRING | SORT_FLAG_CASE);
 
-        // Lots regroupés par produit (les plus récents en premier).
+        // Tous les lots, regroupés par produit.
         $costs = ProductCost::all();
-        $grouped = [];
+        $lotsByProduct = [];
         foreach ($costs as $c) {
             $k = (string) ($c['product_key'] ?? '—');
-            $grouped[$k][] = $c;
+            $lotsByProduct[$k][] = $c;
         }
-        uksort($grouped, 'strnatcasecmp');
+
+        // Tous les produits vendus (avec catégorie + quantité), pour tout afficher
+        // même ceux sans coût saisi.
+        $salesProducts = Sale::byProduct((int) date('Y'), null);
+        $catByProduct = [];
+        $qtyByProduct = [];
+        foreach ($salesProducts as $sp) {
+            $name = (string) $sp['product_key'];
+            $catByProduct[$name] = (string) ($sp['category'] ?? 'Non classé');
+            $qtyByProduct[$name] = (int) ($sp['qty'] ?? 0);
+        }
+
+        // Construction de la liste d'affichage (produits vendus + produits avec lots).
+        $allNames = array_unique(array_merge(array_keys($catByProduct), array_keys($lotsByProduct)));
+        $items = [];
+        foreach ($allNames as $name) {
+            $lots = $lotsByProduct[$name] ?? [];
+            // Lot en cours = valid_to NULL le plus récent.
+            $current = null;
+            foreach ($lots as $l) {
+                if (empty($l['valid_to'])) { $current = $l; break; }
+            }
+            $items[] = [
+                'name'        => $name,
+                'category'    => $catByProduct[$name] ?? 'Non classé',
+                'qty'         => $qtyByProduct[$name] ?? 0,
+                'currentCost' => $current ? (float) $current['cost_price'] : null,
+                'lotsCount'   => count($lots),
+                'lots'        => $lots,
+            ];
+        }
+        usort($items, static function ($a, $b) { return strnatcasecmp($a['name'], $b['name']); });
 
         $this->renderAdmin('admin/compta/costs', [
             'title'       => 'Coûts de revient',
             'user'        => $user,
             'costs'       => $costs,
-            'grouped'     => $grouped,
+            'items'       => $items,
+            'categories'  => array_values(array_unique(array_filter($catByProduct))),
             'productKeys' => $keys,
             'form'        => [
                 'product_key' => $_GET['product_key'] ?? '',
@@ -371,6 +402,16 @@ final class AdminComptaController extends AdminBaseController
         ProductCost::close($id);
         $this->audit('compta.cost.close', 'product_cost', $id);
         $this->setFlash('success', 'Lot clôturé.');
+        redirect(url('/admin/compta/couts'));
+    }
+
+    public function deleteCost(string $id): void
+    {
+        $this->guardCompta();
+
+        ProductCost::delete($id);
+        $this->audit('compta.cost.delete', 'product_cost', $id);
+        $this->setFlash('success', 'Lot supprimé.');
         redirect(url('/admin/compta/couts'));
     }
 
