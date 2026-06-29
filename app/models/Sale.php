@@ -90,9 +90,14 @@ final class Sale extends Model
         SELECT pc.cost_price
         FROM product_costs pc
         WHERE pc.product_key = COALESCE(sales.product_key, sales.description)
-          AND pc.valid_from <= DATE(sales.sold_at)
-          AND (pc.valid_to IS NULL OR DATE(sales.sold_at) < pc.valid_to)
-        ORDER BY pc.valid_from DESC
+        ORDER BY
+            CASE
+                WHEN pc.valid_from <= DATE(sales.sold_at)
+                     AND (pc.valid_to IS NULL OR DATE(sales.sold_at) < pc.valid_to)
+                THEN 0
+                ELSE 1
+            END,
+            pc.valid_from DESC
         LIMIT 1';
 
     /**
