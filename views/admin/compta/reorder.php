@@ -92,8 +92,10 @@ function reorder_qty(float $v): string {
                             <?php endif; ?>
                         </td>
                         <td>
-                            <?php if (!empty($r['is_alert'])): ?>
+                            <?php if (($r['state'] ?? '') === 'reorder'): ?>
                                 <span class="badge badge-warning">À racheter</span>
+                            <?php elseif (($r['state'] ?? '') === 'unknown'): ?>
+                                <span class="badge badge-muted">À définir</span>
                             <?php else: ?>
                                 <span class="badge badge-success">OK</span>
                             <?php endif; ?>
