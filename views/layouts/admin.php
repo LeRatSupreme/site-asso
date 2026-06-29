@@ -64,9 +64,11 @@ if (($user['role'] ?? null) === 'TRESORERIE') {
     <title><?= e($title ?? 'Admin') ?> — <?= e($siteName) ?></title>
     <meta name="robots" content="noindex, nofollow">
     <link rel="icon" href="<?= e(asset('img/favicon.svg')) ?>" type="image/svg+xml">
-    <link rel="stylesheet" href="<?= e(asset('css/base.css')) ?>">
-    <link rel="stylesheet" href="<?= e(APP_URL . '/css/admin.css') ?>">
-    <link rel="stylesheet" href="<?= e(APP_URL . '/css/compta.css') ?>">
+    <link rel="stylesheet" href="<?= e(assetVersioned('css/base.css')) ?>">
+    <link rel="stylesheet" href="<?= e(rootAssetVersioned('/css/admin.css')) ?>">
+    <?php if (($loadComptaCss ?? false) || str_contains($currentPath ?? '', '/compta')): ?>
+        <link rel="stylesheet" href="<?= e(rootAssetVersioned('/css/compta.css')) ?>">
+    <?php endif; ?>
 </head>
 <body class="admin-body">
     <a class="skip-link" href="#contenu">Aller au contenu</a>

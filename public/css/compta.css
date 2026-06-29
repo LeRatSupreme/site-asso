@@ -440,9 +440,9 @@
 }
 .costs-count { margin-left: auto; font-size: 0.8rem; }
 
-.cost-cards { display: flex; flex-direction: column; gap: 1.25rem; }
+.cost-cards { display: flex; flex-direction: column; gap: 1.75rem; }
 
-.cost-group { margin-bottom: 2.75rem; }
+.cost-group { margin-bottom: 3.25rem; }
 .cost-group:last-child { margin-bottom: 0; }
 .cost-group-title {
     font-size: 0.8rem;
@@ -450,16 +450,16 @@
     letter-spacing: 0.1em;
     color: var(--primary);
     font-weight: 800;
-    margin: 0 0 1.25rem;
-    padding-bottom: 0.7rem;
+    margin: 0 0 1.5rem;
+    padding-bottom: 0.85rem;
     border-bottom: 1px solid var(--border);
 }
 
 .cost-card {
     background: rgba(255, 255, 255, 0.035);
     border: 1px solid var(--border);
-    border-radius: 14px;
-    padding: 1.6rem 1.85rem;
+    border-radius: 16px;
+    padding: 2rem 2.25rem;
     transition: border-color 0.15s, background 0.15s;
 }
 .cost-card.has-cost { border-left: 3px solid rgba(72, 189, 211, 0.5); }
@@ -470,10 +470,10 @@
     flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
-    gap: 0.75rem;
+    gap: 1rem;
 }
-.cost-card-id h3 { margin: 0 0 0.3rem; font-size: 1.05rem; font-weight: 800; }
-.cost-card-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; font-size: 0.8rem; }
+.cost-card-id h3 { margin: 0 0 0.55rem; font-size: 1.1rem; font-weight: 800; }
+.cost-card-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; font-size: 0.82rem; }
 .cost-card-current { display: flex; flex-direction: column; align-items: flex-end; gap: 0.25rem; }
 .cost-card-price { font-size: 1.15rem; font-weight: 800; color: var(--primary); }
 
