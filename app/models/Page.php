@@ -85,7 +85,7 @@ final class Page extends Model
         ];
 
         if ($isNew) {
-            $cols = implode(', ', array_keys($fields));
+            $cols = '`' . implode('`, `', array_keys($fields)) . '`';
             $placeholders = implode(', ', array_fill(0, count($fields), '?'));
             $stmt = static::pdo()->prepare(
                 'INSERT INTO pages (' . $cols . ') VALUES (' . $placeholders . ')'
