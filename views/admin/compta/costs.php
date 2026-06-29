@@ -13,9 +13,42 @@ declare(strict_types=1);
     <div>
         <p class="eyebrow">Comptabilité</p>
         <h1 class="page-title">Coûts de revient</h1>
-        <p class="muted">Un lot = un coût d'achat unitaire daté par produit. Comme tu achètes à plusieurs endroits, crée un nouveau lot quand le prix change ; l'ancien est clôturé automatiquement la veille. Le bénéfice est calculé avec le lot valide à la date de chaque vente.</p>
+        <p class="muted">C'est ici que tu dis <strong>combien chaque produit t'a coûté à l'achat</strong>. Sans ça, on connaît le chiffre d'affaires mais pas le vrai bénéfice.</p>
     </div>
 </div>
+
+<!-- Explication : le lien Produit ↔ Coût unitaire ↔ Bénéfice -->
+<section class="card surface glass cost-explain">
+    <h2 class="card-title">Comment ça marche ?</h2>
+    <p class="muted">Pour chaque produit, le bénéfice se calcule ainsi :</p>
+
+    <div class="cost-formula">
+        <div class="cost-formula-item">
+            <span class="cost-formula-label">Prix de vente TTC</span>
+            <span class="cost-formula-value">ce que l'étudiant paie</span>
+            <span class="cost-formula-eg">ex : 1,00 €</span>
+        </div>
+        <span class="cost-formula-op">−</span>
+        <div class="cost-formula-item cost-formula-cost">
+            <span class="cost-formula-label">Coût de revient unitaire</span>
+            <span class="cost-formula-value">ce que TU achètes 1 unité</span>
+            <span class="cost-formula-eg">ex : 0,60 €</span>
+        </div>
+        <span class="cost-formula-op">=</span>
+        <div class="cost-formula-item cost-formula-profit">
+            <span class="cost-formula-label">Bénéfice par unité</span>
+            <span class="cost-formula-value">ta marge réelle</span>
+            <span class="cost-formula-eg">ex : 0,40 € (40 %)</span>
+        </div>
+    </div>
+
+    <div class="cost-tips">
+        <p>📌 <strong>Le « coût de revient » = ton prix d'achat</strong> pour une unité (un Bueno, une canette…), pas le prix de vente.</p>
+        <p>📌 Tu achètes à <strong>plusieurs endroits</strong> → le prix peut changer. On utilise donc des <strong>lots datés</strong> : crée un nouveau lot quand le prix d'achat change, l'ancien est clôturé automatiquement la veille.</p>
+        <p>📌 Le système applique automatiquement le <strong>bon lot</strong> à chaque vente selon sa date.</p>
+    </div>
+</section>
+
 
 <div class="costs-layout">
 
@@ -50,8 +83,9 @@ declare(strict_types=1);
 
             <div class="field-row">
                 <div class="field">
-                    <label for="cost_price">Coût unitaire (€)</label>
-                    <input type="text" id="cost_price" name="cost_price" value="<?= e((string) $form['cost_price']) ?>" placeholder="0,60" inputmode="decimal" required>
+                    <label for="cost_price">Coût d'achat unitaire (€)</label>
+                    <input type="text" id="cost_price" name="cost_price" value="<?= e((string) $form['cost_price']) ?>" placeholder="ex: 0,60" inputmode="decimal" required>
+                    <p class="field-help">Prix auquel <strong>tu achètes</strong> une unité (pas le prix de vente).</p>
                 </div>
                 <div class="field">
                     <label for="valid_from">Début de validité</label>
