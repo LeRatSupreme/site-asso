@@ -32,6 +32,10 @@ function reorder_qty(float $v): string {
     </div>
 </div>
 
+<div class="alert alert-info">
+    🕒 <strong>Cafétéria ouverte du lundi au vendredi</strong> (fermée samedi/dimanche). Les consommations moyennes et les besoins sont calculés en <strong>jours d'ouverture</strong> (5 j/sem ≈ 22 j/mois).
+</div>
+
 <?php if ($alerts > 0): ?>
     <div class="alert alert-warning">
         ⚠️ <strong><?= $alerts ?></strong> produit<?= $alerts > 1 ? 's ont' : ' a' ?> un stock faible (autonomie &lt; 7 jours) — à racheter en priorité.
@@ -57,7 +61,7 @@ function reorder_qty(float $v): string {
                     <th>Produit</th>
                     <th>Catégorie</th>
                     <th class="th-num">Stock actuel</th>
-                    <th class="th-num">Conso moy.<br>/ jour</th>
+                    <th class="th-num">Conso moy.<br>/ jour <small>(ouv.)</small></th>
                     <th class="th-num">Conso moy.<br>/ semaine</th>
                     <th class="th-num">Conso moy.<br>/ mois</th>
                     <th class="th-num">Besoin<br>(<?= e($periods[$currentPeriod]['label']) ?>)</th>
@@ -120,7 +124,7 @@ function reorder_qty(float $v): string {
 </form>
 
 <p class="card-meta">
-    Conso / jour = moyenne mensuelle ÷ 30 · Conso / semaine = conso / jour × 7 · Moyenne mobile 3 mois (ventes SumUp).
+    Conso / jour = moyenne mensuelle ÷ 22 (jours d'ouverture) · Conso / semaine = conso / jour × 5 (lun-ven) · Moyenne mobile 3 mois (ventes SumUp).
     « À commander » = besoin sur la période − stock saisi. Modifie le stock puis <strong>Enregistre</strong>.
 </p>
 
