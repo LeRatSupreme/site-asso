@@ -15,11 +15,27 @@ abstract class Model
     protected static string $table;
 
     /**
-     * Retourne l'instance PDO partagée.
+     * Connexion PDO injectable, utilisée uniquement par les tests unitaires
+     * pour brancher une base de test (aeic_test) sans dépendre de db().
+     * En production, cette propriété reste null et l'on utilise db().
+     */
+    private static ?\PDO $testPdo = null;
+
+    /**
+     * Injecte une connexion PDO de test (remplace db()).
+     * À n'utiliser que dans l'environnement de test PHPUnit.
+     */
+    public static function setTestPdo(?\PDO $pdo): void
+    {
+        self::$testPdo = $pdo;
+    }
+
+    /**
+     * Retourne l'instance PDO partagée (ou celle injectée pour les tests).
      */
     final protected static function pdo(): \PDO
     {
-        return db();
+        return self::$testPdo ?? db();
     }
 
     /**

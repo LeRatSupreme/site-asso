@@ -5,6 +5,7 @@ declare(strict_types=1);
 /**
  * Page « L'équipe ».
  *
+ * @var list<array<string,mixed>> $highlighted
  * @var list<array<string,mixed>> $members
  */
 ?>
@@ -19,38 +20,34 @@ declare(strict_types=1);
 
 <section class="section">
     <div class="container">
-        <?php if (empty($members)): ?>
+        <?php if (empty($highlighted) && empty($members)): ?>
             <div class="empty-state surface glass">
                 <p>Contenu à venir. Le bureau sera bientôt présenté ici.</p>
             </div>
         <?php else: ?>
-            <div class="grid team-grid">
-                <?php foreach ($members as $member): ?>
-                    <article class="team-card card surface glass card-hover">
-                        <div class="team-avatar">
-                            <?php if (!empty($member['photo'])): ?>
-                                <img src="<?= e(is_absolute_url($member['photo']) ? $member['photo'] : asset('img/' . ltrim($member['photo'], '/'))) ?>"
-                                     alt="<?= e(($member['prenom'] ?? '') . ' ' . ($member['nom'] ?? '')) ?>"
-                                     loading="lazy" width="96" height="96">
-                            <?php else: ?>
-                                <span class="team-initial aeic-gradient" aria-hidden="true">
-                                    <?= e(initial(($member['prenom'] ?? '') . ' ' . ($member['nom'] ?? ''))) ?>
-                                </span>
-                            <?php endif; ?>
-                        </div>
-                        <h3 class="card-title"><?= e(($member['prenom'] ?? '') . ' ' . ($member['nom'] ?? '')) ?></h3>
-                        <?php if (!empty($member['role'])): ?>
-                            <p class="team-role"><?= e($member['role']) ?></p>
-                        <?php endif; ?>
-                        <?php if (!empty($member['pole'])): ?>
-                            <p class="team-pole"><span class="badge badge-secondary"><?= e($member['pole']) ?></span></p>
-                        <?php endif; ?>
-                        <?php if (!empty($member['bio'])): ?>
-                            <p class="team-bio"><?= e($member['bio']) ?></p>
-                        <?php endif; ?>
-                    </article>
-                <?php endforeach; ?>
-            </div>
+            <?php if (!empty($highlighted)): ?>
+                <div class="section-head">
+                    <span class="eyebrow">Bureau restreint</span>
+                    <h2 class="section-title">Le bureau</h2>
+                </div>
+                <div class="grid team-grid team-grid-featured">
+                    <?php foreach ($highlighted as $member): ?>
+                        <?php require AEIC_VIEWS . '/partials/_team_card.php'; ?>
+                    <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
+
+            <?php if (!empty($members)): ?>
+                <div class="section-head team-section-others">
+                    <span class="eyebrow">Toute l'équipe</span>
+                    <h2 class="section-title">Les membres</h2>
+                </div>
+                <div class="grid team-grid">
+                    <?php foreach ($members as $member): ?>
+                        <?php require AEIC_VIEWS . '/partials/_team_card.php'; ?>
+                    <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
         <?php endif; ?>
     </div>
 </section>

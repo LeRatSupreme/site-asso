@@ -7,7 +7,9 @@ declare(strict_types=1);
  *
  * @var string $siteName
  * @var string $description
- * @var list<array<string,mixed>> $events
+ * @var list<array<string,mixed>> $upcoming
+ * @var int $eventsCount
+ * @var int $usersCount
  */
 ?>
 <section class="hero">
@@ -35,16 +37,16 @@ declare(strict_types=1);
                 <span class="stat-label">Étudiant</span>
             </div>
             <div class="stat">
+                <span class="stat-value"><?= e((string) max($usersCount, 0)) ?></span>
+                <span class="stat-label">Membres</span>
+            </div>
+            <div class="stat">
+                <span class="stat-value"><?= e((string) max($eventsCount, 0)) ?></span>
+                <span class="stat-label">Événements</span>
+            </div>
+            <div class="stat">
                 <span class="stat-value">0 %</span>
                 <span class="stat-label">Prise de tête</span>
-            </div>
-            <div class="stat">
-                <span class="stat-value"><?= e((string) count($events)) ?></span>
-                <span class="stat-label">Événements à venir</span>
-            </div>
-            <div class="stat">
-                <span class="stat-value aeic-gradient-text">AEIC</span>
-                <span class="stat-label">Depuis toujours</span>
             </div>
         </aside>
     </div>
@@ -57,27 +59,14 @@ declare(strict_types=1);
             <h2 class="section-title">Prochains événements</h2>
         </div>
 
-        <?php if (empty($events)): ?>
+        <?php if (empty($upcoming)): ?>
             <div class="empty-state surface glass">
                 <p>Aucun événement annoncé pour le moment. Revenez bientôt !</p>
             </div>
         <?php else: ?>
             <div class="grid grid-3">
-                <?php foreach ($events as $event): ?>
-                    <article class="card card-hover surface glass">
-                        <?php if (!empty($event['is_featured'])): ?>
-                            <span class="badge badge-gradient">À la une</span>
-                        <?php endif; ?>
-                        <p class="card-date"><?= e(formatDate($event['date'])) ?></p>
-                        <h3 class="card-title"><?= e($event['title']) ?></h3>
-                        <?php if (!empty($event['excerpt'])): ?>
-                            <p class="card-excerpt"><?= e($event['excerpt']) ?></p>
-                        <?php endif; ?>
-                        <?php if (!empty($event['location'])): ?>
-                            <p class="card-meta"><?= e($event['location']) ?></p>
-                        <?php endif; ?>
-                        <a class="btn btn-outline btn-sm" href="<?= e(url('/events/' . $event['slug'])) ?>">Détails</a>
-                    </article>
+                <?php foreach ($upcoming as $event): ?>
+                    <?php require AEIC_VIEWS . '/partials/event_card.php'; ?>
                 <?php endforeach; ?>
             </div>
             <p class="section-more"><a class="btn btn-ghost" href="<?= e(url('/events')) ?>">Tout voir →</a></p>

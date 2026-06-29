@@ -6,6 +6,8 @@ declare(strict_types=1);
  * Page « L'association ».
  *
  * @var array<string,mixed>|null $page
+ * @var int $usersCount
+ * @var int $eventsCount
  */
 ?>
 <header class="page-hero">
@@ -59,9 +61,9 @@ declare(strict_types=1);
             <h2 class="section-title">Des actions concrètes</h2>
         </div>
         <div class="grid grid-4">
+            <div class="stat-card surface glass"><span class="stat-value"><?= e((string) max($usersCount, 0)) ?></span><span class="stat-label">Membres</span></div>
+            <div class="stat-card surface glass"><span class="stat-value"><?= e((string) max($eventsCount, 0)) ?></span><span class="stat-label">Événements</span></div>
             <div class="stat-card surface glass"><span class="stat-value">100 %</span><span class="stat-label">Étudiant</span></div>
-            <div class="stat-card surface glass"><span class="stat-value">∞</span><span class="stat-label">Idées</span></div>
-            <div class="stat-card surface glass"><span class="stat-value">1</span><span class="stat-label">Campus</span></div>
             <div class="stat-card surface glass"><span class="stat-value">0</span><span class="stat-label">Prise de tête</span></div>
         </div>
     </div>

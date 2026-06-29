@@ -1,0 +1,209 @@
+/* =====================================================================
+   AEIC — pages.css
+   Styles spécifiques aux pages publiques (Phase 2).
+   Complète base.css sans l'écraser : event card, détail événement,
+   grille équipe, galerie photos, prose CMS.
+   ===================================================================== */
+
+/* ----------------------------- Event card ----------------------------- */
+.event-card {
+    overflow: hidden;
+    padding: 0;
+}
+.event-card-body {
+    padding: 1.25rem 1.25rem 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    flex: 1;
+}
+.event-card-actions {
+    display: flex;
+    gap: 0.5rem;
+    padding: 1rem 1.25rem 1.25rem;
+    margin-top: auto;
+}
+.event-card-media {
+    position: relative;
+    display: block;
+    aspect-ratio: 16 / 9;
+    background: var(--card);
+    overflow: hidden;
+}
+.event-card-media img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.3s ease;
+}
+.event-card:hover .event-card-media img {
+    transform: scale(1.04);
+}
+.event-card-placeholder {
+    width: 100%;
+    height: 100%;
+    display: grid;
+    place-items: center;
+    color: #fff;
+    font-weight: 900;
+    font-size: 2rem;
+    letter-spacing: -0.04em;
+}
+.event-card-badge {
+    position: absolute;
+    top: 0.75rem;
+    left: 0.75rem;
+    z-index: 1;
+}
+.event-card-body .card-title a {
+    color: #fff;
+}
+.event-card-body .card-title a:hover {
+    color: var(--primary);
+}
+
+/* ----------------------------- Détail événement ----------------------------- */
+.event-detail {
+    display: grid;
+    grid-template-columns: 1fr 340px;
+    gap: 2rem;
+    align-items: start;
+}
+@media (max-width: 900px) {
+    .event-detail { grid-template-columns: 1fr; }
+}
+.event-detail-main {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+.event-detail-sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    position: sticky;
+    top: calc(var(--header-h) + 1rem);
+}
+@media (max-width: 900px) {
+    .event-detail-sidebar { position: static; }
+}
+
+.back-link { margin-bottom: 0.75rem; }
+.back-link a { color: var(--muted); font-weight: 700; font-size: 0.9rem; }
+.back-link a:hover { color: var(--primary); }
+
+.event-cover {
+    position: relative;
+    aspect-ratio: 16 / 9;
+    overflow: hidden;
+    padding: 0;
+}
+.event-cover img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+.event-cover-placeholder {
+    width: 100%;
+    height: 100%;
+    display: grid;
+    place-items: center;
+    color: #fff;
+    font-weight: 900;
+    font-size: 3rem;
+}
+.event-cover-badge {
+    position: absolute;
+    top: 1rem;
+    left: 1rem;
+}
+
+/* Sidebar cartes */
+.sidebar-card { gap: 0.75rem; }
+.sidebar-price { display: flex; flex-direction: column; gap: 0.25rem; }
+.sidebar-cta { width: 100%; margin-top: 0.5rem; }
+.sidebar-count { display: flex; flex-direction: column; gap: 0.2rem; margin: 0.25rem 0 0.75rem; }
+
+.participant-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    margin-top: 0.5rem;
+}
+.participant-list li {
+    color: var(--foreground);
+    font-size: 0.9rem;
+    padding-left: 0.75rem;
+    position: relative;
+}
+.participant-list li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0.55em;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--primary);
+}
+
+.variant-block { padding: 0.75rem 0; border-top: 1px solid var(--border); }
+.variant-label {
+    font-weight: 700;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.4rem;
+}
+.variant-choices {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    color: var(--muted);
+    font-size: 0.9rem;
+    padding-left: 0.75rem;
+}
+
+/* ----------------------------- Galerie photos ----------------------------- */
+.gallery-grid { margin-top: 1rem; }
+.gallery-item {
+    padding: 0;
+    overflow: hidden;
+    aspect-ratio: 4 / 3;
+    position: relative;
+}
+.gallery-item img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.3s ease;
+}
+.gallery-item:hover img { transform: scale(1.05); }
+.gallery-item figcaption {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.8rem;
+    color: #fff;
+    background: linear-gradient(transparent, rgba(0, 0, 0, 0.7));
+}
+
+/* ----------------------------- Équipe ----------------------------- */
+.team-grid-featured {
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    margin-bottom: 3rem;
+}
+.team-section-others { margin-top: 1rem; }
+
+/* ----------------------------- Prose (contenu CMS) ----------------------------- */
+.prose a { color: var(--primary); text-decoration: underline; text-underline-offset: 2px; }
+.prose a:hover { color: var(--foreground); }
+.prose ul li { list-style: disc; margin-left: 1.25rem; }
+.prose ol li { list-style: decimal; margin-left: 1.25rem; }
+.prose img { border-radius: var(--radius-sm); margin: 1rem 0; }
+.prose hr { border: none; border-top: 1px solid var(--border); margin: 1.5rem 0; }
+.prose h1 a, .prose h2 a, .prose h3 a { color: inherit; text-decoration: none; }

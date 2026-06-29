@@ -37,6 +37,7 @@ $user         = Auth::check() ? Auth::user() : null;
 
     <link rel="icon" href="<?= e(asset('img/favicon.svg')) ?>" type="image/svg+xml">
     <link rel="stylesheet" href="<?= e(asset('css/base.css')) ?>">
+    <link rel="stylesheet" href="<?= e(asset('css/pages.css')) ?>">
 </head>
 <body>
     <a class="skip-link" href="#contenu">Aller au contenu</a>

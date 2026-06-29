@@ -34,18 +34,7 @@ declare(strict_types=1);
         <?php else: ?>
             <div class="grid grid-3">
                 <?php foreach ($upcoming as $event): ?>
-                    <article class="card card-hover surface glass">
-                        <?php if (!empty($event['is_featured'])): ?>
-                            <span class="badge badge-gradient">À la une</span>
-                        <?php endif; ?>
-                        <p class="card-date"><?= e(formatDate($event['date'])) ?></p>
-                        <h3 class="card-title"><?= e($event['title']) ?></h3>
-                        <?php if (!empty($event['excerpt'])): ?>
-                            <p class="card-excerpt"><?= e($event['excerpt']) ?></p>
-                        <?php endif; ?>
-                        <p class="card-meta"><?= e($event['location'] ?? '') ?></p>
-                        <a class="btn btn-outline btn-sm" href="<?= e(url('/events/' . $event['slug'])) ?>">Détails</a>
-                    </article>
+                    <?php require AEIC_VIEWS . '/partials/event_card.php'; ?>
                 <?php endforeach; ?>
             </div>
         <?php endif; ?>
@@ -64,11 +53,7 @@ declare(strict_types=1);
         <?php else: ?>
             <div class="grid grid-3">
                 <?php foreach ($past as $event): ?>
-                    <article class="card surface glass">
-                        <span class="badge badge-muted">Terminé</span>
-                        <p class="card-date"><?= e(formatDate($event['date'])) ?></p>
-                        <h3 class="card-title"><?= e($event['title']) ?></h3>
-                    </article>
+                    <?php require AEIC_VIEWS . '/partials/event_card.php'; ?>
                 <?php endforeach; ?>
             </div>
         <?php endif; ?>
