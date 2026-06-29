@@ -31,6 +31,10 @@ final class SettingCacheTest extends TestCase
         $this->reset($pdo, ['settings']);
         Model::setTestPdo($pdo);
 
+        // Le cache des settings est statique (partagé entre les tests) : on
+        // l'invalide pour que chaque test reparte de l'état fraîchement semé.
+        Setting::clearCache();
+
         $this->seedSetting($pdo, 'site_name', 'AEIC Test');
         $this->seedSetting($pdo, 'maintenance_mode', '0');
         $this->seedSetting($pdo, 'orders_enabled', '1');

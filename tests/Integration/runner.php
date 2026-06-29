@@ -161,6 +161,10 @@ register_shutdown_function(static function (): void {
 
 try {
     $router->dispatch($method, $path);
+} catch (\RedirectSignal $e) {
+    // Redirection du contrôleur en mode test : on laisse le flot se terminer
+    // normalement ; l'en-tête `Location` est capturé par headers_list() dans
+    // la fonction d'arrêt ci-dessous.
 } catch (\Throwable $e) {
     http_response_code(500);
     if (APP_DEBUG) {

@@ -68,11 +68,11 @@ final class AdminUserModelTest extends TestCase
     public function test_set_active_desactive_puis_reactive(): void
     {
         User::setActive('adm2', false);
-        self::assertSame('0', User::find('adm2')['is_active']);
+        self::assertEquals(0, User::find('adm2')['is_active']);
         self::assertSame(1, User::countActiveAdmins());
 
         User::setActive('adm2', true);
-        self::assertSame('1', User::find('adm2')['is_active']);
+        self::assertEquals(1, User::find('adm2')['is_active']);
         self::assertSame(2, User::countActiveAdmins());
     }
 

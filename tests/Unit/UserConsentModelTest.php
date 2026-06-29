@@ -66,7 +66,7 @@ final class UserConsentModelTest extends TestCase
         $user = User::findByEmail('sarah@exemple.fr');
         self::assertNotNull($user);
         self::assertSame(Auth::ROLE_ELEVE, $user['role']);
-        self::assertSame('1', $user['is_active']);
+        self::assertEquals(1, $user['is_active']);
     }
 
     public function test_anonymize_efface_les_donnees_personnelles(): void
@@ -76,9 +76,11 @@ final class UserConsentModelTest extends TestCase
         $user = User::find('u_existing');
 
         self::assertSame('Compte supprimé', $user['prenom']);
-        self::assertNull($user['email']);
+        // email NOT NULL/UNIQUE en base : anonymisé en sentinelle invalide.
+        self::assertNotSame('alex@exemple.fr', $user['email']);
+        self::assertSame('deleted_u_existing@invalid.local', $user['email']);
         self::assertNull($user['password']);
-        self::assertSame('0', $user['is_active']);
+        self::assertSame('0', (string) $user['is_active']);
     }
 
     public function test_consent_log_enregistre_et_retrouve(): void
@@ -95,7 +97,7 @@ final class UserConsentModelTest extends TestCase
 
         self::assertCount(1, $rows);
         self::assertSame('registration', $rows[0]['consent_type']);
-        self::assertSame('1', $rows[0]['granted']);
+        self::assertEquals(1, $rows[0]['granted']);
     }
 
     private function seedUser(PDO $pdo, string $id, string $prenom, string $nom, string $email, string $hash): void
