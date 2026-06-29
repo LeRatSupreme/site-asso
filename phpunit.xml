@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
+         bootstrap="tests/bootstrap.php"
+         colors="true"
+         cacheDirectory=".phpunit.cache"
+         executionOrder="random"
+         failOnRisky="true"
+         failOnWarning="true">
+
+    <php>
+        <!-- Base de données de test (jamais la prod) -->
+        <env name="DB_HOST" value="127.0.0.1"/>
+        <env name="DB_NAME" value="aeic_test"/>
+        <env name="DB_USER" value="aeic"/>
+        <env name="DB_PASS" value=""/>
+        <env name="APP_ENV" value="dev"/>
+        <env name="APP_DEBUG" value="true"/>
+        <env name="APP_URL" value="https://example.test"/>
+    </php>
+
+    <testsuites>
+        <testsuite name="Unit">
+            <directory>tests/Unit</directory>
+        </testsuite>
+    </testsuites>
+
+    <source>
+        <include>
+            <directory>app</directory>
+        </include>
+    </source>
+
+    <coverage cacheDirectory=".phpunit.cache/coverage"/>
+</phpunit>

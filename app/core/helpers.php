@@ -1,0 +1,183 @@
+<?php
+
+declare(strict_types=1);
+
+/**
+ * Fonctions utilitaires globales de l'application AEIC.
+ *
+ * Ces fonctions sont chargées via l'autoloader Composer (clé "files").
+ * Elles sont volontairement simples et sans dépendance.
+ */
+
+/**
+ * Échappe une valeur pour un affichage HTML sûr (anti-XSS).
+ */
+function e(mixed $value): string
+{
+    return htmlspecialchars((string) $value, ENT_QUOTES | ENT_HTML5 | ENT_SUBSTITUTE, 'UTF-8');
+}
+
+/**
+ * Formate une date selon un motif ICU/strftime-compatible simple.
+ *
+ * Accepte une chaîne parsable (Y-m-d H:i:s, etc.) ou un objet DateTimeInterface.
+ */
+function formatDate(string|DateTimeInterface|null $date, string $fmt = 'd/m/Y'): string
+{
+    if ($date === null || $date === '') {
+        return '';
+    }
+
+    if (!$date instanceof DateTimeInterface) {
+        try {
+            $date = new DateTimeImmutable($date);
+        } catch (Throwable) {
+            return '';
+        }
+    }
+
+    return $date->format($fmt);
+}
+
+/**
+ * Formate une date + heure au format français (d/m/Y H:i).
+ */
+function formatDateTime(string|DateTimeInterface|null $date): string
+{
+    return formatDate($date, 'd/m/Y H:i');
+}
+
+/**
+ * Formate un nombre en prix euros français (2 décimales, virgule, suffixe " €").
+ *
+ * @param float|int|string|null $n
+ */
+function formatPrice(float|int|string|null $n): string
+{
+    if ($n === null || $n === '') {
+        return '0,00 €';
+    }
+
+    $value = (float) $n;
+
+    return number_format($value, 2, ',', ' ') . ' €';
+}
+
+/**
+ * Parse un nombre "à la française" (virgule décimale) en float.
+ *
+ * Gère "1,75", "1.75", "1 234,5", "0,99".
+ */
+function parseFrenchFloat(string $s): float
+{
+    $s = trim($s);
+    if ($s === '') {
+        return 0.0;
+    }
+
+    // Supprime les espaces fins et insécables utilisés comme séparateurs de milliers.
+    $s = str_replace(["\u{00a0}", "\u{202f}", ' '], '', $s);
+    // Remplace la virgule décimale par un point.
+    $s = str_replace(',', '.', $s);
+
+    // S'il reste plusieurs points, on ne garde que le dernier comme séparateur décimal.
+    $parts = explode('.', $s);
+    if (count($parts) > 2) {
+        $integerPart = implode('', array_slice($parts, 0, -1));
+        $s = $integerPart . '.' . end($parts);
+    }
+
+    return (float) $s;
+}
+
+/**
+ * Redirige vers une URL et termine le script.
+ */
+function redirect(string $url): void
+{
+    if (!headers_sent()) {
+        header('Location: ' . $url);
+    }
+
+    exit;
+}
+
+/**
+ * Construit l'URL d'un asset (préfixe APP_URL + /assets).
+ */
+function asset(string $path): string
+{
+    $path = '/' . ltrim($path, '/');
+
+    return APP_URL . '/assets' . $path;
+}
+
+/**
+ * Construit une URL absolue à partir d'un chemin relatif.
+ */
+function url(string $path = ''): string
+{
+    if ($path === '') {
+        return APP_URL;
+    }
+
+    return APP_URL . '/' . ltrim($path, '/');
+}
+
+/**
+ * Génère (et stocke en session) le token CSRF courant.
+ * Le même token est renvoyé jusqu'à expiration de la session.
+ */
+function csrf_token(): string
+{
+    if (session_status() !== PHP_SESSION_ACTIVE) {
+        @session_start();
+    }
+
+    if (empty($_SESSION['_csrf_token'])) {
+        $_SESSION['_csrf_token'] = bin2hex(random_bytes(32));
+    }
+
+    return $_SESSION['_csrf_token'];
+}
+
+/**
+ * Rend un champ caché contenant le token CSRF, à insérer dans tout formulaire POST.
+ */
+function csrf_field(): string
+{
+    return '<input type="hidden" name="_csrf" value="' . e(csrf_token()) . '">';
+}
+
+/**
+ * Récupère une ancienne valeur de formulaire (depuis $_SESSION['_old'] ou $_POST).
+ */
+function old(string $key, mixed $default = ''): mixed
+{
+    if (isset($_SESSION['_old'][$key])) {
+        $value = $_SESSION['_old'][$key];
+        unset($_SESSION['_old'][$key]);
+
+        return $value;
+    }
+
+    return $_POST[$key] ?? $default;
+}
+
+/**
+ * Vérifie qu'une chaîne est une URL absolue (http/https).
+ */
+function is_absolute_url(string $url): bool
+{
+    return preg_match('#^https?://#i', $url) === 1;
+}
+
+/**
+ * Renvoie l'initiale d'un prénom (utilisé pour les avatars sans photo).
+ */
+function initial(?string $name): string
+{
+    $name = trim((string) $name);
+
+    return $name === '' ? '?' : mb_strtoupper(mb_substr($name, 0, 1));
+}
