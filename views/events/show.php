@@ -103,6 +103,27 @@ $priceLabel = ($price === null || (float) $price <= 0)
                     </div>
                 </div>
             <?php endif; ?>
+
+            <?php
+            $showMap = !empty($event['show_map']) && !empty($event['map_lat']) && !empty($event['map_lon']);
+            if ($showMap):
+                $elat = (float) $event['map_lat'];
+                $elon = (float) $event['map_lon'];
+                $bbox = sprintf('%f,%f,%f,%f', $elon - 0.005, $elat - 0.0028, $elon + 0.005, $elat + 0.0028);
+                $mapEmbed = 'https://www.openstreetmap.org/export/embed.html?bbox=' . rawurlencode($bbox)
+                    . '&layer=mapnik&marker=' . rawurlencode((string) $event['map_lat'] . ',' . (string) $event['map_lon']);
+                $mapGmaps = 'https://www.google.com/maps/search/?api=1&query=' . rawurlencode((string) $event['map_lat'] . ',' . (string) $event['map_lon']);
+            ?>
+                <div class="event-map card surface glass">
+                    <span class="eyebrow">Localisation</span>
+                    <h2 class="card-title">Où se trouve l'événement</h2>
+                    <?php if ($location !== ''): ?><p class="card-meta">📍 <?= e($location) ?></p><?php endif; ?>
+                    <div class="map-frame">
+                        <iframe title="Carte — <?= e($title) ?>" src="<?= e($mapEmbed) ?>" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
+                    </div>
+                    <a class="btn btn-outline btn-sm" href="<?= e($mapGmaps) ?>" target="_blank" rel="noopener">📍 Itinéraire (Google Maps)</a>
+                </div>
+            <?php endif; ?>
         </div>
 
         <aside class="event-detail-sidebar">

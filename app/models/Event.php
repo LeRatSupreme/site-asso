@@ -214,6 +214,9 @@ final class Event extends Model
             'max_capacity'  => $data['max_capacity'] !== '' && $data['max_capacity'] !== null ? $data['max_capacity'] : null,
             'is_featured'   => !empty($data['is_featured']) ? 1 : 0,
             'is_published'  => !empty($data['is_published']) ? 1 : 0,
+            'show_map'      => !empty($data['show_map']) ? 1 : 0,
+            'map_lat'       => ($data['map_lat'] ?? '') !== '' ? $data['map_lat'] : null,
+            'map_lon'       => ($data['map_lon'] ?? '') !== '' ? $data['map_lon'] : null,
         ];
 
         if ($isNew) {
@@ -244,6 +247,41 @@ final class Event extends Model
     {
         $stmt = static::pdo()->prepare('DELETE FROM events WHERE id = ?');
         $stmt->execute([$id]);
+    }
+
+    /**
+     * Géocode une adresse/lieu en (lat, lon) via Nominatim (OpenStreetMap).
+     *
+     * Retourne ['lat' => string, 'lon' => string] ou null si échoc/non trouvé.
+     */
+    public static function geocode(string $location): ?array
+    {
+        $q = trim($location);
+        if ($q === '') {
+            return null;
+        }
+
+        $url = 'https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=' . rawurlencode($q);
+        $ctx = stream_context_create([
+            'http' => [
+                'header'        => "User-Agent: AEIC/1.0 (calais.aeic@gmail.com)\r\n",
+                'timeout'       => 8,
+                'ignore_errors' => true,
+            ],
+        ]);
+        $json = @file_get_contents($url, false, $ctx);
+        if ($json === false) {
+            return null;
+        }
+        $data = json_decode($json, true);
+        if (!is_array($data) || $data === []) {
+            return null;
+        }
+
+        return [
+            'lat' => (string) ($data[0]['lat'] ?? ''),
+            'lon' => (string) ($data[0]['lon'] ?? ''),
+        ];
     }
 
     /**
