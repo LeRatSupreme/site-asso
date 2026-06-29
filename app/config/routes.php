@@ -155,6 +155,7 @@ function aeic_register_routes(Router $router): void
     $router->get('/admin/compta/aliases/auto', [AdminComptaController::class, 'aliasesAuto']);
     $router->post('/admin/compta/aliases/apply', [AdminComptaController::class, 'aliasesApply']);
     $router->get('/admin/compta/reappro', [AdminComptaController::class, 'reorder']);
+    $router->post('/admin/compta/reappro/stocks', [AdminComptaController::class, 'saveStocks']);
 
     // Mini dashboard SumUp (fondé sur les ventes importées ; ADMIN/TRESORERIE).
     $router->get('/admin/sumup', [AdminSumupController::class, 'index']);
