@@ -109,6 +109,35 @@ La directive clé : `DocumentRoot /var/www/aeic/public` et, pour le routing,
 
 ---
 
+## 🚀 Mise en production (checklist)
+
+1. **Désactiver le debug** — `config.env` : `APP_ENV=prod`, `APP_DEBUG=false`.
+   Les erreurs ne sont jamais affichées en détail (`logs/php-error.log`).
+2. **HTTPS obligatoire** — certificat TLS actif, accès HTTP redirigé vers HTTPS.
+   L'en-tête `Strict-Transport-Security` (HSTS) est envoyé automatiquement sur
+   toute réponse servie en HTTPS, y compris les pages d'erreur 4xx/5xx.
+3. **En-têtes de sécurité** — `SecurityHeaders` (CSP, HSTS, X-Frame-Options,
+   `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy`) est
+   appliqué sur **toutes** les réponses (page normale, 404/403/500, maintenance).
+4. **Configurer le SMTP** — dans *Admin → Paramètres → Emails / SMTP* :
+   `smtp_host`, `smtp_port`, `smtp_encryption` (`tls`/`ssl`/`none`/vide),
+   `smtp_user`, `smtp_pass`, `mailer_from`. Laisser `smtp_host` vide pour le
+   fallback `mail()`. Utiliser le bouton **« Envoyer un e-mail de test »**
+   pour valider. (Surcharge possible via `config.env` : `SMTP_*`, `MAILER_*`.)
+5. **Permissions** — `config.env` en `0640` (propriétaire `www-data`),
+   `public/assets/uploads/` inscriptible par `www-data`, reste du dépôt en
+   lecture seule.
+6. **Sauvegardes** — planifier `php scripts/backup.php` (dump complet PHP pur)
+   en cron quotidien + sauvegarde externe des fichiers `database/backup/*.sql`.
+   Restauration via `php scripts/restore.php fichier.sql`.
+7. **Compte admin** — générer le hash du mot de passe (voir §5 ci-dessus),
+   changer le mot de passe par défaut après la 1re connexion, **activer le 2FA**
+   (obligatoire pour ADMIN/Trésorerie).
+8. **Monitoring** — `GET /health` (JSON, 200/503) à brancher sur un uptime
+   checker ; surveiller `logs/app.log` et `logs/php-error.log`.
+
+---
+
 ## 🧪 Tests
 
 ```bash
@@ -120,6 +149,30 @@ composer install                 # installe phpunit (require-dev)
 La base de test déclarée dans `phpunit.xml` est `aeic_test` (**jamais la prod**).
 Les tests couvrent : helpers (`e`, `formatDate`, `formatPrice`, `parseFrenchFloat`) et
 le routeur (matching, extraction `{slug}`/`{id}`, 404, 405).
+
+### Tests d'intégration (route + base)
+
+Les tests d'intégration (`tests/Integration/`) exécutent de **vraies requêtes
+HTTP simulées** contre l'application branchée sur `aeic_test`, dans un
+sous-processus PHP dédié. CSRF et 2FA sont neutralisés via le flag
+`APP_TESTING` (jamais actif en production).
+
+Pré-requis : créer la base `aeic_test` et y importer le schéma :
+
+```bash
+mysql -u aeic -p -e "CREATE DATABASE aeic_test CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+mysql -u aeic -p aeic_test < database/schema.sql
+```
+
+Puis :
+
+```bash
+./vendor/bin/phpunit --testsuite Integration
+```
+
+Couverture : inscription (RGPD, doublons, mot de passe), connexion, inscription
+aux événements (unicité), commande cafétéria (total serveur, stock, produit
+indisponible), import comptable SumUp (déduplication), et logique SMTP du Mailer.
 
 ---
 

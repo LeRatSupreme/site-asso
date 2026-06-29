@@ -14,6 +14,12 @@ use App\Models\Setting;
  *
  * La configuration est lue depuis les settings (modifiables en admin) avec
  * possibilité de surcharge par variables d'environnement (config.env).
+ *
+ * Modes d'envoi (par ordre de priorité) :
+ *  1. transport injectable (tests unitaires) ;
+ *  2. APP_TESTING=true (tests d'intégration) : capture, rien n'est réellement envoyé ;
+ *  3. SMTP natif si `smtp_host` renseigné ;
+ *  4. fallback `mail()`.
  */
 final class Mailer
 {
@@ -22,6 +28,9 @@ final class Mailer
 
     /** @var callable|null Hook de remplacement (tests : intercepte l'envoi réel). */
     private static $transport = null;
+
+    /** @var list<array{to:string,subject:string}> E-mails capturés en mode APP_TESTING. */
+    private static array $captured = [];
 
     /**
      * Définit un transport personnalisé (tests).
@@ -37,12 +46,23 @@ final class Mailer
     {
         self::$transport = null;
         self::$log = [];
+        self::$captured = [];
     }
 
     /** @return list<string> */
     public static function log(): array
     {
         return self::$log;
+    }
+
+    /**
+     * E-mails capturés en mode APP_TESTING (tests d'intégration).
+     *
+     * @return list<array{to:string,subject:string}>
+     */
+    public static function captured(): array
+    {
+        return self::$captured;
     }
 
     /**
@@ -60,14 +80,61 @@ final class Mailer
         $html = self::render($template, $data);
         $text = self::renderText($template, $data);
 
-        $from     = env('MAILER_FROM', Setting::get('mailer_from', 'noreply@aeic.fr'));
-        $fromName = env('MAILER_FROM_NAME', Setting::get('mailer_from_name', 'AEIC'));
+        return self::dispatchRaw($to, $subject, $text, $html);
+    }
+
+    /**
+     * Envoie un e-mail « brut » (sans template), utilisé notamment par le
+     * bouton « Envoyer un e-mail de test » des paramètres.
+     */
+    public static function sendRaw(string $to, string $subject, string $body): bool
+    {
+        return self::dispatchRaw($to, $subject, $body, $body);
+    }
+
+    /**
+     * Résout la configuration de transport depuis les settings / variables
+     * d'environnement. Exposé publiquement pour les tests et le diagnostique.
+     *
+     * @return array{
+     *     host:string, port:int, user:string, pass:string,
+     *     encryption:string, from:string, fromName:string
+     * }
+     */
+    public static function config(): array
+    {
+        return [
+            'host'       => env('SMTP_HOST', Setting::get('smtp_host', '')),
+            'port'       => (int) env('SMTP_PORT', Setting::get('smtp_port', '587')),
+            'user'       => env('SMTP_USER', Setting::get('smtp_user', '')),
+            'pass'       => env('SMTP_PASS', Setting::get('smtp_pass', '')),
+            'encryption' => strtolower(env('SMTP_ENCRYPTION', Setting::get('smtp_encryption', ''))),
+            'from'       => env('MAILER_FROM', Setting::get('mailer_from', 'noreply@aeic.fr')),
+            'fromName'   => env('MAILER_FROM_NAME', Setting::get('mailer_from_name', 'AEIC')),
+        ];
+    }
+
+    /**
+     * Indique si un envoi via SMTP natif aura lieu (hôte renseigné et pas en
+     * mode test / transport injecté).
+     */
+    public static function isSmtpConfigured(): bool
+    {
+        return self::config()['host'] !== '';
+    }
+
+    /**
+     * Cœur d'envoi : applique la priorité des transports.
+     */
+    private static function dispatchRaw(string $to, string $subject, string $text, string $html): bool
+    {
+        $cfg = self::config();
 
         $headers = [
             'MIME-Version: 1.0',
             'Content-Type: text/plain; charset=UTF-8',
-            'From: ' . self::encodeName($fromName) . ' <' . $from . '>',
-            'Reply-To: ' . $from,
+            'From: ' . self::encodeName($cfg['fromName']) . ' <' . $cfg['from'] . '>',
+            'Reply-To: ' . $cfg['from'],
         ];
 
         if (self::$transport !== null) {
@@ -77,15 +144,21 @@ final class Mailer
             return $ok;
         }
 
-        // SMTP natif si configuré, sinon mail().
-        $host = env('SMTP_HOST', Setting::get('smtp_host', ''));
-        if ($host !== '') {
+        if (getenv('APP_TESTING') === 'true') {
+            self::$captured[] = ['to' => $to, 'subject' => $subject];
+            self::$log[] = 'captured: ' . $to . ' / ' . $subject;
+
+            return true;
+        }
+
+        if ($cfg['host'] !== '') {
             $ok = self::sendSmtp(
-                $host,
-                (int) env('SMTP_PORT', Setting::get('smtp_port', '587')),
-                env('SMTP_USER', Setting::get('smtp_user', '')),
-                env('SMTP_PASS', Setting::get('smtp_pass', '')),
-                $from,
+                $cfg['host'],
+                $cfg['port'],
+                $cfg['user'],
+                $cfg['pass'],
+                $cfg['encryption'],
+                $cfg['from'],
                 $to,
                 $subject,
                 $text,
@@ -156,6 +229,50 @@ final class Mailer
     }
 
     /**
+     * Résout le mode de connexion SMTP à partir du réglage d'encryption et du
+     * port : renvoie le remote à ouvrir et indique si STARTTLS doit être
+     * négocié après la bannière. Méthode publique pour testabilité (sans réseau).
+     *
+     * @return array{remote:string, starttls:bool}
+     */
+    public static function resolveTransport(string $encryption, string $host, int $port): array
+    {
+        $encryption = strtolower($encryption);
+        $implicitSsl = $encryption === 'ssl' || ($encryption === '' && $port === 465);
+
+        if ($implicitSsl) {
+            return ['remote' => 'ssl://' . $host . ':' . $port, 'starttls' => false];
+        }
+
+        $starttls = $encryption === 'tls' || ($encryption === '' && $port !== 25);
+
+        return ['remote' => $host . ':' . $port, 'starttls' => $starttls];
+    }
+
+    /**
+     * Construit le bloc DATA d'un message SMTP (en-têtes + corps + fin ".\r\n").
+     * Exposé pour les tests (validation du format sans ouverture de socket).
+     *
+     * @param list<string> $headers
+     */
+    public static function buildDataMessage(
+        string $from,
+        string $to,
+        string $subject,
+        string $body,
+        array $headers
+    ): string {
+        $message = 'Subject: =?UTF-8?B?' . base64_encode($subject) . "?=\r\n";
+        $message .= 'To: <' . $to . ">\r\n";
+        foreach ($headers as $h) {
+            $message .= $h . "\r\n";
+        }
+        $message .= "\r\n" . $body . "\r\n.\r\n";
+
+        return $message;
+    }
+
+    /**
      * Client SMTP minimaliste (EHLO, STARTTLS optionnel, AUTH LOGIN, DATA).
      *
      * @param list<string> $headers
@@ -165,14 +282,15 @@ final class Mailer
         int $port,
         string $user,
         string $pass,
+        string $encryption,
         string $from,
         string $to,
         string $subject,
         string $body,
         array $headers
     ): bool {
-        $remote = ($port === 465 ? 'ssl://' : '') . $host . ':' . $port;
-        $fp = @stream_socket_client($remote, $errno, $errstr, 15);
+        $transport = self::resolveTransport($encryption, $host, $port);
+        $fp = @stream_socket_client($transport['remote'], $errno, $errstr, 15);
         if ($fp === false) {
             self::$log[] = 'smtp-error: ' . $errstr;
 
@@ -184,7 +302,7 @@ final class Mailer
             self::smtpWrite($fp, 'EHLO aeic');
             self::smtpRead($fp, 250);
 
-            if ($port !== 465) {
+            if ($transport['starttls']) {
                 self::smtpWrite($fp, 'STARTTLS');
                 self::smtpRead($fp, 220);
                 stream_socket_enable_crypto($fp, true, STREAM_CRYPTO_METHOD_TLS_CLIENT);
@@ -208,13 +326,7 @@ final class Mailer
             self::smtpWrite($fp, 'DATA');
             self::smtpRead($fp, 354);
 
-            $message = 'Subject: =?UTF-8?B?' . base64_encode($subject) . "?=\r\n";
-            $message .= 'To: <' . $to . ">\r\n";
-            foreach ($headers as $h) {
-                $message .= $h . "\r\n";
-            }
-            $message .= "\r\n" . $body . "\r\n.\r\n";
-            self::smtpWrite($fp, $message);
+            self::smtpWrite($fp, self::buildDataMessage($from, $to, $subject, $body, $headers));
             self::smtpRead($fp, 250);
 
             self::smtpWrite($fp, 'QUIT');

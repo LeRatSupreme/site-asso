@@ -87,6 +87,8 @@ function env(string $key, string $default = ''): string
 define('APP_ENV', env('APP_ENV', 'prod'));
 define('APP_DEBUG', env('APP_DEBUG', APP_ENV === 'dev' ? 'true' : 'false') === 'true');
 define('APP_URL', rtrim(env('APP_URL', ''), '/'));
+// Flag d'environnement de test (tests d'intégration PHPUnit). Jamais true en prod.
+define('APP_TESTING', env('APP_TESTING', 'false') === 'true');
 
 // --- Configuration du reporting d'erreurs -----------------------------------
 
@@ -125,6 +127,12 @@ function aeic_shutdown_handler(): void
     if (!headers_sent()) {
         http_response_code(500);
         header('Content-Type: text/html; charset=utf-8');
+        // Les en-têtes de sécurité doivent également être présents sur la page
+        // d'erreur fatale (durcissement prod : couverture 4xx/5xx).
+        \App\Core\Security\SecurityHeaders::send(
+            (!empty($_SERVER['HTTPS']) && strtolower((string) $_SERVER['HTTPS']) !== 'off')
+            || (($_SERVER['SERVER_PORT'] ?? '') === '443')
+        );
     }
 
     if (APP_DEBUG) {

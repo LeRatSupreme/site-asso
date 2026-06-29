@@ -40,6 +40,7 @@ INSERT INTO settings (id, `key`, value, type, label, `group`) VALUES
     ('set_mailer_from_name',     'mailer_from_name',     'AEIC',                                                       'text',    'Nom expéditeur', 'email'),
     ('set_smtp_host',            'smtp_host',            '',                                                           'text',    'Hôte SMTP (vide = mail() natif)', 'email'),
     ('set_smtp_port',            'smtp_port',            '587',                                                        'text',    'Port SMTP', 'email'),
+    ('set_smtp_encryption',      'smtp_encryption',      '',                                                           'text',    'Chiffrement SMTP (none / tls / ssl ; vide = auto)', 'email'),
     ('set_smtp_user',            'smtp_user',            '',                                                           'text',    'Utilisateur SMTP', 'email'),
     ('set_smtp_pass',            'smtp_pass',            '',                                                           'text',    'Mot de passe SMTP', 'email')
 ON DUPLICATE KEY UPDATE value = VALUES(value);
