@@ -113,6 +113,36 @@ function asset(string $path): string
 }
 
 /**
+ * Construit l'URL d'un asset en ajoutant un paramètre de cache-bust
+ * (?v=filemtime) pour forcer le rechargement navigateur à chaque modification.
+ */
+function assetVersioned(string $path): string
+{
+    $url = asset($path);
+    $file = AEIC_PUBLIC . '/assets' . '/' . ltrim($path, '/');
+    if (is_file($file)) {
+        $url .= '?v=' . filemtime($file);
+    }
+
+    return $url;
+}
+
+/**
+ * Idem pour les assets servis depuis / (hors /assets), avec cache-bust.
+ */
+function rootAssetVersioned(string $path): string
+{
+    $path = '/' . ltrim($path, '/');
+    $file = AEIC_PUBLIC . $path;
+    $url = APP_URL . $path;
+    if (is_file($file)) {
+        $url .= '?v=' . filemtime($file);
+    }
+
+    return $url;
+}
+
+/**
  * Construit une URL absolue à partir d'un chemin relatif.
  */
 function url(string $path = ''): string
