@@ -11,6 +11,7 @@ use App\Models\ImportBatch;
 use App\Models\Product;
 use App\Models\ProductAlias;
 use App\Models\ProductCost;
+use App\Models\ProductStock;
 use App\Models\Sale;
 use App\Models\SaleAdjustment;
 
@@ -601,6 +602,40 @@ final class AdminComptaController extends AdminBaseController
     }
 
     /**
+     * Enregistre les stocks saisis sur la page Réappro (table product_stocks).
+     */
+    public function saveStocks(): void
+    {
+        $this->guardCompta();
+
+        $stocks = $_POST['stocks'] ?? [];
+        if (!is_array($stocks)) {
+            $stocks = [];
+        }
+
+        $count = 0;
+        foreach ($stocks as $key => $value) {
+            $productKey = trim((string) $key);
+            if ($productKey === '') {
+                continue;
+            }
+            $value = trim((string) $value);
+            if ($value === '') {
+                // Champ vide : on n'écrase pas (stock laissé inconnu).
+                continue;
+            }
+            ProductStock::set($productKey, (int) $value);
+            $count++;
+        }
+
+        $this->audit('compta.reappro.stocks', 'product_stocks', null, ['count' => $count]);
+        $this->setFlash('success', sprintf('%d stock(s) mis à jour.', $count));
+
+        $period = (string) ($_POST['period'] ?? '1m');
+        redirect(url('/admin/compta/reappro?period=' . rawurlencode($period)));
+    }
+
+    /**
      * Calcule l'analyse de réapprovisionnement.
      *
      * Basée sur TOUTES les ventes importées (table sales) : chaque produit
@@ -615,6 +650,7 @@ final class AdminComptaController extends AdminBaseController
     {
         $consumption = Sale::consumptionByProductKey(3); // tous les produits des ventes
         $products    = Product::allForAdmin();
+        $stocksInput = ProductStock::allMap();           // stocks saisis sur Réappro
 
         // Stock + catégorie par nom de produit (depuis la table cafétéria).
         $stockByName = [];
@@ -645,8 +681,14 @@ final class AdminComptaController extends AdminBaseController
             $avgDay   = $avgMonth / 30.0;
             $avgWeek  = $avgDay * 7.0;
 
-            $hasStock = array_key_exists($key, $stockByName);
-            $stock    = $hasStock ? $stockByName[$key] : null;
+            // Priorité du stock : valeur saisie sur Réappro > stock cafétéria > inconnu.
+            if (array_key_exists($key, $stocksInput)) {
+                $stock = $stocksInput[$key];
+            } elseif (array_key_exists($key, $stockByName)) {
+                $stock = $stockByName[$key];
+            } else {
+                $stock = null;
+            }
 
             $autonomy = ($stock !== null && $avgDay > 0)
                 ? (int) floor($stock / $avgDay)
@@ -656,7 +698,7 @@ final class AdminComptaController extends AdminBaseController
             $toOrder = max(0, $need - ($stock ?? 0));
 
             // Alerte si autonomie connue < 7 j, ou stock nul connu.
-            $isAlert = ($autonomy !== null && $autonomy < 7) || ($hasStock && $stock <= 0);
+            $isAlert = ($autonomy !== null && $autonomy < 7) || ($stock !== null && $stock <= 0);
             if ($isAlert) {
                 $alerts++;
             }
@@ -680,10 +722,12 @@ final class AdminComptaController extends AdminBaseController
             if (isset($seen[$name])) {
                 continue;
             }
+            // Stock saisi prioritaire si présent.
+            $finalStock = array_key_exists($name, $stocksInput) ? $stocksInput[$name] : $stk;
             $rows[] = [
                 'name'      => $name,
                 'category'  => $catByName[$name] ?? '—',
-                'stock'     => $stk,
+                'stock'     => $finalStock,
                 'avg_day'   => 0.0,
                 'avg_week'  => 0.0,
                 'avg_month' => 0.0,
