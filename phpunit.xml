@@ -13,7 +13,8 @@
         <env name="DB_HOST" value="127.0.0.1"/>
         <env name="DB_NAME" value="aeic_test"/>
         <env name="DB_USER" value="aeic"/>
-        <env name="DB_PASS" value=""/>
+        <!-- DB_PASS : fournis-le via la variable d'environnement shell
+             (ex: DB_PASS='...' vendor/bin/phpunit) pour ne pas committer le mot de passe. -->
         <env name="APP_ENV" value="dev"/>
         <env name="APP_DEBUG" value="true"/>
         <env name="APP_URL" value="https://example.test"/>
