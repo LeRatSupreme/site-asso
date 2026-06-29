@@ -1,0 +1,18 @@
+# AEIC — fichiers à ignorer par Git
+/config.env
+/vendor/
+/node_modules/
+
+# Uploads & cache générés
+/public/assets/uploads/*
+!/public/assets/uploads/.gitkeep
+
+# Logs
+*.log
+/logs/
+
+# OS / éditeurs
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
