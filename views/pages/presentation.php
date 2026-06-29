@@ -79,6 +79,8 @@ declare(strict_types=1);
 </section>
 <?php endif; ?>
 
+<?php require __DIR__ . '/../partials/map.php'; ?>
+
 <section class="section cta">
     <div class="container cta-inner">
         <h2 class="section-title">Envie de nous rejoindre ?</h2>
