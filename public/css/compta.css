@@ -439,13 +439,26 @@
 }
 .costs-count { margin-left: auto; font-size: 0.8rem; }
 
-.cost-cards { display: flex; flex-direction: column; gap: 0.85rem; }
+.cost-cards { display: flex; flex-direction: column; gap: 1.1rem; }
+
+.cost-group { margin-bottom: 2rem; }
+.cost-group:last-child { margin-bottom: 0; }
+.cost-group-title {
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--primary);
+    font-weight: 800;
+    margin: 0 0 0.9rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border);
+}
 
 .cost-card {
-    background: rgba(255, 255, 255, 0.03);
+    background: rgba(255, 255, 255, 0.035);
     border: 1px solid var(--border);
     border-radius: 14px;
-    padding: 1rem 1.15rem;
+    padding: 1.35rem 1.5rem;
     transition: border-color 0.15s, background 0.15s;
 }
 .cost-card.has-cost { border-left: 3px solid rgba(72, 189, 211, 0.5); }
