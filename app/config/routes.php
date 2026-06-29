@@ -120,6 +120,7 @@ function aeic_register_routes(Router $router): void
     $router->get('/admin/users', [AdminUserController::class, 'index']);
     $router->post('/admin/users/{id}/role', [AdminUserController::class, 'changeRole']);
     $router->post('/admin/users/{id}/toggle-active', [AdminUserController::class, 'toggleActive']);
+    $router->post('/admin/users/{id}/delete', [AdminUserController::class, 'delete']);
 
     $router->get('/admin/team', [AdminTeamController::class, 'index']);
     $router->get('/admin/team/new', [AdminTeamController::class, 'form']);

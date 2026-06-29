@@ -44,11 +44,18 @@ $roleLabels = [
                         <?php endif; ?>
                     </td>
                     <td><?= e(formatDate((string) ($u['created_at'] ?? ''))) ?></td>
-                    <td>
+                    <td class="row-actions">
                         <form method="post" action="<?= e(url('/admin/users/' . rawurlencode((string) $u['id']) . '/toggle-active')) ?>" class="inline-form">
                             <?= csrf_field() ?>
                             <button type="submit" class="btn btn-outline btn-sm" <?= $isSelf ? 'disabled title="Vous ne pouvez pas vous désactiver"' : '' ?>>
                                 <?= !empty($u['is_active']) ? 'Désactiver' : 'Activer' ?>
+                            </button>
+                        </form>
+                        <form method="post" action="<?= e(url('/admin/users/' . rawurlencode((string) $u['id']) . '/delete')) ?>" class="inline-form"
+                              onsubmit="return confirm('Supprimer définitivement le compte de <?= e(trim(($u['prenom'] ?? '') . ' ' . ($u['nom'] ?? ''))) ?> ?\nLes commandes (comptabilité) sont conservées mais anonymisées. Action irréversible.');">
+                            <?= csrf_field() ?>
+                            <button type="submit" class="btn btn-danger btn-sm" <?= $isSelf ? 'disabled title="Vous ne pouvez pas supprimer votre propre compte ici"' : '' ?>>
+                                Supprimer
                             </button>
                         </form>
                     </td>
@@ -57,4 +64,4 @@ $roleLabels = [
         </tbody>
     </table>
 </div>
-<p class="card-meta">Le dernier administrateur actif ne peut être ni rétrogradé ni désactivé. Chaque changement de rôle est journalisé (audit log).</p>
+<p class="card-meta">Le dernier administrateur actif ne peut être ni rétrogradé, ni désactivé, ni supprimé. Vous ne pouvez pas supprimer votre propre compte depuis ici. Chaque action est journalisée (audit log). La suppression conserve les commandes (anonymisées) pour la comptabilité.</p>

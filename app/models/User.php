@@ -54,7 +54,7 @@ final class User extends Model
     public static function countActiveAdmins(): int
     {
         try {
-            $stmt = static::pdo()->query(
+            $stmt = static::pdo()->prepare(
                 'SELECT COUNT(*) FROM users WHERE role = ? AND is_active = 1'
             );
             $stmt->execute([Auth::ROLE_ADMIN]);
@@ -81,6 +81,21 @@ final class User extends Model
     {
         $stmt = static::pdo()->prepare('UPDATE users SET is_active = ? WHERE id = ?');
         $stmt->execute([$active ? 1 : 0, $userId]);
+    }
+
+    /**
+     * Supprime un compte (RGPD : droit à l'effacement).
+     *
+     * Les commandes cafétéria sont conservées mais déliées de l'utilisateur
+     * (ON DELETE SET NULL sur cafeteria_orders.user_id) pour les obligations
+     * comptables ; les inscriptions et consentements sont supprimés en cascade.
+     */
+    public static function delete(string $userId): bool
+    {
+        $stmt = static::pdo()->prepare('DELETE FROM users WHERE id = ?');
+        $stmt->execute([$userId]);
+
+        return $stmt->rowCount() === 1;
     }
 
     /**
@@ -147,15 +162,27 @@ final class User extends Model
      * (commandes cafétéria) sont conservés mais déliés de l'identité (la FK
      * user_id passe à NULL via ON DELETE SET NULL sur la table ; ici on ne
      * supprime pas la ligne afin de garder la trace).
+     *
+     * L'e-mail étant NOT NULL et UNIQUE en base, on conserve une valeur
+     * sentinelle déterministe et unique par compte (jamais réutilisée et
+     * invalide), afin de respecter la contrainte tout en détruisant
+     * l'identité réelle.
      */
     public static function anonymize(string $userId): void
     {
         $stmt = static::pdo()->prepare(
             'UPDATE users
-             SET prenom = ?, nom = ?, email = NULL, password = NULL, image = NULL, is_active = 0
+             SET prenom = ?, nom = ?, email = ?, password = ?, image = ?, is_active = 0
              WHERE id = ?'
         );
-        $stmt->execute(['Compte supprimé', 'Compte supprimé', $userId]);
+        $stmt->execute([
+            'Compte supprimé',
+            'Compte supprimé',
+            'deleted_' . $userId . '@invalid.local',
+            null,
+            null,
+            $userId,
+        ]);
     }
 
     /**
