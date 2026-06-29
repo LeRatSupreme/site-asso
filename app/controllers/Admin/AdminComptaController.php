@@ -73,7 +73,7 @@ final class AdminComptaController extends AdminBaseController
         $top = Sale::topProducts($month['year'], $month['month']);
         $byCategory = Sale::byCategory($month['year'], $month['month']);
 
-        $reorderAlerts = $this->reorderData()['alerts'];
+        $reorderAlerts = $this->reorderData(30)['alerts'];
 
         $this->renderAdmin('admin/compta/dashboard', [
             'title'        => 'Comptabilité',
