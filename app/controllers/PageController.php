@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace App\Controllers;
 
 use App\Core\Controller;
+use App\Models\Event;
 use App\Models\Page;
 use App\Models\TeamMember;
+use App\Models\User;
 
 /**
  * Pages éditoriales (L'association, Équipe) et CMS (legal, privacy, génériques).
@@ -21,17 +23,31 @@ final class PageController extends Controller
             'title'       => 'L\'association — AEIC',
             'description' => 'Qui sommes-nous ? Mission, valeurs et chiffres clés de l\'AEIC.',
             'page'        => $page,
+            'usersCount'  => User::countActive(),
+            'eventsCount' => Event::count(),
         ]);
     }
 
     public function team(): void
     {
+        $highlighted = TeamMember::highlighted();
         $members = TeamMember::active();
+
+        // La grille principale n'affiche pas les membres déjà mis en avant en haut.
+        $highlightedIds = array_map(
+            static fn (array $m): string => (string) $m['id'],
+            $highlighted
+        );
+        $others = array_values(array_filter(
+            $members,
+            static fn (array $m): bool => !in_array((string) $m['id'], $highlightedIds, true)
+        ));
 
         $this->render('pages/team', [
             'title'       => 'L\'équipe — AEIC',
             'description' => 'Le bureau de l\'AEIC : les étudiants qui font vivre l\'association.',
-            'members'     => $members,
+            'highlighted' => $highlighted,
+            'members'     => $others,
         ]);
     }
 

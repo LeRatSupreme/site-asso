@@ -7,6 +7,7 @@ namespace App\Controllers;
 use App\Core\Controller;
 use App\Models\Event;
 use App\Models\Setting;
+use App\Models\User;
 
 /**
  * Page d'accueil publique.
@@ -19,7 +20,9 @@ final class HomeController extends Controller
             'title'           => Setting::get('site_name', 'AEIC'),
             'description'     => Setting::get('site_description'),
             'siteName'        => Setting::get('site_name', 'AEIC'),
-            'events'          => Event::upcoming(3),
+            'upcoming'        => Event::featured(3),
+            'eventsCount'     => Event::count(),
+            'usersCount'      => User::countActive(),
             'maintenanceMode' => Setting::getBool('maintenance_mode', false),
         ]);
     }

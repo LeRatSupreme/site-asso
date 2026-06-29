@@ -17,14 +17,14 @@ final class EventController extends Controller
      */
     public function index(): void
     {
-        $upcoming = Event::publishedUpcoming();
-        $past = Event::publishedPast(12);
+        $upcoming = Event::upcoming();
+        $past = Event::past(12);
 
         $this->render('events/index', [
-            'title'       => 'Événements — AEIC',
-            'description' => 'Agenda des prochains rendez-vous de l\'AEIC : soirées, LAN, conférences.',
-            'upcoming'    => $upcoming,
-            'past'        => $past,
+            'title'         => 'Événements — AEIC',
+            'description'   => 'Agenda des prochains rendez-vous de l\'AEIC : soirées, LAN, conférences.',
+            'upcoming'      => $upcoming,
+            'past'          => $past,
             'countUpcoming' => count($upcoming),
             'countPast'     => count($past),
         ]);
@@ -32,8 +32,6 @@ final class EventController extends Controller
 
     /**
      * Détail d'un événement par son slug.
-     *
-     * (Phase 1 : renvoie 404. Le détail complet arrive en Phase 2.)
      */
     public function show(string $slug): void
     {
@@ -43,7 +41,26 @@ final class EventController extends Controller
             $this->abort(404);
         }
 
-        // Phase 1 : la page détail n'est pas encore implémentée.
-        $this->abort(404);
+        $eventId = (string) $event['id'];
+
+        $isPast = false;
+        if (!empty($event['date'])) {
+            try {
+                $isPast = new \DateTimeImmutable($event['date']) < new \DateTimeImmutable('now');
+            } catch (\Throwable) {
+                $isPast = false;
+            }
+        }
+
+        $this->render('events/show', [
+            'title'              => ($event['title'] ?? 'Événement') . ' — AEIC',
+            'description'        => $event['excerpt'] ?? '',
+            'event'              => $event,
+            'variants'           => Event::variants($eventId),
+            'registrationsCount' => Event::registrationsCount($eventId),
+            'participants'       => Event::registrationsNames($eventId, 10),
+            'photos'             => Event::photos($eventId),
+            'isPast'             => $isPast,
+        ]);
     }
 }
