@@ -213,6 +213,42 @@ function initial(?string $name): string
 }
 
 /**
+ * Résout (sans base de données) la priorité du lien de paiement SumUp :
+ * lien spécifique à l'événement > lien par défaut > null.
+ *
+ * Fonction pure isolée afin d'être testée unitairement sans base.
+ */
+function sumup_resolve_link(?string $eventLink, ?string $defaultLink): ?string
+{
+    $eventLink = trim((string) $eventLink);
+    if ($eventLink !== '') {
+        return $eventLink;
+    }
+
+    $defaultLink = trim((string) $defaultLink);
+
+    return $defaultLink !== '' ? $defaultLink : null;
+}
+
+/**
+ * Renvoie le lien de paiement SumUp applicable (lien événement sinon défaut).
+ *
+ * Priorité : lien spécifique à l'événement > setting « sumup_default_link » > null.
+ */
+function sumup_link(?string $eventLink = null): ?string
+{
+    return sumup_resolve_link($eventLink, \App\Models\Setting::get('sumup_default_link', ''));
+}
+
+/**
+ * Indique si les paiements par lien SumUp sont activés (setting « sumup_enabled »).
+ */
+function sumup_enabled(): bool
+{
+    return \App\Models\Setting::getBool('sumup_enabled', false);
+}
+
+/**
  * Renvoie l'adresse IP du client (premier de la chaîne X-Forwarded-For, sinon REMOTE_ADDR).
  */
 function client_ip(): string

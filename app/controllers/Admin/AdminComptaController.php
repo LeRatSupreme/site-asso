@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Controllers\Admin;
 
+use App\Core\Compta\AliasSuggester;
 use App\Core\Compta\ComptaCalc;
 use App\Core\Compta\SumUpCsvParser;
 use App\Models\ImportBatch;
@@ -455,6 +456,112 @@ final class AdminComptaController extends AdminBaseController
         ProductAlias::deleteRow($id);
         $this->audit('compta.alias.delete', 'product_alias', $id);
         $this->setFlash('success', 'Alias supprimé.');
+        redirect(url('/admin/compta/aliases'));
+    }
+
+    // -----------------------------------------------------------------
+    //  Auto-détection de doublons (consolidation des libellés)
+    // -----------------------------------------------------------------
+
+    /**
+     * Suggère un mapping canonique pour chaque libellé rencontré, en regroupant
+     * les variantes (Bueno_white / Bueno, Coca_cherry / Coca cherry...) via une
+     * heuristique déterministe. Affiche un tableau éditable avant application.
+     */
+    public function aliasesAuto(): void
+    {
+        $user = $this->guardCompta();
+
+        $descriptions = Sale::allDescriptions();
+
+        // Mapping déjà existant (raw -> product_key), pour pré-sélectionner.
+        $existing = [];
+        foreach (ProductAlias::all() as $alias) {
+            $existing[(string) $alias['raw_description']] = (string) $alias['product_key'];
+        }
+
+        // Suggestion : on regroupe par clé canonique suggérée.
+        $rows = [];
+        $groups = [];
+        foreach ($descriptions as $d) {
+            $raw = (string) ($d['description'] ?? '');
+            if ($raw === '') {
+                continue;
+            }
+            $suggested = AliasSuggester::suggest($raw);
+            $current = $existing[$raw] ?? $suggested;
+
+            $rows[] = [
+                'raw'        => $raw,
+                'occurrences'=> (int) ($d['occurrences'] ?? 0),
+                'suggested'  => $suggested,
+                'canonical'  => $current,
+                'already'    => isset($existing[$raw]),
+            ];
+            $groups[$current][] = $raw;
+        }
+
+        // Trie par clé canonique suggérée, puis occurrences décroissantes.
+        usort($rows, static function (array $a, array $b): int {
+            $cmp = strnatcasecmp($a['canonical'], $b['canonical']);
+            if ($cmp !== 0) {
+                return $cmp;
+            }
+
+            return $b['occurrences'] <=> $a['occurrences'];
+        });
+
+        $this->renderAdmin('admin/compta/aliases_auto', [
+            'title' => 'Auto-détection des doublons',
+            'user'  => $user,
+            'rows'  => $rows,
+        ]);
+    }
+
+    /**
+     * Applique le mapping validé (POST) : crée/met à jour chaque alias puis
+     * ré-applique le mapping à toutes les ventes existantes.
+     */
+    public function aliasesApply(): void
+    {
+        $this->guardCompta();
+
+        $raws = $_POST['raw'] ?? [];
+        $keys = $_POST['canonical'] ?? [];
+        if (!is_array($raws) || !is_array($keys)) {
+            $this->setFlash('error', 'Données invalides.');
+            redirect(url('/admin/compta/aliases/auto'));
+        }
+
+        $applied = 0;
+        $details = [];
+        for ($i = 0, $n = max(count($raws), count($keys)); $i < $n; $i++) {
+            $raw = trim((string) ($raws[$i] ?? ''));
+            $key = trim((string) ($keys[$i] ?? ''));
+            if ($raw === '' || $key === '') {
+                continue;
+            }
+            if (ProductAlias::save(['raw_description' => $raw, 'product_key' => $key]) !== '') {
+                $applied++;
+                $details[] = $raw . ' -> ' . $key;
+            }
+        }
+
+        $updated = Sale::reapplyAliases();
+
+        $this->audit('compta.alias.apply', 'product_alias', null, [
+            'applied'      => $applied,
+            'sales_updated' => $updated,
+        ]);
+
+        $this->setFlash(
+            'success',
+            sprintf(
+                '%d alias enregistré(s) — %d vente(s) mise(s) à jour.',
+                $applied,
+                $updated
+            )
+        );
         redirect(url('/admin/compta/aliases'));
     }
 

@@ -562,6 +562,13 @@
 .prod-table tbody tr:hover { background: rgba(72,189,211,0.10); }
 .table .th-num, .table td.num { text-align: right; }
 
+/* =========================================================
+   Auto-détection des doublons (aliases_auto)
+   ========================================================= */
+.row-muted { opacity: 0.85; }
+.row-muted td code { color: var(--muted); }
+
+
 
 
 

@@ -1,0 +1,46 @@
+/* =========================================================
+   AEIC — Boutons de paiement SumUp (teal)
+   Compléments à admin.css / base.css.
+   Le teal correspond à --primary (hue ~187°, charte AEIC).
+   ========================================================= */
+
+.btn-sumup {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    background: linear-gradient(135deg, hsl(187 70% 45%), hsl(187 70% 38%));
+    color: #00131a;
+    border: 1px solid hsl(187 70% 32%);
+    font-weight: 800;
+    text-decoration: none;
+    padding: 0.7rem 1.1rem;
+    border-radius: var(--radius-sm, 0.5rem);
+    box-shadow: 0 6px 16px rgba(72, 189, 211, 0.25);
+    transition: transform 0.12s ease, box-shadow 0.15s ease, filter 0.15s ease;
+    cursor: pointer;
+}
+
+.btn-sumup:hover {
+    color: #001218;
+    text-decoration: none;
+    transform: translateY(-1px);
+    filter: brightness(1.05);
+    box-shadow: 0 10px 22px rgba(72, 189, 211, 0.35);
+}
+
+.btn-sumup:focus-visible {
+    outline: 3px solid hsl(187 90% 60%);
+    outline-offset: 2px;
+}
+
+.btn-sumup.btn-block { width: 100%; }
+
+/* Barre d'action SumUp en tête du POS admin */
+.pos-sumup-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    flex-wrap: wrap;
+    margin: 0 0 1rem;
+}

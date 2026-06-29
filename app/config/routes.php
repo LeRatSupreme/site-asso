@@ -10,6 +10,7 @@ use App\Controllers\Admin\AdminEventController;
 use App\Controllers\Admin\AdminMediaController;
 use App\Controllers\Admin\AdminPageController;
 use App\Controllers\Admin\AdminSettingController;
+use App\Controllers\Admin\AdminSumupController;
 use App\Controllers\Admin\AdminTeamController;
 use App\Controllers\Admin\AdminUserController;
 use App\Controllers\AuthController;
@@ -154,5 +155,10 @@ function aeic_register_routes(Router $router): void
     $router->get('/admin/compta/aliases', [AdminComptaController::class, 'aliases']);
     $router->post('/admin/compta/aliases/save', [AdminComptaController::class, 'saveAlias']);
     $router->post('/admin/compta/aliases/{id}/delete', [AdminComptaController::class, 'deleteAlias']);
+    $router->get('/admin/compta/aliases/auto', [AdminComptaController::class, 'aliasesAuto']);
+    $router->post('/admin/compta/aliases/apply', [AdminComptaController::class, 'aliasesApply']);
     $router->get('/admin/compta/reappro', [AdminComptaController::class, 'reorder']);
+
+    // Mini dashboard SumUp (fondé sur les ventes importées ; ADMIN/TRESORERIE).
+    $router->get('/admin/sumup', [AdminSumupController::class, 'index']);
 }

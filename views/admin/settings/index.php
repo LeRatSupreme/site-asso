@@ -13,6 +13,7 @@ $groupLabels = [
     'features'  => 'Fonctionnalités',
     'email'     => 'Emails / SMTP',
     'seo'       => 'SEO',
+    'sumup'     => 'SumUp (paiement en ligne)',
 ];
 ?>
 <form method="post" action="<?= e(url('/admin/settings/save')) ?>">
@@ -26,6 +27,14 @@ $groupLabels = [
                     Renseignez ces champs pour envoyer via SMTP (recommandé en production). Chiffrement&nbsp;:
                     <code>tls</code> (STARTTLS, port 587), <code>ssl</code> (implicite, port 465),
                     <code>none</code> ou vide (auto).
+                </p>
+            <?php endif; ?>
+            <?php if ($group === 'sumup'): ?>
+                <p class="card-meta">
+                    Paiement <strong>par lien SumUp</strong> : collez ici l'URL de paiement SumUp
+                    (générée depuis l'app/dashboard SumUp). Aucune intégration API : le site se
+                    contente d'ouvrir ce lien dans un nouvel onglet (détail événement, cafétéria, POS).
+                    Activez le bouton « sumup_enabled » pour faire apparaître les boutons de paiement.
                 </p>
             <?php endif; ?>
             <?php foreach ($settings as $s): ?>
@@ -43,10 +52,16 @@ $groupLabels = [
                             <option value="0" <?= !$truthy ? 'selected' : '' ?>>Désactivé (0)</option>
                         </select>
                     <?php else: ?>
-                        <input type="<?= $s['key'] === 'smtp_pass' ? 'password' : 'text' ?>"
+                        <?php $inputType = match ($s['key']) {
+                            'smtp_pass' => 'password',
+                            'sumup_default_link' => 'url',
+                            default => 'text',
+                        }; ?>
+                        <input type="<?= $inputType ?>"
                                id="set_<?= e((string) $s['id']) ?>"
                                name="settings[<?= e($s['key']) ?>]"
-                               value="<?= e($s['value']) ?>">
+                               value="<?= e($s['value']) ?>"
+                               <?= $inputType === 'url' ? 'placeholder="https://pay.sumup.com/..."' : '' ?>>
                     <?php endif; ?>
                 </div>
             <?php endforeach; ?>

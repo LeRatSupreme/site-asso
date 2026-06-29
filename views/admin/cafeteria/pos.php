@@ -7,8 +7,15 @@ declare(strict_types=1);
  *
  * @var list<array<string,mixed>> $categories
  * @var list<array<string,mixed>> $products
+ * @var string|null $sumupLink
  */
 ?>
+<?php if ($sumupLink !== null): ?>
+    <p class="pos-sumup-bar">
+        <a class="btn btn-sumup" href="<?= e($sumupLink) ?>" rel="noopener noreferrer" target="_blank">Encaisser par SumUp</a>
+        <span class="muted">Ouvre le lien de paiement SumUp dans un nouvel onglet.</span>
+    </p>
+<?php endif; ?>
 <div class="pos-grid">
     <section class="card surface glass pos-catalogue">
         <h2 class="card-title">Catalogue</h2>

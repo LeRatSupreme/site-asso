@@ -174,6 +174,7 @@ final class AdminCafeteriaController extends AdminBaseController
             'title'      => 'Caisse (POS)',
             'categories' => ProductCategory::active(),
             'products'   => Product::available(),
+            'sumupLink'  => sumup_enabled() ? sumup_link() : null,
         ]);
     }
 

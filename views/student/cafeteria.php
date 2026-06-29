@@ -11,6 +11,7 @@ use App\Models\Cart;
  * @var list<array<string,mixed>> $products
  * @var Cart $cart
  * @var bool $ordersEnabled
+ * @var string|null $sumupLink
  */
 
 $byCategory = [];
@@ -93,6 +94,10 @@ if ($uncategorized !== []) {
                     </div>
                     <button type="submit" class="btn btn-primary btn-block">Valider ma commande</button>
                 </form>
+                <?php if ($sumupLink !== null): ?>
+                    <a class="btn btn-sumup btn-block" href="<?= e($sumupLink) ?>" rel="noopener noreferrer" target="_blank">Payer ma commande (SumUp)</a>
+                    <p class="card-meta">Optionnel : les commandes AEIC sont réglées et retrouvées au comptoir.</p>
+                <?php endif; ?>
                 <form method="post" action="<?= e(url('/eleve/cafeteria/clear')) ?>">
                     <?= csrf_field() ?>
                     <button type="submit" class="btn btn-ghost btn-block btn-sm">Vider le panier</button>

@@ -408,6 +408,67 @@ final class Sale extends Model
     }
 
     /**
+     * Toutes les descriptions distinctes (mappées ou non) avec occurrences.
+     *
+     * Utilisé pour l'auto-détection de doublons : on suggère un mapping pour
+     * chaque libellé rencontré, qu'il soit déjà aliasé ou non.
+     *
+     * @return list<array<string,mixed>>
+     */
+    public static function allDescriptions(): array
+    {
+        $sql = 'SELECT description, COUNT(*) AS occurrences, MAX(sold_at) AS last_seen
+                FROM sales
+                WHERE description IS NOT NULL
+                  AND description <> ""
+                  AND description NOT LIKE "%Montant personnalisé%"
+                GROUP BY description
+                ORDER BY occurrences DESC, last_seen DESC';
+
+        try {
+            /** @var list<array<string,mixed>> $r */
+            return self::pdo()->query($sql)->fetchAll();
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    /**
+     * Ré-applique tous les aliases aux ventes existantes.
+     *
+     * Pour chaque alias (raw_description -> product_key), on met à jour les
+     * ventes dont la `description` correspond, que `product_key` soit NULL ou
+     * déjà renseigné (utile quand la clé canonique d'un alias change).
+     *
+     * @return int Nombre total de lignes affectées.
+     */
+    public static function reapplyAliases(): int
+    {
+        $pdo = self::pdo();
+
+        try {
+            $rows = $pdo->query('SELECT raw_description, product_key FROM product_aliases')->fetchAll();
+        } catch (\Throwable) {
+            return 0;
+        }
+
+        $stmt = $pdo->prepare('UPDATE sales SET product_key = ? WHERE description = ?');
+
+        $count = 0;
+        foreach ($rows as $a) {
+            $raw = trim((string) ($a['raw_description'] ?? ''));
+            $key = trim((string) ($a['product_key'] ?? ''));
+            if ($raw === '' || $key === '') {
+                continue;
+            }
+            $stmt->execute([$key, $raw]);
+            $count += (int) $stmt->rowCount();
+        }
+
+        return $count;
+    }
+
+    /**
      * Liste les catégories distinctes présentes dans les ventes.
      *
      * @return list<string>
