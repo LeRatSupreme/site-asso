@@ -177,14 +177,15 @@
 .costs-layout {
     display: grid;
     grid-template-columns: 360px 1fr;
-    gap: 1.5rem;
+    gap: 2rem;
     align-items: start;
+    margin-top: 2rem;
 }
 @media (max-width: 980px) { .costs-layout { grid-template-columns: 1fr; } }
 
 .costs-form { position: sticky; top: 1rem; }
 .costs-form .card-title,
-.costs-list .card-title { margin: 0 0 1rem; }
+.costs-list .card-title { margin: 0 0 1.25rem; }
 
 .costs-list-head {
     display: flex;
@@ -352,8 +353,8 @@
 /* =========================================================
    Page « Coûts de revient » : bloc explication
    ========================================================= */
-.cost-explain { margin-bottom: 1.5rem; }
-.cost-explain .card-title { margin-bottom: 0.5rem; }
+.cost-explain { margin-bottom: 0; padding: 1.5rem 1.6rem; }
+.cost-explain .card-title { margin-bottom: 0.75rem; }
 
 .cost-formula {
     display: flex;
@@ -412,9 +413,9 @@
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 0.6rem;
-    margin-bottom: 1rem;
-    padding: 0.75rem;
+    gap: 0.75rem;
+    margin-bottom: 1.75rem;
+    padding: 1rem 1.1rem;
     background: rgba(255, 255, 255, 0.03);
     border: 1px solid var(--border);
     border-radius: 12px;
@@ -439,18 +440,18 @@
 }
 .costs-count { margin-left: auto; font-size: 0.8rem; }
 
-.cost-cards { display: flex; flex-direction: column; gap: 1.1rem; }
+.cost-cards { display: flex; flex-direction: column; gap: 1.25rem; }
 
-.cost-group { margin-bottom: 2rem; }
+.cost-group { margin-bottom: 2.75rem; }
 .cost-group:last-child { margin-bottom: 0; }
 .cost-group-title {
-    font-size: 0.78rem;
+    font-size: 0.8rem;
     text-transform: uppercase;
     letter-spacing: 0.1em;
     color: var(--primary);
     font-weight: 800;
-    margin: 0 0 0.9rem;
-    padding-bottom: 0.5rem;
+    margin: 0 0 1.25rem;
+    padding-bottom: 0.7rem;
     border-bottom: 1px solid var(--border);
 }
 
@@ -458,7 +459,7 @@
     background: rgba(255, 255, 255, 0.035);
     border: 1px solid var(--border);
     border-radius: 14px;
-    padding: 1.35rem 1.5rem;
+    padding: 1.6rem 1.85rem;
     transition: border-color 0.15s, background 0.15s;
 }
 .cost-card.has-cost { border-left: 3px solid rgba(72, 189, 211, 0.5); }
