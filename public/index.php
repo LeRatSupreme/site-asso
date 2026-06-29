@@ -11,7 +11,8 @@ declare(strict_types=1);
  * DocumentRoot Apache/Nginx = /var/www/aeic/public
  */
 
-// 1. Bootstrap : constantes, .env, PDO, session.
+// 1. Bootstrap : autoloader Composer, constantes, .env, PDO, session.
+require_once __DIR__ . '/../vendor/autoload.php';
 require_once __DIR__ . '/../app/config/database.php';
 
 use App\Controllers\HomeController;
