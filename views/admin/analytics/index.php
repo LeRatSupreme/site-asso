@@ -502,20 +502,44 @@ $iconSvg = static function (string $name): string {
         }
 
         var html = '<div class="hm-row hm-head"><span class="hm-label"></span>';
-        for (var hh = 0; hh < 24; hh++) { html += '<span class="hm-hh">' + hh + '</span>'; }
+        for (var hh = 0; hh < 24; hh++) { html += '<span class="hm-hh">' + hh + 'h</span>'; }
         html += '</div>';
 
         for (var dd = 0; dd < 7; dd++) {
-            html += '<div class="hm-row"><span class="hm-label">' + days[dd] + '</span>';
+            var dayTotal = 0;
+            for (var dh2 = 0; dh2 < 24; dh2++) { dayTotal += Number(((heat[dd] || [])[dh2]) || 0); }
+
+            html += '<div class="hm-row">';
+            html += '<span class="hm-label">' + days[dd] + '</span>';
             for (var hhh = 0; hhh < 24; hhh++) {
                 var val = Number(((heat[dd] || [])[hhh]) || 0);
                 var alpha = max > 0 ? val / max : 0;
-                var title = days[dd] + ' ' + hhh + 'h : ' + money(val);
-                html += '<span class="hm-cell" style="background:rgba(72,189,211,' + alpha.toFixed(3) + ')" title="' + title.replace(/"/g, '&quot;') + '"></span>';
+                var tip = days[dd] + ' à ' + hhh + 'h\nCA : ' + money(val) + '\nTotal ' + days[dd] + ' : ' + money(dayTotal);
+                html += '<span class="hm-cell" style="background:rgba(72,189,211,' + alpha.toFixed(3) + ')" data-tip="' + tip.replace(/"/g, '&quot;').replace(/\n/g, '&#10;') + '"></span>';
             }
             html += '</div>';
         }
         heatEl.innerHTML = html;
+
+        // Tooltip flottant.
+        var hTip = document.createElement('div');
+        hTip.className = 'hm-tooltip';
+        hTip.style.cssText = 'position:fixed;pointer-events:none;z-index:9999;background:#0c1d36;border:1px solid rgba(72,189,211,0.4);border-radius:8px;padding:0.6rem 0.85rem;font-size:0.78rem;color:#eaf2fb;box-shadow:0 8px 24px rgba(0,0,0,0.5);display:none;white-space:pre-line;line-height:1.5;';
+        document.body.appendChild(hTip);
+
+        heatEl.querySelectorAll('.hm-cell').forEach(function (cell) {
+            cell.addEventListener('mouseenter', function () {
+                hTip.innerHTML = cell.getAttribute('data-tip').replace(/&#10;/g, '<br>');
+                hTip.style.display = 'block';
+            });
+            cell.addEventListener('mousemove', function (e) {
+                hTip.style.left = (e.clientX + 14) + 'px';
+                hTip.style.top = (e.clientY - 10) + 'px';
+            });
+            cell.addEventListener('mouseleave', function () {
+                hTip.style.display = 'none';
+            });
+        });
     }
 
     // ---------- Tableau récapitulatif (tri + totaux + CSV) ----------
