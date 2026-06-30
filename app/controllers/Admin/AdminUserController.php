@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Controllers\Admin;
 
 use App\Core\Auth;
+use App\Core\Mailer;
 use App\Models\AuditLog;
 use App\Models\User;
 use App\Models\UserPolicy;
@@ -118,15 +119,30 @@ final class AdminUserController extends AdminBaseController
         $temporary = self::generateTemporaryPassword();
         User::changePassword($id, $temporary);
 
+        // Envoi de l'email avec le mot de passe temporaire à l'utilisateur.
+        $email = (string) ($target['email'] ?? '');
+        $prenom = (string) ($target['prenom'] ?? '');
+        if ($email !== '') {
+            try {
+                Mailer::send('admin_password_reset', $email, 'Votre nouveau mot de passe — AEIC', [
+                    'prenom'   => $prenom,
+                    'password' => $temporary,
+                ]);
+            } catch (\Throwable) {
+                // Non bloquant : le mot de passe reste affiché dans le flash.
+            }
+        }
+
         AuditLog::log('user.password_reset', Auth::id(), 'user', $id, [
             'email' => $target['email'] ?? null,
             'role'  => (string) $target['role'],
         ]);
 
         $this->setFlash('success', sprintf(
-            'Mot de passe temporaire pour %s : %s — À communiquer à l\'utilisateur. Il devra le changer rapidement.',
+            'Mot de passe temporaire pour %s : %s — Un email a été envoyé à %s. Il devra le changer rapidement.',
             e(trim((string) $target['prenom'] . ' ' . (string) $target['nom'])),
-            e($temporary)
+            e($temporary),
+            e($email !== '' ? $email : '(pas d\'email)')
         ));
         redirect(url('/admin/users'));
     }
