@@ -90,6 +90,8 @@ CREATE TABLE IF NOT EXISTS event_registrations (
     id          VARCHAR(255) NOT NULL PRIMARY KEY,
     user_id     VARCHAR(255) NOT NULL,
     event_id    VARCHAR(255) NOT NULL,
+    qr_token    VARCHAR(64) NULL UNIQUE,
+    checked_in  TINYINT(1) NOT NULL DEFAULT 0,
     created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UNIQUE KEY uniq_registration_user_event (user_id, event_id),
     KEY idx_registrations_event (event_id),

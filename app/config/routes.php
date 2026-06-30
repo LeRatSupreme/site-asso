@@ -114,6 +114,10 @@ function aeic_register_routes(Router $router): void
     $router->post('/admin/events/save', [AdminEventController::class, 'save']);
     $router->post('/admin/events/{slug}/delete', [AdminEventController::class, 'delete']);
     $router->get('/admin/events/{slug}/registrations', [AdminEventController::class, 'registrations']);
+    $router->get('/admin/events/{slug}/checkin', [AdminEventController::class, 'checkinForm']);
+    $router->post('/admin/events/{slug}/checkin', [AdminEventController::class, 'checkinScan']);
+    $router->post('/admin/events/{slug}/toggle-checkin', [AdminEventController::class, 'toggleCheckedIn']);
+    $router->post('/admin/events/{slug}/promote', [AdminEventController::class, 'promoteWaitlist']);
 
     $router->get('/admin/cafeteria', [AdminCafeteriaController::class, 'products']);
     $router->get('/admin/cafeteria/new', [AdminCafeteriaController::class, 'productForm']);

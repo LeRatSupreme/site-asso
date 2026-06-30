@@ -12,9 +12,25 @@ final class Registration extends Model
     protected static string $table = 'event_registrations';
 
     /**
+     * Génère un token unique (48 caractères hexa) pour le check-in QR.
+     */
+    public static function generateQrToken(): string
+    {
+        do {
+            $token = bin2hex(random_bytes(24)); // 48 caractères, unicité quasi garantie.
+            $stmt = static::pdo()->prepare(
+                'SELECT 1 FROM event_registrations WHERE qr_token = ? LIMIT 1'
+            );
+            $stmt->execute([$token]);
+        } while ($stmt->fetchColumn() !== false);
+
+        return $token;
+    }
+
+    /**
      * Crée une inscription pour un utilisateur à un événement, avec les choix
      * de variantes éventuels. Garantit l'unicité (un user ne s'inscrit qu'une
-     * fois par événement) via la contrainte unique DB.
+     * fois par événement) via la contrainte unique DB. Génère un token QR.
      *
      * @param array<string,string> $variantChoices [variant_id => choice_id]
      * @return string Identifiant de l'inscription créée.
@@ -25,13 +41,14 @@ final class Registration extends Model
     {
         $pdo = static::pdo();
         $registrationId = 'reg_' . bin2hex(random_bytes(12));
+        $qrToken = self::generateQrToken();
 
         $pdo->beginTransaction();
         try {
             $stmt = $pdo->prepare(
-                'INSERT INTO event_registrations (id, user_id, event_id) VALUES (?, ?, ?)'
+                'INSERT INTO event_registrations (id, user_id, event_id, qr_token) VALUES (?, ?, ?, ?)'
             );
-            $stmt->execute([$registrationId, $userId, $eventId]);
+            $stmt->execute([$registrationId, $userId, $eventId, $qrToken]);
 
             foreach ($variantChoices as $variantId => $choiceId) {
                 $stmt = $pdo->prepare(
@@ -141,5 +158,101 @@ final class Registration extends Model
         } catch (\Throwable) {
             return [];
         }
+    }
+
+    /**
+     * Token QR d'une inscription (null si non inscrit ou sans token).
+     */
+    public static function qrTokenForUser(string $userId, string $eventId): ?string
+    {
+        try {
+            $stmt = static::pdo()->prepare(
+                'SELECT qr_token FROM event_registrations WHERE user_id = ? AND event_id = ? LIMIT 1'
+            );
+            $stmt->execute([$userId, $eventId]);
+
+            $token = $stmt->fetchColumn();
+
+            return $token !== false && $token !== null ? (string) $token : null;
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    /**
+     * Valide un token pour un événement et marque l'inscription comme présente.
+     *
+     * @return array{ok:bool, message:string, name?:string, already?:bool}
+     */
+    public static function checkInByToken(string $eventId, string $token): array
+    {
+        $token = trim($token);
+        if ($token === '') {
+            return ['ok' => false, 'message' => 'Token vide.'];
+        }
+
+        try {
+            $stmt = static::pdo()->prepare(
+                'SELECT r.id, r.checked_in, u.prenom, u.nom
+                 FROM event_registrations r
+                 INNER JOIN users u ON u.id = r.user_id
+                 WHERE r.event_id = ? AND r.qr_token = ?
+                 LIMIT 1'
+            );
+            $stmt->execute([$eventId, $token]);
+
+            $row = $stmt->fetch();
+        } catch (\Throwable) {
+            return ['ok' => false, 'message' => 'Erreur de base de données.'];
+        }
+
+        if ($row === false) {
+            return ['ok' => false, 'message' => 'Token invalide.'];
+        }
+
+        $name = trim(((string) ($row['prenom'] ?? '')) . ' ' . ((string) ($row['nom'] ?? '')));
+
+        if (!empty($row['checked_in'])) {
+            return [
+                'ok'      => true,
+                'already' => true,
+                'name'    => $name,
+                'message' => $name . ' était déjà présent.',
+            ];
+        }
+
+        $upd = static::pdo()->prepare('UPDATE event_registrations SET checked_in = 1 WHERE id = ?');
+        $upd->execute([(string) $row['id']]);
+
+        return [
+            'ok'      => true,
+            'name'    => $name,
+            'message' => $name . ' — Présent',
+        ];
+    }
+
+    /**
+     * Bascule manuellement le statut « présent » d'une inscription (admin).
+     *
+     * @return bool Nouvel état (true = présent).
+     */
+    public static function toggleCheckedIn(string $registrationUserId, string $eventId): bool
+    {
+        $stmt = static::pdo()->prepare(
+            'SELECT id, checked_in FROM event_registrations
+             WHERE user_id = ? AND event_id = ? LIMIT 1'
+        );
+        $stmt->execute([$registrationUserId, $eventId]);
+        $row = $stmt->fetch();
+
+        if ($row === false) {
+            return false;
+        }
+
+        $new = empty($row['checked_in']) ? 1 : 0;
+        $upd = static::pdo()->prepare('UPDATE event_registrations SET checked_in = ? WHERE id = ?');
+        $upd->execute([$new, (string) $row['id']]);
+
+        return (bool) $new;
     }
 }

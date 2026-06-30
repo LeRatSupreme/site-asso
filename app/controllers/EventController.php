@@ -7,6 +7,7 @@ namespace App\Controllers;
 use App\Core\Auth;
 use App\Core\Controller;
 use App\Models\Event;
+use App\Models\EventWaitlist;
 use App\Models\Registration;
 
 /**
@@ -54,6 +55,16 @@ final class EventController extends Controller
             }
         }
 
+        $isRegistered = Auth::check() ? Registration::isRegistered((string) Auth::id(), $eventId) : false;
+        $isOnWaitlist = Auth::check() ? EventWaitlist::isOnList((string) Auth::id(), $eventId) : false;
+
+        $maxCapacity = $event['max_capacity'] ?? null;
+        $registrationsCount = Event::registrationsCount($eventId);
+        $isFull = $maxCapacity !== null && (int) $maxCapacity > 0 && $registrationsCount >= (int) $maxCapacity;
+        $remaining = ($maxCapacity !== null && (int) $maxCapacity > 0)
+            ? max(0, (int) $maxCapacity - $registrationsCount)
+            : null;
+
         $this->render('events/show', [
             'title'              => ($event['title'] ?? 'Événement') . ' — AEIC',
             'description'        => $event['excerpt'] ?? '',
@@ -61,11 +72,20 @@ final class EventController extends Controller
             'ogImage'            => $event['image'] ?? '',
             'event'              => $event,
             'variants'           => Event::variants($eventId),
-            'registrationsCount' => Event::registrationsCount($eventId),
+            'registrationsCount' => $registrationsCount,
             'participants'       => Event::registrationsNames($eventId, 10),
             'photos'             => Event::photos($eventId),
             'isPast'             => $isPast,
-            'isRegistered'       => Auth::check() ? Registration::isRegistered((string) Auth::id(), $eventId) : false,
+            'isRegistered'       => $isRegistered,
+            'isOnWaitlist'       => $isOnWaitlist,
+            'waitlistPosition'   => $isOnWaitlist
+                ? EventWaitlist::position((string) Auth::id(), $eventId)
+                : 0,
+            'isFull'             => $isFull,
+            'remaining'          => $remaining,
+            'qrToken'            => $isRegistered
+                ? Registration::qrTokenForUser((string) Auth::id(), $eventId)
+                : null,
             'jsonLd'             => $this->eventJsonLd($event),
         ]);
     }

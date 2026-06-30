@@ -14,6 +14,11 @@ use App\Core\Auth;
  * @var list<array<string,mixed>> $photos
  * @var bool $isPast
  * @var bool $isRegistered
+ * @var bool $isOnWaitlist
+ * @var int  $waitlistPosition
+ * @var bool $isFull
+ * @var int|null $remaining
+ * @var string|null $qrToken
  */
 
 $event     = $event ?? [];
@@ -22,6 +27,11 @@ $participants = $participants ?? [];
 $photos    = $photos ?? [];
 $isPast    = $isPast ?? false;
 $isRegistered = $isRegistered ?? false;
+$isOnWaitlist = $isOnWaitlist ?? false;
+$waitlistPosition = $waitlistPosition ?? 0;
+$isFull    = $isFull ?? false;
+$remaining = $remaining ?? null;
+$qrToken   = $qrToken ?? null;
 
 $title       = (string) ($event['title'] ?? '');
 $excerpt     = (string) ($event['excerpt'] ?? '');
@@ -147,15 +157,37 @@ $priceLabel = ($price === null || (float) $price <= 0)
                         <strong class="stat-value"><?= e($priceLabel) ?></strong>
                     </p>
                     <?php if ($maxCapacity !== null): ?>
-                        <p class="card-meta">Capacité : <?= e((string) $maxCapacity) ?> places · <?= e((string) $registrationsCount) ?> inscrits</p>
+                        <?php if (!$isFull && $remaining !== null): ?>
+                            <p class="card-meta">Plus que <strong><?= e((string) $remaining) ?></strong> place(s) · <?= e((string) $registrationsCount) ?>/<?= e((string) $maxCapacity) ?> inscrits</p>
+                        <?php else: ?>
+                            <p class="card-meta"><strong>Complet</strong> · <?= e((string) $registrationsCount) ?>/<?= e((string) $maxCapacity) ?> inscrits</p>
+                        <?php endif; ?>
                     <?php endif; ?>
 
                     <?php if (Auth::check()): ?>
                         <?php if ($isRegistered): ?>
                             <p class="badge badge-success">Vous êtes inscrit·e</p>
+
+                            <?php if ($qrToken !== null && $qrToken !== ''): ?>
+                                <?php
+                                $checkinUrl = url('/events/' . rawurlencode((string) ($event['slug'] ?? '')) . '/checkin?token=' . $qrToken);
+                                $qrImg = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' . rawurlencode($checkinUrl);
+                                ?>
+                                <div class="event-qr">
+                                    <img src="<?= e($qrImg) ?>" alt="QR code de check-in" width="200" height="200" loading="lazy">
+                                    <p class="card-meta">Présentez ce QR code à l'entrée de l'événement.</p>
+                                </div>
+                            <?php endif; ?>
+
                             <form method="post" action="<?= e(url('/events/' . rawurlencode((string) $event['slug']) . '/unregister')) ?>">
                                 <?= csrf_field() ?>
                                 <button type="submit" class="btn btn-outline btn-block">Se désinscrire</button>
+                            </form>
+                        <?php elseif ($isOnWaitlist): ?>
+                            <p class="badge badge-warning">Sur liste d'attente — position <?= e((string) $waitlistPosition) ?></p>
+                            <form method="post" action="<?= e(url('/events/' . rawurlencode((string) $event['slug']) . '/unregister')) ?>">
+                                <?= csrf_field() ?>
+                                <button type="submit" class="btn btn-outline btn-block">Quitter la file</button>
                             </form>
                         <?php else: ?>
                             <form method="post" action="<?= e(url('/events/' . rawurlencode((string) $event['slug']) . '/register')) ?>">
@@ -180,7 +212,11 @@ $priceLabel = ($price === null || (float) $price <= 0)
                                     <?php endforeach; ?>
                                 <?php endif; ?>
 
-                                <button type="submit" class="btn btn-primary btn-lg btn-block">Je m'inscris</button>
+                                <?php if ($isFull): ?>
+                                    <button type="submit" class="btn btn-warning btn-lg btn-block">Liste d'attente</button>
+                                <?php else: ?>
+                                    <button type="submit" class="btn btn-primary btn-lg btn-block">Je m'inscris</button>
+                                <?php endif; ?>
                             </form>
                         <?php endif; ?>
                     <?php else: ?>

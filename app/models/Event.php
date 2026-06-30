@@ -327,6 +327,23 @@ final class Event extends Model
     }
 
     /**
+     * Nombre d'inscrits ayant effectué le check-in (présents) à un événement.
+     */
+    public static function presentCount(string $eventId): int
+    {
+        try {
+            $stmt = static::pdo()->prepare(
+                'SELECT COUNT(*) FROM event_registrations WHERE event_id = ? AND checked_in = 1'
+            );
+            $stmt->execute([$eventId]);
+
+            return (int) $stmt->fetchColumn();
+        } catch (\Throwable) {
+            return 0;
+        }
+    }
+
+    /**
      * Liste des 10 premiers inscrits (prénom + nom) à un événement.
      *
      * @return list<array<string,mixed>>
@@ -335,7 +352,7 @@ final class Event extends Model
     {
         try {
             $stmt = static::pdo()->prepare(
-                'SELECT u.prenom, u.nom
+                'SELECT r.user_id, u.prenom, u.nom, r.checked_in, r.created_at
                  FROM event_registrations r
                  INNER JOIN users u ON u.id = r.user_id
                  WHERE r.event_id = ?
