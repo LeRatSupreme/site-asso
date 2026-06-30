@@ -420,4 +420,11 @@ return [
     'cat.atelier'      => ['fr' => 'Atelier',       'en' => 'Workshop',       'de' => 'Workshop',        'es' => 'Taller',          'zh' => '工作坊',   'ja' => 'ワークショップ','pl' => 'Warsztat'],
     'cat.nuitinfo'     => ['fr' => 'Nuit de l\'Info','en' => 'Nuit de l\'Info','de' => 'Nuit de l\'Info', 'es' => 'Nuit de l\'Info', 'zh' => '信息之夜', 'ja' => 'Nuit de l\'Info','pl' => 'Nuit de l\'Info'],
     'cat.autre'        => ['fr' => 'Autre',         'en' => 'Other',          'de' => 'Sonstige',       'es' => 'Otro',            'zh' => '其他',     'ja' => 'その他',     'pl' => 'Inne'],
+    'cat.hackathon'    => ['fr' => 'Hackathon',     'en' => 'Hackathon',      'de' => 'Hackathon',       'es' => 'Hackatón',        'zh' => '编程马拉松', 'ja' => 'ハッカソン',  'pl' => 'Hackathon'],
+    'cat.rentree'      => ['fr' => 'Rentrée',       'en' => 'Back to school',  'de' => 'Semesterstart',   'es' => 'Vuelta a clase', 'zh' => '开学',     'ja' => '新学期',     'pl' => 'Rozpoczęcie'],
+    'cat.sport'        => ['fr' => 'Sport',         'en' => 'Sports',         'de' => 'Sport',           'es' => 'Deporte',         'zh' => '体育',     'ja' => 'スポーツ',    'pl' => 'Sport'],
+    'cat.culture'      => ['fr' => 'Culture',       'en' => 'Culture',        'de' => 'Kultur',          'es' => 'Cultura',         'zh' => '文化',     'ja' => '文化',       'pl' => 'Kultura'],
+    'cat.musique'      => ['fr' => 'Musique',       'en' => 'Music',          'de' => 'Musik',           'es' => 'Música',          'zh' => '音乐',     'ja' => '音楽',       'pl' => 'Muzyka'],
+    'cat.voyage'       => ['fr' => 'Voyage',        'en' => 'Trip',           'de' => 'Reise',           'es' => 'Viaje',           'zh' => '旅行',     'ja' => '旅行',       'pl' => 'Podróż'],
+    'cat.gastronomie'  => ['fr' => 'Gastronomie',   'en' => 'Food',           'de' => 'Essen',           'es' => 'Gastronomía',     'zh' => '美食',     'ja' => 'グルメ',     'pl' => 'Kuchnia'],
 ];

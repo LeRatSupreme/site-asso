@@ -480,6 +480,14 @@ function t_category(string $category): string
         'sortie'         => 'cat.sortie',
         'atelier'        => 'cat.atelier',
         'nuit de l\'info'=> 'cat.nuitinfo',
+        'hackathon'      => 'cat.hackathon',
+        'rentrée'        => 'cat.rentree',
+        'rentree'        => 'cat.rentree',
+        'sport'          => 'cat.sport',
+        'culture'        => 'cat.culture',
+        'musique'        => 'cat.musique',
+        'voyage'         => 'cat.voyage',
+        'gastronomie'    => 'cat.gastronomie',
         'autre'          => 'cat.autre',
     ];
 
