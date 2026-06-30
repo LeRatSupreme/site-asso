@@ -419,6 +419,6 @@ $twitterHandle = Setting::get('twitter_handle', '');
             }
         })();
     </script>
-    <script src="<?= e(rootAssetVersioned('/js/confirm.js')) ?>"></script>
+    <script src="<?= e(rootAssetVersioned('/assets/js/confirm.js')) ?>"></script>
 </body>
 </html>
