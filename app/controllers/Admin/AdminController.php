@@ -36,7 +36,7 @@ final class AdminController extends AdminBaseController
     {
         $this->guard();
 
-        $this->renderAdmin('admin/wiki', [
+        $this->renderAdmin('admin/wiki/index', [
             'title' => 'Wiki — Guide de l\'admin',
             'user'  => Auth::user(),
         ]);
