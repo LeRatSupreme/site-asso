@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 /**
- * Agenda des événements.
+ * Agenda des événements — groupés par catégorie.
  *
  * @var list<array<string,mixed>> $upcoming
  * @var list<array<string,mixed>> $past
@@ -11,16 +11,58 @@ declare(strict_types=1);
  * @var int $countPast
  */
 
-// Récupère les catégories distinctes pour le filtre.
-$categories = [];
+// Icônes par catégorie (fallback générique).
+$catIcons = [
+    'soirée'        => '🎉',
+    'afterwork'     => '🍻',
+    'barbecue'      => '🥩',
+    'tournoi / lan' => '🎮',
+    'tournoi'       => '🎮',
+    'conférence'    => '🎤',
+    'sortie'        => '🚌',
+    'atelier'       => '🔧',
+    'nuit de l\'info' => '💻',
+    'nuit de l\'info' => '💻',
+    'autre'         => '📅',
+];
+
+// Groupe les événements à venir par catégorie.
+$grouped = [];
+$uncategorized = [];
 foreach ($upcoming as $e) {
     $cat = trim((string) ($e['category'] ?? ''));
-    if ($cat !== '') {
-        $categories[$cat] = true;
+    if ($cat === '') {
+        $uncategorized[] = $e;
+    } else {
+        $grouped[$cat][] = $e;
     }
 }
-$categories = array_keys($categories);
-sort($categories);
+ksort($grouped);
+
+// Pareil pour les archives.
+$groupedPast = [];
+$uncategorizedPast = [];
+foreach ($past as $e) {
+    $cat = trim((string) ($e['category'] ?? ''));
+    if ($cat === '') {
+        $uncategorizedPast[] = $e;
+    } else {
+        $groupedPast[$cat][] = $e;
+    }
+}
+ksort($groupedPast);
+
+/** Renvoie l'icône d'une catégorie. */
+function catIcon(string $cat): string {
+    global $catIcons;
+    $key = strtolower(trim($cat));
+    foreach ($catIcons as $k => $v) {
+        if (str_contains($key, $k) || str_contains($k, $key)) {
+            return $v;
+        }
+    }
+    return '📅';
+}
 ?>
 <header class="page-hero">
     <div class="halo halo-teal" aria-hidden="true"></div>
@@ -35,68 +77,81 @@ sort($categories);
 
 <section class="section">
     <div class="container">
-        <?php if (!empty($categories)): ?>
-        <div class="events-filter">
-            <button class="event-cat-btn is-active" data-cat="">Tous</button>
-            <?php foreach ($categories as $cat): ?>
-                <button class="event-cat-btn" data-cat="<?= e(strtolower($cat)) ?>"><?= e($cat) ?></button>
-            <?php endforeach; ?>
-        </div>
-        <?php endif; ?>
-
-        <div class="section-head">
-            <h2 class="section-title">À venir</h2>
-        </div>
         <?php if (empty($upcoming)): ?>
             <div class="empty-state surface glass">
                 <p>Aucun événement à venir pour le moment. Revenez vite !</p>
             </div>
         <?php else: ?>
-            <div class="grid grid-3 events-grid">
-                <?php foreach ($upcoming as $event): ?>
-                    <?php require AEIC_VIEWS . '/partials/event_card.php'; ?>
-                <?php endforeach; ?>
-            </div>
+
+            <?php foreach ($grouped as $catName => $events): ?>
+                <div class="event-cat-section">
+                    <div class="event-cat-header">
+                        <h2 class="event-cat-title">
+                            <span class="event-cat-icon"><?= catIcon($catName) ?></span>
+                            <?= e($catName) ?>
+                            <span class="event-cat-count"><?= count($events) ?></span>
+                        </h2>
+                    </div>
+                    <div class="grid grid-3">
+                        <?php foreach ($events as $event): ?>
+                            <?php require AEIC_VIEWS . '/partials/event_card.php'; ?>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+            <?php endforeach; ?>
+
+            <?php if (!empty($uncategorized)): ?>
+                <div class="event-cat-section">
+                    <div class="event-cat-header">
+                        <h2 class="event-cat-title">
+                            <span class="event-cat-icon">📅</span>
+                            Autres
+                            <span class="event-cat-count"><?= count($uncategorized) ?></span>
+                        </h2>
+                    </div>
+                    <div class="grid grid-3">
+                        <?php foreach ($uncategorized as $event): ?>
+                            <?php require AEIC_VIEWS . '/partials/event_card.php'; ?>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+            <?php endif; ?>
+
         <?php endif; ?>
     </div>
 </section>
 
+<?php if (!empty($past)): ?>
 <section class="section section-alt">
     <div class="container">
         <div class="section-head">
             <h2 class="section-title">Archives</h2>
         </div>
-        <?php if (empty($past)): ?>
-            <div class="empty-state surface glass">
-                <p>Aucune archive pour le moment.</p>
+
+        <?php foreach ($groupedPast as $catName => $events): ?>
+            <div class="event-cat-section event-cat-past">
+                <div class="event-cat-header">
+                    <h3 class="event-cat-title">
+                        <span class="event-cat-icon"><?= catIcon($catName) ?></span>
+                        <?= e($catName) ?>
+                        <span class="event-cat-count"><?= count($events) ?></span>
+                    </h3>
+                </div>
+                <div class="grid grid-3">
+                    <?php foreach ($events as $event): ?>
+                        <?php require AEIC_VIEWS . '/partials/event_card.php'; ?>
+                    <?php endforeach; ?>
+                </div>
             </div>
-        <?php else: ?>
-            <div class="grid grid-3 events-grid">
-                <?php foreach ($past as $event): ?>
+        <?php endforeach; ?>
+
+        <?php if (!empty($uncategorizedPast)): ?>
+            <div class="grid grid-3" style="margin-top:1rem">
+                <?php foreach ($uncategorizedPast as $event): ?>
                     <?php require AEIC_VIEWS . '/partials/event_card.php'; ?>
                 <?php endforeach; ?>
             </div>
         <?php endif; ?>
     </div>
 </section>
-
-<script>
-(function () {
-    var btns = document.querySelectorAll('.event-cat-btn');
-    if (btns.length === 0) return;
-    var cards = document.querySelectorAll('.events-grid .event-card, .events-grid [data-event-cat]');
-
-    btns.forEach(function (btn) {
-        btn.addEventListener('click', function () {
-            var cat = btn.getAttribute('data-cat');
-            btns.forEach(function (b) { b.classList.remove('is-active'); });
-            btn.classList.add('is-active');
-            cards.forEach(function (card) {
-                var cardCat = (card.getAttribute('data-event-cat') || '').toLowerCase();
-                var visible = cat === '' || cardCat === cat;
-                card.style.display = visible ? '' : 'none';
-            });
-        });
-    });
-})();
-</script>
+<?php endif; ?>
