@@ -6,6 +6,7 @@ namespace App\Controllers;
 
 use App\Core\Auth;
 use App\Core\Controller;
+use App\Models\Notification;
 use App\Models\Poll;
 use App\Models\PollVote;
 
@@ -123,6 +124,13 @@ final class PollController extends Controller
         }
 
         if ($count > 0) {
+            Notification::create(
+                $userId,
+                'poll.voted',
+                'Vote enregistré pour « ' . (string) ($poll['title'] ?? 'sondage') . ' »',
+                'Merci pour votre participation !',
+                url('/sondages/' . $slug)
+            );
             $this->setFlash('success', 'Vote enregistré. Merci !');
         } else {
             $this->setFlash('info', 'Aucun nouveau vote enregistré.');

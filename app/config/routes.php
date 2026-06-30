@@ -18,6 +18,7 @@ use App\Controllers\AuthController;
 use App\Controllers\EventController;
 use App\Controllers\HealthController;
 use App\Controllers\HomeController;
+use App\Controllers\NotificationController;
 use App\Controllers\PageController;
 use App\Controllers\PollController;
 use App\Controllers\RegistrationController;
@@ -57,6 +58,11 @@ function aeic_register_routes(Router $router): void
 
     // SEO.
     $router->get('/sitemap.xml', [SeoController::class, 'sitemap']);
+    $router->get('/search', [SeoController::class, 'search']);
+
+    // Notifications in-app (API, Auth requise).
+    $router->get('/api/notifications', [NotificationController::class, 'index']);
+    $router->post('/api/notifications/read-all', [NotificationController::class, 'readAll']);
 
     // Monitoring.
     $router->get('/health', [HealthController::class, 'health']);

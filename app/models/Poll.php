@@ -34,6 +34,29 @@ final class Poll extends Model
     }
 
     /**
+     * Recherche dans les sondages publiés (titre).
+     *
+     * @return list<array<string,mixed>>
+     */
+    public static function search(string $like, int $limit = 3): array
+    {
+        $sql = 'SELECT * FROM polls
+                WHERE is_published = 1 AND title LIKE ?
+                ORDER BY created_at DESC
+                LIMIT ' . (int) $limit;
+
+        try {
+            $stmt = static::pdo()->prepare($sql);
+            $stmt->execute([$like]);
+
+            /** @var list<array<string,mixed>> $result */
+            return $stmt->fetchAll();
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    /**
      * Recherche un sondage publié par son slug.
      *
      * @return array<string,mixed>|null

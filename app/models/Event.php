@@ -131,6 +131,30 @@ final class Event extends Model
     }
 
     /**
+     * Recherche pleine dans les événements publiés (titre OU excerpt).
+     *
+     * @return list<array<string,mixed>>
+     */
+    public static function search(string $like, int $limit = 5): array
+    {
+        $sql = 'SELECT * FROM events
+                WHERE is_published = 1
+                  AND (title LIKE ? OR excerpt LIKE ?)
+                ORDER BY date DESC
+                LIMIT ' . (int) $limit;
+
+        try {
+            $stmt = static::pdo()->prepare($sql);
+            $stmt->execute([$like, $like]);
+
+            /** @var list<array<string,mixed>> $result */
+            return $stmt->fetchAll();
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    /**
      * Nombre d'événements publiés.
      */
     public static function count(): int

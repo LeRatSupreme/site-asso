@@ -17,14 +17,23 @@ final class HomeController extends Controller
     public function index(): void
     {
         $siteName = Setting::get('site_name', 'AEIC');
+        $logoUrl = is_absolute_url(Setting::get('og_image', ''))
+            ? Setting::get('og_image', '')
+            : APP_URL . asset('img/favicon.svg');
 
         $orgLd = json_encode([
-            '@context'     => 'https://schema.org',
-            '@type'        => 'Organization',
-            'name'         => $siteName,
-            'url'          => APP_URL,
-            'description'  => Setting::get('site_description'),
-            'email'        => Setting::get('contact_email', ''),
+            '@context'    => 'https://schema.org',
+            '@type'       => 'Organization',
+            'name'        => $siteName,
+            'url'         => APP_URL,
+            'logo'        => $logoUrl,
+            'description' => Setting::get('site_description'),
+            'email'       => Setting::get('contact_email', ''),
+            'address'     => [
+                '@type'           => 'PostalAddress',
+                'addressLocality' => 'Calais',
+                'addressCountry'  => 'FR',
+            ],
         ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
         $this->render('home', [
