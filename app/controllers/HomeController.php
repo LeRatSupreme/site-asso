@@ -49,13 +49,13 @@ final class HomeController extends Controller
     }
 
     /**
-     * Galerie photos publique : photos des événements passés, groupées par événement.
+     * Galerie photos publique : tous les médias + photos d'événements.
      */
     public function galerie(): void
     {
+        // 1) Photos d'événements (table photos).
         $rows = Event::pastPhotos();
 
-        // Regroupement par événement (en gardant l'ordre : événements récents d'abord).
         $groups = [];
         foreach ($rows as $row) {
             $eventId = (string) $row['event_id'];
@@ -73,6 +73,36 @@ final class HomeController extends Controller
                 'caption'   => (string) ($row['caption'] ?? ''),
                 'photo_id'  => (string) ($row['photo_id'] ?? ''),
             ];
+        }
+
+        // 2) Médias orphelins (table media, non liés à un événement).
+        try {
+            $mediaRows = db()->query(
+                'SELECT id, name, url, alt, type, created_at
+                 FROM media
+                 WHERE type LIKE "image/%"
+                 ORDER BY created_at DESC
+                 LIMIT 50'
+            )->fetchAll();
+        } catch (\Throwable) {
+            $mediaRows = [];
+        }
+
+        if (!empty($mediaRows)) {
+            $groups['__media__'] = [
+                'event_id'    => '__media__',
+                'event_title' => 'Autres photos',
+                'event_slug'  => '',
+                'event_date'  => '',
+                'photos'      => [],
+            ];
+            foreach ($mediaRows as $m) {
+                $groups['__media__']['photos'][] = [
+                    'url'       => (string) ($m['url'] ?? ''),
+                    'caption'   => (string) ($m['alt'] ?? $m['name'] ?? ''),
+                    'photo_id'  => (string) ($m['id'] ?? ''),
+                ];
+            }
         }
 
         $this->render('galerie/index', [
