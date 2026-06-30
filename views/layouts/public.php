@@ -136,22 +136,29 @@ $twitterHandle = Setting::get('twitter_handle', '');
     </main>
 
     <footer class="site-footer">
-        <div class="container footer-grid">
-            <div>
-                <p class="footer-name"><?= e($siteName) ?></p>
-                <p class="footer-sub">Association Étudiante Informatique de Calais</p>
-                <p class="footer-tag">100 % étudiant.</p>
+        <div class="container footer-inner">
+            <div class="footer-brand">
+                <div class="footer-logo aeic-gradient">AE</div>
+                <div>
+                    <p class="footer-name"><?= e($siteName) ?></p>
+                    <p class="footer-sub">Association Étudiante Informatique de Calais</p>
+                </div>
             </div>
+
             <nav class="footer-links" aria-label="Pied de page">
-                <a href="<?= e(url('/events')) ?>">Événements</a>
-                <a href="<?= e(url('/presentation')) ?>">Association</a>
-                <a href="<?= e(url('/team')) ?>">Équipe</a>
-                <a href="<?= e(url('/sondages')) ?>">Sondages</a>
-                <a href="<?= e(url('/legal')) ?>">Mentions légales</a>
-                <a href="<?= e(url('/privacy')) ?>">Confidentialité</a>
-                <a href="<?= e(url('/cgu')) ?>">CGU</a>
+                <a href="<?= e(url('/events')) ?>">📅 Événements</a>
+                <a href="<?= e(url('/presentation')) ?>">🏫 Association</a>
+                <a href="<?= e(url('/team')) ?>">👥 Équipe</a>
+                <a href="<?= e(url('/sondages')) ?>">📊 Sondages</a>
+                <a href="<?= e(url('/legal')) ?>">⚖️ Mentions légales</a>
+                <a href="<?= e(url('/privacy')) ?>">🔒 Confidentialité</a>
+                <a href="<?= e(url('/cgu')) ?>">📋 CGU</a>
             </nav>
-            <p class="footer-copy">© <?= e($currentYear) ?> <?= e($siteName) ?> · Fait par les étudiants, pour les étudiants.</p>
+
+            <div class="footer-bottom">
+                <span class="footer-tag">🎓 100 % étudiant.</span>
+                <span class="footer-copy">© <?= e($currentYear) ?> <?= e($siteName) ?> · Fait par les étudiants, pour les étudiants.</span>
+            </div>
         </div>
     </footer>
 
