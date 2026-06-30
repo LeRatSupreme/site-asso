@@ -7,6 +7,8 @@ use App\Core\Auth;
 /**
  * @var list<array<string,mixed>> $users
  * @var string $currentId
+ * @var array<string,true> $memberIds
+ * @var string $currentSeason
  */
 $roleLabels = [
     Auth::ROLE_ADMIN      => 'Administrateur',
@@ -16,10 +18,11 @@ $roleLabels = [
 ?>
 <div class="card surface glass table-wrap">
     <table class="table">
-        <thead><tr><th>Nom</th><th>Email</th><th>Rôle</th><th>Statut</th><th>Inscription</th><th>Actions</th></tr></thead>
+        <thead><tr><th>Nom</th><th>Email</th><th>Rôle</th><th>Membre</th><th>Statut</th><th>Inscription</th><th>Actions</th></tr></thead>
         <tbody>
             <?php foreach ($users as $u): ?>
                 <?php $isSelf = ($u['id'] ?? '') === $currentId; ?>
+                <?php $isMember = isset($memberIds[(string) ($u['id'] ?? '')]); ?>
                 <tr<?= $isSelf ? ' class="row-self"' : '' ?>>
                     <td>
                         <strong><?= e(trim(($u['prenom'] ?? '') . ' ' . ($u['nom'] ?? ''))) ?></strong>
@@ -35,6 +38,19 @@ $roleLabels = [
                                 <?php endforeach; ?>
                             </select>
                         </form>
+                    </td>
+                    <td>
+                        <?php if ($isMember): ?>
+                            <span class="badge badge-success" title="Cotisation <?= e($currentSeason) ?>">Membre ✅</span>
+                        <?php else: ?>
+                            <form method="post" action="<?= e(url('/admin/users/' . rawurlencode((string) $u['id']) . '/membership')) ?>" class="inline-form"
+                                  data-confirm="Marquer l'adhésion <?= e($currentSeason) ?> de <?= e(trim(($u['prenom'] ?? '') . ' ' . ($u['nom'] ?? ''))) ?> comme payée ?">
+                                <?= csrf_field() ?>
+                                <input type="number" step="0.01" min="0" name="amount" value="" placeholder="€"
+                                       class="input-sm" style="width:5rem;" aria-label="Montant cotisation">
+                                <button type="submit" class="btn btn-outline btn-sm">Marquer payée</button>
+                            </form>
+                        <?php endif; ?>
                     </td>
                     <td>
                         <?php if (!empty($u['is_active'])): ?>

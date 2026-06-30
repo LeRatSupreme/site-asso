@@ -1072,3 +1072,23 @@ ul, ol { list-style: none; }
     .cafeteria-cart { position: static; }
 }
 
+/* Sélecteur de langue (FR/EN) — Fonctionnalité 12 */
+.lang-switch { display: inline-flex; align-items: center; gap: 0.15rem; }
+.lang-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 2rem; height: 2rem; padding: 0;
+    border: 1px solid var(--border); border-radius: var(--radius-sm);
+    background: rgba(255,255,255,0.03); color: inherit;
+    font-size: 1rem; line-height: 1; cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+}
+.lang-btn:hover { background: rgba(255,255,255,0.08); }
+.lang-btn.is-active {
+    border-color: var(--primary);
+    background: rgba(72, 189, 211, 0.15);
+    box-shadow: 0 0 0 1px var(--primary) inset;
+}
+.lang-switch-mobile { display: inline-flex; gap: 0.5rem; }
+.lang-switch-admin { display: inline-flex; gap: 0.2rem; margin-bottom: 0.5rem; }
+.input-sm { padding: 0.3rem 0.5rem; font-size: 0.85rem; }
+

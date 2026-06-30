@@ -7,6 +7,7 @@ namespace App\Controllers\Admin;
 use App\Core\Auth;
 use App\Core\Mailer;
 use App\Models\AuditLog;
+use App\Models\Membership;
 use App\Models\User;
 use App\Models\UserPolicy;
 
@@ -25,9 +26,11 @@ final class AdminUserController extends AdminBaseController
         $this->guard();
 
         $this->renderAdmin('admin/users/index', [
-            'title'     => 'Utilisateurs',
-            'users'     => User::allForAdmin(),
-            'currentId' => Auth::id(),
+            'title'        => 'Utilisateurs',
+            'users'        => User::allForAdmin(),
+            'currentId'    => Auth::id(),
+            'memberIds'    => Membership::paidUserIds(Membership::currentSeason()),
+            'currentSeason'=> Membership::currentSeason(),
         ]);
     }
 

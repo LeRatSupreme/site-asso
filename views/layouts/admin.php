@@ -18,6 +18,7 @@ use App\Models\Setting;
 $siteName    = Setting::get('site_name', 'AEIC');
 $currentPath = $_SERVER['REQUEST_URI'] ?? '/';
 $user        = Auth::user();
+$lang        = current_lang();
 
 $sections = [
     'Tableau de bord' => [
@@ -46,6 +47,7 @@ $sections = [
     ],
     'Système' => [
         'Utilisateurs' => '/admin/users',
+        'Adhésions'    => '/admin/memberships',
         'Paramètres'   => '/admin/settings',
     ],
 ];
@@ -94,6 +96,12 @@ if (($user['role'] ?? null) === 'TRESORERIE') {
             <?php endforeach; ?>
 
             <div class="admin-sidebar-foot">
+                <form method="post" action="<?= e(url('/set-lang')) ?>" class="lang-switch lang-switch-admin" aria-label="Language">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="back" value="<?= e($currentPath) ?>">
+                    <button type="submit" name="lang" value="fr" class="lang-btn<?= $lang === 'fr' ? ' is-active' : '' ?>" title="Français">🇫🇷</button>
+                    <button type="submit" name="lang" value="en" class="lang-btn<?= $lang === 'en' ? ' is-active' : '' ?>" title="English">🇬🇧</button>
+                </form>
                 <a class="admin-link" href="<?= e(url('/')) ?>" target="_blank">Voir le site →</a>
                 <a class="admin-link" href="<?= e(url('/logout')) ?>">Déconnexion (<?= e($user['prenom'] ?? '') ?>)</a>
             </div>

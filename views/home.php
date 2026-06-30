@@ -17,17 +17,17 @@ declare(strict_types=1);
     <div class="halo halo-violet" aria-hidden="true"></div>
     <div class="container hero-grid">
         <div class="hero-content">
-            <span class="eyebrow">Association étudiante · Informatique · Calais</span>
+            <span class="eyebrow"><?= e(t('Association étudiante · Informatique · Calais', 'Student association · Computer Science · Calais')) ?></span>
             <h1 class="hero-title">
-                Plus qu'une asso.
-                <span class="accent">Ton campus, en mieux.</span>
+                <?= e(t('Plus qu\'une asso.', 'More than an association.')) ?>
+                <span class="accent"><?= e(t('Ton campus, en mieux.', 'Your campus, but better.')) ?></span>
             </h1>
             <p class="hero-lead">
-                <?= e($description ?: 'L\'AEIC réunit les étudiants en informatique du campus de Calais : événements, cafétéria, vie étudiante. Fait par les étudiants, pour les étudiants.') ?>
+                <?= e($description ?: t('L\'AEIC réunit les étudiants en informatique du campus de Calais : événements, cafétéria, vie étudiante. Fait par les étudiants, pour les étudiants.', 'The AEIC brings together computer science students on the Calais campus: events, cafeteria, student life. Made by students, for students.')) ?>
             </p>
             <div class="hero-actions">
-                <a class="btn btn-primary btn-lg" href="<?= e(url('/presentation')) ?>">Rejoindre l'AEIC</a>
-                <a class="btn btn-outline btn-lg" href="<?= e(url('/events')) ?>">Voir les événements</a>
+                <a class="btn btn-primary btn-lg" href="<?= e(url('/presentation')) ?>"><?= e(t("Rejoindre l'AEIC", 'Join AEIC')) ?></a>
+                <a class="btn btn-outline btn-lg" href="<?= e(url('/events')) ?>"><?= e(t('Voir les événements', 'See events')) ?></a>
             </div>
         </div>
 

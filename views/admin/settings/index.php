@@ -50,9 +50,12 @@ $niceLabels = [
     'default_sumup_link'  => 'Lien SumUp par défaut',
     'discord_webhook_url' => 'URL Webhook Discord',
     'discord_enabled'     => 'Activer les annonces Discord',
+    'membership_price'    => 'Prix de la cotisation (€)',
+    'membership_enabled'  => 'Activer la gestion des adhésions',
+    'membership_season'   => 'Saison courante (vide = auto, ex: 2026-2027)',
 ];
 
-$boolKeys = ['maintenance_mode', 'orders_enabled', 'registrations_enabled', 'sumup_enabled', 'discord_enabled'];
+$boolKeys = ['maintenance_mode', 'orders_enabled', 'registrations_enabled', 'sumup_enabled', 'discord_enabled', 'membership_enabled'];
 $passwordKeys = ['smtp_pass', 'brevo_api_key'];
 ?>
 <form method="post" action="<?= e(url('/admin/settings/save')) ?>" id="settings-form">
