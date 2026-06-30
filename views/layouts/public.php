@@ -146,6 +146,7 @@ $twitterHandle = Setting::get('twitter_handle', '');
                 <a href="<?= e(url('/events')) ?>">Événements</a>
                 <a href="<?= e(url('/presentation')) ?>">Association</a>
                 <a href="<?= e(url('/team')) ?>">Équipe</a>
+                <a href="<?= e(url('/sondages')) ?>">Sondages</a>
                 <a href="<?= e(url('/legal')) ?>">Mentions légales</a>
                 <a href="<?= e(url('/privacy')) ?>">Confidentialité</a>
                 <a href="<?= e(url('/cgu')) ?>">CGU</a>
