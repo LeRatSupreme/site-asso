@@ -50,6 +50,20 @@ function reorder_qty(float $v): string {
         <div class="search-box">
             <input type="text" id="reorder-search" placeholder="🔎 Rechercher un produit…" autocomplete="off">
         </div>
+        <select id="reorder-cat" aria-label="Filtrer par catégorie">
+            <option value="">Toutes les catégories</option>
+        </select>
+        <select id="reorder-sort" aria-label="Trier par">
+            <option value="to_order">À commander ↓</option>
+            <option value="name">Produit (A→Z)</option>
+            <option value="name-desc">Produit (Z→A)</option>
+            <option value="cat">Catégorie (A→Z)</option>
+            <option value="month-desc">Conso / mois ↓</option>
+            <option value="need-desc">Besoin ↓</option>
+            <option value="stock-asc">Stock ↑</option>
+            <option value="stock-desc">Stock ↓</option>
+            <option value="autonomy-asc">Autonomie ↑</option>
+        </select>
         <span class="costs-count muted" id="reorder-count"></span>
         <button type="submit" class="btn btn-primary btn-sm">💾 Enregistrer les stocks</button>
     </div>
@@ -76,7 +90,13 @@ function reorder_qty(float $v): string {
                 ?>
                     <tr class="<?= !empty($r['is_alert']) ? 'row-alert' : '' ?>"
                         data-name="<?= e(strtolower($key)) ?>"
-                        data-need="<?= (int) $r['need'] ?>">
+                        data-cat="<?= e(strtolower((string) $r['category'])) ?>"
+                        data-stock="<?= (int) ($r['stock'] ?? 0) ?>"
+                        data-month="<?= (float) $r['avg_month'] ?>"
+                        data-need="<?= (int) $r['need'] ?>"
+                        data-toorder="<?= (int) $r['to_order'] ?>"
+                        data-autonomy="<?= $r['autonomy'] === null ? 99999 : (int) $r['autonomy'] ?>"
+                        data-need-orig="<?= (int) $r['need'] ?>">
                         <td><strong><?= e($key) ?></strong></td>
                         <td><?= e((string) $r['category']) ?></td>
                         <td class="num">
@@ -132,12 +152,28 @@ function reorder_qty(float $v): string {
 <script>
 (function () {
     var search = document.getElementById('reorder-search');
+    var catSel = document.getElementById('reorder-cat');
+    var sortSel = document.getElementById('reorder-sort');
     var countEl = document.getElementById('reorder-count');
+    var tbody = document.querySelector('.reorder-table tbody');
     var rows = Array.prototype.slice.call(document.querySelectorAll('.reorder-table tbody tr[data-name]'));
     var totalEl = document.getElementById('reorder-total');
     var total = rows.length;
 
     function norm(s) { return String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim(); }
+    function num(tr, attr) { return parseFloat(tr.getAttribute(attr)) || 0; }
+
+    // Remplit le filtre catégorie avec les catégories présentes.
+    if (catSel) {
+        var cats = {};
+        rows.forEach(function (tr) { cats[tr.getAttribute('data-cat') || 'sans-categorie'] = true; });
+        Object.keys(cats).sort().forEach(function (c) {
+            var opt = document.createElement('option');
+            opt.value = c;
+            opt.textContent = c === 'sans-categorie' ? '(sans catégorie)' : c;
+            catSel.appendChild(opt);
+        });
+    }
 
     function recomputeTotal() {
         var sum = 0;
@@ -159,6 +195,7 @@ function reorder_qty(float $v): string {
             var stock = parseInt(input.value, 10);
             stock = isNaN(stock) ? 0 : Math.max(0, stock);
             var toOrder = Math.max(0, need - stock);
+            tr.setAttribute('data-toorder', String(toOrder));
             if (cell) {
                 cell.innerHTML = toOrder > 0
                     ? '<strong style="color:var(--primary)">' + toOrder + '</strong>'
@@ -168,19 +205,47 @@ function reorder_qty(float $v): string {
         });
     });
 
+    function sortRows() {
+        var sort = sortSel ? sortSel.value : 'to_order';
+        rows.sort(function (a, b) {
+            switch (sort) {
+                case 'name':       return a.getAttribute('data-name').localeCompare(b.getAttribute('data-name'));
+                case 'name-desc':  return b.getAttribute('data-name').localeCompare(a.getAttribute('data-name'));
+                case 'cat':        return (a.getAttribute('data-cat') || '').localeCompare(b.getAttribute('data-cat') || '');
+                case 'month-desc': return num(b, 'data-month') - num(a, 'data-month');
+                case 'need-desc':  return num(b, 'data-need') - num(a, 'data-need');
+                case 'stock-asc':  return num(a, 'data-stock') - num(b, 'data-stock');
+                case 'stock-desc': return num(b, 'data-stock') - num(a, 'data-stock');
+                case 'autonomy-asc': return num(a, 'data-autonomy') - num(b, 'data-autonomy');
+                default:           return num(b, 'data-toorder') - num(a, 'data-toorder'); // to_order
+            }
+        });
+        if (tbody) {
+            var frag = document.createDocumentFragment();
+            rows.forEach(function (tr) { frag.appendChild(tr); });
+            tbody.appendChild(frag);
+        }
+    }
+
     function apply() {
         var q = norm(search.value);
+        var cat = catSel ? catSel.value : '';
         var shown = 0;
         rows.forEach(function (tr) {
-            var visible = q === '' || norm(tr.getAttribute('data-name')).indexOf(q) !== -1;
+            var okSearch = q === '' || norm(tr.getAttribute('data-name')).indexOf(q) !== -1;
+            var okCat = cat === '' || tr.getAttribute('data-cat') === cat;
+            var visible = okSearch && okCat;
             tr.style.display = visible ? '' : 'none';
             if (visible) shown++;
         });
         countEl.textContent = shown + ' / ' + total + ' produit' + (total > 1 ? 's' : '');
+        sortRows();
         recomputeTotal();
     }
 
     search.addEventListener('input', apply);
+    if (catSel) catSel.addEventListener('change', apply);
+    if (sortSel) sortSel.addEventListener('change', apply);
     apply();
 
     // Conserve la position de défilement après une sauvegarde (rechargement).
