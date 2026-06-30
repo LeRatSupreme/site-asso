@@ -13,6 +13,11 @@
 
 /* ---- Détail sondage ---- */
 .poll-detail { max-width: 720px; }
+.poll-back {
+    display: inline-block;
+    margin-bottom: 1rem;
+    text-decoration: none;
+}
 .poll-badges { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .75rem; }
 
 .poll-desc {
