@@ -289,8 +289,8 @@ abstract class IntegrationTestCase extends TestCase
     ): string {
         $hash = password_hash($password, PASSWORD_BCRYPT);
         $this->pdo->prepare(
-            'INSERT INTO users (id, prenom, nom, email, password, role, is_active)
-             VALUES (?,?,?,?,?,?,?)'
+            'INSERT INTO users (id, prenom, nom, email, password, role, is_active, email_verified_at)
+             VALUES (?,?,?,?,?,?,?,CURRENT_TIMESTAMP)'
         )->execute([$id, 'Test', 'User', $email, $hash, $role, $active]);
 
         return $id;

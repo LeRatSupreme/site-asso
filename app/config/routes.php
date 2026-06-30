@@ -60,6 +60,8 @@ function aeic_register_routes(Router $router): void
     $router->get('/register', [AuthController::class, 'registerForm']);
     $router->post('/register', [AuthController::class, 'register']);
     $router->get('/logout', [AuthController::class, 'logout']);
+    $router->get('/verify-email', [AuthController::class, 'verifyEmail']);
+    $router->get('/resend-verification', [AuthController::class, 'resendVerification']);
     $router->get('/forgot-password', [AuthController::class, 'forgotForm']);
     $router->post('/forgot-password', [AuthController::class, 'forgot']);
     $router->get('/reset-password', [AuthController::class, 'resetForm']);
@@ -110,6 +112,7 @@ function aeic_register_routes(Router $router): void
     $router->get('/admin/users', [AdminUserController::class, 'index']);
     $router->post('/admin/users/{id}/role', [AdminUserController::class, 'changeRole']);
     $router->post('/admin/users/{id}/toggle-active', [AdminUserController::class, 'toggleActive']);
+    $router->post('/admin/users/{id}/reset-password', [AdminUserController::class, 'resetPassword']);
     $router->post('/admin/users/{id}/delete', [AdminUserController::class, 'delete']);
 
     $router->get('/admin/team', [AdminTeamController::class, 'index']);

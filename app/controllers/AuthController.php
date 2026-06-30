@@ -15,6 +15,7 @@ use App\Models\PasswordReset;
 use App\Models\Setting;
 use App\Models\TwoFactor;
 use App\Models\User;
+use App\Models\VerificationToken;
 
 /**
  * Authentification : inscription, connexion, déconnexion.
@@ -107,16 +108,37 @@ final class AuthController extends Controller
             'user_agent' => user_agent(),
         ]);
 
-        // E-mail de bienvenue transactionnel (non bloquant).
-        try {
-            Mailer::send('welcome', User::normalizeEmail((string) $data['email']), 'Bienvenue à l\'AEIC !', [
-                'prenom' => $data['prenom'],
-            ]);
-        } catch (\Throwable) {
-            // L'envoi d'e-mail ne doit jamais empêcher la création du compte.
+        // Confirmation d'e-mail : le compte reste non vérifié jusqu'au clic
+        // sur le lien envoyé par e-mail (token à usage unique, 24 h).
+        $token = VerificationToken::createToken($userId);
+        $verifyUrl = APP_URL . url('/verify-email?token=' . $token);
+
+        $smtpConfigured = Mailer::isSmtpConfigured();
+        $sent = false;
+        if ($smtpConfigured) {
+            try {
+                $sent = Mailer::send('verify_email', User::normalizeEmail((string) $data['email']), 'Confirme ton adresse e-mail — AEIC', [
+                    'prenom'    => $data['prenom'],
+                    'verifyUrl' => $verifyUrl,
+                    'expiresIn' => VerificationToken::EXPIRES_HOURS,
+                ]);
+            } catch (\Throwable) {
+                $sent = false;
+            }
         }
 
-        $this->setFlash('success', 'Votre compte a été créé. Bienvenue à l\'AEIC !');
+        if ($smtpConfigured && $sent) {
+            $this->setFlash('success', 'Ton compte a été créé. Vérifie ta boîte mail (et tes spams) pour confirmer ton adresse e-mail, puis connecte-toi.');
+        } else {
+            // Fallback (SMTP non configuré ou envoi échoué) : on expose le lien
+            // de confirmation dans le flash. À utiliser en développement ; en
+            // production, configurez SMTP (admin > Paramètres).
+            $this->setFlash('info', sprintf(
+                'Compte créé. Aucun envoi SMTP configuré : confirme ton e-mail via ce lien (développement uniquement) — %s',
+                $verifyUrl
+            ));
+        }
+
         redirect(url('/login'));
     }
 
@@ -179,6 +201,17 @@ final class AuthController extends Controller
             redirect(url('/login'));
         }
 
+        // E-mail non confirmé : la connexion est bloquée jusqu'à vérification.
+        if ($user['email_verified_at'] === null) {
+            $limiter->hit($ipKey);
+            $this->setFlash('error', sprintf(
+                'Tu dois confirmer ton adresse e-mail avant de te connecter. Vérifie ta boîte mail (et tes spams), '
+                . 'ou demande un nouvel e-mail de confirmation : %s',
+                APP_URL . url('/resend-verification?email=' . rawurlencode($email))
+            ));
+            redirect(url('/login'));
+        }
+
         // Succès des identifiants : étape 2FA si activée.
         if (TwoFactor::isEnabled((string) $user['id'])) {
             Auth::startSession();
@@ -212,6 +245,80 @@ final class AuthController extends Controller
     {
         Auth::logout();
         redirect(url('/'));
+    }
+
+    // -----------------------------------------------------------------
+    //  Confirmation d'e-mail
+    // -----------------------------------------------------------------
+
+    /**
+     * Vérifie le token de confirmation et active le compte.
+     */
+    public function verifyEmail(): void
+    {
+        Middleware::requireGuest();
+
+        $token = (string) ($_GET['token'] ?? '');
+        $valid = VerificationToken::validate($token);
+
+        if ($valid === null) {
+            $this->setFlash('error', 'Ce lien de confirmation est invalide ou expiré. Tu peux demander un nouvel e-mail depuis la page de connexion.');
+            redirect(url('/login'));
+        }
+
+        // Consommation du token (à usage unique) dans tous les cas.
+        VerificationToken::consume((string) $valid['token_id']);
+
+        if ($valid['email_verified_at'] !== null) {
+            $this->setFlash('success', 'Ton e-mail est déjà confirmé. Tu peux te connecter.');
+            redirect(url('/login'));
+        }
+
+        User::markEmailVerified((string) $valid['user_id']);
+
+        // E-mail de bienvenue transactionnel (non bloquant) une fois confirmé.
+        try {
+            Mailer::send('welcome', (string) $valid['email'], 'Bienvenue à l\'AEIC !', [
+                'prenom' => $valid['prenom'] ?? '',
+            ]);
+        } catch (\Throwable) {
+            // L'envoi d'e-mail ne doit jamais bloquer la confirmation.
+        }
+
+        $this->setFlash('success', 'E-mail confirmé ! Tu peux maintenant te connecter.');
+        redirect(url('/login'));
+    }
+
+    /**
+     * Renvoie un e-mail de confirmation (lien depuis la page de connexion).
+     *
+     * Message générique identique que le compte existe ou non (pas de
+     * divulgation), et uniquement si SMTP est configuré.
+     */
+    public function resendVerification(): void
+    {
+        Middleware::requireGuest();
+
+        $email = trim((string) ($_GET['email'] ?? ''));
+
+        $user = ($email !== '' && Validator::isValidEmail($email)) ? User::findByEmail($email) : null;
+
+        if ($user !== null && $user['email_verified_at'] === null && Mailer::isSmtpConfigured()) {
+            $token = VerificationToken::createToken((string) $user['id']);
+
+            try {
+                Mailer::send('verify_email', (string) $user['email'], 'Confirme ton adresse e-mail — AEIC', [
+                    'prenom'    => $user['prenom'] ?? '',
+                    'verifyUrl' => APP_URL . url('/verify-email?token=' . $token),
+                    'expiresIn' => VerificationToken::EXPIRES_HOURS,
+                ]);
+            } catch (\Throwable) {
+                // L'échec d'envoi ne doit pas lever d'erreur visible.
+            }
+        }
+
+        $this->setFlash('success', 'Si ce compte n\'est pas encore confirmé, un nouvel e-mail de confirmation vient d\'être envoyé.');
+        redirect(url('/login'));
     }
 
     // -----------------------------------------------------------------

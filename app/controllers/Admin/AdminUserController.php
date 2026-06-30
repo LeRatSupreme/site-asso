@@ -99,6 +99,60 @@ final class AdminUserController extends AdminBaseController
     }
 
     /**
+     * Réinitialise le mot de passe d'un compte avec un mot de passe temporaire.
+     *
+     * Génère un mot de passe temporaire aléatoire (≥ 8 caractères, lettre +
+     * chiffre), le hash et le stocke sur le compte. Le mot de passe temporaire
+     * est affiché dans le flash (à communiquer hors-bande à l'utilisateur) et
+     * l'action est journalisée (audit log).
+     */
+    public function resetPassword(string $id): void
+    {
+        $this->guard();
+
+        $target = User::find($id);
+        if ($target === null) {
+            $this->abort(404);
+        }
+
+        $temporary = self::generateTemporaryPassword();
+        User::changePassword($id, $temporary);
+
+        AuditLog::log('user.password_reset', Auth::id(), 'user', $id, [
+            'email' => $target['email'] ?? null,
+            'role'  => (string) $target['role'],
+        ]);
+
+        $this->setFlash('success', sprintf(
+            'Mot de passe temporaire pour %s : %s — À communiquer à l\'utilisateur. Il devra le changer rapidement.',
+            e(trim((string) $target['prenom'] . ' ' . (string) $target['nom'])),
+            e($temporary)
+        ));
+        redirect(url('/admin/users'));
+    }
+
+    /**
+     * Génère un mot de passe temporaire aléatoire (10 caractères, alphabet
+     * sans ambiguïté, au moins une lettre et un chiffre).
+     */
+    private static function generateTemporaryPassword(): string
+    {
+        $letters = 'abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ';
+        $digits  = '23456789';
+
+        // Garantie de robustesse minimale (lettre + chiffre).
+        $password = $letters[random_int(0, strlen($letters) - 1)]
+            . $digits[random_int(0, strlen($digits) - 1)];
+
+        $pool = $letters . $digits;
+        for ($i = 0; $i < 8; $i++) {
+            $password .= $pool[random_int(0, strlen($pool) - 1)];
+        }
+
+        return str_shuffle($password);
+    }
+
+    /**
      * Supprime un compte (droit à l'effacement RGPD).
      *
      * Garde-fous :
