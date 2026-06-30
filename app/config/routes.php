@@ -176,6 +176,7 @@ function aeic_register_routes(Router $router): void
     $router->post('/admin/media/{id}/delete', [AdminMediaController::class, 'delete']);
 
     $router->get('/admin/settings', [AdminSettingController::class, 'index']);
+    $router->get('/admin/wiki', [AdminController::class, 'wiki']);
     $router->post('/admin/settings/save', [AdminSettingController::class, 'save']);
     $router->post('/admin/settings/test-email', [AdminSettingController::class, 'testEmail']);
 
