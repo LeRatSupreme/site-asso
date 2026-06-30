@@ -467,20 +467,68 @@ ul, ol { list-style: none; }
 /* ----------------------------- Footer ----------------------------- */
 .site-footer {
     border-top: 1px solid var(--border);
-    background: var(--background);
-    padding: 3rem 0 2rem;
+    background: linear-gradient(180deg, var(--background) 0%, #050f1f 100%);
+    padding: 3rem 0 1.5rem;
     margin-top: auto;
 }
-.footer-grid { display: grid; grid-template-columns: 1.5fr 1fr 1fr; gap: 2rem; align-items: start; }
-.footer-name { font-weight: 900; letter-spacing: -0.03em; font-size: 1.1rem; }
-.footer-sub { color: var(--muted); font-size: 0.9rem; }
-.footer-tag { color: var(--primary); font-weight: 700; font-size: 0.85rem; margin-top: 0.5rem; }
-.footer-links { display: flex; flex-direction: column; gap: 0.5rem; }
-.footer-links a { color: var(--muted); font-size: 0.9rem; }
+.footer-inner {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+}
+.footer-brand {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+.footer-logo {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: grid;
+    place-items: center;
+    font-weight: 900;
+    font-size: 0.9rem;
+    color: #fff;
+    box-shadow: 0 0 20px rgba(72,189,211,0.2);
+    flex-shrink: 0;
+}
+.footer-name {
+    font-weight: 900;
+    letter-spacing: -0.03em;
+    font-size: 1.2rem;
+    margin: 0;
+}
+.footer-sub { color: var(--muted); font-size: 0.88rem; margin: 0; }
+
+.footer-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem 1.5rem;
+}
+.footer-links a {
+    color: var(--muted);
+    font-size: 0.9rem;
+    text-decoration: none;
+    transition: color 0.15s;
+}
 .footer-links a:hover { color: var(--primary); }
-.footer-copy { color: var(--muted); font-size: 0.8rem; grid-column: 1 / -1; padding-top: 1.5rem; border-top: 1px solid var(--border); }
+
+.footer-bottom {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem 1.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border);
+}
+.footer-tag { color: var(--primary); font-weight: 700; font-size: 0.85rem; }
+.footer-copy { color: var(--muted); font-size: 0.8rem; }
+
 @media (max-width: 700px) {
-    .footer-grid { grid-template-columns: 1fr; gap: 1.25rem; }
+    .footer-brand { flex-direction: column; text-align: center; }
+    .footer-links { justify-content: center; }
+    .footer-bottom { flex-direction: column; text-align: center; gap: 0.5rem; }
 }
 
 /* ----------------------------- Flash messages ----------------------------- */
