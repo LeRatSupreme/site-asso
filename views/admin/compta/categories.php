@@ -38,28 +38,25 @@ declare(strict_types=1);
     $totMargin = $totCa > 0 ? round($totProfit / $totCa * 100, 1) : 0.0;
 ?>
 
-<!-- Total global -->
-<section class="cat-total card surface glass">
-    <div class="cat-total-item">
-        <span class="cat-total-label">Quantité vendue</span>
-        <strong class="cat-total-value"><?= $totQty ?></strong>
+<!-- Total global : 4 cartes séparées -->
+<div class="grid grid-4 stat-cards">
+    <div class="stat-card surface glass">
+        <span class="stat-value"><?= $totQty ?></span>
+        <span class="stat-label">Quantité vendue</span>
     </div>
-    <span class="cat-total-sep"></span>
-    <div class="cat-total-item">
-        <span class="cat-total-label">Chiffre d'affaires</span>
-        <strong class="cat-total-value"><?= e(formatPrice($totCa)) ?></strong>
+    <div class="stat-card surface glass">
+        <span class="stat-value"><?= e(formatPrice($totCa)) ?></span>
+        <span class="stat-label">Chiffre d'affaires</span>
     </div>
-    <span class="cat-total-sep"></span>
-    <div class="cat-total-item">
-        <span class="cat-total-label">Bénéfice</span>
-        <strong class="cat-total-value is-positive"><?= e(formatPrice($totProfit)) ?></strong>
+    <div class="stat-card surface glass">
+        <span class="stat-value is-positive"><?= e(formatPrice($totProfit)) ?></span>
+        <span class="stat-label">Bénéfice</span>
     </div>
-    <span class="cat-total-sep"></span>
-    <div class="cat-total-item">
-        <span class="cat-total-label">Marge globale</span>
-        <strong class="cat-total-value"><?= e(number_format($totMargin, 1, ',', ' ')) ?> %</strong>
+    <div class="stat-card surface glass">
+        <span class="stat-value"><?= e(number_format($totMargin, 1, ',', ' ')) ?> %</span>
+        <span class="stat-label">Marge globale</span>
     </div>
-</section>
+</div>
 
 <?php if ($rows === []): ?>
     <div class="empty-state card surface glass">
