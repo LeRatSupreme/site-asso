@@ -45,7 +45,7 @@ foreach ($results as $r) {
     <div class="halo halo-violet" aria-hidden="true"></div>
     <div class="container">
         <div class="poll-header-top">
-            <a class="btn btn-outline btn-sm poll-back" href="<?= e(url('/sondages')) ?>">← Retour</a>
+            <a class="btn btn-outline poll-back" href="<?= e(url('/sondages')) ?>">← Retour aux sondages</a>
             <span class="poll-eyebrow-lg">📊 Sondage</span>
         </div>
         <h1 class="page-title"><?= e($title) ?></h1>
