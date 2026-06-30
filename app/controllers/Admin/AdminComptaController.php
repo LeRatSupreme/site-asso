@@ -660,7 +660,13 @@ final class AdminComptaController extends AdminBaseController
         // sa catégorie vient du CSV, et son stock est celui saisi sur Réappro
         // (table product_stocks). Plus aucun mélange avec l'ancienne cafétéria.
         $consumption = Sale::consumptionByProductKey(3);
-        $stocksInput = ProductStock::allMap();
+
+        // Stocks saisis, indexés en minuscules pour un rapprochement
+        // insensible à la casse (ex. « Red bull » == « Red Bull »).
+        $stocksInputLower = [];
+        foreach (ProductStock::allMap() as $k => $v) {
+            $stocksInputLower[strtolower(trim((string) $k))] = $v;
+        }
 
         $rows = [];
         $alerts = 0;
@@ -677,8 +683,9 @@ final class AdminComptaController extends AdminBaseController
             $avgDay   = $avgMonth / 21.77;
             $avgWeek  = $avgDay * 5.0;
 
-            $hasStock = array_key_exists($key, $stocksInput);
-            $stock    = $hasStock ? $stocksInput[$key] : null;
+            $lookupKey = strtolower(trim($key));
+            $hasStock = array_key_exists($lookupKey, $stocksInputLower);
+            $stock    = $hasStock ? $stocksInputLower[$lookupKey] : null;
 
             $autonomy = ($stock !== null && $avgDay > 0)
                 ? (int) floor($stock / $avgDay)
