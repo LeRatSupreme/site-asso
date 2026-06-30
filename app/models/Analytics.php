@@ -591,17 +591,22 @@ final class Analytics extends Model
         $w = self::buildWhere($from, $to, $category, $payment);
 
         $sql = 'SELECT
-                    COALESCE(NULLIF(product_key, ""), description) AS product,
-                    COALESCE(NULLIF(category, ""), "Non classé") AS category,
+                    CASE WHEN is_custom_amount = 1 THEN "Montant personnalisé"
+                         ELSE COALESCE(NULLIF(product_key, ""), description)
+                    END AS product,
+                    CASE WHEN is_custom_amount = 1 THEN "Divers"
+                         ELSE COALESCE(NULLIF(category, ""), "Non classé")
+                    END AS category,
                     COALESCE(SUM(quantity), 0) AS qty,
                     COALESCE(SUM(price_ttc), 0) AS ca,
                     AVG(IFNULL((' . self::COST_SUBQUERY . '), 0)) AS cost,
                     COALESCE(SUM(
-                        price_ttc - IFNULL((' . self::COST_SUBQUERY . '), 0) * quantity
+                        CASE WHEN is_custom_amount = 1 THEN price_ttc
+                             ELSE price_ttc - IFNULL((' . self::COST_SUBQUERY . '), 0) * quantity
+                        END
                     ), 0) AS profit
                 FROM sales
                 WHERE ' . $w['sql'] . '
-                  AND is_custom_amount = 0
                 GROUP BY product, category
                 ORDER BY ca DESC';
 
