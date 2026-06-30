@@ -29,6 +29,7 @@ $sections = [
         'Pages'        => '/admin/pages',
         'Équipe'       => '/admin/team',
         'Sondages'     => '/admin/sondages',
+        'Promotions'   => '/admin/promotions',
         'Médias'       => '/admin/media',
     ],
     'Comptabilité' => [
