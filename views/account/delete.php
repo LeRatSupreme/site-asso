@@ -11,9 +11,9 @@ declare(strict_types=1);
 <header class="page-hero">
     <div class="halo halo-violet" aria-hidden="true"></div>
     <div class="container">
-        <a class="btn btn-outline" href="<?= e(url('/account/privacy')) ?>" style="margin-bottom:1rem;text-decoration:none;">← Retour</a>
-        <span class="eyebrow">Zone sensible</span>
-        <h1 class="page-title">Supprimer mon compte</h1>
+        <a class="btn btn-outline" href="<?= e(url('/account/privacy')) ?>" style="margin-bottom:1rem;text-decoration:none;"><?= e(t('common.back')) ?></a>
+        <span class="eyebrow"><?= e(t('account.delete.zone')) ?></span>
+        <h1 class="page-title"><?= e(t('account.delete.title')) ?></h1>
     </div>
 </header>
 
@@ -22,29 +22,28 @@ declare(strict_types=1);
 
         <div class="card surface glass delete-confirm-card">
             <div class="delete-warn-icon">⚠️</div>
-            <h2 class="delete-confirm-title">Cette action est irréversible</h2>
+            <h2 class="delete-confirm-title"><?= e(t('account.delete.warning')) ?></h2>
 
             <p class="delete-confirm-text">
-                Vous êtes sur le point de supprimer définitivement le compte
-                <strong><?= e($user['email'] ?? '') ?></strong>.
+                <?= tt('account.delete.confirm.text', ['{email}' => '<strong>' . e($user['email'] ?? '') . '</strong>']) ?>
             </p>
 
             <div class="delete-impact">
                 <div class="delete-impact-item">
                     <span class="delete-impact-icon ❌">❌</span>
-                    <span>Votre profil (nom, prénom, email, avatar)</span>
+                    <span><?= e(t('account.delete.impact.profile')) ?></span>
                 </div>
                 <div class="delete-impact-item">
                     <span class="delete-impact-icon">❌</span>
-                    <span>Vos inscriptions aux événements</span>
+                    <span><?= e(t('account.delete.impact.registrations')) ?></span>
                 </div>
                 <div class="delete-impact-item">
                     <span class="delete-impact-icon">❌</span>
-                    <span>Vos consentements RGPD</span>
+                    <span><?= e(t('account.delete.impact.consents')) ?></span>
                 </div>
                 <div class="delete-impact-item">
                     <span class="delete-impact-icon">✅</span>
-                    <span>Les données comptables sont conservées mais <strong>anonymisées</strong></span>
+                    <span><?= e(t('account.delete.impact.accounting')) ?></span>
                 </div>
             </div>
 
@@ -52,7 +51,7 @@ declare(strict_types=1);
                 <?= csrf_field() ?>
 
                 <div class="field">
-                    <label for="confirm_text">Tapez <strong>SUPPRIMER</strong> pour confirmer</label>
+                    <label for="confirm_text"><?= e(t('account.delete.type_confirm')) ?></label>
                     <input type="text" id="confirm_text" name="confirm_text"
                            placeholder="SUPPRIMER"
                            autocomplete="off"
@@ -61,12 +60,12 @@ declare(strict_types=1);
                 </div>
 
                 <button type="submit" id="deleteBtn" class="btn btn-danger btn-lg btn-block" disabled>
-                    🗑️ Supprimer définitivement mon compte
+                    <?= e(t('account.delete.btn.confirm')) ?>
                 </button>
             </form>
 
             <a class="btn btn-outline btn-block" href="<?= e(url('/account/privacy')) ?>" style="margin-top:0.75rem;text-decoration:none;">
-                ← Garder mon compte
+                <?= e(t('account.delete.btn.keep')) ?>
             </a>
         </div>
 

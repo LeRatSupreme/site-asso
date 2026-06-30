@@ -11,9 +11,9 @@ declare(strict_types=1);
 <header class="page-hero">
     <div class="halo halo-teal" aria-hidden="true"></div>
     <div class="container">
-        <span class="eyebrow">RGPD · Vos droits</span>
-        <h1 class="page-title">Mes données</h1>
-        <p class="page-lead">Gérez votre mot de passe, exportez ou supprimez vos données.</p>
+        <span class="eyebrow"><?= e(t('account.eyebrow.rgpd')) ?></span>
+        <h1 class="page-title"><?= e(t('account.privacy.title')) ?></h1>
+        <p class="page-lead"><?= e(t('account.privacy.lead')) ?></p>
     </div>
 </header>
 
@@ -25,26 +25,26 @@ declare(strict_types=1);
             <div class="rgpd-card-head">
                 <span class="rgpd-icon">🔐</span>
                 <div>
-                    <h2 class="card-title">Changer mon mot de passe</h2>
-                    <p class="rgpd-sub">Un email de confirmation vous sera envoyé.</p>
+                    <h2 class="card-title"><?= e(t('account.password.title')) ?></h2>
+                    <p class="rgpd-sub"><?= e(t('account.password.sub')) ?></p>
                 </div>
             </div>
             <form method="post" action="<?= e(url('/account/password')) ?>">
                 <?= csrf_field() ?>
                 <div class="field">
-                    <label for="old_password">Mot de passe actuel</label>
+                    <label for="old_password"><?= e(t('account.password.current')) ?></label>
                     <input type="password" id="old_password" name="old_password" required autocomplete="current-password">
                 </div>
                 <div class="field">
-                    <label for="new_password">Nouveau mot de passe</label>
+                    <label for="new_password"><?= e(t('account.password.new')) ?></label>
                     <input type="password" id="new_password" name="new_password" minlength="8" required autocomplete="new-password">
-                    <p class="field-help">8 caractères min · 1 lettre + 1 chiffre</p>
+                    <p class="field-help"><?= e(t('account.password.help')) ?></p>
                 </div>
                 <div class="field">
-                    <label for="new_password_confirmation">Confirmer</label>
+                    <label for="new_password_confirmation"><?= e(t('account.password.confirm')) ?></label>
                     <input type="password" id="new_password_confirmation" name="new_password_confirmation" minlength="8" required autocomplete="new-password">
                 </div>
-                <button type="submit" class="btn btn-primary">Modifier</button>
+                <button type="submit" class="btn btn-primary"><?= e(t('account.password.submit')) ?></button>
             </form>
         </div>
 
@@ -53,12 +53,12 @@ declare(strict_types=1);
             <div class="rgpd-card-head">
                 <span class="rgpd-icon">📦</span>
                 <div>
-                    <h2 class="card-title">Exporter mes données</h2>
-                    <p class="rgpd-sub">Droit à la portabilité — format JSON.</p>
+                    <h2 class="card-title"><?= e(t('account.export.title')) ?></h2>
+                    <p class="rgpd-sub"><?= e(t('account.export.sub')) ?></p>
                 </div>
             </div>
-            <p class="rgpd-desc">Téléchargez l'ensemble de vos données personnelles : profil, consentements, inscriptions aux événements.</p>
-            <a class="btn btn-outline" href="<?= e(url('/account/export')) ?>">📥 Télécharger (JSON)</a>
+            <p class="rgpd-desc"><?= e(t('account.export.desc')) ?></p>
+            <a class="btn btn-outline" href="<?= e(url('/account/export')) ?>"><?= e(t('account.export.btn')) ?></a>
         </div>
 
         <!-- ====== Suppression ====== -->
@@ -66,15 +66,14 @@ declare(strict_types=1);
             <div class="rgpd-card-head">
                 <span class="rgpd-icon rgpd-icon-danger">🗑️</span>
                 <div>
-                    <h2 class="card-title">Supprimer mon compte</h2>
-                    <p class="rgpd-sub">Droit à l'effacement (RGPD).</p>
+                    <h2 class="card-title"><?= e(t('account.delete.title')) ?></h2>
+                    <p class="rgpd-sub"><?= e(t('account.delete.sub')) ?></p>
                 </div>
             </div>
             <p class="rgpd-desc">
-                Vos données personnelles seront <strong>anonymisées</strong> et votre compte désactivé.
-                Les enregistrements comptables obligatoires sont conservés mais déliés de votre identité.
+                <?= e(t('account.delete.desc')) ?>
             </p>
-            <a class="btn btn-danger" href="<?= e(url('/account/delete')) ?>">Supprimer mon compte</a>
+            <a class="btn btn-danger" href="<?= e(url('/account/delete')) ?>"><?= e(t('account.delete.btn')) ?></a>
         </div>
 
     </div>

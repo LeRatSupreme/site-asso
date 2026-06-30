@@ -226,7 +226,7 @@ $priceLabel = ($price === null || (float) $price <= 0)
                     <?php endif; ?>
 
                     <?php if ($sumupLink !== null): ?>
-                        <a class="btn btn-sumup btn-block" href="<?= e($sumupLink) ?>" rel="noopener noreferrer" target="_blank">Payer en ligne (SumUp)</a>
+                        <a class="btn btn-sumup btn-block" href="<?= e($sumupLink) ?>" rel="noopener noreferrer" target="_blank"><?= e(t('event.pay_online')) ?></a>
                     <?php endif; ?>
                 </div>
             <?php endif; ?>

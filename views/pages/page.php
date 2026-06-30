@@ -12,14 +12,14 @@ declare(strict_types=1);
 <header class="page-hero">
     <div class="halo halo-violet" aria-hidden="true"></div>
     <div class="container">
-        <span class="eyebrow">Page</span>
-        <h1 class="page-title"><?= e($page['title'] ?? 'Page') ?></h1>
+        <span class="eyebrow"><?= e(t('page.generic.eyebrow')) ?></span>
+        <h1 class="page-title"><?= e($page['title'] ?? t('page.generic.eyebrow')) ?></h1>
     </div>
 </header>
 <section class="section">
     <div class="container narrow">
         <div class="empty-state surface glass">
-            <p>Contenu à venir.</p>
+            <p><?= e(t('page.placeholder')) ?></p>
         </div>
     </div>
 </section>
@@ -27,8 +27,8 @@ declare(strict_types=1);
 <header class="page-hero">
     <div class="halo halo-violet" aria-hidden="true"></div>
     <div class="container">
-        <span class="eyebrow">Page</span>
-        <h1 class="page-title"><?= e($page['title'] ?? 'Page') ?></h1>
+        <span class="eyebrow"><?= e(t('page.generic.eyebrow')) ?></span>
+        <h1 class="page-title"><?= e($page['title'] ?? t('page.generic.eyebrow')) ?></h1>
     </div>
 </header>
 <section class="section">
