@@ -28,26 +28,23 @@ foreach ($rows as $r) {
     </div>
 </div>
 
-<!-- Résumé -->
-<div class="cat-total card surface glass">
-    <div class="cat-total-item">
-        <span class="cat-total-label">Ventes</span>
-        <strong class="cat-total-value"><?= count($rows) ?></strong>
+<!-- Résumé : 4 cartes séparées -->
+<div class="grid grid-4 stat-cards">
+    <div class="stat-card surface glass">
+        <span class="stat-value"><?= count($rows) ?></span>
+        <span class="stat-label">Ventes</span>
     </div>
-    <span class="cat-total-sep"></span>
-    <div class="cat-total-item">
-        <span class="cat-total-label">Quantité</span>
-        <strong class="cat-total-value"><?= $totQty ?></strong>
+    <div class="stat-card surface glass">
+        <span class="stat-value"><?= $totQty ?></span>
+        <span class="stat-label">Quantité</span>
     </div>
-    <span class="cat-total-sep"></span>
-    <div class="cat-total-item">
-        <span class="cat-total-label">CA (TTC)</span>
-        <strong class="cat-total-value"><?= e(formatPrice($totTtc)) ?></strong>
+    <div class="stat-card surface glass">
+        <span class="stat-value"><?= e(formatPrice($totTtc)) ?></span>
+        <span class="stat-label">CA (TTC)</span>
     </div>
-    <span class="cat-total-sep"></span>
-    <div class="cat-total-item">
-        <span class="cat-total-label">Bénéfice</span>
-        <strong class="cat-total-value is-positive"><?= e(formatPrice($totProfit)) ?></strong>
+    <div class="stat-card surface glass">
+        <span class="stat-value is-positive"><?= e(formatPrice($totProfit)) ?></span>
+        <span class="stat-label">Bénéfice</span>
     </div>
 </div>
 
