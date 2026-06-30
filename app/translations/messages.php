@@ -407,4 +407,17 @@ return [
     'lang.zh' => ['fr' => 'Chinois', 'en' => 'Chinese', 'de' => 'Chinesisch', 'es' => 'Chino', 'zh' => '中文', 'ja' => '中国語', 'pl' => 'Chiński'],
     'lang.ja' => ['fr' => 'Japonais', 'en' => 'Japanese', 'de' => 'Japanisch', 'es' => 'Japonés', 'zh' => '日语', 'ja' => '日本語', 'pl' => 'Japoński'],
     'lang.pl' => ['fr' => 'Polonais', 'en' => 'Polish', 'de' => 'Polnisch', 'es' => 'Polaco', 'zh' => '波兰语', 'ja' => 'ポーランド語', 'pl' => 'Polski'],
+
+    /* ----------------------------------------------------------------- */
+    /*  Catégories d'événements (traduisibles)                           */
+    /* ----------------------------------------------------------------- */
+    'cat.soiree'       => ['fr' => 'Soirée',        'en' => 'Party',          'de' => 'Party',           'es' => 'Fiesta',          'zh' => '晚会',     'ja' => 'パーティー',  'pl' => 'Impreza'],
+    'cat.afterwork'    => ['fr' => 'Afterwork',     'en' => 'Afterwork',      'de' => 'Afterwork',       'es' => 'Afterwork',       'zh' => '课后聚会', 'ja' => 'アフターワーク','pl' => 'Afterwork'],
+    'cat.barbecue'     => ['fr' => 'Barbecue',      'en' => 'Barbecue',       'de' => 'Grillfest',       'es' => 'Barbacoa',        'zh' => '烧烤',     'ja' => 'バーベキュー', 'pl' => 'Grill'],
+    'cat.tournoi'      => ['fr' => 'Tournoi / LAN', 'en' => 'Tournament / LAN','de' => 'Turnier / LAN',  'es' => 'Torneo / LAN',    'zh' => '比赛/LAN',  'ja' => '大会/LAN',    'pl' => 'Turniej / LAN'],
+    'cat.conference'   => ['fr' => 'Conférence',    'en' => 'Conference',     'de' => 'Konferenz',       'es' => 'Conferencia',     'zh' => '会议',     'ja' => 'カンファレンス','pl' => 'Konferencja'],
+    'cat.sortie'       => ['fr' => 'Sortie',        'en' => 'Outing',         'de' => 'Ausflug',         'es' => 'Salida',          'zh' => '出游',     'ja' => '外出',       'pl' => 'Wyjście'],
+    'cat.atelier'      => ['fr' => 'Atelier',       'en' => 'Workshop',       'de' => 'Workshop',        'es' => 'Taller',          'zh' => '工作坊',   'ja' => 'ワークショップ','pl' => 'Warsztat'],
+    'cat.nuitinfo'     => ['fr' => 'Nuit de l\'Info','en' => 'Nuit de l\'Info','de' => 'Nuit de l\'Info', 'es' => 'Nuit de l\'Info', 'zh' => '信息之夜', 'ja' => 'Nuit de l\'Info','pl' => 'Nuit de l\'Info'],
+    'cat.autre'        => ['fr' => 'Autre',         'en' => 'Other',          'de' => 'Sonstige',       'es' => 'Otro',            'zh' => '其他',     'ja' => 'その他',     'pl' => 'Inne'],
 ];
