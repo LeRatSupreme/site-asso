@@ -33,10 +33,10 @@ $isFull    = $isFull ?? false;
 $remaining = $remaining ?? null;
 $qrToken   = $qrToken ?? null;
 
-$title       = (string) ($event['title'] ?? '');
-$excerpt     = (string) ($event['excerpt'] ?? '');
+$title       = tc((string) ($event['title'] ?? ''));
+$excerpt     = tc((string) ($event['excerpt'] ?? ''));
 $description = (string) ($event['description'] ?? '');
-$location    = (string) ($event['location'] ?? '');
+$location    = tc((string) ($event['location'] ?? ''));
 $dateRaw     = (string) ($event['date'] ?? '');
 $endDateRaw  = (string) ($event['end_date'] ?? '');
 $image       = (string) ($event['image'] ?? '');
