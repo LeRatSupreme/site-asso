@@ -17,36 +17,36 @@ declare(strict_types=1);
     <div class="halo halo-violet" aria-hidden="true"></div>
     <div class="container hero-grid">
         <div class="hero-content">
-            <span class="eyebrow"><?= e(t('Association étudiante · Informatique · Calais', 'Student association · Computer Science · Calais')) ?></span>
+            <span class="eyebrow"><?= e(t('home.eyebrow')) ?></span>
             <h1 class="hero-title">
-                <?= e(t('Plus qu\'une asso.', 'More than an association.')) ?>
-                <span class="accent"><?= e(t('Ton campus, en mieux.', 'Your campus, but better.')) ?></span>
+                <?= e(t('home.title.line1')) ?>
+                <span class="accent"><?= e(t('home.title.line2')) ?></span>
             </h1>
             <p class="hero-lead">
-                <?= e($description ?: t('L\'AEIC réunit les étudiants en informatique du campus de Calais : événements, cafétéria, vie étudiante. Fait par les étudiants, pour les étudiants.', 'The AEIC brings together computer science students on the Calais campus: events, cafeteria, student life. Made by students, for students.')) ?>
+                <?= e($description ?: t('home.description')) ?>
             </p>
             <div class="hero-actions">
-                <a class="btn btn-primary btn-lg" href="<?= e(url('/presentation')) ?>"><?= e(t("Rejoindre l'AEIC", 'Join AEIC')) ?></a>
-                <a class="btn btn-outline btn-lg" href="<?= e(url('/events')) ?>"><?= e(t('Voir les événements', 'See events')) ?></a>
+                <a class="btn btn-primary btn-lg" href="<?= e(url('/presentation')) ?>"><?= e(t('home.cta.join')) ?></a>
+                <a class="btn btn-outline btn-lg" href="<?= e(url('/events')) ?>"><?= e(t('home.cta.events')) ?></a>
             </div>
         </div>
 
-        <aside class="hero-stats surface glass" aria-label="L'AEIC en chiffres">
+        <aside class="hero-stats surface glass" aria-label="<?= e(t('home.stats.aria')) ?>">
             <div class="stat">
                 <span class="stat-value">100 %</span>
-                <span class="stat-label">Étudiant</span>
+                <span class="stat-label"><?= e(t('home.stat.student')) ?></span>
             </div>
             <div class="stat">
                 <span class="stat-value"><?= e((string) max($usersCount, 0)) ?></span>
-                <span class="stat-label">Membres</span>
+                <span class="stat-label"><?= e(t('home.stat.members')) ?></span>
             </div>
             <div class="stat">
                 <span class="stat-value"><?= e((string) max($eventsCount, 0)) ?></span>
-                <span class="stat-label">Événements</span>
+                <span class="stat-label"><?= e(t('home.stat.events')) ?></span>
             </div>
             <div class="stat">
                 <span class="stat-value">0 %</span>
-                <span class="stat-label">Prise de tête</span>
+                <span class="stat-label"><?= e(t('home.stat.easy')) ?></span>
             </div>
         </aside>
     </div>
@@ -55,13 +55,13 @@ declare(strict_types=1);
 <section class="section">
     <div class="container">
         <div class="section-head">
-            <span class="eyebrow">Agenda</span>
-            <h2 class="section-title">Prochains événements</h2>
+            <span class="eyebrow"><?= e(t('home.upcoming.eyebrow')) ?></span>
+            <h2 class="section-title"><?= e(t('home.upcoming.title')) ?></h2>
         </div>
 
         <?php if (empty($upcoming)): ?>
             <div class="empty-state surface glass">
-                <p>Aucun événement annoncé pour le moment. Revenez bientôt !</p>
+                <p><?= e(t('home.upcoming.empty')) ?></p>
             </div>
         <?php else: ?>
             <div class="grid grid-3">
@@ -69,7 +69,7 @@ declare(strict_types=1);
                     <?php require AEIC_VIEWS . '/partials/event_card.php'; ?>
                 <?php endforeach; ?>
             </div>
-            <p class="section-more"><a class="btn btn-ghost" href="<?= e(url('/events')) ?>">Tout voir →</a></p>
+            <p class="section-more"><a class="btn btn-ghost" href="<?= e(url('/events')) ?>"><?= e(t('home.upcoming.more')) ?></a></p>
         <?php endif; ?>
     </div>
 </section>
@@ -77,21 +77,21 @@ declare(strict_types=1);
 <section class="section section-alt">
     <div class="container">
         <div class="section-head">
-            <span class="eyebrow">Pourquoi l'AEIC</span>
-            <h2 class="section-title">La vie étudiante, sans friction</h2>
+            <span class="eyebrow"><?= e(t('home.features.eyebrow')) ?></span>
+            <h2 class="section-title"><?= e(t('home.features.title')) ?></h2>
         </div>
         <div class="grid grid-3">
             <article class="card surface glass card-hover">
-                <h3 class="card-title">Événements</h3>
-                <p>Soirées d'intégration, LAN, conférences : un agenda pensé pour les étudiants en info.</p>
+                <h3 class="card-title"><?= e(t('home.feature.events.title')) ?></h3>
+                <p><?= e(t('home.feature.events.desc')) ?></p>
             </article>
             <article class="card surface glass card-hover">
-                <h3 class="card-title">Cafétéria</h3>
-                <p>Des prix étudiant, commandable en ligne, prêt à récupérer entre deux cours.</p>
+                <h3 class="card-title"><?= e(t('home.feature.cafeteria.title')) ?></h3>
+                <p><?= e(t('home.feature.cafeteria.desc')) ?></p>
             </article>
             <article class="card surface glass card-hover">
-                <h3 class="card-title">Communauté</h3>
-                <p>Un réseau d'entraide, des projets, et des gens qui font avancer le campus.</p>
+                <h3 class="card-title"><?= e(t('home.feature.community.title')) ?></h3>
+                <p><?= e(t('home.feature.community.desc')) ?></p>
             </article>
         </div>
     </div>

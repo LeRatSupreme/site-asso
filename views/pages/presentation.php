@@ -13,19 +13,18 @@ declare(strict_types=1);
 <header class="page-hero">
     <div class="halo halo-violet" aria-hidden="true"></div>
     <div class="container">
-        <span class="eyebrow">Qui sommes-nous ?</span>
-        <h1 class="page-title">L'AEIC, c'est le campus qui prend vie.</h1>
-        <p class="page-lead">Association Étudiante Informatique de Calais — fait par les étudiants, pour les étudiants.</p>
+        <span class="eyebrow"><?= e(t('about.eyebrow')) ?></span>
+        <h1 class="page-title"><?= e(t('about.title')) ?></h1>
+        <p class="page-lead"><?= e(t('about.lead')) ?></p>
     </div>
 </header>
 
 <section class="section">
     <div class="container">
         <div class="panel-brand panel">
-            <h2 class="section-title">Notre mission</h2>
+            <h2 class="section-title"><?= e(t('about.mission')) ?></h2>
             <p class="lead">
-                Créer du lien entre les étudiants en informatique de Calais, rythmer la vie du campus
-                et rendre concret ce qui ne l'était pas : événements, vie associative, entraide.
+                <?= e(t('about.mission.desc')) ?>
             </p>
         </div>
     </div>
@@ -34,21 +33,21 @@ declare(strict_types=1);
 <section class="section section-alt">
     <div class="container">
         <div class="section-head">
-            <span class="eyebrow">Nos valeurs</span>
-            <h2 class="section-title">Ce qui nous fait avancer</h2>
+            <span class="eyebrow"><?= e(t('about.values.eyebrow')) ?></span>
+            <h2 class="section-title"><?= e(t('about.values.title')) ?></h2>
         </div>
         <div class="grid grid-3">
             <article class="card surface glass card-hover">
-                <h3 class="card-title">Proximité</h3>
-                <p>Des étudiants comme vous, à côté, qui écoutent et agissent.</p>
+                <h3 class="card-title"><?= e(t('about.value.proximity')) ?></h3>
+                <p><?= e(t('about.value.proximity.desc')) ?></p>
             </article>
             <article class="card surface glass card-hover">
-                <h3 class="card-title">Passion</h3>
-                <p>L'informatique et la vie de campus : nos deux moteurs.</p>
+                <h3 class="card-title"><?= e(t('about.value.passion')) ?></h3>
+                <p><?= e(t('about.value.passion.desc')) ?></p>
             </article>
             <article class="card surface glass card-hover">
-                <h3 class="card-title">Partage</h3>
-                <p>Transmettre, entraider, ouvrir des opportunités à tous.</p>
+                <h3 class="card-title"><?= e(t('about.value.sharing')) ?></h3>
+                <p><?= e(t('about.value.sharing.desc')) ?></p>
             </article>
         </div>
     </div>
@@ -57,14 +56,14 @@ declare(strict_types=1);
 <section class="section">
     <div class="container">
         <div class="section-head">
-            <span class="eyebrow">L'AEIC en chiffres</span>
-            <h2 class="section-title">Des actions concrètes</h2>
+            <span class="eyebrow"><?= e(t('home.stats.aria')) ?></span>
+            <h2 class="section-title"><?= e(t('about.stats.title')) ?></h2>
         </div>
         <div class="grid grid-4">
-            <div class="stat-card surface glass"><span class="stat-value"><?= e((string) max($usersCount, 0)) ?></span><span class="stat-label">Membres</span></div>
-            <div class="stat-card surface glass"><span class="stat-value"><?= e((string) max($eventsCount, 0)) ?></span><span class="stat-label">Événements</span></div>
-            <div class="stat-card surface glass"><span class="stat-value">100 %</span><span class="stat-label">Étudiant</span></div>
-            <div class="stat-card surface glass"><span class="stat-value">0</span><span class="stat-label">Prise de tête</span></div>
+            <div class="stat-card surface glass"><span class="stat-value"><?= e((string) max($usersCount, 0)) ?></span><span class="stat-label"><?= e(t('home.stat.members')) ?></span></div>
+            <div class="stat-card surface glass"><span class="stat-value"><?= e((string) max($eventsCount, 0)) ?></span><span class="stat-label"><?= e(t('home.stat.events')) ?></span></div>
+            <div class="stat-card surface glass"><span class="stat-value">100 %</span><span class="stat-label"><?= e(t('home.stat.student')) ?></span></div>
+            <div class="stat-card surface glass"><span class="stat-value">0</span><span class="stat-label"><?= e(t('home.stat.easy')) ?></span></div>
         </div>
     </div>
 </section>
@@ -83,10 +82,10 @@ declare(strict_types=1);
 
 <section class="section cta">
     <div class="container cta-inner">
-        <h2 class="section-title">Envie de nous rejoindre ?</h2>
+        <h2 class="section-title"><?= e(t('about.cta.title')) ?></h2>
         <div class="hero-actions">
-            <a class="btn btn-primary btn-lg" href="<?= e(url('/events')) ?>">Rejoindre l'AEIC</a>
-            <a class="btn btn-outline btn-lg" href="<?= e(url('/events')) ?>">Voir les événements</a>
+            <a class="btn btn-primary btn-lg" href="<?= e(url('/events')) ?>"><?= e(t('home.cta.join')) ?></a>
+            <a class="btn btn-outline btn-lg" href="<?= e(url('/events')) ?>"><?= e(t('home.cta.events')) ?></a>
         </div>
     </div>
 </section>

@@ -50,16 +50,16 @@ if ($image !== '') {
 }
 
 $priceLabel = ($price === null || (float) $price <= 0)
-    ? 'Gratuit'
+    ? t('event.free')
     : formatPrice($price);
 ?>
 <header class="page-hero">
     <div class="halo halo-violet" aria-hidden="true"></div>
     <div class="container">
         <p class="back-link">
-            <a href="<?= e(url('/events')) ?>">← Retour aux événements</a>
+            <a href="<?= e(url('/events')) ?>"><?= e(t('event.back')) ?></a>
         </p>
-        <span class="eyebrow">Événement</span>
+        <span class="eyebrow"><?= e(t('event.eyebrow')) ?></span>
         <h1 class="page-title"><?= e($title) ?></h1>
     </div>
 </header>
@@ -74,12 +74,12 @@ $priceLabel = ($price === null || (float) $price <= 0)
                     <div class="event-cover-placeholder aeic-gradient" aria-hidden="true">AE</div>
                 <?php endif; ?>
                 <?php if ($isPast): ?>
-                    <span class="badge badge-muted event-cover-badge">Événement terminé</span>
+                    <span class="badge badge-muted event-cover-badge"><?= e(t('event.ended')) ?></span>
                 <?php endif; ?>
             </div>
 
             <article class="card surface glass">
-                <span class="eyebrow">Détails</span>
+                <span class="eyebrow"><?= e(t('event.details')) ?></span>
                 <h2 class="card-title"><?= e($title) ?></h2>
                 <p class="card-meta">
                     📅 <?= e(formatDateTime($dateRaw)) ?>
@@ -98,7 +98,7 @@ $priceLabel = ($price === null || (float) $price <= 0)
                             data-end="<?= e($endDateRaw) ?>"
                             data-location="<?= e($location) ?>"
                             data-description="<?= e(strip_tags($description)) ?>">
-                        📅 Ajouter au calendrier
+                        <?= e(t('event.add_calendar')) ?>
                     </button>
                 </div>
             </article>
@@ -109,8 +109,8 @@ $priceLabel = ($price === null || (float) $price <= 0)
 
             <?php if (!empty($photos)): ?>
                 <div class="event-gallery">
-                    <span class="eyebrow">Galerie</span>
-                    <h2 class="section-title">Photos</h2>
+                    <span class="eyebrow"><?= e(t('event.gallery')) ?></span>
+                    <h2 class="section-title"><?= e(t('event.photos')) ?></h2>
                     <div class="grid grid-3 gallery-grid">
                         <?php foreach ($photos as $photo): ?>
                             <figure class="gallery-item surface">
@@ -137,13 +137,13 @@ $priceLabel = ($price === null || (float) $price <= 0)
                 $mapGmaps = 'https://www.google.com/maps/search/?api=1&query=' . rawurlencode((string) $event['map_lat'] . ',' . (string) $event['map_lon']);
             ?>
                 <div class="event-map card surface glass">
-                    <span class="eyebrow">Localisation</span>
-                    <h2 class="card-title">Où se trouve l'événement</h2>
+                    <span class="eyebrow"><?= e(t('event.location')) ?></span>
+                    <h2 class="card-title"><?= e(t('event.where')) ?></h2>
                     <?php if ($location !== ''): ?><p class="card-meta">📍 <?= e($location) ?></p><?php endif; ?>
                     <div class="map-frame">
-                        <iframe title="Carte — <?= e($title) ?>" src="<?= e($mapEmbed) ?>" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
+                        <iframe title="<?= e(tt('event.map.aria', ['{title}' => $title])) ?>" src="<?= e($mapEmbed) ?>" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
                     </div>
-                    <a class="btn btn-outline btn-sm" href="<?= e($mapGmaps) ?>" target="_blank" rel="noopener">📍 Itinéraire (Google Maps)</a>
+                    <a class="btn btn-outline btn-sm" href="<?= e($mapGmaps) ?>" target="_blank" rel="noopener"><?= e(t('event.itinerary')) ?></a>
                 </div>
             <?php endif; ?>
         </div>
@@ -151,22 +151,22 @@ $priceLabel = ($price === null || (float) $price <= 0)
         <aside class="event-detail-sidebar">
             <?php if (!$isPast): ?>
                 <div class="card surface glass sidebar-card">
-                    <h2 class="card-title">Participer</h2>
+                    <h2 class="card-title"><?= e(t('event.participate')) ?></h2>
                     <p class="sidebar-price">
-                        <span class="eyebrow">Prix</span>
+                        <span class="eyebrow"><?= e(t('event.price')) ?></span>
                         <strong class="stat-value"><?= e($priceLabel) ?></strong>
                     </p>
                     <?php if ($maxCapacity !== null): ?>
                         <?php if (!$isFull && $remaining !== null): ?>
-                            <p class="card-meta">Plus que <strong><?= e((string) $remaining) ?></strong> place(s) · <?= e((string) $registrationsCount) ?>/<?= e((string) $maxCapacity) ?> inscrits</p>
+                            <p class="card-meta"><?= tt('event.places_left', ['{n}' => $remaining]) ?> · <?= tt('event.signed_up', ['{a}' => $registrationsCount, '{b}' => $maxCapacity]) ?></p>
                         <?php else: ?>
-                            <p class="card-meta"><strong>Complet</strong> · <?= e((string) $registrationsCount) ?>/<?= e((string) $maxCapacity) ?> inscrits</p>
+                            <p class="card-meta"><strong><?= e(t('event.full')) ?></strong> · <?= tt('event.signed_up', ['{a}' => $registrationsCount, '{b}' => $maxCapacity]) ?></p>
                         <?php endif; ?>
                     <?php endif; ?>
 
                     <?php if (Auth::check()): ?>
                         <?php if ($isRegistered): ?>
-                            <p class="badge badge-success">Vous êtes inscrit·e</p>
+                            <p class="badge badge-success"><?= e(t('event.registered')) ?></p>
 
                             <?php if ($qrToken !== null && $qrToken !== ''): ?>
                                 <?php
@@ -174,20 +174,20 @@ $priceLabel = ($price === null || (float) $price <= 0)
                                 $qrImg = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' . rawurlencode($checkinUrl);
                                 ?>
                                 <div class="event-qr">
-                                    <img src="<?= e($qrImg) ?>" alt="QR code de check-in" width="200" height="200" loading="lazy">
-                                    <p class="card-meta">Présentez ce QR code à l'entrée de l'événement.</p>
+                                    <img src="<?= e($qrImg) ?>" alt="<?= e(t('event.qr.checkin')) ?>" width="200" height="200" loading="lazy">
+                                    <p class="card-meta"><?= e(t('event.qr.help')) ?></p>
                                 </div>
                             <?php endif; ?>
 
                             <form method="post" action="<?= e(url('/events/' . rawurlencode((string) $event['slug']) . '/unregister')) ?>">
                                 <?= csrf_field() ?>
-                                <button type="submit" class="btn btn-outline btn-block">Se désinscrire</button>
+                                <button type="submit" class="btn btn-outline btn-block"><?= e(t('event.unregister')) ?></button>
                             </form>
                         <?php elseif ($isOnWaitlist): ?>
-                            <p class="badge badge-warning">Sur liste d'attente — position <?= e((string) $waitlistPosition) ?></p>
+                            <p class="badge badge-warning"><?= e(tt('event.waitlist', ['{n}' => $waitlistPosition])) ?></p>
                             <form method="post" action="<?= e(url('/events/' . rawurlencode((string) $event['slug']) . '/unregister')) ?>">
                                 <?= csrf_field() ?>
-                                <button type="submit" class="btn btn-outline btn-block">Quitter la file</button>
+                                <button type="submit" class="btn btn-outline btn-block"><?= e(t('event.leave_queue')) ?></button>
                             </form>
                         <?php else: ?>
                             <form method="post" action="<?= e(url('/events/' . rawurlencode((string) $event['slug']) . '/register')) ?>">
@@ -198,12 +198,12 @@ $priceLabel = ($price === null || (float) $price <= 0)
                                         <div class="field">
                                             <label for="variant-<?= e((string) $variant['id']) ?>">
                                                 <?= e($variant['label'] ?? '') ?>
-                                                <?php if (!empty($variant['required'])): ?><span class="badge badge-warning">Obligatoire</span><?php endif; ?>
+                                                <?php if (!empty($variant['required'])): ?><span class="badge badge-warning"><?= e(t('event.required')) ?></span><?php endif; ?>
                                             </label>
                                             <select id="variant-<?= e((string) $variant['id']) ?>"
                                                     name="variants[<?= e((string) $variant['id']) ?>]"
                                                     <?= !empty($variant['required']) ? 'required' : '' ?>>
-                                                <option value="">— Choisir —</option>
+                                                <option value=""><?= e(t('event.choose')) ?></option>
                                                 <?php foreach ($variant['choices'] ?? [] as $choice): ?>
                                                     <option value="<?= e((string) $choice['id']) ?>"><?= e($choice['label'] ?? '') ?></option>
                                                 <?php endforeach; ?>
@@ -213,16 +213,16 @@ $priceLabel = ($price === null || (float) $price <= 0)
                                 <?php endif; ?>
 
                                 <?php if ($isFull): ?>
-                                    <button type="submit" class="btn btn-warning btn-lg btn-block">Liste d'attente</button>
+                                    <button type="submit" class="btn btn-warning btn-lg btn-block"><?= e(t('event.join_waitlist')) ?></button>
                                 <?php else: ?>
-                                    <button type="submit" class="btn btn-primary btn-lg btn-block">Je m'inscris</button>
+                                    <button type="submit" class="btn btn-primary btn-lg btn-block"><?= e(t('event.register_btn')) ?></button>
                                 <?php endif; ?>
                             </form>
                         <?php endif; ?>
                     <?php else: ?>
-                        <p class="card-excerpt">Connectez-vous pour vous inscrire à cet événement.</p>
-                        <a class="btn btn-primary btn-block" href="<?= e(url('/login?callbackUrl=') . rawurlencode('/events/' . ($event['slug'] ?? ''))) ?>">Se connecter</a>
-                        <a class="btn btn-outline btn-block" href="<?= e(url('/register')) ?>">Créer un compte</a>
+                        <p class="card-excerpt"><?= e(t('event.login_to_register')) ?></p>
+                        <a class="btn btn-primary btn-block" href="<?= e(url('/login?callbackUrl=') . rawurlencode('/events/' . ($event['slug'] ?? ''))) ?>"><?= e(t('event.login_btn')) ?></a>
+                        <a class="btn btn-outline btn-block" href="<?= e(url('/register')) ?>"><?= e(t('event.create_account')) ?></a>
                     <?php endif; ?>
 
                     <?php if ($sumupLink !== null): ?>
@@ -232,10 +232,10 @@ $priceLabel = ($price === null || (float) $price <= 0)
             <?php endif; ?>
 
             <div class="card surface glass sidebar-card">
-                <h2 class="card-title">Participants</h2>
+                <h2 class="card-title"><?= e(t('event.participants')) ?></h2>
                 <p class="sidebar-count">
                     <strong class="stat-value"><?= e((string) $registrationsCount) ?></strong>
-                    <span class="stat-label">inscrits</span>
+                    <span class="stat-label"><?= e(t('event.participants')) ?></span>
                 </p>
                 <?php if (!empty($participants)): ?>
                     <ul class="participant-list">
@@ -244,7 +244,7 @@ $priceLabel = ($price === null || (float) $price <= 0)
                         <?php endforeach; ?>
                     </ul>
                 <?php else: ?>
-                    <p class="card-meta">Soyez les premiers à vous inscrire !</p>
+                    <p class="card-meta"><?= e(t('event.no_participants')) ?></p>
                 <?php endif; ?>
             </div>
         </aside>

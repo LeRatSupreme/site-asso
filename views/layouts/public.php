@@ -21,6 +21,9 @@ $canonical    = APP_URL . strtok($currentPath, '?');
 $user         = Auth::check() ? Auth::user() : null;
 $lang         = current_lang();
 
+$langs       = available_langs();
+$currentFlag = lang_flag($lang);
+
 // SEO : titres et descriptions par défaut + Open Graph.
 $pageTitle    = $title ?? $siteName;
 $pageDesc     = $description ?? $siteDesc;
@@ -48,7 +51,7 @@ $twitterHandle = Setting::get('twitter_handle', '');
     <meta property="og:url" content="<?= e($canonical) ?>">
     <meta property="og:site_name" content="<?= e($siteName) ?>">
     <meta property="og:image" content="<?= e($ogImage) ?>">
-    <meta property="og:locale" content="<?= e($lang === 'en' ? 'en_US' : 'fr_FR') ?>">
+    <meta property="og:locale" content="<?= e(lang_locale($lang)) ?>">
 
     <!-- Twitter Card -->
     <meta name="twitter:card" content="summary_large_image">
@@ -89,11 +92,11 @@ $twitterHandle = Setting::get('twitter_handle', '');
     </script>
 </head>
 <body>
-    <a class="skip-link" href="#contenu">Aller au contenu</a>
+    <a class="skip-link" href="#contenu"><?= e(t('nav.skip')) ?></a>
 
     <header class="site-header">
         <div class="container nav-bar">
-            <a class="brand" href="<?= e(url('/')) ?>" aria-label="<?= e($siteName) ?> — accueil">
+            <a class="brand" href="<?= e(url('/')) ?>" aria-label="<?= e($siteName) ?> — <?= e(t('nav.home')) ?>">
                 <span class="brand-logo" aria-hidden="true">AE</span>
                 <span class="brand-text">
                     <span class="brand-sub">Étudiants · Calais</span>
@@ -101,29 +104,40 @@ $twitterHandle = Setting::get('twitter_handle', '');
                 </span>
             </a>
 
-            <nav class="main-nav" aria-label="<?= e(t('Navigation principale', 'Main navigation')) ?>">
-                <a class="nav-link<?= $currentPath === '/' ? ' is-active' : '' ?>" href="<?= e(url('/')) ?>"><?= e(t('Accueil', 'Home')) ?></a>
-                <a class="nav-link<?= str_starts_with($currentPath, '/events') ? ' is-active' : '' ?>" href="<?= e(url('/events')) ?>"><?= e(t('Événements', 'Events')) ?></a>
-                <a class="nav-link<?= $currentPath === '/presentation' ? ' is-active' : '' ?>" href="<?= e(url('/presentation')) ?>"><?= e(t("L'association", 'About')) ?></a>
-                <a class="nav-link<?= $currentPath === '/team' ? ' is-active' : '' ?>" href="<?= e(url('/team')) ?>"><?= e(t('Équipe', 'Team')) ?></a>
-                <a class="nav-link<?= str_starts_with($currentPath, '/sondages') ? ' is-active' : '' ?>" href="<?= e(url('/sondages')) ?>"><?= e(t('Sondages', 'Polls')) ?></a>
-                <a class="nav-link<?= str_starts_with($currentPath, '/galerie') ? ' is-active' : '' ?>" href="<?= e(url('/galerie')) ?>"><?= e(t('Galerie', 'Gallery')) ?></a>
+            <nav class="main-nav" aria-label="<?= e(t('nav.main.aria')) ?>">
+                <a class="nav-link<?= $currentPath === '/' ? ' is-active' : '' ?>" href="<?= e(url('/')) ?>"><?= e(t('nav.home')) ?></a>
+                <a class="nav-link<?= str_starts_with($currentPath, '/events') ? ' is-active' : '' ?>" href="<?= e(url('/events')) ?>"><?= e(t('nav.events')) ?></a>
+                <a class="nav-link<?= $currentPath === '/presentation' ? ' is-active' : '' ?>" href="<?= e(url('/presentation')) ?>"><?= e(t('nav.about')) ?></a>
+                <a class="nav-link<?= $currentPath === '/team' ? ' is-active' : '' ?>" href="<?= e(url('/team')) ?>"><?= e(t('nav.team')) ?></a>
+                <a class="nav-link<?= str_starts_with($currentPath, '/sondages') ? ' is-active' : '' ?>" href="<?= e(url('/sondages')) ?>"><?= e(t('nav.polls')) ?></a>
+                <a class="nav-link<?= str_starts_with($currentPath, '/galerie') ? ' is-active' : '' ?>" href="<?= e(url('/galerie')) ?>"><?= e(t('nav.gallery')) ?></a>
             </nav>
 
             <div class="nav-actions">
-                <form method="post" action="<?= e(url('/set-lang')) ?>" class="lang-switch" aria-label="<?= e(t('Changer de langue', 'Change language')) ?>">
-                    <?= csrf_field() ?>
-                    <input type="hidden" name="back" value="<?= e($currentPath) ?>">
-                    <button type="submit" name="lang" value="fr"
-                            class="lang-btn<?= $lang === 'fr' ? ' is-active' : '' ?>"
-                            title="Français" aria-label="Français">🇫🇷</button>
-                    <button type="submit" name="lang" value="en"
-                            class="lang-btn<?= $lang === 'en' ? ' is-active' : '' ?>"
-                            title="English" aria-label="English">🇬🇧</button>
-                </form>
+                <div class="lang-dropdown" id="lang-dropdown">
+                    <button type="button" class="lang-current" id="lang-current"
+                            aria-haspopup="true" aria-expanded="false" aria-controls="lang-menu"
+                            title="<?= e(t('nav.lang.change')) ?>">
+                        <span class="lang-flag" aria-hidden="true"><?= $currentFlag ?></span>
+                        <span class="lang-name"><?= e(strtoupper($lang)) ?></span>
+                        <span class="lang-caret" aria-hidden="true">▾</span>
+                    </button>
+                    <ul class="lang-menu" id="lang-menu" role="menu" hidden>
+                        <?php foreach ($langs as $code): ?>
+                            <li role="none">
+                                <a role="menuitemradio" aria-checked="<?= $code === $lang ? 'true' : 'false' ?>"
+                                   class="lang-menu-item<?= $code === $lang ? ' is-active' : '' ?>"
+                                   href="<?= e(url('/set-lang?lang=' . $code . '&redirect=' . rawurlencode($currentPath))) ?>">
+                                    <span class="lang-flag" aria-hidden="true"><?= lang_flag($code) ?></span>
+                                    <span class="lang-name"><?= e(t('lang.' . $code)) ?></span>
+                                </a>
+                            </li>
+                        <?php endforeach; ?>
+                    </ul>
+                </div>
 
                 <button type="button" class="nav-theme-btn" id="theme-toggle"
-                        aria-label="<?= e(t('Basculer le thème clair/sombre', 'Toggle light/dark theme')) ?>" title="<?= e(t('Thème clair / sombre', 'Light / dark theme')) ?>">
+                        aria-label="<?= e(t('nav.theme.toggle')) ?>" title="<?= e(t('nav.theme.light.dark')) ?>">
                     <span class="theme-icon-dark" aria-hidden="true">☀️</span>
                     <span class="theme-icon-light" aria-hidden="true">🌙</span>
                 </button>
@@ -133,17 +147,17 @@ $twitterHandle = Setting::get('twitter_handle', '');
                         <button type="button"
                                 class="nav-bell-btn"
                                 id="notif-toggle"
-                                aria-label="Notifications">
+                                aria-label="<?= e(t('nav.notifications')) ?>">
                             <span aria-hidden="true">🔔</span>
                             <span class="nav-bell-badge" id="notif-badge" hidden>0</span>
                         </button>
                         <div class="nav-bell-dropdown" id="notif-dropdown" hidden>
                             <div class="nav-bell-head">
-                                <strong>Notifications</strong>
-                                <button type="button" class="nav-bell-readall" id="notif-readall">Tout marquer comme lu</button>
+                                <strong><?= e(t('nav.notifications')) ?></strong>
+                                <button type="button" class="nav-bell-readall" id="notif-readall"><?= e(t('nav.notifications.markall')) ?></button>
                             </div>
                             <ul class="nav-bell-list" id="notif-list">
-                                <li class="nav-bell-empty">Aucune notification.</li>
+                                <li class="nav-bell-empty"><?= e(t('nav.notifications.empty')) ?></li>
                             </ul>
                         </div>
                     </div>
@@ -151,48 +165,50 @@ $twitterHandle = Setting::get('twitter_handle', '');
 
                 <?php if ($user !== null): ?>
                     <?php if (($user['role'] ?? '') === 'ADMIN' || ($user['role'] ?? '') === 'TRESORERIE'): ?>
-                        <a class="btn btn-primary btn-sm" href="<?= e(url('/admin')) ?>">Admin</a>
+                        <a class="btn btn-primary btn-sm" href="<?= e(url('/admin')) ?>"><?= e(t('nav.admin')) ?></a>
                     <?php endif; ?>
-                    <a class="btn btn-outline btn-sm" href="<?= e(url('/account/privacy')) ?>"><?= e($user['prenom'] ?? t('Mon compte', 'My account')) ?></a>
-                    <a class="btn btn-ghost btn-sm" href="<?= e(url('/logout')) ?>"><?= e(t('Déconnexion', 'Logout')) ?></a>
+                    <a class="btn btn-outline btn-sm" href="<?= e(url('/account/privacy')) ?>"><?= e($user['prenom'] ?? t('nav.account')) ?></a>
+                    <a class="btn btn-ghost btn-sm" href="<?= e(url('/logout')) ?>"><?= e(t('nav.logout')) ?></a>
                 <?php else: ?>
-                    <a class="btn btn-ghost btn-sm" href="<?= e(url('/login')) ?>"><?= e(t('Connexion', 'Login')) ?></a>
-                    <a class="btn btn-primary btn-sm" href="<?= e(url('/register')) ?>"><?= e(t("S'inscrire", 'Register')) ?></a>
+                    <a class="btn btn-ghost btn-sm" href="<?= e(url('/login')) ?>"><?= e(t('nav.login')) ?></a>
+                    <a class="btn btn-primary btn-sm" href="<?= e(url('/register')) ?>"><?= e(t('nav.register')) ?></a>
                 <?php endif; ?>
             </div>
 
-            <button class="nav-toggle" type="button" aria-label="Ouvrir le menu"
+            <button class="nav-toggle" type="button" aria-label="<?= e(t('nav.open_menu')) ?>"
                     aria-expanded="false" aria-controls="mobile-nav">
                 <span></span><span></span><span></span>
             </button>
         </div>
 
-        <nav id="mobile-nav" class="mobile-nav" aria-label="<?= e(t('Navigation mobile', 'Mobile navigation')) ?>">
-            <a href="<?= e(url('/')) ?>"><?= e(t('Accueil', 'Home')) ?></a>
-            <a href="<?= e(url('/events')) ?>"><?= e(t('Événements', 'Events')) ?></a>
-            <a href="<?= e(url('/presentation')) ?>"><?= e(t("L'association", 'About')) ?></a>
-            <a href="<?= e(url('/team')) ?>"><?= e(t('Équipe', 'Team')) ?></a>
-            <a href="<?= e(url('/sondages')) ?>"><?= e(t('Sondages', 'Polls')) ?></a>
-            <a href="<?= e(url('/galerie')) ?>"><?= e(t('Galerie', 'Gallery')) ?></a>
+        <nav id="mobile-nav" class="mobile-nav" aria-label="<?= e(t('nav.main.aria')) ?>">
+            <a href="<?= e(url('/')) ?>"><?= e(t('nav.home')) ?></a>
+            <a href="<?= e(url('/events')) ?>"><?= e(t('nav.events')) ?></a>
+            <a href="<?= e(url('/presentation')) ?>"><?= e(t('nav.about')) ?></a>
+            <a href="<?= e(url('/team')) ?>"><?= e(t('nav.team')) ?></a>
+            <a href="<?= e(url('/sondages')) ?>"><?= e(t('nav.polls')) ?></a>
+            <a href="<?= e(url('/galerie')) ?>"><?= e(t('nav.gallery')) ?></a>
             <hr>
-            <form method="post" action="<?= e(url('/set-lang')) ?>" class="lang-switch lang-switch-mobile" aria-label="<?= e(t('Changer de langue', 'Change language')) ?>">
-                <?= csrf_field() ?>
-                <input type="hidden" name="back" value="<?= e($currentPath) ?>">
-                <button type="submit" name="lang" value="fr" class="btn btn-outline btn-sm<?= $lang === 'fr' ? ' is-active' : '' ?>">🇫🇷 FR</button>
-                <button type="submit" name="lang" value="en" class="btn btn-outline btn-sm<?= $lang === 'en' ? ' is-active' : '' ?>">🇬🇧 EN</button>
-            </form>
+            <div class="lang-switch-mobile">
+                <?php foreach ($langs as $code): ?>
+                    <a class="btn btn-outline btn-sm<?= $code === $lang ? ' is-active' : '' ?>"
+                       href="<?= e(url('/set-lang?lang=' . $code . '&redirect=' . rawurlencode($currentPath))) ?>">
+                        <?= lang_flag($code) ?> <?= e(strtoupper($code)) ?>
+                    </a>
+                <?php endforeach; ?>
+            </div>
             <hr>
-            <button type="button" class="btn btn-ghost" id="theme-toggle-mobile">🌙 <?= e(t('Thème', 'Theme')) ?></button>
+            <button type="button" class="btn btn-ghost" id="theme-toggle-mobile">🌙 <?= e(t('nav.theme')) ?></button>
             <hr>
             <?php if ($user !== null): ?>
                 <?php if (($user['role'] ?? '') === 'ADMIN' || ($user['role'] ?? '') === 'TRESORERIE'): ?>
-                    <a class="btn btn-primary" href="<?= e(url('/admin')) ?>">Admin</a>
+                    <a class="btn btn-primary" href="<?= e(url('/admin')) ?>"><?= e(t('nav.admin')) ?></a>
                 <?php endif; ?>
-                <a class="btn btn-outline" href="<?= e(url('/account/privacy')) ?>"><?= e(t('Mes données', 'My data')) ?></a>
-                <a class="btn btn-ghost" href="<?= e(url('/logout')) ?>"><?= e(t('Déconnexion', 'Logout')) ?></a>
+                <a class="btn btn-outline" href="<?= e(url('/account/privacy')) ?>"><?= e(t('nav.data')) ?></a>
+                <a class="btn btn-ghost" href="<?= e(url('/logout')) ?>"><?= e(t('nav.logout')) ?></a>
             <?php else: ?>
-                <a class="btn btn-ghost" href="<?= e(url('/login')) ?>"><?= e(t('Connexion', 'Login')) ?></a>
-                <a class="btn btn-primary" href="<?= e(url('/register')) ?>"><?= e(t("S'inscrire", 'Register')) ?></a>
+                <a class="btn btn-ghost" href="<?= e(url('/login')) ?>"><?= e(t('nav.login')) ?></a>
+                <a class="btn btn-primary" href="<?= e(url('/register')) ?>"><?= e(t('nav.register')) ?></a>
             <?php endif; ?>
         </nav>
     </header>
@@ -212,20 +228,20 @@ $twitterHandle = Setting::get('twitter_handle', '');
                 </div>
             </div>
 
-            <nav class="footer-links" aria-label="<?= e(t('Pied de page', 'Footer')) ?>">
-                <a href="<?= e(url('/events')) ?>">📅 <?= e(t('Événements', 'Events')) ?></a>
-                <a href="<?= e(url('/presentation')) ?>">🏫 <?= e(t('Association', 'About')) ?></a>
-                <a href="<?= e(url('/team')) ?>">👥 <?= e(t('Équipe', 'Team')) ?></a>
-                <a href="<?= e(url('/sondages')) ?>">📊 <?= e(t('Sondages', 'Polls')) ?></a>
-                <a href="<?= e(url('/galerie')) ?>">📷 <?= e(t('Galerie', 'Gallery')) ?></a>
-                <a href="<?= e(url('/legal')) ?>">⚖️ <?= e(t('Mentions légales', 'Legal notice')) ?></a>
-                <a href="<?= e(url('/privacy')) ?>">🔒 <?= e(t('Confidentialité', 'Privacy')) ?></a>
-                <a href="<?= e(url('/cgu')) ?>">📋 <?= e(t('CGU', 'Terms')) ?></a>
+            <nav class="footer-links" aria-label="<?= e(t('footer.aria')) ?>">
+                <a href="<?= e(url('/events')) ?>">📅 <?= e(t('nav.events')) ?></a>
+                <a href="<?= e(url('/presentation')) ?>">🏫 <?= e(t('nav.about')) ?></a>
+                <a href="<?= e(url('/team')) ?>">👥 <?= e(t('nav.team')) ?></a>
+                <a href="<?= e(url('/sondages')) ?>">📊 <?= e(t('nav.polls')) ?></a>
+                <a href="<?= e(url('/galerie')) ?>">📷 <?= e(t('nav.gallery')) ?></a>
+                <a href="<?= e(url('/legal')) ?>">⚖️ <?= e(t('footer.legal')) ?></a>
+                <a href="<?= e(url('/privacy')) ?>">🔒 <?= e(t('footer.privacy')) ?></a>
+                <a href="<?= e(url('/cgu')) ?>">📋 <?= e(t('footer.cgu')) ?></a>
             </nav>
 
             <div class="footer-bottom">
-                <span class="footer-tag">🎓 <?= e(t('100 % étudiant.', '100% student-run.')) ?></span>
-                <span class="footer-copy">© <?= e($currentYear) ?> <?= e($siteName) ?> · <?= e(t('Fait par les étudiants, pour les étudiants.', 'Made by students, for students.')) ?></span>
+                <span class="footer-tag">🎓 <?= e(t('footer.tag')) ?></span>
+                <span class="footer-copy">© <?= e($currentYear) ?> <?= e($siteName) ?> · <?= e(t('footer.copy')) ?></span>
             </div>
         </div>
     </footer>
@@ -273,6 +289,13 @@ $twitterHandle = Setting::get('twitter_handle', '');
     <?php if (Auth::check()): ?>
         <script>window.AEIC_CSRF = <?= json_encode(csrf_token()) ?>;</script>
     <?php endif; ?>
+    <script>window.AEIC_I18N = {
+        notifEmpty: <?= json_encode(t('nav.notifications.empty')) ?>,
+        justNow: <?= json_encode($lang === 'fr' ? "à l'instant" : ($lang === 'en' ? 'just now' : ($lang === 'de' ? 'gerade eben' : ($lang === 'es' ? 'justo ahora' : ($lang === 'zh' ? '刚刚' : ($lang === 'ja' ? 'たった今' : 'przed chwilą')))))) ?>,
+        minutesAgo: <?= json_encode($lang === 'fr' ? 'il y a %d min' : ($lang === 'en' ? '%d min ago' : ($lang === 'de' ? 'vor %d Min.' : ($lang === 'es' ? 'hace %d min' : ($lang === 'zh' ? '%d 分钟前' : ($lang === 'ja' ? '%d分前' : '%d min temu')))))) ?>,
+        hoursAgo: <?= json_encode($lang === 'fr' ? 'il y a %d h' : ($lang === 'en' ? '%d h ago' : ($lang === 'de' ? 'vor %d Std.' : ($lang === 'es' ? 'hace %d h' : ($lang === 'zh' ? '%d 小时前' : ($lang === 'ja' ? '%d時間前' : '%d godz. temu')))))) ?>,
+        daysAgo: <?= json_encode($lang === 'fr' ? 'il y a %d j' : ($lang === 'en' ? '%d d ago' : ($lang === 'de' ? 'vor %d Tg.' : ($lang === 'es' ? 'hace %d d' : ($lang === 'zh' ? '%d 天前' : ($lang === 'ja' ? '%d日前' : '%d dni temu')))))) ?>
+    };</script>
 
     <script>
         (function () {
@@ -373,10 +396,11 @@ $twitterHandle = Setting::get('twitter_handle', '');
                     if (!iso) return '';
                     var then = new Date(iso.replace(' ', 'T') + 'Z');
                     var diff = Math.round((Date.now() - then.getTime()) / 60000);
-                    if (diff < 1) return "à l'instant";
-                    if (diff < 60) return 'il y a ' + diff + ' min';
-                    if (diff < 1440) return 'il y a ' + Math.floor(diff / 60) + ' h';
-                    return 'il y a ' + Math.floor(diff / 1440) + ' j';
+                    var i18n = window.AEIC_I18N || {};
+                    if (diff < 1) return i18n.justNow || '';
+                    if (diff < 60) return (i18n.minutesAgo || '').replace('%d', diff);
+                    if (diff < 1440) return (i18n.hoursAgo || '').replace('%d', Math.floor(diff / 60));
+                    return (i18n.daysAgo || '').replace('%d', Math.floor(diff / 1440));
                 }
 
                 function render(payload) {
@@ -386,7 +410,7 @@ $twitterHandle = Setting::get('twitter_handle', '');
 
                     var items = payload.items || [];
                     if (!items.length) {
-                        list.innerHTML = '<li class="nav-bell-empty">Aucune notification.</li>';
+                        list.innerHTML = '<li class="nav-bell-empty">' + ((window.AEIC_I18N || {}).notifEmpty || '') + '</li>';
                         return;
                     }
                     list.innerHTML = '';
@@ -444,6 +468,37 @@ $twitterHandle = Setting::get('twitter_handle', '');
         })();
     </script>
     <script src="<?= e(rootAssetVersioned('/assets/js/confirm.js')) ?>"></script>
+
+    <!-- Dropdown de langue : ouverture, fermeture au clic extérieur et à Échap. -->
+    <script>
+        (function () {
+            var box = document.getElementById('lang-dropdown');
+            var btn = document.getElementById('lang-current');
+            var menu = document.getElementById('lang-menu');
+            if (!box || !btn || !menu) return;
+
+            function open() {
+                menu.hidden = false;
+                btn.setAttribute('aria-expanded', 'true');
+            }
+            function close() {
+                menu.hidden = true;
+                btn.setAttribute('aria-expanded', 'false');
+            }
+            function toggle() { menu.hidden ? open() : close(); }
+
+            btn.addEventListener('click', function (e) {
+                e.stopPropagation();
+                toggle();
+            });
+            document.addEventListener('click', function (e) {
+                if (!box.contains(e.target)) close();
+            });
+            document.addEventListener('keydown', function (e) {
+                if (e.key === 'Escape') close();
+            });
+        })();
+    </script>
 
     <!-- PWA : enregistrement du service worker -->
     <script>if ('serviceWorker' in navigator) { window.addEventListener('load', function () { navigator.serviceWorker.register('/sw.js'); }); }</script>

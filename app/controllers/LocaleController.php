@@ -17,11 +17,13 @@ final class LocaleController extends Controller
     public function setLang(): void
     {
         $lang = strtolower((string) ($_POST['lang'] ?? $_GET['lang'] ?? 'fr'));
-        $lang = $lang === 'en' ? 'en' : 'fr';
+        if (!in_array($lang, available_langs(), true)) {
+            $lang = 'fr';
+        }
 
         $this->setCookie('aeic_lang', $lang, time() + 60 * 60 * 24 * 365);
 
-        $back = $_POST['back'] ?? $_GET['back'] ?? $_SERVER['HTTP_REFERER'] ?? '/';
+        $back = $_POST['back'] ?? $_GET['back'] ?? $_GET['redirect'] ?? $_POST['redirect'] ?? $_SERVER['HTTP_REFERER'] ?? '/';
         $back = $this->safeBack((string) $back);
 
         redirect($back);

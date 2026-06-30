@@ -54,11 +54,11 @@ if ($voters > 0) {
         <div class="poll-card-v2-body">
             <div class="poll-card-v2-meta">
                 <?php if ($isClosed): ?>
-                    <span class="badge badge-muted">🔒 Fermé</span>
+                    <span class="badge badge-muted"><?= e(t('poll.closed')) ?></span>
                 <?php else: ?>
-                    <span class="badge badge-success">🟢 Ouvert</span>
+                    <span class="badge badge-success"><?= e(t('poll.open')) ?></span>
                 <?php endif; ?>
-                <span class="poll-card-v2-type"><?= $isMulti ? '☑️ Multi' : '🔘 Unique' ?></span>
+                <span class="poll-card-v2-type"><?= e($isMulti ? t('poll.card.multi') : t('poll.card.single')) ?></span>
             </div>
 
             <h3 class="poll-card-v2-title"><?= e($title) ?></h3>
@@ -77,10 +77,10 @@ if ($voters > 0) {
             <div class="poll-card-v2-foot">
                 <span class="poll-card-v2-stats">
                     <span class="poll-stat">🗳️ <?= e((string) $voters) ?></span>
-                    <span class="poll-stat"><?= e((string) $optCount) ?> options</span>
+                    <span class="poll-stat"><?= e(tt('poll.card.options', ['{n}' => $optCount])) ?></span>
                 </span>
                 <span class="poll-card-v2-cta">
-                    <?= $isClosed ? 'Voir →' : 'Participer →' ?>
+                    <?= e($isClosed ? t('poll.card.view') : t('poll.card.join')) ?>
                 </span>
             </div>
         </div>

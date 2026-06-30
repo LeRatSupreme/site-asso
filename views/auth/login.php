@@ -11,8 +11,8 @@ declare(strict_types=1);
 <header class="page-hero">
     <div class="halo halo-teal" aria-hidden="true"></div>
     <div class="container">
-        <span class="eyebrow">Espace membre</span>
-        <h1 class="page-title">Connexion</h1>
+        <span class="eyebrow"><?= e(t('auth.login.eyebrow')) ?></span>
+        <h1 class="page-title"><?= e(t('auth.login.title')) ?></h1>
     </div>
 </header>
 
@@ -23,23 +23,23 @@ declare(strict_types=1);
             <input type="hidden" name="callbackUrl" value="<?= e($callbackUrl ?? '') ?>">
 
             <div class="field">
-                <label for="email">Adresse e-mail</label>
+                <label for="email"><?= e(t('auth.login.email')) ?></label>
                 <input type="email" id="email" name="email" autocomplete="username"
                        placeholder="vous@exemple.fr" required>
             </div>
 
             <div class="field">
-                <label for="password">Mot de passe</label>
+                <label for="password"><?= e(t('auth.login.password')) ?></label>
                 <input type="password" id="password" name="password"
                        autocomplete="current-password" required>
             </div>
-            <p class="field-meta"><a href="<?= e(url('/forgot-password')) ?>">Mot de passe oublié ?</a></p>
+            <p class="field-meta"><a href="<?= e(url('/forgot-password')) ?>"><?= e(t('auth.login.forgot')) ?></a></p>
 
-            <button type="submit" class="btn btn-primary btn-block">Se connecter</button>
+            <button type="submit" class="btn btn-primary btn-block"><?= e(t('auth.login.submit')) ?></button>
 
             <p class="auth-alt">
-                Pas encore de compte ?
-                <a href="<?= e(url('/register')) ?>">Créer un compte</a>
+                <?= e(t('auth.login.alt')) ?>
+                <a href="<?= e(url('/register')) ?>"><?= e(t('auth.register.title')) ?></a>
             </p>
         </form>
     </div>

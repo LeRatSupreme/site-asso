@@ -67,10 +67,10 @@ function catIcon(string $cat): string {
 <header class="page-hero">
     <div class="halo halo-teal" aria-hidden="true"></div>
     <div class="container">
-        <span class="eyebrow">Agenda AEIC</span>
-        <h1 class="page-title">Les prochains rendez-vous.</h1>
+        <span class="eyebrow"><?= e(t('events.eyebrow')) ?></span>
+        <h1 class="page-title"><?= e(t('events.title')) ?></h1>
         <p class="page-lead">
-            <?= e((string) $countUpcoming) ?> à venir · <?= e((string) $countPast) ?> passés
+            <?= e(tt('events.lead', ['{a}' => max($countUpcoming, 0), '{b}' => max($countPast, 0)])) ?>
         </p>
     </div>
 </header>
@@ -79,7 +79,7 @@ function catIcon(string $cat): string {
     <div class="container">
         <?php if (empty($upcoming)): ?>
             <div class="empty-state surface glass">
-                <p>Aucun événement à venir pour le moment. Revenez vite !</p>
+                <p><?= e(t('events.empty')) ?></p>
             </div>
         <?php else: ?>
 
@@ -105,7 +105,7 @@ function catIcon(string $cat): string {
                     <div class="event-cat-header">
                         <h2 class="event-cat-title">
                             <span class="event-cat-icon">📅</span>
-                            Autres
+                            <?= e(t('events.others')) ?>
                             <span class="event-cat-count"><?= count($uncategorized) ?></span>
                         </h2>
                     </div>
@@ -125,7 +125,7 @@ function catIcon(string $cat): string {
 <section class="section section-alt">
     <div class="container">
         <div class="section-head">
-            <h2 class="section-title">Archives</h2>
+            <h2 class="section-title"><?= e(t('events.archives')) ?></h2>
         </div>
 
         <?php foreach ($groupedPast as $catName => $events): ?>

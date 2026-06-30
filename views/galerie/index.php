@@ -14,9 +14,9 @@ $groups = $groups ?? [];
 <header class="page-hero">
     <div class="halo halo-teal" aria-hidden="true"></div>
     <div class="container">
-        <span class="eyebrow">📷 Galerie</span>
-        <h1 class="page-title">Photos des événements</h1>
-        <p class="page-lead">Retrouvez en images les meilleurs moments des événements passés de l'AEIC.</p>
+        <span class="eyebrow"><?= e(t('gallery.eyebrow')) ?></span>
+        <h1 class="page-title"><?= e(t('gallery.title')) ?></h1>
+        <p class="page-lead"><?= e(t('gallery.lead')) ?></p>
     </div>
 </header>
 
@@ -24,7 +24,7 @@ $groups = $groups ?? [];
     <div class="container">
         <?php if ($groups === []): ?>
             <div class="empty-state">
-                <p>Aucune photo pour le moment. Revenez bientôt après nos prochains événements !</p>
+                <p><?= e(t('gallery.empty')) ?></p>
             </div>
         <?php else: ?>
             <?php foreach ($groups as $group): ?>
@@ -53,7 +53,7 @@ $groups = $groups ?? [];
                             <figure class="gallery-item surface">
                                 <a href="<?= e($photoUrl) ?>" class="gallery-zoom"
                                    data-caption="<?= e($caption) ?>"
-                                   title="<?= e($caption !== '' ? $caption : 'Agrandir') ?>">
+                                   title="<?= e($caption !== '' ? $caption : t('gallery.zoom')) ?>">
                                     <img src="<?= e($photoUrl) ?>"
                                          alt="<?= e($caption !== '' ? $caption : $group['event_title']) ?>"
                                          loading="lazy">
@@ -72,7 +72,7 @@ $groups = $groups ?? [];
 
 <!-- Lightbox (CSS + JS minimal) -->
 <div class="lightbox" id="lightbox" hidden>
-    <button type="button" class="lightbox-close" id="lightbox-close" aria-label="Fermer">✕</button>
+    <button type="button" class="lightbox-close" id="lightbox-close" aria-label="<?= e(t('gallery.close')) ?>">✕</button>
     <img src="" alt="" id="lightbox-img">
     <p class="lightbox-caption" id="lightbox-caption"></p>
 </div>
