@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 use App\Controllers\AccountController;
+use App\Controllers\Admin\AdminAnalyticsController;
+use App\Controllers\Admin\AdminArticleController;
 use App\Controllers\Admin\AdminCafeteriaController;
 use App\Controllers\Admin\AdminComptaController;
 use App\Controllers\Admin\AdminController;
@@ -15,6 +17,7 @@ use App\Controllers\Admin\AdminSumupController;
 use App\Controllers\Admin\AdminTeamController;
 use App\Controllers\Admin\AdminUserController;
 use App\Controllers\AuthController;
+use App\Controllers\ArticleController;
 use App\Controllers\EventController;
 use App\Controllers\HealthController;
 use App\Controllers\HomeController;
@@ -51,6 +54,10 @@ function aeic_register_routes(Router $router): void
     $router->get('/privacy', [PageController::class, 'privacy']);
     $router->get('/cgu', [PageController::class, 'cgu']);
     $router->get('/p/{slug}', [PageController::class, 'show']);
+
+    // Blog / actualités.
+    $router->get('/blog', [ArticleController::class, 'index']);
+    $router->get('/blog/{slug}', [ArticleController::class, 'show']);
 
     // Sondages.
     $router->get('/sondages', [PollController::class, 'index']);
@@ -146,6 +153,13 @@ function aeic_register_routes(Router $router): void
     $router->post('/admin/pages/save', [AdminPageController::class, 'save']);
     $router->post('/admin/pages/{slug}/delete', [AdminPageController::class, 'delete']);
 
+    // Blog / articles (admin).
+    $router->get('/admin/articles', [AdminArticleController::class, 'index']);
+    $router->get('/admin/articles/new', [AdminArticleController::class, 'form']);
+    $router->get('/admin/articles/{id}', [AdminArticleController::class, 'form']);
+    $router->post('/admin/articles/save', [AdminArticleController::class, 'save']);
+    $router->post('/admin/articles/{id}/delete', [AdminArticleController::class, 'delete']);
+
     $router->get('/admin/sondages', [AdminPollController::class, 'index']);
     $router->get('/admin/sondages/new', [AdminPollController::class, 'form']);
     $router->get('/admin/sondages/{id}', [AdminPollController::class, 'form']);
@@ -181,4 +195,7 @@ function aeic_register_routes(Router $router): void
 
     // Mini dashboard SumUp (fondé sur les ventes importées ; ADMIN/TRESORERIE).
     $router->get('/admin/sumup', [AdminSumupController::class, 'index']);
+
+    // Dashboard analytics (graphiques Chart.js).
+    $router->get('/admin/analytics', [AdminAnalyticsController::class, 'index']);
 }
