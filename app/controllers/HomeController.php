@@ -49,66 +49,75 @@ final class HomeController extends Controller
     }
 
     /**
-     * Galerie photos publique : tous les médias + photos d'événements.
+     * Galerie photos publique : tous les médias uploadés.
      */
     public function galerie(): void
     {
-        // 1) Photos d'événements (table photos).
-        $rows = Event::pastPhotos();
+        $photos = [];
 
-        $groups = [];
-        foreach ($rows as $row) {
-            $eventId = (string) $row['event_id'];
-            if (!isset($groups[$eventId])) {
-                $groups[$eventId] = [
-                    'event_id'    => $eventId,
-                    'event_title' => (string) ($row['event_title'] ?? ''),
-                    'event_slug'  => (string) ($row['event_slug'] ?? ''),
-                    'event_date'  => (string) ($row['event_date'] ?? ''),
-                    'photos'      => [],
-                ];
-            }
-            $groups[$eventId]['photos'][] = [
-                'url'       => (string) ($row['url'] ?? ''),
-                'caption'   => (string) ($row['caption'] ?? ''),
-                'photo_id'  => (string) ($row['photo_id'] ?? ''),
-            ];
-        }
-
-        // 2) Médias orphelins (table media, non liés à un événement).
+        // Médias uploadés (table media).
         try {
-            $mediaRows = db()->query(
-                'SELECT id, name, url, alt, type, created_at
+            $stmt = db()->query(
+                'SELECT id, name, url, alt
                  FROM media
-                 WHERE type LIKE "image/%"
                  ORDER BY created_at DESC
                  LIMIT 50'
-            )->fetchAll();
-        } catch (\Throwable) {
-            $mediaRows = [];
+            );
+            $photos = $stmt->fetchAll();
+        } catch (\Throwable $e) {
+            // Log silencieux.
+            if (defined('APP_DEBUG') && APP_DEBUG) {
+                error_log('Galerie media query error: ' . $e->getMessage());
+            }
         }
 
-        if (!empty($mediaRows)) {
-            $groups['__media__'] = [
-                'event_id'    => '__media__',
-                'event_title' => 'Autres photos',
+        $groups = [];
+        if (!empty($photos)) {
+            $groups[] = [
+                'event_id'    => 'media',
+                'event_title' => 'Photos',
                 'event_slug'  => '',
                 'event_date'  => '',
-                'photos'      => [],
+                'photos'      => array_map(static function (array $m): array {
+                    return [
+                        'url'      => (string) ($m['url'] ?? ''),
+                        'caption'  => (string) ($m['alt'] ?? $m['name'] ?? ''),
+                        'photo_id' => (string) ($m['id'] ?? ''),
+                    ];
+                }, $photos),
             ];
-            foreach ($mediaRows as $m) {
-                $groups['__media__']['photos'][] = [
-                    'url'       => (string) ($m['url'] ?? ''),
-                    'caption'   => (string) ($m['alt'] ?? $m['name'] ?? ''),
-                    'photo_id'  => (string) ($m['id'] ?? ''),
+        }
+
+        // Aussi les photos d'événements (table photos) si elles existent.
+        try {
+            $eventPhotos = Event::pastPhotos();
+            $byEvent = [];
+            foreach ($eventPhotos as $row) {
+                $eid = (string) $row['event_id'];
+                if (!isset($byEvent[$eid])) {
+                    $byEvent[$eid] = [
+                        'event_id'    => $eid,
+                        'event_title' => (string) ($row['event_title'] ?? ''),
+                        'event_slug'  => (string) ($row['event_slug'] ?? ''),
+                        'event_date'  => (string) ($row['event_date'] ?? ''),
+                        'photos'      => [],
+                    ];
+                }
+                $byEvent[$eid]['photos'][] = [
+                    'url'      => (string) ($row['url'] ?? ''),
+                    'caption'  => (string) ($row['caption'] ?? ''),
+                    'photo_id' => (string) ($row['photo_id'] ?? ''),
                 ];
             }
+            $groups = array_merge($groups, array_values($byEvent));
+        } catch (\Throwable) {
+            // Ignore.
         }
 
         $this->render('galerie/index', [
             'title'       => 'Galerie — AEIC',
-            'description' => 'Photos des événements passés de l\'AEIC : soirées, LAN, conférences et plus.',
-            'groups'      => array_values($groups),
+            'description' => 'Photos des événements et activités de l\'AEIC.',
+            'groups'      => $groups,
         ]);
     }
 }
