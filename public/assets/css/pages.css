@@ -248,6 +248,44 @@
     white-space: nowrap;
 }
 
+/* ----------------------------- Sections par catégorie ----------------------------- */
+.event-cat-section {
+    margin-bottom: 2.5rem;
+}
+.event-cat-section:last-child {
+    margin-bottom: 0;
+}
+.event-cat-header {
+    margin-bottom: 1.25rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 2px solid var(--border);
+}
+.event-cat-title {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin: 0;
+    font-size: 1.25rem;
+    font-weight: 800;
+    color: var(--foreground);
+}
+.event-cat-icon {
+    font-size: 1.4rem;
+    line-height: 1;
+}
+.event-cat-count {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--muted);
+    background: rgba(255,255,255,0.06);
+    padding: 0.15rem 0.6rem;
+    border-radius: 999px;
+}
+.event-cat-past .event-cat-title {
+    font-size: 1.05rem;
+    opacity: 0.8;
+}
+
 /* ----------------------------- Carte (Où nous trouver) ----------------------------- */
 .map-block {
     display: grid;
