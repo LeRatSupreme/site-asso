@@ -2,443 +2,581 @@
 
 declare(strict_types=1);
 
-/**
- * Wiki / Guide de l'administrateur — intégré au site.
- *
- * @var array<string,mixed> $user
- */
-
-$sections = [
-    'getting-started' => [
-        'icon' => '🚀',
-        'title' => 'Démarrage',
-        'color' => '#48bdd3',
-        'items' => [
-            'Comment se connecter ?' => 'Va sur https://asso.aremond.ovh/login → entre ton email et mot de passe. Si tu es admin, un bouton « Admin » apparaît en haut à droite.',
-            'Le 2FA (authentification à 2 facteurs)' => 'Les administrateurs doivent configurer le 2FA. À la première connexion, scanne le QR code avec Google Authenticator (ou équivalent). À chaque connexion ultérieure, entre le code à 6 chiffres généré par l\'app.',
-            'Mot de passe oublié' => 'Sur la page de connexion, clique « Mot de passe oublié ? ». Un email avec un lien de réinitialisation est envoyé. Un admin peut aussi faire « Reset MDP » depuis Utilisateurs.',
-            'Les rôles' => 'ADMIN = accès complet. TRESORERIE = uniquement la comptabilité. ELEVE = pas d\'accès admin. Seul un ADMIN peut changer les rôles.',
-            'Changer mon mot de passe' => 'Mon compte → Mes données → « Changer mon mot de passe ». Un email de confirmation est envoyé. 8 caractères minimum avec 1 lettre + 1 chiffre.',
-        ],
-    ],
-    'dashboard' => [
-        'icon' => '📊',
-        'title' => 'Tableau de bord',
-        'color' => '#6150aa',
-        'items' => [
-            'Que montre le tableau de bord ?' => '5 indicateurs : membres actifs, membres à jour de cotisation, événements publiés, CA du mois (basé sur les ventes SumUp importées), bénéfice du mois.',
-            'Journal d\'audit' => 'En bas du tableau de bord, liste toutes les actions sensibles : qui a créé/modifié/supprimé quoi et quand. Utile en cas de problème.',
-            'Les chiffres sont à 0' => 'Si le CA est à 0 → tu n\'as pas importé de rapport SumUp ce mois-ci. Va dans Comptabilité → Importer CSV.',
-        ],
-    ],
-    'events' => [
-        'icon' => '📅',
-        'title' => 'Événements',
-        'color' => '#48bdd3',
-        'items' => [
-            'Créer un événement' => 'Admin → Événements → « + Nouvel événement ». Remplis : titre, slug (URL), catégorie, extrait (résumé court), description (HTML), date/heure, lieu.',
-            'Catégories d\'événements' => 'Les événements sont groupés par catégorie sur la page /events. Catégories possibles : Soirée, Afterwork, Barbecue, Tournoi/LAN, Conférence, Sortie, Atelier, Nuit de l\'Info, Hackathon, Rentrée, Autre.',
-            'Capacité max et liste d\'attente' => 'Si tu mets une capacité max (ex: 50), les inscriptions au-delà vont en file d\'attente automatiquement. Quand quelqu\'un se désinscrit → le premier de la file est promu + reçoit un email automatique.',
-            'Carte interactive' => 'Coche « Afficher une carte du lieu » → l\'adresse est géocodée automatiquement et une carte OpenStreetMap s\'affiche sur la page de l\'événement.',
-            'Prix et paiement SumUp' => 'Mets un prix (vide = gratuit). Colle un lien SumUp dans « Lien de paiement ». Le bouton « Payer en ligne » apparaîtra sur la page.',
-            'Mettre en avant' => 'Coche « Mis en avant » → l\'événement apparaît en priorité sur l\'accueil.',
-            'Publier / dépublier' => 'Coche « Publié » pour le rendre visible. Décoche pour le masquer (brouillon).',
-            'Voir les inscriptions' => 'Clique 📋 à côté d\'un événement → liste des inscrits avec nom, date d\'inscription, choix (menus/options). Export CSV disponible.',
-            'Modifier un événement' => 'Clique ✏️ → modifie les champs → « Enregistrer ».',
-            'Supprimer un événement' => 'Clique 🗑️ → confirmation → suppression définitive (inscriptions supprimées aussi).',
-        ],
-    ],
-    'checkin' => [
-        'icon' => '📱',
-        'title' => 'Check-in QR',
-        'color' => '#f59e0b',
-        'items' => [
-            'Comment ça marche ?' => 'Quand un élève s\'inscrit → un QR code unique est généré automatiquement. Il est visible sur la page de l\'événement (si l\'élève est connecté et inscrit).',
-            'Le jour de l\'événement' => 'Admin → Événements → 📋 → « Ouvrir le check-in ». Scanne le QR de chaque participant avec la caméra du téléphone ou saisis le token manuellement → Entrée.',
-            'Badge de présence' => 'Après scan : ✅ vert = présent. Si déjà scanné : ⚠️ « Déjà checké ». Tu peux aussi basculer manuellement présent/absent.',
-            'QR ne marche pas' => 'L\'élève doit se désinscrire puis se réinscrire pour générer un nouveau QR (si le token a expiré).',
-        ],
-    ],
-    'sondages' => [
-        'icon' => '📊',
-        'title' => 'Sondages',
-        'color' => '#6150aa',
-        'items' => [
-            'Créer un sondage' => 'Admin → Sondages → « + Nouveau ». Titre + description + options (bouton « + Ajouter une option »). Choix unique (radio) ou multiple (checkbox). Publier.',
-            'Comment votent les élèves' => 'L\'élève va sur /sondages → clique « Participer » → sélectionne sa réponse → « Voter ». Une seule fois. Après vote → résultats visibles.',
-            'Résultats en direct' => 'Barres de progression avec % pour chaque option. 🏆 sur l\'option gagnante. « ✓ votre choix » s\'affiche sur l\'option que l\'élève a choisie.',
-            'Fermer un sondage' => 'Dépublie-le (ou mets une date de clôture). Les résultats restent visibles.',
-        ],
-    ],
-    'cafeteria' => [
-        'icon' => '☕',
-        'title' => 'Cafétéria (produits & carte)',
-        'color' => '#22c55e',
-        'items' => [
-            'Ajouter un produit' => 'Admin → Cafétéria → Produits → « + Nouveau ». Remplis : nom, description, prix de vente, catégorie, image (optionnel), stock, disponible, actif.',
-            'Le menu sur l\'accueil' => 'Les produits actifs + disponibles apparaissent dans « Notre carte » sur la page d\'accueil, organisés par catégorie avec onglets.',
-            'Emojis automatiques' => 'Le site attribue un emoji selon le nom (Coca→🥤, Bueno→🍫, Monster→⚡, Eau→💧, Chips→🍟...). Si tu ajoutes une image → elle remplace l\'emoji.',
-            'Ajouter une image à un produit' => 'Upload une image dans Médias → copie l\'URL → colle-la dans le champ « Image » du produit.',
-            'Gérer les catégories' => 'Admin → Cafétéria → Catégories. Crée/modifie les catégories (Boissons, Snacks, Spécial). L\'ordre détermine l\'affichage des onglets sur l\'accueil.',
-            'Activer/Désactiver un produit' => 'Produit « Actif » = visible sur le site. « Disponible » = en stock. Désactive un produit épuisé pour le masquer du menu.',
-        ],
-    ],
-    'promotions' => [
-        'icon' => '🏷️',
-        'title' => 'Promotions',
-        'color' => '#ef4444',
-        'items' => [
-            'Créer une promo' => 'Admin → Promotions → « + Nouvelle ». Titre, description, badge (PROMO, -20%, NOUVEAU...), ancien prix, nouveau prix, dates (optionnel). Active.',
-            'Affichage sur l\'accueil' => 'Les promos actives apparaissent dans « Promos & ventes spéciales ». Ancien prix barré, nouveau prix en gros teal, badge coloré.',
-            'Désactiver une promo' => 'Décoche « Active » ou mets une date de fin. La promo disparaît de l\'accueil.',
-        ],
-    ],
-    'compta-import' => [
-        'icon' => '📥',
-        'title' => 'Comptabilité — Import SumUp',
-        'color' => '#48bdd3',
-        'items' => [
-            'Récupérer le rapport SumUp' => 'Sur l\'app SumUp : Reports → sélectionne la période (mois) → Export CSV. Le fichier contient : date, description produit, prix, moyen de paiement, etc.',
-            'Importer le CSV' => 'Admin → Comptabilité → Importer CSV → choisis le fichier → « Importer ». Le système parse, normalise (Carte/Liquide) et déduplique.',
-            'Déduplication automatique' => 'Si tu réimportes le même fichier → 0 doublon (clé unique sur transaction_ref + date + produit). Tu peux importer sans crainte.',
-            'Montant personnalisé' => 'Les ventes « Montant personnalisé » (saisies libres à la caisse) sont comptées dans le CA mais exclues du bénéfice (pas de produit associé).',
-            'Fréquence recommandée' => 'Au moins une fois par mois. Plus tu importes souvent, plus les statistiques sont précises (moyennes mobiles).',
-        ],
-    ],
-    'compta-aliases' => [
-        'icon' => '🔗',
-        'title' => 'Comptabilité — Mapping libellés',
-        'color' => '#6150aa',
-        'items' => [
-            'Pourquoi mapper ?' => 'SumUp enregistre parfois le même produit sous des noms différents (Bueno, Bueno_white, Coca_cherry, Coca cherry...). Le mapping les fusionne en un seul produit canonique.',
-            'Auto-détecter les doublons' => 'Clique « Auto-détecter les doublons » → le système propose un mapping automatique basé sur la similarité des noms. Vérifie → « Appliquer ».',
-            'Conséquences' => 'Après mapping : les stats sont fusionnées (une seule ligne Bueno au lieu de Bueno + Bueno_white), les coûts de revient ne sont à saisir qu\'une fois, les marges sont justes.',
-            'File à classer' => 'La page « Mapping libellés » montre les libellés non encore mappés (file à classer). Rattache-les un par un ou via l\'auto-détection.',
-        ],
-    ],
-    'compta-costs' => [
-        'icon' => '💸',
-        'title' => 'Comptabilité — Coûts de revient',
-        'color' => '#f59e0b',
-        'items' => [
-            'Pourquoi saisir les coûts ?' => 'Le bénéfice = prix de vente − coût d\'achat. Sans coût saisi → bénéfice affiché à 100% (faux). Avec coût → marge réelle calculée partout (Analytics, Produits, Journal).',
-            'Comment saisir un coût' => 'Comptabilité → Coûts de revient → recherche le produit (autocomplété) → saisis le coût unitaire (ex: Bueno = 0,60€) → fournisseur (Metro, Carrefour...) → « Enregistrer ».',
-            'Lots datés' => 'Si tu achètes à des prix différents selon le fournisseur/période → crée un nouveau lot avec une date de début. Le système applique automatiquement le bon lot selon la date de chaque vente.',
-            'Clôturer un lot' => 'Quand le prix change → clique « Clôturer » sur l\'ancien lot et crée-en un nouveau. L\'ancien garde ses dates, le nouveau prend le relais.',
-            'Quels produits ont un coût ?' => 'Dans la page Coûts de revient, les produits avec un lot actif ont un badge vert « Lot en cours ». Les autres ont « Aucun coût » (ambre).',
-        ],
-    ],
-    'reappro' => [
-        'icon' => '📦',
-        'title' => 'Réapprovisionnement',
-        'color' => '#22c55e',
-        'items' => [
-            'Principe' => 'La page calcule combien racheter de chaque produit, basé sur les ventes réelles (moyenne mobile 3 mois) et les jours d\'ouverture (lun-ven, ≈22j/mois).',
-            'Utilisation' => 'Choisis la période à couvrir (1 semaine, 2 semaines, 1 mois, 2 mois, 3 mois). Saisis le stock actuel dans le champ. Clique « Enregistrer les stocks ».',
-            'Colonne « À commander »' => 'Besoin sur la période − stock saisi. Si 0 → stock suffisant (badge OK). Si > 0 → à racheter. Le total en bas somme tout.',
-            'États' => 'À définir (gris) = stock non saisi. À racheter (ambre) = stock faible/nul. OK (vert) = stock suffisant.',
-            'Jours d\'ouverture' => 'Le CAF est ouvert lundi au vendredi (5j/sem). Les calculs sont basés sur ces jours, pas sur 7j. Conso/jour = moyenne mensuelle ÷ 22.',
-        ],
-    ],
-    'analytics' => [
-        'icon' => '📈',
-        'title' => 'Dashboard Analytics',
-        'color' => '#48bdd3',
-        'items' => [
-            'Filtres globaux' => 'Période (7j à 12 mois + dates personnalisées). Granularité (jour/semaine/mois). Catégorie (Boisson, Nourriture...). Paiement (Carte, Liquide). Les filtres sont partageables par URL.',
-            '6 KPI Cards' => 'CA TTC, Bénéfice net (+marge%), Volume vendu, Panier moyen, Transactions, Nouveaux membres. Chaque carte montre la variation ↑/↓ vs période précédente.',
-            'Heatmap jour × heure' => 'Grille 7 jours × 24h. Intensité du CA en couleur. Survol d\'une case → tooltip avec CA de l\'heure + total du jour.',
-            'Top 10 produits' => 'Graphique en barres horizontales. Cliquable → redirige vers la page Produits.',
-            'Répartition paiements' => 'Doughnut Carte vs Liquide avec % au centre + dans la légende.',
-            'Tableau récapitulatif' => 'Tous les produits avec qté, CA, coût, bénéfice, marge. Tri par colonne (clic). Export CSV disponible.',
-            'Insights automatiques' => 'Produit star 🏆, plus forte croissance 📈, alerte marge ⚠️, meilleur jour 🕐 — calculés automatiquement selon la période.',
-        ],
-    ],
-    'users' => [
-        'icon' => '👥',
-        'title' => 'Utilisateurs',
-        'color' => '#6150aa',
-        'items' => [
-            'Changer un rôle' => 'Sélectionne ADMIN, TRESORERIE ou ELEVE dans le menu déroulant. Chaque changement est journalisé (audit log) + un email de notification est envoyé.',
-            'Activer / désactiver' => 'Bouton « Désactiver » → l\'utilisateur ne peut plus se connecter. Ses données sont conservées. « Activer » pour réactiver.',
-            'Reset MDP (mot de passe)' => 'Bouton « Reset MDP » → génère un mot de passe temporaire aléatoire. Affiché dans le flash ET envoyé par email à l\'utilisateur. Il devra le changer rapidement.',
-            'Supprimer un compte' => 'Bouton « Supprimer » → les données perso sont anonymisées (RGPD). Les données comptables sont conservées mais déliées de l\'identité. Action irréversible.',
-            'Badge « Membre ✅ »' => 'Apparaît à côté des utilisateurs à jour de cotisation. Clique « Marquer payée » pour définir le paiement.',
-            'Sécurité' => 'Impossible de supprimer son propre compte depuis l\'admin. Impossible de supprimer/rétrograder le dernier administrateur. Le 2FA est obligatoire pour ADMIN et TRESORERIE.',
-        ],
-    ],
-    'memberships' => [
-        'icon' => '💳',
-        'title' => 'Adhésions / Cotisations',
-        'color' => '#f59e0b',
-        'items' => [
-            'Saison scolaire' => 'Calculée automatiquement : si on est en juillet-décembre → saison = année/année+1 (ex: 2026-2027). Sinon → année-1/année.',
-            'Marquer payée' => 'Admin → Adhésions → ou depuis Utilisateurs → « Marquer payée ». Saisis le montant. Le badge « Membre ✅ » apparaît.',
-            'Filtre par saison' => 'Dans la page Adhésions, sélectionne la saison pour voir les cotisations d\'une année précise.',
-            'Statuts' => 'Payée (vert) = cotisation réglée. En attente (ambre) = créée mais non payée. Expirée (gris) = ancienne saison non payée.',
-            'Statistiques' => 'Le tableau de bord affiche « X à jour de cotisation (saison YYYY-YYYY) ».',
-        ],
-    ],
-    'team' => [
-        'icon' => '👥',
-        'title' => 'Équipe (bureau)',
-        'color' => '#48bdd3',
-        'items' => [
-            'Ajouter un membre' => 'Admin → Équipe → « + Nouveau membre ». Prénom, nom, rôle (Président, Trésorier...), pôle, bio courte, photo (URL), mis en avant, actif.',
-            'Mise en avant' => 'Les membres « Mis en avant » apparaissent en premier sur la page /team (bureau restreint).',
-            'Photo' => 'URL d\'une image uploadée dans Médias. Sans photo → placeholder (initiales).',
-            'Pôles' => 'Permet de grouper les membres (bureau, communication, événements, cafétéria).',
-        ],
-    ],
-    'pages' => [
-        'icon' => '📄',
-        'title' => 'Pages (CMS)',
-        'color' => '#6150aa',
-        'items' => [
-            'Pages existantes' => 'Mentions légales (/legal), Politique de confidentialité (/privacy), CGU (/cgu), L\'association (/presentation).',
-            'Modifier une page' => 'Admin → Pages → clique sur la page → modifie titre, contenu (HTML), méta SEO → Enregistrer.',
-            'Contenu HTML' => 'Tu peux utiliser <h2>, <p>, <ul>, <li>, <strong>, <a href="..."> etc. Le contenu est rendu en « prose » (styles automatiques).',
-            'Page non publiée' => 'Si dépubliée → la page affiche « Contenu à venir » sur le site.',
-        ],
-    ],
-    'medias' => [
-        'icon' => '🖼️',
-        'title' => 'Bibliothèque de médias',
-        'color' => '#22c55e',
-        'items' => [
-            'Uploader une image' => 'Admin → Médias → clique ou glisse-dépose une image dans la zone. Ajoute un texte alternatif (accessibilité). Clique « Téléverser ».',
-            'Utiliser une image' => 'Clique « Copier l\'URL » → l\'URL est copiée → colle-la dans le champ Image d\'un événement, produit, ou membre d\'équipe.',
-            'Formats acceptés' => 'JPG, PNG, GIF, WebP, SVG — 5 Mo maximum.',
-            'Supprimer un média' => 'Bouton « Supprimer » → confirmation. L\'image est définitivement supprimée du serveur.',
-            'Galerie publique' => 'Toutes les images uploadées apparaissent aussi sur la page /galerie (section « Autres photos »).',
-        ],
-    ],
-    'settings' => [
-        'icon' => '⚙️',
-        'title' => 'Paramètres du site',
-        'color' => '#48bdd3',
-        'items' => [
-            'Nom et description' => 'Modifie le nom affiché partout (navbar, footer, emails) et la description courte (accueil + SEO).',
-            'Emails / SMTP (Brevo)' => 'Renseigne la clé API Brevo (recommandé). Test avec « Envoyer un e-mail de test ». L\'adresse d\'expédition doit être un domaine vérifié (ex: contact@aremond.ovh).',
-            'SumUp (paiement)' => 'Colle l\'URL de paiement SumUp + active le toggle. Les boutons « Payer en ligne » apparaissent sur les événements.',
-            'Discord (annonces auto)' => 'Colle l\'URL du webhook Discord + active. À chaque création d\'événement/sondage → un message embed est envoyé sur Discord.',
-            'Contact & carte' => 'Adresse + latitude/longitude pour la carte « Où nous trouver ». Ajuste les coordonnées si le marqueur n\'est pas pile au bon endroit.',
-            'Mode maintenance' => 'Active pour bloquer le site public (seul l\'admin garde l\'accès). Désactive quand tu as fini.',
-            'Fonctionnalités' => 'Toggle pour activer/désactiver : inscriptions aux événements, commandes en ligne.',
-        ],
-    ],
-    'emails' => [
-        'icon' => '📧',
-        'title' => 'Emails automatiques',
-        'color' => '#f59e0b',
-        'items' => [
-            'Inscription d\'un nouvel élève' => 'Un mot de passe temporaire est généré et envoyé par email. L\'élève peut se connecter immédiatement.',
-            'Rappel 24h avant événement' => 'Automatique (cron toutes les 15 min). Email « Plus que 24h ! » envoyé à tous les inscrits.',
-            'Rappel 1h avant événement' => 'Automatique. Email « Ça commence dans 1h ! » envoyé à tous les inscrits.',
-            'Reset MDP (admin)' => 'Le mot de passe temporaire est envoyé à l\'utilisateur concerné par email.',
-            'Changement de mot de passe' => 'L\'utilisateur reçoit une confirmation « Votre mot de passe a été modifié ».',
-            'Suppression de compte' => 'Email de confirmation RGPD envoyé avant anonymisation des données.',
-            'Liste d\'attente promue' => 'Quand une place se libère → l\'utilisateur promu reçoit « Une place s\'est libérée ! Vous êtes inscrit ».',
-            'Vérifier que les emails partent' => 'Admin → Paramètres → Emails → « Envoyer un e-mail de test ». Si échec → vérifier la clé API Brevo et l\'adresse d\'expédition.',
-        ],
-    ],
-    'discord' => [
-        'icon' => '🎮',
-        'title' => 'Discord (annonces automatiques)',
-        'color' => '#6150aa',
-        'items' => [
-            'Configuration' => 'Admin → Paramètres → « Réseaux sociaux & Discord » → colle l\'URL du webhook Discord → active.',
-            'Quand un message est envoyé ?' => 'À la création d\'un nouvel événement publié (embed teal avec titre, date, lieu) et d\'un nouveau sondage publié (embed violet).',
-            'Non bloquant' => 'Si Discord est down ou l\'URL est invalide → l\'événement est quand même créé. Le message Discord échoue silencieusement.',
-            'Obtenir l\'URL du webhook' => 'Discord → Paramètres du serveur → Integrations → Webhooks → New Webhook → Copy Webhook URL.',
-        ],
-    ],
-    'security' => [
-        'icon' => '🔐',
-        'title' => 'Sécurité & bonnes pratiques',
-        'color' => '#ef4444',
-        'items' => [
-            '2FA obligatoire' => 'Tous les ADMIN et TRESORERIE doivent avoir le 2FA activé. Utilise Google Authenticator, Authy ou équivalent.',
-            'Ne pas partager les mots de passe' => 'Chaque personne a SON compte. Les mots de passe ne doivent jamais être partagés. Pour donner l\'accès → crée un compte + attribue le rôle.',
-            'Changer les mots de passe' => 'Régulièrement (Mon compte → Changer mon mot de passe). En cas de départ d\'un membre du bureau → désactive son compte.',
-            'Dernier admin' => 'Le système empêche de supprimer ou rétrograder le dernier administrateur actif (anti-lockout).',
-            'Audit log' => 'Toutes les actions sensibles (création/suppression, changement de rôle, reset MDP) sont journalisées et visibles dans le tableau de bord.',
-            'Sauvegardes automatiques' => 'Une sauvegarde de la base de données tourne chaque nuit à 3h (cron). En cas de problème → contacter Remond Adrien.',
-            'RGPD' => 'Chaque utilisateur peut exporter ses données (JSON) et supprimer son compte (anonymisation). Les consentements sont journalisés.',
-        ],
-    ],
-    'tips' => [
-        'icon' => '💡',
-        'title' => 'Conseils pratiques',
-        'color' => '#f59e0b',
-        'items' => [
-            'Avant un événement' => 'Crée l\'événement à l\'avance → vérifie la catégorie + carte activée + prix + lien SumUp. Teste l\'inscription toi-même.',
-            'Après un événement' => 'Ajoute les photos dans Médias. Elles apparaîtront dans la galerie. Importe le rapport SumUp si vente au comptoir.',
-            'Mensuellement' => 'Importe le rapport SumUp → vérifie les aliases non mappés → saisis les coûts de revient des nouveaux produits → vérifie le réappro.',
-            'Début d\'année' => 'Crée les adhésions pour les nouveaux membres → marque « Payée » au fur et à mesure → mets à jour l\'équipe (nouveaux membres du bureau).',
-            'Multilingue' => 'Le site supporte 9 langues (FR, EN, DE, ES, ZH, JA, PL, RU, MS). L\'interface se traduit automatiquement. Le contenu (événements, descriptions) reste en français.',
-            'Mode sombre / clair' => 'Bouton ☀️/🌙 dans la navbar. La préférence est sauvegardée (localStorage).',
-            'Installer le site comme app' => 'Sur Chrome mobile/desktop → « Installer » dans le menu. Le site fonctionne comme une app native (PWA).',
-        ],
-    ],
-];
+/** @var array<string,mixed> $user */
 ?>
-<div class="wiki-page">
+<div class="wiki">
 
-    <div class="wiki-hero">
-        <div class="wiki-hero-inner">
-            <span class="wiki-hero-icon">📚</span>
-            <h1 class="wiki-hero-title">Guide de l'administrateur</h1>
-            <p class="wiki-hero-sub">Tout ce qu'il faut savoir pour gérer le site AEIC. Destiné à tous les membres du bureau.</p>
+<!-- ===================== HERO ===================== -->
+<header class="wiki-hero">
+    <span class="wiki-hero-emoji">📚</span>
+    <h1>Guide de l'administrateur</h1>
+    <p>Tout ce qu'il faut savoir pour gérer le site AEIC au quotidien.</p>
+</header>
+
+<!-- ===================== RECHERCHE ===================== -->
+<div class="wiki-search-wrap">
+    <input type="text" id="wiki-search" placeholder="🔎 Rechercher..." autocomplete="off">
+    <span id="wiki-count" class="wiki-count"></span>
+</div>
+
+<div class="wiki-body" id="wiki-body">
+
+<!-- ===================== 1. DÉMARRAGE ===================== -->
+<section class="wiki-section" id="sec-start">
+    <h2><span class="wiki-num">1</span> 🚀 Démarrage & connexion</h2>
+
+    <div class="wiki-block">
+        <h3>Comment se connecter</h3>
+        <p>Tu as reçu un email avec ton mot de passe temporaire. Voici les étapes :</p>
+        <div class="wiki-steps">
+            <div class="wiki-step"><span class="wiki-step-n">1</span><div><strong>Va sur le site</strong><br><code>https://asso.aremond.ovh/login</code></div></div>
+            <div class="wiki-step"><span class="wiki-step-n">2</span><div><strong>Entre ton email</strong> (celui avec lequel tu t'es inscrit) et ton mot de passe.</div></div>
+            <div class="wiki-step"><span class="wiki-step-n">3</span><div><strong>Configure le 2FA</strong> si c'est ta première connexion (voir ci-dessous).</div></div>
+            <div class="wiki-step"><span class="wiki-step-n">4</span><div><strong>Clique sur « Admin »</strong> en haut à droite pour accéder à l'espace d'administration.</div></div>
         </div>
     </div>
 
-    <div class="wiki-toolbar">
-        <input type="text" id="wiki-search" class="wiki-search-input" placeholder="🔎 Rechercher dans le guide..." autocomplete="off">
-        <span class="wiki-count muted" id="wiki-count"></span>
+    <div class="wiki-block">
+        <h3>Le 2FA (authentification à deux facteurs)</h3>
+        <p>Le 2FA est <strong>obligatoire</strong> pour les administrateurs et trésoriers. Il ajoute une couche de sécurité : même si quelqu'un vole ton mot de passe, il ne peut pas se connecter sans ton téléphone.</p>
+        <div class="wiki-diagram">
+            <div class="wiki-diagram-box">📧 Email + mot de passe</div>
+            <div class="wiki-arrow">↓</div>
+            <div class="wiki-diagram-box">📱 Code à 6 chiffres (app Authenticator)</div>
+            <div class="wiki-arrow">↓</div>
+            <div class="wiki-diagram-box wiki-diagram-ok">✅ Connecté</div>
+        </div>
+        <p><strong>Comment configurer :</strong> à la première connexion, un QR code s'affiche. Scanne-le avec <strong>Google Authenticator</strong> (Android/iOS). L'app génère un code à 6 chiffres qui change toutes les 30 secondes.</p>
     </div>
 
-    <div class="wiki-toc">
-        <?php foreach ($sections as $key => $sec): ?>
-            <a href="#wiki-<?= e($key) ?>" class="wiki-toc-pill" style="--pill-color: <?= e($sec['color']) ?>">
-                <span class="wiki-toc-emoji"><?= e($sec['icon']) ?></span>
-                <span><?= e($sec['title']) ?></span>
-            </a>
-        <?php endforeach; ?>
+    <div class="wiki-block">
+        <h3>Mot de passe oublié</h3>
+        <p>Sur la page de connexion → <strong>« Mot de passe oublié ? »</strong> → entre ton email → un lien de réinitialisation t'est envoyé. Clique le lien → choisis un nouveau mot de passe (8 caractères min, 1 lettre + 1 chiffre).</p>
+        <p>Un admin peut aussi faire un <strong>« Reset MDP »</strong> depuis Admin → Utilisateurs → ça génère un mot de passe temporaire envoyé par email.</p>
     </div>
 
-    <div class="wiki-grid">
-        <?php foreach ($sections as $key => $sec): ?>
-            <section class="wiki-card" id="wiki-<?= e($key) ?>" data-search="<?= e(strtolower($sec['title'] . ' ' . implode(' ', array_keys($sec['items'])) . ' ' . implode(' ', array_values($sec['items'])))) ?>" style="--card-accent: <?= e($sec['color']) ?>">
-                <div class="wiki-card-head">
-                    <span class="wiki-card-emoji"><?= e($sec['icon']) ?></span>
-                    <h2 class="wiki-card-title"><?= e($sec['title']) ?></h2>
-                </div>
-                <div class="wiki-card-body">
-                    <?php foreach ($sec['items'] as $q => $a): ?>
-                        <div class="wiki-faq" data-search="<?= e(strtolower($q . ' ' . $a)) ?>">
-                            <h3 class="wiki-faq-q"><?= e($q) ?></h3>
-                            <p class="wiki-faq-a"><?= e($a) ?></p>
-                        </div>
-                    <?php endforeach; ?>
-                </div>
-            </section>
-        <?php endforeach; ?>
+    <div class="wiki-block">
+        <h3>Les 3 rôles</h3>
+        <div class="wiki-table">
+            <div class="wiki-table-row wiki-table-head">
+                <span>Rôle</span><span>Accès</span><span>Qui ?</span>
+            </div>
+            <div class="wiki-table-row"><span class="wiki-tag wiki-tag-teal">ADMIN</span><span>Tout l'espace d'administration</span><span>Président, membres du bureau de confiance</span></div>
+            <div class="wiki-table-row"><span class="wiki-tag wiki-tag-violet">TRESORERIE</span><span>Uniquement la comptabilité (import, coûts, réappro, analytics)</span><span>Trésorier</span></div>
+            <div class="wiki-table-row"><span class="wiki-tag wiki-tag-muted">ELEVE</span><span>Espace membre uniquement (pas d'admin)</span><span>Tous les étudiants inscrits</span></div>
+        </div>
     </div>
 
-    <div class="wiki-footer">
-        <p>💻 Développé par <strong style="color:var(--primary)">Remond Adrien</strong> · © 2026 AEIC · 100 % étudiant</p>
+    <div class="wiki-block">
+        <h3>Changer son mot de passe</h3>
+        <p>Une fois connecté → clique sur ton prénom en haut à droite → <strong>« Mes données »</strong> → <strong>« Changer mon mot de passe »</strong> → saisie l'ancien + le nouveau + confirmation → <strong>Modifier</strong>. Un email de confirmation est envoyé automatiquement.</p>
     </div>
+</section>
+
+<!-- ===================== 2. ÉVÉNEMENTS ===================== -->
+<section class="wiki-section" id="sec-events">
+    <h2><span class="wiki-num">2</span> 📅 Créer un événement</h2>
+
+    <div class="wiki-block">
+        <h3>Étapes pour créer un événement</h3>
+        <div class="wiki-steps">
+            <div class="wiki-step"><span class="wiki-step-n">1</span><div><strong>Admin → Événements</strong> → clique <strong>« + Nouvel événement »</strong></div></div>
+            <div class="wiki-step"><span class="wiki-step-n">2</span><div><strong>Titre</strong> : le nom de l'événement (ex: « Soirée d'intégration »)</div></div>
+            <div class="wiki-step"><span class="wiki-step-n">3</span><div><strong>Slug</strong> : l'URL (ex: <code>soiree-integration</code>). Auto-généré si vide.</div></div>
+            <div class="wiki-step"><span class="wiki-step-n">4</span><div><strong>Catégorie</strong> : Soirée, Tournoi/LAN, Conférence, Barbecue, Sortie...</div></div>
+            <div class="wiki-step"><span class="wiki-step-n">5</span><div><strong>Extrait</strong> : résumé court affiché sur les cartes (max 1 phrase)</div></div>
+            <div class="wiki-step"><span class="wiki-step-n">6</span><div><strong>Description</strong> : texte complet en HTML (<code>&lt;p&gt;</code>, <code>&lt;ul&gt;</code>, <code>&lt;strong&gt;</code>...)</div></div>
+            <div class="wiki-step"><span class="wiki-step-n">7</span><div><strong>Date et heure</strong> + <strong>Lieu</strong></div></div>
+            <div class="wiki-step"><span class="wiki-step-n">8</span><div><strong>Options</strong> : prix, capacité max, carte, SumUp, mis en avant</div></div>
+            <div class="wiki-step"><span class="wiki-step-n">9</span><div>Coche <strong>« Publié »</strong> → <strong>Enregistrer</strong></div></div>
+        </div>
+    </div>
+
+    <div class="wiki-block">
+        <h3>Capacité max et liste d'attente</h3>
+        <p>Si tu mets une <strong>capacité max</strong> (ex: 50 places), voici comment ça marche :</p>
+        <div class="wiki-diagram">
+            <div class="wiki-diagram-box">📝 Élève s'inscrit</div>
+            <div class="wiki-arrow">↓</div>
+            <div class="wiki-diagram-box">Places restantes ?</div>
+            <div class="wiki-arrow">↓ ↓</div>
+            <div class="wiki-diagram-row">
+                <div class="wiki-diagram-box wiki-diagram-ok">✅ Oui → Inscription confirmée + QR code</div>
+                <div class="wiki-diagram-box wiki-diagram-warn">⚠️ Non → Liste d'attente (position X)</div>
+            </div>
+            <div class="wiki-arrow">↓ (si quelqu'un se désinscrit)</div>
+            <div class="wiki-diagram-box wiki-diagram-ok">✅ Premier de la file promu + email automatique</div>
+        </div>
+    </div>
+
+    <div class="wiki-block">
+        <h3>Gérer les inscriptions</h3>
+        <p>Dans la liste des événements, clique l'icône 📋 → tu vois :</p>
+        <ul class="wiki-list">
+            <li>Liste des inscrits (nom, prénom, date d'inscription)</li>
+            <li>Leurs choix (menus, options) si l'événement a des variantes</li>
+            <li>Le statut de présence (✅/⬜) si le check-in QR a été fait</li>
+            <li>La <strong>liste d'attente</strong> en bas (si l'événement est complet)</li>
+        </ul>
+        <p>Bouton <strong>« Export CSV »</strong> pour télécharger la liste.</p>
+    </div>
+</section>
+
+<!-- ===================== 3. CHECK-IN QR ===================== -->
+<section class="wiki-section" id="sec-checkin">
+    <h2><span class="wiki-num">3</span> 📱 Check-in QR (le jour J)</h2>
+
+    <div class="wiki-block">
+        <h3>Comment scanner les participants</h3>
+        <p>Quand un élève s'inscrit à un événement, un <strong>QR code unique</strong> est généré. Il est visible sur la page de l'événement (si l'élève est connecté et inscrit).</p>
+        <div class="wiki-steps">
+            <div class="wiki-step"><span class="wiki-step-n">1</span><div><strong>Le jour J</strong> → Admin → Événements → 📋 → <strong>« Ouvrir le check-in »</strong></div></div>
+            <div class="wiki-step"><span class="wiki-step-n">2</span><div>Une page avec un <strong>champ de saisie</strong> s'ouvre (autofocus)</div></div>
+            <div class="wiki-step"><span class="wiki-step-n">3</span><div><strong>Scanne le QR</strong> du participant avec la caméra du téléphone (ou saisis le token manuellement) → Entrée</div></div>
+            <div class="wiki-step"><span class="wiki-step-n">4</span><div>Résultat : <span class="wiki-tag wiki-tag-green">✅ Présent</span> ou <span class="wiki-tag wiki-tag-warn">⚠️ Déjà checké</span></div></div>
+        </div>
+    </div>
+</section>
+
+<!-- ===================== 4. SONDAGES ===================== -->
+<section class="wiki-section" id="sec-sondages">
+    <h2><span class="wiki-num">4</span> 📊 Créer un sondage</h2>
+
+    <div class="wiki-block">
+        <h3>Étapes</h3>
+        <div class="wiki-steps">
+            <div class="wiki-step"><span class="wiki-step-n">1</span><div><strong>Admin → Sondages</strong> → « + Nouveau sondage »</div></div>
+            <div class="wiki-step"><span class="wiki-step-n">2</span><div><strong>Titre</strong> (ex: « Chocolatine ou pain au chocolat ? ») + <strong>description</strong></div></div>
+            <div class="wiki-step"><span class="wiki-step-n">3</span><div>Clique <strong>« + Ajouter une option »</strong> pour chaque choix</div></div>
+            <div class="wiki-step"><span class="wiki-step-n">4</span><div><strong>Choix unique</strong> (radio) ou <strong>choix multiple</strong> (checkbox)</div></div>
+            <div class="wiki-step"><span class="wiki-step-n">5</span><div>Coche <strong>« Publié »</strong> → Enregistrer</div></div>
+        </div>
+        <p>Les élèves votent sur <code>/sondages</code>. Une seule fois. Après le vote → <strong>résultats en direct</strong> (barres + %).</p>
+    </div>
+</section>
+
+<!-- ===================== 5. CAFÉTÉRIA ===================== -->
+<section class="wiki-section" id="sec-cafeteria">
+    <h2><span class="wiki-num">5</span> ☕ Cafétéria — Produits & carte</h2>
+
+    <div class="wiki-block">
+        <h3>Ajouter un produit au menu</h3>
+        <div class="wiki-steps">
+            <div class="wiki-step"><span class="wiki-step-n">1</span><div><strong>Admin → Cafétéria → Produits</strong> → « + Nouveau produit »</div></div>
+            <div class="wiki-step"><span class="wiki-step-n">2</span><div><strong>Nom</strong> (ex: « Red Bull ») + <strong>Description</strong> (ex: « Boisson énergisante »)</div></div>
+            <div class="wiki-step"><span class="wiki-step-n">3</span><div><strong>Prix de vente</strong> (ex: <code>1,50</code>) + <strong>Catégorie</strong> (Boissons, Snacks...)</div></div>
+            <div class="wiki-step"><span class="wiki-step-n">4</span><div><strong>Image</strong> (optionnel) : colle une URL d'une image uploadée dans Médias</div></div>
+            <div class="wiki-step"><span class="wiki-step-n">5</span><div><strong>Stock</strong> (pour le réappro) + <strong>Disponible</strong> ✅ + <strong>Actif</strong> ✅</div></div>
+            <div class="wiki-step"><span class="wiki-step-n">6</span><div>Enregistrer → le produit apparaît dans <strong>« Notre carte »</strong> sur l'accueil</div></div>
+        </div>
+    </div>
+
+    <div class="wiki-block">
+        <h3>Emojis automatiques</h3>
+        <p>Si tu ne mets pas d'image, le site attribue automatiquement un emoji selon le nom :</p>
+        <div class="wiki-emoji-grid">
+            <span>🥤 Coca, Fanta, Oasis, Orangina</span>
+            <span>💧 Eau, Cristaline, Perrier</span>
+            <span>⚡ Monster, Red Bull</span>
+            <span>🍫 Bueno, KitKat, Mars, Snickers</span>
+            <span>🍟 Chips</span>
+            <span>🍬 Bonbon</span>
+            <span>🍵 Lipton</span>
+            <span>🧃 Minute Maid, Pulco</span>
+        </div>
+    </div>
+</section>
+
+<!-- ===================== 6. COMPTABILITÉ ===================== -->
+<section class="wiki-section" id="sec-compta">
+    <h2><span class="wiki-num">6</span> 💰 Comptabilité — Importer SumUp</h2>
+
+    <div class="wiki-block">
+        <h3>Récupérer le rapport SumUp</h3>
+        <div class="wiki-steps">
+            <div class="wiki-step"><span class="wiki-step-n">1</span><div>Ouvre l'<strong>app SumUp</strong> sur ton téléphone</div></div>
+            <div class="wiki-step"><span class="wiki-step-n">2</span><div>Va dans <strong>Reports</strong> → sélectionne la période (ex: le mois écoulé)</div></div>
+            <div class="wiki-step"><span class="wiki-step-n">3</span><div><strong>Export CSV</strong> → le fichier est téléchargé</div></div>
+            <div class="wiki-step"><span class="wiki-step-n">4</span><div>Sur le site : <strong>Admin → Comptabilité → Importer CSV</strong> → choisis le fichier → <strong>Importer</strong></div></div>
+        </div>
+    </div>
+
+    <div class="wiki-block">
+        <h3>Que fait le système à l'import ?</h3>
+        <div class="wiki-diagram">
+            <div class="wiki-diagram-box">📄 Fichier CSV SumUp</div>
+            <div class="wiki-arrow">↓</div>
+            <div class="wiki-diagram-box">🔍 Parse : dates FR, prix (virgule), moyen de paiement</div>
+            <div class="wiki-arrow">↓</div>
+            <div class="wiki-diagram-box">💳 Normalise : Visa/Mastercard → CARTE, Espèces → LIQUIDE</div>
+            <div class="wiki-arrow">↓</div>
+            <div class="wiki-diagram-box">🚫 Déduplication : clé unique (ref + date + produit). Réimport = 0 doublon.</div>
+            <div class="wiki-arrow">↓</div>
+            <div class="wiki-diagram-box wiki-diagram-ok">✅ Ventes disponibles dans tout le module compta</div>
+        </div>
+    </div>
+
+    <div class="wiki-block">
+        <h3>Mapping des libellés (important !)</h3>
+        <p>SumUp enregistre parfois le <strong>même produit sous des noms différents</strong> :</p>
+        <div class="wiki-table">
+            <div class="wiki-table-row wiki-table-head"><span>Libellés bruts SumUp</span><span>→ Produit canonique</span></div>
+            <div class="wiki-table-row"><span>Bueno / Bueno_white</span><span>Bueno</span></div>
+            <div class="wiki-table-row"><span>CocaCola / Coca cherry / Coca_cherry / Coca Cola</span><span>Coca</span></div>
+            <div class="wiki-table-row"><span>Monster Blanche / Monster_Bleue / Monster rose</span><span>Monster</span></div>
+        </div>
+        <p><strong>Solution :</strong> Admin → Comptabilité → Mapping libellés → <strong>« Auto-détecter les doublons »</strong> → vérifier → <strong>Appliquer</strong>. Toutes les ventes sont fusionnées sous un seul nom.</p>
+    </div>
+
+    <div class="wiki-block">
+        <h3>Coûts de revient (pour calculer le vrai bénéfice)</h3>
+        <p>Le bénéfice = <strong>prix de vente − coût d'achat</strong>. Sans coût saisi → marge à 100% (faux).</p>
+        <div class="wiki-diagram">
+            <div class="wiki-diagram-box">💵 Prix de vente TTC : 1,00 €</div>
+            <div class="wiki-arrow">−</div>
+            <div class="wiki-diagram-box">🛒 Coût d'achat : 0,60 €</div>
+            <div class="wiki-arrow">=</div>
+            <div class="wiki-diagram-box wiki-diagram-ok">💰 Bénéfice : 0,40 € (marge 40%)</div>
+        </div>
+        <p><strong>Comment :</strong> Admin → Comptabilité → Coûts de revient → recherche le produit → saisis le coût → Enregistrer. Si le prix d'achat change → crée un nouveau lot daté.</p>
+    </div>
+</section>
+
+<!-- ===================== 7. RÉAPPRO ===================== -->
+<section class="wiki-section" id="sec-reappro">
+    <h2><span class="wiki-num">7</span> 📦 Réapprovisionnement</h2>
+
+    <div class="wiki-block">
+        <h3>Comment savoir combien racheter</h3>
+        <p>La page calcule automatiquement les quantités à racheter, basé sur :</p>
+        <div class="wiki-diagram">
+            <div class="wiki-diagram-row">
+                <div class="wiki-diagram-box">📊 Ventes réelles<br>(moyenne 3 mois)</div>
+                <div class="wiki-diagram-box">📅 Jours d'ouverture<br>(lun-ven = 22j/mois)</div>
+                <div class="wiki-diagram-box">📦 Stock actuel<br>(saisi par toi)</div>
+            </div>
+            <div class="wiki-arrow">↓</div>
+            <div class="wiki-diagram-box wiki-diagram-ok">✅ « À commander : X unités »</div>
+        </div>
+    </div>
+
+    <div class="wiki-block">
+        <h3>Utilisation</h3>
+        <div class="wiki-steps">
+            <div class="wiki-step"><span class="wiki-step-n">1</span><div>Choisis la <strong>période</strong> à couvrir (1 semaine, 1 mois, 3 mois...)</div></div>
+            <div class="wiki-step"><span class="wiki-step-n">2</span><div>Saisis le <strong>stock actuel</strong> de chaque produit dans le champ</div></div>
+            <div class="wiki-step"><span class="wiki-step-n">3</span><div>La colonne <strong>« À commander »</strong> se recalcule automatiquement</div></div>
+            <div class="wiki-step"><span class="wiki-step-n">4</span><div>Clique <strong>« Enregistrer les stocks »</strong> pour sauvegarder</div></div>
+            <div class="wiki-step"><span class="wiki-step-n">5</span><div>Le <strong>total en bas</strong> te donne la quantité globale à commander</div></div>
+        </div>
+    </div>
+</section>
+
+<!-- ===================== 8. ANALYTICS ===================== -->
+<section class="wiki-section" id="sec-analytics">
+    <h2><span class="wiki-num">8</span> 📈 Dashboard Analytics</h2>
+
+    <div class="wiki-block">
+        <h3>Filtres globaux</h3>
+        <p>En haut de la page, choisis :</p>
+        <ul class="wiki-list">
+            <li><strong>Période</strong> : 7j / 30j / 3 mois / 6 mois / 12 mois / dates personnalisées</li>
+            <li><strong>Granularité</strong> : Jour / Semaine / Mois (affecte les graphiques de tendance)</li>
+            <li><strong>Catégorie</strong> : filtrer par Boisson, Nourriture, Spécial...</li>
+            <li><strong>Paiement</strong> : filtrer par Carte ou Liquide</li>
+        </ul>
+        <p>Les filtres sont <strong>partageables par URL</strong> (envoie le lien à quelqu'un).</p>
+    </div>
+
+    <div class="wiki-block">
+        <h3>Les 6 indicateurs (KPI)</h3>
+        <div class="wiki-table">
+            <div class="wiki-table-row wiki-table-head"><span>Indicateur</span><span>Signification</span></div>
+            <div class="wiki-table-row"><span><strong>CA TTC</strong></span><span>Chiffre d'affaires total + variation vs période précédente</span></div>
+            <div class="wiki-table-row"><span><strong>Bénéfice net</strong></span><span>CA − coûts d'achat + marge en %</span></div>
+            <div class="wiki-table-row"><span><strong>Volume vendu</strong></span><span>Nombre total d'unités vendues</span></div>
+            <div class="wiki-table-row"><span><strong>Panier moyen</strong></span><span>CA divisé par le nombre de transactions</span></div>
+            <div class="wiki-table-row"><span><strong>Transactions</strong></span><span>Nombre de lignes de vente</span></div>
+            <div class="wiki-table-row"><span><strong>Nouveaux membres</strong></span><span>Étudiants inscrits sur la période</span></div>
+        </div>
+    </div>
+</section>
+
+<!-- ===================== 9. UTILISATEURS ===================== -->
+<section class="wiki-section" id="sec-users">
+    <h2><span class="wiki-num">9</span> 👥 Utilisateurs & adhésions</h2>
+
+    <div class="wiki-block">
+        <h3>Actions possibles sur un utilisateur</h3>
+        <div class="wiki-table">
+            <div class="wiki-table-row wiki-table-head"><span>Action</span><span>Effet</span></div>
+            <div class="wiki-table-row"><span>🔄 <strong>Changer le rôle</strong></span><span>ELEVE → ADMIN ou TRESORERIE. Journalisé + email envoyé.</span></div>
+            <div class="wiki-table-row"><span>🔒 <strong>Désactiver</strong></span><span>Bloque la connexion. Données conservées.</span></div>
+            <div class="wiki-table-row"><span>🔑 <strong>Reset MDP</strong></span><span>Génère un mot de passe temporaire envoyé par email.</span></div>
+            <div class="wiki-table-row"><span>🗑️ <strong>Supprimer</strong></span><span>Anonymise les données (RGPD). Comptabilité conservée anonyme.</span></div>
+            <div class="wiki-table-row"><span>💳 <strong>Marquer payée</strong></span><span>Définit la cotisation comme payée pour la saison.</span></div>
+        </div>
+    </div>
+
+    <div class="wiki-block">
+        <h3>Sécurité</h3>
+        <div class="wiki-alert wiki-alert-warn">
+            <strong>⚠️ Règles de sécurité :</strong>
+            <ul class="wiki-list">
+                <li>Tu ne peux <strong>pas</strong> supprimer ton propre compte depuis l'admin</li>
+                <li>Tu ne peux <strong>pas</strong> supprimer/rétrograder le dernier administrateur</li>
+                <li>Le <strong>2FA est obligatoire</strong> pour ADMIN et TRESORERIE</li>
+                <li>Chaque action est <strong>journalisée</strong> (audit log visible dans le tableau de bord)</li>
+            </ul>
+        </div>
+    </div>
+</section>
+
+<!-- ===================== 10. EMAILS ===================== -->
+<section class="wiki-section" id="sec-emails">
+    <h2><span class="wiki-num">10</span> 📧 Emails automatiques</h2>
+
+    <div class="wiki-block">
+        <p>Le site envoie automatiquement ces emails (si le SMTP/API Brevo est configuré) :</p>
+        <div class="wiki-table">
+            <div class="wiki-table-row wiki-table-head"><span>Déclencheur</span><span>Email envoyé</span></div>
+            <div class="wiki-table-row"><span>📝 Inscription d'un élève</span><span>Mot de passe temporaire (« Bienvenue à l'AEIC »)</span></div>
+            <div class="wiki-table-row"><span>📅 24h avant événement</span><span>« Plus que 24h ! » avec détails (date, lieu)</span></div>
+            <div class="wiki-table-row"><span>⏰ 1h avant événement</span><span>« Ça commence dans 1h ! »</span></div>
+            <div class="wiki-table-row"><span>🔑 Reset MDP (admin)</span><span>Mot de passe temporaire à l'utilisateur</span></div>
+            <div class="wiki-table-row"><span>🔐 Changement de mot de passe</span><span>« Votre mot de passe a été modifié »</span></div>
+            <div class="wiki-table-row"><span>🗑️ Suppression de compte</span><span>Confirmation RGPD (anonymisation)</span></div>
+            <div class="wiki-table-row"><span>✅ Liste d'attente promue</span><span>« Une place s'est libérée ! Vous êtes inscrit »</span></div>
+        </div>
+    </div>
+
+    <div class="wiki-block">
+        <h3>Vérifier que les emails partent</h3>
+        <p>Admin → Paramètres → Emails/SMTP → <strong>« Envoyer un e-mail de test »</strong> → tape ton adresse → si tu reçois l'email → ✅ tout marche.</p>
+        <p>Si échec → vérifie la <strong>clé API Brevo</strong> et l'<strong>adresse d'expédition</strong> (doit être un domaine vérifié comme <code>contact@aremond.ovh</code>).</p>
+    </div>
+</section>
+
+<!-- ===================== 11. PARAMÈTRES ===================== -->
+<section class="wiki-section" id="sec-settings">
+    <h2><span class="wiki-num">11</span> ⚙️ Paramètres du site</h2>
+
+    <div class="wiki-block">
+        <h3>Configuration Brevo (emails)</h3>
+        <div class="wiki-steps">
+            <div class="wiki-step"><span class="wiki-step-n">1</span><div>Crée un compte sur <strong>brevo.com</strong> (gratuit, 300 emails/jour)</div></div>
+            <div class="wiki-step"><span class="wiki-step-n">2</span><div>Vérifie ton expéditeur (ex: <code>contact@aremond.ovh</code>)</div></div>
+            <div class="wiki-step"><span class="wiki-step-n">3</span><div>Génère une <strong>clé API</strong> (<code>xkeysib-...</code>) dans Brevo → SMTP & API</div></div>
+            <div class="wiki-step"><span class="wiki-step-n">4</span><div>Sur le site : Admin → Paramètres → « Clé API Brevo » → colle la clé</div></div>
+            <div class="wiki-step"><span class="wiki-step-n">5</span><div>« Adresse d'expédition » → <code>contact@aremond.ovh</code></div></div>
+            <div class="wiki-step"><span class="wiki-step-n">6</span><div>Test avec « Envoyer un e-mail de test »</div></div>
+        </div>
+    </div>
+
+    <div class="wiki-block">
+        <h3>Discord (annonces auto)</h3>
+        <p>Pour que chaque nouvel événement/sondage soit annoncé automatiquement sur Discord :</p>
+        <div class="wiki-steps">
+            <div class="wiki-step"><span class="wiki-step-n">1</span><div>Discord → Paramètres du serveur → <strong>Integrations → Webhooks</strong></div></div>
+            <div class="wiki-step"><span class="wiki-step-n">2</span><div><strong>New Webhook</strong> → choisis le salon → <strong>Copy URL</strong></div></div>
+            <div class="wiki-step"><span class="wiki-step-n">3</span><div>Admin → Paramètres → « URL Webhook Discord » → colle l'URL</div></div>
+            <div class="wiki-step"><span class="wiki-step-n">4</span><div>Active le toggle → Enregistrer</div></div>
+        </div>
+    </div>
+</section>
+
+<!-- ===================== 12. CONSEILS ===================== -->
+<section class="wiki-section" id="sec-tips">
+    <h2><span class="wiki-num">12</span> 💡 Conseils pratiques</h2>
+
+    <div class="wiki-block">
+        <h3>Routine mensuelle (trésorier)</h3>
+        <div class="wiki-steps">
+            <div class="wiki-step"><span class="wiki-step-n">1</span><div>📥 <strong>Importe</strong> le rapport SumUp du mois écoulé</div></div>
+            <div class="wiki-step"><span class="wiki-step-n">2</span><div>🔗 <strong>Mappe</strong> les nouveaux libellés non reconnus (aliases)</div></div>
+            <div class="wiki-step"><span class="wiki-step-n">3</span><div>💸 <strong>Saisis</strong> les coûts de revient des nouveaux produits</div></div>
+            <div class="wiki-step"><span class="wiki-step-n">4</span><div>📦 <strong>Vérifie</strong> le réappro (quantités à racheter)</div></div>
+            <div class="wiki-step"><span class="wiki-step-n">5</span><div>📈 <strong>Analyse</strong> le dashboard Analytics (tendances, insights)</div></div>
+        </div>
+    </div>
+
+    <div class="wiki-block">
+        <h3>Routine début d'année (président)</h3>
+        <ul class="wiki-list">
+            <li>👥 Crée les comptes pour les nouveaux membres du bureau</li>
+            <li>🔑 Donne le rôle ADMIN aux nouveaux (2FA obligatoire)</li>
+            <li>💳 Crée les adhésions pour la nouvelle saison</li>
+            <li>👥 Mets à jour la page Équipe (nouveaux membres, photos)</li>
+            <li>📅 Crée les événements de rentrée</li>
+        </ul>
+    </div>
+
+    <div class="wiki-block">
+        <h3>Si quelque chose ne marche pas</h3>
+        <div class="wiki-alert wiki-alert-info">
+            <strong>🔧 Dépannage rapide :</strong>
+            <ul class="wiki-list">
+                <li><strong>Page blanche / erreur 500</strong> → contacte Remond Adrien (développeur)</li>
+                <li><strong>Emails ne partent pas</strong> → vérifier Paramètres → Brevo API key + adresse d'expédition</li>
+                <li><strong>Chiffres à 0</strong> → importer un rapport SumUp (Comptabilité → Importer CSV)</li>
+                <li><strong>Marges à 100%</strong> → saisir les coûts de revient (Comptabilité → Coûts)</li>
+                <li><strong>QR code ne marche pas</strong> → l'élève doit se désinscrire puis se réinscrire</li>
+            </ul>
+        </div>
+    </div>
+</section>
+
+</div><!-- /wiki-body -->
+
+<div class="wiki-footer">
+    <p>💻 Développé par <strong style="color:var(--primary)">Remond Adrien</strong> · © 2026 AEIC · 100 % étudiant</p>
 </div>
 
+</div><!-- /wiki -->
+
 <style>
-.wiki-page { display: flex; flex-direction: column; gap: 1.5rem; }
+.wiki { display: flex; flex-direction: column; gap: 1.5rem; }
 
+/* Hero */
 .wiki-hero {
-    background: linear-gradient(135deg, rgba(72,189,211,0.08), rgba(97,80,170,0.08));
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    padding: 2.5rem 2rem;
-    text-align: center;
+    text-align: center; padding: 2.5rem 1.5rem;
+    background: linear-gradient(135deg, rgba(72,189,211,0.06), rgba(97,80,170,0.06));
+    border: 1px solid var(--border); border-radius: 16px;
 }
-.wiki-hero-icon { font-size: 3rem; display: block; margin-bottom: 0.5rem; }
-.wiki-hero-title { font-size: 1.8rem; font-weight: 900; margin: 0 0 0.5rem; color: var(--primary); text-transform: none; letter-spacing: -0.02em; }
-.wiki-hero-sub { color: var(--muted); font-size: 0.95rem; margin: 0; max-width: 500px; margin: 0 auto; }
+.wiki-hero-emoji { font-size: 3rem; display: block; }
+.wiki-hero h1 { font-size: 1.8rem; font-weight: 900; margin: 0.5rem 0 0.25rem; color: var(--primary); text-transform: none; }
+.wiki-hero p { color: var(--muted); font-size: 0.95rem; margin: 0; }
 
-.wiki-toolbar {
-    display: flex; align-items: center; gap: 1rem;
+/* Recherche */
+.wiki-search-wrap {
     position: sticky; top: 0; z-index: 20;
-    background: var(--admin-bg, #0a1b33);
-    padding: 0.75rem 0;
+    display: flex; align-items: center; gap: 1rem;
+    background: var(--admin-bg, #0a1b33); padding: 0.5rem 0;
 }
-.wiki-search-input {
-    flex: 1;
-    background: rgba(255,255,255,0.05);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    color: var(--foreground);
-    padding: 0.6rem 1rem;
-    font-size: 0.95rem;
+.wiki-search-wrap input {
+    flex: 1; background: rgba(255,255,255,0.05); border: 1px solid var(--border);
+    border-radius: 10px; color: var(--foreground); padding: 0.65rem 1rem; font-size: 0.95rem;
 }
-.wiki-search-input:focus { outline: none; border-color: var(--primary); }
-.wiki-count { font-size: 0.8rem; white-space: nowrap; }
+.wiki-search-wrap input:focus { outline: none; border-color: var(--primary); }
+.wiki-count { font-size: 0.8rem; color: var(--muted); white-space: nowrap; }
 
-.wiki-toc {
-    display: flex; flex-wrap: wrap; gap: 0.4rem;
-}
-.wiki-toc-pill {
-    display: inline-flex; align-items: center; gap: 0.35rem;
-    background: rgba(255,255,255,0.03);
-    border: 1px solid var(--pill-color, var(--border));
-    border-radius: 999px;
-    padding: 0.35rem 0.8rem;
-    font-size: 0.78rem; font-weight: 600;
-    color: var(--muted);
-    text-decoration: none;
-    transition: all 0.15s;
-}
-.wiki-toc-pill:hover {
-    color: var(--foreground);
-    background: color-mix(in srgb, var(--pill-color) 10%, transparent);
-    transform: translateY(-1px);
-}
-.wiki-toc-emoji { font-size: 0.9rem; }
+/* Sections (pleine largeur, 1 par ligne) */
+.wiki-body { display: flex; flex-direction: column; gap: 1.5rem; }
 
-.wiki-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
-    gap: 1.25rem;
+.wiki-section {
+    background: rgba(255,255,255,0.02); border: 1px solid var(--border);
+    border-radius: 14px; padding: 0; overflow: hidden;
 }
-@media (max-width: 860px) { .wiki-grid { grid-template-columns: 1fr; } }
-
-.wiki-card {
-    background: rgba(255,255,255,0.02);
-    border: 1px solid var(--border);
-    border-top: 3px solid var(--card-accent, var(--primary));
-    border-radius: 14px;
-    overflow: hidden;
-    transition: border-color 0.2s;
+.wiki-section h2 {
+    display: flex; align-items: center; gap: 0.6rem;
+    font-size: 1.3rem; font-weight: 800; margin: 0;
+    padding: 1.25rem 1.5rem;
+    background: rgba(72,189,211,0.05); border-bottom: 1px solid var(--border);
+    color: var(--foreground); text-transform: none; letter-spacing: -0.01em;
 }
-.wiki-card:hover { border-color: color-mix(in srgb, var(--card-accent) 30%, var(--border)); }
-
-.wiki-card-head {
-    display: flex; align-items: center; gap: 0.65rem;
-    padding: 1.1rem 1.25rem;
-    border-bottom: 1px solid var(--border);
-    background: color-mix(in srgb, var(--card-accent) 5%, transparent);
-}
-.wiki-card-emoji { font-size: 1.4rem; }
-.wiki-card-title {
-    font-size: 1.05rem; font-weight: 800; margin: 0;
-    color: var(--card-accent, var(--primary));
-    text-transform: none; letter-spacing: -0.01em;
+.wiki-num {
+    display: inline-grid; place-items: center;
+    width: 28px; height: 28px; border-radius: 8px;
+    background: var(--primary); color: #08172d;
+    font-size: 0.85rem; font-weight: 900; flex-shrink: 0;
 }
 
-.wiki-card-body { padding: 1rem 1.25rem 1.25rem; }
-
-.wiki-faq {
-    padding: 0.75rem 0;
-    border-bottom: 1px solid rgba(255,255,255,0.04);
-}
-.wiki-faq:last-child { border-bottom: none; }
-.wiki-faq-q {
-    font-size: 0.88rem; font-weight: 700;
-    margin: 0 0 0.3rem;
-    color: var(--foreground);
-}
-.wiki-faq-a {
-    font-size: 0.82rem; color: var(--muted);
-    margin: 0; line-height: 1.6;
+.wiki-block { padding: 1.25rem 1.5rem; border-bottom: 1px solid rgba(255,255,255,0.03); }
+.wiki-block:last-child { border-bottom: none; }
+.wiki-block h3 { font-size: 1rem; font-weight: 700; margin: 0 0 0.6rem; color: var(--primary); text-transform: none; }
+.wiki-block p { font-size: 0.9rem; color: var(--muted); line-height: 1.65; margin: 0 0 0.6rem; }
+.wiki-block p:last-child { margin-bottom: 0; }
+.wiki-block code {
+    background: rgba(72,189,211,0.1); color: var(--primary);
+    padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.82rem;
 }
 
-.wiki-footer {
-    text-align: center;
-    padding: 1.5rem 0 0.5rem;
-    border-top: 1px solid var(--border);
+/* Listes */
+.wiki-list { list-style: none; padding: 0; margin: 0.5rem 0; }
+.wiki-list li { font-size: 0.88rem; color: var(--muted); padding: 0.3rem 0 0.3rem 1.2rem; position: relative; }
+.wiki-list li::before { content: '▸'; position: absolute; left: 0; color: var(--primary); }
+
+/* Steps (numérotés) */
+.wiki-steps { display: flex; flex-direction: column; gap: 0.6rem; margin: 0.75rem 0; }
+.wiki-step {
+    display: flex; align-items: flex-start; gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    background: rgba(255,255,255,0.02); border-radius: 10px;
+    border-left: 3px solid var(--primary);
 }
+.wiki-step-n {
+    display: inline-grid; place-items: center;
+    width: 24px; height: 24px; border-radius: 50%;
+    background: var(--primary); color: #08172d;
+    font-size: 0.78rem; font-weight: 800; flex-shrink: 0;
+}
+.wiki-step div { font-size: 0.88rem; color: var(--foreground); line-height: 1.5; }
+
+/* Diagrammes */
+.wiki-diagram {
+    display: flex; flex-direction: column; align-items: center; gap: 0.5rem;
+    padding: 1.25rem; margin: 0.75rem 0;
+    background: rgba(0,0,0,0.1); border-radius: 12px;
+}
+.wiki-diagram-box {
+    background: rgba(255,255,255,0.05); border: 1px solid var(--border);
+    border-radius: 10px; padding: 0.6rem 1.2rem;
+    font-size: 0.85rem; color: var(--foreground); text-align: center;
+    min-width: 200px; max-width: 400px;
+}
+.wiki-diagram-box code { font-size: 0.78rem; }
+.wiki-diagram-ok { border-color: rgba(34,197,94,0.3); background: rgba(34,197,94,0.08); }
+.wiki-diagram-warn { border-color: rgba(245,158,11,0.3); background: rgba(245,158,11,0.08); }
+.wiki-arrow { color: var(--muted); font-size: 1rem; }
+.wiki-diagram-row { display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center; }
+
+/* Tableaux */
+.wiki-table { display: flex; flex-direction: column; margin: 0.75rem 0; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.wiki-table-row {
+    display: grid; grid-template-columns: 1fr 2fr;
+    gap: 0.5rem; padding: 0.6rem 1rem;
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+    font-size: 0.85rem; color: var(--muted);
+}
+.wiki-table-row:last-child { border-bottom: none; }
+.wiki-table-head { background: rgba(255,255,255,0.03); font-weight: 700; color: var(--foreground); }
+@media (max-width: 600px) { .wiki-table-row { grid-template-columns: 1fr; } }
+
+/* Tags */
+.wiki-tag {
+    display: inline-block; padding: 0.15rem 0.5rem; border-radius: 6px;
+    font-size: 0.75rem; font-weight: 700;
+}
+.wiki-tag-teal { background: rgba(72,189,211,0.15); color: var(--primary); }
+.wiki-tag-violet { background: rgba(97,80,170,0.15); color: var(--secondary); }
+.wiki-tag-muted { background: rgba(255,255,255,0.05); color: var(--muted); }
+.wiki-tag-green { background: rgba(34,197,94,0.12); color: #4ade80; }
+.wiki-tag-warn { background: rgba(245,158,11,0.12); color: #fbbf24; }
+
+/* Alertes */
+.wiki-alert {
+    padding: 1rem 1.25rem; border-radius: 10px;
+    border-left: 4px solid;
+    font-size: 0.88rem; color: var(--muted); line-height: 1.6;
+}
+.wiki-alert-warn { border-color: #f59e0b; background: rgba(245,158,11,0.06); }
+.wiki-alert-info { border-color: var(--primary); background: rgba(72,189,211,0.06); }
+.wiki-alert strong { color: var(--foreground); }
+
+/* Emoji grid */
+.wiki-emoji-grid { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0.75rem 0; }
+.wiki-emoji-grid span {
+    background: rgba(255,255,255,0.03); border: 1px solid var(--border);
+    border-radius: 8px; padding: 0.4rem 0.75rem; font-size: 0.82rem; color: var(--muted);
+}
+
+/* Footer */
+.wiki-footer { text-align: center; padding: 1.5rem 0; border-top: 1px solid var(--border); }
 .wiki-footer p { font-size: 0.82rem; color: var(--muted); margin: 0; }
 
-.wiki-faq.is-hidden, .wiki-card.is-hidden { display: none; }
+/* Recherche */
+.wiki-block.is-hidden { display: none; }
+.wiki-section.is-hidden { display: none; }
 </style>
 
 <script>
@@ -450,25 +588,22 @@ $sections = [
 
     search.addEventListener('input', function () {
         var q = norm(search.value.trim());
-        var cards = document.querySelectorAll('.wiki-card');
-        var visibleFaqs = 0;
+        var sections = document.querySelectorAll('.wiki-section');
+        var visible = 0;
 
-        cards.forEach(function (card) {
-            var faqs = card.querySelectorAll('.wiki-faq');
+        sections.forEach(function (sec) {
+            var blocks = sec.querySelectorAll('.wiki-block');
             var anyVisible = false;
-            faqs.forEach(function (faq) {
-                var match = q === '' || norm(faq.getAttribute('data-search') || '').indexOf(q) !== -1;
-                faq.classList.toggle('is-hidden', !match);
-                if (match) { anyVisible = true; visibleFaqs++; }
+            blocks.forEach(function (block) {
+                var text = norm(block.textContent || '');
+                var match = q === '' || text.indexOf(q) !== -1;
+                block.classList.toggle('is-hidden', !match);
+                if (match) { anyVisible = true; visible++; }
             });
-            card.classList.toggle('is-hidden', !anyVisible);
+            sec.classList.toggle('is-hidden', !anyVisible);
         });
 
-        if (q === '') {
-            countEl.textContent = '';
-        } else {
-            countEl.textContent = visibleFaqs + ' résultat' + (visibleFaqs > 1 ? 's' : '');
-        }
+        countEl.textContent = q === '' ? '' : visible + ' résultat' + (visible > 1 ? 's' : '');
     });
 })();
 </script>
