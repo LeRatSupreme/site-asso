@@ -306,7 +306,7 @@ function is_member(): bool
 }
 
 // ---------------------------------------------------------------------
-//  Fonctionnalité 12 — Système de traduction multilingue (7 langues).
+//  Fonctionnalité 12 — Système de traduction multilingue (9 langues).
 // ---------------------------------------------------------------------
 
 /**
@@ -316,7 +316,7 @@ function is_member(): bool
  */
 function available_langs(): array
 {
-    return ['fr', 'en', 'de', 'es', 'zh', 'ja', 'pl'];
+    return ['fr', 'en', 'de', 'es', 'zh', 'ja', 'pl', 'ru', 'ms'];
 }
 
 /**
@@ -332,6 +332,8 @@ function lang_flag(string $lang): string
         'zh' => '🇨🇳',
         'ja' => '🇯🇵',
         'pl' => '🇵🇱',
+        'ru' => '🇷🇺',
+        'ms' => '🇲🇾',
     ];
 
     return $flags[$lang] ?? '🌐';
@@ -350,6 +352,8 @@ function lang_locale(string $lang): string
         'zh' => 'zh_CN',
         'ja' => 'ja_JP',
         'pl' => 'pl_PL',
+        'ru' => 'ru_RU',
+        'ms' => 'ms_MY',
     ];
 
     return $locales[$lang] ?? 'fr_FR';

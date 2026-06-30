@@ -13,7 +13,7 @@ declare(strict_types=1);
  * Le français n'est jamais listé en valeur : c'est la clé elle-même qui sert
  * de texte de référence (et de fallback via tc()).
  *
- * Langues : en, de, es, zh, ja, pl.
+ * Langues : en, de, es, zh, ja, pl, ru, ms.
  */
 
 return [
@@ -28,6 +28,8 @@ return [
         'zh' => '加来计算机学生协会。由学生打造,为学生服务。',
         'ja' => 'カレー学生情報科学協会。学生による、学生のための活動。',
         'pl' => 'Studenckie Stowarzyszenie Informatyczne Calais. Tworzone przez studentów, dla studentów.',
+        'ru' => 'Студенческая ассоциация информатики Кале. Сделано студентами для студентов.',
+        'ms' => 'Persatuan Informatik Pelajar Calais. Dibuat oleh pelajar, untuk pelajar.',
     ],
 
     /* ----------------------------------------------------------------- */
@@ -40,6 +42,8 @@ return [
         'zh' => '迎新晚会',
         'ja' => '新歓パーティー',
         'pl' => 'Wieczór integracyjny',
+        'ru' => 'Вечеринка знакомства',
+        'ms' => 'Malam mesra',
     ],
 
     // Variation orthographique possible (sans accent / apostrophe droite).
@@ -50,6 +54,8 @@ return [
         'zh' => '迎新晚会',
         'ja' => '新歓パーティー',
         'pl' => 'Wieczór integracyjny',
+        'ru' => 'Вечеринка знакомства',
+        'ms' => 'Malam mesra',
     ],
 
     'LAN Party' => [
@@ -59,6 +65,8 @@ return [
         'zh' => 'LAN 派对',
         'ja' => 'LANパーティー',
         'pl' => 'LAN Party',
+        'ru' => 'LAN-вечеринка',
+        'ms' => 'Parti LAN',
     ],
 
     'Conférence IA' => [
@@ -68,6 +76,8 @@ return [
         'zh' => '人工智能讲座',
         'ja' => 'AI カンファレンス',
         'pl' => 'Konferencja AI',
+        'ru' => 'Конференция по ИИ',
+        'ms' => 'Persidangan AI',
     ],
 
     'Afterwork de rentrée' => [
@@ -77,6 +87,8 @@ return [
         'zh' => '开学职场社交会',
         'ja' => '新学期アフターワーク',
         'pl' => 'Afterwork na start semestru',
+        'ru' => 'Afterwork к началу года',
+        'ms' => 'Afterwork kembali ke kampus',
     ],
 
     'Barbecue de rentrée' => [
@@ -86,6 +98,8 @@ return [
         'zh' => '迎新烧烤',
         'ja' => '新歓バーベキュー',
         'pl' => 'Powitalne grille',
+        'ru' => 'Приветственный барбекю',
+        'ms' => 'BBQ sambutan',
     ],
 
     'Soirée bowling' => [
@@ -95,6 +109,8 @@ return [
         'zh' => '保龄球之夜',
         'ja' => 'ボウリングの夕べ',
         'pl' => 'Wieczór kręgli',
+        'ru' => 'Боулинг-вечер',
+        'ms' => 'Malam boling',
     ],
 
     'Nuit de l\'Info' => [
@@ -105,6 +121,8 @@ return [
         'zh' => 'Nuit de l\'Info',
         'ja' => 'Nuit de l\'Info',
         'pl' => 'Nuit de l\'Info',
+        'ru' => 'Nuit de l\'Info',
+        'ms' => 'Nuit de l\'Info',
     ],
 
     'Hackathon' => [
@@ -114,6 +132,8 @@ return [
         'zh' => '黑客松',
         'ja' => 'ハッカソン',
         'pl' => 'Hackathon',
+        'ru' => 'Хакатон',
+        'ms' => 'Hackathon',
     ],
 
     /* ----------------------------------------------------------------- */
@@ -126,6 +146,8 @@ return [
         'zh' => '全体计算机学生的开学聚会。',
         'ja' => '全情報学生のための新学期の集い。',
         'pl' => 'Powitalne spotkanie wszystkich studentów informatyki.',
+        'ru' => 'Встреча начала года для всех студентов-информатиков.',
+        'ms' => 'Perjumpaan kembali ke kampus untuk semua pelajar informatik.',
     ],
 
     'Tournois jeux vidéo toute la nuit.' => [
@@ -135,6 +157,8 @@ return [
         'zh' => '整晚的电子游戏锦标赛。',
         'ja' => '一晩中のゲーム大会。',
         'pl' => 'Turnieje gier wideo przez całą noc.',
+        'ru' => 'Турниры по видеоиграм всю ночь.',
+        'ms' => 'Kejohanan permainan video sepanjang malam.',
     ],
 
     'Intervenants pro autour de l\'IA générative.' => [
@@ -144,6 +168,8 @@ return [
         'zh' => '围绕生成式人工智能的专业演讲嘉宾。',
         'ja' => '生成AIをめぐるプロの登壇者。',
         'pl' => 'Profesjonalni prelegenci o generatywnej sztucznej inteligencji.',
+        'ru' => 'Профессиональные спикеры о генеративном ИИ.',
+        'ms' => 'Penceramah profesional tentang AI generatif.',
     ],
 
     'Décompressez après les cours et faites-vous des amis autour d\'un verre.' => [
@@ -153,6 +179,8 @@ return [
         'zh' => '课后放松,在杯酒之间结交朋友。',
         'ja' => '授業の後にリラックスして、一杯囲みながら友達を作ろう。',
         'pl' => 'Zrelaksuj się po zajęciach i zdobądź znajomych przy drinku.',
+        'ru' => 'Отдохните после занятий и заведите друзей за бокалом напитка.',
+        'ms' => 'Bersantai selepas kelas dan berkawan sambil minum.',
     ],
 
     'Un moment de partage et de convivialité en plein air pour toute la communauté.' => [
@@ -162,6 +190,8 @@ return [
         'zh' => '面向全体社区的户外分享与欢聚时刻。',
         'ja' => 'コミュニティ全員のための、屋外での分かち合いと和やかなひととき。',
         'pl' => 'Chwila dzielenia się i wspólnoty na świeżym powietrzu dla całej społeczności.',
+        'ru' => 'Момент общения и уюта на свежем воздухе для всего сообщества.',
+        'ms' => 'Momen perkongsian dan kebersamaan di luar ruang untuk seluruh komuniti.',
     ],
 
     'Défiez vos camarades sur les pistes pour une soirée compétitive et fun.' => [
@@ -171,6 +201,8 @@ return [
         'zh' => '在球道上挑战同学,享受一晚既竞技又欢乐的时光。',
         'ja' => 'レーンで同級生に挑んで、競い合いながら楽しむ夜。',
         'pl' => 'Rywalizuj ze znajomymi na torach w konkurencyjny i wesoły wieczór.',
+        'ru' => 'Бросьте вызов однокурсникам на дорожках в соревновательный и весёлый вечер.',
+        'ms' => 'Cabari rakan sekelas di lorong untuk malam yang berpersaingan dan menyeronokkan.',
     ],
 
     'L\'événement national incontournable : une nuit de programmation collaborative pour de bonnes causes.' => [
@@ -180,6 +212,8 @@ return [
         'zh' => '不可错过的全国盛事:为公益事业而通宵协作编程。',
         'ja' => '見逃せない全国イベント:良い原因のために協力してコードを書く一晩。',
         'pl' => 'Krajowe wydarzenie, którego nie można przegapić: noc wspólnego programowania na szczytny cel.',
+        'ru' => 'Обязательное национальное событие: ночь совместного программирования на благо добрых дел.',
+        'ms' => 'Acara kebangsaan yang tidak boleh dilepaskan: satu malam pengaturcaraan kolaboratif untuk tujuan baik.',
     ],
 
     /* ----------------------------------------------------------------- */
@@ -192,6 +226,8 @@ return [
         'zh' => '加来 IUT — 计算机系大厅',
         'ja' => 'カレー IUT — 情報工学科ホール',
         'pl' => 'IUT de Calais — Hol wydziału Informatyki',
+        'ru' => 'IUT de Calais — холл факультета информатики',
+        'ms' => 'IUT de Calais — Dewan jabatan Informatik',
     ],
 
     'Campus de Calais — Amphi A' => [
@@ -201,6 +237,8 @@ return [
         'zh' => '加来校区 — A 阶梯教室',
         'ja' => 'カレーキャンパス — 講義棟A',
         'pl' => 'Campus Calais — Aula A',
+        'ru' => 'Кампус Кале — Амфи A',
+        'ms' => 'Kampus Calais — Dewan kuliah A',
     ],
 
     'Pelouse de l\'IUT de Calais' => [
@@ -210,6 +248,8 @@ return [
         'zh' => '加来 IUT 草坪',
         'ja' => 'カレー IUT の芝生',
         'pl' => 'Trawnik IUT de Calais',
+        'ru' => 'Газон IUT de Calais',
+        'ms' => 'Lapang IUT de Calais',
     ],
 
     'Bowling de Calais' => [
@@ -219,6 +259,8 @@ return [
         'zh' => '加来保龄球馆',
         'ja' => 'カレーのボウリング場',
         'pl' => 'Kręgielnia w Calais',
+        'ru' => 'Боулинг Кале',
+        'ms' => 'Laluan boling Calais',
     ],
 
     'Salle des associations' => [
@@ -228,6 +270,8 @@ return [
         'zh' => '社团活动室',
         'ja' => 'サークル室',
         'pl' => 'Sala stowarzyszeń studenckich',
+        'ru' => 'Зал ассоциаций',
+        'ms' => 'Bilik persatuan pelajar',
     ],
 
     'Amphi B' => [
@@ -237,6 +281,8 @@ return [
         'zh' => 'B 阶梯教室',
         'ja' => '講義棟B',
         'pl' => 'Aula B',
+        'ru' => 'Амфи B',
+        'ms' => 'Dewan kuliah B',
     ],
 
     'IUT de Calais — Salles informatiques' => [
@@ -246,29 +292,31 @@ return [
         'zh' => '加来 IUT — 计算机机房',
         'ja' => 'カレー IUT — 情報実習室',
         'pl' => 'IUT de Calais — Sale komputerowe',
+        'ru' => 'IUT de Calais — компьютерные классы',
+        'ms' => 'IUT de Calais — Makmal komputer',
     ],
 
     /* ---- Notifications ---- */
     'Vous êtes inscrit à « Nuit de l\'Info »' => [
-        'en' => 'You are registered for "Nuit de l\'Info"', 'de' => 'Sie sind für "Nuit de l\'Info" angemeldet', 'es' => 'Estás inscrito en "Nuit de l\'Info"', 'zh' => '您已注册参加「信息之夜」', 'ja' => '「Nuit de l\'Info」に登録しました', 'pl' => 'Jesteś zapisany na "Nuit de l\'Info"',
+        'en' => 'You are registered for "Nuit de l\'Info"', 'de' => 'Sie sind für "Nuit de l\'Info" angemeldet', 'es' => 'Estás inscrito en "Nuit de l\'Info"', 'zh' => '您已注册参加「信息之夜」', 'ja' => '「Nuit de l\'Info」に登録しました', 'pl' => 'Jesteś zapisany na "Nuit de l\'Info"', 'ru' => 'Вы записаны на «Nuit de l\'Info»', 'ms' => 'Anda berdaftar untuk "Nuit de l\'Info"',
     ],
     'Vous êtes inscrit à « Nuit de l\'info »' => [
-        'en' => 'You are registered for "Nuit de l\'Info"', 'de' => 'Sie sind für "Nuit de l\'Info" angemeldet', 'es' => 'Estás inscrito en "Nuit de l\'Info"', 'zh' => '您已注册参加「信息之夜」', 'ja' => '「Nuit de l\'Info」に登録しました', 'pl' => 'Jesteś zapisany na "Nuit de l\'Info"',
+        'en' => 'You are registered for "Nuit de l\'Info"', 'de' => 'Sie sind für "Nuit de l\'Info" angemeldet', 'es' => 'Estás inscrito en "Nuit de l\'Info"', 'zh' => '您已注册参加「信息之夜」', 'ja' => '「Nuit de l\'Info」に登録しました', 'pl' => 'Jesteś zapisany na "Nuit de l\'Info"', 'ru' => 'Вы записаны на «Nuit de l\'Info»', 'ms' => 'Anda berdaftar untuk "Nuit de l\'Info"',
     ],
     'Votre inscription est confirmée. Retrouvez les détails dans votre espace.' => [
-        'en' => 'Your registration is confirmed. Find the details in your space.', 'de' => 'Ihre Anmeldung ist bestätigt. Details finden Sie in Ihrem Bereich.', 'es' => 'Tu inscripción está confirmada. Encuentra los detalles en tu espacio.', 'zh' => '您的报名已确认。请在个人空间中查看详情。', 'ja' => '登録が確認されました。詳細はスペースでご確認ください。', 'pl' => 'Twoja rejestracja jest potwierdzona. Szczegóły znajdziesz w swoim obszarze.',
+        'en' => 'Your registration is confirmed. Find the details in your space.', 'de' => 'Ihre Anmeldung ist bestätigt. Details finden Sie in Ihrem Bereich.', 'es' => 'Tu inscripción está confirmada. Encuentra los detalles en tu espacio.', 'zh' => '您的报名已确认。请在个人空间中查看详情。', 'ja' => '登録が確認されました。詳細はスペースでご確認ください。', 'pl' => 'Twoja rejestracja jest potwierdzona. Szczegóły znajdziesz w swoim obszarze.', 'ru' => 'Ваша регистрация подтверждена. Подробности в личном кабинете.', 'ms' => 'Pendaftaran anda disahkan. Sila lihat butiran di ruang anda.',
     ],
     'Vote enregistré pour « Chocolatine ou pain au chocolat ? »' => [
-        'en' => 'Vote recorded for "Chocolatine ou pain au chocolat ?"', 'de' => 'Stimme abgegeben für "Chocolatine ou pain au chocolant ?"', 'es' => 'Voto registrado para "Chocolatine ou pain au chocolat ?"', 'zh' => '已为「巧克力面包还是巧克力面包？」投票', 'ja' => '「Chocolatine ou pain au chocolat ?」に投票しました', 'pl' => 'Głos oddany na "Chocolatine ou pain au chocolat ?"',
+        'en' => 'Vote recorded for "Chocolatine ou pain au chocolat ?"', 'de' => 'Stimme abgegeben für "Chocolatine ou pain au chocolant ?"', 'es' => 'Voto registrado para "Chocolatine ou pain au chocolat ?"', 'zh' => '已为「巧克力面包还是巧克力面包？」投票', 'ja' => '「Chocolatine ou pain au chocolat ?」に投票しました', 'pl' => 'Głos oddany na "Chocolatine ou pain au chocolat ?"', 'ru' => 'Голос записан за «Chocolatine ou pain au chocolat ?»', 'ms' => 'Undi direkodkan untuk "Chocolatine ou pain au chocolat ?"',
     ],
     'Votre vote a bien été pris en compte.' => [
-        'en' => 'Your vote has been recorded.', 'de' => 'Ihre Stimme wurde erfasst.', 'es' => 'Tu voto ha sido registrado.', 'zh' => '您的投票已被记录。', 'ja' => '投票が記録されました。', 'pl' => 'Twój głos został zarejestrowany.',
+        'en' => 'Your vote has been recorded.', 'de' => 'Ihre Stimme wurde erfasst.', 'es' => 'Tu voto ha sido registrado.', 'zh' => '您的投票已被记录。', 'ja' => '投票が記録されました。', 'pl' => 'Twój głos został zarejestrowany.', 'ru' => 'Ваш голос учтён.', 'ms' => 'Undi anda telah direkodkan.',
     ],
     'Une place s\'est libérée pour' => [
-        'en' => 'A spot opened up for', 'de' => 'Ein Platz ist frei geworden für', 'es' => 'Se ha liberado una plaza para', 'zh' => '有空位了：', 'ja' => '空きが出ました：', 'pl' => 'Zwolniło się miejsce na',
+        'en' => 'A spot opened up for', 'de' => 'Ein Platz ist frei geworden für', 'es' => 'Se ha liberado una plaza para', 'zh' => '有空位了：', 'ja' => '空きが出ました：', 'pl' => 'Zwolniło się miejsce na', 'ru' => 'Освободилось место для', 'ms' => 'Satu tempat telah kosong untuk',
     ],
     'Vous êtes inscrit !' => [
-        'en' => 'You are registered!', 'de' => 'Sie sind angemeldet!', 'es' => '¡Estás inscrito!', 'zh' => '您已注册！', 'ja' => '登録完了！', 'pl' => 'Jesteś zapisany!',
+        'en' => 'You are registered!', 'de' => 'Sie sind angemeldet!', 'es' => '¡Estás inscrito!', 'zh' => '您已注册！', 'ja' => '登録完了！', 'pl' => 'Jesteś zapisany!', 'ru' => 'Вы записаны!', 'ms' => 'Anda telah berdaftar!',
     ],
 
 ];
