@@ -92,17 +92,6 @@ $twitterHandle = Setting::get('twitter_handle', '');
             </nav>
 
             <div class="nav-actions">
-                <div class="nav-search" id="nav-search">
-                    <span class="nav-search-icon" aria-hidden="true">🔎</span>
-                    <input type="search"
-                           id="global-search-input"
-                           class="nav-search-input"
-                           placeholder="Rechercher…"
-                           autocomplete="off"
-                           aria-label="Recherche globale">
-                    <div class="nav-search-results" id="global-search-results" hidden></div>
-                </div>
-
                 <?php if ($user !== null): ?>
                     <div class="nav-bell" id="nav-notif">
                         <button type="button"
@@ -140,24 +129,6 @@ $twitterHandle = Setting::get('twitter_handle', '');
                     aria-expanded="false" aria-controls="mobile-nav">
                 <span></span><span></span><span></span>
             </button>
-
-            <button class="nav-search-toggle" type="button" id="nav-search-toggle" aria-label="Rechercher">
-                <span aria-hidden="true">🔎</span>
-            </button>
-        </div>
-
-        <div class="search-overlay" id="search-overlay" hidden>
-            <div class="search-overlay-inner">
-                <span class="nav-search-icon" aria-hidden="true">🔎</span>
-                <input type="search"
-                       id="mobile-search-input"
-                       class="nav-search-input"
-                       placeholder="Rechercher…"
-                       autocomplete="off"
-                       aria-label="Recherche globale">
-                <button type="button" class="search-overlay-close" id="search-overlay-close" aria-label="Fermer">✕</button>
-                <div class="nav-search-results" id="mobile-search-results" hidden></div>
-            </div>
         </div>
 
         <nav id="mobile-nav" class="mobile-nav" aria-label="Navigation mobile">
