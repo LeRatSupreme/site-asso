@@ -6,7 +6,7 @@ declare(strict_types=1);
  * AEIC — Script de rappels d'événements (24h et 1h avant).
  *
  * À exécuter via cron toutes les 15 minutes :
- *   */15 * * * * /usr/bin/php /home/ubuntu/AEIC/scripts/send_event_reminders.php >> /home/ubuntu/AEIC/logs/reminders.log 2>&1
+ *   crontab: every 15 min → /usr/bin/php .../send_event_reminders.php
  *
  * Vérifie les événements à venir et envoie des emails de rappel aux
  * inscrits 24h puis 1h avant l'événement. Les colonnes
