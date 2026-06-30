@@ -171,6 +171,12 @@
 .reorder-table tfoot th { padding-top: 1rem; border-top: 2px solid var(--border); }
 .reorder-table .num { text-align: right; }
 
+/* ---- Journal des ventes ---- */
+.sales-table th, .sales-table td { padding: 0.85rem 0.9rem; font-size: 0.9rem; vertical-align: middle; }
+.sales-table tbody tr:hover { background: rgba(72, 189, 211, 0.08); }
+.sales-table .row-muted { opacity: 0.6; }
+.sales-table tfoot th { border-top: 2px solid var(--border); padding-top: 1rem; font-size: 0.92rem; }
+
 .stock-input {
     background: rgba(255, 255, 255, 0.06);
     border: 1px solid var(--border);
