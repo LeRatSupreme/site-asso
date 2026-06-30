@@ -84,6 +84,10 @@ declare(strict_types=1);
 .rgpd-card {
     padding: 1.75rem;
     margin-bottom: 1.25rem;
+    transition: border-color 0.2s;
+}
+.rgpd-card:hover {
+    border-color: rgba(255,255,255,0.15);
 }
 .rgpd-card-head {
     display: flex;
@@ -102,5 +106,20 @@ declare(strict_types=1);
 .rgpd-desc { font-size: 0.9rem; color: var(--muted); line-height: 1.6; margin: 0 0 1rem; }
 .rgpd-card-danger { border-left: 3px solid rgba(239, 68, 68, 0.5); }
 .rgpd-card .field { margin-bottom: 0.85rem; }
-.rgpd-card .btn { margin-top: 0.5rem; }
+.rgpd-card .btn { margin-top: 0.5rem; transition: transform 0.15s, filter 0.15s; }
+.rgpd-card .btn:hover { transform: translateY(-2px); filter: brightness(1.15); }
+.rgpd-card .btn:active { transform: translateY(0); }
+
+.btn-danger {
+    background: rgba(239, 68, 68, 0.14);
+    border: 1px solid rgba(239, 68, 68, 0.4);
+    color: var(--accent-danger, #ef4444);
+}
+.btn-danger:hover {
+    background: rgba(239, 68, 68, 0.25);
+    border-color: rgba(239, 68, 68, 0.6);
+    color: #fff;
+    transform: translateY(-2px);
+    filter: brightness(1.1);
+}
 </style>
