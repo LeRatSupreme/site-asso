@@ -9,6 +9,7 @@ use App\Controllers\Admin\AdminController;
 use App\Controllers\Admin\AdminEventController;
 use App\Controllers\Admin\AdminMediaController;
 use App\Controllers\Admin\AdminPageController;
+use App\Controllers\Admin\AdminPollController;
 use App\Controllers\Admin\AdminSettingController;
 use App\Controllers\Admin\AdminSumupController;
 use App\Controllers\Admin\AdminTeamController;
@@ -18,6 +19,7 @@ use App\Controllers\EventController;
 use App\Controllers\HealthController;
 use App\Controllers\HomeController;
 use App\Controllers\PageController;
+use App\Controllers\PollController;
 use App\Controllers\RegistrationController;
 use App\Controllers\SeoController;
 use App\Controllers\StudentController;
@@ -47,6 +49,11 @@ function aeic_register_routes(Router $router): void
     $router->get('/privacy', [PageController::class, 'privacy']);
     $router->get('/cgu', [PageController::class, 'cgu']);
     $router->get('/p/{slug}', [PageController::class, 'show']);
+
+    // Sondages.
+    $router->get('/sondages', [PollController::class, 'index']);
+    $router->get('/sondages/{slug}', [PollController::class, 'show']);
+    $router->post('/sondages/{slug}/vote', [PollController::class, 'vote']);
 
     // SEO.
     $router->get('/sitemap.xml', [SeoController::class, 'sitemap']);
@@ -127,6 +134,12 @@ function aeic_register_routes(Router $router): void
     $router->get('/admin/pages/{slug}', [AdminPageController::class, 'form']);
     $router->post('/admin/pages/save', [AdminPageController::class, 'save']);
     $router->post('/admin/pages/{slug}/delete', [AdminPageController::class, 'delete']);
+
+    $router->get('/admin/sondages', [AdminPollController::class, 'index']);
+    $router->get('/admin/sondages/new', [AdminPollController::class, 'form']);
+    $router->get('/admin/sondages/{id}', [AdminPollController::class, 'form']);
+    $router->post('/admin/sondages/save', [AdminPollController::class, 'save']);
+    $router->post('/admin/sondages/{id}/delete', [AdminPollController::class, 'delete']);
 
     $router->get('/admin/media', [AdminMediaController::class, 'index']);
     $router->post('/admin/media/upload', [AdminMediaController::class, 'upload']);
