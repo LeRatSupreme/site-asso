@@ -417,7 +417,7 @@ ul, ol { list-style: none; }
     padding: 4.5rem 0;
 }
 .page-title {
-    font-size: clamp(2.5rem, 7vw, 5rem);
+    font-size: clamp(2rem, 5vw, 3.5rem);
     color: #fff;
     font-weight: 900;
     text-transform: uppercase;
