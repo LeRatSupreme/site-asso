@@ -198,10 +198,10 @@ ul, ol { list-style: none; }
     gap: 0.5rem;
     color: var(--primary);
     text-transform: uppercase;
-    letter-spacing: 0.26em;
-    font-size: 10px;
+    letter-spacing: 0.22em;
+    font-size: 14px;
     font-weight: 800;
-    margin-bottom: 0.75rem;
+    margin-bottom: 0.85rem;
 }
 
 .lead { font-size: 1.1rem; color: var(--muted); }
