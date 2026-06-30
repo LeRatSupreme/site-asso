@@ -176,18 +176,19 @@ $twitterHandle = Setting::get('twitter_handle', '');
             </div>
 
             <button class="nav-toggle" type="button" aria-label="<?= e(t('nav.open_menu')) ?>"
-                    aria-expanded="false" aria-controls="mobile-nav">
+                    aria-expanded="false" aria-controls="mobile-nav" id="nav-toggle-btn">
                 <span></span><span></span><span></span>
             </button>
         </div>
 
+        <div class="mobile-nav-overlay" id="mobile-nav-overlay"></div>
         <nav id="mobile-nav" class="mobile-nav" aria-label="<?= e(t('nav.main.aria')) ?>">
-            <a href="<?= e(url('/')) ?>"><?= e(t('nav.home')) ?></a>
-            <a href="<?= e(url('/events')) ?>"><?= e(t('nav.events')) ?></a>
-            <a href="<?= e(url('/presentation')) ?>"><?= e(t('nav.about')) ?></a>
-            <a href="<?= e(url('/team')) ?>"><?= e(t('nav.team')) ?></a>
-            <a href="<?= e(url('/sondages')) ?>"><?= e(t('nav.polls')) ?></a>
-            <a href="<?= e(url('/galerie')) ?>"><?= e(t('nav.gallery')) ?></a>
+            <a href="<?= e(url('/')) ?>">🏠 <?= e(t('nav.home')) ?></a>
+            <a href="<?= e(url('/events')) ?>">📅 <?= e(t('nav.events')) ?></a>
+            <a href="<?= e(url('/presentation')) ?>">🏫 <?= e(t('nav.about')) ?></a>
+            <a href="<?= e(url('/team')) ?>">👥 <?= e(t('nav.team')) ?></a>
+            <a href="<?= e(url('/sondages')) ?>">📊 <?= e(t('nav.polls')) ?></a>
+            <a href="<?= e(url('/galerie')) ?>">📷 <?= e(t('nav.gallery')) ?></a>
             <hr>
             <div class="lang-switch-mobile">
                 <?php foreach ($langs as $code): ?>
@@ -248,14 +249,37 @@ $twitterHandle = Setting::get('twitter_handle', '');
     </footer>
 
     <script>
-        // Menu mobile minimal (vanilla).
+        // Menu mobile avec overlay + animation.
         (function () {
-            var btn = document.querySelector('.nav-toggle');
+            var btn = document.getElementById('nav-toggle-btn');
             var nav = document.getElementById('mobile-nav');
+            var overlay = document.getElementById('mobile-nav-overlay');
             if (!btn || !nav) return;
+
+            function openMenu() {
+                nav.classList.add('is-open');
+                btn.classList.add('is-open');
+                if (overlay) overlay.classList.add('is-open');
+                btn.setAttribute('aria-expanded', 'true');
+                document.body.style.overflow = 'hidden';
+            }
+            function closeMenu() {
+                nav.classList.remove('is-open');
+                btn.classList.remove('is-open');
+                if (overlay) overlay.classList.remove('is-open');
+                btn.setAttribute('aria-expanded', 'false');
+                document.body.style.overflow = '';
+            }
+
             btn.addEventListener('click', function () {
-                var open = nav.classList.toggle('is-open');
-                btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+                if (nav.classList.contains('is-open')) { closeMenu(); } else { openMenu(); }
+            });
+            if (overlay) overlay.addEventListener('click', closeMenu);
+            document.addEventListener('keydown', function (e) {
+                if (e.key === 'Escape' && nav.classList.contains('is-open')) { closeMenu(); }
+            });
+            nav.querySelectorAll('a').forEach(function (a) {
+                a.addEventListener('click', closeMenu);
             });
         })();
 
