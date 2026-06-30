@@ -32,6 +32,10 @@ $sections = [
         'Promotions'   => '/admin/promotions',
         'Médias'       => '/admin/media',
     ],
+    'Cafétéria' => [
+        'Produits'    => '/admin/cafeteria',
+        'Catégories'  => '/admin/cafeteria/categories',
+    ],
     'Comptabilité' => [
         'Dashboard'      => '/admin/compta',
         'Importer CSV'   => '/admin/compta/import',
