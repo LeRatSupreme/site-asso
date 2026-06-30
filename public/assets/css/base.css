@@ -414,17 +414,17 @@ ul, ol { list-style: none; }
     overflow: hidden;
     border-bottom: 1px solid var(--border);
     background: var(--background);
-    padding: 3.5rem 0;
+    padding: 4.5rem 0;
 }
 .page-title {
-    font-size: clamp(2rem, 5vw, 3.5rem);
+    font-size: clamp(2.5rem, 7vw, 5rem);
     color: #fff;
     font-weight: 900;
     text-transform: uppercase;
     letter-spacing: -0.055em;
     line-height: 0.95;
 }
-.page-lead { color: var(--muted); margin-top: 0.75rem; font-size: 1.05rem; }
+.page-lead { color: var(--muted); margin-top: 1rem; font-size: 1.15rem; max-width: 60ch; }
 
 /* ----------------------------- Empty state ----------------------------- */
 .empty-state {
