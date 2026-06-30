@@ -425,4 +425,34 @@ final class Event extends Model
             return [];
         }
     }
+
+    /**
+     * Toutes les photos des événements publiés passés, jointes à l'événement.
+     *
+     * Tri : événements les plus récents d'abord, puis photos les plus anciennes
+     * d'abord au sein d'un même événement.
+     *
+     * @return list<array<string,mixed>> Lignes {event_id, event_title, event_slug,
+     *                                   event_date, photo_id, url, caption, created_at}.
+     */
+    public static function pastPhotos(): array
+    {
+        try {
+            $stmt = static::pdo()->query(
+                'SELECT e.id AS event_id, e.title AS event_title, e.slug AS event_slug,
+                        e.date AS event_date,
+                        p.id AS photo_id, p.url AS url, p.caption AS caption,
+                        p.created_at AS created_at
+                 FROM photos p
+                 INNER JOIN events e ON e.id = p.event_id
+                 WHERE e.is_published = 1 AND e.date < NOW()
+                 ORDER BY e.date DESC, p.created_at ASC'
+            );
+
+            /** @var list<array<string,mixed>> $result */
+            return $stmt->fetchAll();
+        } catch (\Throwable) {
+            return [];
+        }
+    }
 }

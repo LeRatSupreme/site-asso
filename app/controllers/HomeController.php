@@ -47,4 +47,38 @@ final class HomeController extends Controller
             'maintenanceMode' => Setting::getBool('maintenance_mode', false),
         ]);
     }
+
+    /**
+     * Galerie photos publique : photos des événements passés, groupées par événement.
+     */
+    public function galerie(): void
+    {
+        $rows = Event::pastPhotos();
+
+        // Regroupement par événement (en gardant l'ordre : événements récents d'abord).
+        $groups = [];
+        foreach ($rows as $row) {
+            $eventId = (string) $row['event_id'];
+            if (!isset($groups[$eventId])) {
+                $groups[$eventId] = [
+                    'event_id'    => $eventId,
+                    'event_title' => (string) ($row['event_title'] ?? ''),
+                    'event_slug'  => (string) ($row['event_slug'] ?? ''),
+                    'event_date'  => (string) ($row['event_date'] ?? ''),
+                    'photos'      => [],
+                ];
+            }
+            $groups[$eventId]['photos'][] = [
+                'url'       => (string) ($row['url'] ?? ''),
+                'caption'   => (string) ($row['caption'] ?? ''),
+                'photo_id'  => (string) ($row['photo_id'] ?? ''),
+            ];
+        }
+
+        $this->render('galerie/index', [
+            'title'       => 'Galerie — AEIC',
+            'description' => 'Photos des événements passés de l\'AEIC : soirées, LAN, conférences et plus.',
+            'groups'      => array_values($groups),
+        ]);
+    }
 }

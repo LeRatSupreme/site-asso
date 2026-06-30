@@ -38,6 +38,7 @@ function aeic_register_routes(Router $router): void
 {
     // Pages publiques.
     $router->get('/', [HomeController::class, 'index']);
+    $router->get('/galerie', [HomeController::class, 'galerie']);
 
     $router->get('/events', [EventController::class, 'index']);
     $router->get('/events/{slug}', [EventController::class, 'show']);
