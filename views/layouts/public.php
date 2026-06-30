@@ -63,6 +63,11 @@ $twitterHandle = Setting::get('twitter_handle', '');
     <?php endif; ?>
 
     <link rel="icon" href="<?= e(asset('img/favicon.svg')) ?>" type="image/svg+xml">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="apple-touch-icon" href="<?= e(asset('img/icon.svg')) ?>">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="AEIC">
     <link rel="stylesheet" href="<?= e(assetVersioned('css/base.css')) ?>">
     <link rel="stylesheet" href="<?= e(assetVersioned('css/pages.css')) ?>">
     <link rel="stylesheet" href="<?= e(rootAssetVersioned('/css/payments.css')) ?>">
@@ -420,5 +425,8 @@ $twitterHandle = Setting::get('twitter_handle', '');
         })();
     </script>
     <script src="<?= e(rootAssetVersioned('/assets/js/confirm.js')) ?>"></script>
+
+    <!-- PWA : enregistrement du service worker -->
+    <script>if ('serviceWorker' in navigator) { window.addEventListener('load', function () { navigator.serviceWorker.register('/sw.js'); }); }</script>
 </body>
 </html>

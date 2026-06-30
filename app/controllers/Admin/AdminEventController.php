@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Controllers\Admin;
 
+use App\Core\Discord;
 use App\Models\Event;
 use App\Models\EventWaitlist;
 use App\Models\Notification;
@@ -80,6 +81,20 @@ final class AdminEventController extends AdminBaseController
         $id = Event::save($data);
 
         $this->audit($isNew ? 'event.create' : 'event.update', 'event', $id);
+
+        // Annonce Discord (non bloquante) — uniquement à la création.
+        if ($isNew) {
+            try {
+                Discord::notifyEvent(
+                    (string) ($data['title'] ?? ''),
+                    (string) ($data['date'] ?? ''),
+                    (string) ($data['location'] ?? ''),
+                    url('/events/' . rawurlencode((string) ($data['slug'] ?? '')))
+                );
+            } catch (\Throwable) {
+                // Silencieux : un échec Discord ne doit pas casser la création.
+            }
+        }
 
         $this->setFlash('success', 'Événement enregistré.');
         redirect(url('/admin/events'));

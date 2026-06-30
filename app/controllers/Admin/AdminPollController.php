@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Controllers\Admin;
 
+use App\Core\Discord;
 use App\Models\Poll;
 use App\Models\PollOption;
 
@@ -71,6 +72,19 @@ final class AdminPollController extends AdminBaseController
         }
 
         $this->audit($isNew ? 'poll.create' : 'poll.update', 'poll', $id);
+
+        // Annonce Discord (non bloquante) — uniquement à la création.
+        if ($isNew) {
+            try {
+                $saved = Poll::find($id);
+                Discord::notifyPoll(
+                    (string) ($saved['title'] ?? (string) ($data['title'] ?? '')),
+                    url('/sondages/' . rawurlencode((string) ($saved['slug'] ?? '')))
+                );
+            } catch (\Throwable) {
+                // Silencieux : un échec Discord ne doit pas casser la création.
+            }
+        }
 
         $this->setFlash('success', 'Sondage enregistré.');
         redirect(url('/admin/sondages'));
