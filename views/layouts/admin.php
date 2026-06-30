@@ -52,8 +52,9 @@ $sections = [
     ],
     'Système' => [
         'Utilisateurs' => '/admin/users',
-        'Adhésions'    => '/admin/memberships',
-        'Paramètres'   => '/admin/settings',
+        'Adhésions'   => '/admin/memberships',
+        'Paramètres'  => '/admin/settings',
+        'Wiki'        => '/admin/wiki',
     ],
 ];
 
