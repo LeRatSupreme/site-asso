@@ -33,7 +33,7 @@ declare(strict_types=1);
     <div class="media-grid">
         <?php foreach ($medias as $m):
             $rel = (string) ($m['url'] ?? '');
-            $fullUrl = asset('assets/' . $rel);
+            $fullUrl = asset($rel);
             $name = basename($rel);
             $size = isset($m['size']) ? round((int) $m['size'] / 1024) : null;
         ?>
