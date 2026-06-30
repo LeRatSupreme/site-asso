@@ -453,17 +453,21 @@ $iconSvg = static function (string $name): string {
         });
     }
 
-    // ---------- 4. Répartition des paiements (donut CA) ----------
+    // ---------- 4. Répartition des paiements (donut CA + % au centre) ----------
     var pm = data.payments || { by_ca: {}, by_count: {} };
     var pmLabels = ['Carte', 'Liquide'];
     var pmKeys   = ['CARTE', 'LIQUIDE'];
     var pmCa     = pmKeys.map(function (k) { return Number((pm.by_ca || {})[k] || 0); });
+    var pmTotal  = pmCa.reduce(function (a, b) { return a + b; }, 0);
     var ctxPm = document.getElementById('chart-payment');
     if (ctxPm) {
         new Chart(ctxPm, {
             type: 'doughnut',
             data: {
-                labels: pmLabels,
+                labels: pmLabels.map(function (label, i) {
+                    var pct = pmTotal > 0 ? Math.round(pmCa[i] / pmTotal * 100) : 0;
+                    return label + ' ' + pct + '%';
+                }),
                 datasets: [{
                     data: pmCa,
                     backgroundColor: [teal, amber],
@@ -473,7 +477,7 @@ $iconSvg = static function (string $name): string {
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                cutout: '60%',
+                cutout: '58%',
                 plugins: {
                     legend: { position: 'bottom', labels: { boxWidth: 12, padding: 12 } },
                     tooltip: {
@@ -481,12 +485,29 @@ $iconSvg = static function (string $name): string {
                             label: function (c) {
                                 var key = pmKeys[c.dataIndex];
                                 var nb = Number((pm.by_count || {})[key] || 0);
-                                return c.label + ' : ' + money(c.raw) + ' (' + nb + ' transactions)';
+                                var pct = pmTotal > 0 ? (c.raw / pmTotal * 100).toFixed(1).replace('.', ',') : '0';
+                                return c.label + ' : ' + money(c.raw) + ' (' + pct + '% · ' + nb + ' transactions)';
                             },
                         },
                     },
                 },
             },
+            plugins: [{
+                id: 'pmCenter',
+                beforeDraw: function (chart) {
+                    var w = chart.width, h = chart.height, ctx = chart.ctx;
+                    var cartPct = pmTotal > 0 ? Math.round(pmCa[0] / pmTotal * 100) : 0;
+                    ctx.save();
+                    ctx.font = '600 12px system-ui';
+                    ctx.fillStyle = '#9fb3c8';
+                    ctx.textAlign = 'center';
+                    ctx.fillText('Carte', w / 2, h / 2 - 12);
+                    ctx.font = '800 22px system-ui';
+                    ctx.fillStyle = '#48bdd3';
+                    ctx.fillText(cartPct + '%', w / 2, h / 2 + 14);
+                    ctx.restore();
+                },
+            }],
         });
     }
 
