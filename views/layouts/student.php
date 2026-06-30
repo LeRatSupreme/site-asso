@@ -23,14 +23,14 @@ $canonical    = APP_URL . strtok($currentPath, '?');
 $user         = Auth::check() ? Auth::user() : null;
 
 $nav = [
-    '/eleve'                 => 'Tableau de bord',
-    '/eleve/inscriptions'    => 'Mes inscriptions',
-    '/eleve/profile'         => 'Mon profil',
-    '/account/privacy'       => 'Mes données (RGPD)',
+    '/eleve'                 => t('dash.menu.dashboard'),
+    '/eleve/inscriptions'    => t('dash.menu.inscriptions'),
+    '/eleve/profile'         => t('dash.menu.profile'),
+    '/account/privacy'       => t('dash.menu.data'),
 ];
 ?>
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="<?= e(current_lang()) ?>">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -45,32 +45,32 @@ $nav = [
     <link rel="stylesheet" href="<?= e(rootAssetVersioned('/css/payments.css')) ?>">
 </head>
 <body>
-    <a class="skip-link" href="#contenu">Aller au contenu</a>
+    <a class="skip-link" href="#contenu"><?= e(t('nav.skip')) ?></a>
 
     <header class="site-header">
         <div class="container nav-bar">
-            <a class="brand" href="<?= e(url('/')) ?>" aria-label="<?= e($siteName) ?> — accueil">
+            <a class="brand" href="<?= e(url('/')) ?>" aria-label="<?= e(tt('brand.aria.home', ['{name}' => $siteName])) ?>">
                 <span class="brand-logo" aria-hidden="true">AE</span>
                 <span class="brand-text">
-                    <span class="brand-sub">Étudiants · Calais</span>
+                    <span class="brand-sub"><?= e(t('brand.sub')) ?></span>
                     <span class="brand-name"><?= e($siteName) ?></span>
                 </span>
             </a>
 
-            <nav class="main-nav" aria-label="Navigation principale">
-                <a class="nav-link" href="<?= e(url('/')) ?>">Accueil</a>
-                <a class="nav-link" href="<?= e(url('/events')) ?>">Événements</a>
-                <a class="nav-link" href="<?= e(url('/presentation')) ?>">L'association</a>
-                <a class="nav-link" href="<?= e(url('/team')) ?>">Équipe</a>
+            <nav class="main-nav" aria-label="<?= e(t('nav.main.aria')) ?>">
+                <a class="nav-link" href="<?= e(url('/')) ?>"><?= e(t('nav.home')) ?></a>
+                <a class="nav-link" href="<?= e(url('/events')) ?>"><?= e(t('nav.events')) ?></a>
+                <a class="nav-link" href="<?= e(url('/presentation')) ?>"><?= e(t('nav.about')) ?></a>
+                <a class="nav-link" href="<?= e(url('/team')) ?>"><?= e(t('nav.team')) ?></a>
             </nav>
 
             <div class="nav-actions">
                 <?php if ($user !== null): ?>
-                    <a class="btn btn-outline btn-sm" href="<?= e(url('/eleve')) ?>"><?= e($user['prenom'] ?? 'Mon compte') ?></a>
-                    <a class="btn btn-ghost btn-sm" href="<?= e(url('/logout')) ?>">Déconnexion</a>
+                    <a class="btn btn-outline btn-sm" href="<?= e(url('/eleve')) ?>"><?= e($user['prenom'] ?? t('nav.account')) ?></a>
+                    <a class="btn btn-ghost btn-sm" href="<?= e(url('/logout')) ?>"><?= e(t('nav.logout')) ?></a>
                 <?php else: ?>
-                    <a class="btn btn-ghost btn-sm" href="<?= e(url('/login')) ?>">Connexion</a>
-                    <a class="btn btn-primary btn-sm" href="<?= e(url('/register')) ?>">S'inscrire</a>
+                    <a class="btn btn-ghost btn-sm" href="<?= e(url('/login')) ?>"><?= e(t('nav.login')) ?></a>
+                    <a class="btn btn-primary btn-sm" href="<?= e(url('/register')) ?>"><?= e(t('nav.register')) ?></a>
                 <?php endif; ?>
             </div>
         </div>
@@ -81,7 +81,7 @@ $nav = [
         <div class="container dashboard">
             <aside class="dash-sidebar">
                 <p class="dash-hello"><?= e($user['prenom'] ?? '') ?></p>
-                <nav aria-label="Espace membre">
+                <nav aria-label="<?= e(t('dash.eyebrow.member')) ?>">
                     <?php foreach ($nav as $path => $label): ?>
                         <?php $active = $path === '/eleve' ? $currentPath === $path : str_starts_with($currentPath, $path); ?>
                         <a class="dash-link<?= $active ? ' is-active' : '' ?>" href="<?= e(url($path)) ?>"><?= e($label) ?></a>
@@ -99,16 +99,16 @@ $nav = [
         <div class="container footer-grid">
             <div>
                 <p class="footer-name"><?= e($siteName) ?></p>
-                <p class="footer-sub">Association Étudiante Informatique de Calais</p>
-                <p class="footer-tag">100 % étudiant.</p>
+                <p class="footer-sub"><?= e(t('footer.association')) ?></p>
+                <p class="footer-tag"><?= e(t('footer.tag')) ?></p>
             </div>
-            <nav class="footer-links" aria-label="Pied de page">
-                <a href="<?= e(url('/events')) ?>">Événements</a>
-                <a href="<?= e(url('/presentation')) ?>">Association</a>
-                <a href="<?= e(url('/legal')) ?>">Mentions légales</a>
-                <a href="<?= e(url('/privacy')) ?>">Confidentialité</a>
+            <nav class="footer-links" aria-label="<?= e(t('footer.aria')) ?>">
+                <a href="<?= e(url('/events')) ?>"><?= e(t('nav.events')) ?></a>
+                <a href="<?= e(url('/presentation')) ?>"><?= e(t('nav.about')) ?></a>
+                <a href="<?= e(url('/legal')) ?>"><?= e(t('footer.legal')) ?></a>
+                <a href="<?= e(url('/privacy')) ?>"><?= e(t('footer.privacy')) ?></a>
             </nav>
-            <p class="footer-copy">© <?= e($currentYear) ?> <?= e($siteName) ?> · Fait par les étudiants, pour les étudiants.</p>
+            <p class="footer-copy">© <?= e($currentYear) ?> <?= e($siteName) ?> · <?= e(t('footer.copy')) ?></p>
         </div>
     </footer>
 </body>

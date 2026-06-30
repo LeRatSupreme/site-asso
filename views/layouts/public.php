@@ -99,7 +99,7 @@ $twitterHandle = Setting::get('twitter_handle', '');
             <a class="brand" href="<?= e(url('/')) ?>" aria-label="<?= e($siteName) ?> — <?= e(t('nav.home')) ?>">
                 <span class="brand-logo" aria-hidden="true">AE</span>
                 <span class="brand-text">
-                    <span class="brand-sub">Étudiants · Calais</span>
+                    <span class="brand-sub"><?= e(t('brand.sub')) ?></span>
                     <span class="brand-name"><?= e($siteName) ?></span>
                 </span>
             </a>
@@ -224,7 +224,7 @@ $twitterHandle = Setting::get('twitter_handle', '');
                 <div class="footer-logo aeic-gradient">AE</div>
                 <div>
                     <p class="footer-name"><?= e($siteName) ?></p>
-                    <p class="footer-sub">Association Étudiante Informatique de Calais</p>
+                    <p class="footer-sub"><?= e(t('footer.association')) ?></p>
                 </div>
             </div>
 

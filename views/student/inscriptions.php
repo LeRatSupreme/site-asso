@@ -9,20 +9,20 @@ declare(strict_types=1);
  */
 ?>
 <header class="dash-head">
-    <span class="eyebrow">Événements</span>
-    <h1 class="page-title">Mes inscriptions</h1>
+    <span class="eyebrow"><?= e(t('inscriptions.eyebrow')) ?></span>
+    <h1 class="page-title"><?= e(t('inscriptions.title')) ?></h1>
 </header>
 
 <?php if (empty($registrations)): ?>
     <div class="empty-state surface glass">
-        <p>Vous n'êtes inscrit·e à aucun événement pour le moment.</p>
-        <a class="btn btn-primary" href="<?= e(url('/events')) ?>">Voir les événements</a>
+        <p><?= e(t('inscriptions.empty')) ?></p>
+        <a class="btn btn-primary" href="<?= e(url('/events')) ?>"><?= e(t('inscriptions.see_events')) ?></a>
     </div>
 <?php else: ?>
     <div class="card surface glass table-wrap">
         <table class="table">
             <thead>
-                <tr><th>Événement</th><th>Date</th><th>Lieu</th><th>Statut</th></tr>
+                <tr><th><?= e(t('inscriptions.col.event')) ?></th><th><?= e(t('inscriptions.col.date')) ?></th><th><?= e(t('inscriptions.col.location')) ?></th><th><?= e(t('inscriptions.col.status')) ?></th></tr>
             </thead>
             <tbody>
                 <?php foreach ($registrations as $r): ?>
@@ -36,9 +36,9 @@ declare(strict_types=1);
                         <td><?= e($r['location'] ?? '') ?></td>
                         <td>
                             <?php if (!empty($r['is_past'])): ?>
-                                <span class="badge badge-muted">Passé</span>
+                                <span class="badge badge-muted"><?= e(t('inscriptions.status.past')) ?></span>
                             <?php else: ?>
-                                <span class="badge badge-success">À venir</span>
+                                <span class="badge badge-success"><?= e(t('inscriptions.status.upcoming')) ?></span>
                             <?php endif; ?>
                         </td>
                     </tr>

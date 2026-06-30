@@ -11,8 +11,8 @@ declare(strict_types=1);
 <header class="page-hero">
     <div class="halo halo-violet" aria-hidden="true"></div>
     <div class="container">
-        <span class="eyebrow">Informations légales</span>
-        <h1 class="page-title">Mentions légales</h1>
+        <span class="eyebrow"><?= e(t('page.legal.eyebrow')) ?></span>
+        <h1 class="page-title"><?= e(t('page.legal.title')) ?></h1>
     </div>
 </header>
 
@@ -22,15 +22,15 @@ declare(strict_types=1);
             <div class="prose surface glass"><?= $page['content'] ?></div>
         <?php else: ?>
             <div class="empty-state surface glass">
-                <p>Contenu à venir. Les mentions légales seront publiées ici prochainement.</p>
+                <p><?= e(t('page.legal.placeholder')) ?></p>
             </div>
             <div class="prose surface glass">
-                <h2>Éditeur du site</h2>
-                <p>AEIC — Association Étudiante Informatique de Calais.</p>
-                <h2>Responsable de publication</h2>
-                <p>Le bureau de l'AEIC.</p>
-                <h2>Hébergement</h2>
-                <p>Site hébergé sur un serveur dédié (VPS).</p>
+                <h2><?= e(t('page.legal.publisher')) ?></h2>
+                <p><?= e(t('page.legal.publisher.desc')) ?></p>
+                <h2><?= e(t('page.legal.publisher_responsible')) ?></h2>
+                <p><?= e(t('page.legal.publisher_responsible.desc')) ?></p>
+                <h2><?= e(t('page.legal.hosting')) ?></h2>
+                <p><?= e(t('page.legal.hosting.desc')) ?></p>
             </div>
         <?php endif; ?>
     </div>
