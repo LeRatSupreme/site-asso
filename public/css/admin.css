@@ -522,3 +522,59 @@
     .pos-grid { grid-template-columns: 1fr; }
     .pos-cart { position: static; }
 }
+
+/* ---- Dashboard SumUp --------------------------------------------------- */
+
+.sumup-split { margin-bottom: 1.5rem; }
+
+.split-bar {
+    display: flex;
+    height: 48px;
+    border-radius: 10px;
+    overflow: hidden;
+    margin: 1rem 0 0.8rem;
+}
+.split-bar-card {
+    background: linear-gradient(135deg, rgba(72,189,211,0.35), rgba(72,189,211,0.20));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 30px;
+    transition: width 0.3s ease;
+}
+.split-bar-cash {
+    background: linear-gradient(135deg, rgba(255,255,255,0.12), rgba(255,255,255,0.06));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    transition: width 0.3s ease;
+}
+.split-label {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: #fff;
+    white-space: nowrap;
+}
+
+.split-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+}
+
+.sumup-link {
+    text-decoration: none;
+    color: inherit;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    padding: 1.25rem;
+    transition: transform 0.15s, border-color 0.15s;
+}
+.sumup-link:hover {
+    transform: translateY(-3px);
+    border-color: rgba(72, 189, 211, 0.4);
+}
+.sumup-link strong { font-size: 1.05rem; }
+.sumup-link .muted { font-size: 0.85rem; }
