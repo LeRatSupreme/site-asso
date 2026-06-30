@@ -13,10 +13,23 @@
 
 /* ---- Détail sondage ---- */
 .poll-detail { max-width: 720px; }
+
+.poll-header-top {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 0.75rem;
+}
 .poll-back {
     display: inline-block;
-    margin-bottom: 1rem;
     text-decoration: none;
+}
+.poll-eyebrow-lg {
+    font-size: 1.1rem;
+    font-weight: 800;
+    color: var(--primary);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
 }
 .poll-badges { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .75rem; }
 

@@ -44,8 +44,10 @@ foreach ($results as $r) {
 <header class="page-hero">
     <div class="halo halo-violet" aria-hidden="true"></div>
     <div class="container">
-        <a class="btn btn-outline btn-sm poll-back" href="<?= e(url('/sondages')) ?>">← Retour aux sondages</a>
-        <span class="eyebrow">Sondage</span>
+        <div class="poll-header-top">
+            <a class="btn btn-outline btn-sm poll-back" href="<?= e(url('/sondages')) ?>">← Retour</a>
+            <span class="poll-eyebrow-lg">📊 Sondage</span>
+        </div>
         <h1 class="page-title"><?= e($title) ?></h1>
         <div class="poll-badges">
             <?php if ($isClosed): ?>
