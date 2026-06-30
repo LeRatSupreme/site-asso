@@ -241,7 +241,7 @@ final class Poll extends Model
             $counts = [];
         }
 
-        $total = self::totalVotes($pollId);
+        $total = max(1, self::totalVoters($pollId));
 
         $results = [];
         foreach ($options as $option) {
@@ -251,7 +251,7 @@ final class Poll extends Model
                 'label'     => $option['label'],
                 'order'     => $option['order'],
                 'votes'     => $n,
-                'percent'   => $total > 0 ? (int) round($n / $total * 100) : 0,
+                'percent'   => min(100, (int) round($n / $total * 100)),
             ];
         }
 
