@@ -208,6 +208,46 @@
 .prose hr { border: none; border-top: 1px solid var(--border); margin: 1.5rem 0; }
 .prose h1 a, .prose h2 a, .prose h3 a { color: inherit; text-decoration: none; }
 
+/* ----------------------------- Catégories événements ----------------------------- */
+.events-filter {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+}
+.event-cat-btn {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    padding: 0.45rem 1rem;
+    border-radius: 999px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+.event-cat-btn:hover {
+    border-color: var(--primary);
+    color: var(--foreground);
+}
+.event-cat-btn.is-active {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: #08172d;
+}
+
+.event-card-meta-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-bottom: 0.3rem;
+}
+.event-cat-badge {
+    font-size: 0.7rem;
+    white-space: nowrap;
+}
+
 /* ----------------------------- Carte (Où nous trouver) ----------------------------- */
 .map-block {
     display: grid;

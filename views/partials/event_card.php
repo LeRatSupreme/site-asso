@@ -23,6 +23,8 @@ $dateRaw    = (string) ($event['date'] ?? '');
 $price      = $event['price'] ?? null;
 $isFeatured = !empty($event['is_featured']);
 
+$category   = (string) ($event['category'] ?? '');
+
 $badge = '';
 if ($isFeatured) {
     $badge = '<span class="badge badge-gradient">À la une</span>';
@@ -37,7 +39,7 @@ if ($image !== '') {
     $imageUrl = is_absolute_url($image) ? $image : asset(ltrim($image, '/'));
 }
 ?>
-<article class="event-card card card-hover surface glass">
+<article class="event-card card card-hover surface glass" <?= $category !== '' ? 'data-event-cat="' . e(strtolower($category)) . '"' : 'data-event-cat=""' ?>>
     <a class="event-card-media" href="<?= e(url('/events/' . $slug)) ?>" tabindex="-1" aria-hidden="true">
         <?php if ($imageUrl !== ''): ?>
             <img src="<?= e($imageUrl) ?>" alt="" loading="lazy">
@@ -48,7 +50,12 @@ if ($image !== '') {
     </a>
 
     <div class="event-card-body">
-        <p class="card-date"><?= e(formatDateTime($dateRaw) ?: formatDate($dateRaw)) ?></p>
+        <div class="event-card-meta-top">
+            <p class="card-date"><?= e(formatDateTime($dateRaw) ?: formatDate($dateRaw)) ?></p>
+            <?php if ($category !== ''): ?>
+                <span class="badge badge-info event-cat-badge"><?= e($category) ?></span>
+            <?php endif; ?>
+        </div>
         <h3 class="card-title">
             <a href="<?= e(url('/events/' . $slug)) ?>"><?= e($title) ?></a>
         </h3>

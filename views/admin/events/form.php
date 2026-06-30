@@ -43,11 +43,19 @@ declare(strict_types=1);
             <p class="field-help">Adresse utilisée pour la carte (si activée ci-dessous).</p>
         </div>
         <div class="field">
-            <label class="checkbox-inline">
-                <input type="checkbox" name="show_map" value="1" <?= !empty($event['show_map']) ? 'checked' : '' ?>>
-                Afficher une carte du lieu
-            </label>
-            <p class="field-help">Coche pour afficher une carte interactive sur la page de l'événement (le lieu est géocodé automatiquement à l'enregistrement).</p>
+            <label for="category">Catégorie</label>
+            <input type="text" id="category" name="category" list="event-categories" value="<?= e($event['category'] ?? '') ?>" placeholder="Soirée, Tournoi, Conférence…">
+            <datalist id="event-categories">
+                <option value="Soirée">
+                <option value="Afterwork">
+                <option value="Barbecue">
+                <option value="Tournoi / LAN">
+                <option value="Conférence">
+                <option value="Sortie">
+                <option value="Atelier">
+                <option value="Nuit de l'Info">
+                <option value="Autre">
+            </datalist>
         </div>
     </div>
 
