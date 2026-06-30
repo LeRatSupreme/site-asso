@@ -128,7 +128,8 @@ final class User extends Model
     }
 
     /**
-     * Crée un nouvel utilisateur (rôle ELEVE, compte actif).
+     * Crée un nouvel utilisateur (rôle ELEVE, compte actif mais e-mail non
+     * encore vérifié : `email_verified_at` vaut NULL jusqu'à confirmation).
      *
      * @return string L'identifiant (généré) du nouvel utilisateur.
      */
@@ -139,8 +140,8 @@ final class User extends Model
         $hash = (string) $data['password']; // déjà hashé par l'appelant.
 
         $stmt = static::pdo()->prepare(
-            'INSERT INTO users (id, prenom, nom, email, password, role, is_active)
-             VALUES (?, ?, ?, ?, ?, ?, 1)'
+            'INSERT INTO users (id, prenom, nom, email, password, role, is_active, email_verified_at)
+             VALUES (?, ?, ?, ?, ?, ?, 1, NULL)'
         );
         $stmt->execute([
             $id,
@@ -152,6 +153,17 @@ final class User extends Model
         ]);
 
         return $id;
+    }
+
+    /**
+     * Marque l'e-mail d'un utilisateur comme vérifié (confirmation d'inscription).
+     */
+    public static function markEmailVerified(string $userId): void
+    {
+        $stmt = static::pdo()->prepare(
+            'UPDATE users SET email_verified_at = CURRENT_TIMESTAMP WHERE id = ?'
+        );
+        $stmt->execute([$userId]);
     }
 
     /**

@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS users (
     image       VARCHAR(255) NULL,
     role        ENUM('ADMIN','TRESORERIE','ELEVE') NOT NULL DEFAULT 'ELEVE',
     is_active   TINYINT(1) NOT NULL DEFAULT 1,
+    email_verified_at DATETIME NULL,
     created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     UNIQUE KEY uniq_users_email (email)
@@ -360,6 +361,21 @@ CREATE TABLE IF NOT EXISTS password_resets (
     UNIQUE KEY uq_reset_token (token_hash),
     KEY idx_reset_user (user_id),
     CONSTRAINT fk_reset_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -------------------------------------------------------------------
+--  Confirmation d'e-mail à l'inscription (tokens à usage unique)
+-- -------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS verification_tokens (
+    id         VARCHAR(255) NOT NULL PRIMARY KEY,
+    user_id    VARCHAR(255) NOT NULL,
+    token_hash CHAR(64)     NOT NULL,
+    expires_at DATETIME     NOT NULL,
+    used_at    DATETIME     NULL,
+    created_at DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_verify_token (token_hash),
+    KEY idx_verify_user (user_id),
+    CONSTRAINT fk_verify_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- -------------------------------------------------------------------
