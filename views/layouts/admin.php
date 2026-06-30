@@ -121,5 +121,6 @@ if (($user['role'] ?? null) === 'TRESORERIE') {
             });
         })();
     </script>
+    <script src="<?= e(rootAssetVersioned('/js/confirm.js')) ?>"></script>
 </body>
 </html>

@@ -48,7 +48,7 @@ declare(strict_types=1);
                         <a class="btn btn-outline btn-sm" href="<?= e(url('/admin/events/' . rawurlencode($slug) . '/checkin')) ?>" title="Check-in">📱</a>
                         <a class="btn btn-outline btn-sm" href="<?= e(url('/events/' . rawurlencode($slug))) ?>" target="_blank" title="Voir">👁️</a>
                         <form method="post" action="<?= e(url('/admin/events/' . rawurlencode($slug) . '/delete')) ?>"
-                              onsubmit="return confirm('Supprimer « <?= e($ev['title'] ?? '') ?> » ?');">
+                              data-confirm="Supprimer « <?= e($ev['title'] ?? '') ?> » ?">
                             <?= csrf_field() ?>
                             <button type="submit" class="btn btn-danger btn-sm" title="Supprimer">🗑️</button>
                         </form>

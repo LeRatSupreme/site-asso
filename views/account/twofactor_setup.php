@@ -30,7 +30,7 @@ $otpauth = $secret !== '' ? Totp::uri($secret, (string) ($user['email'] ?? '')) 
         <div class="card surface glass">
             <p class="flash-success-text">✓ Le 2FA est <strong>activé</strong> sur votre compte.</p>
             <?php if (!$required): ?>
-                <form method="post" action="<?= e(url('/account/2fa/disable')) ?>" onsubmit="return confirm('Désactiver le 2FA ?');">
+                <form method="post" action="<?= e(url('/account/2fa/disable')) ?>" data-confirm="Désactiver le 2FA ?">
                     <?= csrf_field() ?>
                     <button type="submit" class="btn btn-outline">Désactiver le 2FA</button>
                 </form>

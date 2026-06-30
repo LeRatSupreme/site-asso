@@ -26,7 +26,7 @@ declare(strict_types=1);
                     </td>
                     <td class="row-actions">
                         <a class="btn btn-outline btn-sm" href="<?= e(url('/admin/pages/' . rawurlencode((string) $p['slug']))) ?>">Éditer</a>
-                        <form method="post" action="<?= e(url('/admin/pages/' . rawurlencode((string) $p['slug']) . '/delete')) ?>" onsubmit="return confirm('Supprimer cette page ?');">
+                        <form method="post" action="<?= e(url('/admin/pages/' . rawurlencode((string) $p['slug']) . '/delete')) ?>" data-confirm="Supprimer cette page ?">
                             <?= csrf_field() ?>
                             <button type="submit" class="btn btn-destructive btn-sm">Supprimer</button>
                         </form>

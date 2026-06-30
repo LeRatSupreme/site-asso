@@ -48,7 +48,7 @@ use App\Models\Poll;
                             <a class="btn btn-ghost btn-sm" href="<?= e(url('/sondages/' . rawurlencode((string) $poll['slug']))) ?>" target="_blank">Voir</a>
                         <?php endif; ?>
                         <form method="post" action="<?= e(url('/admin/sondages/' . rawurlencode($pollId) . '/delete')) ?>"
-                              onsubmit="return confirm('Supprimer ce sondage ?');">
+                              data-confirm="Supprimer ce sondage ?">
                             <?= csrf_field() ?>
                             <button type="submit" class="btn btn-destructive btn-sm">Supprimer</button>
                         </form>

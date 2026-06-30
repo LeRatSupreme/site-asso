@@ -169,12 +169,12 @@ declare(strict_types=1);
                                                         <td><?= e((string) ($c['supplier'] ?? '—')) ?></td>
                                                         <td class="row-actions">
                                                             <?php if (empty($c['valid_to'])): ?>
-                                                                <form method="post" action="<?= e(url('/admin/compta/couts/' . rawurlencode((string) $c['id']) . '/close')) ?>" onsubmit="return confirm('Clôturer ce lot maintenant ?');">
+                                                                <form method="post" action="<?= e(url('/admin/compta/couts/' . rawurlencode((string) $c['id']) . '/close')) ?>" data-confirm="Clôturer ce lot maintenant ?">
                                                                     <?= csrf_field() ?>
                                                                     <button type="submit" class="btn btn-outline btn-sm">Clôturer</button>
                                                                 </form>
                                                             <?php endif; ?>
-                                                            <form method="post" action="<?= e(url('/admin/compta/couts/' . rawurlencode((string) $c['id']) . '/delete')) ?>" onsubmit="return confirm('Supprimer ce lot ? Action irréversible.');">
+                                                            <form method="post" action="<?= e(url('/admin/compta/couts/' . rawurlencode((string) $c['id']) . '/delete')) ?>" data-confirm="Supprimer ce lot ? Action irréversible.">
                                                                 <?= csrf_field() ?>
                                                                 <button type="submit" class="btn btn-danger btn-sm" aria-label="Supprimer">🗑</button>
                                                             </form>

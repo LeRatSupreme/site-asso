@@ -34,7 +34,7 @@ declare(strict_types=1);
                         <?php endif; ?>
                     </td>
                     <td>
-                        <form method="post" action="<?= e(url('/admin/cafeteria/categories/' . rawurlencode((string) $c['id']) . '/delete')) ?>" onsubmit="return confirm('Supprimer cette catégorie ?');">
+                        <form method="post" action="<?= e(url('/admin/cafeteria/categories/' . rawurlencode((string) $c['id']) . '/delete')) ?>" data-confirm="Supprimer cette catégorie ?">
                             <?= csrf_field() ?>
                             <button type="submit" class="btn btn-destructive btn-sm">Supprimer</button>
                         </form>

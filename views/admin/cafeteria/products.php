@@ -29,7 +29,7 @@ declare(strict_types=1);
                     </td>
                     <td class="row-actions">
                         <a class="btn btn-outline btn-sm" href="<?= e(url('/admin/cafeteria/' . rawurlencode((string) $p['id']) . '/edit')) ?>">Éditer</a>
-                        <form method="post" action="<?= e(url('/admin/cafeteria/' . rawurlencode((string) $p['id']) . '/delete')) ?>" onsubmit="return confirm('Supprimer ce produit ?');">
+                        <form method="post" action="<?= e(url('/admin/cafeteria/' . rawurlencode((string) $p['id']) . '/delete')) ?>" data-confirm="Supprimer ce produit ?">
                             <?= csrf_field() ?>
                             <button type="submit" class="btn btn-destructive btn-sm">Supprimer</button>
                         </form>
