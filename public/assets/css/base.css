@@ -334,6 +334,24 @@ ul, ol { list-style: none; }
 
 .btn-destructive { background: var(--accent-danger); color: #fff; }
 
+.btn-warning {
+    background: #d97706;
+    color: #fff;
+}
+.btn-warning:hover { background: #b45309; color: #fff; }
+
+.event-qr {
+    text-align: center;
+    margin: 1rem 0;
+}
+.event-qr img {
+    display: inline-block;
+    background: #fff;
+    padding: 0.5rem;
+    border-radius: 0.6rem;
+    max-width: 100%;
+}
+
 /* ----------------------------- Badges ----------------------------- */
 .badge {
     display: inline-flex;
