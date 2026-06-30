@@ -17,7 +17,7 @@ INSERT INTO products (id, name, description, price, category_id, stock, is_avail
     -- Boissons
     ('prod_redbull',     'Red Bull',      'Boisson énergisante',           1.50, 'cat_boissons', 0, 1, 1, 1),
     ('prod_bueno',       'Kinder Bueno',  'Barre chocolatée',              1.00, 'cat_snacks',   0, 1, 1, 2),
-    ('prod_eau',         'Eau',           'Bouteille d'eau',               0.50, 'cat_boissons', 0, 1, 1, 3),
+    ('prod_eau',         'Eau',           'Bouteille d''eau',               0.50, 'cat_boissons', 0, 1, 1, 3),
     ('prod_monster',     'Monster',       'Boisson énergisante',           1.75, 'cat_boissons', 0, 1, 1, 4),
     ('prod_coca',        'Coca-Cola',     'Soda classique',                1.00, 'cat_boissons', 0, 1, 1, 5),
     ('prod_oasis',       'Oasis',         'Jus de fruits',                 1.00, 'cat_boissons', 0, 1, 1, 6),
