@@ -41,61 +41,67 @@ $iconSvg = static function (string $name): string {
     <!-- ============================================================ -->
     <!--  Barre de filtres globaux (GET, partageable)                  -->
     <!-- ============================================================ -->
-    <form method="get" class="card surface glass analytics-filters" id="analytics-filters">
-        <div class="filter-group">
-            <label class="filter-label">Période</label>
-            <select name="period" id="analytics-period">
-                <?php foreach ($periods as $key => $label): ?>
-                    <option value="<?= e($key) ?>" <?= $filters['period'] === $key ? 'selected' : '' ?>><?= e($label) ?></option>
-                <?php endforeach; ?>
-            </select>
+    <form method="get" class="analytics-filters" id="analytics-filters">
+        <div class="af-row">
+            <div class="af-group">
+                <label class="af-label">📅 Période</label>
+                <div class="af-pills" id="period-pills">
+                    <?php foreach ($periods as $key => $label): ?>
+                        <button type="button" class="af-pill <?= $filters['period'] === $key ? 'is-active' : '' ?>" data-period="<?= e($key) ?>"><?= e($label) ?></button>
+                    <?php endforeach; ?>
+                </div>
+            </div>
         </div>
 
-        <div class="filter-group filter-custom" id="filter-custom" hidden>
-            <label class="filter-label">Du</label>
-            <input type="date" name="from" value="<?= e($filters['fromInput']) ?>">
-            <label class="filter-label">Au</label>
-            <input type="date" name="to" value="<?= e($filters['toInput']) ?>">
+        <div class="af-row" id="filter-custom" hidden>
+            <div class="af-group">
+                <label class="af-label">Du</label>
+                <input type="date" name="from" value="<?= e($filters['fromInput']) ?>" class="af-input">
+                <label class="af-label">Au</label>
+                <input type="date" name="to" value="<?= e($filters['toInput']) ?>" class="af-input">
+            </div>
         </div>
 
-        <div class="filter-group">
-            <label class="filter-label">Granularité</label>
-            <select name="granularity">
-                <option value="" <?= $filters['granularity'] === '' ? 'selected' : '' ?>>Auto</option>
-                <option value="day" <?= $filters['granularity'] === 'day' ? 'selected' : '' ?>>Jour</option>
-                <option value="week" <?= $filters['granularity'] === 'week' ? 'selected' : '' ?>>Semaine</option>
-                <option value="month" <?= $filters['granularity'] === 'month' ? 'selected' : '' ?>>Mois</option>
-            </select>
-        </div>
+        <div class="af-row af-row-filters">
+            <div class="af-group">
+                <label class="af-label">📊 Granularité</label>
+                <select name="granularity" class="af-select">
+                    <option value="" <?= $filters['granularity'] === '' ? 'selected' : '' ?>>Auto</option>
+                    <option value="day" <?= $filters['granularity'] === 'day' ? 'selected' : '' ?>>Jour</option>
+                    <option value="week" <?= $filters['granularity'] === 'week' ? 'selected' : '' ?>>Semaine</option>
+                    <option value="month" <?= $filters['granularity'] === 'month' ? 'selected' : '' ?>>Mois</option>
+                </select>
+            </div>
 
-        <div class="filter-group">
-            <label class="filter-label">Catégorie</label>
-            <select name="category">
-                <option value="all" <?= $filters['category'] === 'all' ? 'selected' : '' ?>>Toutes</option>
-                <option value="Boisson" <?= $filters['category'] === 'Boisson' ? 'selected' : '' ?>>Boisson</option>
-                <option value="Nourriture" <?= $filters['category'] === 'Nourriture' ? 'selected' : '' ?>>Nourriture</option>
-                <option value="Spécial" <?= $filters['category'] === 'Spécial' ? 'selected' : '' ?>>Spécial</option>
-                <option value="Non classé" <?= $filters['category'] === 'Non classé' ? 'selected' : '' ?>>Non classé</option>
-                <?php foreach ($categories as $c): ?>
-                    <?php if (in_array($c, ['Boisson', 'Nourriture', 'Spécial', 'Non classé'], true)) { continue; } ?>
-                    <option value="<?= e($c) ?>" <?= $filters['category'] === $c ? 'selected' : '' ?>><?= e($c) ?></option>
-                <?php endforeach; ?>
-            </select>
-        </div>
+            <div class="af-group">
+                <label class="af-label">🏷️ Catégorie</label>
+                <select name="category" class="af-select">
+                    <option value="all" <?= $filters['category'] === 'all' ? 'selected' : '' ?>>Toutes</option>
+                    <option value="Boisson" <?= $filters['category'] === 'Boisson' ? 'selected' : '' ?>>Boisson</option>
+                    <option value="Nourriture" <?= $filters['category'] === 'Nourriture' ? 'selected' : '' ?>>Nourriture</option>
+                    <option value="Spécial" <?= $filters['category'] === 'Spécial' ? 'selected' : '' ?>>Spécial</option>
+                    <?php foreach ($categories as $c): ?>
+                        <?php if (in_array($c, ['Boisson', 'Nourriture', 'Spécial', 'Non classé'], true)) { continue; } ?>
+                        <option value="<?= e($c) ?>" <?= $filters['category'] === $c ? 'selected' : '' ?>><?= e($c) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
 
-        <div class="filter-group">
-            <label class="filter-label">Paiement</label>
-            <select name="payment">
-                <option value="all" <?= $filters['payment'] === 'all' ? 'selected' : '' ?>>Tous</option>
-                <option value="CARTE" <?= $filters['payment'] === 'CARTE' ? 'selected' : '' ?>>Carte</option>
-                <option value="LIQUIDE" <?= $filters['payment'] === 'LIQUIDE' ? 'selected' : '' ?>>Liquide</option>
-            </select>
-        </div>
+            <div class="af-group">
+                <label class="af-label">💳 Paiement</label>
+                <select name="payment" class="af-select">
+                    <option value="all" <?= $filters['payment'] === 'all' ? 'selected' : '' ?>>Tous</option>
+                    <option value="CARTE" <?= $filters['payment'] === 'CARTE' ? 'selected' : '' ?>>Carte</option>
+                    <option value="LIQUIDE" <?= $filters['payment'] === 'LIQUIDE' ? 'selected' : '' ?>>Liquide</option>
+                </select>
+            </div>
 
-        <div class="filter-actions">
-            <button type="submit" class="btn btn-primary btn-sm">Appliquer</button>
-            <a class="btn btn-ghost btn-sm" href="<?= e(url('/admin/analytics')) ?>">Réinitialiser</a>
+            <div class="af-actions">
+                <button type="submit" class="btn btn-primary">✅ Appliquer</button>
+                <a class="btn btn-ghost" href="<?= e(url('/admin/analytics')) ?>">🔄 Reset</a>
+            </div>
         </div>
+        <input type="hidden" name="period" id="period-hidden" value="<?= e($filters['period']) ?>">
     </form>
 
     <?php if (!$hasSales): ?>
@@ -196,7 +202,14 @@ $iconSvg = static function (string $name): string {
             <h2 class="chart-title">Heatmap des ventes (jour × heure)</h2>
             <span class="chart-sub">Intensité du CA</span>
         </div>
+        <div class="heatmap-wrap">
         <div class="heatmap" id="heatmap"></div>
+        <div class="hm-legend">
+            <span class="hm-legend-label">Faible</span>
+            <div class="hm-legend-bar"></div>
+            <span class="hm-legend-label">Fort</span>
+        </div>
+    </div>
     </div>
 
     <!-- ============================================================ -->
@@ -259,14 +272,22 @@ $iconSvg = static function (string $name): string {
 (function () {
     var data = <?= $json ?>;
 
-    // ---------- Affichage du sélecteur de dates custom ----------
-    var periodSel = document.getElementById('analytics-period');
+    // ---------- Affichage du sélecteur de dates custom + pills ----------
     var customBox = document.getElementById('filter-custom');
+    var periodHidden = document.getElementById('period-hidden');
     function syncCustom() {
-        customBox.hidden = periodSel.value !== 'custom';
+        var val = periodHidden.value;
+        customBox.hidden = val !== 'custom';
     }
+    document.querySelectorAll('.af-pill').forEach(function (pill) {
+        pill.addEventListener('click', function () {
+            document.querySelectorAll('.af-pill').forEach(function (p) { p.classList.remove('is-active'); });
+            pill.classList.add('is-active');
+            periodHidden.value = pill.getAttribute('data-period');
+            syncCustom();
+        });
+    });
     syncCustom();
-    periodSel.addEventListener('change', syncCustom);
 
     // ---------- Chart.js defaults ----------
     Chart.defaults.color = '#9fb3c8';
@@ -580,18 +601,60 @@ $iconSvg = static function (string $name): string {
 
 /* ---- Filtres ---- */
 .analytics-filters {
-    display: flex; flex-wrap: wrap; align-items: flex-end; gap: .9rem 1.1rem;
-    padding: 1rem 1.1rem;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--border, rgba(255,255,255,.08));
+    border-radius: 14px;
+    padding: 1.25rem 1.4rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
 }
-.filter-group { display: flex; align-items: center; gap: .45rem; }
-.filter-group.filter-custom { flex-wrap: wrap; }
-.filter-label { font-size: .72rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted, #9fb3c8); }
-.analytics-filters select,
-.analytics-filters input[type="date"] {
-    background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.12);
-    color: inherit; border-radius: 8px; padding: .42rem .55rem; font-size: .88rem;
+.af-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0.75rem 1.25rem; }
+.af-row-filters { align-items: flex-end; }
+.af-group { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.af-label {
+    font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.04em; color: var(--muted, #9fb3c8); white-space: nowrap;
 }
-.filter-actions { margin-left: auto; display: flex; gap: .5rem; }
+.af-pills { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+.af-pill {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.1);
+    color: var(--muted, #9fb3c8);
+    padding: 0.42rem 0.85rem;
+    border-radius: 999px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+}
+.af-pill:hover {
+    border-color: rgba(72,189,211,0.4);
+    color: var(--foreground);
+    background: rgba(72,189,211,0.06);
+}
+.af-pill.is-active {
+    background: var(--primary, #48bdd3);
+    border-color: var(--primary, #48bdd3);
+    color: #08172d;
+    font-weight: 700;
+}
+.af-select, .af-input {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.12);
+    color: var(--foreground);
+    border-radius: 8px;
+    padding: 0.5rem 0.7rem;
+    font-size: 0.88rem;
+    transition: border-color 0.15s;
+}
+.af-select:focus, .af-input:focus {
+    outline: none;
+    border-color: var(--primary, #48bdd3);
+    background: rgba(72,189,211,0.05);
+}
+.af-actions { margin-left: auto; display: flex; gap: 0.5rem; }
 
 /* ---- KPI ---- */
 .kpi-grid { gap: 1rem; }
@@ -621,10 +684,66 @@ $iconSvg = static function (string $name): string {
 
 /* ---- Heatmap ---- */
 .heatmap-card { overflow-x: auto; }
-.heatmap { display: inline-grid; grid-auto-rows: 22px; gap: 2px; min-width: 760px; }
-.hm-row { display: grid; grid-template-columns: 34px repeat(24, 1fr); gap: 2px; align-items: center; }
-.hm-label, .hm-hh { font-size: .66rem; color: var(--muted, #9fb3c8); text-align: center; }
-.hm-cell { height: 22px; border-radius: 3px; background: rgba(72,189,211,0); }
+.heatmap-wrap { display: flex; flex-direction: column; gap: 0.8rem; }
+.heatmap {
+    display: inline-grid;
+    grid-auto-rows: 28px;
+    gap: 3px;
+    min-width: 820px;
+    padding: 4px;
+}
+.hm-row {
+    display: grid;
+    grid-template-columns: 40px repeat(24, 1fr);
+    gap: 3px;
+    align-items: center;
+}
+.hm-head .hm-label, .hm-head .hm-hh {
+    font-size: 0.62rem;
+    color: var(--muted, #9fb3c8);
+    text-align: center;
+    font-weight: 600;
+    padding-bottom: 2px;
+}
+.hm-label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--foreground);
+    text-align: right;
+    padding-right: 4px;
+}
+.hm-hh {
+    font-size: 0.6rem;
+    color: var(--muted, #9fb3c8);
+    text-align: center;
+}
+.hm-cell {
+    height: 28px;
+    border-radius: 5px;
+    background: rgba(72,189,211,0.03);
+    border: 1px solid rgba(255,255,255,0.03);
+    transition: transform 0.1s, box-shadow 0.1s;
+    cursor: default;
+}
+.hm-cell:hover {
+    transform: scale(1.25);
+    box-shadow: 0 0 8px rgba(72,189,211,0.4);
+    z-index: 5;
+    position: relative;
+}
+.hm-legend {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    justify-content: flex-end;
+}
+.hm-legend-label { font-size: 0.72rem; color: var(--muted, #9fb3c8); }
+.hm-legend-bar {
+    width: 120px;
+    height: 12px;
+    border-radius: 6px;
+    background: linear-gradient(90deg, rgba(72,189,211,0.05), rgba(72,189,211,1));
+}
 
 /* ---- Insights ---- */
 .insights-grid { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 1rem; }
