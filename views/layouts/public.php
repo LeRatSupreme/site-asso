@@ -66,6 +66,9 @@ $twitterHandle = Setting::get('twitter_handle', '');
     <link rel="stylesheet" href="<?= e(assetVersioned('css/base.css')) ?>">
     <link rel="stylesheet" href="<?= e(assetVersioned('css/pages.css')) ?>">
     <link rel="stylesheet" href="<?= e(rootAssetVersioned('/css/payments.css')) ?>">
+    <?php if (str_starts_with($currentPath ?? '', '/sondages')): ?>
+        <link rel="stylesheet" href="<?= e(rootAssetVersioned('/css/polls.css')) ?>">
+    <?php endif; ?>
 </head>
 <body>
     <a class="skip-link" href="#contenu">Aller au contenu</a>
@@ -85,6 +88,7 @@ $twitterHandle = Setting::get('twitter_handle', '');
                 <a class="nav-link<?= str_starts_with($currentPath, '/events') ? ' is-active' : '' ?>" href="<?= e(url('/events')) ?>">Événements</a>
                 <a class="nav-link<?= $currentPath === '/presentation' ? ' is-active' : '' ?>" href="<?= e(url('/presentation')) ?>">L'association</a>
                 <a class="nav-link<?= $currentPath === '/team' ? ' is-active' : '' ?>" href="<?= e(url('/team')) ?>">Équipe</a>
+                <a class="nav-link<?= str_starts_with($currentPath, '/sondages') ? ' is-active' : '' ?>" href="<?= e(url('/sondages')) ?>">Sondages</a>
             </nav>
 
             <div class="nav-actions">
@@ -111,6 +115,7 @@ $twitterHandle = Setting::get('twitter_handle', '');
             <a href="<?= e(url('/events')) ?>">Événements</a>
             <a href="<?= e(url('/presentation')) ?>">L'association</a>
             <a href="<?= e(url('/team')) ?>">Équipe</a>
+            <a href="<?= e(url('/sondages')) ?>">Sondages</a>
             <hr>
             <?php if ($user !== null): ?>
                 <?php if (($user['role'] ?? '') === 'ADMIN' || ($user['role'] ?? '') === 'TRESORERIE'): ?>
