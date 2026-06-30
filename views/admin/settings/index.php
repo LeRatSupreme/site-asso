@@ -16,7 +16,7 @@ $groupConfig = [
     'site'      => ['icon' => '🌐', 'label' => 'Site'],
     'cafeteria' => ['icon' => '☕', 'label' => 'Cafétéria'],
     'events'    => ['icon' => '📅', 'label' => 'Événements'],
-    'social'    => ['icon' => '📱', 'label' => 'Réseaux sociaux'],
+    'social'    => ['icon' => '📱', 'label' => 'Réseaux sociaux & Discord'],
 ];
 
 // Libellés lisibles par clé technique.
@@ -48,9 +48,11 @@ $niceLabels = [
     'linkedin_url'        => 'Page LinkedIn',
     'csp_directives'      => 'Content-Security-Policy (avancé)',
     'default_sumup_link'  => 'Lien SumUp par défaut',
+    'discord_webhook_url' => 'URL Webhook Discord',
+    'discord_enabled'     => 'Activer les annonces Discord',
 ];
 
-$boolKeys = ['maintenance_mode', 'orders_enabled', 'registrations_enabled', 'sumup_enabled'];
+$boolKeys = ['maintenance_mode', 'orders_enabled', 'registrations_enabled', 'sumup_enabled', 'discord_enabled'];
 $passwordKeys = ['smtp_pass', 'brevo_api_key'];
 ?>
 <form method="post" action="<?= e(url('/admin/settings/save')) ?>" id="settings-form">
