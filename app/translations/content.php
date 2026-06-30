@@ -248,4 +248,27 @@ return [
         'pl' => 'IUT de Calais — Sale komputerowe',
     ],
 
+    /* ---- Notifications ---- */
+    'Vous êtes inscrit à « Nuit de l\'Info »' => [
+        'en' => 'You are registered for "Nuit de l\'Info"', 'de' => 'Sie sind für "Nuit de l\'Info" angemeldet', 'es' => 'Estás inscrito en "Nuit de l\'Info"', 'zh' => '您已注册参加「信息之夜」', 'ja' => '「Nuit de l\'Info」に登録しました', 'pl' => 'Jesteś zapisany na "Nuit de l\'Info"',
+    ],
+    'Vous êtes inscrit à « Nuit de l\'info »' => [
+        'en' => 'You are registered for "Nuit de l\'Info"', 'de' => 'Sie sind für "Nuit de l\'Info" angemeldet', 'es' => 'Estás inscrito en "Nuit de l\'Info"', 'zh' => '您已注册参加「信息之夜」', 'ja' => '「Nuit de l\'Info」に登録しました', 'pl' => 'Jesteś zapisany na "Nuit de l\'Info"',
+    ],
+    'Votre inscription est confirmée. Retrouvez les détails dans votre espace.' => [
+        'en' => 'Your registration is confirmed. Find the details in your space.', 'de' => 'Ihre Anmeldung ist bestätigt. Details finden Sie in Ihrem Bereich.', 'es' => 'Tu inscripción está confirmada. Encuentra los detalles en tu espacio.', 'zh' => '您的报名已确认。请在个人空间中查看详情。', 'ja' => '登録が確認されました。詳細はスペースでご確認ください。', 'pl' => 'Twoja rejestracja jest potwierdzona. Szczegóły znajdziesz w swoim obszarze.',
+    ],
+    'Vote enregistré pour « Chocolatine ou pain au chocolat ? »' => [
+        'en' => 'Vote recorded for "Chocolatine ou pain au chocolat ?"', 'de' => 'Stimme abgegeben für "Chocolatine ou pain au chocolant ?"', 'es' => 'Voto registrado para "Chocolatine ou pain au chocolat ?"', 'zh' => '已为「巧克力面包还是巧克力面包？」投票', 'ja' => '「Chocolatine ou pain au chocolat ?」に投票しました', 'pl' => 'Głos oddany na "Chocolatine ou pain au chocolat ?"',
+    ],
+    'Votre vote a bien été pris en compte.' => [
+        'en' => 'Your vote has been recorded.', 'de' => 'Ihre Stimme wurde erfasst.', 'es' => 'Tu voto ha sido registrado.', 'zh' => '您的投票已被记录。', 'ja' => '投票が記録されました。', 'pl' => 'Twój głos został zarejestrowany.',
+    ],
+    'Une place s\'est libérée pour' => [
+        'en' => 'A spot opened up for', 'de' => 'Ein Platz ist frei geworden für', 'es' => 'Se ha liberado una plaza para', 'zh' => '有空位了：', 'ja' => '空きが出ました：', 'pl' => 'Zwolniło się miejsce na',
+    ],
+    'Vous êtes inscrit !' => [
+        'en' => 'You are registered!', 'de' => 'Sie sind angemeldet!', 'es' => '¡Estás inscrito!', 'zh' => '您已注册！', 'ja' => '登録完了！', 'pl' => 'Jesteś zapisany!',
+    ],
+
 ];

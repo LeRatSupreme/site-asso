@@ -25,6 +25,13 @@ final class NotificationController extends Controller
         $userId = (string) Auth::id();
         $items = Notification::forUser($userId);
 
+        // Traduit le titre et le corps de chaque notification.
+        foreach ($items as &$item) {
+            $item['title'] = tc((string) ($item['title'] ?? ''));
+            $item['body']  = tc((string) ($item['body'] ?? ''));
+        }
+        unset($item);
+
         $this->json([
             'count' => Notification::unreadCount($userId),
             'items' => $items,
