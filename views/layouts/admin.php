@@ -25,7 +25,6 @@ $sections = [
     ],
     'Contenu' => [
         'Événements'   => '/admin/events',
-        'Articles'     => '/admin/articles',
         'Pages'        => '/admin/pages',
         'Équipe'       => '/admin/team',
         'Sondages'     => '/admin/sondages',
