@@ -170,7 +170,7 @@ $priceLabel = ($price === null || (float) $price <= 0)
 
                             <?php if ($qrToken !== null && $qrToken !== ''): ?>
                                 <?php
-                                $checkinUrl = url('/events/' . rawurlencode((string) ($event['slug'] ?? '')) . '/checkin?token=' . $qrToken);
+                                $checkinUrl = url('/admin/events/' . rawurlencode((string) ($event['slug'] ?? '')) . '/checkin?token=' . $qrToken);
                                 $qrImg = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' . rawurlencode($checkinUrl);
                                 ?>
                                 <div class="event-qr">
