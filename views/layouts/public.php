@@ -229,6 +229,7 @@ $twitterHandle = Setting::get('twitter_handle', '');
             </div>
 
             <nav class="footer-links" aria-label="<?= e(t('footer.aria')) ?>">
+                <a href="<?= e(url('/')) ?>">🏠 <?= e(t('nav.home')) ?></a>
                 <a href="<?= e(url('/events')) ?>">📅 <?= e(t('nav.events')) ?></a>
                 <a href="<?= e(url('/presentation')) ?>">🏫 <?= e(t('nav.about')) ?></a>
                 <a href="<?= e(url('/team')) ?>">👥 <?= e(t('nav.team')) ?></a>
