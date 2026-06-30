@@ -209,6 +209,7 @@ final class Event extends Model
             'date'          => $data['date'] ?? date('Y-m-d H:i:s'),
             'end_date'      => $data['end_date'] ?? null,
             'location'      => $data['location'] ?? null,
+            'category'      => ($data['category'] ?? '') !== '' ? $data['category'] : null,
             'sumup_link'    => $data['sumup_link'] ?? null,
             'price'         => $data['price'] !== '' && $data['price'] !== null ? $data['price'] : null,
             'max_capacity'  => $data['max_capacity'] !== '' && $data['max_capacity'] !== null ? $data['max_capacity'] : null,
