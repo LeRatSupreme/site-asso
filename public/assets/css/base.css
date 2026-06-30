@@ -902,12 +902,54 @@ ul, ol { list-style: none; }
 
 /* ----------------------------- Reduced motion ----------------------------- */
 @media (prefers-reduced-motion: reduce) {
-    *, *::before, *::after {
-        scroll-behavior: auto !important;
-        animation-duration: 0.01ms !important;
-        animation-iteration-count: 1 !important;
-        transition-duration: 0.01ms !important;
-    }
+    *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+
+/* ----------------------------- Modal confirmation ----------------------------- */
+.confirm-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+}
+.confirm-overlay[hidden] { display: none; }
+.confirm-box {
+    background: var(--card, #0c1d36);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--accent-danger, #ef4444);
+    border-radius: 16px;
+    padding: 2rem;
+    max-width: 400px;
+    width: 100%;
+    text-align: center;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+    animation: confirm-pop 0.2s ease;
+}
+@keyframes confirm-pop {
+    from { opacity: 0; transform: scale(0.92); }
+    to { opacity: 1; transform: scale(1); }
+}
+.confirm-icon {
+    font-size: 2.5rem;
+    margin-bottom: 0.75rem;
+}
+.confirm-text {
+    font-size: 1rem;
+    color: var(--foreground);
+    margin: 0 0 1.5rem;
+    line-height: 1.5;
+}
+.confirm-buttons {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: center;
+}
+.confirm-buttons .btn { min-width: 120px; }
 }
 
 /* ----------------------------- Scrollbar ----------------------------- */

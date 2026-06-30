@@ -47,7 +47,7 @@ declare(strict_types=1);
                         <td><strong><?= e((string) $a['product_key']) ?></strong></td>
                         <td><?= e((string) ($a['category'] ?? '—')) ?></td>
                         <td>
-                            <form method="post" action="<?= e(url('/admin/compta/aliases/' . rawurlencode((string) $a['id']) . '/delete')) ?>" onsubmit="return confirm('Supprimer cet alias ?');">
+                            <form method="post" action="<?= e(url('/admin/compta/aliases/' . rawurlencode((string) $a['id']) . '/delete')) ?>" data-confirm="Supprimer cet alias ?">
                                 <?= csrf_field() ?>
                                 <button type="submit" class="btn btn-destructive btn-sm">Supprimer</button>
                             </form>

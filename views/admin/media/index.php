@@ -49,7 +49,7 @@ declare(strict_types=1);
                     <code class="media-url" id="url-<?= e((string) $m['id']) ?>"><?= e($fullUrl) ?></code>
                     <div class="media-actions">
                         <button type="button" class="btn btn-outline btn-sm copy-url" data-target="url-<?= e((string) $m['id']) ?>">Copier l'URL</button>
-                        <form method="post" action="<?= e(url('/admin/media/' . rawurlencode((string) $m['id']) . '/delete')) ?>" onsubmit="return confirm('Supprimer ce média ? Action irréversible.');">
+                        <form method="post" action="<?= e(url('/admin/media/' . rawurlencode((string) $m['id']) . '/delete')) ?>" data-confirm="Supprimer ce média ? Action irréversible.">
                             <?= csrf_field() ?>
                             <button type="submit" class="btn btn-danger btn-sm">Supprimer</button>
                         </form>

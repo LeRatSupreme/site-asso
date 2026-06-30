@@ -31,7 +31,7 @@ declare(strict_types=1);
                     </td>
                     <td class="row-actions">
                         <a class="btn btn-outline btn-sm" href="<?= e(url('/admin/team/' . rawurlencode((string) $m['id']))) ?>">Éditer</a>
-                        <form method="post" action="<?= e(url('/admin/team/' . rawurlencode((string) $m['id']) . '/delete')) ?>" onsubmit="return confirm('Supprimer ce membre ?');">
+                        <form method="post" action="<?= e(url('/admin/team/' . rawurlencode((string) $m['id']) . '/delete')) ?>" data-confirm="Supprimer ce membre ?">
                             <?= csrf_field() ?>
                             <button type="submit" class="btn btn-destructive btn-sm">Supprimer</button>
                         </form>
