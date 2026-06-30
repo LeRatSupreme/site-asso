@@ -15,9 +15,9 @@ if (!is_array($event)) {
 }
 
 $slug       = (string) ($event['slug'] ?? '');
-$title      = (string) ($event['title'] ?? '');
-$excerpt    = (string) ($event['excerpt'] ?? '');
-$location   = (string) ($event['location'] ?? '');
+$title      = tc((string) ($event['title'] ?? ''));
+$excerpt    = tc((string) ($event['excerpt'] ?? ''));
+$location   = tc((string) ($event['location'] ?? ''));
 $image      = (string) ($event['image'] ?? '');
 $dateRaw    = (string) ($event['date'] ?? '');
 $price      = $event['price'] ?? null;

@@ -23,7 +23,7 @@ declare(strict_types=1);
                 <span class="accent"><?= e(t('home.title.line2')) ?></span>
             </h1>
             <p class="hero-lead">
-                <?= e($description ?: t('home.description')) ?>
+                <?= e(tc($description ?: t('home.description'))) ?>
             </p>
             <div class="hero-actions">
                 <a class="btn btn-primary btn-lg" href="<?= e(url('/presentation')) ?>"><?= e(t('home.cta.join')) ?></a>

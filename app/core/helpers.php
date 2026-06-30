@@ -421,6 +421,42 @@ function tt(string $key, array $vars, ?string $fallback = null): string
 }
 
 /**
+ * Traduit un contenu dynamique stocké en français en base (titre, extrait,
+ * lieu d'événement, setting...).
+ *
+ * Contrairement à t() qui travaille par clé symbolique, tc() prend en entrée
+ * le texte français EXACT et le résout via l'overlay app/translations/content.php.
+ *
+ * Comportement :
+ *  - langue courante == fr : renvoie le texte tel quel ;
+ *  - traduction connue pour la langue courante : la renvoie ;
+ *  - sinon : renvoie le texte français (fallback safe, ne casse rien).
+ */
+function tc(string $frenchText): string
+{
+    if ($frenchText === '') {
+        return '';
+    }
+
+    static $content = null;
+    if ($content === null) {
+        $content = require AEIC_ROOT . '/app/translations/content.php';
+    }
+
+    $lang = current_lang();
+    if ($lang === 'fr') {
+        return $frenchText;
+    }
+
+    $key = trim($frenchText);
+    if (isset($content[$key][$lang]) && $content[$key][$lang] !== '') {
+        return (string) $content[$key][$lang];
+    }
+
+    return $frenchText;
+}
+
+/**
  * Traduit une catégorie d'événement (stockée en français en base).
  * Si la catégorie n'a pas de traduction connue, retourne la valeur brute.
  */
