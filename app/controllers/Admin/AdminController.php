@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace App\Controllers\Admin;
 
 use App\Models\AuditLog;
-use App\Models\CafeteriaOrder;
 use App\Models\Event;
+use App\Models\Sale;
 use App\Models\User;
 
 /**
@@ -18,14 +18,16 @@ final class AdminController extends AdminBaseController
     {
         $this->guard();
 
+        $now = new \DateTime();
+        $agg = Sale::monthAggregates((int) $now->format('Y'), (int) $now->format('n'));
+
         $this->renderAdmin('admin/dashboard', [
-            'title'          => 'Tableau de bord',
-            'usersCount'     => User::countActive(),
-            'eventsCount'    => Event::count(),
-            'ordersCount'    => count(CafeteriaOrder::allForAdmin()),
-            'revenue'        => CafeteriaOrder::revenue(),
-            'recentAudit'    => AuditLog::recent(10),
-            'recentOrders'   => CafeteriaOrder::allForAdmin(5),
+            'title'       => 'Tableau de bord',
+            'usersCount'  => User::countActive(),
+            'eventsCount' => Event::count(),
+            'monthCa'     => $agg['ca'],
+            'monthProfit' => $agg['profit'],
+            'recentAudit' => AuditLog::recent(10),
         ]);
     }
 }
