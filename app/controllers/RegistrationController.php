@@ -8,6 +8,7 @@ use App\Core\Auth;
 use App\Core\Controller;
 use App\Core\Middleware;
 use App\Models\Event;
+use App\Models\Notification;
 use App\Models\Registration;
 
 /**
@@ -72,6 +73,14 @@ final class RegistrationController extends Controller
             $this->setFlash('info', 'Vous êtes déjà inscrit à cet événement.');
             redirect(url('/events/' . $slug));
         }
+
+        Notification::create(
+            $userId,
+            'event.registered',
+            'Vous êtes inscrit à « ' . (string) $event['title'] . ' »',
+            'Votre inscription est confirmée. Retrouvez les détails dans votre espace.',
+            url('/events/' . $slug)
+        );
 
         $this->setFlash('success', 'Inscription confirmée ! Rendez-vous sur votre espace pour le suivi.');
         redirect(url('/events/' . $slug));

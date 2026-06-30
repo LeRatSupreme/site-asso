@@ -4,15 +4,18 @@ declare(strict_types=1);
 
 namespace App\Controllers;
 
+use App\Core\Auth;
 use App\Core\Controller;
 use App\Models\Event;
 use App\Models\Page;
+use App\Models\Poll;
 use App\Models\Setting;
 
 /**
- * SEO : sitemap.xml dynamique.
+ * SEO : sitemap.xml dynamique et recherche globale.
  *
- * Liste les pages statiques, les événements publiés et les pages CMS publiées.
+ * Liste les pages statiques, les événements publiés, les sondages publiés
+ * et les pages CMS publiées.
  */
 final class SeoController extends Controller
 {
@@ -32,9 +35,19 @@ final class SeoController extends Controller
         $base = rtrim(APP_URL, '/');
         $urls = [];
 
-        // Pages statiques.
-        foreach (['/', '/events', '/presentation', '/team'] as $p) {
-            $urls[] = ['loc' => $base . $p, 'priority' => $p === '/' ? '1.0' : '0.8'];
+        // Pages statiques publiques.
+        $static = [
+            '/'             => '1.0',
+            '/events'       => '0.9',
+            '/presentation' => '0.8',
+            '/team'         => '0.7',
+            '/sondages'     => '0.8',
+            '/legal'        => '0.4',
+            '/privacy'      => '0.4',
+            '/cgu'          => '0.4',
+        ];
+        foreach ($static as $p => $priority) {
+            $urls[] = ['loc' => $base . $p, 'priority' => $priority];
         }
 
         // Événements publiés.
@@ -44,6 +57,16 @@ final class SeoController extends Controller
                     'loc'      => $base . '/events/' . rawurlencode((string) $ev['slug']),
                     'priority' => '0.7',
                     'lastmod'  => !empty($ev['date']) ? date('Y-m-d', strtotime((string) $ev['date'])) : null,
+                ];
+            }
+        }
+
+        // Sondages publiés.
+        foreach (Poll::published() as $poll) {
+            if (!empty($poll['slug'])) {
+                $urls[] = [
+                    'loc'      => $base . '/sondages/' . rawurlencode((string) $poll['slug']),
+                    'priority' => '0.6',
                 ];
             }
         }
@@ -76,5 +99,55 @@ final class SeoController extends Controller
         $xml .= '</urlset>' . "\n";
 
         return $xml;
+    }
+
+    /**
+     * Recherche globale (GET /search?q=...).
+     *
+     * Cherche dans les événements (titre, excerpt), les sondages (titre)
+     * et les pages (titre), et renvoie du JSON (max 10 résultats).
+     */
+    public function search(): void
+    {
+        $q = trim((string) ($_GET['q'] ?? ''));
+        $results = [];
+
+        if ($q !== '' && mb_strlen($q) >= 2) {
+            $like = '%' . str_replace(['%', '_', '\\'], ['\%', '\_', '\\\\'], $q) . '%';
+
+            // Événements (titre + excerpt).
+            foreach (Event::search($like, 5) as $row) {
+                $results[] = [
+                    'type'    => 'Événement',
+                    'title'   => (string) ($row['title'] ?? ''),
+                    'url'     => url('/events/' . rawurlencode((string) ($row['slug'] ?? ''))),
+                    'excerpt' => trim(strip_tags((string) ($row['excerpt'] ?? ''))),
+                ];
+            }
+
+            // Sondages (titre).
+            foreach (Poll::search($like, 3) as $row) {
+                $results[] = [
+                    'type'    => 'Sondage',
+                    'title'   => (string) ($row['title'] ?? ''),
+                    'url'     => url('/sondages/' . rawurlencode((string) ($row['slug'] ?? ''))),
+                    'excerpt' => trim(strip_tags((string) ($row['description'] ?? ''))),
+                ];
+            }
+
+            // Pages (titre).
+            foreach (Page::search($like, 3) as $row) {
+                $results[] = [
+                    'type'    => 'Page',
+                    'title'   => (string) ($row['title'] ?? ''),
+                    'url'     => url('/p/' . rawurlencode((string) ($row['slug'] ?? ''))),
+                    'excerpt' => '',
+                ];
+            }
+
+            $results = array_slice($results, 0, 10);
+        }
+
+        $this->json($results);
     }
 }

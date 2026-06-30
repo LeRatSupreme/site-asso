@@ -92,6 +92,38 @@ $twitterHandle = Setting::get('twitter_handle', '');
             </nav>
 
             <div class="nav-actions">
+                <div class="nav-search" id="nav-search">
+                    <span class="nav-search-icon" aria-hidden="true">🔎</span>
+                    <input type="search"
+                           id="global-search-input"
+                           class="nav-search-input"
+                           placeholder="Rechercher…"
+                           autocomplete="off"
+                           aria-label="Recherche globale">
+                    <div class="nav-search-results" id="global-search-results" hidden></div>
+                </div>
+
+                <?php if ($user !== null): ?>
+                    <div class="nav-bell" id="nav-notif">
+                        <button type="button"
+                                class="nav-bell-btn"
+                                id="notif-toggle"
+                                aria-label="Notifications">
+                            <span aria-hidden="true">🔔</span>
+                            <span class="nav-bell-badge" id="notif-badge" hidden>0</span>
+                        </button>
+                        <div class="nav-bell-dropdown" id="notif-dropdown" hidden>
+                            <div class="nav-bell-head">
+                                <strong>Notifications</strong>
+                                <button type="button" class="nav-bell-readall" id="notif-readall">Tout marquer comme lu</button>
+                            </div>
+                            <ul class="nav-bell-list" id="notif-list">
+                                <li class="nav-bell-empty">Aucune notification.</li>
+                            </ul>
+                        </div>
+                    </div>
+                <?php endif; ?>
+
                 <?php if ($user !== null): ?>
                     <?php if (($user['role'] ?? '') === 'ADMIN' || ($user['role'] ?? '') === 'TRESORERIE'): ?>
                         <a class="btn btn-primary btn-sm" href="<?= e(url('/admin')) ?>">Admin</a>
@@ -108,6 +140,24 @@ $twitterHandle = Setting::get('twitter_handle', '');
                     aria-expanded="false" aria-controls="mobile-nav">
                 <span></span><span></span><span></span>
             </button>
+
+            <button class="nav-search-toggle" type="button" id="nav-search-toggle" aria-label="Rechercher">
+                <span aria-hidden="true">🔎</span>
+            </button>
+        </div>
+
+        <div class="search-overlay" id="search-overlay" hidden>
+            <div class="search-overlay-inner">
+                <span class="nav-search-icon" aria-hidden="true">🔎</span>
+                <input type="search"
+                       id="mobile-search-input"
+                       class="nav-search-input"
+                       placeholder="Rechercher…"
+                       autocomplete="off"
+                       aria-label="Recherche globale">
+                <button type="button" class="search-overlay-close" id="search-overlay-close" aria-label="Fermer">✕</button>
+                <div class="nav-search-results" id="mobile-search-results" hidden></div>
+            </div>
         </div>
 
         <nav id="mobile-nav" class="mobile-nav" aria-label="Navigation mobile">
@@ -172,6 +222,180 @@ $twitterHandle = Setting::get('twitter_handle', '');
                 var open = nav.classList.toggle('is-open');
                 btn.setAttribute('aria-expanded', open ? 'true' : 'false');
             });
+        })();
+    </script>
+
+    <?php if (Auth::check()): ?>
+        <script>window.AEIC_CSRF = <?= json_encode(csrf_token()) ?>;</script>
+    <?php endif; ?>
+
+    <script>
+        (function () {
+            function esc(s) {
+                var d = document.createElement('div');
+                d.textContent = s == null ? '' : String(s);
+                return d.innerHTML;
+            }
+
+            function renderResults(container, items) {
+                container.innerHTML = '';
+                if (!items.length) {
+                    container.hidden = true;
+                    return;
+                }
+                items.forEach(function (it) {
+                    var a = document.createElement('a');
+                    a.href = it.url;
+                    a.className = 'search-result';
+                    a.innerHTML =
+                        '<span class="search-result-main">' +
+                            '<span class="search-result-title">' + esc(it.title) + '</span>' +
+                            (it.excerpt ? '<span class="search-result-excerpt">' + esc(it.excerpt) + '</span>' : '') +
+                        '</span>' +
+                        '<span class="badge badge-muted search-result-type">' + esc(it.type) + '</span>';
+                    container.appendChild(a);
+                });
+                container.hidden = false;
+            }
+
+            function wireSearch(input, resultsEl, onClose) {
+                var timer = null;
+                input.addEventListener('input', function () {
+                    var q = input.value.trim();
+                    clearTimeout(timer);
+                    if (q.length < 2) {
+                        resultsEl.hidden = true;
+                        resultsEl.innerHTML = '';
+                        return;
+                    }
+                    timer = setTimeout(function () {
+                        fetch(<?= json_encode(url('/search')) ?> + '?q=' + encodeURIComponent(q), {
+                            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                        })
+                            .then(function (r) { return r.json(); })
+                            .then(function (items) { renderResults(resultsEl, items); })
+                            .catch(function () { resultsEl.hidden = true; });
+                    }, 300);
+                });
+
+                input.addEventListener('keydown', function (e) {
+                    if (e.key === 'Escape') {
+                        resultsEl.hidden = true;
+                        if (onClose) onClose();
+                    }
+                });
+            }
+
+            var desktopInput = document.getElementById('global-search-input');
+            var desktopResults = document.getElementById('global-search-results');
+            if (desktopInput && desktopResults) {
+                wireSearch(desktopInput, desktopResults);
+                document.addEventListener('click', function (e) {
+                    var box = document.getElementById('nav-search');
+                    if (box && !box.contains(e.target)) {
+                        desktopResults.hidden = true;
+                    }
+                });
+            }
+
+            // Overlay mobile.
+            var overlay = document.getElementById('search-overlay');
+            var overlayToggle = document.getElementById('nav-search-toggle');
+            var overlayClose = document.getElementById('search-overlay-close');
+            var mobileInput = document.getElementById('mobile-search-input');
+            var mobileResults = document.getElementById('mobile-search-results');
+            if (overlay && overlayToggle && mobileInput && mobileResults) {
+                overlayToggle.addEventListener('click', function () {
+                    overlay.hidden = false;
+                    setTimeout(function () { mobileInput.focus(); }, 50);
+                });
+                function closeOverlay() { overlay.hidden = true; mobileResults.hidden = true; mobileInput.value = ''; }
+                if (overlayClose) overlayClose.addEventListener('click', closeOverlay);
+                overlay.addEventListener('click', function (e) { if (e.target === overlay) closeOverlay(); });
+                wireSearch(mobileInput, mobileResults, closeOverlay);
+            }
+
+            // Notifications (uniquement si connecté).
+            var notifBox = document.getElementById('nav-notif');
+            if (notifBox && window.AEIC_CSRF) {
+                var badge = document.getElementById('notif-badge');
+                var list = document.getElementById('notif-list');
+                var dropdown = document.getElementById('notif-dropdown');
+                var toggle = document.getElementById('notif-toggle');
+                var readAll = document.getElementById('notif-readall');
+
+                function timeAgo(iso) {
+                    if (!iso) return '';
+                    var then = new Date(iso.replace(' ', 'T') + 'Z');
+                    var diff = Math.round((Date.now() - then.getTime()) / 60000);
+                    if (diff < 1) return "à l'instant";
+                    if (diff < 60) return 'il y a ' + diff + ' min';
+                    if (diff < 1440) return 'il y a ' + Math.floor(diff / 60) + ' h';
+                    return 'il y a ' + Math.floor(diff / 1440) + ' j';
+                }
+
+                function render(payload) {
+                    var n = payload.count || 0;
+                    if (n > 0) { badge.hidden = false; badge.textContent = n > 99 ? '99+' : n; }
+                    else { badge.hidden = true; }
+
+                    var items = payload.items || [];
+                    if (!items.length) {
+                        list.innerHTML = '<li class="nav-bell-empty">Aucune notification.</li>';
+                        return;
+                    }
+                    list.innerHTML = '';
+                    items.forEach(function (it) {
+                        var li = document.createElement('li');
+                        li.className = 'nav-bell-item' + (it.is_read ? ' is-read' : '');
+                        var inner = '<div class="nav-bell-item-title">' + esc(it.title) + '</div>';
+                        if (it.body) inner += '<div class="nav-bell-item-body">' + esc(it.body) + '</div>';
+                        inner += '<div class="nav-bell-item-meta">' + timeAgo(it.created_at) + '</div>';
+                        if (it.url) {
+                            var a = document.createElement('a');
+                            a.href = it.url;
+                            a.innerHTML = inner;
+                            li.appendChild(a);
+                        } else {
+                            li.innerHTML = inner;
+                        }
+                        list.appendChild(li);
+                    });
+                }
+
+                function load() {
+                    fetch(<?= json_encode(url('/api/notifications')) ?>, {
+                        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                    })
+                        .then(function (r) { return r.json(); })
+                        .then(render)
+                        .catch(function () {});
+                }
+
+                toggle.addEventListener('click', function (e) {
+                    e.stopPropagation();
+                    dropdown.hidden = !dropdown.hidden;
+                });
+                document.addEventListener('click', function (e) {
+                    if (!notifBox.contains(e.target)) dropdown.hidden = true;
+                });
+                document.addEventListener('keydown', function (e) {
+                    if (e.key === 'Escape') dropdown.hidden = true;
+                });
+
+                readAll.addEventListener('click', function () {
+                    fetch(<?= json_encode(url('/api/notifications/read-all')) ?>, {
+                        method: 'POST',
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'X-CSRF-Token': window.AEIC_CSRF
+                        }
+                    }).then(function () { load(); });
+                });
+
+                load();
+                setInterval(load, 60000);
+            }
         })();
     </script>
 </body>

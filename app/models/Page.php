@@ -29,6 +29,29 @@ final class Page extends Model
     }
 
     /**
+     * Recherche dans les pages publiées (titre).
+     *
+     * @return list<array<string,mixed>>
+     */
+    public static function search(string $like, int $limit = 3): array
+    {
+        $sql = 'SELECT * FROM pages
+                WHERE is_published = 1 AND title LIKE ?
+                ORDER BY title ASC
+                LIMIT ' . (int) $limit;
+
+        try {
+            $stmt = static::pdo()->prepare($sql);
+            $stmt->execute([$like]);
+
+            /** @var list<array<string,mixed>> $result */
+            return $stmt->fetchAll();
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    /**
      * Toutes les pages (admin), triées par titre.
      *
      * @return list<array<string,mixed>>
