@@ -68,15 +68,74 @@ declare(strict_types=1);
     </div>
 </section>
 
-<?php if (!empty($page['content'])): ?>
 <section class="section section-alt">
     <div class="container">
-        <div class="prose surface glass">
-            <?= $page['content'] ?>
+        <div class="panel-brand panel">
+            <h2 class="section-title"><?= e(t('about.vision.title')) ?></h2>
+            <p class="lead"><?= e(t('about.vision.desc')) ?></p>
         </div>
     </div>
 </section>
-<?php endif; ?>
+
+<section class="section">
+    <div class="container">
+        <div class="section-head">
+            <span class="eyebrow"><?= e(t('about.spaces.eyebrow')) ?></span>
+            <h2 class="section-title"><?= e(t('about.spaces.title')) ?></h2>
+            <p class="lead"><?= e(t('about.spaces.desc')) ?></p>
+        </div>
+        <div class="grid grid-2">
+            <article class="card surface glass card-hover">
+                <p><?= e(t('about.spaces.free')) ?></p>
+            </article>
+            <article class="card surface glass card-hover">
+                <p><?= e(t('about.spaces.local')) ?></p>
+            </article>
+        </div>
+    </div>
+</section>
+
+<section class="section section-alt">
+    <div class="container">
+        <div class="section-head">
+            <span class="eyebrow"><?= e(t('about.events.eyebrow')) ?></span>
+            <h2 class="section-title"><?= e(t('about.events.title')) ?></h2>
+            <p class="lead"><?= e(t('about.events.intro')) ?></p>
+        </div>
+        <div class="grid grid-3">
+            <article class="card surface glass card-hover">
+                <h3 class="card-title"><?= e(t('about.events.nuitinfo.title')) ?></h3>
+                <p><?= e(t('about.events.nuitinfo.desc')) ?></p>
+            </article>
+            <article class="card surface glass card-hover">
+                <h3 class="card-title"><?= e(t('about.events.afterworks.title')) ?></h3>
+                <p><?= e(t('about.events.afterworks.desc')) ?></p>
+            </article>
+            <article class="card surface glass card-hover">
+                <h3 class="card-title"><?= e(t('about.events.bbq.title')) ?></h3>
+                <p><?= e(t('about.events.bbq.desc')) ?></p>
+            </article>
+            <article class="card surface glass card-hover">
+                <h3 class="card-title"><?= e(t('about.events.bowling.title')) ?></h3>
+                <p><?= e(t('about.events.bowling.desc')) ?></p>
+            </article>
+            <article class="card surface glass card-hover">
+                <h3 class="card-title"><?= e(t('about.events.bar.title')) ?></h3>
+                <p><?= e(t('about.events.bar.desc')) ?></p>
+            </article>
+        </div>
+        <p class="lead" style="text-align:center;margin-top:2rem"><?= e(t('about.events.closing')) ?></p>
+    </div>
+</section>
+
+<section class="section">
+    <div class="container">
+        <div class="panel surface glass">
+            <h2 class="section-title"><?= e(t('about.contact.title')) ?></h2>
+            <p class="lead"><?= e(t('about.contact.label')) ?> — <?= e(t('about.contact.address')) ?></p>
+        </div>
+    </div>
+</section>
 
 <?php require __DIR__ . '/../partials/map.php'; ?>
 

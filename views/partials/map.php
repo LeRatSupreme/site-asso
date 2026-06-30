@@ -13,7 +13,7 @@ use App\Models\Setting;
 
 $lat = Setting::get('map_lat', '50.9463');
 $lon = Setting::get('map_lon', '1.8456');
-$address = Setting::get('address', '19 Rue Louis David, 62100 Calais');
+$address = Setting::get('address', t('map.address'));
 
 $lat = trim((string) $lat);
 $lon = trim((string) $lon);
@@ -34,24 +34,24 @@ $gmapsLink = 'https://www.google.com/maps/search/?api=1&query=' . rawurlencode($
 <section class="section section-alt" id="ou-nous-trouver">
     <div class="container">
         <div class="section-head">
-            <span class="eyebrow">Nous localiser</span>
-            <h2 class="section-title">Où nous trouver</h2>
+            <span class="eyebrow"><?= e(t('map.eyebrow')) ?></span>
+            <h2 class="section-title"><?= e(t('map.title')) ?></h2>
         </div>
 
         <div class="map-block">
             <div class="map-card card surface glass">
-                <h3 class="card-title">IUT de Calais — Informatique</h3>
+                <h3 class="card-title"><?= e(t('map.card_title')) ?></h3>
                 <p class="map-address"><?= e($address) ?></p>
                 <div class="map-actions">
-                    <a class="btn btn-primary btn-sm" href="<?= e($gmapsLink) ?>" target="_blank" rel="noopener">📍 Itinéraire (Google Maps)</a>
-                    <a class="btn btn-outline btn-sm" href="<?= e($osmLink) ?>" target="_blank" rel="noopener">Voir sur OpenStreetMap</a>
+                    <a class="btn btn-primary btn-sm" href="<?= e($gmapsLink) ?>" target="_blank" rel="noopener"><?= e(t('map.directions')) ?></a>
+                    <a class="btn btn-outline btn-sm" href="<?= e($osmLink) ?>" target="_blank" rel="noopener"><?= e(t('map.osm')) ?></a>
                 </div>
             </div>
 
             <div class="map-frame" id="mapFrame">
-                <button type="button" class="map-expand" id="mapExpand" aria-label="Agrandir la carte" title="Agrandir la carte">⛶</button>
+                <button type="button" class="map-expand" id="mapExpand" aria-label="<?= e(t('map.expand')) ?>" title="<?= e(t('map.expand')) ?>" data-expand="<?= e(t('map.expand')) ?>" data-shrink="<?= e(t('map.shrink')) ?>">⛶</button>
                 <iframe
-                    title="Carte interactive — IUT de Calais"
+                    title="<?= e(t('map.iframe.title')) ?>"
                     src="<?= e($embedSrc) ?>"
                     loading="lazy"
                     referrerpolicy="no-referrer-when-downgrade"></iframe>
@@ -69,8 +69,9 @@ $gmapsLink = 'https://www.google.com/maps/search/?api=1&query=' . rawurlencode($
     function setOpen(open) {
         frame.classList.toggle('is-fullscreen', open);
         btn.textContent = open ? '✕' : '⛶';
-        btn.setAttribute('aria-label', open ? 'Réduire la carte' : 'Agrandir la carte');
-        btn.title = open ? 'Réduire' : 'Agrandir la carte';
+        var label = open ? btn.getAttribute('data-shrink') : btn.getAttribute('data-expand');
+        btn.setAttribute('aria-label', label);
+        btn.title = label;
     }
 
     btn.addEventListener('click', function () {
