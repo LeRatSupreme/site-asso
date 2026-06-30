@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Core;
 
 use App\Models\Setting;
+use PHPMailer\PHPMailer\PHPMailer;
 
 /**
  * Envoi d'e-mails transactionnels (templates HTML/texte).
@@ -137,6 +138,46 @@ final class Mailer
     }
 
     /**
+     * Envoie via PHPMailer (librairie standard, gestion robuste de
+     * STARTTLS, AUTH LOGIN/PLAIN, encoding).
+     */
+    private static function sendViaPhpMailer(array $cfg, string $to, string $subject, string $text, string $html): bool
+    {
+        try {
+            $mail = new PHPMailer(true);
+            $mail->isSMTP();
+            $mail->Host = $cfg['host'];
+            $mail->Port = (int) $cfg['port'];
+            $mail->SMTPAuth = true;
+            $mail->Username = $cfg['user'];
+            $mail->Password = $cfg['pass'];
+
+            $enc = strtolower((string) $cfg['encryption']);
+            if ($enc === 'ssl' || ($enc === '' && (int) $cfg['port'] === 465)) {
+                $mail->SMTPSecure = PHPMailer::ENCRYPTION_SMTPS;
+            } else {
+                $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
+            }
+
+            $mail->setFrom($cfg['from'], $cfg['fromName']);
+            $mail->addAddress($to);
+            $mail->Subject = $subject;
+            $mail->Body = $html;
+            $mail->AltBody = $text;
+            $mail->CharSet = 'UTF-8';
+            $mail->Encoding = 'base64';
+
+            $mail->send();
+
+            return true;
+        } catch (\Throwable $e) {
+            self::$log[] = 'smtp-error: ' . $e->getMessage();
+
+            return false;
+        }
+    }
+
+    /**
      * Cœur d'envoi : applique la priorité des transports.
      */
     private static function dispatchRaw(string $to, string $subject, string $text, string $html): bool
@@ -165,18 +206,7 @@ final class Mailer
         }
 
         if ($cfg['host'] !== '') {
-            $ok = self::sendSmtp(
-                $cfg['host'],
-                $cfg['port'],
-                $cfg['user'],
-                $cfg['pass'],
-                $cfg['encryption'],
-                $cfg['from'],
-                $to,
-                $subject,
-                $text,
-                $headers
-            );
+            $ok = self::sendViaPhpMailer($cfg, $to, $subject, $text, $html);
             self::$log[] = 'smtp: ' . $to . ' / ' . $subject;
 
             return $ok;
