@@ -45,21 +45,21 @@ foreach ($results as $r) {
     <div class="halo halo-violet" aria-hidden="true"></div>
     <div class="container">
         <div class="poll-header-top">
-            <a class="btn btn-outline poll-back" href="<?= e(url('/sondages')) ?>">← Retour aux sondages</a>
-            <span class="poll-eyebrow-lg">📊 Sondage</span>
+            <a class="btn btn-outline poll-back" href="<?= e(url('/sondages')) ?>"><?= e(t('poll.back')) ?></a>
+            <span class="poll-eyebrow-lg"><?= e(t('poll.eyebrow.lg')) ?></span>
         </div>
         <h1 class="page-title"><?= e($title) ?></h1>
         <div class="poll-badges">
             <?php if ($isClosed): ?>
-                <span class="badge badge-muted">🔒 Fermé</span>
+                <span class="badge badge-muted"><?= e(t('poll.closed')) ?></span>
             <?php elseif ($showForm): ?>
-                <span class="badge badge-success">🟢 Ouvert</span>
+                <span class="badge badge-success"><?= e(t('poll.open')) ?></span>
             <?php else: ?>
-                <span class="badge badge-secondary">📊 En cours</span>
+                <span class="badge badge-secondary"><?= e(t('poll.in_progress')) ?></span>
             <?php endif; ?>
-            <span class="badge badge-muted"><?= $isMultiple ? '☑️ Choix multiple' : '🔘 Choix unique' ?></span>
+            <span class="badge badge-muted"><?= e($isMultiple ? t('poll.multiple') : t('poll.single')) ?></span>
             <?php if ($totalVoters > 0): ?>
-                <span class="badge badge-info">👥 <?= e((string) $totalVoters) ?> votant<?= $totalVoters > 1 ? 's' : '' ?></span>
+                <span class="badge badge-info"><?= e(tt('poll.voters', ['{n}' => $totalVoters])) ?></span>
             <?php endif; ?>
         </div>
     </div>
@@ -73,12 +73,12 @@ foreach ($results as $r) {
             <?php if ($showForm): ?>
                 <!-- ============ FORMULAIRE DE VOTE ============ -->
                 <div class="card surface glass poll-vote-card">
-                    <span class="eyebrow">Votre avis compte</span>
-                    <h2 class="card-title">Votez maintenant</h2>
+                    <span class="eyebrow"><?= e(t('poll.vote.eyebrow')) ?></span>
+                    <h2 class="card-title"><?= e(t('poll.vote.now')) ?></h2>
                     <?php if ($isMultiple): ?>
-                        <p class="card-meta">Vous pouvez choisir plusieurs réponses.</p>
+                        <p class="card-meta"><?= e(t('poll.vote.multiple.desc')) ?></p>
                     <?php else: ?>
-                        <p class="card-meta">Choisissez une seule réponse.</p>
+                        <p class="card-meta"><?= e(t('poll.vote.single.desc')) ?></p>
                     <?php endif; ?>
 
                     <form method="post" action="<?= e(url('/sondages/' . rawurlencode($slug) . '/vote')) ?>">
@@ -96,7 +96,7 @@ foreach ($results as $r) {
                                 </label>
                             <?php endforeach; ?>
                         </div>
-                        <button type="submit" class="btn btn-primary btn-lg btn-block">🗳️ Voter</button>
+                        <button type="submit" class="btn btn-primary btn-lg btn-block"><?= e(t('poll.vote.submit')) ?></button>
                     </form>
                 </div>
 
@@ -104,14 +104,14 @@ foreach ($results as $r) {
                 <!-- ============ RÉSULTATS ============ -->
                 <div class="card surface glass poll-results-card">
                     <div class="poll-results-head">
-                        <span class="eyebrow">Résultats</span>
+                        <span class="eyebrow"><?= e(t('poll.results')) ?></span>
                         <h2 class="card-title">
-                            <?= $hasVoted ? '✅ Merci pour votre vote !' : ($isClosed ? '🔒 Sondage terminé' : '📊 Résultats en direct') ?>
+                            <?= e($hasVoted ? t('poll.thanks') : ($isClosed ? t('poll.closed.label') : t('poll.results.live'))) ?>
                         </h2>
                         <p class="card-meta">
-                            <?= e((string) $totalVoters) ?> votant<?= $totalVoters > 1 ? 's' : '' ?>
+                            <?= e(tt('poll.voters', ['{n}' => $totalVoters])) ?>
                             <?php if (!$isClosed && $closesAt !== ''): ?>
-                                · clôture le <?= e(formatDateTime($closesAt)) ?>
+                                · <?= e(formatDateTime($closesAt)) ?>
                             <?php endif; ?>
                         </p>
                     </div>
@@ -119,7 +119,7 @@ foreach ($results as $r) {
                     <?php if ($results === []): ?>
                         <div class="poll-empty">
                             <span class="poll-empty-icon">🗳️</span>
-                            <p class="muted">Aucun vote pour le moment. Soyez le premier !</p>
+                            <p class="muted"><?= e(t('poll.no_votes')) ?></p>
                         </div>
                     <?php else: ?>
                         <div class="poll-results-list">
@@ -133,7 +133,7 @@ foreach ($results as $r) {
                                         <span class="poll-result-label">
                                             <?php if ($isWinner): ?><span class="poll-trophy">🏆</span><?php endif; ?>
                                             <?= e($row['label'] ?? '') ?>
-                                            <?php if ($isMine): ?><span class="poll-your-vote">✓ votre choix</span><?php endif; ?>
+                                            <?php if ($isMine): ?><span class="poll-your-vote"><?= e(t('poll.your_vote')) ?></span><?php endif; ?>
                                         </span>
                                         <span class="poll-result-pct"><?= e((string) $pct) ?>%</span>
                                     </div>
@@ -141,7 +141,7 @@ foreach ($results as $r) {
                                         <div class="poll-result-fill <?= $isWinner ? 'is-winner' : '' ?> <?= $isMine ? 'is-mine' : '' ?>"
                                              style="width: <?= max(2, $pct) ?>%"></div>
                                     </div>
-                                    <span class="poll-result-count"><?= e((string) ($row['votes'] ?? 0)) ?> vote<?= (($row['votes'] ?? 0) > 1) ? 's' : '' ?></span>
+                                    <span class="poll-result-count"><?= e(tt('poll.vote.count', ['{n}' => ($row['votes'] ?? 0)])) ?></span>
                                 </div>
                             <?php endforeach; ?>
                         </div>
@@ -152,11 +152,11 @@ foreach ($results as $r) {
                 <!-- ============ NON CONNECTÉ ============ -->
                 <div class="card surface glass poll-login-prompt">
                     <span class="poll-login-icon">🗳️</span>
-                    <h2 class="card-title">Connectez-vous pour voter</h2>
-                    <p class="card-excerpt">Ce sondage est ouvert aux membres de l'AEIC. Créez un compte ou connectez-vous pour participer et voir les résultats.</p>
+                    <h2 class="card-title"><?= e(t('poll.login.title')) ?></h2>
+                    <p class="card-excerpt"><?= e(t('poll.login.desc')) ?></p>
                     <div class="hero-actions" style="justify-content:center;">
-                        <a class="btn btn-primary btn-lg" href="<?= e(url('/login?callbackUrl=' . rawurlencode('/sondages/' . $slug))) ?>">Se connecter</a>
-                        <a class="btn btn-outline btn-lg" href="<?= e(url('/register')) ?>">Créer un compte</a>
+                        <a class="btn btn-primary btn-lg" href="<?= e(url('/login?callbackUrl=' . rawurlencode('/sondages/' . $slug))) ?>"><?= e(t('poll.login.button')) ?></a>
+                        <a class="btn btn-outline btn-lg" href="<?= e(url('/register')) ?>"><?= e(t('poll.login.register')) ?></a>
                     </div>
                 </div>
             <?php endif; ?>
@@ -166,37 +166,37 @@ foreach ($results as $r) {
         <aside class="poll-side">
             <?php if ($description !== ''): ?>
                 <div class="card surface glass poll-side-desc">
-                    <span class="eyebrow">À propos</span>
+                    <span class="eyebrow"><?= e(t('poll.about')) ?></span>
                     <p><?= nl2br(e($description)) ?></p>
                 </div>
             <?php endif; ?>
 
             <div class="card surface glass poll-side-info">
-                <h3 class="card-title">Informations</h3>
+                <h3 class="card-title"><?= e(t('poll.info')) ?></h3>
                 <ul class="poll-info-list">
                     <li>
-                        <span class="muted">Statut</span>
+                        <span class="muted"><?= e(t('poll.info.status')) ?></span>
                         <?php if ($isClosed): ?>
-                            <span class="badge badge-muted">🔒 Fermé</span>
+                            <span class="badge badge-muted"><?= e(t('poll.closed')) ?></span>
                         <?php else: ?>
-                            <span class="badge badge-success">🟢 Ouvert</span>
+                            <span class="badge badge-success"><?= e(t('poll.open')) ?></span>
                         <?php endif; ?>
                     </li>
                     <li>
-                        <span class="muted">Type</span>
-                        <span><?= $isMultiple ? '☑️ Choix multiple' : '🔘 Choix unique' ?></span>
+                        <span class="muted"><?= e(t('poll.info.type')) ?></span>
+                        <span><?= e($isMultiple ? t('poll.multiple') : t('poll.single')) ?></span>
                     </li>
                     <li>
-                        <span class="muted">Votants</span>
+                        <span class="muted"><?= e(t('poll.info.voters')) ?></span>
                         <strong><?= e((string) $totalVoters) ?></strong>
                     </li>
                     <li>
-                        <span class="muted">Options</span>
+                        <span class="muted"><?= e(t('poll.info.options')) ?></span>
                         <strong><?= e((string) count($options)) ?></strong>
                     </li>
                     <?php if ($closesAt !== ''): ?>
                         <li>
-                            <span class="muted">Clôture</span>
+                            <span class="muted"><?= e(t('poll.info.closes')) ?></span>
                             <span><?= e(formatDateTime($closesAt)) ?></span>
                         </li>
                     <?php endif; ?>

@@ -306,26 +306,116 @@ function is_member(): bool
 }
 
 // ---------------------------------------------------------------------
-//  Fonctionnalité 12 — Sélecteur de langue léger (FR/EN, cookie).
+//  Fonctionnalité 12 — Système de traduction multilingue (7 langues).
 // ---------------------------------------------------------------------
 
 /**
- * Langue courante (préférence stockée en cookie), par défaut "fr".
+ * Langues officiellement supportées par le site.
+ *
+ * @return list<string>
  */
-function current_lang(): string
+function available_langs(): array
 {
-    $lang = $_COOKIE['aeic_lang'] ?? 'fr';
-    $lang = strtolower((string) $lang);
-
-    return $lang === 'en' ? 'en' : 'fr';
+    return ['fr', 'en', 'de', 'es', 'zh', 'ja', 'pl'];
 }
 
 /**
- * Traduction minimale : renvoie la chaîne FR ou EN selon la langue courante.
- *
- * Si aucune traduction EN n'est fournie, la chaîne FR est renvoyée telle quelle.
+ * Drapeau (emoji) associé à un code de langue.
  */
-function t(string $fr, string $en = ''): string
+function lang_flag(string $lang): string
 {
-    return current_lang() === 'en' && $en !== '' ? $en : $fr;
+    $flags = [
+        'fr' => '🇫🇷',
+        'en' => '🇬🇧',
+        'de' => '🇩🇪',
+        'es' => '🇪🇸',
+        'zh' => '🇨🇳',
+        'ja' => '🇯🇵',
+        'pl' => '🇵🇱',
+    ];
+
+    return $flags[$lang] ?? '🌐';
+}
+
+/**
+ * Code de locale BCP-47 associé à une langue (balises <html lang>, og:locale).
+ */
+function lang_locale(string $lang): string
+{
+    $locales = [
+        'fr' => 'fr_FR',
+        'en' => 'en_US',
+        'de' => 'de_DE',
+        'es' => 'es_ES',
+        'zh' => 'zh_CN',
+        'ja' => 'ja_JP',
+        'pl' => 'pl_PL',
+    ];
+
+    return $locales[$lang] ?? 'fr_FR';
+}
+
+/**
+ * Langue courante (préférence stockée en cookie `aeic_lang`), par défaut "fr".
+ */
+function current_lang(): string
+{
+    $lang = strtolower((string) ($_COOKIE['aeic_lang'] ?? 'fr'));
+    if (in_array($lang, available_langs(), true)) {
+        return $lang;
+    }
+
+    return 'fr';
+}
+
+/**
+ * Traduit une clé depuis le catalogue app/translations/messages.php.
+ *
+ * Renvoie, dans l'ordre : la traduction dans la langue courante, sinon la
+ * traduction française (référence), sinon le fallback fourni, sinon la clé.
+ *
+ * Les éventuels marqueurs `{n}`, `{a}`... de la chaîne peuvent être remplacés
+ * via tt() (ou manuellement par strtr()).
+ */
+function t(string $key, ?string $fallback = null): string
+{
+    static $messages = null;
+    if ($messages === null) {
+        $messages = require AEIC_ROOT . '/app/translations/messages.php';
+    }
+
+    $row = $messages[$key] ?? null;
+    if (is_array($row)) {
+        $lang = current_lang();
+        if (isset($row[$lang]) && $row[$lang] !== '') {
+            return (string) $row[$lang];
+        }
+        if (isset($row['fr'])) {
+            return (string) $row['fr'];
+        }
+    }
+
+    return $fallback ?? $key;
+}
+
+/**
+ * Variante de t() qui remplace des marqueurs {clé} par des valeurs.
+ *
+ * Exemple : tt('poll.voters', ['{n}' => 42]).
+ *
+ * @param array<string,scalar> $vars
+ */
+function tt(string $key, array $vars, ?string $fallback = null): string
+{
+    $text = t($key, $fallback);
+    if ($vars === []) {
+        return $text;
+    }
+
+    $replacements = [];
+    foreach ($vars as $k => $v) {
+        $replacements[(string) $k] = (string) $v;
+    }
+
+    return strtr($text, $replacements);
 }

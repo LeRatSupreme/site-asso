@@ -1088,7 +1088,68 @@ ul, ol { list-style: none; }
     background: rgba(72, 189, 211, 0.15);
     box-shadow: 0 0 0 1px var(--primary) inset;
 }
-.lang-switch-mobile { display: inline-flex; gap: 0.5rem; }
+.lang-switch-mobile { display: inline-flex; gap: 0.5rem; flex-wrap: wrap; }
 .lang-switch-admin { display: inline-flex; gap: 0.2rem; margin-bottom: 0.5rem; }
 .input-sm { padding: 0.3rem 0.5rem; font-size: 0.85rem; }
+
+/* Sélecteur de langue (dropdown 7 langues) */
+.lang-dropdown { position: relative; display: inline-block; }
+.lang-current {
+    display: inline-flex; align-items: center; gap: 0.4rem;
+    height: 2rem; padding: 0 0.55rem;
+    border: 1px solid var(--border); border-radius: var(--radius-sm);
+    background: rgba(255,255,255,0.03); color: inherit;
+    font-size: 0.85rem; line-height: 1; cursor: pointer;
+    transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
+}
+.lang-current:hover {
+    background: rgba(72, 189, 211, 0.12);
+    border-color: var(--primary);
+}
+.lang-current:focus-visible {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 2px rgba(72, 189, 211, 0.35);
+}
+.lang-current .lang-flag { font-size: 1rem; line-height: 1; }
+.lang-current .lang-name { font-weight: 600; letter-spacing: 0.03em; }
+.lang-current .lang-caret { opacity: 0.6; font-size: 0.7rem; transition: transform 0.15s; }
+.lang-current[aria-expanded="true"] .lang-caret { transform: rotate(180deg); }
+
+.lang-menu {
+    position: absolute; right: 0; top: calc(100% + 0.35rem);
+    z-index: 60;
+    min-width: 11rem; margin: 0; padding: 0.3rem;
+    list-style: none;
+    background: var(--surface, #0f1f3a);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: 0 14px 40px rgba(0,0,0,0.45);
+}
+.lang-menu[hidden] { display: none; }
+.lang-menu-item {
+    display: flex; align-items: center; gap: 0.5rem;
+    padding: 0.5rem 0.6rem;
+    border-radius: var(--radius-sm);
+    color: inherit; text-decoration: none;
+    font-size: 0.9rem; white-space: nowrap;
+    transition: background 0.12s, color 0.12s;
+}
+.lang-menu-item:hover,
+.lang-menu-item:focus-visible {
+    background: rgba(72, 189, 211, 0.18);
+    color: var(--primary, #48bdd3);
+    outline: none;
+}
+.lang-menu-item.is-active {
+    background: rgba(72, 189, 211, 0.14);
+    font-weight: 600;
+}
+.lang-menu-item .lang-flag { font-size: 1.1rem; }
+
+@media (max-width: 720px) {
+    .lang-dropdown { width: 100%; }
+    .lang-current { justify-content: flex-start; }
+    .lang-menu { right: auto; left: 0; min-width: 100%; }
+}
 

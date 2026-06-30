@@ -14,10 +14,10 @@ use App\Models\Poll;
 <header class="page-hero">
     <div class="halo halo-teal" aria-hidden="true"></div>
     <div class="container">
-        <span class="eyebrow">Sondages AEIC</span>
-        <h1 class="page-title">Votre avis compte.</h1>
+        <span class="eyebrow"><?= e(t('polls.eyebrow')) ?></span>
+        <h1 class="page-title"><?= e(t('polls.title')) ?></h1>
         <p class="page-lead">
-            <?= e((string) $count) ?> sondage<?= $count > 1 ? 's' : '' ?> · résultats en temps réel
+            <?= e(tt('polls.lead', ['{n}' => $count])) ?>
         </p>
     </div>
 </header>
@@ -26,7 +26,7 @@ use App\Models\Poll;
     <div class="container">
         <?php if (empty($polls)): ?>
             <div class="empty-state surface glass">
-                <p>Aucun sondage ouvert pour le moment. Revenez vite !</p>
+                <p><?= e(t('polls.empty')) ?></p>
             </div>
         <?php else: ?>
             <div class="grid grid-3">

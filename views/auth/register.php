@@ -9,8 +9,8 @@ declare(strict_types=1);
 <header class="page-hero">
     <div class="halo halo-violet" aria-hidden="true"></div>
     <div class="container">
-        <span class="eyebrow">Rejoins l'AEIC</span>
-        <h1 class="page-title">Créer un compte</h1>
+        <span class="eyebrow"><?= e(t('auth.register.eyebrow')) ?></span>
+        <h1 class="page-title"><?= e(t('auth.register.title')) ?></h1>
     </div>
 </header>
 
@@ -21,40 +21,44 @@ declare(strict_types=1);
 
             <div class="field-row">
                 <div class="field">
-                    <label for="prenom">Prénom</label>
+                    <label for="prenom"><?= e(t('auth.register.firstname')) ?></label>
                     <input type="text" id="prenom" name="prenom" autocomplete="given-name"
                            value="<?= e(old('prenom')) ?>" required>
                 </div>
                 <div class="field">
-                    <label for="nom">Nom</label>
+                    <label for="nom"><?= e(t('auth.register.lastname')) ?></label>
                     <input type="text" id="nom" name="nom" autocomplete="family-name"
                            value="<?= e(old('nom')) ?>" required>
                 </div>
             </div>
 
             <div class="field">
-                <label for="email">Adresse e-mail</label>
+                <label for="email"><?= e(t('auth.login.email')) ?></label>
                 <input type="email" id="email" name="email" autocomplete="email"
                        value="<?= e(old('email')) ?>" placeholder="vous@exemple.fr" required>
-                <small class="field-hint">Votre mot de passe temporaire vous sera envoyé par e-mail.</small>
+                <small class="field-hint"><?= e(t('auth.register.email.hint')) ?></small>
             </div>
 
             <div class="field field-checkbox">
+                <?php
+                $cguUrl = e(url('/cgu'));
+                $privacyUrl = e(url('/privacy'));
+                $consent = tt('auth.register.consent', [
+                    '{cgu}'     => '<a href="' . $cguUrl . '" target="_blank" rel="noopener">' . e(t('auth.register.cgu')) . '</a>',
+                    '{privacy}' => '<a href="' . $privacyUrl . '" target="_blank" rel="noopener">' . e(t('auth.register.consent.privacy')) . '</a>',
+                ]);
+                ?>
                 <label>
                     <input type="checkbox" name="consent" value="1" required>
-                    <span>
-                        J'accepte les
-                        <a href="<?= e(url('/cgu')) ?>" target="_blank" rel="noopener">conditions d'utilisation</a>
-                        et la <a href="<?= e(url('/privacy')) ?>" target="_blank" rel="noopener">politique de confidentialité</a>.
-                    </span>
+                    <span><?= $consent ?></span>
                 </label>
             </div>
 
-            <button type="submit" class="btn btn-primary btn-block">Créer mon compte</button>
+            <button type="submit" class="btn btn-primary btn-block"><?= e(t('auth.register.submit')) ?></button>
 
             <p class="auth-alt">
-                Déjà inscrit ?
-                <a href="<?= e(url('/login')) ?>">Se connecter</a>
+                <?= e(t('auth.register.alt')) ?>
+                <a href="<?= e(url('/login')) ?>"><?= e(t('auth.login.title')) ?></a>
             </p>
         </form>
     </div>

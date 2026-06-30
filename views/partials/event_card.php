@@ -27,9 +27,9 @@ $category   = (string) ($event['category'] ?? '');
 
 $badge = '';
 if ($isFeatured) {
-    $badge = '<span class="badge badge-gradient">À la une</span>';
+    $badge = '<span class="badge badge-gradient">' . e(t('common.featured')) . '</span>';
 } elseif ($price === null || (float) $price <= 0) {
-    $badge = '<span class="badge badge-success">Gratuit</span>';
+    $badge = '<span class="badge badge-success">' . e(t('event.free')) . '</span>';
 } else {
     $badge = '<span class="badge badge-secondary">' . e(formatPrice($price)) . '</span>';
 }
@@ -68,6 +68,6 @@ if ($image !== '') {
     </div>
 
     <div class="event-card-actions">
-        <a class="btn btn-outline btn-sm" href="<?= e(url('/events/' . $slug)) ?>">Détails</a>
+        <a class="btn btn-outline btn-sm" href="<?= e(url('/events/' . $slug)) ?>"><?= e(t('common.details')) ?></a>
     </div>
 </article>
