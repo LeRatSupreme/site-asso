@@ -36,19 +36,7 @@ declare(strict_types=1);
                 <label for="email">Adresse e-mail</label>
                 <input type="email" id="email" name="email" autocomplete="email"
                        value="<?= e(old('email')) ?>" placeholder="vous@exemple.fr" required>
-            </div>
-
-            <div class="field">
-                <label for="password">Mot de passe</label>
-                <input type="password" id="password" name="password" autocomplete="new-password"
-                       minlength="8" required>
-                <small class="field-hint">Au moins 8 caractères, une lettre et un chiffre.</small>
-            </div>
-
-            <div class="field">
-                <label for="password_confirmation">Confirmer le mot de passe</label>
-                <input type="password" id="password_confirmation" name="password_confirmation"
-                       autocomplete="new-password" minlength="8" required>
+                <small class="field-hint">Votre mot de passe temporaire vous sera envoyé par e-mail.</small>
             </div>
 
             <div class="field field-checkbox">

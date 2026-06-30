@@ -31,6 +31,37 @@ final class AuthController extends Controller
     /** Fenêtre de limitation (secondes) : 10 minutes. */
     private const LOGIN_WINDOW = 600;
 
+    /** Longueur du mot de passe temporaire généré à l'inscription. */
+    private const PASSWORD_LENGTH = 8;
+
+    /**
+     * Génère un mot de passe aléatoire lisible (sans caractères ambigus) et
+     * garantissant au moins une lettre et un chiffre.
+     *
+     * Jeu de caractères sans 0/O/o/l/1/I/i pour éviter les confusions à la
+     * saisie.
+     */
+    private static function generatePassword(): string
+    {
+        $letters = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz';
+        $digits = '23456789';
+
+        $pick = static function (string $set): string {
+            return $set[random_int(0, strlen($set) - 1)];
+        };
+
+        // Une lettre + un chiffre garantis, reste aléatoire.
+        $chars = [$pick($letters), $pick($digits)];
+        $pool = $letters . $digits;
+        for ($i = 2; $i < self::PASSWORD_LENGTH; $i++) {
+            $chars[] = $pick($pool);
+        }
+
+        shuffle($chars);
+
+        return implode('', $chars);
+    }
+
     // -----------------------------------------------------------------
     //  Inscription
     // -----------------------------------------------------------------
@@ -50,17 +81,20 @@ final class AuthController extends Controller
 
     /**
      * Traitement de l'inscription.
+     *
+     * Le mot de passe n'est pas choisi par l'utilisateur : il est généré
+     * aléatoirement puis envoyé par e-mail. La réception de cet e-mail prouve
+     * la propriété de l'adresse, le compte est donc créé vérifié d'emblée
+     * (aucun token de confirmation à valider).
      */
     public function register(): void
     {
         Middleware::requireGuest();
 
         $data = [
-            'prenom'                => $_POST['prenom'] ?? '',
-            'nom'                   => $_POST['nom'] ?? '',
-            'email'                 => $_POST['email'] ?? '',
-            'password'              => $_POST['password'] ?? '',
-            'password_confirmation' => $_POST['password_confirmation'] ?? '',
+            'prenom' => $_POST['prenom'] ?? '',
+            'nom'    => $_POST['nom'] ?? '',
+            'email'  => $_POST['email'] ?? '',
         ];
         $consent = isset($_POST['consent']);
 
@@ -90,8 +124,11 @@ final class AuthController extends Controller
             redirect(url('/register'));
         }
 
+        // Mot de passe temporaire généré et envoyé par e-mail.
+        $password = self::generatePassword();
+
         // Création du compte.
-        $hash = password_hash($data['password'], PASSWORD_BCRYPT);
+        $hash = password_hash($password, PASSWORD_BCRYPT);
         $userId = User::create([
             'prenom'   => $data['prenom'],
             'nom'      => $data['nom'],
@@ -99,6 +136,9 @@ final class AuthController extends Controller
             'password' => $hash,
             'role'     => Auth::ROLE_ELEVE,
         ]);
+
+        // L'e-mail est prouvé par réception du mot de passe : vérification immédiate.
+        User::markEmailVerified($userId);
 
         // Journalisation du consentement RGPD (preuve datée).
         Consent::log('registration', true, 'cgu-v1', [
@@ -108,19 +148,14 @@ final class AuthController extends Controller
             'user_agent' => user_agent(),
         ]);
 
-        // Confirmation d'e-mail : le compte reste non vérifié jusqu'au clic
-        // sur le lien envoyé par e-mail (token à usage unique, 24 h).
-        $token = VerificationToken::createToken($userId);
-        $verifyUrl = APP_URL . url('/verify-email?token=' . $token);
-
+        // Envoi de l'e-mail de bienvenue contenant le mot de passe temporaire.
         $smtpConfigured = Mailer::isSmtpConfigured();
         $sent = false;
         if ($smtpConfigured) {
             try {
-                $sent = Mailer::send('verify_email', User::normalizeEmail((string) $data['email']), 'Confirme ton adresse e-mail — AEIC', [
-                    'prenom'    => $data['prenom'],
-                    'verifyUrl' => $verifyUrl,
-                    'expiresIn' => VerificationToken::EXPIRES_HOURS,
+                $sent = Mailer::send('welcome_password', User::normalizeEmail((string) $data['email']), 'Bienvenue à l\'AEIC — votre mot de passe', [
+                    'prenom'   => $data['prenom'],
+                    'password' => $password,
                 ]);
             } catch (\Throwable) {
                 $sent = false;
@@ -128,14 +163,14 @@ final class AuthController extends Controller
         }
 
         if ($smtpConfigured && $sent) {
-            $this->setFlash('success', 'Ton compte a été créé. Vérifie ta boîte mail (et tes spams) pour confirmer ton adresse e-mail, puis connecte-toi.');
+            $this->setFlash('success', 'Votre compte a été créé. Votre mot de passe vient de vous être envoyé par e-mail.');
         } else {
-            // Fallback (SMTP non configuré ou envoi échoué) : on expose le lien
-            // de confirmation dans le flash. À utiliser en développement ; en
+            // Fallback (SMTP non configuré ou envoi échoué) : on expose le mot
+            // de passe dans le flash. À utiliser en développement ; en
             // production, configurez SMTP (admin > Paramètres).
             $this->setFlash('info', sprintf(
-                'Compte créé. Aucun envoi SMTP configuré : confirme ton e-mail via ce lien (développement uniquement) — %s',
-                $verifyUrl
+                'Compte créé. Aucun envoi SMTP configuré (développement uniquement) — mot de passe temporaire : %s',
+                $password
             ));
         }
 

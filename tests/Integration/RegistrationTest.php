@@ -21,17 +21,15 @@ final class RegistrationTest extends IntegrationTestCase
         $this->reset(['consents', 'users', 'settings']);
     }
 
-    public function test_inscription_valide_cree_un_eleve_actif_et_journalise_le_consentement(): void
+    public function test_inscription_valide_cree_un_eleve_actif_verifie_et_journalise_le_consentement(): void
     {
         $email = 'nouveau' . bin2hex(random_bytes(3)) . '@exemple.fr';
 
         $response = $this->request('POST', '/register', [
-            'prenom'                => 'Ada',
-            'nom'                   => 'Lovelace',
-            'email'                 => $email,
-            'password'              => 'Password1',
-            'password_confirmation' => 'Password1',
-            'consent'               => '1',
+            'prenom'  => 'Ada',
+            'nom'     => 'Lovelace',
+            'email'   => $email,
+            'consent' => '1',
         ]);
 
         // Redirection vers /login (le compte n'est pas auto-connecté).
@@ -44,6 +42,8 @@ final class RegistrationTest extends IntegrationTestCase
         self::assertNotNull($row);
         self::assertSame(Auth::ROLE_ELEVE, $row['role']);
         self::assertSame('1', (string) $row['is_active']);
+        // Le mot de passe étant envoyé par e-mail, l'e-mail est prouvé d'emblée.
+        self::assertNotNull($row['email_verified_at']);
 
         $consents = $this->pdo->prepare('SELECT * FROM consents WHERE user_id = ? AND consent_type = ?');
         $consents->execute([$row['id'], 'registration']);
@@ -57,12 +57,10 @@ final class RegistrationTest extends IntegrationTestCase
         $countBefore = (int) $this->pdo->query('SELECT COUNT(*) FROM users')->fetchColumn();
 
         $response = $this->request('POST', '/register', [
-            'prenom'                => 'Dup',
-            'nom'                   => 'Able',
-            'email'                 => 'deja@exemple.fr',
-            'password'              => 'Password1',
-            'password_confirmation' => 'Password1',
-            'consent'               => '1',
+            'prenom'  => 'Dup',
+            'nom'     => 'Able',
+            'email'   => 'deja@exemple.fr',
+            'consent' => '1',
         ]);
 
         self::assertStringContainsString('/register', $this->location($response));
@@ -71,17 +69,15 @@ final class RegistrationTest extends IntegrationTestCase
         self::assertSame($countBefore, $countAfter, 'Aucun compte supplémentaire ne doit être créé.');
     }
 
-    public function test_mot_de_passe_trop_court_rejete(): void
+    public function test_email_invalide_rejete(): void
     {
         $countBefore = (int) $this->pdo->query('SELECT COUNT(*) FROM users')->fetchColumn();
 
         $response = $this->request('POST', '/register', [
-            'prenom'                => 'Court',
-            'nom'                   => 'Mdp',
-            'email'                 => 'court@exemple.fr',
-            'password'              => 'ab1',
-            'password_confirmation' => 'ab1',
-            'consent'               => '1',
+            'prenom'  => 'Bad',
+            'nom'     => 'Email',
+            'email'   => 'pas-un-email',
+            'consent' => '1',
         ]);
 
         self::assertStringContainsString('/register', $this->location($response));
@@ -93,11 +89,9 @@ final class RegistrationTest extends IntegrationTestCase
         $countBefore = (int) $this->pdo->query('SELECT COUNT(*) FROM users')->fetchColumn();
 
         $response = $this->request('POST', '/register', [
-            'prenom'                => 'No',
-            'nom'                   => 'Consent',
-            'email'                 => 'noconsent@exemple.fr',
-            'password'              => 'Password1',
-            'password_confirmation' => 'Password1',
+            'prenom' => 'No',
+            'nom'    => 'Consent',
+            'email'  => 'noconsent@exemple.fr',
             // consent absent
         ]);
 
