@@ -461,6 +461,132 @@ function tc(string $frenchText): string
 }
 
 /**
+ * Associe un emoji à un produit en fonction de mots-clés présents dans son nom.
+ *
+ * Permet d'afficher un menu cafétéria plus vivant sans stocker les emojis en base.
+ */
+function product_emoji(string $name): string
+{
+    $haystack = mb_strtolower($name);
+
+    $map = [
+        'coca'    => '🥤',
+        'cola'    => '🥤',
+        'pepsi'   => '🥤',
+        'eau'     => '💧',
+        'ice'     => '🧊',
+        'thé'     => '🍵',
+        'the'     => '🍵',
+        'ice tea' => '🍵',
+        'café'    => '☕',
+        'coffee'  => '☕',
+        'expresso'=> '☕',
+        'latte'   => '☕',
+        'capuccino'=> '☕',
+        'cappuccino'=> '☕',
+        'chai'    => '🍵',
+        'monster' => '⚡',
+        'red bull' => '⚡',
+        'redbull' => '⚡',
+        'energy'  => '⚡',
+        'jus'     => '🧃',
+        'orange'  => '🧃',
+        'smoothie'=> '🥤',
+        'bière'   => '🍺',
+        'biere'   => '🍺',
+        'beer'    => '🍺',
+        'vin'     => '🍷',
+        'wine'    => '🍷',
+        'lait'    => '🥛',
+        'milk'    => '🥛',
+        'chocolat'=> '🍫',
+        'choco'   => '🍫',
+        'bueno'   => '🍫',
+        'kitkat'  => '🍫',
+        'twix'    => '🍫',
+        'mars'    => '🍫',
+        'snickers'=> '🍫',
+        'bn'      => '🍪',
+        'cookie'  => '🍪',
+        'cookies' => '🍪',
+        'oreo'    => '🍪',
+        'bonbon'  => '🍬',
+        'dragée'  => '🍬',
+        'dragee'  => '🍬',
+        'haribo'  => '🍬',
+        'chips'   => '🍟',
+        'chipos'  => '🍟',
+        'tuc'     => '🍟',
+        'pringle' => '🍟',
+        'cracker' => '🍟',
+        'sandwich'=> '🥪',
+        'panini'  => '🥪',
+        'bagel'   => '🥯',
+        'pizza'   => '🍕',
+        'quiche'  => '🥧',
+        'tarte'   => '🥧',
+        'croissant'=> '🥐',
+        'pain'    => '🍞',
+        'viennoiserie'=> '🥐',
+        'muffin'  => '🧁',
+        'cupcake' => '🧁',
+        'cake'    => '🍰',
+        'donut'   => '🍩',
+        'beignet' => '🍩',
+        'glace'   => '🍦',
+        'ice cream'=> '🍦',
+        'yaourt'  => '🥣',
+        'fruit'   => '🍎',
+        'pomme'   => '🍎',
+        'banane'  => '🍌',
+        'orange fruit'=> '🍊',
+        'clémentine'=> '🍊',
+        'clementine'=> '🍊',
+        'friand'  => '🥨',
+        'nouille' => '🍜',
+        'ramen'   => '🍜',
+        'soupe'   => '🍲',
+        'salade'  => '🥗',
+        'tacos'   => '🌮',
+        'kebab'   => '🌯',
+        'burrito' => '🌯',
+        'burger'  => '🍔',
+        'hot dog' => '🌭',
+        'frites'  => '🍟',
+        'pates'   => '🍝',
+        'pâtes'   => '🍝',
+        'pasta'   => '🍝',
+        'riz'     => '🍚',
+        'rice'    => '🍚',
+        'œuf'     => '🍳',
+        'oeuf'    => '🍳',
+        'egg'     => '🍳',
+        'waffle'  => '🧇',
+        'gaufre'  => '🧇',
+        'bubble tea'=> '🧋',
+        'boba'    => '🧋',
+        'matcha'  => '🍵',
+        'gas'     => '⛽',
+        'essence' => '⛽',
+        'loterie' => '🎟️',
+        'ticket'  => '🎟️',
+        'goodies' => '🎁',
+        't-shirt' => '👕',
+        'tshirt'  => '👕',
+        'stylo'   => '🖊️',
+        'cahier'  => '📓',
+    ];
+
+    foreach ($map as $needle => $emoji) {
+        if ($needle !== '' && str_contains($haystack, $needle)) {
+            return $emoji;
+        }
+    }
+
+    return '🍽️';
+}
+
+/**
  * Traduit une catégorie d'événement (stockée en français en base).
  * Si la catégorie n'a pas de traduction connue, retourne la valeur brute.
  */

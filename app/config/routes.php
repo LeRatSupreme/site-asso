@@ -12,6 +12,7 @@ use App\Controllers\Admin\AdminMembershipController;
 use App\Controllers\Admin\AdminMediaController;
 use App\Controllers\Admin\AdminPageController;
 use App\Controllers\Admin\AdminPollController;
+use App\Controllers\Admin\AdminPromotionController;
 use App\Controllers\Admin\AdminSettingController;
 use App\Controllers\Admin\AdminSumupController;
 use App\Controllers\Admin\AdminTeamController;
@@ -163,6 +164,12 @@ function aeic_register_routes(Router $router): void
     $router->get('/admin/sondages/{id}', [AdminPollController::class, 'form']);
     $router->post('/admin/sondages/save', [AdminPollController::class, 'save']);
     $router->post('/admin/sondages/{id}/delete', [AdminPollController::class, 'delete']);
+
+    $router->get('/admin/promotions', [AdminPromotionController::class, 'index']);
+    $router->get('/admin/promotions/new', [AdminPromotionController::class, 'form']);
+    $router->get('/admin/promotions/{id}', [AdminPromotionController::class, 'form']);
+    $router->post('/admin/promotions/save', [AdminPromotionController::class, 'save']);
+    $router->post('/admin/promotions/{id}/delete', [AdminPromotionController::class, 'delete']);
 
     $router->get('/admin/media', [AdminMediaController::class, 'index']);
     $router->post('/admin/media/upload', [AdminMediaController::class, 'upload']);

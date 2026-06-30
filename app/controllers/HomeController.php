@@ -6,6 +6,9 @@ namespace App\Controllers;
 
 use App\Core\Controller;
 use App\Models\Event;
+use App\Models\Product;
+use App\Models\ProductCategory;
+use App\Models\Promotion;
 use App\Models\Setting;
 use App\Models\User;
 
@@ -44,8 +47,52 @@ final class HomeController extends Controller
             'upcoming'        => Event::featured(3),
             'eventsCount'     => Event::count(),
             'usersCount'      => User::countActive(),
+            'menuCategories'  => $this->buildMenu(),
+            'promotions'      => Promotion::active(),
             'maintenanceMode' => Setting::getBool('maintenance_mode', false),
         ]);
+    }
+
+    /**
+     * Construit la carte de la cafétéria : catégories actives avec leurs
+     * produits disponibles (is_active = 1 ET is_available = 1).
+     *
+     * @return list<array<string,mixed>>
+     */
+    private function buildMenu(): array
+    {
+        $categories = ProductCategory::active();
+        if ($categories === []) {
+            return [];
+        }
+
+        $products = Product::available();
+
+        $byCat = [];
+        foreach ($products as $product) {
+            $catId = (string) ($product['category_id'] ?? '');
+            if ($catId === '') {
+                continue;
+            }
+            $byCat[$catId][] = $product;
+        }
+
+        $menu = [];
+        foreach ($categories as $category) {
+            $catId = (string) $category['id'];
+            $items = $byCat[$catId] ?? [];
+            if ($items === []) {
+                continue;
+            }
+            $menu[] = [
+                'id'          => $catId,
+                'name'        => (string) $category['name'],
+                'description' => (string) ($category['description'] ?? ''),
+                'products'    => $items,
+            ];
+        }
+
+        return $menu;
     }
 
     /**

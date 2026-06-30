@@ -76,6 +76,18 @@ return [
     'home.upcoming.empty'   => ['fr' => 'Aucun événement annoncé pour le moment. Revenez bientôt !', 'en' => 'No events announced yet. Check back soon!', 'de' => 'Noch keine Veranstaltungen angekündigt. Schau bald wieder vorbei!', 'es' => 'Ningún evento anunciado por ahora. ¡Vuelve pronto!', 'zh' => '暂无公布的活动。敬请期待!', 'ja' => 'まだ告知されたイベントはありません。また来てください!', 'pl' => 'Brak ogłoszonych wydarzeń. Wracaj wkrótce!', 'ru' => 'Пока нет объявленных мероприятий. Заходите позже!', 'ms' => 'Tiada acara diumumkan buat masa ini. Sila datang semula nanti!'],
     'home.upcoming.more'    => ['fr' => 'Tout voir →', 'en' => 'See all →', 'de' => 'Alle ansehen →', 'es' => 'Ver todo →', 'zh' => '查看全部 →', 'ja' => 'すべて見る →', 'pl' => 'Zobacz wszystko →', 'ru' => 'Смотреть всё →', 'ms' => 'Lihat semua →'],
 
+    /* Accueil — Notre carte (cafétéria) */
+    'home.menu.eyebrow'     => ['fr' => 'Notre carte', 'en' => 'Our menu', 'de' => 'Unsere Karte', 'es' => 'Nuestra carta', 'zh' => '我们的菜单', 'ja' => 'メニュー', 'pl' => 'Nasze menu', 'ru' => 'Наше меню', 'ms' => 'Menu kami'],
+    'home.menu.title'       => ['fr' => 'Ce qu\'on vend à la cafétéria', 'en' => 'What we sell at the cafeteria', 'de' => 'Was es in der Cafeteria gibt', 'es' => 'Lo que vendemos en la cafetería', 'zh' => '咖啡馆售卖商品', 'ja' => 'カフェテリアの商品', 'pl' => 'Co sprzedajemy w kafeterii', 'ru' => 'Что продаётся в кафетерии', 'ms' => 'Barangan di kafeteria'],
+    'home.menu.subtitle'    => ['fr' => 'Vente au comptoir — paiement par carte SumUp ou espèces.', 'en' => 'Counter sales — payment by SumUp card or cash.', 'de' => 'Thekenverkauf — Zahlung per SumUp-Karte oder bar.', 'es' => 'Venta en el mostrador — pago con tarjeta SumUp o en efectivo.', 'zh' => '柜台销售 — 支持SumUp刷卡或现金支付。', 'ja' => 'カウンター販売 — SumUpカードまたは現金で支払い。', 'pl' => 'Sprzedaż na ladzie — płatność kartą SumUp lub gotówką.', 'ru' => 'Продажа за стойкой — оплата картой SumUp или наличными.', 'ms' => 'Jualan di kaunter — bayaran kad SumUp atau tunai'],
+    'home.menu.tab.all'     => ['fr' => 'Tout', 'en' => 'All', 'de' => 'Alle', 'es' => 'Todo', 'zh' => '全部', 'ja' => 'すべて', 'pl' => 'Wszystko', 'ru' => 'Всё', 'ms' => 'Semua'],
+    'home.menu.empty'       => ['fr' => 'Menu à venir.', 'en' => 'Menu coming soon.', 'de' => 'Karte folgt.', 'es' => 'Carta próximamente.', 'zh' => '菜单即将上线。', 'ja' => 'メニューは近日公開。', 'pl' => 'Menu wkrótce.', 'ru' => 'Меню скоро.', 'ms' => 'Menu akan datang.'],
+
+    /* Accueil — Promos & ventes spéciales */
+    'home.promos.eyebrow'   => ['fr' => 'Bonnes affaires', 'en' => 'Deals', 'de' => 'Schnäppchen', 'es' => 'Ofertas', 'zh' => '优惠', 'ja' => 'お得', 'pl' => 'Okazje', 'ru' => 'Выгоды', 'ms' => 'Tawaran'],
+    'home.promos.title'     => ['fr' => 'Promos & ventes spéciales', 'en' => 'Promos & special sales', 'de' => 'Aktionen & Sonderverkäufe', 'es' => 'Promos y ventas especiales', 'zh' => '促销与特卖', 'ja' => 'プロモ＆特別セール', 'pl' => 'Promocje i wyprzedaże', 'ru' => 'Акции и распродажи', 'ms' => 'Promosi & jualan istimewa'],
+    'home.promos.empty'     => ['fr' => 'Pas de promo en ce moment. Revenez bientôt !', 'en' => 'No promos right now. Check back soon!', 'de' => 'Aktuell keine Aktionen. Schau bald wieder vorbei!', 'es' => 'Sin promociones ahora mismo. ¡Vuelve pronto!', 'zh' => '暂无优惠。敬请期待！', 'ja' => '現在プロモはありません。また来てください！', 'pl' => 'Brak promocji. Wracaj wkrótce!', 'ru' => 'Сейчас нет акций. Заходите позже!', 'ms' => 'Tiada promosi sekarang. Sila datang semula nanti!'],
+
     /* ----------------------------------------------------------------- */
     /*  Événements (liste)                                               */
     /* ----------------------------------------------------------------- */

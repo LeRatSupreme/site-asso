@@ -443,3 +443,158 @@
     padding: 0 1.5rem;
 }
 
+/* ----------------------------- Notre carte (menu cafétéria) ----------------------------- */
+.menu-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1.75rem;
+}
+.menu-tab {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    padding: 0.5rem 1.1rem;
+    border-radius: 999px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s, background 0.15s, transform 0.1s;
+}
+.menu-tab:hover {
+    border-color: var(--primary);
+    color: var(--foreground);
+}
+.menu-tab:active { transform: scale(0.96); }
+.menu-tab.is-active {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: var(--primary-foreground);
+}
+
+.menu-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 0.9rem;
+}
+.menu-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    gap: 0.4rem;
+    padding: 1.1rem 0.85rem;
+    transition: transform 0.15s ease, border-color 0.15s ease;
+}
+.menu-item:hover {
+    transform: translateY(-3px);
+    border-color: var(--primary);
+}
+.menu-item-emoji {
+    font-size: 1.9rem;
+    line-height: 1;
+}
+.menu-item-name {
+    font-weight: 700;
+    color: #fff;
+    font-size: 0.95rem;
+}
+[data-theme="light"] .menu-item-name { color: var(--foreground); }
+.menu-item-price {
+    font-weight: 800;
+    color: var(--primary);
+    font-size: 1.05rem;
+}
+
+.menu-empty-results {
+    text-align: center;
+    margin-top: 1rem;
+}
+
+/* ----------------------------- Promos & ventes spéciales ----------------------------- */
+.promo-grid { margin-top: 0.5rem; }
+
+.promo-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 1.5rem;
+    overflow: hidden;
+}
+.promo-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(120% 80% at 100% 0%, rgba(72, 189, 211, 0.12), transparent 60%);
+    pointer-events: none;
+}
+.promo-badge {
+    align-self: flex-start;
+    background: linear-gradient(135deg, #ff5a5f, #ff8a3d);
+    color: #fff;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    padding: 0.25rem 0.7rem;
+    border-radius: 999px;
+    position: relative;
+    z-index: 1;
+}
+.promo-title {
+    margin: 0;
+    font-size: 1.15rem;
+    color: #fff;
+    position: relative;
+    z-index: 1;
+}
+[data-theme="light"] .promo-title { color: var(--foreground); }
+.promo-desc {
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.92rem;
+    position: relative;
+    z-index: 1;
+}
+.promo-prices {
+    margin-top: auto;
+    display: flex;
+    align-items: baseline;
+    gap: 0.75rem;
+    position: relative;
+    z-index: 1;
+}
+.promo-old {
+    color: var(--muted);
+    text-decoration: line-through;
+    font-size: 0.95rem;
+}
+.promo-new {
+    color: var(--primary);
+    font-weight: 900;
+    font-size: 1.5rem;
+}
+
+.promo-empty {
+    text-align: center;
+    padding: 3rem 1.5rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.75rem;
+    max-width: 520px;
+    margin: 0 auto;
+}
+.promo-empty-icon {
+    font-size: 3rem;
+    line-height: 1;
+}
+.promo-empty p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 1.05rem;
+}
+
+
