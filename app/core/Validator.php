@@ -19,7 +19,11 @@ final class Validator
     /**
      * Valide les données d'inscription.
      *
-     * @param array{prenom?:string,nom?:string,email?:string,password?:string,password_confirmation?:string} $data
+     * Le mot de passe n'est plus saisi dans le formulaire : il est généré
+     * aléatoirement et envoyé par e-mail. Seuls l'identité et l'e-mail sont
+     * contrôlés ici.
+     *
+     * @param array{prenom?:string,nom?:string,email?:string} $data
      * @return list<string> Messages d'erreur (vide si tout est valide).
      */
     public static function registration(array $data): array
@@ -29,8 +33,6 @@ final class Validator
         $prenom = trim((string) ($data['prenom'] ?? ''));
         $nom = trim((string) ($data['nom'] ?? ''));
         $email = trim((string) ($data['email'] ?? ''));
-        $password = (string) ($data['password'] ?? '');
-        $confirmation = (string) ($data['password_confirmation'] ?? '');
 
         if ($prenom === '') {
             $errors[] = 'Le prénom est obligatoire.';
@@ -43,16 +45,6 @@ final class Validator
             $errors[] = 'L\'adresse e-mail est obligatoire.';
         } elseif (!self::isValidEmail($email)) {
             $errors[] = 'L\'adresse e-mail n\'est pas valide.';
-        }
-
-        if (mb_strlen($password) < self::PASSWORD_MIN) {
-            $errors[] = sprintf('Le mot de passe doit contenir au moins %d caractères.', self::PASSWORD_MIN);
-        } elseif (!self::isStrongEnough($password)) {
-            $errors[] = 'Le mot de passe doit contenir au moins une lettre et un chiffre.';
-        }
-
-        if ($password !== $confirmation) {
-            $errors[] = 'La confirmation du mot de passe ne correspond pas.';
         }
 
         return $errors;

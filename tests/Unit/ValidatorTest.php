@@ -15,11 +15,9 @@ final class ValidatorTest extends TestCase
     public function test_inscription_valide_renvoie_aucune_erreur(): void
     {
         $errors = Validator::registration([
-            'prenom'                => 'Alex',
-            'nom'                   => 'Martin',
-            'email'                 => 'alex@exemple.fr',
-            'password'              => 'Secret123',
-            'password_confirmation' => 'Secret123',
+            'prenom' => 'Alex',
+            'nom'    => 'Martin',
+            'email'  => 'alex@exemple.fr',
         ]);
 
         self::assertSame([], $errors);
@@ -28,11 +26,9 @@ final class ValidatorTest extends TestCase
     public function test_prenom_ou_nom_manquant_est_rejete(): void
     {
         $errors = Validator::registration([
-            'prenom'                => '',
-            'nom'                   => '',
-            'email'                 => 'a@b.fr',
-            'password'              => 'Secret123',
-            'password_confirmation' => 'Secret123',
+            'prenom' => '',
+            'nom'    => '',
+            'email'  => 'a@b.fr',
         ]);
 
         self::assertTrue(in_array('Le prénom est obligatoire.', $errors, true));
@@ -42,54 +38,23 @@ final class ValidatorTest extends TestCase
     public function test_email_invalide_est_rejete(): void
     {
         $errors = Validator::registration([
-            'prenom'                => 'Alex',
-            'nom'                   => 'Martin',
-            'email'                 => 'pas-un-email',
-            'password'              => 'Secret123',
-            'password_confirmation' => 'Secret123',
+            'prenom' => 'Alex',
+            'nom'    => 'Martin',
+            'email'  => 'pas-un-email',
         ]);
 
         self::assertTrue(in_array('L\'adresse e-mail n\'est pas valide.', $errors, true));
     }
 
-    public function test_mot_de_passe_trop_court_est_rejete(): void
+    public function test_email_manquant_est_rejete(): void
     {
         $errors = Validator::registration([
-            'prenom'                => 'Alex',
-            'nom'                   => 'Martin',
-            'email'                 => 'a@b.fr',
-            'password'              => 'Ab1',
-            'password_confirmation' => 'Ab1',
+            'prenom' => 'Alex',
+            'nom'    => 'Martin',
+            'email'  => '',
         ]);
 
-        self::assertSame(1, count($errors));
-        self::assertStringContainsString('8 caractères', $errors[0]);
-    }
-
-    public function test_mot_de_passe_sans_chiffre_est_rejete(): void
-    {
-        $errors = Validator::registration([
-            'prenom'                => 'Alex',
-            'nom'                   => 'Martin',
-            'email'                 => 'a@b.fr',
-            'password'              => 'MotDePasseLong',
-            'password_confirmation' => 'MotDePasseLong',
-        ]);
-
-        self::assertTrue(in_array('Le mot de passe doit contenir au moins une lettre et un chiffre.', $errors, true));
-    }
-
-    public function test_confirmation_differente_est_rejetee(): void
-    {
-        $errors = Validator::registration([
-            'prenom'                => 'Alex',
-            'nom'                   => 'Martin',
-            'email'                 => 'a@b.fr',
-            'password'              => 'Secret123',
-            'password_confirmation' => 'Autre456',
-        ]);
-
-        self::assertTrue(in_array('La confirmation du mot de passe ne correspond pas.', $errors, true));
+        self::assertTrue(in_array('L\'adresse e-mail est obligatoire.', $errors, true));
     }
 
     public function test_is_valid_email(): void

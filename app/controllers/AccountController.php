@@ -6,6 +6,7 @@ namespace App\Controllers;
 
 use App\Core\Auth;
 use App\Core\Controller;
+use App\Core\Mailer;
 use App\Core\Middleware;
 use App\Models\Consent;
 use App\Models\User;
@@ -80,7 +81,8 @@ final class AccountController extends Controller
     }
 
     /**
-     * Traitement de la suppression : anonymise le compte puis déconnecte.
+     * Traitement de la suppression : notifie l'utilisateur puis anonymise le
+     * compte et déconnecte.
      */
     public function delete(): void
     {
@@ -89,6 +91,10 @@ final class AccountController extends Controller
         $user = Auth::user();
         $userId = (string) $user['id'];
 
+        // Capture des données avant anonymisation (pour la notification).
+        $email = (string) ($user['email'] ?? '');
+        $prenom = (string) ($user['prenom'] ?? '');
+
         // Journalisation du retrait de consentement (avant anonymisation).
         Consent::log('account_deletion', true, 'cgu-v1', [
             'user_id'    => $userId,
@@ -96,6 +102,18 @@ final class AccountController extends Controller
             'ip_address' => client_ip(),
             'user_agent' => user_agent(),
         ]);
+
+        // E-mail de confirmation RGPD (envoyé AVANT l'anonymisation, car
+        // l'adresse réelle sera détruite juste après). Non bloquant.
+        if ($email !== '') {
+            try {
+                Mailer::send('account_deleted', $email, 'Votre compte a été supprimé — AEIC', [
+                    'prenom' => $prenom,
+                ]);
+            } catch (\Throwable) {
+                // L'échec d'envoi ne doit pas empêcher la suppression.
+            }
+        }
 
         // Anonymisation (commandes conservées mais déliées de l'identité).
         User::anonymize($userId);
