@@ -37,6 +37,60 @@ final class AccountController extends Controller
     }
 
     /**
+     * Changement de mot de passe depuis l'espace membre.
+     */
+    public function changePassword(): void
+    {
+        Middleware::requireLogin();
+
+        $user = Auth::user();
+        $userId = (string) $user['id'];
+
+        $oldPassword = (string) ($_POST['old_password'] ?? '');
+        $newPassword = (string) ($_POST['new_password'] ?? '');
+        $confirmPassword = (string) ($_POST['new_password_confirmation'] ?? '');
+
+        // Vérifier l'ancien mot de passe.
+        if (!password_verify($oldPassword, (string) ($user['password'] ?? ''))) {
+            $this->setFlash('error', 'Votre mot de passe actuel est incorrect.');
+            redirect(url('/account/privacy'));
+        }
+
+        // Valider le nouveau mot de passe.
+        if (strlen($newPassword) < 8) {
+            $this->setFlash('error', 'Le nouveau mot de passe doit faire au moins 8 caractères.');
+            redirect(url('/account/privacy'));
+        }
+        if (!preg_match('/[a-zA-Z]/', $newPassword) || !preg_match('/[0-9]/', $newPassword)) {
+            $this->setFlash('error', 'Le mot de passe doit contenir au moins une lettre et un chiffre.');
+            redirect(url('/account/privacy'));
+        }
+        if ($newPassword !== $confirmPassword) {
+            $this->setFlash('error', 'La confirmation ne correspond pas au nouveau mot de passe.');
+            redirect(url('/account/privacy'));
+        }
+
+        // Mettre à jour.
+        User::changePassword($userId, $newPassword);
+
+        // Envoyer l'email de confirmation.
+        $email = (string) ($user['email'] ?? '');
+        $prenom = (string) ($user['prenom'] ?? '');
+        if ($email !== '') {
+            try {
+                Mailer::send('password_changed', $email, 'Votre mot de passe a été modifié — AEIC', [
+                    'prenom' => $prenom,
+                ]);
+            } catch (\Throwable) {
+                // Non bloquant.
+            }
+        }
+
+        $this->setFlash('success', 'Votre mot de passe a été modifié. Un email de confirmation vous a été envoyé.');
+        redirect(url('/account/privacy'));
+    }
+
+    /**
      * Export JSON de toutes les données de l'utilisateur connecté (portabilité).
      */
     public function export(): void

@@ -76,6 +76,7 @@ function aeic_register_routes(Router $router): void
 
     // Espace compte (RGPD).
     $router->get('/account/privacy', [AccountController::class, 'privacy']);
+    $router->post('/account/password', [AccountController::class, 'changePassword']);
     $router->get('/account/export', [AccountController::class, 'export']);
     $router->get('/account/delete', [AccountController::class, 'deleteConfirm']);
     $router->post('/account/delete', [AccountController::class, 'delete']);
