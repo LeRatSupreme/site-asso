@@ -186,11 +186,16 @@ function reorder_qty(float $v): string {
     }
 
     // Recalcul live : à commander = max(0, besoin − stock saisi).
+    // Entrée bloquée pour ne pas soumettre le formulaire (et donc perdre le
+    // filtre/trier en cours) ; la sauvegarde se fait via le bouton Enregistrer.
     rows.forEach(function (tr) {
         var input = tr.querySelector('.stock-input');
         if (!input) return;
         var need = parseInt(tr.getAttribute('data-need'), 10) || 0;
         var cell = tr.querySelector('.to-order-cell');
+        input.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+        });
         input.addEventListener('input', function () {
             var stock = parseInt(input.value, 10);
             stock = isNaN(stock) ? 0 : Math.max(0, stock);
