@@ -121,9 +121,15 @@ $allPromoEmpty = empty($promotions);
                         <?php
                         $name  = (string) ($product['name'] ?? '');
                         $emoji = product_emoji($name);
+                        $img   = trim((string) ($product['image'] ?? ''));
+                        $imgUrl = $img !== '' ? (is_absolute_url($img) ? $img : asset(ltrim($img, '/'))) : '';
                         ?>
                         <article class="menu-item surface glass" data-cat="<?= e((string) $cat['id']) ?>">
-                            <span class="menu-item-emoji" aria-hidden="true"><?= e($emoji) ?></span>
+                            <?php if ($imgUrl !== ''): ?>
+                                <img src="<?= e($imgUrl) ?>" alt="<?= e($name) ?>" class="menu-item-img" loading="lazy">
+                            <?php else: ?>
+                                <span class="menu-item-emoji" aria-hidden="true"><?= e($emoji) ?></span>
+                            <?php endif; ?>
                             <span class="menu-item-name"><?= e($name) ?></span>
                             <span class="menu-item-price"><?= e(formatPrice($product['price'] ?? 0)) ?></span>
                         </article>
