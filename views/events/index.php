@@ -88,7 +88,7 @@ function catIcon(string $cat): string {
                     <div class="event-cat-header">
                         <h2 class="event-cat-title">
                             <span class="event-cat-icon"><?= catIcon($catName) ?></span>
-                            <?= e($catName) ?>
+                            <?= e(t_category($catName)) ?>
                             <span class="event-cat-count"><?= count($events) ?></span>
                         </h2>
                     </div>
@@ -130,10 +130,10 @@ function catIcon(string $cat): string {
 
         <?php foreach ($groupedPast as $catName => $events): ?>
             <div class="event-cat-section event-cat-past">
-                <div class="event-cat-header">
-                    <h3 class="event-cat-title">
-                        <span class="event-cat-icon"><?= catIcon($catName) ?></span>
-                        <?= e($catName) ?>
+                    <div class="event-cat-header">
+                        <h3 class="event-cat-title">
+                            <span class="event-cat-icon"><?= catIcon($catName) ?></span>
+                            <?= e(t_category($catName)) ?>
                         <span class="event-cat-count"><?= count($events) ?></span>
                     </h3>
                 </div>

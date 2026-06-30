@@ -53,7 +53,7 @@ if ($image !== '') {
         <div class="event-card-meta-top">
             <p class="card-date"><?= e(formatDateTime($dateRaw) ?: formatDate($dateRaw)) ?></p>
             <?php if ($category !== ''): ?>
-                <span class="badge badge-info event-cat-badge"><?= e($category) ?></span>
+                <span class="badge badge-info event-cat-badge"><?= e(t_category($category)) ?></span>
             <?php endif; ?>
         </div>
         <h3 class="card-title">

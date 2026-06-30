@@ -419,3 +419,40 @@ function tt(string $key, array $vars, ?string $fallback = null): string
 
     return strtr($text, $replacements);
 }
+
+/**
+ * Traduit une catégorie d'événement (stockée en français en base).
+ * Si la catégorie n'a pas de traduction connue, retourne la valeur brute.
+ */
+function t_category(string $category): string
+{
+    $cat = strtolower(trim($category));
+    if ($cat === '') {
+        return '';
+    }
+
+    // Mapping vers les clés de traduction.
+    $map = [
+        'soirée'         => 'cat.soiree',
+        'soiree'         => 'cat.soiree',
+        'afterwork'      => 'cat.afterwork',
+        'barbecue'       => 'cat.barbecue',
+        'tournoi / lan'  => 'cat.tournoi',
+        'tournoi'        => 'cat.tournoi',
+        'conférence'     => 'cat.conference',
+        'conference'     => 'cat.conference',
+        'sortie'         => 'cat.sortie',
+        'atelier'        => 'cat.atelier',
+        'nuit de l\'info'=> 'cat.nuitinfo',
+        'autre'          => 'cat.autre',
+    ];
+
+    // Recherche par correspondance partielle.
+    foreach ($map as $needle => $key) {
+        if ($cat === $needle || str_contains($cat, $needle)) {
+            return t($key);
+        }
+    }
+
+    return $category;
+}
