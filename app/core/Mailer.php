@@ -308,12 +308,35 @@ final class Mailer
         $data['siteName'] = $data['siteName'] ?? Setting::get('site_name', 'AEIC');
         $data['siteUrl']  = $data['siteUrl'] ?? APP_URL;
 
+        // Pied de page commun à tous les emails.
+        $footerHtml = '<tr><td style="padding:1rem 2rem 2rem;border-top:1px solid rgba(255,255,255,0.08);">'
+            . '<p style="font-size:0.8rem;color:#6b7280;margin:0 0 0.3rem;">&copy; ' . date('Y') . ' ' . e($data['siteName'])
+            . ' — 100 % étudiant.</p>'
+            . '<p style="font-size:0.75rem;color:#6b7280;margin:0;">💻 Développé par <strong style="color:#48bdd3;">Remond Adrien</strong></p>'
+            . '</td></tr>';
+        $footerTxt = "\n-- \n© " . date('Y') . " " . $data['siteName'] . " — 100 % étudiant.\n"
+            . "Développé par Remond Adrien\n";
+
         extract($data, EXTR_SKIP);
 
         ob_start();
         require $path;
+        $body = (string) ob_get_clean();
 
-        return (string) ob_get_clean();
+        // Insère le footer avant la dernière balise de fermeture du template.
+        if ($html) {
+            $body = str_replace('<!--EMAIL_FOOTER-->', $footerHtml, $body);
+            // Si pas de marqueur, on l'ajoute avant </table> ou </body>.
+            if (strpos($body, 'Développé par') === false) {
+                if (preg_match('#</table>\s*</body>#', $body)) {
+                    $body = preg_replace('#(</table>)(\s*</body>)#', "$1\n$footerHtml\n$2", $body);
+                }
+            }
+        } else {
+            $body = rtrim($body) . "\n" . $footerTxt;
+        }
+
+        return $body;
     }
 
     private static function encodeName(string $name): string
