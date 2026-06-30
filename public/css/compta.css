@@ -170,6 +170,30 @@
 .reorder-table th, .reorder-table td { vertical-align: middle; }
 .reorder-table tfoot th { padding-top: 1rem; border-top: 2px solid var(--border); }
 .reorder-table .num { text-align: right; }
+
+.stock-input {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--foreground);
+    padding: 0.5rem 0.6rem;
+    font-size: 0.98rem;
+    font-weight: 700;
+    width: 5.5rem;
+    text-align: center;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+.stock-input:hover { border-color: rgba(72, 189, 211, 0.4); }
+.stock-input:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(72, 189, 211, 0.18);
+    background: rgba(72, 189, 211, 0.06);
+}
+.stock-input::placeholder { color: var(--muted); font-weight: 400; }
+.stock-input::-webkit-outer-spin-button,
+.stock-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.stock-input { -moz-appearance: textfield; appearance: textfield; }
 .alert-warning {
     background: rgba(245, 158, 11, 0.14);
     border: 1px solid rgba(245, 158, 11, 0.4);
