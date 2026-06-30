@@ -577,16 +577,29 @@
    ========================================================= */
 .cat-total {
     display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 1.5rem;
-    padding: 1.5rem 1.75rem;
-    margin-bottom: 2rem;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    gap: 0;
+    padding: 1.1rem 0.5rem;
+    margin-bottom: 1.5rem;
 }
-.cat-total-item { display: flex; flex-direction: column; gap: 0.25rem; }
-.cat-total-label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 700; }
-.cat-total-value { font-size: 1.5rem; font-weight: 800; }
-.cat-total-sep { width: 1px; align-self: stretch; background: var(--border); }
+.cat-total-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.2rem;
+    text-align: center;
+    padding: 0 0.5rem;
+}
+.cat-total-label { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); font-weight: 700; }
+.cat-total-value { font-size: 1.35rem; font-weight: 800; line-height: 1.1; }
+.cat-total-sep { width: 1px; align-self: stretch; background: var(--border); flex: 0 0 auto; }
+@media (max-width: 640px) {
+    .cat-total { flex-wrap: wrap; }
+    .cat-total-item { flex: 1 1 40%; }
+    .cat-total-sep { display: none; }
+}
 
 .cat-grid {
     display: grid;
