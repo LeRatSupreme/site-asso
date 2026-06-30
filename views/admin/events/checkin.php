@@ -76,11 +76,13 @@ $slug    = (string) ($event['slug'] ?? '');
             log.prepend(li);
         }
 
-        input.addEventListener('keydown', function (e) {
-            if (e.key !== 'Enter') { return; }
-            e.preventDefault();
-            var token = input.value.trim();
+        function processToken(token) {
             if (token === '') { return; }
+            // Si c'est une URL complète (QR scanné), extraire le token.
+            if (token.indexOf('token=') !== -1) {
+                var match = token.match(/token=([a-zA-Z0-9]+)/);
+                if (match) { token = match[1]; }
+            }
 
             fetch(endpoint, {
                 method: 'POST',
@@ -106,6 +108,18 @@ $slug    = (string) ($event['slug'] ?? '');
 
             input.value = '';
             input.focus();
+        }
+
+        input.addEventListener('keydown', function (e) {
+            if (e.key !== 'Enter') { return; }
+            e.preventDefault();
+            processToken(input.value.trim());
         });
+
+        // Auto-check-in si un token est dans l'URL (?token=XXX).
+        var urlToken = new URLSearchParams(window.location.search).get('token');
+        if (urlToken) {
+            processToken(urlToken);
+        }
     })();
 </script>
