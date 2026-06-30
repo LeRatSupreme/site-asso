@@ -138,6 +138,47 @@ final class Mailer
     }
 
     /**
+     * Envoie via l'API REST Brevo (évite les problèmes d'authentification SMTP).
+     * Simplement un POST JSON avec la clé API.
+     */
+    private static function sendViaBrevoApi(string $apiKey, array $cfg, string $to, string $subject, string $text, string $html): bool
+    {
+        $payload = json_encode([
+            'sender'     => ['name' => $cfg['fromName'], 'email' => $cfg['from']],
+            'to'         => [['email' => $to]],
+            'subject'    => $subject,
+            'htmlContent' => $html,
+            'textContent' => $text,
+        ], JSON_UNESCAPED_UNICODE);
+
+        $ch = curl_init('https://api.brevo.com/v3/smtp/email');
+        curl_setopt_array($ch, [
+            CURLOPT_POST           => true,
+            CURLOPT_POSTFIELDS     => $payload,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT        => 15,
+            CURLOPT_HTTPHEADER     => [
+                'accept: application/json',
+                'api-key: ' . $apiKey,
+                'content-type: application/json',
+            ],
+        ]);
+
+        $response = curl_exec($ch);
+        $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $error = curl_error($ch);
+        curl_close($ch);
+
+        if ($httpCode >= 200 && $httpCode < 300) {
+            return true;
+        }
+
+        self::$log[] = 'brevo-api-error: HTTP ' . $httpCode . ' — ' . ($error ?: substr((string) $response, 0, 200));
+
+        return false;
+    }
+
+    /**
      * Envoie via PHPMailer (librairie standard, gestion robuste de
      * STARTTLS, AUTH LOGIN/PLAIN, encoding).
      */
@@ -206,6 +247,15 @@ final class Mailer
         }
 
         if ($cfg['host'] !== '') {
+            // Si on a une clé API Brevo, on utilise l'API (plus fiable que SMTP).
+            $apiKey = env('BREVO_API_KEY', Setting::get('brevo_api_key', ''));
+            if ($apiKey !== '') {
+                $ok = self::sendViaBrevoApi($apiKey, $cfg, $to, $subject, $text, $html);
+                self::$log[] = 'brevo-api: ' . $to . ' / ' . $subject;
+                return $ok;
+            }
+
+            // Sinon, SMTP via PHPMailer.
             $ok = self::sendViaPhpMailer($cfg, $to, $subject, $text, $html);
             self::$log[] = 'smtp: ' . $to . ' / ' . $subject;
 
