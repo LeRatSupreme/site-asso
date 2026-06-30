@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Controllers\Admin;
 
+use App\Core\Auth;
 use App\Models\AuditLog;
 use App\Models\Event;
 use App\Models\Membership;
