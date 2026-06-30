@@ -244,6 +244,7 @@ $twitterHandle = Setting::get('twitter_handle', '');
             <div class="footer-bottom">
                 <span class="footer-tag">🎓 <?= e(t('footer.tag')) ?></span>
                 <span class="footer-copy">© <?= e($currentYear) ?> <?= e($siteName) ?> · <?= e(t('footer.copy')) ?></span>
+                <span class="footer-credit">💻 Développé par <strong>Remond Adrien</strong></span>
             </div>
         </div>
     </footer>

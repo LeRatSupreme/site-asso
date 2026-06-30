@@ -912,6 +912,8 @@ ul, ol { list-style: none; }
     border: 1px solid rgba(72,189,211,0.2);
 }
 .footer-copy { color: var(--muted); font-size: 0.8rem; }
+.footer-credit { font-size: 0.78rem; color: var(--muted); }
+.footer-credit strong { color: var(--primary); font-weight: 700; }
 
 @media (max-width: 700px) {
     .footer-brand { flex-direction: column; text-align: center; }
