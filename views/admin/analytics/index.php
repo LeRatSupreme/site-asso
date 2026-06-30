@@ -199,8 +199,18 @@ $iconSvg = static function (string $name): string {
     <!-- ============================================================ -->
     <div class="card surface glass chart-card heatmap-card">
         <div class="chart-head">
-            <h2 class="chart-title">Heatmap des ventes (jour × heure)</h2>
-            <span class="chart-sub">Intensité du CA</span>
+            <div>
+                <h2 class="chart-title">Heatmap des ventes (jour × heure)</h2>
+                <span class="chart-sub" id="heatmap-sub">Intensité du CA — <?= e($filters['category'] === 'all' ? 'Toutes catégories' : $filters['category']) ?> · <?= e($filters['payment'] === 'all' ? 'Tous paiements' : $filters['payment']) ?></span>
+            </div>
+            <div class="hm-filters">
+                <select id="hm-cat" class="af-select" onchange="document.getElementById('analytics-filters').submit()">
+                    <option value="">🔄 Toutes catégories</option>
+                    <option value="Boisson">💧 Boisson</option>
+                    <option value="Nourriture">🍫 Nourriture</option>
+                    <option value="Spécial">⭐ Spécial</option>
+                </select>
+            </div>
         </div>
         <div class="heatmap-wrap">
         <div class="heatmap" id="heatmap"></div>
@@ -271,6 +281,22 @@ $iconSvg = static function (string $name): string {
 <script>
 (function () {
     var data = <?= $json ?>;
+
+    // ---------- Heatmap filter sync ----------
+    var hmCat = document.getElementById('hm-cat');
+    if (hmCat) {
+        // Sync valeur actuelle.
+        var curCat = '<?= e($filters['category']) ?>';
+        if (curCat !== 'all') { hmCat.value = curCat; }
+        hmCat.addEventListener('change', function () {
+            // Met à jour le select catégorie global et soumet le form.
+            var globalCat = document.querySelector('select[name="category"]');
+            if (globalCat) {
+                globalCat.value = hmCat.value || 'all';
+            }
+            document.getElementById('analytics-filters').submit();
+        });
+    }
 
     // ---------- Affichage du sélecteur de dates custom + pills ----------
     var customBox = document.getElementById('filter-custom');
@@ -708,6 +734,8 @@ $iconSvg = static function (string $name): string {
 
 /* ---- Heatmap ---- */
 .heatmap-card { overflow-x: auto; }
+.hm-filters { display: flex; gap: 0.5rem; align-items: center; }
+.hm-filters .af-select { font-size: 0.82rem; padding: 0.35rem 0.6rem; }
 .heatmap-wrap { display: flex; flex-direction: column; gap: 0.8rem; }
 .heatmap {
     display: inline-grid;
