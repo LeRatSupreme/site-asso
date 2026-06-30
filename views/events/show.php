@@ -79,6 +79,18 @@ $priceLabel = ($price === null || (float) $price <= 0)
                 <?php if ($excerpt !== ''): ?>
                     <p class="card-excerpt"><?= e($excerpt) ?></p>
                 <?php endif; ?>
+
+                <div class="event-ical">
+                    <button type="button" class="btn btn-outline btn-sm"
+                            id="ical-export"
+                            data-title="<?= e($title) ?>"
+                            data-date="<?= e($dateRaw) ?>"
+                            data-end="<?= e($endDateRaw) ?>"
+                            data-location="<?= e($location) ?>"
+                            data-description="<?= e(strip_tags($description)) ?>">
+                        📅 Ajouter au calendrier
+                    </button>
+                </div>
             </article>
 
             <?php if ($description !== ''): ?>
@@ -202,3 +214,65 @@ $priceLabel = ($price === null || (float) $price <= 0)
         </aside>
     </div>
 </section>
+
+<script>
+    (function () {
+        function toIcsDate(value) {
+            // value = "YYYY-MM-DD HH:MM:SS" (heure locale serveur) -> UTC iCal.
+            var s = String(value || '').replace(/[-:]/g, ' ').replace(' ', 'T');
+            var d = new Date(s);
+            if (isNaN(d.getTime())) { return ''; }
+            function p(n) { return String(n).padStart(2, '0'); }
+            return d.getUTCFullYear() + p(d.getUTCMonth() + 1) + p(d.getUTCDate())
+                + 'T' + p(d.getUTCHours()) + p(d.getUTCMinutes()) + p(d.getUTCSeconds()) + 'Z';
+        }
+
+        function escapeIcs(text) {
+            return String(text || '')
+                .replace(/\\/g, '\\\\')
+                .replace(/;/g, '\\;')
+                .replace(/,/g, '\\,')
+                .replace(/\r?\n/g, '\\n');
+        }
+
+        function downloadIcs(title, date, end, location, description) {
+            var dtStart = toIcsDate(date);
+            if (!dtStart) { return; }
+            var lines = [
+                'BEGIN:VCALENDAR',
+                'VERSION:2.0',
+                'PRODID:-//AEIC//Event//FR',
+                'BEGIN:VEVENT',
+                'UID:' + Date.now() + '@aeic',
+                'DTSTAMP:' + toIcsDate(new Date().toISOString()),
+                'DTSTART:' + dtStart
+            ];
+            if (end) { lines.push('DTEND:' + toIcsDate(end)); }
+            lines.push('SUMMARY:' + escapeIcs(title));
+            if (location) { lines.push('LOCATION:' + escapeIcs(location)); }
+            if (description) { lines.push('DESCRIPTION:' + escapeIcs(description)); }
+            lines.push('END:VEVENT', 'END:VCALENDAR');
+
+            var blob = new Blob([lines.join('\r\n') + '\r\n'], { type: 'text/calendar;charset=utf-8' });
+            var a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = title.replace(/[^a-z0-9]/gi, '-') + '.ics';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        }
+
+        var btn = document.getElementById('ical-export');
+        if (btn) {
+            btn.addEventListener('click', function () {
+                downloadIcs(
+                    btn.getAttribute('data-title') || '',
+                    btn.getAttribute('data-date') || '',
+                    btn.getAttribute('data-end') || '',
+                    btn.getAttribute('data-location') || '',
+                    btn.getAttribute('data-description') || ''
+                );
+            });
+        }
+    })();
+</script>

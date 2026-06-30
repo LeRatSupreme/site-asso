@@ -36,6 +36,81 @@
     --header-h: 4.25rem;
 }
 
+/* ----------------------------- Thème clair ----------------------------- */
+[data-theme="light"] {
+    --background: #f5f7fb;
+    --card: #ffffff;
+    --foreground: #1a1d24;
+    --muted: #6b7280;
+    --primary: #08839a;
+    --primary-foreground: #ffffff;
+    --secondary: #6150aa;
+    --secondary-foreground: #ffffff;
+    --border: rgba(0, 0, 0, 0.08);
+    --border-strong: rgba(0, 0, 0, 0.14);
+    --input-bg: rgba(0, 0, 0, 0.03);
+
+    --accent-success: #16a34a;
+    --accent-warning: #d97706;
+    --accent-danger: #dc2626;
+}
+
+/* En thème clair, on adapte les fonds translucides et halos. */
+[data-theme="light"] body { color-scheme: light; }
+[data-theme="light"] .section-alt { background: rgba(0, 0, 0, 0.015); }
+[data-theme="light"] .surface,
+[data-theme="light"] .glass {
+    background: #ffffff;
+    border-color: var(--border);
+}
+[data-theme="light"] .panel-brand {
+    background: linear-gradient(150deg, rgba(97, 80, 170, 0.08), rgba(8, 131, 154, 0.05));
+    border-color: rgba(8, 131, 154, 0.24);
+}
+[data-theme="light"] .dot-grid {
+    background-image: radial-gradient(circle, rgba(8, 131, 154, 0.15) 1px, transparent 1px);
+}
+[data-theme="light"] .hero .halo-teal { background: radial-gradient(circle, rgba(8, 131, 154, 0.16), transparent 65%); }
+[data-theme="light"] .hero .halo-violet { background: radial-gradient(circle, rgba(97, 80, 170, 0.14), transparent 65%); }
+[data-theme="light"] .section-title,
+[data-theme="light"] .hero-title,
+[data-theme="light"] .page-title,
+[data-theme="light"] .card-title,
+[data-theme="light"] .stat-value,
+[data-theme="light"] .prose h1,
+[data-theme="light"] .prose h2,
+[data-theme="light"] .prose h3,
+[data-theme="light"] .dash-hello { color: #1a1d24; }
+[data-theme="light"] .site-header { background: rgba(245, 247, 251, 0.82); }
+[data-theme="light"] .nav-link:hover { background: rgba(0, 0, 0, 0.05); }
+[data-theme="light"] .nav-link.is-active { background: rgba(8, 131, 154, 0.12); }
+[data-theme="light"] .nav-bell-btn:hover,
+[data-theme="light"] .nav-search-result:hover,
+[data-theme="light"] .nav-bell-item a:hover,
+[data-theme="light"] .dash-link:hover { background: rgba(0, 0, 0, 0.05); }
+[data-theme="light"] .btn-ghost { background: rgba(0, 0, 0, 0.04); }
+[data-theme="light"] .btn-ghost:hover { background: rgba(0, 0, 0, 0.08); }
+[data-theme="light"] .badge-muted { background: rgba(0, 0, 0, 0.06); color: var(--muted); }
+[data-theme="light"] .badge-secondary { background: rgba(97, 80, 170, 0.12); color: #4a3d8a; }
+[data-theme="light"] .empty-state { background: rgba(0, 0, 0, 0.02); }
+[data-theme="light"] .prose code { background: rgba(0, 0, 0, 0.06); }
+[data-theme="light"] .search-overlay { background: rgba(245, 247, 251, 0.97); }
+[data-theme="light"] .site-footer {
+    background: linear-gradient(180deg, #ffffff 0%, #eef1f6 60%, #e6eaf2 100%);
+}
+[data-theme="light"] .footer-name {
+    background: linear-gradient(135deg, #1a1d24 0%, #08839a 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+[data-theme="light"] .table tbody tr:hover { background: rgba(0, 0, 0, 0.02); }
+[data-theme="light"] .flash-success { background: rgba(22, 163, 74, 0.12); }
+[data-theme="light"] .flash-error,
+[data-theme="light"] .flash-danger { background: rgba(220, 38, 38, 0.12); }
+[data-theme="light"] .flash-warning { background: rgba(217, 119, 6, 0.12); }
+[data-theme="light"] .flash-info { background: rgba(8, 131, 154, 0.12); }
+
 /* ----------------------------- Reset ----------------------------- */
 *, *::before, *::after { box-sizing: border-box; }
 

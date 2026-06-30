@@ -69,6 +69,18 @@ $twitterHandle = Setting::get('twitter_handle', '');
     <?php if (str_starts_with($currentPath ?? '', '/sondages')): ?>
         <link rel="stylesheet" href="<?= e(rootAssetVersioned('/css/polls.css')) ?>">
     <?php endif; ?>
+
+    <!-- Thème clair/sombre : appliqué avant le rendu pour éviter tout flash. -->
+    <script>
+        (function () {
+            try {
+                var t = localStorage.getItem('aeic-theme');
+                if (t === 'light' || t === 'dark') {
+                    document.documentElement.setAttribute('data-theme', t);
+                }
+            } catch (e) {}
+        })();
+    </script>
 </head>
 <body>
     <a class="skip-link" href="#contenu">Aller au contenu</a>
@@ -89,9 +101,16 @@ $twitterHandle = Setting::get('twitter_handle', '');
                 <a class="nav-link<?= $currentPath === '/presentation' ? ' is-active' : '' ?>" href="<?= e(url('/presentation')) ?>">L'association</a>
                 <a class="nav-link<?= $currentPath === '/team' ? ' is-active' : '' ?>" href="<?= e(url('/team')) ?>">Équipe</a>
                 <a class="nav-link<?= str_starts_with($currentPath, '/sondages') ? ' is-active' : '' ?>" href="<?= e(url('/sondages')) ?>">Sondages</a>
+                <a class="nav-link<?= str_starts_with($currentPath, '/galerie') ? ' is-active' : '' ?>" href="<?= e(url('/galerie')) ?>">Galerie</a>
             </nav>
 
             <div class="nav-actions">
+                <button type="button" class="nav-theme-btn" id="theme-toggle"
+                        aria-label="Basculer le thème clair/sombre" title="Thème clair / sombre">
+                    <span class="theme-icon-dark" aria-hidden="true">☀️</span>
+                    <span class="theme-icon-light" aria-hidden="true">🌙</span>
+                </button>
+
                 <?php if ($user !== null): ?>
                     <div class="nav-bell" id="nav-notif">
                         <button type="button"
@@ -137,6 +156,9 @@ $twitterHandle = Setting::get('twitter_handle', '');
             <a href="<?= e(url('/presentation')) ?>">L'association</a>
             <a href="<?= e(url('/team')) ?>">Équipe</a>
             <a href="<?= e(url('/sondages')) ?>">Sondages</a>
+            <a href="<?= e(url('/galerie')) ?>">Galerie</a>
+            <hr>
+            <button type="button" class="btn btn-ghost" id="theme-toggle-mobile">🌙 Thème</button>
             <hr>
             <?php if ($user !== null): ?>
                 <?php if (($user['role'] ?? '') === 'ADMIN' || ($user['role'] ?? '') === 'TRESORERIE'): ?>
@@ -171,6 +193,7 @@ $twitterHandle = Setting::get('twitter_handle', '');
                 <a href="<?= e(url('/presentation')) ?>">🏫 Association</a>
                 <a href="<?= e(url('/team')) ?>">👥 Équipe</a>
                 <a href="<?= e(url('/sondages')) ?>">📊 Sondages</a>
+                <a href="<?= e(url('/galerie')) ?>">📷 Galerie</a>
                 <a href="<?= e(url('/legal')) ?>">⚖️ Mentions légales</a>
                 <a href="<?= e(url('/privacy')) ?>">🔒 Confidentialité</a>
                 <a href="<?= e(url('/cgu')) ?>">📋 CGU</a>
@@ -193,6 +216,33 @@ $twitterHandle = Setting::get('twitter_handle', '');
                 var open = nav.classList.toggle('is-open');
                 btn.setAttribute('aria-expanded', open ? 'true' : 'false');
             });
+        })();
+
+        // Toggle thème clair / sombre (persistance localStorage).
+        (function () {
+            var STORAGE_KEY = 'aeic-theme';
+            var root = document.documentElement;
+
+            function current() {
+                return root.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+            }
+
+            function apply(theme) {
+                root.setAttribute('data-theme', theme);
+                try { localStorage.setItem(STORAGE_KEY, theme); } catch (e) {}
+                document.querySelectorAll('[data-theme-active]').forEach(function (el) {
+                    el.setAttribute('data-theme-active', theme);
+                });
+            }
+
+            apply(current());
+
+            function toggle() { apply(current() === 'light' ? 'dark' : 'light'); }
+
+            var btn = document.getElementById('theme-toggle');
+            if (btn) btn.addEventListener('click', toggle);
+            var btnMobile = document.getElementById('theme-toggle-mobile');
+            if (btnMobile) btnMobile.addEventListener('click', toggle);
         })();
     </script>
 
