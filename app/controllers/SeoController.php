@@ -6,6 +6,7 @@ namespace App\Controllers;
 
 use App\Core\Auth;
 use App\Core\Controller;
+use App\Models\Article;
 use App\Models\Event;
 use App\Models\Page;
 use App\Models\Poll;
@@ -38,6 +39,7 @@ final class SeoController extends Controller
         // Pages statiques publiques.
         $static = [
             '/'             => '1.0',
+            '/blog'         => '0.9',
             '/events'       => '0.9',
             '/presentation' => '0.8',
             '/team'         => '0.7',
@@ -69,6 +71,23 @@ final class SeoController extends Controller
                     'priority' => '0.6',
                 ];
             }
+        }
+
+        // Articles de blog publiés.
+        try {
+            foreach (Article::published() as $art) {
+                if (!empty($art['slug'])) {
+                    $urls[] = [
+                        'loc'      => $base . '/blog/' . rawurlencode((string) $art['slug']),
+                        'priority' => '0.7',
+                        'lastmod'  => !empty($art['published_at'])
+                            ? date('Y-m-d', strtotime((string) $art['published_at']))
+                            : null,
+                    ];
+                }
+            }
+        } catch (\Throwable) {
+            // Base indisponible : on ignore les articles.
         }
 
         // Pages CMS publiées.
@@ -142,6 +161,16 @@ final class SeoController extends Controller
                     'title'   => (string) ($row['title'] ?? ''),
                     'url'     => url('/p/' . rawurlencode((string) ($row['slug'] ?? ''))),
                     'excerpt' => '',
+                ];
+            }
+
+            // Articles de blog (titre + extrait).
+            foreach (Article::search($like, 4) as $row) {
+                $results[] = [
+                    'type'    => 'Article',
+                    'title'   => (string) ($row['title'] ?? ''),
+                    'url'     => url('/blog/' . rawurlencode((string) ($row['slug'] ?? ''))),
+                    'excerpt' => trim(strip_tags((string) ($row['excerpt'] ?? ''))),
                 ];
             }
 

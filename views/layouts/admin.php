@@ -25,6 +25,7 @@ $sections = [
     ],
     'Contenu' => [
         'Événements'   => '/admin/events',
+        'Articles'     => '/admin/articles',
         'Pages'        => '/admin/pages',
         'Équipe'       => '/admin/team',
         'Sondages'     => '/admin/sondages',
@@ -39,6 +40,7 @@ $sections = [
         'Coûts de revient' => '/admin/compta/couts',
         'Mapping libellés' => '/admin/compta/aliases',
         'Réappro'        => '/admin/compta/reappro',
+        'Analytics'      => '/admin/analytics',
     ],
     'SumUp' => [
         'Dashboard SumUp' => '/admin/sumup',

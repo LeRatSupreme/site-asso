@@ -102,6 +102,7 @@ $twitterHandle = Setting::get('twitter_handle', '');
 
             <nav class="main-nav" aria-label="Navigation principale">
                 <a class="nav-link<?= $currentPath === '/' ? ' is-active' : '' ?>" href="<?= e(url('/')) ?>">Accueil</a>
+                <a class="nav-link<?= str_starts_with($currentPath, '/blog') ? ' is-active' : '' ?>" href="<?= e(url('/blog')) ?>">Blog</a>
                 <a class="nav-link<?= str_starts_with($currentPath, '/events') ? ' is-active' : '' ?>" href="<?= e(url('/events')) ?>">Événements</a>
                 <a class="nav-link<?= $currentPath === '/presentation' ? ' is-active' : '' ?>" href="<?= e(url('/presentation')) ?>">L'association</a>
                 <a class="nav-link<?= $currentPath === '/team' ? ' is-active' : '' ?>" href="<?= e(url('/team')) ?>">Équipe</a>
@@ -157,6 +158,7 @@ $twitterHandle = Setting::get('twitter_handle', '');
 
         <nav id="mobile-nav" class="mobile-nav" aria-label="Navigation mobile">
             <a href="<?= e(url('/')) ?>">Accueil</a>
+            <a href="<?= e(url('/blog')) ?>">Blog</a>
             <a href="<?= e(url('/events')) ?>">Événements</a>
             <a href="<?= e(url('/presentation')) ?>">L'association</a>
             <a href="<?= e(url('/team')) ?>">Équipe</a>
@@ -194,6 +196,7 @@ $twitterHandle = Setting::get('twitter_handle', '');
             </div>
 
             <nav class="footer-links" aria-label="Pied de page">
+                <a href="<?= e(url('/blog')) ?>">📰 Blog</a>
                 <a href="<?= e(url('/events')) ?>">📅 Événements</a>
                 <a href="<?= e(url('/presentation')) ?>">🏫 Association</a>
                 <a href="<?= e(url('/team')) ?>">👥 Équipe</a>
