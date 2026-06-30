@@ -292,3 +292,40 @@ function user_agent(): string
 
     return mb_substr($ua, 0, 255);
 }
+
+/**
+ * Indique si l'utilisateur courant est à jour de cotisation (saison en cours).
+ */
+function is_member(): bool
+{
+    if (!\App\Core\Auth::check()) {
+        return false;
+    }
+
+    return \App\Models\Membership::isMember((string) \App\Core\Auth::id());
+}
+
+// ---------------------------------------------------------------------
+//  Fonctionnalité 12 — Sélecteur de langue léger (FR/EN, cookie).
+// ---------------------------------------------------------------------
+
+/**
+ * Langue courante (préférence stockée en cookie), par défaut "fr".
+ */
+function current_lang(): string
+{
+    $lang = $_COOKIE['aeic_lang'] ?? 'fr';
+    $lang = strtolower((string) $lang);
+
+    return $lang === 'en' ? 'en' : 'fr';
+}
+
+/**
+ * Traduction minimale : renvoie la chaîne FR ou EN selon la langue courante.
+ *
+ * Si aucune traduction EN n'est fournie, la chaîne FR est renvoyée telle quelle.
+ */
+function t(string $fr, string $en = ''): string
+{
+    return current_lang() === 'en' && $en !== '' ? $en : $fr;
+}

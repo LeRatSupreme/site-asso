@@ -19,6 +19,7 @@ $currentYear  = date('Y');
 $currentPath  = $_SERVER['REQUEST_URI'] ?? '/';
 $canonical    = APP_URL . strtok($currentPath, '?');
 $user         = Auth::check() ? Auth::user() : null;
+$lang         = current_lang();
 
 // SEO : titres et descriptions par défaut + Open Graph.
 $pageTitle    = $title ?? $siteName;
@@ -31,7 +32,7 @@ $ogImage      = !empty($ogImage)
 $twitterHandle = Setting::get('twitter_handle', '');
 ?>
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="<?= e($lang) ?>">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -47,7 +48,7 @@ $twitterHandle = Setting::get('twitter_handle', '');
     <meta property="og:url" content="<?= e($canonical) ?>">
     <meta property="og:site_name" content="<?= e($siteName) ?>">
     <meta property="og:image" content="<?= e($ogImage) ?>">
-    <meta property="og:locale" content="fr_FR">
+    <meta property="og:locale" content="<?= e($lang === 'en' ? 'en_US' : 'fr_FR') ?>">
 
     <!-- Twitter Card -->
     <meta name="twitter:card" content="summary_large_image">
@@ -100,18 +101,29 @@ $twitterHandle = Setting::get('twitter_handle', '');
                 </span>
             </a>
 
-            <nav class="main-nav" aria-label="Navigation principale">
-                <a class="nav-link<?= $currentPath === '/' ? ' is-active' : '' ?>" href="<?= e(url('/')) ?>">Accueil</a>
-                <a class="nav-link<?= str_starts_with($currentPath, '/events') ? ' is-active' : '' ?>" href="<?= e(url('/events')) ?>">Événements</a>
-                <a class="nav-link<?= $currentPath === '/presentation' ? ' is-active' : '' ?>" href="<?= e(url('/presentation')) ?>">L'association</a>
-                <a class="nav-link<?= $currentPath === '/team' ? ' is-active' : '' ?>" href="<?= e(url('/team')) ?>">Équipe</a>
-                <a class="nav-link<?= str_starts_with($currentPath, '/sondages') ? ' is-active' : '' ?>" href="<?= e(url('/sondages')) ?>">Sondages</a>
-                <a class="nav-link<?= str_starts_with($currentPath, '/galerie') ? ' is-active' : '' ?>" href="<?= e(url('/galerie')) ?>">Galerie</a>
+            <nav class="main-nav" aria-label="<?= e(t('Navigation principale', 'Main navigation')) ?>">
+                <a class="nav-link<?= $currentPath === '/' ? ' is-active' : '' ?>" href="<?= e(url('/')) ?>"><?= e(t('Accueil', 'Home')) ?></a>
+                <a class="nav-link<?= str_starts_with($currentPath, '/events') ? ' is-active' : '' ?>" href="<?= e(url('/events')) ?>"><?= e(t('Événements', 'Events')) ?></a>
+                <a class="nav-link<?= $currentPath === '/presentation' ? ' is-active' : '' ?>" href="<?= e(url('/presentation')) ?>"><?= e(t("L'association", 'About')) ?></a>
+                <a class="nav-link<?= $currentPath === '/team' ? ' is-active' : '' ?>" href="<?= e(url('/team')) ?>"><?= e(t('Équipe', 'Team')) ?></a>
+                <a class="nav-link<?= str_starts_with($currentPath, '/sondages') ? ' is-active' : '' ?>" href="<?= e(url('/sondages')) ?>"><?= e(t('Sondages', 'Polls')) ?></a>
+                <a class="nav-link<?= str_starts_with($currentPath, '/galerie') ? ' is-active' : '' ?>" href="<?= e(url('/galerie')) ?>"><?= e(t('Galerie', 'Gallery')) ?></a>
             </nav>
 
             <div class="nav-actions">
+                <form method="post" action="<?= e(url('/set-lang')) ?>" class="lang-switch" aria-label="<?= e(t('Changer de langue', 'Change language')) ?>">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="back" value="<?= e($currentPath) ?>">
+                    <button type="submit" name="lang" value="fr"
+                            class="lang-btn<?= $lang === 'fr' ? ' is-active' : '' ?>"
+                            title="Français" aria-label="Français">🇫🇷</button>
+                    <button type="submit" name="lang" value="en"
+                            class="lang-btn<?= $lang === 'en' ? ' is-active' : '' ?>"
+                            title="English" aria-label="English">🇬🇧</button>
+                </form>
+
                 <button type="button" class="nav-theme-btn" id="theme-toggle"
-                        aria-label="Basculer le thème clair/sombre" title="Thème clair / sombre">
+                        aria-label="<?= e(t('Basculer le thème clair/sombre', 'Toggle light/dark theme')) ?>" title="<?= e(t('Thème clair / sombre', 'Light / dark theme')) ?>">
                     <span class="theme-icon-dark" aria-hidden="true">☀️</span>
                     <span class="theme-icon-light" aria-hidden="true">🌙</span>
                 </button>
@@ -141,11 +153,11 @@ $twitterHandle = Setting::get('twitter_handle', '');
                     <?php if (($user['role'] ?? '') === 'ADMIN' || ($user['role'] ?? '') === 'TRESORERIE'): ?>
                         <a class="btn btn-primary btn-sm" href="<?= e(url('/admin')) ?>">Admin</a>
                     <?php endif; ?>
-                    <a class="btn btn-outline btn-sm" href="<?= e(url('/account/privacy')) ?>"><?= e($user['prenom'] ?? 'Mon compte') ?></a>
-                    <a class="btn btn-ghost btn-sm" href="<?= e(url('/logout')) ?>">Déconnexion</a>
+                    <a class="btn btn-outline btn-sm" href="<?= e(url('/account/privacy')) ?>"><?= e($user['prenom'] ?? t('Mon compte', 'My account')) ?></a>
+                    <a class="btn btn-ghost btn-sm" href="<?= e(url('/logout')) ?>"><?= e(t('Déconnexion', 'Logout')) ?></a>
                 <?php else: ?>
-                    <a class="btn btn-ghost btn-sm" href="<?= e(url('/login')) ?>">Connexion</a>
-                    <a class="btn btn-primary btn-sm" href="<?= e(url('/register')) ?>">S'inscrire</a>
+                    <a class="btn btn-ghost btn-sm" href="<?= e(url('/login')) ?>"><?= e(t('Connexion', 'Login')) ?></a>
+                    <a class="btn btn-primary btn-sm" href="<?= e(url('/register')) ?>"><?= e(t("S'inscrire", 'Register')) ?></a>
                 <?php endif; ?>
             </div>
 
@@ -155,25 +167,32 @@ $twitterHandle = Setting::get('twitter_handle', '');
             </button>
         </div>
 
-        <nav id="mobile-nav" class="mobile-nav" aria-label="Navigation mobile">
-            <a href="<?= e(url('/')) ?>">Accueil</a>
-            <a href="<?= e(url('/events')) ?>">Événements</a>
-            <a href="<?= e(url('/presentation')) ?>">L'association</a>
-            <a href="<?= e(url('/team')) ?>">Équipe</a>
-            <a href="<?= e(url('/sondages')) ?>">Sondages</a>
-            <a href="<?= e(url('/galerie')) ?>">Galerie</a>
+        <nav id="mobile-nav" class="mobile-nav" aria-label="<?= e(t('Navigation mobile', 'Mobile navigation')) ?>">
+            <a href="<?= e(url('/')) ?>"><?= e(t('Accueil', 'Home')) ?></a>
+            <a href="<?= e(url('/events')) ?>"><?= e(t('Événements', 'Events')) ?></a>
+            <a href="<?= e(url('/presentation')) ?>"><?= e(t("L'association", 'About')) ?></a>
+            <a href="<?= e(url('/team')) ?>"><?= e(t('Équipe', 'Team')) ?></a>
+            <a href="<?= e(url('/sondages')) ?>"><?= e(t('Sondages', 'Polls')) ?></a>
+            <a href="<?= e(url('/galerie')) ?>"><?= e(t('Galerie', 'Gallery')) ?></a>
             <hr>
-            <button type="button" class="btn btn-ghost" id="theme-toggle-mobile">🌙 Thème</button>
+            <form method="post" action="<?= e(url('/set-lang')) ?>" class="lang-switch lang-switch-mobile" aria-label="<?= e(t('Changer de langue', 'Change language')) ?>">
+                <?= csrf_field() ?>
+                <input type="hidden" name="back" value="<?= e($currentPath) ?>">
+                <button type="submit" name="lang" value="fr" class="btn btn-outline btn-sm<?= $lang === 'fr' ? ' is-active' : '' ?>">🇫🇷 FR</button>
+                <button type="submit" name="lang" value="en" class="btn btn-outline btn-sm<?= $lang === 'en' ? ' is-active' : '' ?>">🇬🇧 EN</button>
+            </form>
+            <hr>
+            <button type="button" class="btn btn-ghost" id="theme-toggle-mobile">🌙 <?= e(t('Thème', 'Theme')) ?></button>
             <hr>
             <?php if ($user !== null): ?>
                 <?php if (($user['role'] ?? '') === 'ADMIN' || ($user['role'] ?? '') === 'TRESORERIE'): ?>
                     <a class="btn btn-primary" href="<?= e(url('/admin')) ?>">Admin</a>
                 <?php endif; ?>
-                <a class="btn btn-outline" href="<?= e(url('/account/privacy')) ?>">Mes données</a>
-                <a class="btn btn-ghost" href="<?= e(url('/logout')) ?>">Déconnexion</a>
+                <a class="btn btn-outline" href="<?= e(url('/account/privacy')) ?>"><?= e(t('Mes données', 'My data')) ?></a>
+                <a class="btn btn-ghost" href="<?= e(url('/logout')) ?>"><?= e(t('Déconnexion', 'Logout')) ?></a>
             <?php else: ?>
-                <a class="btn btn-ghost" href="<?= e(url('/login')) ?>">Connexion</a>
-                <a class="btn btn-primary" href="<?= e(url('/register')) ?>">S'inscrire</a>
+                <a class="btn btn-ghost" href="<?= e(url('/login')) ?>"><?= e(t('Connexion', 'Login')) ?></a>
+                <a class="btn btn-primary" href="<?= e(url('/register')) ?>"><?= e(t("S'inscrire", 'Register')) ?></a>
             <?php endif; ?>
         </nav>
     </header>
@@ -193,20 +212,20 @@ $twitterHandle = Setting::get('twitter_handle', '');
                 </div>
             </div>
 
-            <nav class="footer-links" aria-label="Pied de page">
-                <a href="<?= e(url('/events')) ?>">📅 Événements</a>
-                <a href="<?= e(url('/presentation')) ?>">🏫 Association</a>
-                <a href="<?= e(url('/team')) ?>">👥 Équipe</a>
-                <a href="<?= e(url('/sondages')) ?>">📊 Sondages</a>
-                <a href="<?= e(url('/galerie')) ?>">📷 Galerie</a>
-                <a href="<?= e(url('/legal')) ?>">⚖️ Mentions légales</a>
-                <a href="<?= e(url('/privacy')) ?>">🔒 Confidentialité</a>
-                <a href="<?= e(url('/cgu')) ?>">📋 CGU</a>
+            <nav class="footer-links" aria-label="<?= e(t('Pied de page', 'Footer')) ?>">
+                <a href="<?= e(url('/events')) ?>">📅 <?= e(t('Événements', 'Events')) ?></a>
+                <a href="<?= e(url('/presentation')) ?>">🏫 <?= e(t('Association', 'About')) ?></a>
+                <a href="<?= e(url('/team')) ?>">👥 <?= e(t('Équipe', 'Team')) ?></a>
+                <a href="<?= e(url('/sondages')) ?>">📊 <?= e(t('Sondages', 'Polls')) ?></a>
+                <a href="<?= e(url('/galerie')) ?>">📷 <?= e(t('Galerie', 'Gallery')) ?></a>
+                <a href="<?= e(url('/legal')) ?>">⚖️ <?= e(t('Mentions légales', 'Legal notice')) ?></a>
+                <a href="<?= e(url('/privacy')) ?>">🔒 <?= e(t('Confidentialité', 'Privacy')) ?></a>
+                <a href="<?= e(url('/cgu')) ?>">📋 <?= e(t('CGU', 'Terms')) ?></a>
             </nav>
 
             <div class="footer-bottom">
-                <span class="footer-tag">🎓 100 % étudiant.</span>
-                <span class="footer-copy">© <?= e($currentYear) ?> <?= e($siteName) ?> · Fait par les étudiants, pour les étudiants.</span>
+                <span class="footer-tag">🎓 <?= e(t('100 % étudiant.', '100% student-run.')) ?></span>
+                <span class="footer-copy">© <?= e($currentYear) ?> <?= e($siteName) ?> · <?= e(t('Fait par les étudiants, pour les étudiants.', 'Made by students, for students.')) ?></span>
             </div>
         </div>
     </footer>

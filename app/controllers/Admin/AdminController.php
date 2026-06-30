@@ -6,6 +6,7 @@ namespace App\Controllers\Admin;
 
 use App\Models\AuditLog;
 use App\Models\Event;
+use App\Models\Membership;
 use App\Models\Sale;
 use App\Models\User;
 
@@ -22,12 +23,14 @@ final class AdminController extends AdminBaseController
         $agg = Sale::monthAggregates((int) $now->format('Y'), (int) $now->format('n'));
 
         $this->renderAdmin('admin/dashboard', [
-            'title'       => 'Tableau de bord',
-            'usersCount'  => User::countActive(),
-            'eventsCount' => Event::count(),
-            'monthCa'     => $agg['ca'],
-            'monthProfit' => $agg['profit'],
-            'recentAudit' => AuditLog::recent(10),
+            'title'           => 'Tableau de bord',
+            'usersCount'      => User::countActive(),
+            'eventsCount'     => Event::count(),
+            'monthCa'         => $agg['ca'],
+            'monthProfit'     => $agg['profit'],
+            'recentAudit'     => AuditLog::recent(10),
+            'membersCount'    => Membership::countPaidCurrent(),
+            'currentSeason'   => Membership::currentSeason(),
         ]);
     }
 }

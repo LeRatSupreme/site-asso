@@ -8,6 +8,7 @@ use App\Controllers\Admin\AdminCafeteriaController;
 use App\Controllers\Admin\AdminComptaController;
 use App\Controllers\Admin\AdminController;
 use App\Controllers\Admin\AdminEventController;
+use App\Controllers\Admin\AdminMembershipController;
 use App\Controllers\Admin\AdminMediaController;
 use App\Controllers\Admin\AdminPageController;
 use App\Controllers\Admin\AdminPollController;
@@ -19,6 +20,7 @@ use App\Controllers\AuthController;
 use App\Controllers\EventController;
 use App\Controllers\HealthController;
 use App\Controllers\HomeController;
+use App\Controllers\LocaleController;
 use App\Controllers\NotificationController;
 use App\Controllers\PageController;
 use App\Controllers\PollController;
@@ -68,6 +70,10 @@ function aeic_register_routes(Router $router): void
 
     // Monitoring.
     $router->get('/health', [HealthController::class, 'health']);
+
+    // Sélecteur de langue (FR/EN, cookie 1 an).
+    $router->post('/set-lang', [LocaleController::class, 'setLang']);
+    $router->get('/set-lang', [LocaleController::class, 'setLang']);
 
     // Authentification.
     $router->get('/login', [AuthController::class, 'loginForm']);
@@ -134,6 +140,11 @@ function aeic_register_routes(Router $router): void
     $router->post('/admin/users/{id}/toggle-active', [AdminUserController::class, 'toggleActive']);
     $router->post('/admin/users/{id}/reset-password', [AdminUserController::class, 'resetPassword']);
     $router->post('/admin/users/{id}/delete', [AdminUserController::class, 'delete']);
+
+    // Adhésions / cotisations (rôle ADMIN requis).
+    $router->get('/admin/memberships', [AdminMembershipController::class, 'index']);
+    $router->post('/admin/memberships/{id}/mark-paid', [AdminMembershipController::class, 'markPaid']);
+    $router->post('/admin/users/{id}/membership', [AdminMembershipController::class, 'createForMember']);
 
     $router->get('/admin/team', [AdminTeamController::class, 'index']);
     $router->get('/admin/team/new', [AdminTeamController::class, 'form']);
