@@ -1281,3 +1281,48 @@ ul, ol { list-style: none; }
     .lang-menu { right: auto; left: 0; min-width: 100%; }
 }
 
+/* ----------------------------- Cookie banner ----------------------------- */
+.cookie-banner {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 9000;
+    background: var(--card, #0c1d36);
+    border-top: 1px solid rgba(72, 189, 211, 0.2);
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3);
+    animation: cookie-slide-up 0.3s ease;
+}
+.cookie-banner.is-closing {
+    animation: cookie-slide-down 0.3s ease forwards;
+}
+@keyframes cookie-slide-up {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+}
+@keyframes cookie-slide-down {
+    from { transform: translateY(0); }
+    to { transform: translateY(100%); }
+}
+.cookie-banner-inner {
+    max-width: var(--container, 1320px);
+    margin: 0 auto;
+    padding: 0.85rem 0.75rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+.cookie-text {
+    font-size: 0.85rem;
+    color: var(--muted);
+    line-height: 1.5;
+}
+.cookie-text a { color: var(--primary); text-decoration: underline; }
+.cookie-text strong { color: var(--foreground); }
+@media (max-width: 600px) {
+    .cookie-banner-inner { flex-direction: column; text-align: center; }
+    .cookie-text { font-size: 0.8rem; }
+}
+

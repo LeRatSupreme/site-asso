@@ -495,6 +495,31 @@ $twitterHandle = Setting::get('twitter_handle', '');
     </script>
     <script src="<?= e(rootAssetVersioned('/assets/js/confirm.js')) ?>"></script>
 
+    <!-- Bandelette cookies -->
+    <div class="cookie-banner" id="cookie-banner" hidden>
+        <div class="cookie-banner-inner">
+            <span class="cookie-text">
+                🍪 Ce site utilise un <strong>cookie de session strictement nécessaire</strong> (connexion). Aucune publicité, aucun tracking.
+                <a href="<?= e(url('/privacy')) ?>">En savoir plus →</a>
+            </span>
+            <button type="button" class="btn btn-primary btn-sm" id="cookie-ok">OK</button>
+        </div>
+    </div>
+    <script>
+    (function(){
+        if (localStorage.getItem('aeic_cookie_ok') === '1') return;
+        var b = document.getElementById('cookie-banner');
+        var btn = document.getElementById('cookie-ok');
+        if (!b || !btn) return;
+        b.hidden = false;
+        btn.addEventListener('click', function(){
+            localStorage.setItem('aeic_cookie_ok', '1');
+            b.classList.add('is-closing');
+            setTimeout(function(){ b.hidden = true; }, 300);
+        });
+    })();
+    </script>
+
     <!-- Dropdown de langue : ouverture, fermeture au clic extérieur et à Échap. -->
     <script>
         (function () {
