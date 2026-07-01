@@ -23,7 +23,7 @@ declare(strict_types=1);
 
 <!-- ===================== 1. DÉMARRAGE ===================== -->
 <section class="wiki-section" id="sec-start">
-    <h2><span class="wiki-num">1</span> 🚀 Démarrage & connexion</h2>
+    <h2>🚀 Démarrage & connexion</h2>
 
     <div class="wiki-block">
         <h3>Comment se connecter</h3>
@@ -75,7 +75,7 @@ declare(strict_types=1);
 
 <!-- ===================== 2. ÉVÉNEMENTS ===================== -->
 <section class="wiki-section" id="sec-events">
-    <h2><span class="wiki-num">2</span> 📅 Créer un événement</h2>
+    <h2>📅 Créer un événement</h2>
 
     <div class="wiki-block">
         <h3>Étapes pour créer un événement</h3>
@@ -124,7 +124,7 @@ declare(strict_types=1);
 
 <!-- ===================== 3. CHECK-IN QR ===================== -->
 <section class="wiki-section" id="sec-checkin">
-    <h2><span class="wiki-num">3</span> 📱 Check-in QR (le jour J)</h2>
+    <h2>📱 Check-in QR (le jour J)</h2>
 
     <div class="wiki-block">
         <h3>Comment scanner les participants</h3>
@@ -140,7 +140,7 @@ declare(strict_types=1);
 
 <!-- ===================== 4. SONDAGES ===================== -->
 <section class="wiki-section" id="sec-sondages">
-    <h2><span class="wiki-num">4</span> 📊 Créer un sondage</h2>
+    <h2>📊 Créer un sondage</h2>
 
     <div class="wiki-block">
         <h3>Étapes</h3>
@@ -157,7 +157,7 @@ declare(strict_types=1);
 
 <!-- ===================== 5. CAFÉTÉRIA ===================== -->
 <section class="wiki-section" id="sec-cafeteria">
-    <h2><span class="wiki-num">5</span> ☕ Cafétéria — Produits & carte</h2>
+    <h2>☕ Cafétéria — Produits & carte</h2>
 
     <div class="wiki-block">
         <h3>Ajouter un produit au menu</h3>
@@ -189,7 +189,7 @@ declare(strict_types=1);
 
 <!-- ===================== 6. COMPTABILITÉ ===================== -->
 <section class="wiki-section" id="sec-compta">
-    <h2><span class="wiki-num">6</span> 💰 Comptabilité — Importer SumUp</h2>
+    <h2>💰 Comptabilité — Importer SumUp</h2>
 
     <div class="wiki-block">
         <h3>Récupérer le rapport SumUp</h3>
@@ -244,7 +244,7 @@ declare(strict_types=1);
 
 <!-- ===================== 7. RÉAPPRO ===================== -->
 <section class="wiki-section" id="sec-reappro">
-    <h2><span class="wiki-num">7</span> 📦 Réapprovisionnement</h2>
+    <h2>📦 Réapprovisionnement</h2>
 
     <div class="wiki-block">
         <h3>Comment savoir combien racheter</h3>
@@ -274,7 +274,7 @@ declare(strict_types=1);
 
 <!-- ===================== 8. ANALYTICS ===================== -->
 <section class="wiki-section" id="sec-analytics">
-    <h2><span class="wiki-num">8</span> 📈 Dashboard Analytics</h2>
+    <h2>📈 Dashboard Analytics</h2>
 
     <div class="wiki-block">
         <h3>Filtres globaux</h3>
@@ -304,7 +304,7 @@ declare(strict_types=1);
 
 <!-- ===================== 9. UTILISATEURS ===================== -->
 <section class="wiki-section" id="sec-users">
-    <h2><span class="wiki-num">9</span> 👥 Utilisateurs & adhésions</h2>
+    <h2>👥 Utilisateurs & adhésions</h2>
 
     <div class="wiki-block">
         <h3>Actions possibles sur un utilisateur</h3>
@@ -334,7 +334,7 @@ declare(strict_types=1);
 
 <!-- ===================== 10. EMAILS ===================== -->
 <section class="wiki-section" id="sec-emails">
-    <h2><span class="wiki-num">10</span> 📧 Emails automatiques</h2>
+    <h2>📧 Emails automatiques</h2>
 
     <div class="wiki-block">
         <p>Le site envoie automatiquement ces emails (si le SMTP/API Brevo est configuré) :</p>
@@ -359,7 +359,7 @@ declare(strict_types=1);
 
 <!-- ===================== 11. PARAMÈTRES ===================== -->
 <section class="wiki-section" id="sec-settings">
-    <h2><span class="wiki-num">11</span> ⚙️ Paramètres du site</h2>
+    <h2>⚙️ Paramètres du site</h2>
 
     <div class="wiki-block">
         <h3>Configuration Brevo (emails)</h3>
@@ -387,7 +387,7 @@ declare(strict_types=1);
 
 <!-- ===================== 12. CONSEILS ===================== -->
 <section class="wiki-section" id="sec-tips">
-    <h2><span class="wiki-num">12</span> 💡 Conseils pratiques</h2>
+    <h2>💡 Conseils pratiques</h2>
 
     <div class="wiki-block">
         <h3>Routine mensuelle (trésorier)</h3>
