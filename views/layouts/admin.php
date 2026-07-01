@@ -157,6 +157,13 @@ if (($user['role'] ?? null) === 'TRESORERIE') {
                 var open = side.classList.toggle('is-open');
                 btn.setAttribute('aria-expanded', open ? 'true' : 'false');
             });
+
+            // Sauvegarde et restaure la position du scroll de la sidebar.
+            var SS_KEY = 'aeic_admin_sidebar_scroll';
+            try { side.scrollTop = parseInt(sessionStorage.getItem(SS_KEY) || '0', 10) || 0; } catch (e) {}
+            window.addEventListener('beforeunload', function () {
+                try { sessionStorage.setItem(SS_KEY, String(side.scrollTop)); } catch (e) {}
+            });
         })();
     </script>
     <script src="<?= e(rootAssetVersioned('/assets/js/confirm.js')) ?>"></script>
