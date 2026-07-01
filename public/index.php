@@ -47,6 +47,21 @@ if ($qs !== false) {
     $path = substr($path, 0, $qs);
 }
 
+// Nettoyage : retire le point final (ex: "/." ou "/events/." → 404).
+$path = rtrim($path, '.');
+if ($path === '') {
+    $path = '/';
+}
+
+// Redirige si le Host se termine par un point (DNS root, ex: asso.aremond.ovh.).
+$host = $_SERVER['HTTP_HOST'] ?? '';
+if (str_ends_with($host, '.')) {
+    $cleanHost = rtrim($host, '.');
+    $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+    header('Location: ' . $protocol . '://' . $cleanHost . $_SERVER['REQUEST_URI'], true, 301);
+    exit;
+}
+
 // Mode maintenance : bloque l'accès public (l'admin y a toujours accès).
 // Ignoré en environnement de test (APP_TESTING) pour ne pas polluer les
 // tests d'intégration.
