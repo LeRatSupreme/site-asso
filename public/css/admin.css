@@ -40,6 +40,11 @@
     height: 100vh;
     overflow-y: auto;
     border-right: 1px solid var(--border);
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+.admin-sidebar::-webkit-scrollbar {
+    display: none;
 }
 
 .admin-sidebar .brand {
