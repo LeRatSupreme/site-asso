@@ -504,12 +504,7 @@ declare(strict_types=1);
     background: rgba(255,255,255,0.02); border-radius: 10px;
     border-left: 3px solid var(--primary);
 }
-.wiki-step-n {
-    display: inline-grid; place-items: center;
-    width: 24px; height: 24px; border-radius: 50%;
-    background: var(--primary); color: #08172d;
-    font-size: 0.78rem; font-weight: 800; flex-shrink: 0;
-}
+.wiki-step-n { display: none; }
 .wiki-step div { font-size: 0.88rem; color: var(--foreground); line-height: 1.5; }
 
 /* Diagrammes */
