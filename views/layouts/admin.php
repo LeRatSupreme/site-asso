@@ -52,7 +52,6 @@ $sections = [
     ],
     'Système' => [
         'Utilisateurs' => '/admin/users',
-        'Adhésions'   => '/admin/memberships',
         'Paramètres'  => '/admin/settings',
         'Wiki'        => '/admin/wiki',
     ],
@@ -95,7 +94,31 @@ if (($user['role'] ?? null) === 'TRESORERIE') {
                 <p class="admin-group"><?= e($group) ?></p>
                 <nav aria-label="<?= e($group) ?>">
                     <?php foreach ($links as $label => $path): ?>
-                        <?php $active = str_starts_with($currentPath, $path); ?>
+                        <?php
+                        // État actif : match exact OU sous-route directe.
+                        // Évite que /admin/compta reste allumé sur /admin/compta/produits.
+                        $active = false;
+                        if ($currentPath === $path) {
+                            $active = true;
+                        } elseif (str_starts_with($currentPath, $path . '/')) {
+                            // Sous-route : on ne marque actif que si c'est le parent le plus précis.
+                            // On vérifie qu'aucun autre lien plus long ne matche mieux.
+                            $betterMatch = false;
+                            foreach ($sections as $g2 => $links2) {
+                                foreach ($links2 as $l2 => $p2) {
+                                    if ($p2 !== $path && strlen($p2) > strlen($path) && str_starts_with($currentPath, $p2)) {
+                                        $betterMatch = true;
+                                        break 2;
+                                    }
+                                }
+                            }
+                            $active = !$betterMatch;
+                        }
+                        // Cas spécial : /admin (tableau de bord) n'est actif que sur /admin exact.
+                        if ($path === '/admin' && $currentPath !== '/admin') {
+                            $active = false;
+                        }
+                        ?>
                         <a class="admin-link<?= $active ? ' is-active' : '' ?>" href="<?= e(url($path)) ?>"><?= e($label) ?></a>
                     <?php endforeach; ?>
                 </nav>
