@@ -23,6 +23,7 @@ $lang        = current_lang();
 $sections = [
     'Tableau de bord' => [
         'Tableau de bord' => '/admin',
+        'Wiki'        => '/admin/wiki',
     ],
     'Contenu' => [
         'Événements'   => '/admin/events',
@@ -53,7 +54,6 @@ $sections = [
     'Système' => [
         'Utilisateurs' => '/admin/users',
         'Paramètres'  => '/admin/settings',
-        'Wiki'        => '/admin/wiki',
     ],
 ];
 
