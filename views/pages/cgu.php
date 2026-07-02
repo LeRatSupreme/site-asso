@@ -15,36 +15,31 @@ $isFr = current_lang() === 'fr';
 
 <section class="section">
     <div class="container narrow">
-        <?php if (!$isFr): ?>
-            <div class="lang-notice">
-                <span>🌐</span>
-                <p><?= e(t('page.lang_notice')) ?></p>
-            </div>
-        <?php endif; ?>
-        <?php if (!empty($page['content'])): ?>
+        <?php if ($isFr && !empty($page['content'])): ?>
             <div class="prose surface glass"><?= $page['content'] ?></div>
         <?php else: ?>
-            <div class="empty-state surface glass">
-                <p><?= e(t('page.cgu.placeholder')) ?></p>
-            </div>
             <div class="prose surface glass">
-                <h2><?= e(t('page.cgu.object')) ?></h2>
-                <p><?= e(t('page.cgu.object.desc')) ?></p>
-                <h2><?= e(t('page.cgu.registration')) ?></h2>
-                <p><?= e(t('page.cgu.registration.desc')) ?></p>
-                <h2><?= e(t('page.cgu.responsibility')) ?></h2>
-                <p><?= e(t('page.cgu.responsibility.desc')) ?></p>
+                <?php if ($isFr): ?>
+                    <p><?= e(t('page.cgu.placeholder')) ?></p>
+                <?php endif; ?>
+                <p><?= e(t('cgu.intro')) ?></p>
+                <h2><?= e(t('cgu.account.title')) ?></h2>
+                <p><?= e(t('cgu.account.desc')) ?></p>
+                <h2><?= e(t('cgu.usage.title')) ?></h2>
+                <p><?= e(t('cgu.usage.desc')) ?></p>
+                <h2><?= e(t('cgu.events.title')) ?></h2>
+                <p><?= e(t('cgu.events.desc')) ?></p>
+                <h2><?= e(t('cgu.ip.title')) ?></h2>
+                <p><?= e(t('cgu.ip.desc')) ?></p>
+                <h2><?= e(t('cgu.liability.title')) ?></h2>
+                <p><?= e(t('cgu.liability.desc')) ?></p>
+                <h2><?= e(t('cgu.data.title')) ?></h2>
+                <p><?= e(t('cgu.data.desc')) ?></p>
+                <h2><?= e(t('cgu.changes.title')) ?></h2>
+                <p><?= e(t('cgu.changes.desc')) ?></p>
+                <h2><?= e(t('cgu.law.title')) ?></h2>
+                <p><?= e(t('cgu.law.desc')) ?></p>
             </div>
         <?php endif; ?>
     </div>
 </section>
-
-<style>
-.lang-notice {
-    display: flex; align-items: center; gap: 0.6rem;
-    background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.2);
-    border-radius: 10px; padding: 0.75rem 1rem; margin-bottom: 1.25rem;
-    font-size: 0.85rem; color: var(--muted);
-}
-.lang-notice span { font-size: 1.2rem; }
-</style>
