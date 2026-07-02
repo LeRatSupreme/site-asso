@@ -119,14 +119,15 @@ $allPromoEmpty = empty($promotions);
                 <?php foreach ($menuCategories as $cat): ?>
                     <?php foreach ($cat['products'] as $product): ?>
                         <?php
-                        $name  = (string) ($product['name'] ?? '');
-                        $emoji = product_emoji($name);
+                        $name  = tc((string) ($product['name'] ?? ''));
+                        $emoji = product_emoji((string) ($product['name'] ?? ''));
                         $img   = trim((string) ($product['image'] ?? ''));
                         $imgUrl = $img !== '' ? (is_absolute_url($img) ? $img : asset(ltrim($img, '/'))) : '';
                         ?>
                         <article class="menu-item surface glass" data-cat="<?= e((string) $cat['id']) ?>">
                             <?php if ($imgUrl !== ''): ?>
-                                <img src="<?= e($imgUrl) ?>" alt="<?= e($name) ?>" class="menu-item-img" loading="lazy">
+                                <img src="<?= e($imgUrl) ?>" alt="" class="menu-item-img" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='';">
+                                <span class="menu-item-emoji" aria-hidden="true" style="display:none;"><?= e($emoji) ?></span>
                             <?php else: ?>
                                 <span class="menu-item-emoji" aria-hidden="true"><?= e($emoji) ?></span>
                             <?php endif; ?>
