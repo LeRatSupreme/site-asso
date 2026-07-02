@@ -15,36 +15,39 @@ $isFr = current_lang() === 'fr';
 
 <section class="section">
     <div class="container narrow">
-        <?php if (!$isFr): ?>
-            <div class="lang-notice">
-                <span>🌐</span>
-                <p><?= e(t('page.lang_notice')) ?></p>
-            </div>
-        <?php endif; ?>
-        <?php if (!empty($page['content'])): ?>
+        <?php if ($isFr && !empty($page['content'])): ?>
             <div class="prose surface glass"><?= $page['content'] ?></div>
         <?php else: ?>
-            <div class="empty-state surface glass">
-                <p><?= e(t('page.privacy.placeholder')) ?></p>
-            </div>
             <div class="prose surface glass">
-                <h2><?= e(t('page.privacy.collected')) ?></h2>
-                <p><?= e(t('page.privacy.collected.desc')) ?></p>
-                <h2><?= e(t('page.privacy.rights')) ?></h2>
-                <p><?= e(t('page.privacy.rights.desc')) ?></p>
-                <h2><?= e(t('page.privacy.contact')) ?></h2>
-                <p><?= e(t('page.privacy.contact.desc')) ?> <a href="mailto:calais.aeic@gmail.com">calais.aeic@gmail.com</a>.</p>
+                <?php if ($isFr): ?>
+                    <p><?= e(t('page.privacy.placeholder')) ?></p>
+                <?php endif; ?>
+                <p><?= e(t('privacy.intro')) ?></p>
+                <h2><?= e(t('privacy.data.collected')) ?></h2>
+                <p>
+                    <?= e(t('privacy.data.email')) ?><br>
+                    <?= e(t('privacy.data.password')) ?><br>
+                    <?= e(t('privacy.data.name')) ?><br>
+                    <?= e(t('privacy.data.purpose')) ?><br>
+                    <?= e(t('privacy.data.retention')) ?>
+                </p>
+                <h2><?= e(t('privacy.rights.title')) ?></h2>
+                <p>
+                    <?= e(t('privacy.rights.access')) ?><br>
+                    <?= e(t('privacy.rights.rectify')) ?><br>
+                    <?= e(t('privacy.rights.erase')) ?><br>
+                    <?= e(t('privacy.rights.export')) ?><br>
+                    <?= e(t('privacy.rights.object')) ?>
+                </p>
+                <h2><?= e(t('privacy.security.title')) ?></h2>
+                <p><?= e(t('privacy.security.desc')) ?></p>
+                <p><?= e(t('privacy.no_card')) ?></p>
+                <h2><?= e(t('privacy.contact')) ?></h2>
+                <p>
+                    <a href="mailto:calais.aeic@gmail.com">calais.aeic@gmail.com</a><br>
+                    <?= e(t('privacy.cnil')) ?>
+                </p>
             </div>
         <?php endif; ?>
     </div>
 </section>
-
-<style>
-.lang-notice {
-    display: flex; align-items: center; gap: 0.6rem;
-    background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.2);
-    border-radius: 10px; padding: 0.75rem 1rem; margin-bottom: 1.25rem;
-    font-size: 0.85rem; color: var(--muted);
-}
-.lang-notice span { font-size: 1.2rem; }
-</style>
