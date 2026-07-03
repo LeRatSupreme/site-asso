@@ -15,9 +15,9 @@ if (!is_array($member)) {
 }
 
 $fullName = trim(($member['prenom'] ?? '') . ' ' . ($member['nom'] ?? ''));
-$role     = (string) ($member['role'] ?? '');
-$pole     = (string) ($member['pole'] ?? '');
-$bio      = (string) ($member['bio'] ?? '');
+$role     = tc((string) ($member['role'] ?? ''));
+$pole     = tc((string) ($member['pole'] ?? ''));
+$bio      = tc((string) ($member['bio'] ?? ''));
 $photo    = (string) ($member['photo'] ?? '');
 ?>
 <article class="team-card card surface glass card-hover">
