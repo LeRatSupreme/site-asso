@@ -354,4 +354,25 @@ return [
     'Snacks' => ['en' => 'Snacks', 'de' => 'Snacks', 'es' => 'Aperitivos', 'zh' => '零食', 'ja' => 'スナック', 'pl' => 'Przekąski', 'ru' => 'Закуски', 'ms' => 'Snek'],
     'Spécial' => ['en' => 'Special', 'de' => 'Spezial', 'es' => 'Especial', 'zh' => '特色', 'ja' => 'スペシャル', 'pl' => 'Specjalne', 'ru' => 'Специальное', 'ms' => 'Istimewa'],
 
+    /* ---- Rôles du bureau ---- */
+    'Président' => ['en' => 'President', 'de' => 'Präsident', 'es' => 'Presidente', 'zh' => '主席', 'ja' => '会長', 'pl' => 'Prezes', 'ru' => 'Председатель', 'ms' => 'Presiden'],
+    'Vice-Président' => ['en' => 'Vice President', 'de' => 'Vizepräsident', 'es' => 'Vicepresidente', 'zh' => '副主席', 'ja' => '副会長', 'pl' => 'Wiceprezes', 'ru' => 'Заместитель председателя', 'ms' => 'Timbalan Presiden'],
+    'Trésorier' => ['en' => 'Treasurer', 'de' => 'Kassenwart', 'es' => 'Tesorero', 'zh' => '财务主管', 'ja' => '会計', 'pl' => 'Skarbnik', 'ru' => 'Казначей', 'ms' => 'Bendahara'],
+    'Vice-Trésorier' => ['en' => 'Vice Treasurer', 'de' => 'Vize-Kassenwart', 'es' => 'Vicetesorero', 'zh' => '副财务主管', 'ja' => '副会計', 'pl' => 'Wiceskarbnik', 'ru' => 'Заместитель казначея', 'ms' => 'Timbalan Bendahara'],
+    'Secrétaire' => ['en' => 'Secretary', 'de' => 'Schriftführer', 'es' => 'Secretario', 'zh' => '秘书', 'ja' => '書記', 'pl' => 'Sekretarz', 'ru' => 'Секретарь', 'ms' => 'Setiausaha'],
+    'Vice-Secrétaire' => ['en' => 'Vice Secretary', 'de' => 'Vize-Schriftführer', 'es' => 'Vicesecretario', 'zh' => '副秘书长', 'ja' => '副書記', 'pl' => 'Wicesekretarz', 'ru' => 'Заместитель секретаря', 'ms' => 'Timbalan Setiausaha'],
+    'Responsable Communication' => ['en' => 'Communication Manager', 'de' => 'Kommunikationsverantwortlicher', 'es' => 'Responsable de Comunicación', 'zh' => '宣传负责人', 'ja' => '広報担当', 'pl' => 'Odpowiedzialny za komunikację', 'ru' => 'Ответственный за связь', 'ms' => 'Pengurus Komunikasi'],
+    'Responsable Événements' => ['en' => 'Events Manager', 'de' => 'Veranstaltungsverantwortlicher', 'es' => 'Responsable de Eventos', 'zh' => '活动负责人', 'ja' => 'イベント担当', 'pl' => 'Odpowiedzialny za wydarzenia', 'ru' => 'Ответственный за мероприятия', 'ms' => 'Pengurus Acara'],
+    'Responsable Cafétéria' => ['en' => 'Cafeteria Manager', 'de' => 'Cafeteria-Verantwortlicher', 'es' => 'Responsable de Cafetería', 'zh' => '咖啡厅负责人', 'ja' => 'カフェテリア担当', 'pl' => 'Odpowiedzialny za kafeterię', 'ru' => 'Ответственный за кафетерий', 'ms' => 'Pengurus Kafeteria'],
+    'Membre' => ['en' => 'Member', 'de' => 'Mitglied', 'es' => 'Miembro', 'zh' => '成员', 'ja' => 'メンバー', 'pl' => 'Członek', 'ru' => 'Член', 'ms' => 'Ahli'],
+
+    /* ---- Pôles ---- */
+    'bureau' => ['en' => 'Board', 'de' => 'Vorstand', 'es' => 'Junta', 'zh' => '核心管理层', 'ja' => '役員会', 'pl' => 'Zarząd', 'ru' => 'Правление', 'ms' => 'Jawatankuasa'],
+    'communication' => ['en' => 'Communication', 'de' => 'Kommunikation', 'es' => 'Comunicación', 'zh' => '宣传部', 'ja' => '広報部', 'pl' => 'Komunikacja', 'ru' => 'Связь', 'ms' => 'Komunikasi'],
+    'événements' => ['en' => 'Events', 'de' => 'Veranstaltungen', 'es' => 'Eventos', 'zh' => '活动部', 'ja' => 'イベント部', 'pl' => 'Wydarzenia', 'ru' => 'Мероприятия', 'ms' => 'Acara'],
+    'cafétéria' => ['en' => 'Cafeteria', 'de' => 'Cafeteria', 'es' => 'Cafetería', 'zh' => '咖啡厅', 'ja' => 'カフェテリア', 'pl' => 'Kafeteria', 'ru' => 'Кафетерий', 'ms' => 'Kafeteria'],
+
+    /* ---- Bios ---- */
+    'Gère les finances, les paiements et la comptabilité.' => ['en' => 'Manages finances, payments and accounting.', 'de' => 'Verwaltet die Finanzen, Zahlungen und Buchhaltung.', 'es' => 'Gestiona las finanzas, los pagos y la contabilidad.', 'zh' => '管理财务、付款和会计。', 'ja' => '財務、支払い、会計を管理します。', 'pl' => 'Zarządza finansami, płatnościami i księgowością.', 'ru' => 'Управляет финансами, платежами и бухгалтерией.', 'ms' => 'Mengurus kewangan, pembayaran dan perakaunan.'],
+
 ];
