@@ -14,23 +14,21 @@ $roleLabels = [
     Auth::ROLE_ELEVE      => 'Élève',
 ];
 ?>
-<!-- Barre de filtres -->
-<div class="costs-toolbar">
-    <div class="search-box">
-        <input type="text" id="user-search" placeholder="🔎 Rechercher un utilisateur…" autocomplete="off">
-    </div>
-    <select id="user-role-filter" aria-label="Filtrer par rôle">
+<!-- Barre de filtres horizontale -->
+<div class="user-filters">
+    <input type="text" id="user-search" class="user-filter-search" placeholder="🔎 Rechercher…" autocomplete="off">
+    <select id="user-role-filter" class="user-filter-select">
         <option value="">Tous les rôles</option>
-        <option value="admin">👑 Administrateur</option>
+        <option value="admin">👑 Admin</option>
         <option value="eleve">🎓 Élève</option>
         <option value="tresorerie">💰 Trésorerie</option>
     </select>
-    <select id="user-status-filter" aria-label="Filtrer par statut">
-        <option value="">Tous les statuts</option>
+    <select id="user-status-filter" class="user-filter-select">
+        <option value="">Tous</option>
         <option value="active">✅ Actif</option>
-        <option value="inactive">⛔ Désactivé</option>
+        <option value="inactive">⛔ Inactif</option>
     </select>
-    <span class="costs-count muted" id="user-count"></span>
+    <span class="user-filter-count muted" id="user-count"></span>
 </div>
 
 <div class="card surface glass table-wrap">
@@ -96,6 +94,48 @@ $roleLabels = [
     </table>
 </div>
 <p class="card-meta">Le dernier administrateur actif ne peut être ni rétrogradé, ni désactivé, ni supprimé. Chaque action est journalisée (audit log).</p>
+
+<style>
+.user-filters {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin-bottom: 1rem;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 0.25rem;
+}
+.user-filter-search {
+    flex: 1;
+    min-width: 180px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--foreground);
+    padding: 0.5rem 0.7rem;
+    font-size: 0.88rem;
+    white-space: nowrap;
+}
+.user-filter-search:focus { outline: none; border-color: var(--primary); }
+.user-filter-select {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--foreground);
+    padding: 0.5rem 0.5rem;
+    font-size: 0.82rem;
+    white-space: nowrap;
+}
+.user-filter-count {
+    font-size: 0.78rem;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+@media (max-width: 600px) {
+    .user-filters { flex-wrap: wrap; }
+    .user-filter-search { min-width: 100%; }
+}
+</style>
 
 <script>
 (function () {
