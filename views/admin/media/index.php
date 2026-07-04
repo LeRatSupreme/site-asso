@@ -51,10 +51,7 @@ declare(strict_types=1);
                     <div class="media-actions">
                         <button type="button" class="btn btn-outline btn-sm copy-url" data-target="url-<?= e((string) $m['id']) ?>">Copier</button>
                         <button type="button" class="btn btn-outline btn-sm media-edit-btn" data-id="<?= e((string) $m['id']) ?>" data-name="<?= e($name) ?>" data-alt="<?= e((string)($m['alt'] ?? '')) ?>">✏️ Éditer</button>
-                        <form method="post" action="<?= e(url('/admin/media/' . rawurlencode((string) $m['id']) . '/delete')) ?>" data-confirm="Supprimer ce média ? Action irréversible.">
-                            <?= csrf_field() ?>
-                            <button type="submit" class="btn btn-danger btn-sm">🗑️</button>
-                        </form>
+                        <button type="button" class="btn btn-danger btn-sm media-delete-btn" data-url="<?= e(url('/admin/media/' . rawurlencode((string) $m['id']) . '/delete')) ?>" data-csrf="<?= e(csrf_token()) ?>" data-name="<?= e($name) ?>">🗑️</button>
                     </div>
                 </figcaption>
             </figure>
@@ -91,6 +88,19 @@ declare(strict_types=1);
             }
         });
     }
+
+    // Suppression via fetch (évite les problèmes de form imbriqué).
+    document.querySelectorAll('.media-delete-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            if (!confirm('Supprimer "' + (btn.dataset.name || 'ce média') + '" ? Action irréversible.')) return;
+            fetch(btn.dataset.url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: '_csrf=' + encodeURIComponent(btn.dataset.csrf),
+                credentials: 'same-origin'
+            }).then(function () { window.location.reload(); });
+        });
+    });
 
     // Copier l'URL.
     document.querySelectorAll('.copy-url').forEach(function (btn) {
