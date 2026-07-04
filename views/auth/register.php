@@ -36,8 +36,13 @@ declare(strict_types=1);
                 <label for="email"><?= e(t('auth.login.email')) ?></label>
                 <input type="email" id="email" name="email" autocomplete="email"
                        value="<?= e(old('email')) ?>" placeholder="vous@exemple.fr" required>
-                <div class="register-password-notice">
-                    📧 <strong><?= e(t('auth.register.email.hint')) ?></strong>
+            </div>
+
+            <div class="register-email-notice">
+                <div class="register-email-icon">✅</div>
+                <div class="register-email-text">
+                    <strong>Votre mot de passe temporaire</strong> sera envoyé à cette adresse e-mail.
+                    <br><span class="muted">Vérifie ta boîte de réception (et tes spams) après l'inscription.</span>
                 </div>
             </div>
 
