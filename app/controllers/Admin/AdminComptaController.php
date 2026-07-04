@@ -51,11 +51,31 @@ final class AdminComptaController extends AdminBaseController
 
     private function resolveMonth(?string $param): array
     {
-        $now = new \DateTimeImmutable('first day of this month');
+        // Si un mois est explicitement demandé via l'URL, l'utiliser.
         if (preg_match('/^(\d{4})-(\d{2})$/', (string) $param, $m)) {
             return ['year' => (int) $m[1], 'month' => (int) $m[2], 'value' => $param];
         }
 
+        // Sinon, défaut = dernier mois qui a des ventes (pas le mois calendaire actuel).
+        try {
+            $stmt = \db()->query(
+                'SELECT YEAR(sold_at) AS y, MONTH(sold_at) AS m
+                 FROM sales
+                 GROUP BY YEAR(sold_at), MONTH(sold_at)
+                 ORDER BY y DESC, m DESC
+                 LIMIT 1'
+            );
+            $row = $stmt->fetch();
+            if ($row) {
+                $val = sprintf('%04d-%02d', (int) $row['y'], (int) $row['m']);
+                return ['year' => (int) $row['y'], 'month' => (int) $row['m'], 'value' => $val];
+            }
+        } catch (\Throwable) {
+            // Ignore et fallback ci-dessous.
+        }
+
+        // Fallback : mois calendaire actuel.
+        $now = new \DateTimeImmutable('first day of this month');
         return ['year' => (int) $now->format('Y'), 'month' => (int) $now->format('n'), 'value' => $now->format('Y-m')];
     }
 
