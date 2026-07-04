@@ -7,6 +7,7 @@ namespace App\Controllers;
 use App\Core\Auth;
 use App\Core\Controller;
 use App\Models\GameScore;
+use App\Models\WordleWord;
 
 /**
  * Zone jeux : Wordle (FR/EN) + classement.
@@ -51,14 +52,24 @@ final class GameController extends Controller
             'en' => $uid !== null ? GameScore::hasPlayedToday($uid, 'en') : false,
         ];
 
+        // Mots chargés depuis la base (table wordle_words).
+        // Le mot du jour est sélectionné côté client à partir de cette liste,
+        // de façon déterministe (même index pour tous les joueurs, pas de
+        // répétition tant que la liste n'est pas entièrement parcourue).
+        $words = [
+            'fr' => WordleWord::allForLanguage('fr'),
+            'en' => WordleWord::allForLanguage('en'),
+        ];
+
         $this->render('game/wordle', [
-            'title'       => '🎮 Wordle AEIC — FR / EN',
-            'description' => 'Le Wordle de l\'AEIC : un mot de 5 lettres par jour, en français ou en anglais.',
-            'user'        => $user,
-            'isLoggedIn'  => Auth::check(),
-            'playedToday' => $playedToday,
-            'submitUrl'   => url('/jeux/wordle/submit'),
-            'csrfToken'   => csrf_token(),
+            'title'          => '🎮 Wordle AEIC — FR / EN',
+            'description'    => 'Le Wordle de l\'AEIC : un mot de 5 lettres par jour, en français ou en anglais.',
+            'user'           => $user,
+            'isLoggedIn'     => Auth::check(),
+            'playedToday'    => $playedToday,
+            'words'          => $words,
+            'submitUrl'      => url('/jeux/wordle/submit'),
+            'csrfToken'      => csrf_token(),
             'leaderboardUrl' => url('/jeux/leaderboard'),
         ]);
     }
