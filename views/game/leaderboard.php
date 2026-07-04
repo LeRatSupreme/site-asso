@@ -62,7 +62,7 @@ function wordleInitials(string $prenom, string $nom): string
     <div class="container">
         <span class="eyebrow">🎮 Zone jeux</span>
         <h1 class="page-title">🏆 Classement Wordle</h1>
-        <p class="page-lead">Les meilleurs joueurs de l'AEIC, classés par plus longue série de victoires consécutives.</p>
+        <p class="page-lead">Les joueurs classés par série de victoires en cours au mot quotidien (5 lettres). La série grandit chaque jour consécutif gagné&nbsp;!</p>
     </div>
 </header>
 
@@ -86,7 +86,8 @@ function wordleInitials(string $prenom, string $nom): string
                         <tr>
                             <th class="num" style="width:3.5rem;">#</th>
                             <th>Joueur</th>
-                            <th class="num">Série max 🏆</th>
+                            <th class="num">Série en cours 🔥</th>
+                            <th class="num lb-hide-sm">Série max 🏆</th>
                             <th class="num lb-hide-sm">Victoires</th>
                             <th class="num lb-hide-sm">Parties</th>
                         </tr>
@@ -108,7 +109,8 @@ function wordleInitials(string $prenom, string $nom): string
                                         </span>
                                     </div>
                                 </td>
-                                <td class="num"><strong style="color:var(--primary);"><?= (int) $row['maxStreak'] ?></strong></td>
+                                <td class="num"><strong style="color:var(--primary); font-size:1.15rem;"><?= (int) ($row['currentStreak'] ?? 0) ?> jour<?= (int) ($row['currentStreak'] ?? 0) > 1 ? 's' : '' ?></strong></td>
+                                <td class="num lb-hide-sm"><?= (int) ($row['maxStreak'] ?? 0) ?></td>
                                 <td class="num lb-hide-sm"><?= (int) $row['won'] ?></td>
                                 <td class="num lb-hide-sm"><?= (int) $row['played'] ?></td>
                             </tr>

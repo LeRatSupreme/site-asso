@@ -99,6 +99,10 @@ declare(strict_types=1);
     color: #0a1628;
     border-color: var(--primary);
 }
+.pill:disabled {
+    cursor: not-allowed !important;
+    pointer-events: none;
+}
 
 .row-cell {
     display: grid; place-items: center;
@@ -483,9 +487,25 @@ declare(strict_types=1);
             if (busy) return;
             settings[key] = val;
             saveSettings();
+            applyDailyLock();
             syncPills();
             newGame();
         });
+    }
+
+    // Le mode quotidien est toujours en 5 lettres (facile) : on verrouille
+    // le sélecteur de difficulté quand le mode quotidien est actif.
+    function applyDailyLock() {
+        var isDaily = settings.mode === 'daily';
+        ['diff-facile','diff-moyen','diff-difficile'].forEach(function(id) {
+            var el = document.getElementById(id);
+            el.disabled = isDaily;
+            el.style.opacity = isDaily ? '0.4' : '';
+            el.style.cursor = isDaily ? 'not-allowed' : '';
+        });
+        if (isDaily) {
+            settings.difficulty = 'facile';
+        }
     }
 
     bindPill('lang-fr', 'lang', 'fr');
@@ -511,6 +531,7 @@ declare(strict_types=1);
     });
 
     // ===================== INIT =====================
+    applyDailyLock();
     syncPills();
     newGame();
 
