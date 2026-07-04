@@ -395,7 +395,9 @@
     font-size: 0.85rem;
 }
 
-.event-ical { margin-top: 0.75rem; }
+.event-ical { margin-top: 0.75rem; display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.event-fb-btn svg { color: #48bdd3; transition: color 0.15s; }
+.event-fb-btn:hover svg { color: #fff; }
 
 /* Lightbox */
 .lightbox {
