@@ -23,6 +23,7 @@ return [
     'nav.team'              => ['fr' => 'Équipe', 'en' => 'Team', 'de' => 'Team', 'es' => 'Equipo', 'zh' => '团队', 'ja' => 'チーム', 'pl' => 'Zespół', 'ru' => 'Команда', 'ms' => 'Pasukan'],
     'nav.polls'             => ['fr' => 'Sondages', 'en' => 'Polls', 'de' => 'Umfragen', 'es' => 'Encuestas', 'zh' => '投票', 'ja' => 'アンケート', 'pl' => 'Ankiety', 'ru' => 'Опросы', 'ms' => 'Undian'],
     'nav.gallery'           => ['fr' => 'Galerie', 'en' => 'Gallery', 'de' => 'Galerie', 'es' => 'Galería', 'zh' => '图库', 'ja' => 'ギャラリー', 'pl' => 'Galeria', 'ru' => 'Галерея', 'ms' => 'Galeri'],
+    'nav.games'             => ['fr' => 'Jeux', 'en' => 'Games', 'de' => 'Spiele', 'es' => 'Juegos', 'zh' => '游戏', 'ja' => 'ゲーム', 'pl' => 'Gry', 'ru' => 'Игры', 'ms' => 'Permainan'],
     'nav.login'             => ['fr' => 'Connexion', 'en' => 'Log in', 'de' => 'Anmelden', 'es' => 'Iniciar sesión', 'zh' => '登录', 'ja' => 'ログイン', 'pl' => 'Zaloguj', 'ru' => 'Вход', 'ms' => 'Log masuk'],
     'nav.register'          => ['fr' => "S'inscrire", 'en' => 'Register', 'de' => 'Registrieren', 'es' => 'Registrarse', 'zh' => '注册', 'ja' => '登録', 'pl' => 'Zarejestruj', 'ru' => 'Регистрация', 'ms' => 'Daftar'],
     'nav.logout'            => ['fr' => 'Déconnexion', 'en' => 'Log out', 'de' => 'Abmelden', 'es' => 'Cerrar sesión', 'zh' => '退出', 'ja' => 'ログアウト', 'pl' => 'Wyloguj', 'ru' => 'Выйти', 'ms' => 'Log keluar'],

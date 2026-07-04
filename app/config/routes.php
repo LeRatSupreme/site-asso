@@ -19,6 +19,7 @@ use App\Controllers\Admin\AdminTeamController;
 use App\Controllers\Admin\AdminUserController;
 use App\Controllers\AuthController;
 use App\Controllers\EventController;
+use App\Controllers\GameController;
 use App\Controllers\HealthController;
 use App\Controllers\HomeController;
 use App\Controllers\LocaleController;
@@ -60,6 +61,12 @@ function aeic_register_routes(Router $router): void
     $router->get('/sondages', [PollController::class, 'index']);
     $router->get('/sondages/{slug}', [PollController::class, 'show']);
     $router->post('/sondages/{slug}/vote', [PollController::class, 'vote']);
+
+    // Zone jeux (Wordle FR/EN + classement).
+    $router->get('/jeux', [GameController::class, 'index']);
+    $router->get('/jeux/wordle', [GameController::class, 'wordle']);
+    $router->post('/jeux/wordle/submit', [GameController::class, 'submitWordle']);
+    $router->get('/jeux/leaderboard', [GameController::class, 'leaderboard']);
 
     // SEO.
     $router->get('/sitemap.xml', [SeoController::class, 'sitemap']);
