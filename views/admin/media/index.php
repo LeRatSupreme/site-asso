@@ -45,13 +45,15 @@ declare(strict_types=1);
                     <strong class="media-name" title="<?= e($name) ?>"><?= e($name) ?></strong>
                     <div class="media-meta">
                         <?php if ($size !== null): ?><span class="badge badge-muted"><?= (int) $size ?> Ko</span><?php endif; ?>
+                        <?php if (!empty($m['alt'])): ?><span class="badge badge-info">📝 <?= e($m['alt']) ?></span><?php endif; ?>
                     </div>
                     <code class="media-url" id="url-<?= e((string) $m['id']) ?>"><?= e($fullUrl) ?></code>
                     <div class="media-actions">
-                        <button type="button" class="btn btn-outline btn-sm copy-url" data-target="url-<?= e((string) $m['id']) ?>">Copier l'URL</button>
+                        <button type="button" class="btn btn-outline btn-sm copy-url" data-target="url-<?= e((string) $m['id']) ?>">Copier</button>
+                        <button type="button" class="btn btn-outline btn-sm media-edit-btn" data-id="<?= e((string) $m['id']) ?>" data-name="<?= e($name) ?>" data-alt="<?= e((string)($m['alt'] ?? '')) ?>">✏️ Éditer</button>
                         <form method="post" action="<?= e(url('/admin/media/' . rawurlencode((string) $m['id']) . '/delete')) ?>" data-confirm="Supprimer ce média ? Action irréversible.">
                             <?= csrf_field() ?>
-                            <button type="submit" class="btn btn-danger btn-sm">Supprimer</button>
+                            <button type="submit" class="btn btn-danger btn-sm">🗑️</button>
                         </form>
                     </div>
                 </figcaption>
@@ -98,16 +100,87 @@ declare(strict_types=1);
             var url = el.textContent.trim();
             var done = function () {
                 var orig = btn.textContent;
-                btn.textContent = '✓ Copié !';
-                btn.classList.add('is-done');
-                setTimeout(function () { btn.textContent = orig; btn.classList.remove('is-done'); }, 1500);
+                btn.textContent = '✓';
+                setTimeout(function () { btn.textContent = orig; }, 1200);
             };
             if (navigator.clipboard && navigator.clipboard.writeText) {
-                navigator.clipboard.writeText(url).then(done, function () { window.prompt('Copie cette URL :', url); });
+                navigator.clipboard.writeText(url).then(done, function () { window.prompt('Copie :', url); });
             } else {
-                window.prompt('Copie cette URL :', url);
+                window.prompt('Copie :', url);
             }
         });
     });
+
+    // Modal d'édition.
+    document.querySelectorAll('.media-edit-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var modal = document.getElementById('media-edit-modal');
+            var idField = document.getElementById('edit-id');
+            var nameField = document.getElementById('edit-name');
+            var altField = document.getElementById('edit-alt');
+            var form = document.getElementById('edit-form');
+
+            idField.value = btn.dataset.id;
+            nameField.value = btn.dataset.name || '';
+            altField.value = btn.dataset.alt || '';
+            form.action = '<?= e(url('/admin/media')) ?>/' + encodeURIComponent(btn.dataset.id) + '/update';
+
+            modal.hidden = false;
+        });
+    });
+    var closeBtn = document.getElementById('media-edit-close');
+    if (closeBtn) closeBtn.addEventListener('click', function () {
+        document.getElementById('media-edit-modal').hidden = true;
+    });
+    var overlay = document.getElementById('media-edit-overlay');
+    if (overlay) overlay.addEventListener('click', function () {
+        document.getElementById('media-edit-modal').hidden = true;
+    });
 })();
 </script>
+
+<!-- Modal d'édition -->
+<div class="media-edit-overlay" id="media-edit-overlay" hidden></div>
+<div class="media-edit-modal" id="media-edit-modal" hidden>
+    <div class="media-edit-head">
+        <h2>✏️ Éditer le média</h2>
+        <button type="button" id="media-edit-close" class="btn btn-ghost btn-sm">✕</button>
+    </div>
+    <form method="post" id="edit-form">
+        <?= csrf_field() ?>
+        <input type="hidden" id="edit-id" name="id" value="">
+        <div class="field">
+            <label for="edit-name">Nom du fichier</label>
+            <input type="text" id="edit-name" name="name" value="">
+        </div>
+        <div class="field">
+            <label for="edit-alt">Texte alternatif (description)</label>
+            <input type="text" id="edit-alt" name="alt" value="" placeholder="Ex: Photo du barbecue de rentrée">
+        </div>
+        <button type="submit" class="btn btn-primary">💾 Enregistrer</button>
+    </form>
+</div>
+
+<style>
+.media-edit-overlay {
+    position: fixed; inset: 0; z-index: 9999;
+    background: rgba(0,0,0,0.5); backdrop-filter: blur(2px);
+}
+.media-edit-overlay[hidden] { display: none; }
+.media-edit-modal {
+    position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    z-index: 10000; background: var(--card, #0f1e35);
+    border: 1px solid var(--border); border-radius: 16px;
+    padding: 1.75rem; width: 90%; max-width: 420px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    animation: mepop 0.25s ease;
+}
+.media-edit-modal[hidden] { display: none; }
+@keyframes mepop { from { opacity: 0; transform: translate(-50%, -45%); } }
+.media-edit-head {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 1.25rem;
+}
+.media-edit-head h2 { font-size: 1.1rem; font-weight: 800; margin: 0; color: var(--primary); }
+.media-edit-modal .field { margin-bottom: 0.85rem; }
+</style>

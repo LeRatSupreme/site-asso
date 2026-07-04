@@ -106,6 +106,30 @@ final class AdminMediaController extends AdminBaseController
             if (is_file($path)) {
                 @unlink($path);
             }
+        }
+        Media::delete($id);
+        $this->audit('media.delete', 'media', $id);
+        $this->setFlash('success', 'Média supprimé.');
+        redirect(url('/admin/media'));
+    }
+
+    public function update(string $id): void
+    {
+        $this->guard();
+
+        $alt = trim((string) ($_POST['alt'] ?? ''));
+        $name = trim((string) ($_POST['name'] ?? ''));
+
+        try {
+            $stmt = \db()->prepare('UPDATE media SET alt = ?, name = ? WHERE id = ?');
+            $stmt->execute([$alt, $name, $id]);
+            $this->setFlash('success', 'Média mis à jour.');
+        } catch (\Throwable) {
+            $this->setFlash('error', 'Erreur lors de la mise à jour.');
+        }
+
+        redirect(url('/admin/media'));
+    }
             Media::deleteRow($id);
             $this->audit('media.delete', 'media', $id);
             $this->setFlash('success', 'Média supprimé.');
