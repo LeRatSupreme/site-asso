@@ -121,10 +121,18 @@ declare(strict_types=1);
         });
     });
 
-    // Modal d'édition.
+    function closeEditModal() {
+        var modal = document.getElementById('media-edit-modal');
+        var overlay = document.getElementById('media-edit-overlay');
+        if (modal) modal.hidden = true;
+        if (overlay) overlay.hidden = true;
+    }
+
+    // Ouvrir le modal.
     document.querySelectorAll('.media-edit-btn').forEach(function (btn) {
         btn.addEventListener('click', function () {
             var modal = document.getElementById('media-edit-modal');
+            var overlay = document.getElementById('media-edit-overlay');
             var idField = document.getElementById('edit-id');
             var nameField = document.getElementById('edit-name');
             var altField = document.getElementById('edit-alt');
@@ -135,16 +143,16 @@ declare(strict_types=1);
             altField.value = btn.dataset.alt || '';
             form.action = '<?= e(url('/admin/media')) ?>/' + encodeURIComponent(btn.dataset.id) + '/update';
 
-            modal.hidden = false;
+            if (overlay) overlay.hidden = false;
+            if (modal) modal.hidden = false;
         });
     });
     var closeBtn = document.getElementById('media-edit-close');
-    if (closeBtn) closeBtn.addEventListener('click', function () {
-        document.getElementById('media-edit-modal').hidden = true;
-    });
-    var overlay = document.getElementById('media-edit-overlay');
-    if (overlay) overlay.addEventListener('click', function () {
-        document.getElementById('media-edit-modal').hidden = true;
+    if (closeBtn) closeBtn.addEventListener('click', closeEditModal);
+    var overlayEl = document.getElementById('media-edit-overlay');
+    if (overlayEl) overlayEl.addEventListener('click', closeEditModal);
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') closeEditModal();
     });
 })();
 </script>
