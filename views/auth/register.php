@@ -38,12 +38,15 @@ declare(strict_types=1);
                        value="<?= e(old('email')) ?>" placeholder="vous@exemple.fr" required>
             </div>
 
-            <div class="register-email-notice">
-                <div class="register-email-icon">✅</div>
-                <div class="register-email-text">
-                    <strong>Votre mot de passe temporaire</strong> sera envoyé à cette adresse e-mail.
-                    <br><span class="muted">Vérifie ta boîte de réception (et tes spams) après l'inscription.</span>
-                </div>
+            <div class="register-mail-notice">
+                <label class="register-mail-check">
+                    <input type="checkbox" id="ack-mail" required>
+                    <span class="check-box"></span>
+                </label>
+                <label for="ack-mail" class="register-mail-content">
+                    <span class="register-mail-title">📧 Mot de passe par e-mail</span>
+                    <span class="register-mail-desc">Ton mot de passe temporaire sera envoyé à l'adresse ci-dessus. Vérifie ta boîte de réception <strong>et tes spams</strong> après l'inscription.</span>
+                </label>
             </div>
 
             <div class="field field-checkbox">

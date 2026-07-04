@@ -1165,6 +1165,64 @@ ul, ol { list-style: none; }
 .register-email-text strong { color: var(--primary); font-weight: 800; }
 .register-email-text .muted { font-size: 0.82rem; }
 
+/* Notice mot de passe avec checkbox */
+.register-mail-notice {
+    display: flex; align-items: flex-start; gap: 0.85rem;
+    padding: 1rem 1.1rem;
+    background: linear-gradient(135deg, rgba(72,189,211,0.06), rgba(97,80,170,0.04));
+    border: 1px solid rgba(72,189,211,0.2);
+    border-radius: 12px;
+    margin-bottom: 1.25rem;
+    transition: border-color 0.2s;
+}
+.register-mail-notice:has(input:checked) {
+    border-color: rgba(72,189,211,0.4);
+    background: linear-gradient(135deg, rgba(72,189,211,0.1), rgba(97,80,170,0.06));
+}
+.register-mail-check {
+    flex-shrink: 0;
+    cursor: pointer;
+    margin-top: 2px;
+}
+.register-mail-check input {
+    position: absolute; opacity: 0; pointer-events: none;
+}
+.check-box {
+    display: block;
+    width: 22px; height: 22px;
+    border: 2px solid rgba(72,189,211,0.4);
+    border-radius: 6px;
+    transition: all 0.2s;
+    position: relative;
+}
+.register-mail-check input:checked + .check-box {
+    background: var(--primary);
+    border-color: var(--primary);
+}
+.register-mail-check input:checked + .check-box::after {
+    content: '';
+    position: absolute;
+    left: 6px; top: 2px;
+    width: 6px; height: 11px;
+    border: solid #08172d;
+    border-width: 0 3px 3px 0;
+    transform: rotate(45deg);
+}
+.register-mail-check input:focus-visible + .check-box {
+    box-shadow: 0 0 0 3px rgba(72,189,211,0.2);
+}
+.register-mail-content {
+    cursor: pointer;
+    display: flex; flex-direction: column; gap: 0.2rem;
+}
+.register-mail-title {
+    font-size: 0.95rem; font-weight: 800; color: var(--primary);
+}
+.register-mail-desc {
+    font-size: 0.85rem; line-height: 1.5; color: var(--muted);
+}
+.register-mail-desc strong { color: var(--foreground); }
+
 .field input[type="text"],
 .field input[type="email"],
 .field input[type="password"],
