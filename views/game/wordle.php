@@ -2,518 +2,470 @@
 
 declare(strict_types=1);
 
-/**
- * Page du jeu Wordle (FR / EN).
- *
- * @var array<string,mixed>|null $user
- * @var bool $isLoggedIn
- * @var array{fr:bool, en:bool} $playedToday
- * @var string $submitUrl
- * @var string $leaderboardUrl
- * @var string $csrfToken
- */
-
-$wordleCss = <<<CSS
-.wordle-wrap { max-width: 520px; margin: 0 auto; }
-.wordle-mode { display:flex; justify-content:center; gap:0.5rem; margin-bottom:1.25rem; flex-wrap:wrap; }
-.mode-pill {
-    padding:0.5rem 1.1rem; border-radius:999px; cursor:pointer;
-    border:1px solid var(--border-strong); background:rgba(255,255,255,0.03);
-    color:var(--foreground); font-weight:700; font-size:0.9rem;
-    transition: background .15s, border-color .15s, color .15s;
-}
-.mode-pill:hover { background: rgba(72,189,211,0.12); }
-.mode-pill.is-active {
-    background: var(--primary); color: var(--primary-foreground);
-    border-color: var(--primary);
-}
-.wordle-grid {
-    display:grid; grid-template-rows: repeat(6, 1fr); gap:0.4rem;
-    margin:0 auto 1.25rem;
-}
-.wordle-row { display:grid; grid-template-columns: repeat(5, 1fr); gap:0.4rem; }
-.wordle-cell {
-    aspect-ratio:1/1; display:grid; place-items:center;
-    font-size:1.6rem; font-weight:900; text-transform:uppercase;
-    border:2px solid var(--border-strong); border-radius:0.4rem;
-    color:var(--foreground); background:rgba(255,255,255,0.02);
-    transition: transform .1s ease; user-select:none;
-}
-.wordle-cell.has-letter { border-color: rgba(72,189,211,0.5); }
-.wordle-cell.flipping { animation: flip .5s ease forwards; }
-.wordle-cell.correct {
-    background:#3a9bb8; border-color:#3a9bb8; color:#0a1628;
-}
-.wordle-cell.present {
-    background:#d4941a; border-color:#d4941a; color:#0a1628;
-}
-.wordle-cell.absent {
-    background:#1a2a3e; border-color:#1a2a3e; color: var(--muted);
-}
-.wordle-cell.pop { animation: pop .12s ease; }
-@keyframes flip {
-    0% { transform: rotateX(0); }
-    50% { transform: rotateX(90deg); }
-    100% { transform: rotateX(0); }
-}
-@keyframes pop {
-    0% { transform: scale(1); }
-    50% { transform: scale(1.08); }
-    100% { transform: scale(1); }
-}
-.wordle-keyboard { display:flex; flex-direction:column; gap:0.4rem; }
-.kb-row { display:flex; justify-content:center; gap:0.3rem; }
-.kb-key {
-    flex:1; max-width:42px; min-width:28px;
-    padding:0.7rem 0; border:none; border-radius:0.35rem;
-    background:rgba(255,255,255,0.08); color:var(--foreground);
-    font-weight:800; font-size:0.95rem; cursor:pointer;
-    text-transform:uppercase; transition: background .15s, transform .05s;
-}
-.kb-key:hover { background:rgba(255,255,255,0.16); }
-.kb-key:active { transform: translateY(1px); }
-.kb-key.wide { flex:1.6; max-width:64px; font-size:0.72rem; }
-.kb-key.correct { background:#3a9bb8; color:#0a1628; }
-.kb-key.present { background:#d4941a; color:#0a1628; }
-.kb-key.absent { background:#1a2a3e; color:var(--muted); }
-.wordle-msg { text-align:center; min-height:1.6rem; margin-bottom:0.75rem; font-weight:700; }
-.wordle-msg.win { color: var(--primary); }
-.wordle-msg.lose { color: var(--accent-danger); }
-.wordle-actions { display:flex; justify-content:center; gap:0.5rem; flex-wrap:wrap; margin-top:1rem; }
-@media (max-width: 480px) {
-    .wordle-cell { font-size: 1.25rem; }
-    .kb-key { font-size:0.85rem; padding:0.6rem 0; }
-}
-CSS;
+/** @var array<string,mixed>|null $user */
+/** @var bool $isLoggedIn */
+/** @var array{fr:bool, en:bool} $playedToday */
+/** @var string $submitUrl */
+/** @var string $leaderboardUrl */
+/** @var string $csrfToken */
 ?>
-
-<style><?= $wordleCss ?></style>
-
 <header class="page-hero">
     <div class="halo halo-teal" aria-hidden="true"></div>
     <div class="container">
-        <span class="eyebrow">🎮 Zone jeux</span>
-        <h1 class="page-title">Wordle AEIC</h1>
-        <p class="page-lead">Devine le mot de 5 lettres du jour. Choisis ta langue et c'est parti&nbsp;!</p>
+        <a class="btn btn-outline" href="<?= e(url('/jeux')) ?>" style="margin-bottom:0.75rem;text-decoration:none;">← Retour aux jeux</a>
+        <span class="eyebrow">🔤 Jeu de lettres</span>
+        <h1 class="page-title">Wordle</h1>
+        <p class="page-lead">Devine le mot en 6 essais. Un nouveau mot chaque jour.</p>
     </div>
 </header>
 
 <section class="section">
-    <div class="container wordle-wrap">
+    <div class="container" style="max-width:500px;">
 
-        <?php if (!$isLoggedIn): ?>
-            <div class="surface card panel-brand" style="margin-bottom:1.25rem; align-items:flex-start;">
-                <p style="margin:0; font-size:0.9rem;">🔒 <strong>Mode démo</strong> — tes parties ne sont pas sauvegardées. <a href="<?= e(url('/login?callbackUrl=' . rawurlencode('/jeux/wordle'))) ?>">Connecte-toi</a> pour enregistrer ton score et grimper dans le classement.</p>
-            </div>
-        <?php endif; ?>
-
-        <div class="wordle-mode" role="tablist" aria-label="Langue du Wordle">
-            <button type="button" class="mode-pill" data-mode="fr" role="tab">🇫🇷 Français</button>
-            <button type="button" class="mode-pill" data-mode="en" role="tab">🇬🇧 English</button>
+        <!-- Sélecteur FR/EN -->
+        <div style="display:flex;justify-content:center;gap:0.5rem;margin-bottom:1.5rem;">
+            <button type="button" class="mode-pill" id="mode-fr" data-mode="fr">🇫🇷 FR</button>
+            <button type="button" class="mode-pill" id="mode-en" data-mode="en">🇬🇧 EN</button>
         </div>
 
-        <div class="wordle-msg" id="w-msg" role="status" aria-live="polite"></div>
+        <!-- Grille -->
+        <div id="grid" style="display:grid;gap:6px;margin-bottom:1.5rem;"></div>
 
-        <div class="wordle-grid" id="w-grid"></div>
+        <!-- Message -->
+        <div id="msg" style="text-align:center;font-weight:700;min-height:1.5rem;margin-bottom:1rem;"></div>
 
-        <div class="wordle-keyboard" id="w-keyboard"></div>
+        <!-- Clavier -->
+        <div id="keyboard"></div>
 
-        <div class="wordle-actions" id="w-actions" hidden>
-            <button type="button" class="btn btn-outline btn-sm" id="w-share">📋 Partager</button>
+        <!-- Actions fin -->
+        <div id="end-actions" style="display:none;text-align:center;margin-top:1.5rem;gap:0.5rem;justify-content:center;">
+            <button type="button" class="btn btn-outline btn-sm" id="btn-share">📋 Partager</button>
             <a class="btn btn-primary btn-sm" href="<?= e($leaderboardUrl) ?>">🏆 Classement</a>
         </div>
     </div>
 </section>
 
+<style>
+.mode-pill {
+    padding: 0.5rem 1.2rem;
+    border-radius: 999px;
+    cursor: pointer;
+    border: 2px solid var(--border-strong);
+    background: rgba(255,255,255,0.03);
+    color: var(--muted);
+    font-weight: 700;
+    font-size: 0.9rem;
+    transition: all 0.15s;
+}
+.mode-pill.active {
+    background: var(--primary);
+    color: #0a1628;
+    border-color: var(--primary);
+}
+
+.row-cell {
+    width: 56px; height: 56px;
+    display: grid; place-items: center;
+    font-size: 1.5rem; font-weight: 900;
+    text-transform: uppercase;
+    border: 2px solid rgba(255,255,255,0.15);
+    border-radius: 8px;
+    background: transparent;
+    color: var(--foreground);
+    transition: transform 0.1s;
+}
+.row-cell.filled { border-color: rgba(255,255,255,0.4); }
+
+/* Couleurs de résultat */
+.row-cell.green {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: #0a1628;
+}
+.row-cell.yellow {
+    background: var(--accent-warning);
+    border-color: var(--accent-warning);
+    color: #0a1628;
+}
+.row-cell.gray {
+    background: rgba(255,255,255,0.06);
+    border-color: rgba(255,255,255,0.06);
+    color: var(--muted);
+}
+
+/* Animation reveal */
+.row-cell.reveal {
+    animation: cellReveal 0.5s ease forwards;
+}
+@keyframes cellReveal {
+    0% { transform: rotateX(0deg); }
+    50% { transform: rotateX(90deg); }
+    100% { transform: rotateX(0deg); }
+}
+
+/* Clavier */
+.kb-row { display: flex; justify-content: center; gap: 5px; margin-bottom: 5px; }
+.kb-key {
+    min-width: 30px; height: 48px;
+    flex: 1; max-width: 42px;
+    border: none; border-radius: 6px;
+    background: rgba(255,255,255,0.1);
+    color: var(--foreground);
+    font-weight: 800; font-size: 0.9rem;
+    cursor: pointer; text-transform: uppercase;
+    transition: background 0.15s;
+}
+.kb-key:hover { background: rgba(255,255,255,0.2); }
+.kb-key:active { transform: translateY(1px); }
+.kb-key.wide { max-width: 62px; font-size: 0.7rem; }
+.kb-key.green { background: var(--primary); color: #0a1628; }
+.kb-key.yellow { background: var(--accent-warning); color: #0a1628; }
+.kb-key.gray { background: rgba(255,255,255,0.05); color: var(--muted); }
+</style>
+
 <script>
-(function () {
-    // ===================== Dictionnaires (150+ mots/langue) =====================
+(function() {
+    'use strict';
+
+    // ===================== MOTS 5 LETTRES =====================
     var WORDS = {
-        fr: [
-            "MAISON","TABLE","CHIEN","ARBRE","FLEUR","PLAGE","ROUTE","PORTE","TOITS","JARDIN",
-            "AVION","BATEAU","METRO","ECOLE","LIVRE","STYLO","REGLE","POMME","RAISIN","TOMATE",
-            "PATATE","BONBON","GATEAU","BISCUIT","PAINS","CREPE","PIZZA","ROUGE","BLANC","JAUNE",
-            "ORANGE","VIOLET","GRAND","PETIT","CHAUD","FROID","VITESSE","RAPIDE","LENT","JOIE",
-            "PEURS","AMOUR","COLERE","HONTE","REVES","DORMIR","MANGEZ","BOIRE","LIREZ","JOUER",
-            "COURIR","NAGER","LUNDI","MARDI","MATIN","SOIRS","NUITS","MOIS","PERES","MERES",
-            "FRERE","SOEUR","ONCLE","TANTE","AMIES","HEURE","MINUT","TEMPS","VIEUX","JEUNE",
-            "ARGENT","METAL","PIERRE","BRIQUE","VERRE","FER","NEIGE","PLUIE","SOLEIL","NUAGE",
-            "TIGRE","LOUPS","OURS","LIONS","SINGE","CHEVAL","VACHE","MERES","MONDE","TERRE",
-            "MARS","LUNE","ETOILE","CIEUX","LACS","POULE","CANARD","AIGLE","REQUIN","LAPIN"
-        ].filter(function(w){ return w.length === 5; }),
-        en: [
-            "HOUSE","TABLE","WATER","BREAD","APPLE","CHAIR","MOUSE","LIGHT","NIGHT","MUSIC",
-            "RIVER","OCEAN","CLOUD","STORM","BEACH","FIELD","TOWER","TRAIN","PLANE","TRUCK",
-            "SCHOOL","CLASS","BOOKS","PAPER","STUDY","TEACH","LEARN","WRITE","GRAPE","LEMON",
-            "MANGO","PEACH","MELON","BERRY","SALAD","ONION","BEANS","JUICE","CANDY","SUGAR",
-            "COLOR","GREEN","BLACK","WHITE","BROWN","SILVER","BRONZE","COPPER","HAPPY","BRAVE",
-            "PROUD","QUIET","SMART","FUNNY","SILLY","DREAM","MONDAY","FRIDAY","SUNDAY","WEEK",
-            "MONTH","YEARS","FATHER","MOTHER","SISTER","UNCLE","FRIEND","CHILD","WORLD","EARTH",
-            "MONEY","METAL","STONE","BRICK","GLASS","STEEL","IRONS","SNOWS","RAINS","WINDS",
-            "SUNNY","FOGGY","FROST","TIGER","WOLF","HORSE","SHEEP","EAGLE","SHARK","WHALE",
-            "MOUSE","RABBIT","SNAKE","MONKEY","ZEBRA","PANDA","PARTY","MAGIC","EARTH","HEART"
-        ].filter(function(w){ return w.length === 5; })
+        fr: ["TABLE","CHIEN","ARBRE","FLEUR","PLAGE","ROUTE","PORTE","AVION","METRO","ECOLE",
+             "LIVRE","STYLO","REGLE","POMME","CREPE","PIZZA","ROUGE","BLANC","JAUNE","VIOLET",
+             "GRAND","PETIT","CHAUD","FROID","RAPIDE","LUNDI","MARDI","MATIN","SOIRS","NUITS",
+             "PERES","MERES","FRERE","SOEUR","ONCLE","AMIES","HEURE","TEMPS","VIEUX","JEUNE",
+             "METAL","VERRE","NEIGE","PLUIE","LOUPS","OURS","LIONS","SINGE","MONDE","TERRE",
+             "MARS","LUNE","LACS","AIGLE","LAPIN","BLOND","NOIRES","TROIS","SEIZE","FETES",
+             "OEILS","SAINT","FUMEE","NUAGE","ECRAN","PIANO","GANTS","LOUPE","CARTE","SORTS",
+             "FONDS","GROUPE","PAIXS","OISEAU","RAYON","JOURNAL","CINQ","FROMAGE","DEUX","HUIT",
+             "BÂTON","GANTS","TRAIN","BATEAU","VOILE","LOUP","MOINE","ARBRE","TOAST","FÊTE"].map(function(w) {
+            return w.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+        }).filter(function(w) { return /^[A-Z]{5}$/.test(w); }),
+
+        en: ["HOUSE","TABLE","WATER","BREAD","APPLE","CHAIR","MOUSE","LIGHT","NIGHT","MUSIC",
+             "RIVER","OCEAN","CLOUD","STORM","BEACH","FIELD","TOWER","TRAIN","PLANE","TRUCK",
+             "CLASS","BOOKS","PAPER","STUDY","TEACH","LEARN","WRITE","GRAPE","LEMON","MANGO",
+             "PEACH","MELON","BERRY","SALAD","ONION","BEANS","JUICE","CANDY","SUGAR","COLOR",
+             "GREEN","BLACK","WHITE","BROWN","HAPPY","BRAVE","PROUD","QUIET","SMART","FUNNY",
+             "DREAM","PARTY","MAGIC","EARTH","HEART","SMILE","PHONE","BRAIN","BONES","SKINS",
+             "PRICE","STORE","TRADE","DEALS","SALES","TAXES","CYBER","PIXEL","CODES","BYTES",
+             "FILES","INPUT","CLICK","VIEWS","WORDS","LINES","GAMES","CARDS","BOARD","SPORT",
+             "GOALS","CHESS","TEAMS","SHARK","WHALE","HORSE","SHEEP","EAGLE","SNAKE","ZEBRA",
+             "PANDA","SUNNY","FOGGY","FROST","TIGER","RABBIT","MONKEY","STEEL","STONE","BRICK",
+             "GLASS","METAL","MONEY","WORLD","MONTH","WEEKS","FRIEND","CHILD","MOTHER","SISTER"].map(function(w) {
+            return w.toUpperCase();
+        }).filter(function(w) { return /^[A-Z]{5}$/.test(w); })
     };
 
-    // Nettoyage : on ne garde que des mots de 5 lettres A-Z (pour la cohérence du jeu).
-    function clean(list) {
-        var out = [];
-        for (var i = 0; i < list.length; i++) {
-            var w = list[i].toUpperCase().replace(/[^A-Z]/g, '');
-            if (w.length === 5) { out.push(w); }
-        }
-        return out;
-    }
-    WORDS.fr = clean(WORDS.fr);
-    WORDS.en = clean(WORDS.en);
-
+    // ===================== CLAVIERS =====================
     var KEYBOARDS = {
-        fr: ['AZERTYUIOP', 'QSDFGHJKLM', 'WXCVBN'],
-        en: ['QWERTYUIOP', 'ASDFGHJKL',  'ZXCVBN']
+        fr: ["AZERTYUIOP", "QSDFGHJKLM", "WXCVBN"],
+        en: ["QWERTYUIOP", "ASDFGHJKL", "ZXCVBN"]
     };
 
+    // ===================== ÉTAT =====================
     var MODE_KEY = 'aeic-wordle-mode';
     var SUBMIT_URL = <?= json_encode($submitUrl) ?>;
     var CSRF_TOKEN = <?= json_encode($csrfToken) ?>;
     var IS_LOGGED_IN = <?= json_encode($isLoggedIn) ?>;
-    var PLAYED_TODAY = <?= json_encode($playedToday) ?>;
-    var LEADERBOARD_URL = <?= json_encode($leaderboardUrl) ?>;
 
-    // ===================== Mot du jour (déterministe) =====================
-    function dayOfYear(d) {
-        var start = new Date(d.getFullYear(), 0, 0);
-        var diff = d - start;
-        return Math.floor(diff / 86400000);
-    }
-    function wordOfDay(mode) {
-        var list = WORDS[mode];
-        if (!list.length) { return '?????'; }
+    var mode = localStorage.getItem(MODE_KEY) || 'fr';
+    var answer = '';
+    var guess = '';
+    var row = 0;
+    var over = false;
+    var keyState = {}; // 'A' -> 'green'|'yellow'|'gray'
+
+    // ===================== MOT DU JOUR =====================
+    function dayOfYear() {
         var now = new Date();
-        var seed = 2654435761; // Knuth
-        var idx = Math.floor((dayOfYear(now) * seed) % list.length);
-        return list[(idx + list.length) % list.length];
+        var start = new Date(now.getFullYear(), 0, 0);
+        return Math.floor((now - start) / 86400000);
+    }
+    function pickWord() {
+        var list = WORDS[mode];
+        if (!list || list.length === 0) return '?????';
+        var idx = (dayOfYear() * 7 + list.length) % list.length;
+        return list[idx];
     }
 
-    // ===================== État =====================
-    var state = {
-        mode: localStorage.getItem(MODE_KEY) || 'fr',
-        answer: '',
-        grid: [],          // lignes saisies
-        current: '',       // ligne en cours
-        row: 0,
-        over: false,
-        won: false,
-        keyStates: {}      // lettre -> 'correct'|'present'|'absent'
-    };
+    // ===================== ALGORITHME D'ÉVALUATION =====================
+    // Renvoie un tableau de 5 résultats : 'green', 'yellow', 'gray'
+    function evaluate(guess, answer) {
+        var result = ['gray','gray','gray','gray','gray'];
 
-    var gridEl = document.getElementById('w-grid');
-    var kbEl = document.getElementById('w-keyboard');
-    var msgEl = document.getElementById('w-msg');
-    var actionsEl = document.getElementById('w-actions');
+        // Compter les lettres disponibles dans la réponse.
+        var count = {};
+        for (var i = 0; i < 5; i++) {
+            var c = answer[i];
+            count[c] = (count[c] || 0) + 1;
+        }
 
-    // ===================== Rendu grille =====================
+        // 1er passage : lettres bien placées (green).
+        for (var i = 0; i < 5; i++) {
+            if (guess[i] === answer[i]) {
+                result[i] = 'green';
+                count[guess[i]]--;
+            }
+        }
+
+        // 2e passage : lettres présentes mais mal placées (yellow).
+        for (var j = 0; j < 5; j++) {
+            if (result[j] === 'green') continue;
+            var letter = guess[j];
+            if (count[letter] > 0) {
+                result[j] = 'yellow';
+                count[letter]--;
+            }
+        }
+
+        return result;
+    }
+
+    // ===================== RENDU =====================
+    var gridEl = document.getElementById('grid');
+    var kbEl = document.getElementById('keyboard');
+    var msgEl = document.getElementById('msg');
+    var endEl = document.getElementById('end-actions');
+
+    var cells = []; // cells[row][col]
+
     function buildGrid() {
         gridEl.innerHTML = '';
-        state.grid = [];
+        cells = [];
         for (var r = 0; r < 6; r++) {
-            var row = document.createElement('div');
-            row.className = 'wordle-row';
-            var cells = [];
+            var rowEl = document.createElement('div');
+            rowEl.style.display = 'grid';
+            rowEl.style.gridTemplateColumns = 'repeat(5, 56px)';
+            rowEl.style.gap = '6px';
+            rowEl.style.justifyContent = 'center';
+            rowEl.style.marginBottom = '6px';
+            var rowCells = [];
             for (var c = 0; c < 5; c++) {
                 var cell = document.createElement('div');
-                cell.className = 'wordle-cell';
-                row.appendChild(cell);
-                cells.push(cell);
+                cell.className = 'row-cell';
+                rowEl.appendChild(cell);
+                rowCells.push(cell);
             }
-            gridEl.appendChild(row);
-            state.grid.push(cells);
+            gridEl.appendChild(rowEl);
+            cells.push(rowCells);
         }
     }
 
-    // ===================== Rendu clavier =====================
     function buildKeyboard() {
         kbEl.innerHTML = '';
-        var rows = KEYBOARDS[state.mode];
+        var rows = KEYBOARDS[mode];
         for (var r = 0; r < rows.length; r++) {
-            var line = rows[r];
             var rowEl = document.createElement('div');
             rowEl.className = 'kb-row';
-            if (r === 1) {
-                var spacer = document.createElement('div');
-                spacer.style.flex = '0.5';
-                rowEl.appendChild(spacer);
-            }
-            for (var i = 0; i < line.length; i++) {
-                rowEl.appendChild(makeKey(line[i], line[i]));
-            }
-            if (r === 1) {
-                var spacer2 = document.createElement('div');
-                spacer2.style.flex = '0.5';
-                rowEl.appendChild(spacer2);
+            var letters = rows[r];
+            for (var i = 0; i < letters.length; i++) {
+                rowEl.appendChild(makeKey(letters[i], letters[i]));
             }
             if (r === rows.length - 1) {
-                rowEl.appendChild(makeKey('ENTRER', 'ENTER', true));
-                rowEl.appendChild(makeKey('EFFACER', 'BACK', true));
+                rowEl.insertBefore(makeKey('↵', 'ENTER', true), rowEl.firstChild);
+                rowEl.appendChild(makeKey('⌫', 'BACK', true));
             }
             kbEl.appendChild(rowEl);
         }
-        applyKeyStates();
+        applyKeyColors();
     }
+
     function makeKey(label, value, wide) {
         var btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'kb-key' + (wide ? ' wide' : '');
         btn.textContent = label;
-        btn.setAttribute('data-key', value);
-        btn.addEventListener('click', function () { handleKey(value); });
+        btn.dataset.key = value;
+        btn.addEventListener('click', function() { handleKey(value); });
         return btn;
     }
 
-    // ===================== Logique de jeu =====================
-    function setMode(mode) {
-        if (mode !== 'fr' && mode !== 'en') { return; }
-        state.mode = mode;
-        localStorage.setItem(MODE_KEY, mode);
-        document.querySelectorAll('.mode-pill').forEach(function (p) {
-            p.classList.toggle('is-active', p.getAttribute('data-mode') === mode);
-        });
-        resetGame();
+    function applyKeyColors() {
+        var keys = kbEl.querySelectorAll('.kb-key');
+        for (var i = 0; i < keys.length; i++) {
+            var k = keys[i];
+            var val = k.dataset.key;
+            k.classList.remove('green', 'yellow', 'gray');
+            if (val.length === 1 && keyState[val]) {
+                k.classList.add(keyState[val]);
+            }
+        }
     }
 
-    function resetGame() {
-        state.answer = wordOfDay(state.mode);
-        state.current = '';
-        state.row = 0;
-        state.over = false;
-        state.won = false;
-        state.keyStates = {};
-        msgEl.textContent = '';
-        msgEl.className = 'wordle-msg';
-        actionsEl.hidden = true;
-        buildGrid();
-        buildKeyboard();
+    function renderCurrentRow() {
+        var rowCells = cells[row];
+        if (!rowCells) return;
+        for (var i = 0; i < 5; i++) {
+            var ch = guess[i] || '';
+            rowCells[i].textContent = ch;
+            rowCells[i].classList.toggle('filled', ch !== '');
+        }
     }
 
+    // ===================== LOGIQUE =====================
     function handleKey(key) {
-        if (state.over) { return; }
+        if (over) return;
         if (key === 'BACK') {
-            state.current = state.current.slice(0, -1);
+            guess = guess.slice(0, -1);
         } else if (key === 'ENTER') {
             submitGuess();
-        } else if (/^[A-Z]$/.test(key) && state.current.length < 5) {
-            state.current += key;
+        } else if (guess.length < 5 && /^[A-Z]$/.test(key)) {
+            guess += key;
         }
         renderCurrentRow();
     }
 
-    function renderCurrentRow() {
-        var cells = state.grid[state.row];
-        if (!cells) { return; }
-        for (var i = 0; i < 5; i++) {
-            var ch = state.current[i] || '';
-            cells[i].textContent = ch;
-            cells[i].classList.toggle('has-letter', ch !== '');
-            if (ch) { cells[i].classList.add('pop'); setTimeout((function(c){return function(){c.classList.remove('pop');};})(cells[i]), 130); }
-        }
-    }
-
-    function evaluate(guess, answer) {
-        console.log('[WORDLE] guess=' + guess + ' answer=' + answer);
-        var res = new Array(5).fill('absent');
-        var remaining = {};
-        for (var k = 0; k < 5; k++) {
-            var ch = answer[k];
-            remaining[ch] = (remaining[ch] || 0) + 1;
-        }
-        console.log('[WORDLE] remaining init=', JSON.stringify(remaining));
-        // 1er passage : correspondances exactes.
-        for (var i = 0; i < 5; i++) {
-            if (guess[i] === answer[i]) {
-                res[i] = 'correct';
-                remaining[guess[i]]--;
-                console.log('[WORDLE] pos ' + i + ' CORRECT (' + guess[i] + ')');
-            }
-        }
-        console.log('[WORDLE] remaining after greens=', JSON.stringify(remaining));
-        // 2e passage : lettres présentes mal placées.
-        for (var j = 0; j < 5; j++) {
-            if (res[j] === 'correct') { continue; }
-            var letter = guess[j];
-            if (remaining[letter] > 0) {
-                res[j] = 'present';
-                remaining[letter]--;
-            }
-        }
-        console.log('[WORDLE] result=', JSON.stringify(res));
-        return res;
-    }
-
     function submitGuess() {
-        if (state.current.length !== 5) {
-            flash('Il faut 5 lettres.');
+        if (guess.length !== 5) {
+            showMessage('5 lettres requises !');
             return;
         }
-        var guess = state.current;
-        var result = evaluate(guess, state.answer);
-        var cells = state.grid[state.row];
 
-        // Animation flip séquentielle + màj états clavier.
+        var result = evaluate(guess, answer);
+        var rowCells = cells[row];
+
+        // Met à jour les couleurs du clavier (priorité green > yellow > gray).
+        for (var i = 0; i < 5; i++) {
+            var letter = guess[i];
+            var st = result[i];
+            var current = keyState[letter];
+            if (!current) {
+                keyState[letter] = st;
+            } else if (current === 'gray' && (st === 'green' || st === 'yellow')) {
+                keyState[letter] = st;
+            } else if (current === 'yellow' && st === 'green') {
+                keyState[letter] = st;
+            }
+        }
+
+        // Animation : révèle chaque case une par une.
         var i = 0;
-        function flipNext() {
+        function revealNext() {
             if (i >= 5) {
-                updateKeyStates(guess, result);
-                afterRow();
+                applyKeyColors();
+                afterRow(result);
                 return;
             }
-            var cell = cells[i];
-            cell.classList.add('flipping');
-            setTimeout(function () {
-                cell.classList.add(result[i]);
-                cell.classList.remove('has-letter');
-            }, 250);
+            var cell = rowCells[i];
+            cell.classList.add('reveal');
+            // Applique la couleur à mi-animation (quand la case est plate).
+            setTimeout(function(idx) {
+                return function() {
+                    cell.classList.remove('filled');
+                    cell.classList.add(result[idx]);
+                };
+            }(i), 240);
             i++;
-            setTimeout(flipNext, 280);
+            setTimeout(revealNext, 300);
         }
-        flipNext();
+        revealNext();
     }
 
-    function afterRow() {
-        if (state.current === state.answer) {
-            state.won = true;
-            state.over = true;
-            showEnd(true);
+    function afterRow(result) {
+        // Vérifie si gagné.
+        var allGreen = true;
+        for (var i = 0; i < 5; i++) {
+            if (result[i] !== 'green') { allGreen = false; break; }
+        }
+
+        if (allGreen) {
+            over = true;
+            showMessage('🎉 Bravo ! Trouvé en ' + (row + 1) + ' essai(s) !', 'win');
+            showEnd(true, row + 1);
             return;
         }
-        state.row++;
-        state.current = '';
-        if (state.row >= 6) {
-            state.over = true;
-            state.won = false;
-            showEnd(false);
+
+        row++;
+        guess = '';
+
+        if (row >= 6) {
+            over = true;
+            showMessage('💀 Le mot était : ' + answer, 'lose');
+            showEnd(false, 6);
         }
     }
 
-    function showEnd(won) {
-        var attempts = state.row + 1;
-        if (won) {
-            msgEl.textContent = '🎉 Bravo ! Trouvé en ' + attempts + ' essai' + (attempts > 1 ? 's' : '') + ' !';
-            msgEl.className = 'wordle-msg win';
-        } else {
-            msgEl.textContent = '💀 Le mot était : ' + state.answer;
-            msgEl.className = 'wordle-msg lose';
-        }
-        actionsEl.hidden = false;
+    function showMessage(text, type) {
+        msgEl.textContent = text;
+        msgEl.style.color = type === 'win' ? 'var(--primary)' : (type === 'lose' ? 'var(--accent-danger)' : 'var(--muted)');
+    }
+
+    function showEnd(won, attempts) {
+        endEl.style.display = 'flex';
 
         if (IS_LOGGED_IN) {
-            submit(won, attempts);
-        }
-    }
-
-    function submit(won, attempts) {
-        if (PLAYED_TODAY[state.mode]) {
-            // Déjà joué aujourd'hui : on n'enregistre pas.
-            return;
-        }
-        try {
-            var body = new URLSearchParams();
-            body.append('_csrf', CSRF_TOKEN);
-            body.append('mode', state.mode);
-            body.append('won', won ? '1' : '0');
-            body.append('word', state.answer);
-            body.append('attempts', String(attempts));
             fetch(SUBMIT_URL, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: body.toString()
-            }).then(function (r) { return r.json(); }).then(function (data) {
-                if (data && data.saved && data.stats) {
-                    PLAYED_TODAY[state.mode] = true;
-                    var s = data.stats;
-                    msgEl.textContent += ' — Série : ' + s.currentStreak + ' 🔥 (record ' + s.maxStreak + ' 🏆)';
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': CSRF_TOKEN
+                },
+                credentials: 'same-origin',
+                body: JSON.stringify({
+                    mode: mode,
+                    won: won,
+                    word: answer,
+                    attempts: attempts
+                })
+            }).catch(function() {});
+        }
+
+        // Bouton partager.
+        document.getElementById('btn-share').onclick = function() {
+            var emojis = { green: '🟩', yellow: '🟨', gray: '⬛' };
+            var text = 'Wordle AEIC (' + mode.toUpperCase() + ') ' + (won ? attempts + '/6' : 'X/6') + '\n';
+            for (var r = 0; r < row + 1; r++) {
+                if (!cells[r]) continue;
+                var line = '';
+                for (var c = 0; c < 5; c++) {
+                    var cls = cells[r][c].className;
+                    if (cls.indexOf('green') !== -1) line += emojis.green;
+                    else if (cls.indexOf('yellow') !== -1) line += emojis.yellow;
+                    else line += emojis.gray;
                 }
-            }).catch(function () {});
-        } catch (e) {}
-    }
-
-    function updateKeyStates(guess, result) {
-        var rank = { correct: 3, present: 2, absent: 1 };
-        for (var i = 0; i < 5; i++) {
-            var ch = guess[i];
-            var cur = state.keyStates[ch];
-            if (!cur || rank[result[i]] > rank[cur]) {
-                state.keyStates[ch] = result[i];
+                text += line + '\n';
             }
-        }
-        applyKeyStates();
-    }
-    function applyKeyStates() {
-        var keys = kbEl.querySelectorAll('.kb-key');
-        keys.forEach(function (k) {
-            var v = k.getAttribute('data-key');
-            k.classList.remove('correct', 'present', 'absent');
-            if (state.keyStates[v]) { k.classList.add(state.keyStates[v]); }
-        });
+            navigator.clipboard.writeText(text).then(function() {
+                showMessage('📋 Résultat copié !', 'win');
+            });
+        };
     }
 
-    function flash(text) {
-        msgEl.textContent = text;
-        msgEl.className = 'wordle-msg';
-        gridEl.classList.add('pop');
-        setTimeout(function () { gridEl.classList.remove('pop'); }, 120);
+    // ===================== MODE FR/EN =====================
+    function setMode(m) {
+        mode = m;
+        localStorage.setItem(MODE_KEY, m);
+        document.getElementById('mode-fr').classList.toggle('active', m === 'fr');
+        document.getElementById('mode-en').classList.toggle('active', m === 'en');
+        newGame();
     }
 
-    // ===================== Partage =====================
-    function emojiForResult() {
-        var out = [];
-        for (var r = 0; r <= state.row && r < 6; r++) {
-            var cells = state.grid[r];
-            var line = '';
-            for (var c = 0; c < 5; c++) {
-                if (cells[c].classList.contains('correct')) { line += '🟩'; }
-                else if (cells[c].classList.contains('present')) { line += '🟨'; }
-                else { line += '⬛'; }
-            }
-            out.push(line);
-        }
-        return out.join('\n');
+    function newGame() {
+        answer = pickWord();
+        guess = '';
+        row = 0;
+        over = false;
+        keyState = {};
+        showMessage('');
+        endEl.style.display = 'none';
+        buildGrid();
+        buildKeyboard();
     }
-    document.getElementById('w-share').addEventListener('click', function () {
-        var score = state.won ? (state.row + 1) + '/6' : 'X/6';
-        var text = 'Wordle AEIC (' + state.mode.toUpperCase() + ') ' + score + '\n' + emojiForResult() + '\n' + LEADERBOARD_URL;
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-            navigator.clipboard.writeText(text).then(function () {
-                msgEl.textContent = '📋 Résultat copié !';
-            }, function () { fallbackCopy(text); });
-        } else {
-            fallbackCopy(text);
+
+    // ===================== CLAVIER PHYSIQUE =====================
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') { handleKey('ENTER'); }
+        else if (e.key === 'Backspace') { handleKey('BACK'); }
+        else {
+            var k = e.key.toUpperCase();
+            if (/^[A-Z]$/.test(k)) { handleKey(k); }
         }
     });
-    function fallbackCopy(text) {
-        var ta = document.createElement('textarea');
-        ta.value = text; document.body.appendChild(ta); ta.select();
-        try { document.execCommand('copy'); msgEl.textContent = '📋 Résultat copié !'; }
-        catch (e) { msgEl.textContent = 'Impossible de copier.'; }
-        document.body.removeChild(ta);
-    }
 
-    // ===================== Entrée clavier physique =====================
-    document.addEventListener('keydown', function (e) {
-        if (e.ctrlKey || e.metaKey || e.altKey) { return; }
-        if (e.key === 'Enter') { handleKey('ENTER'); e.preventDefault(); }
-        else if (e.key === 'Backspace') { handleKey('BACK'); e.preventDefault(); }
-        else if (/^[a-zA-Z]$/.test(e.key)) { handleKey(e.key.toUpperCase()); }
-    });
+    // ===================== INIT =====================
+    document.getElementById('mode-fr').addEventListener('click', function() { setMode('fr'); });
+    document.getElementById('mode-en').addEventListener('click', function() { setMode('en'); });
+    setMode(mode);
 
-    // ===================== Pills de langue =====================
-    document.querySelectorAll('.mode-pill').forEach(function (p) {
-        p.addEventListener('click', function () { setMode(p.getAttribute('data-mode')); });
-    });
-
-    // ===================== Init =====================
-    if (PLAYED_TODAY.fr && PLAYED_TODAY.en && IS_LOGGED_IN) {
-        // Les deux modes déjà joués : on laisse quand même jouer en démo visuelle
-        // mais submit() ne renverra rien.
-    }
-    setMode(state.mode);
 })();
 </script>
