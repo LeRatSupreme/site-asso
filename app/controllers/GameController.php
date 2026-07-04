@@ -27,8 +27,8 @@ final class GameController extends Controller
             $user = Auth::user();
             $uid = (string) Auth::id();
             $stats = [
-                'fr' => GameScore::getUserStats($uid, 'fr'),
-                'en' => GameScore::getUserStats($uid, 'en'),
+                'fr' => GameScore::getUserStats($uid, 'daily_fr'),
+                'en' => GameScore::getUserStats($uid, 'daily_en'),
             ];
         }
 
@@ -83,6 +83,12 @@ final class GameController extends Controller
         }
         if (!in_array($mode, ['daily', 'free'], true)) {
             $mode = 'free';
+        }
+
+        // Le mode quotidien est TOUJOURS en 5 lettres (facile) :
+        // même mot pour tout le monde, série de victoires comparable.
+        if ($mode === 'daily') {
+            $difficulty = 'facile';
         }
 
         if ($mode === 'daily') {
@@ -152,7 +158,8 @@ final class GameController extends Controller
         // On ne sauvegarde en base QUE le mode quotidien (1 fois par jour).
         $saved = false;
         if ($mode === 'daily') {
-            $gameMode = $language . '_' . $difficulty;
+            // Le mode quotidien est toujours en 5 lettres : clé dédiée daily_{lang}.
+            $gameMode = 'daily_' . $language;
             $alreadyPlayed = GameScore::hasPlayedToday($uid, $gameMode);
             try {
                 GameScore::saveWordleResult($uid, $gameMode, $won, null, $attempts);
@@ -179,12 +186,14 @@ final class GameController extends Controller
             $mode = 'fr';
         }
 
-        $rows = GameScore::getLeaderboard($mode, 50);
+        // Le classement porte sur le mode quotidien (5 lettres, commun).
+        $gameMode = 'daily_' . $mode;
+        $rows = GameScore::getLeaderboard($gameMode, 50);
         $currentId = Auth::check() ? (string) Auth::id() : null;
 
         $this->render('game/leaderboard', [
             'title'       => '🏆 Classement Wordle — AEIC',
-            'description' => 'Classement des meilleurs joueurs de Wordle AEIC (FR/EN).',
+            'description' => 'Classement des joueurs de Wordle AEIC par série de victoires en cours (mot quotidien 5 lettres).',
             'mode'        => $mode,
             'rows'        => $rows,
             'currentId'   => $currentId,

@@ -69,10 +69,11 @@ final class GameScore extends Model
     }
 
     /**
-     * Série de victoires consécutives (en partant d'aujourd'hui).
+     * Série de victoires consécutives en cours.
      *
-     * Remonte les jours consécutifs gagnés. S'arrête au premier jour non joué
-     * ou perdu.
+     * Compte les jours consécutifs gagnés en remontant depuis aujourd'hui.
+     * Tolérance : si le joueur n'a pas encore joué aujourd'hui, on part
+     * d'hier (la série reste vivante jusqu'à la fin de la journée).
      */
     public static function getUserStreak(string $userId, string $mode): int
     {
@@ -88,12 +89,26 @@ final class GameScore extends Model
             return 0;
         }
 
-        $streak = 0;
-        $cursor = strtotime(date('Y-m-d'));
+        if (empty($rows)) {
+            return 0;
+        }
 
+        $today = strtotime(date('Y-m-d'));
+        $yesterday = strtotime('-1 day', $today);
+
+        // Curseur de départ : aujourd'hui si joué aujourd'hui, sinon hier.
+        $firstDay = strtotime((string) $rows[0]['played_at']);
+        if ($firstDay === $today) {
+            $cursor = $today;
+        } elseif ($firstDay === $yesterday) {
+            $cursor = $yesterday;
+        } else {
+            return 0; // Dernière partie avant hier : série cassée.
+        }
+
+        $streak = 0;
         foreach ($rows as $row) {
             $day = strtotime((string) $row['played_at']);
-            // On s'attend à ce que la ligne courante corresponde au jour curseur.
             if ($day === $cursor) {
                 if ((int) $row['won'] === 1) {
                     $streak++;
@@ -102,10 +117,8 @@ final class GameScore extends Model
                     break;
                 }
             } elseif ($day < $cursor) {
-                // Jour manquant dans la série : on s'arrête.
                 break;
             }
-            // $day > $cursor : doublon impossible (UNIQUE), on ignore.
         }
 
         return $streak;
@@ -180,11 +193,10 @@ final class GameScore extends Model
     }
 
     /**
-     * Classement : top joueurs par série max décroissante pour un mode.
+     * Classement : top joueurs par série de victoires en cours.
      *
-     * Le calcul de la plus longue série de victoires consécutives se fait en
-     * PHP (robuste, indépendant du moteur SQL) à partir des parties ordonnées
-     * par date pour chaque joueur.
+     * Le calcul de la série (courante et max) se fait en PHP à partir des
+     * parties ordonnées par date pour chaque joueur.
      *
      * @return list<array<string,mixed>>
      */
@@ -193,16 +205,14 @@ final class GameScore extends Model
         $limit = max(1, min(100, $limit));
 
         try {
-            // Correspondance par préfixe de langue : 'fr' couvre 'fr', 'fr_facile',
-            // 'fr_moyen', 'fr_difficile' (toutes difficultés confondues).
             $sql = 'SELECT g.user_id, g.played_at, g.won,
                            u.prenom, u.nom, u.email
                     FROM game_scores g
                     INNER JOIN users u ON u.id = g.user_id
-                    WHERE g.game = ? AND (g.mode = ? OR g.mode LIKE ?)
+                    WHERE g.game = ? AND g.mode = ?
                     ORDER BY g.user_id, g.played_at ASC';
             $stmt = static::pdo()->prepare($sql);
-            $stmt->execute([self::GAME, $mode, $mode . '\\_%']);
+            $stmt->execute([self::GAME, $mode]);
             $rows = $stmt->fetchAll();
         } catch (\Throwable) {
             return [];
@@ -219,8 +229,6 @@ final class GameScore extends Model
                     'nom'    => (string) $row['nom'],
                     'email'  => (string) $row['email'],
                     'rows'   => [],
-                    'played' => 0,
-                    'won'    => 0,
                 ];
             }
             $byUser[$uid]['rows'][] = [
@@ -229,16 +237,21 @@ final class GameScore extends Model
             ];
         }
 
-        // Calcule la série max de victoires consécutives pour chaque joueur.
+        // Calcule les séries pour chaque joueur.
+        $todayTs = strtotime(date('Y-m-d'));
+        $yesterdayTs = strtotime('-1 day', $todayTs);
         $board = [];
         foreach ($byUser as $uid => $data) {
+            $rowsAsc = $data['rows'];
+
+            // Série max (toutes les victoires consécutives historiques).
             $maxStreak = 0;
             $run = 0;
             $prev = null;
-            foreach ($data['rows'] as $r) {
+            foreach ($rowsAsc as $r) {
                 if ($r['won'] === 1) {
                     $consecutive = $prev !== null
-                        && strtotime($r['played_at']) === strtotime('+1 day', strtotime($prev));
+                        && (strtotime($r['played_at']) === strtotime('+1 day', strtotime($prev)));
                     $run = $consecutive ? $run + 1 : 1;
                     if ($run > $maxStreak) {
                         $maxStreak = $run;
@@ -248,35 +261,85 @@ final class GameScore extends Model
                 }
                 $prev = $r['played_at'];
             }
-            $data['played'] = count($data['rows']);
-            foreach ($data['rows'] as $r) {
+
+            // Série en cours (remonte depuis aujourd'hui/hier).
+            $currentStreak = self::currentStreakFromRows($rowsAsc);
+
+            $played = count($rowsAsc);
+            $won = 0;
+            foreach ($rowsAsc as $r) {
                 if ($r['won'] === 1) {
-                    $data['won']++;
+                    $won++;
                 }
             }
 
             $board[] = [
-                'id'        => $uid,
-                'prenom'    => $data['prenom'],
-                'nom'       => $data['nom'],
-                'email'     => $data['email'],
-                'played'    => $data['played'],
-                'won'       => $data['won'],
-                'maxStreak' => $maxStreak,
+                'id'            => $uid,
+                'prenom'        => $data['prenom'],
+                'nom'           => $data['nom'],
+                'email'         => $data['email'],
+                'played'        => $played,
+                'won'           => $won,
+                'currentStreak' => $currentStreak,
+                'maxStreak'     => $maxStreak,
             ];
         }
 
+        // Tri : série en cours décroissante, puis série max, puis victoires.
         usort($board, function (array $a, array $b): int {
+            if ($a['currentStreak'] !== $b['currentStreak']) {
+                return $b['currentStreak'] <=> $a['currentStreak'];
+            }
             if ($a['maxStreak'] !== $b['maxStreak']) {
                 return $b['maxStreak'] <=> $a['maxStreak'];
             }
-            if ($a['won'] !== $b['won']) {
-                return $b['won'] <=> $a['won'];
-            }
-
-            return $a['played'] <=> $b['played'];
+            return $b['won'] <=> $a['won'];
         });
 
         return array_slice($board, 0, $limit);
+    }
+
+    /**
+     * Calcule la série en cours à partir des parties (triées desc).
+     * Tolérance : si la dernière partie n'est pas aujourd'hui, on accepte hier.
+     *
+     * @param list<array{played_at:string,won:int}> $rowsAsc  parties triées par date croissante
+     */
+    private static function currentStreakFromRows(array $rowsAsc): int
+    {
+        if (empty($rowsAsc)) {
+            return 0;
+        }
+        // Trie par date décroissante.
+        $desc = array_reverse($rowsAsc);
+
+        $today = strtotime(date('Y-m-d'));
+        $yesterday = strtotime('-1 day', $today);
+
+        $firstDay = strtotime((string) $desc[0]['played_at']);
+        if ($firstDay === $today) {
+            $cursor = $today;
+        } elseif ($firstDay === $yesterday) {
+            $cursor = $yesterday;
+        } else {
+            return 0;
+        }
+
+        $streak = 0;
+        foreach ($desc as $r) {
+            $day = strtotime((string) $r['played_at']);
+            if ($day === $cursor) {
+                if ($r['won'] === 1) {
+                    $streak++;
+                    $cursor = strtotime('-1 day', $cursor);
+                } else {
+                    break;
+                }
+            } elseif ($day < $cursor) {
+                break;
+            }
+        }
+
+        return $streak;
     }
 }
