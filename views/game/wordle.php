@@ -130,48 +130,29 @@ CSS;
     // ===================== Dictionnaires (150+ mots/langue) =====================
     var WORDS = {
         fr: [
-            "MAISON","TABLE","CHIEN","CHAT","OISEAU","ARBRE","FLEUR","PLAGE","ROUTE","PORTE",
-            "FENETRE","TOIT","JARDIN","PARKING","RUE","BOULEVARD","AVENUE","PLACE","PONT","TUNNEL",
-            "VOITURE","CAMION","TRAIN","AVION","VELO","BATEAU","BUS","METRO","TRAM","TAXI",
-            "ECOLE","CLASSE","MATHS","ANGLAIS","HISTOIRE","LIVRE","CAHIER","CRAYON","STYLO","REGLE",
-            "FRAISE","POMME","RAISIN","CERISE","TOMATE","SALADE","CAROTTE","PATATE","OIGNON","AIL",
-            "EAU","LAIT","CAFE","THE","VIN","BIERE","JUS","SODA","SIROP","BONBON",
-            "GATEAU","TARTES","BISCUIT","PAIN","CROISSANT","CREPE","OMELETTE","SOUPE","PIZZA","PATES",
-            "ROUGE","BLEUS","VERTS","NOIRS","BLANC","JAUNE","ORANGE","VIOLET","ROSE","GRIS",
-            "GRAND","PETIT","GROSSE","MINCE","HAUT","BAS","CHAUD","FROID","RAPIDE","LENTE",
-            "JOIE","PEUR","AMOUR","COLERE","HONTE","FIER","CALME","TRISTE","RIRES","REVE",
-            "DORMIR","MANGER","BOIRE","LIRE","ECRIRE","JOUER","COURIR","NAGER","CHANTER","DANSER",
-            "LUNDI","MARDI","VENDREDI","DIMANCHE","MATIN","SOIR","NUIT","JOUR","MOIS","ANNEE",
-            "PERE","MERE","FRERE","SOEUR","ONCLE","TANTE","COUSIN","NEVEU","NIECE","AMI",
-            "HEURE","MINUTE","SECONDE","TEMPS","VIEUX","JEUNE","NOUVEAU","ANCIEN","MODERN","FUTUR",
-            "ARGENT","METAL","PIERRE","BRIQUE","BOIS","VERRE","PLASTIQUE","CUITRE","FER","OR",
-            "NEIGE","PLUIE","ORAGE","VENTS","SOLEIL","NUAGE","BRUMES","GIVRE","GEL","FONDRE",
-            "TIGRE","LOUPS","OURS","LION","SINGE","CHEVAL","VACHE","MOUTON","COCHON","POULE",
-            "MONDE","TERRE","MARS","LUNE","ETOILE","NUAGES","CIEUX","MER","LAC","RIVIERE",
-            "POULE","CANARD","Cygne","AIGLE","REQUIN","BALEINE","DAUPHIN","SOURIS","LAPIN","TORTUE"
-        ],
+            "MAISON","TABLE","CHIEN","ARBRE","FLEUR","PLAGE","ROUTE","PORTE","TOITS","JARDIN",
+            "AVION","BATEAU","METRO","ECOLE","LIVRE","STYLO","REGLE","POMME","RAISIN","TOMATE",
+            "PATATE","BONBON","GATEAU","BISCUIT","PAINS","CREPE","PIZZA","ROUGE","BLANC","JAUNE",
+            "ORANGE","VIOLET","GRAND","PETIT","CHAUD","FROID","VITESSE","RAPIDE","LENT","JOIE",
+            "PEURS","AMOUR","COLERE","HONTE","REVES","DORMIR","MANGEZ","BOIRE","LIREZ","JOUER",
+            "COURIR","NAGER","LUNDI","MARDI","MATIN","SOIRS","NUITS","MOIS","PERES","MERES",
+            "FRERE","SOEUR","ONCLE","TANTE","AMIES","HEURE","MINUT","TEMPS","VIEUX","JEUNE",
+            "ARGENT","METAL","PIERRE","BRIQUE","VERRE","FER","NEIGE","PLUIE","SOLEIL","NUAGE",
+            "TIGRE","LOUPS","OURS","LIONS","SINGE","CHEVAL","VACHE","MERES","MONDE","TERRE",
+            "MARS","LUNE","ETOILE","CIEUX","LACS","POULE","CANARD","AIGLE","REQUIN","LAPIN"
+        ].filter(function(w){ return w.length === 5; }),
         en: [
             "HOUSE","TABLE","WATER","BREAD","APPLE","CHAIR","MOUSE","LIGHT","NIGHT","MUSIC",
-            "RIVER","OCEAN","CLOUD","STORM","BEACH","FIELD","FOREST","MOUNT","VALLEY","ISLAND",
-            "TRAIN","PLANE","TRUCK","BOATS","CYCLE","ROADS","BRIDGE","TUNNEL","PARKS","TOWERS",
-            "SCHOOL","CLASS","BOOKS","PAPER","PENCIL","RULER","STUDY","TEACH","LEARN","WRITE",
-            "GRAPE","LEMON","MANGO","PEACH","MELON","BERRY","SALAD","ONION","GARLIC","BEANS",
-            "JUICE","COFFEE","TEAS","MILK","WINE","BEERS","SODAS","CAKES","CANDY","SUGAR",
-            "COLOR","GREEN","BLACK","WHITE","BROWN","GREY","GOLD","SILVER","BRONZE","COPPER",
-            "HAPPY","SADLY","ANGRY","BRAVE","PROUD","QUIET","LOUD","SMART","FUNNY","SILLY",
-            "RUN","JUMP","SWIM","DANCE","SING","PLAY","EATS","DRINK","SLEEP","DREAM",
-            "MONDAY","TUESDAY","FRIDAY","SUNDAY","MORNING","EVENING","NOON","WEEK","MONTH","YEARS",
-            "FATHER","MOTHER","BROTHER","SISTER","UNCLE","AUNTS","COUSIN","FRIEND","CHILD","BABIES",
-            "WORLD","EARTH","MARS","MOON","STARS","SKIES","SEAS","LAKES","HILLS","ROCKS",
-            "MONEY","METAL","STONE","BRICK","WOOD","GLASS","STEEL","IRON","LEAD","TIN",
-            "SNOW","RAIN","WIND","SUNNY","FOGGY","FROST","CLOUD","THUNDER","LIGHTS","DARKS",
-            "TIGER","WOLF","BEARS","LIONS","HORSE","COWS","SHEEP","PIGS","HENS","DUCKS",
-            "EAGLE","SHARK","WHALE","MOUSE","RABBIT","SNAKE","SPIDER","MONKEY","ZEBRA","PANDA",
-            "WORDS","LINES","GAMES","CARDS","DICE","BOARD","CHESS","SPORT","TEAMS","GOALS",
-            "CYBER","PIXEL","CODES","BYTES","FILES","INPUT","MOUSE","CLICK","SCROLL","VIEWS",
-            "HEART","BRAIN","BONES","SKINS","EYES","EARS","HAND","FOOT","LEGS","ARMS",
-            "PRICE","STORE","MARKET","VENDOR","BUYER","GOODS","TRADE","DEALS","SALES","TAXES"
-        ]
+            "RIVER","OCEAN","CLOUD","STORM","BEACH","FIELD","TOWER","TRAIN","PLANE","TRUCK",
+            "SCHOOL","CLASS","BOOKS","PAPER","STUDY","TEACH","LEARN","WRITE","GRAPE","LEMON",
+            "MANGO","PEACH","MELON","BERRY","SALAD","ONION","BEANS","JUICE","CANDY","SUGAR",
+            "COLOR","GREEN","BLACK","WHITE","BROWN","SILVER","BRONZE","COPPER","HAPPY","BRAVE",
+            "PROUD","QUIET","SMART","FUNNY","SILLY","DREAM","MONDAY","FRIDAY","SUNDAY","WEEK",
+            "MONTH","YEARS","FATHER","MOTHER","SISTER","UNCLE","FRIEND","CHILD","WORLD","EARTH",
+            "MONEY","METAL","STONE","BRICK","GLASS","STEEL","IRONS","SNOWS","RAINS","WINDS",
+            "SUNNY","FOGGY","FROST","TIGER","WOLF","HORSE","SHEEP","EAGLE","SHARK","WHALE",
+            "MOUSE","RABBIT","SNAKE","MONKEY","ZEBRA","PANDA","PARTY","MAGIC","EARTH","HEART"
+        ].filter(function(w){ return w.length === 5; })
     };
 
     // Nettoyage : on ne garde que des mots de 5 lettres A-Z (pour la cohérence du jeu).
@@ -338,19 +319,25 @@ CSS;
 
     function evaluate(guess, answer) {
         var res = new Array(5).fill('absent');
-        var used = answer.split('');
+        var remaining = {}; // compte des lettres encore disponibles dans la réponse
+        for (var k = 0; k < 5; k++) {
+            var ch = answer[k];
+            remaining[ch] = (remaining[ch] || 0) + 1;
+        }
+        // 1er passage : les correspondances exactes (vert).
         for (var i = 0; i < 5; i++) {
             if (guess[i] === answer[i]) {
                 res[i] = 'correct';
-                used[i] = null;
+                remaining[guess[i]]--;
             }
         }
+        // 2e passage : les lettres présentes mais mal placées (jaune).
         for (var j = 0; j < 5; j++) {
             if (res[j] === 'correct') { continue; }
-            var idx = used.indexOf(guess[j]);
-            if (idx !== -1) {
+            var letter = guess[j];
+            if (remaining[letter] > 0) {
                 res[j] = 'present';
-                used[idx] = null;
+                remaining[letter]--;
             }
         }
         return res;
