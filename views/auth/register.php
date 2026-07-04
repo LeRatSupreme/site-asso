@@ -44,8 +44,8 @@ declare(strict_types=1);
                     <span class="check-box"></span>
                 </label>
                 <label for="ack-mail" class="register-mail-content">
-                    <span class="register-mail-title">📧 Mot de passe par e-mail</span>
-                    <span class="register-mail-desc">Ton mot de passe temporaire sera envoyé à l'adresse ci-dessus. Vérifie ta boîte de réception <strong>et tes spams</strong> après l'inscription.</span>
+                    <span class="register-mail-title">📧 <?= e(t('auth.register.email.title')) ?></span>
+                    <span class="register-mail-desc"><?= e(t('auth.register.email.desc')) ?></span>
                 </label>
             </div>
 
@@ -55,7 +55,7 @@ declare(strict_types=1);
                     <span class="check-box"></span>
                 </label>
                 <label for="consent" class="register-mail-content">
-                    <span class="register-mail-title">📋 Conditions & confidentialité</span>
+                    <span class="register-mail-title">📋 <?= e(t('auth.register.consent.title')) ?></span>
                     <span class="register-mail-desc">
                         <?php
                         $cguUrl = e(url('/cgu'));
