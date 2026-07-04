@@ -245,6 +245,13 @@ $twitterHandle = Setting::get('twitter_handle', '');
                 <a href="<?= e(url('/cgu')) ?>">📋 <?= e(t('footer.cgu')) ?></a>
             </nav>
 
+            <div class="footer-partners">
+                <span class="footer-partners-label">🎓 Notre IUT</span>
+                <a href="https://www.facebook.com/IUTinfoCalais/" target="_blank" rel="noopener" class="footer-partner-link">
+                    📘 IUT Informatique Calais
+                </a>
+            </div>
+
             <div class="footer-bottom">
                 <span class="footer-tag">🎓 <?= e(t('footer.tag')) ?></span>
                 <span class="footer-copy">© <?= e($currentYear) ?> <?= e($siteName) ?> · <?= e(t('footer.copy')) ?></span>
