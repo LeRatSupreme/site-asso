@@ -1129,6 +1129,17 @@ ul, ol { list-style: none; }
 .field-row .field { margin-bottom: 1.1rem; }
 .field > label { font-weight: 700; font-size: 0.85rem; color: var(--foreground); }
 .field-hint { color: var(--muted); font-size: 0.78rem; }
+.register-password-notice {
+    margin-top: 0.6rem;
+    padding: 0.85rem 1rem;
+    background: rgba(72, 189, 211, 0.08);
+    border: 1px solid rgba(72, 189, 211, 0.2);
+    border-radius: 10px;
+    font-size: 1rem;
+    line-height: 1.5;
+    color: var(--foreground);
+}
+.register-password-notice strong { color: var(--primary); }
 
 .field input[type="text"],
 .field input[type="email"],

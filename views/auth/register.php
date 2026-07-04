@@ -36,7 +36,9 @@ declare(strict_types=1);
                 <label for="email"><?= e(t('auth.login.email')) ?></label>
                 <input type="email" id="email" name="email" autocomplete="email"
                        value="<?= e(old('email')) ?>" placeholder="vous@exemple.fr" required>
-                <small class="field-hint"><?= e(t('auth.register.email.hint')) ?></small>
+                <div class="register-password-notice">
+                    📧 <strong><?= e(t('auth.register.email.hint')) ?></strong>
+                </div>
             </div>
 
             <div class="field field-checkbox">
