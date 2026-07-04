@@ -130,11 +130,4 @@ final class AdminMediaController extends AdminBaseController
 
         redirect(url('/admin/media'));
     }
-            Media::deleteRow($id);
-            $this->audit('media.delete', 'media', $id);
-            $this->setFlash('success', 'Média supprimé.');
-        }
-
-        redirect(url('/admin/media'));
-    }
 }
