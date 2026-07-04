@@ -49,18 +49,24 @@ declare(strict_types=1);
                 </label>
             </div>
 
-            <div class="field field-checkbox">
-                <?php
-                $cguUrl = e(url('/cgu'));
-                $privacyUrl = e(url('/privacy'));
-                $consent = tt('auth.register.consent', [
-                    '{cgu}'     => '<a href="' . $cguUrl . '" target="_blank" rel="noopener">' . e(t('auth.register.cgu')) . '</a>',
-                    '{privacy}' => '<a href="' . $privacyUrl . '" target="_blank" rel="noopener">' . e(t('auth.register.consent.privacy')) . '</a>',
-                ]);
-                ?>
-                <label>
-                    <input type="checkbox" name="consent" value="1" required>
-                    <span><?= $consent ?></span>
+            <div class="register-mail-notice register-consent">
+                <label class="register-mail-check">
+                    <input type="checkbox" name="consent" value="1" id="consent" required>
+                    <span class="check-box"></span>
+                </label>
+                <label for="consent" class="register-mail-content">
+                    <span class="register-mail-title">📋 Conditions & confidentialité</span>
+                    <span class="register-mail-desc">
+                        <?php
+                        $cguUrl = e(url('/cgu'));
+                        $privacyUrl = e(url('/privacy'));
+                        $consent = tt('auth.register.consent', [
+                            '{cgu}'     => '<a href="' . $cguUrl . '" target="_blank" rel="noopener">' . e(t('auth.register.cgu')) . '</a>',
+                            '{privacy}' => '<a href="' . $privacyUrl . '" target="_blank" rel="noopener">' . e(t('auth.register.consent.privacy')) . '</a>',
+                        ]);
+                        echo $consent;
+                        ?>
+                    </span>
                 </label>
             </div>
 

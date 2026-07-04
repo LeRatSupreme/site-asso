@@ -1223,6 +1223,17 @@ ul, ol { list-style: none; }
 }
 .register-mail-desc strong { color: var(--foreground); }
 
+.register-consent {
+    border-color: rgba(245,158,11,0.2);
+    background: linear-gradient(135deg, rgba(245,158,11,0.04), rgba(97,80,170,0.04));
+}
+.register-consent:has(input:checked) {
+    border-color: rgba(45,154,95,0.4);
+    background: linear-gradient(135deg, rgba(45,154,95,0.08), rgba(72,189,211,0.04));
+}
+.register-consent .register-mail-title { color: var(--accent-warning, #d4941a); }
+.register-consent:has(input:checked) .register-mail-title { color: var(--accent-success, #2d9a5f); }
+
 .field input[type="text"],
 .field input[type="email"],
 .field input[type="password"],
