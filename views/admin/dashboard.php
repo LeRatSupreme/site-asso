@@ -10,31 +10,12 @@ declare(strict_types=1);
  * @var float $monthCa
  * @var float $monthProfit
  * @var list<array<string,mixed>> $recentAudit
- * @var int $membersCount
- * @var string $currentSeason
  */
 ?>
 <div class="grid grid-4 stat-cards">
     <div class="stat-card surface glass">
         <span class="stat-value"><?= e((string) $usersCount) ?></span>
         <span class="stat-label">Membres actifs</span>
-    </div>
-    <div class="stat-card surface glass">
-        <span class="stat-value"><?= e((string) $eventsCount) ?></span>
-        <span class="stat-label">Événements publiés</span>
-    </div>
-    <div class="stat-card surface glass">
-        <span class="stat-value"><?= e(formatPrice($monthCa)) ?></span>
-        <span class="stat-label">CA ce mois</span>
-    </div>
-    <div class="stat-card surface glass">
-        <span class="stat-value is-positive"><?= e(formatPrice($monthProfit)) ?></span>
-        <span class="stat-label">Bénéfice ce mois</span>
-    </div>
-</div>
-    <div class="stat-card surface glass">
-        <span class="stat-value"><?= e((string) $membersCount) ?></span>
-        <span class="stat-label">À jour de cotisation (<?= e($currentSeason) ?>)</span>
     </div>
     <div class="stat-card surface glass">
         <span class="stat-value"><?= e((string) $eventsCount) ?></span>
