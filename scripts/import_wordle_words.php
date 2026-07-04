@@ -19,21 +19,8 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../vendor/autoload.php';
 
-// Charge la config (DB).
-$appConfig = __DIR__ . '/../config.env';
-if (is_file($appConfig)) {
-    $lines = file($appConfig, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-    foreach ($lines as $line) {
-        if ($line === '' || $line[0] === '#') {
-            continue;
-        }
-        if (str_contains($line, '=')) {
-            [$k, $v] = explode('=', $line, 2);
-            $_ENV[trim($k)] = trim($v);
-            putenv(trim($k) . '=' . trim($v));
-        }
-    }
-}
+// Charge la config DB + la fonction db() (PDO).
+require_once __DIR__ . '/../app/config/database.php';
 
 /**
  * Normalise un mot : majuscules, sans accents, A-Z uniquement.
