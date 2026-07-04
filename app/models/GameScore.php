@@ -193,14 +193,16 @@ final class GameScore extends Model
         $limit = max(1, min(100, $limit));
 
         try {
+            // Correspondance par préfixe de langue : 'fr' couvre 'fr', 'fr_facile',
+            // 'fr_moyen', 'fr_difficile' (toutes difficultés confondues).
             $sql = 'SELECT g.user_id, g.played_at, g.won,
                            u.prenom, u.nom, u.email
                     FROM game_scores g
                     INNER JOIN users u ON u.id = g.user_id
-                    WHERE g.game = ? AND g.mode = ?
+                    WHERE g.game = ? AND (g.mode = ? OR g.mode LIKE ?)
                     ORDER BY g.user_id, g.played_at ASC';
             $stmt = static::pdo()->prepare($sql);
-            $stmt->execute([self::GAME, $mode]);
+            $stmt->execute([self::GAME, $mode, $mode . '\\_%']);
             $rows = $stmt->fetchAll();
         } catch (\Throwable) {
             return [];

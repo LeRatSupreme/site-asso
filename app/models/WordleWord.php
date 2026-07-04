@@ -9,146 +9,169 @@ namespace App\Models;
  *
  * @table wordle_words
  *
- * La sélection du mot du jour est déterministe : tous les joueurs ont le
- * même mot un jour donné, et aucun mot ne se répète tant que toute la liste
- * n'a pas été parcourue (modulo la taille de la liste).
+ * Difficultés :
+ *   - facile   = 5 lettres
+ *   - moyen    = 6 lettres
+ *   - difficile = 7 lettres
+ *
+ * Deux modes de sélection :
+ *   - dailyWord()  : mot du jour, identique pour tous, change à minuit (Paris).
+ *   - randomWord() : mot aléatoire (mode libre), différent à chaque partie.
  */
 final class WordleWord extends Model
 {
     protected static string $table = 'wordle_words';
 
-    /**
-     * Langues acceptées par le jeu.
-     */
     public const LANGUAGES = ['fr', 'en'];
+    public const DIFFICULTIES = ['facile', 'moyen', 'difficile'];
 
     /**
-     * Retourne tous les mots actifs d'une langue, triés par id (ordre stable).
-     *
-     * @return list<string>
+     * Longueur de grille associée à chaque difficulté.
      */
-    public static function wordsForLanguage(string $language): array
+    public const LENGTHS = [
+        'facile'    => 5,
+        'moyen'     => 6,
+        'difficile' => 7,
+    ];
+
+    /**
+     * Vérifie qu'une difficulté est valide.
+     */
+    public static function isValidDifficulty(string $difficulty): bool
     {
-        $language = strtolower(trim($language));
-        if (!in_array($language, self::LANGUAGES, true)) {
-            return [];
-        }
-
-        $sql = 'SELECT word FROM ' . static::$table . '
-                WHERE language = :lang AND is_active = 1
-                ORDER BY id ASC';
-
-        $stmt = static::pdo()->prepare($sql);
-        $stmt->execute([':lang' => $language]);
-
-        /** @var list<string> $words */
-        $words = $stmt->fetchAll(\PDO::FETCH_COLUMN);
-
-        return $words;
+        return in_array($difficulty, self::DIFFICULTIES, true);
     }
 
     /**
-     * Nombre de mots actifs pour une langue.
+     * Date du jour au format YYYY-MM-DD dans le fuseau Europe/Paris.
+     * Permet au mot du jour de changer à minuit heure française.
      */
-    public static function countForLanguage(string $language): int
+    public static function parisDate(): string
     {
-        $language = strtolower(trim($language));
-        if (!in_array($language, self::LANGUAGES, true)) {
-            return 0;
-        }
-
-        $sql = 'SELECT COUNT(*) FROM ' . static::$table . '
-                WHERE language = :lang AND is_active = 1';
-
-        $stmt = static::pdo()->prepare($sql);
-        $stmt->execute([':lang' => $language]);
-
-        return (int) $stmt->fetchColumn();
+        $now = new \DateTimeImmutable('now', new \DateTimeZone('Europe/Paris'));
+        return $now->format('Y-m-d');
     }
 
     /**
-     * Détermine le mot du jour pour une langue.
-     *
-     * L'index est calculé à partir du nombre de jours écoulés depuis
-     * l'epoch Unix (UTC), modulo le nombre total de mots. Ainsi :
-     *   - le mot est identique pour tous les joueurs d'une même journée,
-     *   - aucun mot n'est répété avant que toute la liste ne soit parcourue,
-     *   - la rotation reprend ensuite cycliquement.
-     *
-     * @param string $language 'fr' ou 'en'
-     * @return string Mot de 5 lettres majuscules, ou '' si aucun mot disponible.
+     * Index entier déterministe basé sur le nombre de jours écoulés
+     * depuis l'epoch (calculé dans le fuseau Europe/Paris).
      */
-    public static function wordOfDay(string $language): string
+    public static function dayIndex(): int
     {
-        $words = self::wordsForLanguage($language);
+        $now = new \DateTimeImmutable('now', new \DateTimeZone('Europe/Paris'));
+        $epoch = new \DateTimeImmutable('1970-01-01', new \DateTimeZone('Europe/Paris'));
+        $diff = $epoch->diff($now);
+        // Nombre de jours = années*365 + ... ; plus simple via timestamp.
+        $days = (int) floor(($now->getTimestamp() - $epoch->getTimestamp()) / 86400);
+        return $days;
+    }
+
+    /**
+     * Retourne le mot du jour pour une langue et une difficulté.
+     * Déterministe : identique pour tous les joueurs d'une même journée.
+     */
+    public static function dailyWord(string $language, string $difficulty): string
+    {
+        $language = strtolower(trim($language));
+        $difficulty = strtolower(trim($difficulty));
+
+        if (!in_array($language, self::LANGUAGES, true) || !self::isValidDifficulty($difficulty)) {
+            return '';
+        }
+
+        // Liste triée par id (ordre stable).
+        $words = self::listForDifficulty($language, $difficulty);
         if ($words === []) {
             return '';
         }
 
         $count = count($words);
-        $dayIndex = (int) floor(time() / 86400); // jours écoulés depuis le 01/01/1970 (UTC)
-
-        return $words[$dayIndex % $count];
+        return $words[self::dayIndex() % $count];
     }
 
     /**
-     * Retourne la liste des mots pour une langue, indexée par position.
-     * Utilisé pour transmettre la liste au client (sélection identique côté JS).
-     *
-     * @return list<string>
+     * Retourne un mot aléatoire (mode libre) pour une langue et une difficulté.
      */
-    public static function allForLanguage(string $language): array
+    public static function randomWord(string $language, string $difficulty): string
     {
-        return self::wordsForLanguage($language);
-    }
-
-    /**
-     * Ajoute un mot (normalisé en majuscules, sans accents) pour une langue.
-     *
-     * @return bool true si inséré, false si déjà présent (doublon ignoré).
-     */
-    public static function add(string $word, string $language): bool
-    {
-        $word = self::normalize($word);
         $language = strtolower(trim($language));
+        $difficulty = strtolower(trim($difficulty));
 
-        if ($word === '' || !in_array($language, self::LANGUAGES, true)) {
-            return false;
-        }
-
-        $sql = 'INSERT IGNORE INTO ' . static::$table . ' (word, language) VALUES (:word, :lang)';
-
-        $stmt = static::pdo()->prepare($sql);
-        $stmt->execute([':word' => $word, ':lang' => $language]);
-
-        return $stmt->rowCount() > 0;
-    }
-
-    /**
-     * Active ou désactive un mot.
-     */
-    public static function setActive(int $id, bool $active): void
-    {
-        $sql = 'UPDATE ' . static::$table . ' SET is_active = :active WHERE id = :id';
-
-        $stmt = static::pdo()->prepare($sql);
-        $stmt->execute([':active' => $active ? 1 : 0, ':id' => $id]);
-    }
-
-    /**
-     * Normalise un mot : majuscules, sans accents, exactement 5 lettres A-Z.
-     * Retourne '' si le mot ne respecte pas ces critères.
-     */
-    public static function normalize(string $word): string
-    {
-        // Supprime les accents, met en majuscules.
-        $word = strtoupper(trim($word));
-        $word = preg_replace('/[\x{0300}-\x{036f}]/u', '', \Normalizer::normalize($word, \Normalizer::FORM_D)) ?? $word;
-
-        if (!preg_match('/^[A-Z]{5}$/', $word)) {
+        if (!in_array($language, self::LANGUAGES, true) || !self::isValidDifficulty($difficulty)) {
             return '';
         }
 
+        $sql = 'SELECT word FROM ' . static::$table . '
+                WHERE language = :lang AND difficulty = :diff AND is_active = 1
+                ORDER BY RAND() LIMIT 1';
+
+        $stmt = static::pdo()->prepare($sql);
+        $stmt->execute([':lang' => $language, ':diff' => $difficulty]);
+
+        $word = $stmt->fetchColumn();
+        return $word !== false ? (string) $word : '';
+    }
+
+    /**
+     * Retourne tous les mots d'une langue + difficulté, triés par id.
+     *
+     * @return list<string>
+     */
+    public static function listForDifficulty(string $language, string $difficulty): array
+    {
+        $language = strtolower(trim($language));
+        $difficulty = strtolower(trim($difficulty));
+
+        if (!in_array($language, self::LANGUAGES, true) || !self::isValidDifficulty($difficulty)) {
+            return [];
+        }
+
+        $sql = 'SELECT word FROM ' . static::$table . '
+                WHERE language = :lang AND difficulty = :diff AND is_active = 1
+                ORDER BY id ASC';
+
+        $stmt = static::pdo()->prepare($sql);
+        $stmt->execute([':lang' => $language, ':diff' => $difficulty]);
+
+        /** @var list<string> $words */
+        return $stmt->fetchAll(\PDO::FETCH_COLUMN);
+    }
+
+    /**
+     * Compte les mots disponibles par langue/difficulté.
+     */
+    public static function countForDifficulty(string $language, string $difficulty): int
+    {
+        $language = strtolower(trim($language));
+        $difficulty = strtolower(trim($difficulty));
+
+        if (!in_array($language, self::LANGUAGES, true) || !self::isValidDifficulty($difficulty)) {
+            return 0;
+        }
+
+        $sql = 'SELECT COUNT(*) FROM ' . static::$table . '
+                WHERE language = :lang AND difficulty = :diff AND is_active = 1';
+
+        $stmt = static::pdo()->prepare($sql);
+        $stmt->execute([':lang' => $language, ':diff' => $difficulty]);
+
+        return (int) $stmt->fetchColumn();
+    }
+
+    /**
+     * Normalise un mot : majuscules, sans accents, exactement la longueur voulue.
+     * Retourne '' si invalide.
+     */
+    public static function normalize(string $word): string
+    {
+        $word = strtoupper(trim($word));
+        $normalized = \Normalizer::normalize($word, \Normalizer::FORM_D);
+        if ($normalized !== false) {
+            $word = preg_replace('/\p{M}/u', '', $normalized) ?? $word;
+        }
+        if (!preg_match('/^[A-Z]+$/', $word)) {
+            return '';
+        }
         return $word;
     }
 }

@@ -61,22 +61,23 @@ use App\Core\Auth;
         <h2 class="section-title" style="font-size:1.3rem; margin-bottom:1rem;">Jeux disponibles</h2>
         <div class="grid grid-3">
             <a class="surface card card-hover" href="<?= e(url('/jeux/wordle')) ?>" style="text-decoration:none; color:inherit;">
-                <span class="badge badge-secondary">Nouveau</span>
+                <span class="badge badge-secondary">3 difficultés</span>
                 <h3 class="card-title">🔤 Wordle</h3>
-                <p class="card-excerpt">Devine le mot de 5 lettres du jour. 6 essais, en français ou en anglais. Un nouveau mot chaque jour, identique pour tous&nbsp;!</p>
+                <p class="card-excerpt">Devine le mot en 6 essais. 3 niveaux (5, 6 ou 7 lettres), mode quotidien commun ou libre illimité, en français ou en anglais&nbsp;!</p>
                 <span class="btn btn-primary btn-sm" style="align-self:flex-start;">Jouer →</span>
+            </a>
+
+            <a class="surface card card-hover" href="<?= e(url('/jeux/enigme')) ?>" style="text-decoration:none; color:inherit;">
+                <span class="badge badge-secondary">Quotidien</span>
+                <h3 class="card-title">🧩 Énigme du jour</h3>
+                <p class="card-excerpt">Une devinette par jour, identique pour tous les joueurs. Saurez-vous la résoudre&nbsp;? Change chaque jour à minuit&nbsp;!</p>
+                <span class="btn btn-primary btn-sm" style="align-self:flex-start;">Réfléchir →</span>
             </a>
 
             <div class="surface card" style="opacity:0.6;">
                 <span class="badge badge-muted">Bientôt</span>
                 <h3 class="card-title">🧠 Memory</h3>
                 <p class="card-excerpt">Le memory cafétéria reviendra bientôt dans la zone jeux.</p>
-            </div>
-
-            <div class="surface card" style="opacity:0.6;">
-                <span class="badge badge-muted">Bientôt</span>
-                <h3 class="card-title">🎯 À venir</h3>
-                <p class="card-excerpt">D'autres jeux arrivent prochainement. Reste connecté&nbsp;!</p>
             </div>
         </div>
 
