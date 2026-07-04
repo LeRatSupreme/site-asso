@@ -5,6 +5,7 @@ declare(strict_types=1);
 /** @var array<string,mixed>|null $user */
 /** @var bool $isLoggedIn */
 /** @var array{fr:bool, en:bool} $playedToday */
+/** @var array{fr:list<string>, en:list<string>} $words */
 /** @var string $submitUrl */
 /** @var string $leaderboardUrl */
 /** @var string $csrfToken */
@@ -127,34 +128,8 @@ declare(strict_types=1);
 (function() {
     'use strict';
 
-    // ===================== MOTS 5 LETTRES =====================
-    var WORDS = {
-        fr: ["TABLE","CHIEN","ARBRE","FLEUR","PLAGE","ROUTE","PORTE","AVION","METRO","ECOLE",
-             "LIVRE","STYLO","REGLE","POMME","CREPE","PIZZA","ROUGE","BLANC","JAUNE","VIOLET",
-             "GRAND","PETIT","CHAUD","FROID","RAPIDE","LUNDI","MARDI","MATIN","SOIRS","NUITS",
-             "PERES","MERES","FRERE","SOEUR","ONCLE","AMIES","HEURE","TEMPS","VIEUX","JEUNE",
-             "METAL","VERRE","NEIGE","PLUIE","LOUPS","OURS","LIONS","SINGE","MONDE","TERRE",
-             "MARS","LUNE","LACS","AIGLE","LAPIN","BLOND","NOIRES","TROIS","SEIZE","FETES",
-             "OEILS","SAINT","FUMEE","NUAGE","ECRAN","PIANO","GANTS","LOUPE","CARTE","SORTS",
-             "FONDS","GROUPE","PAIXS","OISEAU","RAYON","JOURNAL","CINQ","FROMAGE","DEUX","HUIT",
-             "BÂTON","GANTS","TRAIN","BATEAU","VOILE","LOUP","MOINE","ARBRE","TOAST","FÊTE"].map(function(w) {
-            return w.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
-        }).filter(function(w) { return /^[A-Z]{5}$/.test(w); }),
-
-        en: ["HOUSE","TABLE","WATER","BREAD","APPLE","CHAIR","MOUSE","LIGHT","NIGHT","MUSIC",
-             "RIVER","OCEAN","CLOUD","STORM","BEACH","FIELD","TOWER","TRAIN","PLANE","TRUCK",
-             "CLASS","BOOKS","PAPER","STUDY","TEACH","LEARN","WRITE","GRAPE","LEMON","MANGO",
-             "PEACH","MELON","BERRY","SALAD","ONION","BEANS","JUICE","CANDY","SUGAR","COLOR",
-             "GREEN","BLACK","WHITE","BROWN","HAPPY","BRAVE","PROUD","QUIET","SMART","FUNNY",
-             "DREAM","PARTY","MAGIC","EARTH","HEART","SMILE","PHONE","BRAIN","BONES","SKINS",
-             "PRICE","STORE","TRADE","DEALS","SALES","TAXES","CYBER","PIXEL","CODES","BYTES",
-             "FILES","INPUT","CLICK","VIEWS","WORDS","LINES","GAMES","CARDS","BOARD","SPORT",
-             "GOALS","CHESS","TEAMS","SHARK","WHALE","HORSE","SHEEP","EAGLE","SNAKE","ZEBRA",
-             "PANDA","SUNNY","FOGGY","FROST","TIGER","RABBIT","MONKEY","STEEL","STONE","BRICK",
-             "GLASS","METAL","MONEY","WORLD","MONTH","WEEKS","FRIEND","CHILD","MOTHER","SISTER"].map(function(w) {
-            return w.toUpperCase();
-        }).filter(function(w) { return /^[A-Z]{5}$/.test(w); })
-    };
+    // ===================== MOTS 5 LETTRES (depuis la base de données) =====================
+    var WORDS = <?= json_encode($words) ?>;
 
     // ===================== CLAVIERS =====================
     var KEYBOARDS = {
@@ -176,16 +151,17 @@ declare(strict_types=1);
     var keyState = {}; // 'A' -> 'green'|'yellow'|'gray'
 
     // ===================== MOT DU JOUR =====================
-    function dayOfYear() {
-        var now = new Date();
-        var start = new Date(now.getFullYear(), 0, 0);
-        return Math.floor((now - start) / 86400000);
+    // Index déterministe basé sur le nombre de jours écoulés depuis
+    // l'epoch Unix (UTC), modulo la taille de la liste. Tous les joueurs
+    // ont ainsi le même mot un jour donné, et aucun mot ne se répète tant
+    // que toute la liste n'est pas parcourue (plus d'un an avec ~400 mots).
+    function dayIndex() {
+        return Math.floor(Date.now() / 86400000);
     }
     function pickWord() {
         var list = WORDS[mode];
         if (!list || list.length === 0) return '?????';
-        var idx = (dayOfYear() * 7 + list.length) % list.length;
-        return list[idx];
+        return list[dayIndex() % list.length];
     }
 
     // ===================== ALGORITHME D'ÉVALUATION =====================
