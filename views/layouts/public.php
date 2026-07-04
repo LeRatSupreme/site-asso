@@ -111,7 +111,7 @@ $twitterHandle = Setting::get('twitter_handle', '');
                 <a class="nav-link<?= $currentPath === '/team' ? ' is-active' : '' ?>" href="<?= e(url('/team')) ?>"><?= e(t('nav.team')) ?></a>
                 <a class="nav-link<?= str_starts_with($currentPath, '/sondages') ? ' is-active' : '' ?>" href="<?= e(url('/sondages')) ?>"><?= e(t('nav.polls')) ?></a>
                 <a class="nav-link<?= str_starts_with($currentPath, '/galerie') ? ' is-active' : '' ?>" href="<?= e(url('/galerie')) ?>"><?= e(t('nav.gallery')) ?></a>
-                <a class="nav-link<?= str_starts_with($currentPath, '/jeux') ? ' is-active' : '' ?>" href="<?= e(url('/jeux')) ?>">🎮 <?= e(t('nav.games')) ?></a>
+                <a class="nav-link<?= str_starts_with($currentPath, '/jeux') ? ' is-active' : '' ?>" href="<?= e(url('/jeux')) ?>"><?= e(t('nav.games')) ?></a>
             </nav>
 
             <div class="nav-actions">
@@ -191,7 +191,7 @@ $twitterHandle = Setting::get('twitter_handle', '');
                 <a href="<?= e(url('/team')) ?>">👥 <?= e(t('nav.team')) ?></a>
                 <a href="<?= e(url('/sondages')) ?>">📊 <?= e(t('nav.polls')) ?></a>
                 <a href="<?= e(url('/galerie')) ?>">📷 <?= e(t('nav.gallery')) ?></a>
-                <a href="<?= e(url('/jeux')) ?>">🎮 <?= e(t('nav.games')) ?></a>
+                <a href="<?= e(url('/jeux')) ?>"><?= e(t('nav.games')) ?></a>
             </div>
 
             <div class="mobile-nav-section">
@@ -242,7 +242,7 @@ $twitterHandle = Setting::get('twitter_handle', '');
                 <a href="<?= e(url('/team')) ?>">👥 <?= e(t('nav.team')) ?></a>
                 <a href="<?= e(url('/sondages')) ?>">📊 <?= e(t('nav.polls')) ?></a>
                 <a href="<?= e(url('/galerie')) ?>">📷 <?= e(t('nav.gallery')) ?></a>
-                <a href="<?= e(url('/jeux')) ?>">🎮 <?= e(t('nav.games')) ?></a>
+                <a href="<?= e(url('/jeux')) ?>"><?= e(t('nav.games')) ?></a>
                 <a href="<?= e(url('/legal')) ?>">⚖️ <?= e(t('footer.legal')) ?></a>
                 <a href="<?= e(url('/privacy')) ?>">🔒 <?= e(t('footer.privacy')) ?></a>
                 <a href="<?= e(url('/cgu')) ?>">📋 <?= e(t('footer.cgu')) ?></a>
