@@ -183,34 +183,38 @@ $twitterHandle = Setting::get('twitter_handle', '');
 
         <div class="mobile-nav-overlay" id="mobile-nav-overlay"></div>
         <nav id="mobile-nav" class="mobile-nav" aria-label="<?= e(t('nav.main.aria')) ?>">
-            <a href="<?= e(url('/')) ?>">🏠 <?= e(t('nav.home')) ?></a>
-            <a href="<?= e(url('/events')) ?>">📅 <?= e(t('nav.events')) ?></a>
-            <a href="<?= e(url('/presentation')) ?>">🏫 <?= e(t('nav.about')) ?></a>
-            <a href="<?= e(url('/team')) ?>">👥 <?= e(t('nav.team')) ?></a>
-            <a href="<?= e(url('/sondages')) ?>">📊 <?= e(t('nav.polls')) ?></a>
-            <a href="<?= e(url('/galerie')) ?>">📷 <?= e(t('nav.gallery')) ?></a>
-            <hr>
-            <div class="lang-switch-mobile">
-                <?php foreach ($langs as $code): ?>
-                    <a class="btn btn-outline btn-sm<?= $code === $lang ? ' is-active' : '' ?>"
-                       href="<?= e(url('/set-lang?lang=' . $code . '&redirect=' . rawurlencode($currentPath))) ?>">
-                        <?= lang_flag($code) ?> <?= e(strtoupper($code)) ?>
-                    </a>
-                <?php endforeach; ?>
+            <div class="mobile-nav-links">
+                <a href="<?= e(url('/')) ?>">🏠 <?= e(t('nav.home')) ?></a>
+                <a href="<?= e(url('/events')) ?>">📅 <?= e(t('nav.events')) ?></a>
+                <a href="<?= e(url('/presentation')) ?>">🏫 <?= e(t('nav.about')) ?></a>
+                <a href="<?= e(url('/team')) ?>">👥 <?= e(t('nav.team')) ?></a>
+                <a href="<?= e(url('/sondages')) ?>">📊 <?= e(t('nav.polls')) ?></a>
+                <a href="<?= e(url('/galerie')) ?>">📷 <?= e(t('nav.gallery')) ?></a>
             </div>
-            <hr>
-            <button type="button" class="btn btn-ghost" id="theme-toggle-mobile">🌙 <?= e(t('nav.theme')) ?></button>
-            <hr>
-            <?php if ($user !== null): ?>
-                <?php if (($user['role'] ?? '') === 'ADMIN' || ($user['role'] ?? '') === 'TRESORERIE'): ?>
-                    <a class="btn btn-primary" href="<?= e(url('/admin')) ?>"><?= e(t('nav.admin')) ?></a>
+
+            <div class="mobile-nav-section">
+                <select id="lang-select-mobile" class="mobile-lang-select" onchange="window.location.href=this.value">
+                    <?php foreach ($langs as $code): ?>
+                        <option value="<?= e(url('/set-lang?lang=' . $code . '&redirect=' . rawurlencode($currentPath))) ?>" <?= $code === $lang ? 'selected' : '' ?>>
+                            <?= e(lang_flag($code) . ' ' . strtoupper($code)) ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+                <button type="button" class="btn btn-ghost btn-sm mobile-theme-btn" id="theme-toggle-mobile">🌙</button>
+            </div>
+
+            <div class="mobile-nav-section mobile-nav-account">
+                <?php if ($user !== null): ?>
+                    <?php if (($user['role'] ?? '') === 'ADMIN' || ($user['role'] ?? '') === 'TRESORERIE'): ?>
+                        <a class="btn btn-primary btn-sm" href="<?= e(url('/admin')) ?>"><?= e(t('nav.admin')) ?></a>
+                    <?php endif; ?>
+                    <a class="btn btn-outline btn-sm" href="<?= e(url('/account/privacy')) ?>"><?= e(t('nav.data')) ?></a>
+                    <a class="btn btn-ghost btn-sm" href="<?= e(url('/logout')) ?>"><?= e(t('nav.logout')) ?></a>
+                <?php else: ?>
+                    <a class="btn btn-ghost btn-sm" href="<?= e(url('/login')) ?>"><?= e(t('nav.login')) ?></a>
+                    <a class="btn btn-primary btn-sm" href="<?= e(url('/register')) ?>"><?= e(t('nav.register')) ?></a>
                 <?php endif; ?>
-                <a class="btn btn-outline" href="<?= e(url('/account/privacy')) ?>"><?= e(t('nav.data')) ?></a>
-                <a class="btn btn-ghost" href="<?= e(url('/logout')) ?>"><?= e(t('nav.logout')) ?></a>
-            <?php else: ?>
-                <a class="btn btn-ghost" href="<?= e(url('/login')) ?>"><?= e(t('nav.login')) ?></a>
-                <a class="btn btn-primary" href="<?= e(url('/register')) ?>"><?= e(t('nav.register')) ?></a>
-            <?php endif; ?>
+            </div>
         </nav>
     </header>
 
@@ -258,19 +262,27 @@ $twitterHandle = Setting::get('twitter_handle', '');
             if (!btn || !nav) return;
 
             function openMenu() {
+                scrollY = window.scrollY;
+                document.body.style.position = 'fixed';
+                document.body.style.top = '-' + scrollY + 'px';
+                document.body.style.width = '100%';
                 nav.classList.add('is-open');
                 btn.classList.add('is-open');
                 if (overlay) overlay.classList.add('is-open');
                 btn.setAttribute('aria-expanded', 'true');
-                document.body.style.overflow = 'hidden';
             }
             function closeMenu() {
+                document.body.style.position = '';
+                document.body.style.top = '';
+                document.body.style.width = '';
+                window.scrollTo(0, scrollY);
                 nav.classList.remove('is-open');
                 btn.classList.remove('is-open');
                 if (overlay) overlay.classList.remove('is-open');
                 btn.setAttribute('aria-expanded', 'false');
-                document.body.style.overflow = '';
             }
+
+            var scrollY = 0;
 
             btn.addEventListener('click', function () {
                 if (nav.classList.contains('is-open')) { closeMenu(); } else { openMenu(); }
