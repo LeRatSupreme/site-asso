@@ -318,20 +318,24 @@ CSS;
     }
 
     function evaluate(guess, answer) {
+        console.log('[WORDLE] guess=' + guess + ' answer=' + answer);
         var res = new Array(5).fill('absent');
-        var remaining = {}; // compte des lettres encore disponibles dans la réponse
+        var remaining = {};
         for (var k = 0; k < 5; k++) {
             var ch = answer[k];
             remaining[ch] = (remaining[ch] || 0) + 1;
         }
-        // 1er passage : les correspondances exactes (vert).
+        console.log('[WORDLE] remaining init=', JSON.stringify(remaining));
+        // 1er passage : correspondances exactes.
         for (var i = 0; i < 5; i++) {
             if (guess[i] === answer[i]) {
                 res[i] = 'correct';
                 remaining[guess[i]]--;
+                console.log('[WORDLE] pos ' + i + ' CORRECT (' + guess[i] + ')');
             }
         }
-        // 2e passage : les lettres présentes mais mal placées (jaune).
+        console.log('[WORDLE] remaining after greens=', JSON.stringify(remaining));
+        // 2e passage : lettres présentes mal placées.
         for (var j = 0; j < 5; j++) {
             if (res[j] === 'correct') { continue; }
             var letter = guess[j];
@@ -340,6 +344,7 @@ CSS;
                 remaining[letter]--;
             }
         }
+        console.log('[WORDLE] result=', JSON.stringify(res));
         return res;
     }
 
