@@ -410,12 +410,20 @@ declare(strict_types=1);
                 },
                 credentials: 'same-origin',
                 body: JSON.stringify({
+                    _csrf: CSRF_TOKEN,
                     mode: settings.mode,
                     lang: settings.lang,
                     difficulty: settings.difficulty,
                     won: won,
                     attempts: attempts
                 })
+            }).then(function(r) {
+                return r.json().catch(function() { return {}; });
+            }).then(function(data) {
+                if (data && !data.success) {
+                    // Affiche l'erreur pour le débogage sans casser l'expérience.
+                    console.log('[Wordle] soumission:', data);
+                }
             }).catch(function() {});
         }
 

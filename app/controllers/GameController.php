@@ -183,7 +183,18 @@ final class GameController extends Controller
         }
         $data = array_merge($_POST, $data);
 
+        // Token CSRF : accepté depuis le body (_csrf) OU le header (X-CSRF-Token).
         $token = (string) ($data['_csrf'] ?? '');
+        if ($token === '') {
+            $headerToken = '';
+            foreach (['HTTP_X_CSRF_TOKEN', 'HTTP_X_CSRFTOKEN'] as $key) {
+                if (!empty($_SERVER[$key])) {
+                    $headerToken = (string) $_SERVER[$key];
+                    break;
+                }
+            }
+            $token = $headerToken;
+        }
         if (!hash_equals(csrf_token(), $token)) {
             $this->json(['success' => false, 'error' => 'csrf'], 419);
         }
