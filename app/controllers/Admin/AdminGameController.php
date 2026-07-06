@@ -131,8 +131,11 @@ final class AdminGameController extends AdminBaseController
         $search = trim((string) ($_GET['q'] ?? ''));
         $language = trim((string) ($_GET['lang'] ?? ''));
         $difficulty = trim((string) ($_GET['diff'] ?? ''));
+        $perPage = (int) ($_GET['perPage'] ?? 100);
+        if (!in_array($perPage, [50, 100, 200, 500], true)) {
+            $perPage = 100;
+        }
         $page = max(1, (int) ($_GET['page'] ?? 1));
-        $perPage = 100;
         $offset = ($page - 1) * $perPage;
 
         $result = WordleWord::adminList(
