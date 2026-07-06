@@ -342,4 +342,137 @@ final class GameScore extends Model
 
         return $streak;
     }
+
+    /**
+     * Classement global (toutes langues confondues du mode quotidien).
+     *
+     * Affiche TOUS les joueurs ayant au moins une partie enregistrée, avec :
+     *   - leur pseudo (ou à défaut prénom + initiale du nom)
+     *   - leur meilleure série en cours (FR ou EN)
+     *   - leur meilleure série max (FR ou EN)
+     *   - le nombre total de parties (FR + EN)
+     *   - le nombre total de victoires (FR + EN)
+     *
+     * @return list<array<string,mixed>>
+     */
+    public static function getGlobalLeaderboard(int $limit = 200): array
+    {
+        $limit = max(1, min(500, $limit));
+
+        try {
+            // Toutes les parties du mode quotidien (FR + EN).
+            $sql = 'SELECT g.user_id, g.mode, g.played_at, g.won,
+                           u.prenom, u.nom, u.pseudo
+                    FROM game_scores g
+                    INNER JOIN users u ON u.id = g.user_id
+                    WHERE g.game = ? AND g.mode IN (?, ?)
+                    ORDER BY g.user_id, g.played_at ASC';
+            $stmt = static::pdo()->prepare($sql);
+            $stmt->execute([self::GAME, 'daily_fr', 'daily_en']);
+            $rows = $stmt->fetchAll();
+        } catch (\Throwable) {
+            return [];
+        }
+
+        // Regroupe par utilisateur, en séparant FR et EN pour le calcul des séries.
+        /** @var array<string,array{pseudo:?string,prenom:string,nom:string,fr:list,won:int}> $byUser */
+        $byUser = [];
+        foreach ($rows as $row) {
+            $uid = (string) $row['user_id'];
+            if (!isset($byUser[$uid])) {
+                $byUser[$uid] = [
+                    'pseudo' => ($row['pseudo'] ?? null) !== null && $row['pseudo'] !== '' ? (string) $row['pseudo'] : null,
+                    'prenom' => (string) $row['prenom'],
+                    'nom'    => (string) $row['nom'],
+                    'fr'     => [],
+                    'en'     => [],
+                ];
+            }
+            $entry = [
+                'played_at' => (string) $row['played_at'],
+                'won'       => (int) $row['won'],
+            ];
+            if ((string) $row['mode'] === 'daily_en') {
+                $byUser[$uid]['en'][] = $entry;
+            } else {
+                $byUser[$uid]['fr'][] = $entry;
+            }
+        }
+
+        $board = [];
+        foreach ($byUser as $uid => $data) {
+            // Séries : on prend le meilleur entre FR et EN.
+            $frCur = self::currentStreakFromRows($data['fr']);
+            $enCur = self::currentStreakFromRows($data['en']);
+            $frMax = self::maxStreakFromRows($data['fr']);
+            $enMax = self::maxStreakFromRows($data['en']);
+
+            $currentStreak = max($frCur, $enCur);
+            $maxStreak = max($frMax, $enMax);
+
+            $played = count($data['fr']) + count($data['en']);
+            $won = 0;
+            foreach ($data['fr'] as $r) { if ($r['won'] === 1) $won++; }
+            foreach ($data['en'] as $r) { if ($r['won'] === 1) $won++; }
+
+            // Nom affiché : pseudo > prénom + initiale.
+            $displayName = $data['pseudo'];
+            if ($displayName === null || $displayName === '') {
+                $initial = mb_substr(trim($data['nom']), 0, 1);
+                $displayName = trim($data['prenom']) . ($initial !== '' ? ' ' . mb_strtoupper($initial) . '.' : '');
+            }
+
+            $board[] = [
+                'id'            => $uid,
+                'pseudo'        => $data['pseudo'],
+                'displayName'   => $displayName,
+                'played'        => $played,
+                'won'           => $won,
+                'currentStreak' => $currentStreak,
+                'maxStreak'     => $maxStreak,
+            ];
+        }
+
+        // Tri : série en cours, puis série max, puis victoires, puis parties.
+        usort($board, function (array $a, array $b): int {
+            if ($a['currentStreak'] !== $b['currentStreak']) {
+                return $b['currentStreak'] <=> $a['currentStreak'];
+            }
+            if ($a['maxStreak'] !== $b['maxStreak']) {
+                return $b['maxStreak'] <=> $a['maxStreak'];
+            }
+            if ($a['won'] !== $b['won']) {
+                return $b['won'] <=> $a['won'];
+            }
+            return $b['played'] <=> $a['played'];
+        });
+
+        return array_slice($board, 0, $limit);
+    }
+
+    /**
+     * Calcule la série max (historique) à partir des parties triées par date croissante.
+     *
+     * @param list<array{played_at:string,won:int}> $rowsAsc
+     */
+    private static function maxStreakFromRows(array $rowsAsc): int
+    {
+        $max = 0;
+        $run = 0;
+        $prev = null;
+        foreach ($rowsAsc as $r) {
+            if ($r['won'] === 1) {
+                $consecutive = $prev !== null
+                    && strtotime($r['played_at']) === strtotime('+1 day', strtotime($prev));
+                $run = $consecutive ? $run + 1 : 1;
+                if ($run > $max) {
+                    $max = $run;
+                }
+            } else {
+                $run = 0;
+            }
+            $prev = $r['played_at'];
+        }
+        return $max;
+    }
 }

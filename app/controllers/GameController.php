@@ -8,6 +8,7 @@ use App\Core\Auth;
 use App\Core\Controller;
 use App\Models\DailyEnigma;
 use App\Models\GameScore;
+use App\Models\User;
 use App\Models\WordleWord;
 
 /**
@@ -22,6 +23,7 @@ final class GameController extends Controller
     {
         $stats = null;
         $user = null;
+        $uid = null;
 
         if (Auth::check()) {
             $user = Auth::user();
@@ -32,11 +34,62 @@ final class GameController extends Controller
             ];
         }
 
+        // Classement global (tout le monde, FR + EN confondus).
+        $leaderboard = GameScore::getGlobalLeaderboard(200);
+
         $this->render('game/index', [
             'title'       => '🎮 Zone jeux — AEIC',
             'description' => 'Joue au Wordle AEIC (FR/EN, 3 difficultés), résous l\'énigme du jour et grimpe dans le classement.',
             'user'        => $user,
             'stats'       => $stats,
+            'leaderboard' => $leaderboard,
+            'currentId'   => $uid,
+            'setPseudoUrl' => url('/jeux/set-pseudo'),
+            'csrfToken'    => csrf_token(),
+        ]);
+    }
+
+    /**
+     * Définit le pseudo joueur (AJAX, auth requis).
+     */
+    public function setPseudo(): void
+    {
+        if (!Auth::check()) {
+            $this->json(['success' => false, 'error' => 'auth_required'], 401);
+        }
+
+        $raw = file_get_contents('php://input');
+        $data = [];
+        if (is_string($raw) && $raw !== '') {
+            $decoded = json_decode($raw, true);
+            if (is_array($decoded)) {
+                $data = $decoded;
+            }
+        }
+        $data = array_merge($_POST, $data);
+
+        $token = (string) ($data['_csrf'] ?? '');
+        if (!hash_equals(csrf_token(), $token)) {
+            $this->json(['success' => false, 'error' => 'csrf'], 419);
+        }
+
+        $pseudo = (string) ($data['pseudo'] ?? '');
+        $uid = (string) Auth::id();
+
+        $normalized = User::normalizePseudo($pseudo);
+        if ($normalized === '') {
+            $this->json(['success' => false, 'error' => 'invalid', 'message' => '3 à 20 caractères (lettres, chiffres, espaces, - _ .)'], 422);
+        }
+
+        if (!User::isPseudoAvailable($normalized, $uid)) {
+            $this->json(['success' => false, 'error' => 'taken', 'message' => 'Ce pseudo est déjà utilisé.'], 409);
+        }
+
+        $saved = User::setPseudo($uid, $normalized);
+
+        $this->json([
+            'success' => true,
+            'pseudo'  => $saved,
         ]);
     }
 
@@ -181,20 +234,14 @@ final class GameController extends Controller
      */
     public function leaderboard(): void
     {
-        $mode = strtolower(trim((string) ($_GET['mode'] ?? 'fr')));
-        if (!in_array($mode, ['fr', 'en'], true)) {
-            $mode = 'fr';
-        }
-
-        // Le classement porte sur le mode quotidien (5 lettres, commun).
-        $gameMode = 'daily_' . $mode;
-        $rows = GameScore::getLeaderboard($gameMode, 50);
+        // Classement global (toutes langues, pseudo) — tout le monde.
+        $rows = GameScore::getGlobalLeaderboard(200);
         $currentId = Auth::check() ? (string) Auth::id() : null;
 
         $this->render('game/leaderboard', [
             'title'       => '🏆 Classement Wordle — AEIC',
             'description' => 'Classement des joueurs de Wordle AEIC par série de victoires en cours (mot quotidien 5 lettres).',
-            'mode'        => $mode,
+            'mode'        => 'global',
             'rows'        => $rows,
             'currentId'   => $currentId,
         ]);

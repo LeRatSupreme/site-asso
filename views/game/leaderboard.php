@@ -62,21 +62,16 @@ function wordleInitials(string $prenom, string $nom): string
     <div class="container">
         <span class="eyebrow">🎮 Zone jeux</span>
         <h1 class="page-title">🏆 Classement Wordle</h1>
-        <p class="page-lead">Les joueurs classés par série de victoires en cours au mot quotidien (5 lettres). La série grandit chaque jour consécutif gagné&nbsp;!</p>
+        <p class="page-lead">Tous les joueurs classés par série de victoires en cours au mot quotidien (5 lettres). La série grandit chaque jour consécutif gagné&nbsp;!</p>
     </div>
 </header>
 
 <section class="section">
     <div class="container">
 
-        <div class="lb-tabs">
-            <a class="lb-pill <?= $mode === 'fr' ? 'is-active' : '' ?>" href="<?= e(url('/jeux/leaderboard?mode=fr')) ?>">🇫🇷 Français</a>
-            <a class="lb-pill <?= $mode === 'en' ? 'is-active' : '' ?>" href="<?= e(url('/jeux/leaderboard?mode=en')) ?>">🇬🇧 English</a>
-        </div>
-
         <?php if ($rows === []): ?>
             <div class="surface lb-empty">
-                <p style="font-size:1.1rem; margin-bottom:0.5rem;">🗂️ Aucune partie enregistrée pour le moment en mode <?= $mode === 'fr' ? 'français' : 'anglais' ?>.</p>
+                <p style="font-size:1.1rem; margin-bottom:0.5rem;">🗂️ Aucune partie enregistrée pour le moment.</p>
                 <p><a class="btn btn-primary btn-sm" href="<?= e(url('/jeux/wordle')) ?>">Jouer au Wordle →</a></p>
             </div>
         <?php else: ?>
@@ -87,8 +82,7 @@ function wordleInitials(string $prenom, string $nom): string
                             <th class="num" style="width:3.5rem;">#</th>
                             <th>Joueur</th>
                             <th class="num">Série en cours 🔥</th>
-                            <th class="num lb-hide-sm">Série max 🏆</th>
-                            <th class="num lb-hide-sm">Victoires</th>
+                            <th class="num lb-hide-sm">Record 🏆</th>
                             <th class="num lb-hide-sm">Parties</th>
                         </tr>
                     </thead>
@@ -96,23 +90,22 @@ function wordleInitials(string $prenom, string $nom): string
                         <?php foreach ($rows as $i => $row):
                             $rank = $i + 1;
                             $rankClass = $rank === 1 ? 'gold' : ($rank === 2 ? 'silver' : ($rank === 3 ? 'bronze' : ''));
-                            $isCurrent = $currentId !== null && (string) $row['id'] === $currentId; ?>
+                            $isCurrent = $currentId !== null && (string) $row['id'] === $currentId;
+                            $streak = (int) ($row['currentStreak'] ?? 0); ?>
                             <tr class="lb-row <?= $isCurrent ? 'is-current' : '' ?>">
                                 <td class="num"><span class="lb-rank <?= $rankClass ?>"><?= $rank ?></span></td>
                                 <td>
                                     <div class="lb-user-cell">
-                                        <span class="lb-avatar" aria-hidden="true"><?= e(wordleInitials((string) $row['prenom'], (string) $row['nom'])) ?></span>
+                                        <span class="lb-avatar" aria-hidden="true"><?= e(mb_strtoupper(mb_substr((string) $row['displayName'], 0, 1) ?: '?')) ?></span>
                                         <span>
-                                            <span class="lb-user-name"><?= e($row['prenom'] . ' ' . $row['nom']) ?></span>
+                                            <span class="lb-user-name"><?= e($row['displayName']) ?></span>
                                             <?php if ($isCurrent): ?> <span class="badge badge-info" style="margin-left:0.4rem;">Toi</span><?php endif; ?>
-                                            <span class="lb-user-email lb-hide-sm"><?= e($row['email']) ?></span>
                                         </span>
                                     </div>
                                 </td>
-                                <td class="num"><strong style="color:var(--primary); font-size:1.15rem;"><?= (int) ($row['currentStreak'] ?? 0) ?> jour<?= (int) ($row['currentStreak'] ?? 0) > 1 ? 's' : '' ?></strong></td>
+                                <td class="num"><strong style="color:var(--primary); font-size:1.15rem;"><?= $streak ?> jour<?= $streak > 1 ? 's' : '' ?></strong></td>
                                 <td class="num lb-hide-sm"><?= (int) ($row['maxStreak'] ?? 0) ?></td>
-                                <td class="num lb-hide-sm"><?= (int) $row['won'] ?></td>
-                                <td class="num lb-hide-sm"><?= (int) $row['played'] ?></td>
+                                <td class="num lb-hide-sm"><?= (int) ($row['played'] ?? 0) ?></td>
                             </tr>
                         <?php endforeach; ?>
                     </tbody>

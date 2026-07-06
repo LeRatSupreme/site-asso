@@ -64,6 +64,7 @@ function aeic_register_routes(Router $router): void
 
     // Zone jeux (Wordle FR/EN, 3 difficultés, 2 modes + énigme quotidienne + classement).
     $router->get('/jeux', [GameController::class, 'index']);
+    $router->post('/jeux/set-pseudo', [GameController::class, 'setPseudo']);
     $router->get('/jeux/wordle', [GameController::class, 'wordle']);
     $router->get('/jeux/wordle/word', [GameController::class, 'getWord']);
     $router->post('/jeux/wordle/submit', [GameController::class, 'submitWordle']);
