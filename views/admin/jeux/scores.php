@@ -19,32 +19,30 @@ declare(strict_types=1);
     </div>
 <?php else: ?>
 
-    <!-- Barre de filtres -->
-    <div class="card surface glass" style="display:flex;gap:0.6rem;flex-wrap:wrap;align-items:flex-end;margin-bottom:1rem;padding:0.8rem;">
-        <div style="flex:1;min-width:200px;">
-            <label style="font-size:0.75rem;color:var(--muted);display:block;margin-bottom:0.2rem;">🔎 Rechercher</label>
-            <input type="text" id="player-search" placeholder="Nom, email ou pseudo…"
-                   style="width:100%;padding:0.4rem 0.6rem;border-radius:0.3rem;border:1px solid var(--border-strong);background:rgba(255,255,255,0.04);color:var(--foreground);" />
+    <!-- Barre de filtres horizontale -->
+    <div class="wordle-toolbar" style="margin-bottom:1rem;padding:0.85rem 1rem;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:12px;display:flex;flex-wrap:wrap;align-items:center;gap:0.75rem;">
+        <div style="flex:1 1 200px;min-width:180px;">
+            <input type="text" id="player-search" placeholder="🔎 Nom, email ou pseudo…"
+                   style="width:100%;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:10px;color:var(--foreground);padding:0.5rem 0.7rem;font-size:0.9rem;" />
         </div>
-        <div>
-            <label style="font-size:0.75rem;color:var(--muted);display:block;margin-bottom:0.2rem;">Pseudo</label>
-            <select id="player-pseudo-filter">
-                <option value="">Tous</option>
-                <option value="with">Avec pseudo</option>
-                <option value="without">Sans pseudo</option>
-            </select>
-        </div>
-        <div>
-            <label style="font-size:0.75rem;color:var(--muted);display:block;margin-bottom:0.2rem;">Trier par</label>
-            <select id="player-sort">
-                <option value="streak">Série en cours ↓</option>
-                <option value="max">Record ↓</option>
-                <option value="played">Parties ↓</option>
-                <option value="won">Victoires ↓</option>
-                <option value="name">Nom A→Z</option>
-            </select>
-        </div>
-        <span style="color:var(--muted);font-size:0.85rem;align-self:center;">
+
+        <select id="player-pseudo-filter" aria-label="Pseudo"
+                style="width:auto;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:10px;color:var(--foreground);padding:0.5rem 0.7rem;font-size:0.9rem;">
+            <option value="">Tous pseudos</option>
+            <option value="with">Avec pseudo</option>
+            <option value="without">Sans pseudo</option>
+        </select>
+
+        <select id="player-sort" aria-label="Trier"
+                style="width:auto;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:10px;color:var(--foreground);padding:0.5rem 0.7rem;font-size:0.9rem;">
+            <option value="streak">Série en cours ↓</option>
+            <option value="max">Record ↓</option>
+            <option value="played">Parties ↓</option>
+            <option value="won">Victoires ↓</option>
+            <option value="name">Nom A→Z</option>
+        </select>
+
+        <span style="margin-left:auto;font-size:0.8rem;color:var(--muted);white-space:nowrap;">
             <span id="player-count"><?= count($players) ?></span> joueur(s)
         </span>
     </div>

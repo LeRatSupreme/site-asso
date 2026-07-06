@@ -50,51 +50,39 @@ function wordlePageWindow(int $current, int $total): array
 ?>
 <div class="admin-actions">
     <a class="btn btn-ghost btn-sm" href="<?= e(url('/admin/jeux')) ?>">← Retour</a>
-    <a class="btn btn-primary btn-sm" href="<?= e(url('/admin/jeux/wordle/new')) ?>">+ Nouveau mot</a>
 </div>
 
-<!-- Filtres -->
-<form method="get" class="card surface glass" style="display:flex;gap:0.6rem;flex-wrap:wrap;align-items:flex-end;margin-bottom:1rem;padding:0.8rem;">
-    <div style="flex:1;min-width:180px;">
-        <label style="font-size:0.75rem;color:var(--muted);display:block;margin-bottom:0.2rem;">Recherche</label>
-        <input type="text" name="q" value="<?= e($search) ?>" placeholder="ex : TABLE"
-               style="width:100%;padding:0.4rem 0.6rem;border-radius:0.3rem;border:1px solid var(--border-strong);background:rgba(255,255,255,0.04);color:var(--foreground);" />
+<!-- Barre de filtres horizontale -->
+<form method="get" class="wordle-toolbar">
+    <div class="wordle-search">
+        <input type="text" name="q" value="<?= e($search) ?>" placeholder="🔎 Rechercher un mot…" aria-label="Recherche" />
     </div>
-    <div>
-        <label style="font-size:0.75rem;color:var(--muted);display:block;margin-bottom:0.2rem;">Langue</label>
-        <select name="lang">
-            <option value="">Toutes</option>
-            <option value="fr" <?= $langFilter === 'fr' ? 'selected' : '' ?>>🇫🇷 FR</option>
-            <option value="en" <?= $langFilter === 'en' ? 'selected' : '' ?>>🇬🇧 EN</option>
-        </select>
-    </div>
-    <div>
-        <label style="font-size:0.75rem;color:var(--muted);display:block;margin-bottom:0.2rem;">Difficulté</label>
-        <select name="diff">
-            <option value="">Toutes</option>
-            <option value="facile" <?= $diffFilter === 'facile' ? 'selected' : '' ?>>Facile (5)</option>
-            <option value="moyen" <?= $diffFilter === 'moyen' ? 'selected' : '' ?>>Moyen (6)</option>
-            <option value="difficile" <?= $diffFilter === 'difficile' ? 'selected' : '' ?>>Difficile (7)</option>
-        </select>
-    </div>
-    <div>
-        <label style="font-size:0.75rem;color:var(--muted);display:block;margin-bottom:0.2rem;">Par page</label>
-        <select name="perPage">
-            <?php foreach ([50, 100, 200, 500] as $n): ?>
-                <option value="<?= $n ?>" <?= $perPage === $n ? 'selected' : '' ?>><?= $n ?></option>
-            <?php endforeach; ?>
-        </select>
-    </div>
-    <button type="submit" class="btn btn-primary btn-sm">Filtrer</button>
-    <a class="btn btn-ghost btn-sm" href="<?= e(url('/admin/jeux/wordle')) ?>">Réinitialiser</a>
-</form>
 
-<p style="color:var(--muted);font-size:0.85rem;margin-bottom:0.5rem;">
-    <strong><?= number_format($total, 0, ',', ' ') ?></strong> mot(s)
-    <?php if ($search !== '' || $langFilter !== '' || $diffFilter !== ''): ?>
-        · filtré(s)
-    <?php endif; ?>
-</p>
+    <select name="lang" aria-label="Langue">
+        <option value="">Toutes langues</option>
+        <option value="fr" <?= $langFilter === 'fr' ? 'selected' : '' ?>>🇫🇷 FR</option>
+        <option value="en" <?= $langFilter === 'en' ? 'selected' : '' ?>>🇬🇧 EN</option>
+    </select>
+
+    <select name="diff" aria-label="Difficulté">
+        <option value="">Toutes difficultés</option>
+        <option value="facile" <?= $diffFilter === 'facile' ? 'selected' : '' ?>>Facile (5)</option>
+        <option value="moyen" <?= $diffFilter === 'moyen' ? 'selected' : '' ?>>Moyen (6)</option>
+        <option value="difficile" <?= $diffFilter === 'difficile' ? 'selected' : '' ?>>Difficile (7)</option>
+    </select>
+
+    <select name="perPage" aria-label="Par page">
+        <?php foreach ([50, 100, 200, 500] as $n): ?>
+            <option value="<?= $n ?>" <?= $perPage === $n ? 'selected' : '' ?>><?= $n ?>/page</option>
+        <?php endforeach; ?>
+    </select>
+
+    <button type="submit" class="btn btn-primary btn-sm">Filtrer</button>
+    <a class="btn btn-outline btn-sm" href="<?= e(url('/admin/jeux/wordle')) ?>">Réinitialiser</a>
+    <a class="btn btn-primary btn-sm" href="<?= e(url('/admin/jeux/wordle/new')) ?>">+ Nouveau mot</a>
+
+    <span class="wordle-count"><?= number_format($total, 0, ',', ' ') ?> mot(s)<?php if ($search !== '' || $langFilter !== '' || $diffFilter !== ''): ?> · filtré(s)<?php endif; ?></span>
+</form>
 
 <?php if ($words === []): ?>
     <div class="card surface glass" style="text-align:center;padding:2rem;color:var(--muted);">
@@ -187,6 +175,52 @@ function wordlePageWindow(int $current, int $total): array
 <?php endif; ?>
 
 <style>
+/* Barre de filtres horizontale */
+.wordle-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+    padding: 0.85rem 1rem;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+}
+.wordle-toolbar .wordle-search {
+    flex: 1 1 200px;
+    min-width: 180px;
+}
+.wordle-toolbar .wordle-search input {
+    width: 100%;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--foreground);
+    padding: 0.5rem 0.7rem;
+    font-size: 0.9rem;
+}
+.wordle-toolbar .wordle-search input:focus,
+.wordle-toolbar select:focus {
+    outline: none;
+    border-color: var(--primary);
+}
+.wordle-toolbar select {
+    width: auto;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--foreground);
+    padding: 0.5rem 0.7rem;
+    font-size: 0.9rem;
+}
+.wordle-count {
+    margin-left: auto;
+    font-size: 0.8rem;
+    color: var(--muted);
+    white-space: nowrap;
+}
+
 .pagination {
     display: flex;
     gap: 0.3rem;
