@@ -62,6 +62,12 @@ declare(strict_types=1);
         <!-- Clavier -->
         <div id="keyboard"></div>
 
+        <!-- Champ invisible : capte le clavier natif sur mobile -->
+        <input type="text" id="wordle-input" autocomplete="off" autocorrect="off"
+               autocapitalize="characters" spellcheck="false" inputmode="text"
+               aria-hidden="true" tabindex="-1"
+               style="position:absolute;left:-9999px;top:50%;opacity:0;width:1px;height:1px;font-size:16px;" />
+
         <!-- Actions fin -->
         <div id="end-actions" style="display:none;text-align:center;margin-top:1.5rem;gap:0.5rem;justify-content:center;flex-wrap:wrap;">
             <button type="button" class="btn btn-primary btn-sm" id="btn-replay">🔄 Rejouer</button>
@@ -316,6 +322,8 @@ declare(strict_types=1);
             guess += key;
         }
         renderCurrentRow();
+        // Re-focalise l'input invisible (garde le clavier natif mobile ouvert).
+        focusInput();
     }
 
     function submitGuess() {
@@ -465,6 +473,9 @@ declare(strict_types=1);
                 buildGrid();
                 buildKeyboard();
                 busy = false;
+                // Focalise l'input invisible pour faire apparaître le clavier
+                // natif sur mobile (sans effet visible sur desktop).
+                focusInput();
             })
             .catch(function() {
                 loaderEl.textContent = 'Impossible de charger le mot. Recharge la page.';
@@ -520,7 +531,25 @@ declare(strict_types=1);
         newGame();
     });
 
-    // ===================== CLAVIER PHYSIQUE =====================
+    // ===================== CLAVIER (physique + mobile natif) =====================
+    // Sur mobile, document.addEventListener('keydown') ne se déclenche pas car il
+    // n'y a pas de champ focalisé. On ajoute un <input> invisible qui, une fois
+    // focalisé, fait apparaître le clavier natif du téléphone. On intercepte
+    // ensuite les caractères tapés via l'événement 'input' (plus fiable que
+    // 'keydown' sur mobile) et on vide l'input après chaque frappe.
+
+    var hiddenInput = document.getElementById('wordle-input');
+
+    // Focalise l'input invisible (fait apparaître le clavier natif sur mobile).
+    function focusInput() {
+        if (!over && !busy && hiddenInput) {
+            try { hiddenInput.focus({ preventScroll: true }); } catch (e) {
+                hiddenInput.focus();
+            }
+        }
+    }
+
+    // Clavier physique (desktop).
     document.addEventListener('keydown', function(e) {
         if (e.key === 'Enter') { handleKey('ENTER'); }
         else if (e.key === 'Backspace') { handleKey('BACK'); }
@@ -529,6 +558,47 @@ declare(strict_types=1);
             if (/^[A-Z]$/.test(k)) { handleKey(k); }
         }
     });
+
+    // Clavier natif mobile : on intercepte les caractères via 'input'.
+    // On utilise aussi 'keydown' sur l'input pour Backspace/Enter.
+    if (hiddenInput) {
+        hiddenInput.addEventListener('input', function(e) {
+            // Récupère tout le texte tapé (l'autocapitalize met en majuscules).
+            var typed = hiddenInput.value.toUpperCase();
+            // Traite chaque caractère valide (A-Z), ignore le reste.
+            for (var i = 0; i < typed.length; i++) {
+                var ch = typed[i];
+                if (/^[A-Z]$/.test(ch)) {
+                    handleKey(ch);
+                }
+            }
+            // Vide l'input pour la prochaine frappe.
+            hiddenInput.value = '';
+        });
+
+        hiddenInput.addEventListener('keydown', function(e) {
+            // IMPORTANT : stoppe la propagation pour éviter le double traitement
+            // (ce keydown ne doit PAS aussi remonter jusqu'au listener document).
+            e.stopPropagation();
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                handleKey('ENTER');
+            } else if (e.key === 'Backspace') {
+                // L'input est vidé après chaque lettre : un backspace sur input
+                // vide déclenche notre propre effacement de la grille.
+                if (hiddenInput.value === '') {
+                    handleKey('BACK');
+                }
+            }
+        });
+
+        // Re-focalise l'input quand on tape sur la grille (mobile).
+        var gridWrapEl = document.getElementById('grid-wrap');
+        if (gridWrapEl) {
+            gridWrapEl.addEventListener('click', focusInput);
+            gridWrapEl.addEventListener('touchstart', focusInput, { passive: true });
+        }
+    }
 
     // ===================== INIT =====================
     applyDailyLock();
