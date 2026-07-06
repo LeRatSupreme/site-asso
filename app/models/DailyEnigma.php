@@ -104,4 +104,91 @@ final class DailyEnigma extends Model
         $stmt = static::pdo()->query('SELECT COUNT(*) FROM ' . static::$table . ' WHERE is_active = 1');
         return (int) $stmt->fetchColumn();
     }
+
+    // ===================== ADMIN CRUD =====================
+
+    /**
+     * Toutes les énigmes pour l'admin (triées par id).
+     *
+     * @return list<array<string,mixed>>
+     */
+    public static function allForAdmin(): array
+    {
+        $stmt = static::pdo()->query('SELECT * FROM ' . static::$table . ' ORDER BY id ASC');
+        /** @var list<array<string,mixed>> $result */
+        return $stmt->fetchAll();
+    }
+
+    /**
+     * Trouve une énigme par son id.
+     *
+     * @return array<string,mixed>|null
+     */
+    public static function findById(int $id): ?array
+    {
+        $stmt = static::pdo()->prepare('SELECT * FROM ' . static::$table . ' WHERE id = ? LIMIT 1');
+        $stmt->execute([$id]);
+        $row = $stmt->fetch();
+        return $row ?: null;
+    }
+
+    /**
+     * Crée ou met à jour une énigme.
+     *
+     * @return int l'id de l'énigme
+     */
+    public static function save(array $data): int
+    {
+        $questionFr = trim((string) ($data['question_fr'] ?? ''));
+        $questionEn = trim((string) ($data['question_en'] ?? ''));
+        $answer = trim((string) ($data['answer'] ?? ''));
+        $hintFr = trim((string) ($data['hint_fr'] ?? ''));
+        $hintEn = trim((string) ($data['hint_en'] ?? ''));
+
+        if ($questionFr === '' || $answer === '') {
+            return 0;
+        }
+        if ($questionEn === '') {
+            $questionEn = $questionFr;
+        }
+
+        $active = isset($data['is_active']) ? 1 : 0;
+        $id = (int) ($data['id'] ?? 0);
+
+        if ($id > 0) {
+            $sql = 'UPDATE ' . static::$table . '
+                    SET question_fr = :qfr, question_en = :qen, answer = :ans,
+                        hint_fr = :hfr, hint_en = :hen, is_active = :active
+                    WHERE id = :id';
+            $stmt = static::pdo()->prepare($sql);
+            $stmt->execute([
+                ':qfr' => $questionFr, ':qen' => $questionEn, ':ans' => $answer,
+                ':hfr' => ($hintFr !== '' ? $hintFr : null),
+                ':hen' => ($hintEn !== '' ? $hintEn : null),
+                ':active' => $active, ':id' => $id,
+            ]);
+            return $id;
+        }
+
+        $sql = 'INSERT INTO ' . static::$table . '
+                (question_fr, question_en, answer, hint_fr, hint_en, is_active) VALUES
+                (:qfr, :qen, :ans, :hfr, :hen, :active)';
+        $stmt = static::pdo()->prepare($sql);
+        $stmt->execute([
+            ':qfr' => $questionFr, ':qen' => $questionEn, ':ans' => $answer,
+            ':hfr' => ($hintFr !== '' ? $hintFr : null),
+            ':hen' => ($hintEn !== '' ? $hintEn : null),
+            ':active' => $active,
+        ]);
+        return (int) static::pdo()->lastInsertId();
+    }
+
+    /**
+     * Supprime une énigme.
+     */
+    public static function deleteRow(int $id): void
+    {
+        $stmt = static::pdo()->prepare('DELETE FROM ' . static::$table . ' WHERE id = ?');
+        $stmt->execute([$id]);
+    }
 }

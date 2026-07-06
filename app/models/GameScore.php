@@ -475,4 +475,97 @@ final class GameScore extends Model
         }
         return $max;
     }
+
+    /**
+     * Liste de tous les joueurs avec leurs stats, pour l'admin.
+     * Inclut les utilisateurs qui n'ont jamais joué (pseudo vide, 0 parties).
+     *
+     * @return list<array<string,mixed>>
+     */
+    public static function playersForAdmin(): array
+    {
+        try {
+            // Tous les scores quotidiens.
+            $sql = 'SELECT g.user_id, g.mode, g.played_at, g.won,
+                           u.prenom, u.nom, u.email, u.pseudo, u.is_active
+                    FROM game_scores g
+                    INNER JOIN users u ON u.id = g.user_id
+                    WHERE g.game = ? AND g.mode IN (?, ?)
+                    ORDER BY g.user_id, g.played_at ASC';
+            $stmt = static::pdo()->prepare($sql);
+            $stmt->execute([self::GAME, 'daily_fr', 'daily_en']);
+            $rows = $stmt->fetchAll();
+        } catch (\Throwable) {
+            $rows = [];
+        }
+
+        /** @var array<string,array{pseudo:?string,prenom:string,nom:string,email:string,is_active:int,fr:list,en:list}> $byUser */
+        $byUser = [];
+        foreach ($rows as $row) {
+            $uid = (string) $row['user_id'];
+            if (!isset($byUser[$uid])) {
+                $byUser[$uid] = [
+                    'pseudo'    => ($row['pseudo'] ?? null) !== null && $row['pseudo'] !== '' ? (string) $row['pseudo'] : null,
+                    'prenom'    => (string) $row['prenom'],
+                    'nom'       => (string) $row['nom'],
+                    'email'     => (string) $row['email'],
+                    'is_active' => (int) $row['is_active'],
+                    'fr'        => [],
+                    'en'        => [],
+                ];
+            }
+            $entry = ['played_at' => (string) $row['played_at'], 'won' => (int) $row['won']];
+            if ((string) $row['mode'] === 'daily_en') {
+                $byUser[$uid]['en'][] = $entry;
+            } else {
+                $byUser[$uid]['fr'][] = $entry;
+            }
+        }
+
+        $players = [];
+        foreach ($byUser as $uid => $d) {
+            $frCur = self::currentStreakFromRows($d['fr']);
+            $enCur = self::currentStreakFromRows($d['en']);
+            $frMax = self::maxStreakFromRows($d['fr']);
+            $enMax = self::maxStreakFromRows($d['en']);
+
+            $played = count($d['fr']) + count($d['en']);
+            $won = 0;
+            foreach ($d['fr'] as $r) { if ($r['won'] === 1) $won++; }
+            foreach ($d['en'] as $r) { if ($r['won'] === 1) $won++; }
+
+            $players[] = [
+                'id'            => $uid,
+                'pseudo'        => $d['pseudo'],
+                'prenom'        => $d['prenom'],
+                'nom'           => $d['nom'],
+                'email'         => $d['email'],
+                'is_active'     => $d['is_active'],
+                'played'        => $played,
+                'won'           => $won,
+                'currentStreak' => max($frCur, $enCur),
+                'maxStreak'     => max($frMax, $enMax),
+            ];
+        }
+
+        // Tri par série en cours, puis parties.
+        usort($players, function (array $a, array $b): int {
+            if ($a['currentStreak'] !== $b['currentStreak']) {
+                return $b['currentStreak'] <=> $a['currentStreak'];
+            }
+            return $b['played'] <=> $a['played'];
+        });
+
+        return $players;
+    }
+
+    /**
+     * Supprime tous les scores d'un joueur (réinitialise ses stats Wordle).
+     */
+    public static function resetPlayer(string $userId): int
+    {
+        $stmt = static::pdo()->prepare('DELETE FROM ' . static::$table . ' WHERE user_id = ? AND game = ?');
+        $stmt->execute([$userId, self::GAME]);
+        return $stmt->rowCount();
+    }
 }
