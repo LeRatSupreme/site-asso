@@ -71,20 +71,30 @@ $userPseudo = ($user !== null && !empty($user['pseudo'])) ? (string) $user['pseu
                     <div style="flex:1;">
                         <p style="margin:0 0 0.5rem; font-weight:700;">Choisis ton pseudo de joueur</p>
                         <p style="margin:0 0 0.75rem; color:var(--muted); font-size:0.9rem;">Ton pseudo apparaîtra dans le classement ci-dessous. 3 à 20 caractères (lettres, chiffres, espaces, - _ .).</p>
-                        <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
-                            <input type="text" id="pseudo-input" maxlength="20" placeholder="ex : MotusMaster" autocomplete="off"
-                                   style="flex:1; min-width:200px; padding:0.6rem 0.8rem; border-radius:0.5rem; border:2px solid var(--border-strong); background:rgba(255,255,255,0.04); color:var(--foreground); font-size:1rem;" />
+                        <div class="pseudo-edit-row">
+                            <input type="text" id="pseudo-input" class="pseudo-input" maxlength="20" placeholder="ex : MotusMaster" autocomplete="off" value="<?= e($userPseudo ?? '') ?>" />
                             <button type="button" class="btn btn-primary btn-sm" id="pseudo-save">Enregistrer</button>
                         </div>
-                        <p id="pseudo-msg" style="margin:0.5rem 0 0; font-size:0.85rem; min-height:1.1rem;"></p>
+                        <p id="pseudo-msg" class="pseudo-msg"></p>
                     </div>
                 </div>
             </div>
         <?php elseif ($user !== null && $userPseudo !== null): ?>
-            <div class="surface card" style="margin-bottom:1.5rem; flex-direction:row; align-items:center; gap:0.75rem;">
+            <!-- Pseudo existant + bouton modifier -->
+            <div class="surface card" id="pseudo-display" style="margin-bottom:1.5rem; flex-direction:row; align-items:center; gap:0.75rem; flex-wrap:wrap;">
                 <span style="font-size:1.3rem;">🎮</span>
                 <span style="color:var(--muted);">Ton pseudo&nbsp;:</span>
-                <strong style="color:var(--primary);"><?= e($userPseudo) ?></strong>
+                <strong id="pseudo-current" style="color:var(--primary);"><?= e($userPseudo) ?></strong>
+                <button type="button" class="btn btn-outline btn-sm" id="pseudo-edit-btn" style="margin-left:auto;">✏️ Modifier</button>
+            </div>
+            <!-- Formulaire de modification (caché par défaut) -->
+            <div class="surface card" id="pseudo-edit" style="display:none; margin-bottom:1.5rem; flex-direction:column; gap:0.5rem; align-items:stretch;">
+                <div class="pseudo-edit-row">
+                    <input type="text" id="pseudo-input" class="pseudo-input" maxlength="20" autocomplete="off" value="<?= e($userPseudo) ?>" />
+                    <button type="button" class="btn btn-primary btn-sm" id="pseudo-save">Enregistrer</button>
+                    <button type="button" class="btn btn-ghost btn-sm" id="pseudo-cancel">Annuler</button>
+                </div>
+                <p id="pseudo-msg" class="pseudo-msg"></p>
             </div>
         <?php endif; ?>
 
@@ -181,6 +191,14 @@ $userPseudo = ($user !== null && !empty($user['pseudo'])) ? (string) $user['pseu
 .lb-row.is-current { background: rgba(72,189,211,0.12); }
 .lb-row.is-current td { border-bottom-color: rgba(72,189,211,0.25); }
 .lb-row.is-current td:first-child { border-left:3px solid var(--primary); }
+.pseudo-edit-row { display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center; }
+.pseudo-input {
+    flex:1; min-width:200px; padding:0.6rem 0.8rem; border-radius:0.5rem;
+    border:2px solid var(--border-strong); background:rgba(255,255,255,0.04);
+    color:var(--foreground); font-size:1rem;
+}
+.pseudo-input:focus { outline:none; border-color:var(--primary); }
+.pseudo-msg { margin:0.5rem 0 0; font-size:0.85rem; min-height:1.1rem; }
 </style>
 
 <script>
@@ -188,13 +206,48 @@ $userPseudo = ($user !== null && !empty($user['pseudo'])) ? (string) $user['pseu
     var input = document.getElementById('pseudo-input');
     var btn = document.getElementById('pseudo-save');
     var msg = document.getElementById('pseudo-msg');
-    if (!input || !btn) return;
-
     var SUBMIT_URL = <?= json_encode($setPseudoUrl) ?>;
     var CSRF_TOKEN = <?= json_encode($csrfToken) ?>;
 
+    // --- Mode "définir" (pas encore de pseudo) ---
+    if (input && btn) {
+        wireSave();
+    }
+
+    // --- Mode "modifier" (pseudo déjà existant) ---
+    var editBtn = document.getElementById('pseudo-edit-btn');
+    var editBox = document.getElementById('pseudo-edit');
+    var cancelBtn = document.getElementById('pseudo-cancel');
+    var display = document.getElementById('pseudo-current');
+
+    if (editBtn && editBox) {
+        editBtn.addEventListener('click', function() {
+            editBox.style.display = 'flex';
+            editBtn.style.display = 'none';
+            // Re-branche les handlers sur les nouveaux éléments.
+            input = document.getElementById('pseudo-input');
+            btn = document.getElementById('pseudo-save');
+            msg = document.getElementById('pseudo-msg');
+            wireSave();
+            if (input) { input.focus(); input.select(); }
+        });
+    }
+    if (cancelBtn) {
+        cancelBtn.addEventListener('click', function() {
+            editBox.style.display = 'none';
+            if (editBtn) editBtn.style.display = '';
+            if (msg) msg.textContent = '';
+        });
+    }
+
+    function wireSave() {
+        if (!input || !btn) return;
+        btn.onclick = save;
+        input.onkeydown = function(e) { if (e.key === 'Enter') save(); };
+    }
+
     function save() {
-        var val = input.value.trim();
+        var val = (input.value || '').trim();
         if (val.length < 3) {
             msg.textContent = 'Minimum 3 caractères.';
             msg.style.color = 'var(--accent-danger)';
@@ -217,9 +270,8 @@ $userPseudo = ($user !== null && !empty($user['pseudo'])) ? (string) $user['pseu
             if (data.success) {
                 msg.textContent = '✅ Pseudo enregistré : ' + data.pseudo;
                 msg.style.color = 'var(--primary)';
-                btn.disabled = true;
                 // Recharge la page pour mettre à jour le classement.
-                setTimeout(function() { window.location.reload(); }, 1000);
+                setTimeout(function() { window.location.reload(); }, 800);
             } else {
                 msg.textContent = data.message || 'Erreur.';
                 msg.style.color = 'var(--accent-danger)';
@@ -232,8 +284,5 @@ $userPseudo = ($user !== null && !empty($user['pseudo'])) ? (string) $user['pseu
             msg.style.color = 'var(--accent-danger)';
         });
     }
-
-    btn.addEventListener('click', save);
-    input.addEventListener('keydown', function(e) { if (e.key === 'Enter') save(); });
 })();
 </script>
