@@ -29,7 +29,7 @@ read_env() {
     # Priorité : variable d'environnement, puis config.env, puis défaut.
     local envval="${!key:-}"
     if [[ -n "${envval}" ]]; then
-        printf '%s' "${envval}"
+        printf '%s' "${envval}"   
         return
     fi
     if [[ -f "${CONFIG_FILE}" ]]; then

@@ -75,6 +75,74 @@ final class User extends Model
     }
 
     /**
+     * Définit le pseudo joueur (pour le classement des jeux).
+     * Normalise : trim, 3 à 20 caractères, alphanumériques + - _ .
+     * Retourne le pseudo normalisé ou '' si invalide.
+     */
+    public static function setPseudo(string $userId, string $pseudo): string
+    {
+        $pseudo = self::normalizePseudo($pseudo);
+        if ($pseudo === '') {
+            return '';
+        }
+
+        // Vérifie l'unicité (insensible à la casse).
+        $stmt = static::pdo()->prepare(
+            'SELECT 1 FROM users WHERE LOWER(pseudo) = LOWER(?) AND id <> ? LIMIT 1'
+        );
+        $stmt->execute([$pseudo, $userId]);
+        if ($stmt->fetch() !== false) {
+            return ''; // déjà pris
+        }
+
+        $stmt = static::pdo()->prepare('UPDATE users SET pseudo = ? WHERE id = ?');
+        $stmt->execute([$pseudo, $userId]);
+
+        return $pseudo;
+    }
+
+    /**
+     * Normalise un pseudo : 3 à 20 caractères alphanumériques, tirets, underscores.
+     */
+    public static function normalizePseudo(string $pseudo): string
+    {
+        $pseudo = trim($pseudo);
+        if ($pseudo === '') {
+            return '';
+        }
+        // Caractères autorisés : lettres, chiffres, espaces, tirets, underscores, points.
+        if (!preg_match('/^[\p{L}\p{N} _\-.]{3,20}$/u', $pseudo)) {
+            return '';
+        }
+        // Replie les espaces multiples.
+        $pseudo = preg_replace('/\s+/u', ' ', $pseudo);
+        return $pseudo;
+    }
+
+    /**
+     * Vérifie qu'un pseudo est disponible (non utilisé par un autre utilisateur).
+     */
+    public static function isPseudoAvailable(string $pseudo, ?string $excludeUserId = null): bool
+    {
+        $pseudo = self::normalizePseudo($pseudo);
+        if ($pseudo === '') {
+            return false;
+        }
+        if ($excludeUserId !== null) {
+            $stmt = static::pdo()->prepare(
+                'SELECT 1 FROM users WHERE LOWER(pseudo) = LOWER(?) AND id <> ? LIMIT 1'
+            );
+            $stmt->execute([$pseudo, $excludeUserId]);
+        } else {
+            $stmt = static::pdo()->prepare(
+                'SELECT 1 FROM users WHERE LOWER(pseudo) = LOWER(?) LIMIT 1'
+            );
+            $stmt->execute([$pseudo]);
+        }
+        return $stmt->fetch() === false;
+    }
+
+    /**
      * Active ou désactive un compte.
      */
     public static function setActive(string $userId, bool $active): void
