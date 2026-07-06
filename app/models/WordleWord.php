@@ -174,4 +174,129 @@ final class WordleWord extends Model
         }
         return $word;
     }
+
+    // ===================== ADMIN CRUD =====================
+
+    /**
+     * Liste filtrée pour l'admin (recherche + filtres langue/difficulté).
+     *
+     * @return array{rows:list<array<string,mixed>>, total:int}
+     */
+    public static function adminList(
+        ?string $search = null,
+        ?string $language = null,
+        ?string $difficulty = null,
+        int $limit = 500,
+        int $offset = 0
+    ): array {
+        $where = [];
+        $params = [];
+
+        if ($search !== null && $search !== '') {
+            $where[] = 'word LIKE :q';
+            $params[':q'] = '%' . $search . '%';
+        }
+        if ($language !== null && in_array($language, self::LANGUAGES, true)) {
+            $where[] = 'language = :lang';
+            $params[':lang'] = $language;
+        }
+        if ($difficulty !== null && self::isValidDifficulty($difficulty)) {
+            $where[] = 'difficulty = :diff';
+            $params[':diff'] = $difficulty;
+        }
+
+        $clause = $where === [] ? '' : 'WHERE ' . implode(' AND ', $where);
+
+        $countSql = 'SELECT COUNT(*) FROM ' . static::$table . ' ' . $clause;
+        $stmt = static::pdo()->prepare($countSql);
+        $stmt->execute($params);
+        $total = (int) $stmt->fetchColumn();
+
+        $limit = max(1, min(2000, $limit));
+        $offset = max(0, $offset);
+
+        $sql = 'SELECT * FROM ' . static::$table . ' ' . $clause .
+            ' ORDER BY language ASC, difficulty ASC, word ASC LIMIT ' . $limit . ' OFFSET ' . $offset;
+        $stmt = static::pdo()->prepare($sql);
+        $stmt->execute($params);
+
+        /** @var list<array<string,mixed>> $rows */
+        $rows = $stmt->fetchAll();
+
+        return ['rows' => $rows, 'total' => $total];
+    }
+
+    /**
+     * Trouve un mot par son id.
+     *
+     * @return array<string,mixed>|null
+     */
+    public static function findById(int $id): ?array
+    {
+        $stmt = static::pdo()->prepare('SELECT * FROM ' . static::$table . ' WHERE id = ? LIMIT 1');
+        $stmt->execute([$id]);
+        $row = $stmt->fetch();
+        return $row ?: null;
+    }
+
+    /**
+     * Crée ou met à jour un mot. Détermine la difficulté à partir de la longueur.
+     *
+     * @return int l'id du mot
+     */
+    public static function save(array $data): int
+    {
+        $word = self::normalize((string) ($data['word'] ?? ''));
+        $language = strtolower(trim((string) ($data['language'] ?? 'fr')));
+        if ($word === '' || !in_array($language, self::LANGUAGES, true)) {
+            return 0;
+        }
+
+        $length = strlen($word);
+        $difficulty = match ($length) {
+            5 => 'facile',
+            6 => 'moyen',
+            7 => 'difficile',
+            default => null,
+        };
+        if ($difficulty === null) {
+            return 0;
+        }
+
+        $active = isset($data['is_active']) ? 1 : 0;
+        $id = (int) ($data['id'] ?? 0);
+
+        if ($id > 0) {
+            // UPDATE (INSERT IGNORE pour gérer les doublons potentiels).
+            $sql = 'UPDATE ' . static::$table . '
+                    SET word = :word, language = :lang, length = :len, difficulty = :diff, is_active = :active
+                    WHERE id = :id';
+            $stmt = static::pdo()->prepare($sql);
+            $stmt->execute([
+                ':word' => $word, ':lang' => $language, ':len' => $length,
+                ':diff' => $difficulty, ':active' => $active, ':id' => $id,
+            ]);
+            return $id;
+        }
+
+        // INSERT IGNORE (évite l'erreur sur doublon unique word+language).
+        $sql = 'INSERT IGNORE INTO ' . static::$table . '
+                (word, language, length, difficulty, is_active) VALUES
+                (:word, :lang, :len, :diff, :active)';
+        $stmt = static::pdo()->prepare($sql);
+        $stmt->execute([
+            ':word' => $word, ':lang' => $language, ':len' => $length,
+            ':diff' => $difficulty, ':active' => $active,
+        ]);
+        return (int) static::pdo()->lastInsertId();
+    }
+
+    /**
+     * Supprime un mot.
+     */
+    public static function deleteRow(int $id): void
+    {
+        $stmt = static::pdo()->prepare('DELETE FROM ' . static::$table . ' WHERE id = ?');
+        $stmt->execute([$id]);
+    }
 }

@@ -37,6 +37,12 @@ $sections = [
         'Produits'    => '/admin/cafeteria',
         'Catégories'  => '/admin/cafeteria/categories',
     ],
+    'Jeux' => [
+        'Vue d\'ensemble' => '/admin/jeux',
+        'Joueurs & Pseudos' => '/admin/jeux/scores',
+        'Mots Wordle'   => '/admin/jeux/wordle',
+        'Énigmes'       => '/admin/jeux/enigmes',
+    ],
     'Comptabilité' => [
         'Dashboard'      => '/admin/compta',
         'Importer CSV'   => '/admin/compta/import',

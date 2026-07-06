@@ -8,6 +8,7 @@ use App\Controllers\Admin\AdminCafeteriaController;
 use App\Controllers\Admin\AdminComptaController;
 use App\Controllers\Admin\AdminController;
 use App\Controllers\Admin\AdminEventController;
+use App\Controllers\Admin\AdminGameController;
 use App\Controllers\Admin\AdminMembershipController;
 use App\Controllers\Admin\AdminMediaController;
 use App\Controllers\Admin\AdminPageController;
@@ -186,6 +187,22 @@ function aeic_register_routes(Router $router): void
     $router->post('/admin/media/upload', [AdminMediaController::class, 'upload']);
     $router->post('/admin/media/{id}/delete', [AdminMediaController::class, 'delete']);
     $router->post('/admin/media/{id}/update', [AdminMediaController::class, 'update']);
+
+    // Jeux (Wordle + Énigme + classement/pseudos).
+    $router->get('/admin/jeux', [AdminGameController::class, 'index']);
+    $router->get('/admin/jeux/scores', [AdminGameController::class, 'scores']);
+    $router->post('/admin/jeux/set-pseudo', [AdminGameController::class, 'setPseudo']);
+    $router->post('/admin/jeux/reset-player', [AdminGameController::class, 'resetPlayer']);
+    $router->get('/admin/jeux/wordle', [AdminGameController::class, 'wordleIndex']);
+    $router->get('/admin/jeux/wordle/new', [AdminGameController::class, 'wordleForm']);
+    $router->get('/admin/jeux/wordle/{id}', [AdminGameController::class, 'wordleForm']);
+    $router->post('/admin/jeux/wordle/save', [AdminGameController::class, 'saveWordle']);
+    $router->post('/admin/jeux/wordle/{id}/delete', [AdminGameController::class, 'deleteWordle']);
+    $router->get('/admin/jeux/enigmes', [AdminGameController::class, 'enigmaIndex']);
+    $router->get('/admin/jeux/enigmes/new', [AdminGameController::class, 'enigmaForm']);
+    $router->get('/admin/jeux/enigmes/{id}', [AdminGameController::class, 'enigmaForm']);
+    $router->post('/admin/jeux/enigmes/save', [AdminGameController::class, 'saveEnigma']);
+    $router->post('/admin/jeux/enigmes/{id}/delete', [AdminGameController::class, 'deleteEnigma']);
 
     $router->get('/admin/settings', [AdminSettingController::class, 'index']);
     $router->get('/admin/wiki', [AdminController::class, 'wiki']);
