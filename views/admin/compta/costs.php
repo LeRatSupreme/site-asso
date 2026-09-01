@@ -7,6 +7,7 @@ declare(strict_types=1);
  * @var list<string>                             $categories
  * @var list<string>                             $productKeys
  * @var array<string,mixed>                      $form
+ * @var array<string,mixed>|null                 $editLot
  */
 ?>
 <div class="compta-head">
@@ -42,16 +43,18 @@ declare(strict_types=1);
     <div class="cost-tips">
         <p>📌 Le « coût d'achat » = ton prix pour <strong>une unité</strong> (un Bueno, une canette…), pas le prix de vente.</p>
         <p>📌 Dès qu'au moins un lot est saisi pour un produit, le bénéfice se calcule automatiquement (le lot le plus pertinent est appliqué selon la date de vente).</p>
-        <p>📌 Tu peux <strong>supprimer</strong> un lot erroné (icône corbeille) ou le <strong>clôturer</strong>.</p>
+        <p>📌 Tu peux <strong>modifier</strong> un lot (✏️), le <strong>clôturer</strong> ou le <strong>supprimer</strong> (icône corbeille).</p>
     </div>
 </section>
 
 <div class="costs-layout">
 
-    <!-- Formulaire d'ajout (sticky) -->
-    <section class="card surface glass costs-form">
-        <h2 class="card-title">Ajouter un lot</h2>
-        <form method="post" action="<?= e(url('/admin/compta/couts/save')) ?>">
+    <!-- Formulaire d'ajout / modification (sticky) -->
+    <section class="card surface glass costs-form" id="costs-form">
+        <h2 class="card-title"><?= $editLot !== null ? 'Modifier le lot' : 'Ajouter un lot' ?></h2>
+        <form method="post" action="<?= e(url($editLot !== null
+            ? '/admin/compta/couts/' . rawurlencode((string) $editLot['id']) . '/update'
+            : '/admin/compta/couts/save')) ?>">
             <?= csrf_field() ?>
 
             <div class="field">
@@ -59,11 +62,12 @@ declare(strict_types=1);
                 <div class="combobox" id="pk-combobox">
                     <input type="text" id="product_key" name="product_key" class="combobox-input"
                         value="<?= e((string) $form['product_key']) ?>" placeholder="Rechercher un produit…"
-                        autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="pk-listbox" required>
+                        autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="pk-listbox" required
+                        <?= $editLot !== null ? 'readonly' : '' ?>>
                     <span class="combobox-badge" id="pk-count" hidden></span>
                     <ul class="combobox-list" id="pk-listbox" role="listbox" hidden></ul>
                 </div>
-                <p class="field-help">Choisis dans la liste (mêmes noms que dans les ventes) pour éviter les fautes.</p>
+                <p class="field-help"><?= $editLot !== null ? 'Lot en modification — le produit ne change pas.' : 'Choisis dans la liste (mêmes noms que dans les ventes) pour éviter les fautes.' ?></p>
             </div>
 
             <div class="field-row">
@@ -82,7 +86,10 @@ declare(strict_types=1);
                 <input type="text" id="supplier" name="supplier" value="<?= e((string) $form['supplier']) ?>" placeholder="ex: Metro…">
             </div>
 
-            <button type="submit" class="btn btn-primary btn-block">Enregistrer</button>
+            <button type="submit" class="btn btn-primary btn-block"><?= $editLot !== null ? 'Mettre à jour' : 'Enregistrer' ?></button>
+            <?php if ($editLot !== null): ?>
+                <a class="btn btn-ghost btn-block" href="<?= e(url('/admin/compta/couts')) ?>">Annuler la modification</a>
+            <?php endif; ?>
         </form>
     </section>
 
@@ -143,6 +150,7 @@ declare(strict_types=1);
                                         <?php if ($hasCost): ?>
                                             <span class="badge badge-success">Lot en cours</span>
                                             <strong class="cost-card-price"><?= e(formatPrice($it['currentCost'])) ?><span class="muted"> /unité</span></strong>
+                                            <a class="btn btn-outline btn-sm" href="<?= e(url('/admin/compta/couts?edit=' . rawurlencode((string) $it['currentLotId']) . '#costs-form')) ?>">✏️ Modifier</a>
                                         <?php else: ?>
                                             <span class="badge badge-warning">Aucun coût</span>
                                         <?php endif; ?>
@@ -168,6 +176,7 @@ declare(strict_types=1);
                                                         </td>
                                                         <td><?= e((string) ($c['supplier'] ?? '—')) ?></td>
                                                         <td class="row-actions">
+                                                            <a class="btn btn-outline btn-sm" href="<?= e(url('/admin/compta/couts?edit=' . rawurlencode((string) $c['id']) . '#costs-form')) ?>">✏️ Modifier</a>
                                                             <?php if (empty($c['valid_to'])): ?>
                                                                 <form method="post" action="<?= e(url('/admin/compta/couts/' . rawurlencode((string) $c['id']) . '/close')) ?>" data-confirm="Clôturer ce lot maintenant ?">
                                                                     <?= csrf_field() ?>
