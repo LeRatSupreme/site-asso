@@ -369,15 +369,29 @@ final class AdminComptaController extends AdminBaseController
                 if (empty($l['valid_to'])) { $current = $l; break; }
             }
             $items[] = [
-                'name'        => $name,
-                'category'    => $catByProduct[$name] ?? 'Non classé',
-                'qty'         => $qtyByProduct[$name] ?? 0,
-                'currentCost' => $current ? (float) $current['cost_price'] : null,
-                'lotsCount'   => count($lots),
-                'lots'        => $lots,
+                'name'         => $name,
+                'category'     => $catByProduct[$name] ?? 'Non classé',
+                'qty'          => $qtyByProduct[$name] ?? 0,
+                'currentCost'  => $current ? (float) $current['cost_price'] : null,
+                'currentLotId' => $current['id'] ?? null,
+                'lotsCount'    => count($lots),
+                'lots'         => $lots,
             ];
         }
         usort($items, static function ($a, $b) { return strnatcasecmp($a['name'], $b['name']); });
+
+        // Édition d'un lot existant (?edit=ID) : le formulaire latéral se
+        // pré-remplit et bascule en mode « mise à jour ».
+        $editLot = null;
+        $editId = trim((string) ($_GET['edit'] ?? ''));
+        if ($editId !== '') {
+            foreach ($costs as $c) {
+                if ((string) ($c['id'] ?? '') === $editId) {
+                    $editLot = $c;
+                    break;
+                }
+            }
+        }
 
         $this->renderAdmin('admin/compta/costs', [
             'title'       => 'Coûts de revient',
@@ -386,11 +400,12 @@ final class AdminComptaController extends AdminBaseController
             'items'       => $items,
             'categories'  => array_values(array_unique(array_filter($catByProduct))),
             'productKeys' => $keys,
+            'editLot'     => $editLot,
             'form'        => [
-                'product_key' => $_GET['product_key'] ?? '',
-                'cost_price'  => '',
-                'valid_from'  => date('Y-m-d'),
-                'supplier'    => '',
+                'product_key' => (string) ($editLot['product_key'] ?? ($_GET['product_key'] ?? '')),
+                'cost_price'  => $editLot !== null ? number_format((float) $editLot['cost_price'], 2, ',', '') : '',
+                'valid_from'  => $editLot !== null ? substr((string) $editLot['valid_from'], 0, 10) : date('Y-m-d'),
+                'supplier'    => $editLot !== null ? (string) ($editLot['supplier'] ?? '') : '',
                 'notes'       => '',
             ],
         ]);
@@ -434,6 +449,25 @@ final class AdminComptaController extends AdminBaseController
         ProductCost::delete($id);
         $this->audit('compta.cost.delete', 'product_cost', $id);
         $this->setFlash('success', 'Lot supprimé.');
+        redirect(url('/admin/compta/couts'));
+    }
+
+    public function updateCost(string $id): void
+    {
+        $this->guardCompta();
+
+        $data = $_POST;
+        $data['cost_price'] = parseFrenchFloat((string) ($data['cost_price'] ?? '0'));
+
+        if (ProductCost::update($id, $data)) {
+            $this->audit('compta.cost.update', 'product_cost', $id, [
+                'cost_price' => $data['cost_price'],
+            ]);
+            $this->setFlash('success', 'Lot mis à jour.');
+        } else {
+            $this->setFlash('error', 'Lot introuvable ou date de début invalide.');
+        }
+
         redirect(url('/admin/compta/couts'));
     }
 

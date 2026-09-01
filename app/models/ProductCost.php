@@ -139,6 +139,34 @@ final class ProductCost extends Model
     }
 
     /**
+     * Met à jour un lot existant (coût unitaire, date de début, fournisseur).
+     *
+     * @param array<string,mixed> $data
+     */
+    public static function update(string $id, array $data): bool
+    {
+        if (self::find($id) === null) {
+            return false;
+        }
+
+        $validFrom = substr((string) ($data['valid_from'] ?? ''), 0, 10);
+        if ($validFrom === '') {
+            return false;
+        }
+
+        $costPrice = (float) ($data['cost_price'] ?? 0);
+        $supplier = ($data['supplier'] ?? '') !== '' ? trim((string) $data['supplier']) : null;
+
+        self::pdo()->prepare(
+            'UPDATE product_costs
+                SET cost_price = ?, valid_from = ?, supplier = ?
+              WHERE id = ?'
+        )->execute([$costPrice, $validFrom, $supplier, $id]);
+
+        return true;
+    }
+
+    /**
      * Supprime un lot (utile pour nettoyer les doublons / saisies erronées).
      */
     public static function delete(string $id): bool
