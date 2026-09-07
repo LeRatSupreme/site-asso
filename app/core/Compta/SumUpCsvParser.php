@@ -21,20 +21,29 @@ final class SumUpCsvParser
     /** Mois français (minuscules, sans accent) -> numéro. */
     public const FR_MONTHS = [
         'janvier'   => 1,
+        'janv'      => 1,
         'fevrier'   => 2,
         'février'   => 2,
+        'fevr'      => 2,
+        'févr'      => 2,
         'mars'      => 3,
         'avril'     => 4,
         'mai'       => 5,
         'juin'      => 6,
         'juillet'   => 7,
+        'juil'      => 7,
         'aout'      => 8,
         'août'      => 8,
         'septembre' => 9,
+        'sept'      => 9,
         'octobre'   => 10,
+        'oct'       => 10,
         'novembre'  => 11,
+        'nov'       => 11,
         'decembre'  => 12,
         'décembre'  => 12,
+        'dec'       => 12,
+        'déc'       => 12,
     ];
 
     /**
@@ -164,10 +173,12 @@ final class SumUpCsvParser
             return substr($value, 0, 19);
         }
 
-        // « 1 juin 2026 09:59 » ou « 1 juin 2026 ».
-        if (preg_match('/^(\d{1,2})\s+([a-zA-Zéûôîàèùç]+)\s+(\d{4})(?:\s+(\d{1,2}:\d{2}(?::\d{2})?))?$/u', $value, $m)) {
+        // « 1 juin 2026 09:59 », « 1 sept. 2026 09:59 » ou « 1 juin 2026 ».
+        if (preg_match('/^(\d{1,2})\s+([a-zA-Zéûôîàèùç.]+)\s+(\d{4})(?:\s+(\d{1,2}:\d{2}(?::\d{2})?))?$/u', $value, $m)) {
             $day = (int) $m[1];
             $monthName = mb_strtolower($m[2], 'UTF-8');
+            // SumUp exporte parfois les mois abrégés avec un point (« sept. »).
+            $monthName = rtrim($monthName, '.');
             $year = (int) $m[3];
             $time = $m[4] ?? '00:00:00';
             if (mb_strlen($time) === 5) {

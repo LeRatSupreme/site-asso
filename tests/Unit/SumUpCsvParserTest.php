@@ -42,6 +42,17 @@ final class SumUpCsvParserTest extends TestCase
         self::assertNull($p->parseFrenchDate('15 sploutch 2026'));
     }
 
+    public function test_parse_french_date_mois_abreges(): void
+    {
+        $p = $this->parser();
+
+        self::assertSame('2026-09-01 10:08:00', $p->parseFrenchDate('1 sept. 2026 10:08'));
+        self::assertSame('2026-01-15 00:00:00', $p->parseFrenchDate('15 janv. 2026'));
+        self::assertSame('2026-02-10 12:30:00', $p->parseFrenchDate('10 févr. 2026 12:30'));
+        self::assertSame('2026-07-21 09:00:00', $p->parseFrenchDate('21 juil. 2026 09:00'));
+        self::assertSame('2026-12-31 23:59:00', $p->parseFrenchDate('31 déc. 2026 23:59'));
+    }
+
     public function test_parse_french_float_via_prix_ttc(): void
     {
         $csv = $this->header()
