@@ -196,7 +196,7 @@ declare(strict_types=1);
                                 <?php endif; ?>
 
                                 <div class="cost-card-add">
-                                    <a class="btn btn-ghost btn-sm" href="<?= e(url('/admin/compta/couts?product_key=' . rawurlencode($name))) ?>">＋ Ajouter un lot pour <?= e($name) ?></a>
+                                    <a class="btn btn-ghost btn-sm" href="<?= e(url('/admin/compta/couts?product_key=' . rawurlencode($name)) . '#costs-form') ?>">＋ Ajouter un lot pour <?= e($name) ?></a>
                                 </div>
                             </article>
                         <?php endforeach; ?>
