@@ -26,6 +26,18 @@ function reorder_date_fr(?string $day): string {
     $t = strtotime($day);
     return $t === false ? $day : date('d/m/Y', $t);
 }
+
+// Libellés courts pour les pastilles de période.
+$refShort = [
+    '7d'     => '7 j',
+    '30d'    => '30 j',
+    '3m'     => '3 mois',
+    '6m'     => '6 mois',
+    '12m'    => '12 mois',
+    'ytd'    => 'Année',
+    'all'    => 'Tout',
+    'custom' => 'Perso.',
+];
 ?>
 <div class="compta-head">
     <div class="compta-head-row">
@@ -37,43 +49,48 @@ function reorder_date_fr(?string $day): string {
     </div>
 </div>
 
-<form method="get" class="card surface glass" style="display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end;padding:14px 18px;margin-bottom:14px;">
-    <div>
-        <label for="ref" class="muted" style="display:block;font-size:0.75rem;margin-bottom:0.3rem">📅 Période analysée</label>
-        <select name="ref" id="ref" onchange="this.form.submit()">
+<form method="get" class="reappro-bar" id="reappro-filters">
+    <div class="reappro-field">
+        <span class="field-label">📅 Période analysée</span>
+        <div class="chip-row" role="radiogroup" aria-label="Période analysée">
             <?php foreach ($refOptions as $k => $label): ?>
-                <option value="<?= e($k) ?>" <?= $k === $currentRef ? 'selected' : '' ?>><?= e($label) ?></option>
+                <label class="chip" title="<?= e($label) ?>">
+                    <input type="radio" name="ref" value="<?= e($k) ?>"
+                           data-autosubmit="<?= $k === 'custom' ? '0' : '1' ?>"
+                           <?= $k === $currentRef ? 'checked' : '' ?>>
+                    <span><?= e($refShort[$k] ?? $label) ?></span>
+                </label>
             <?php endforeach; ?>
-        </select>
+        </div>
     </div>
-    <div id="ref-custom" style="<?= $currentRef === 'custom' ? 'display:flex;gap:8px;align-items:flex-end;' : 'display:none;' ?>">
+
+    <div class="reappro-dates" id="ref-custom" <?= $currentRef === 'custom' ? '' : 'hidden' ?>>
         <div>
-            <label for="du" class="muted" style="display:block;font-size:0.75rem;margin-bottom:0.3rem">Du</label>
+            <label class="field-label" for="du">Du</label>
             <input type="date" name="du" id="du" value="<?= e($du) ?>">
         </div>
         <div>
-            <label for="au" class="muted" style="display:block;font-size:0.75rem;margin-bottom:0.3rem">Au</label>
+            <label class="field-label" for="au">Au</label>
             <input type="date" name="au" id="au" value="<?= e($au) ?>">
         </div>
     </div>
-    <div>
-        <label for="period" class="muted" style="display:block;font-size:0.75rem;margin-bottom:0.3rem">Couvrir pour :</label>
-        <select name="period" id="period" onchange="this.form.submit()">
+
+    <div class="reappro-field">
+        <label class="field-label" for="period">🎯 Couvrir pour</label>
+        <select name="period" id="period" data-autosubmit="1">
             <?php foreach ($periods as $k => $p): ?>
                 <option value="<?= e($k) ?>" <?= $k === $currentPeriod ? 'selected' : '' ?>><?= e($p['label']) ?></option>
             <?php endforeach; ?>
         </select>
     </div>
+
     <button type="submit" class="btn btn-primary btn-sm">Appliquer</button>
-    <span class="muted" style="font-size:0.8rem;">
-        Du <strong><?= e(reorder_date_fr($refFrom)) ?></strong> au <strong><?= e(reorder_date_fr($refTo)) ?></strong>
-        · <?= (int) $refOpenDays ?> jour<?= $refOpenDays > 1 ? 's' : '' ?> d'ouverture
+
+    <span class="reappro-meta" title="Période analysée : bornes et jours d'ouverture (lundi-vendredi) réels">
+        🗓️ <?= e(reorder_date_fr($refFrom)) ?> → <?= e(reorder_date_fr($refTo)) ?>
+        · <?= (int) $refOpenDays ?> j d'ouverture
     </span>
 </form>
-
-<div class="alert alert-info">
-    🕒 <strong>Cafétéria ouverte du lundi au vendredi</strong> (fermée samedi/dimanche). Les consommations moyennes sont calculées sur les <strong>jours d'ouverture réels</strong> de la période analysée.
-</div>
 
 <?php if ($alerts > 0): ?>
     <div class="alert alert-warning">
@@ -189,20 +206,37 @@ function reorder_date_fr(?string $day): string {
 </form>
 
 <p class="card-meta">
-    « Vendus » = quantité totale sur la période analysée · Conso / jour = vendus ÷ jours d'ouverture de la période · Conso / semaine = conso / jour × 5 (lun-ven) · Conso / mois = conso / jour × 21,77.
-    « À commander » = besoin sur l'horizon de couverture − stock saisi (le stock est optionnel : sans saisie, à commander = besoin).
+    🕒 Cafétéria ouverte du lundi au vendredi : les moyennes sont ramenées aux <strong>jours d'ouverture réels</strong> de la période analysée.
+    « Vendus » = quantité totale sur la période · Conso / jour = vendus ÷ jours d'ouverture · Conso / semaine = conso / jour × 5 · Conso / mois = conso / jour × 21,77.
+    « À commander » = besoin sur l'horizon de couverture − stock saisi (optionnel : sans saisie, à commander = besoin).
 </p>
 
 <script>
 (function () {
-    // Affiche/masque les bornes « Personnalisé » au changement de période.
-    var refSel = document.getElementById('ref');
+    // Barre de filtres : les pastilles/selects soumettent seuls, sauf
+    // « Perso. » qui révèle d'abord les bornes de dates.
+    var form = document.getElementById('reappro-filters');
     var custom = document.getElementById('ref-custom');
-    if (refSel && custom) {
-        refSel.addEventListener('change', function () {
-            custom.style.display = refSel.value === 'custom'
-                ? 'flex'
-                : 'none';
+    if (!form) return;
+
+    Array.prototype.forEach.call(form.querySelectorAll('[data-autosubmit]'), function (el) {
+        el.addEventListener('change', function () {
+            if (el.getAttribute('data-autosubmit') === '1') {
+                form.submit();
+            }
+        });
+    });
+
+    var customRadio = form.querySelector('input[name="ref"][value="custom"]');
+    if (customRadio && custom) {
+        Array.prototype.forEach.call(form.querySelectorAll('input[name="ref"]'), function (radio) {
+            radio.addEventListener('change', function () {
+                custom.hidden = radio.value === 'custom' ? false : true;
+                if (radio.value === 'custom') {
+                    var du = document.getElementById('du');
+                    if (du) du.focus();
+                }
+            });
         });
     }
 })();
