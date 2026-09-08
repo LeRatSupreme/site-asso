@@ -8,6 +8,7 @@ declare(strict_types=1);
  * @var list<string>                             $productKeys
  * @var array<string,mixed>                      $form
  * @var array<string,mixed>|null                 $editLot
+ * @var list<array{suggested:string, members:list<array{name:string,qty:int,lots:int,current:bool}>}> $dupes
  */
 ?>
 <div class="compta-head">
@@ -17,6 +18,31 @@ declare(strict_types=1);
         <p class="muted">Dis <strong>combien chaque produit t'a coûté à l'achat</strong>. Sans ça, on a le chiffre d'affaires mais pas le vrai bénéfice.</p>
     </div>
 </div>
+
+<?php if (!empty($dupes)): ?>
+<section class="card surface glass dupes-card" id="dupes">
+    <h2 class="card-title">⚠️ Doublons détectés (<?= count($dupes) ?>)</h2>
+    <p class="muted" style="font-size:0.85rem;margin:0 0 12px;">
+        Même produit sous des orthographes différentes. Choisis le nom à <strong>garder</strong> puis fusionne :
+        ventes, lots de coûts et libellés sont regroupés automatiquement.
+    </p>
+    <?php foreach ($dupes as $g): ?>
+        <form method="post" action="<?= e(url('/admin/compta/couts/merge')) ?>"
+              data-confirm="Fusionner ce groupe vers le produit sélectionné ?"
+              style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:8px 0;border-top:1px solid var(--border,#e5e7eb);">
+            <?= csrf_field() ?>
+            <?php foreach ($g['members'] as $m): ?>
+                <label style="display:flex;align-items:center;gap:6px;font-size:0.85rem;cursor:pointer;">
+                    <input type="radio" name="keep" value="<?= e($m['name']) ?>" <?= $m['name'] === $g['suggested'] ? 'checked' : '' ?>>
+                    <strong><?= e($m['name']) ?></strong>
+                    <span class="muted">(<?= (int) $m['qty'] ?> vendus, <?= (int) $m['lots'] ?> lot<?= $m['lots'] > 1 ? 's' : '' ?><?= $m['current'] ? ', lot en cours' : '' ?>)</span>
+                </label>
+            <?php endforeach; ?>
+            <button type="submit" class="btn btn-primary btn-sm" style="margin-left:auto;">Fusionner</button>
+        </form>
+    <?php endforeach; ?>
+</section>
+<?php endif; ?>
 
 <!-- Explication -->
 <section class="card surface glass cost-explain">

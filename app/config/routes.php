@@ -218,6 +218,7 @@ function aeic_register_routes(Router $router): void
     $router->get('/admin/compta/categories', [AdminComptaController::class, 'categories']);
     $router->get('/admin/compta/couts', [AdminComptaController::class, 'costs']);
     $router->post('/admin/compta/couts/save', [AdminComptaController::class, 'saveCost']);
+    $router->post('/admin/compta/couts/merge', [AdminComptaController::class, 'mergeProducts']);
     $router->post('/admin/compta/couts/{id}/update', [AdminComptaController::class, 'updateCost']);
     $router->post('/admin/compta/couts/{id}/close', [AdminComptaController::class, 'closeCost']);
     $router->post('/admin/compta/couts/{id}/delete', [AdminComptaController::class, 'deleteCost']);

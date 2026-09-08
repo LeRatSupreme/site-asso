@@ -176,4 +176,18 @@ final class ProductCost extends Model
 
         return $stmt->rowCount() === 1;
     }
+
+    /**
+     * Ré-affecte tous les lots d'un produit vers une autre clé canonique
+     * (fusion de doublons). Les dates/périodes des lots sont conservées.
+     */
+    public static function reassign(string $from, string $to): int
+    {
+        $stmt = self::pdo()->prepare(
+            'UPDATE product_costs SET product_key = ? WHERE product_key = ?'
+        );
+        $stmt->execute([$to, $from]);
+
+        return $stmt->rowCount();
+    }
 }

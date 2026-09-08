@@ -71,6 +71,36 @@ final class Sale extends Model
     }
 
     /**
+     * Regroupe les ventes de plusieurs clés produit vers une clé canonique.
+     *
+     * Cible les lignes dont product_key = ancienne clé, OU dont product_key
+     * est NULL avec une description strictement égale à l'ancienne clé
+     * (le libellé brut servait alors de clé canonique par défaut).
+     *
+     * @param list<string> $oldKeys Clés à fusionner dans $keep.
+     * @return int Nombre de ventes re-groupées.
+     */
+    public static function mergeInto(string $keep, array $oldKeys): int
+    {
+        $oldKeys = array_values(array_unique(array_filter(array_map('trim', $oldKeys), static fn ($k): bool => $k !== '' && $k !== $keep)));
+        if ($oldKeys === []) {
+            return 0;
+        }
+
+        $placeholders = implode(',', array_fill(0, count($oldKeys), '?'));
+        $args = array_merge([$keep], $oldKeys, $oldKeys);
+
+        $stmt = self::pdo()->prepare(
+            'UPDATE sales SET product_key = ?
+              WHERE product_key IN (' . $placeholders . ')
+                 OR (product_key IS NULL AND description IN (' . $placeholders . '))'
+        );
+        $stmt->execute($args);
+
+        return $stmt->rowCount();
+    }
+
+    /**
      * Nombre total de ventes importées.
      */
     public static function count(): int

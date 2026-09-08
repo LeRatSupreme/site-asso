@@ -76,4 +76,53 @@ final class AliasSuggesterTest extends TestCase
             self::assertSame(AliasSuggester::suggest($lib), AliasSuggester::suggest($lib));
         }
     }
+
+    public function test_normalize_key_sans_retrait_de_suffixe(): void
+    {
+        // normalizeKey ne retire PAS les suffixes de couleur (contrairement
+        // à suggest) : les variantes restent distinguables.
+        self::assertSame('monster blanche', AliasSuggester::normalizeKey('Monster Blanche'));
+        self::assertSame('monster bleue', AliasSuggester::normalizeKey('Monster_Bleue'));
+        self::assertNotSame(AliasSuggester::normalizeKey('Monster Blanche'), AliasSuggester::normalizeKey('Monster Bleue'));
+    }
+
+    public function test_normalize_key_casse_et_accents(): void
+    {
+        self::assertSame('redbull peach', AliasSuggester::normalizeKey('Redbull Peach'));
+        self::assertSame('redbull peach', AliasSuggester::normalizeKey('redbull Peach'));
+        self::assertSame('redbull peach', AliasSuggester::normalizeKey('  REDBULL_Peach  '));
+        self::assertSame('cristaline', AliasSuggester::normalizeKey('Cristaline'));
+    }
+
+    public function test_group_duplicates_case_et_accent(): void
+    {
+        $groups = AliasSuggester::groupDuplicates([
+            'redbull Peach',
+            'Redbull Peach',
+            'Monster',
+            'Cristaline',
+        ]);
+
+        self::assertCount(1, $groups);
+        self::assertSame(['redbull Peach', 'Redbull Peach'], $groups[0]);
+    }
+
+    public function test_group_duplicates_variantes_distinctes_non_groupées(): void
+    {
+        // « Monster Blanche » et « Monster Bleue » sont deux variantes
+        // légitimes : elles ne doivent PAS être signalées comme doublons.
+        $groups = AliasSuggester::groupDuplicates([
+            'Monster Blanche',
+            'Monster Bleue',
+            'Monster verte (energy)',
+        ]);
+
+        self::assertSame([], $groups);
+    }
+
+    public function test_group_duplicates_ignores_vides_et_uniques(): void
+    {
+        self::assertSame([], AliasSuggester::groupDuplicates(['Coca', 'Pepsi', '']));
+        self::assertSame([], AliasSuggester::groupDuplicates([]));
+    }
 }
