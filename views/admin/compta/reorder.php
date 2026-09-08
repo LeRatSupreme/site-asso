@@ -138,8 +138,10 @@ $refShort = [
                     <th class="th-num">Conso moy.<br>/ jour <small>(ouv.)</small></th>
                     <th class="th-num">Conso moy.<br>/ semaine</th>
                     <th class="th-num">Conso moy.<br>/ mois</th>
+                    <th class="th-num">Coût<br>unit.</th>
                     <th class="th-num">Besoin<br>(<?= e($periods[$currentPeriod]['label']) ?>)</th>
                     <th class="th-num">À commander</th>
+                    <th class="th-num">Coût ligne</th>
                     <th>État</th>
                 </tr>
             </thead>
@@ -155,6 +157,7 @@ $refShort = [
                         data-month="<?= (float) $r['avg_month'] ?>"
                         data-need="<?= (int) $r['need'] ?>"
                         data-toorder="<?= (int) $r['to_order'] ?>"
+                        data-unitcost="<?= $r['unit_cost'] !== null ? e((string) $r['unit_cost']) : '' ?>"
                         data-autonomy="<?= $r['autonomy'] === null ? 99999 : (int) $r['autonomy'] ?>"
                         data-need-orig="<?= (int) $r['need'] ?>">
                         <td><strong><?= e($key) ?></strong></td>
@@ -169,12 +172,24 @@ $refShort = [
                         <td class="num muted"><?= reorder_qty((float) $r['avg_day']) ?></td>
                         <td class="num muted"><?= reorder_qty((float) $r['avg_week']) ?></td>
                         <td class="num muted"><?= reorder_qty((float) $r['avg_month']) ?></td>
+                        <td class="num muted">
+                            <?= $r['unit_cost'] !== null ? e(formatPrice((float) $r['unit_cost'])) : '—' ?>
+                        </td>
                         <td class="num"><?= e((string) $r['need']) ?></td>
                         <td class="num to-order-cell">
                             <?php if ((int) $r['to_order'] > 0): ?>
                                 <strong style="color:var(--primary)"><?= e((string) $r['to_order']) ?></strong>
                             <?php else: ?>
                                 <span class="muted">0</span>
+                            <?php endif; ?>
+                        </td>
+                        <td class="num cost-line-cell">
+                            <?php if ($r['order_cost'] !== null && (int) $r['to_order'] > 0): ?>
+                                <strong><?= e(formatPrice((float) $r['order_cost'])) ?></strong>
+                            <?php elseif ($r['unit_cost'] === null): ?>
+                                <span class="muted" title="Coût de revient non saisi">—</span>
+                            <?php else: ?>
+                                <span class="muted">0 €</span>
                             <?php endif; ?>
                         </td>
                         <td>
@@ -189,14 +204,35 @@ $refShort = [
                     </tr>
                 <?php endforeach; ?>
                 <?php if ($rows === []): ?>
-                    <tr><td colspan="10" class="muted">Aucun produit à analyser sur cette période. Importe d'abord un rapport SumUp.</td></tr>
+                    <tr><td colspan="12" class="muted">Aucun produit à analyser sur cette période. Importe d'abord un rapport SumUp.</td></tr>
                 <?php endif; ?>
             </tbody>
             <?php if ($rows !== []): ?>
+                <?php
+                    $totalQty = 0;
+                    $totalCost = 0.0;
+                    $missingCost = 0;
+                    foreach ($rows as $r) {
+                        $totalQty += (int) $r['to_order'];
+                        if ($r['order_cost'] !== null) {
+                            $totalCost += (float) $r['order_cost'];
+                        } elseif ((int) $r['to_order'] > 0) {
+                            $missingCost++;
+                        }
+                    }
+                ?>
                 <tfoot>
                     <tr>
-                        <th colspan="8" style="text-align:right">Total à commander (<?= e($periods[$currentPeriod]['label']) ?>) :</th>
-                        <th class="num"><strong id="reorder-total" style="color:var(--primary)">0</strong></th>
+                        <th colspan="9" style="text-align:right">Total à commander (<?= e($periods[$currentPeriod]['label']) ?>) :</th>
+                        <th class="num"><strong id="reorder-total" style="color:var(--primary)"><?= (int) $totalQty ?></strong></th>
+                        <th class="num">
+                            <strong id="reorder-total-cost" style="color:var(--primary)">≈ <?= e(formatPrice($totalCost)) ?></strong>
+                            <?php if ($missingCost > 0): ?>
+                                <span class="muted" style="display:block;font-weight:400;font-size:0.72rem;" title="Produits à commander sans coût de revient saisi">
+                                    +<?= (int) $missingCost ?> sans coût
+                                </span>
+                            <?php endif; ?>
+                        </th>
                         <th></th>
                     </tr>
                 </tfoot>
@@ -209,6 +245,7 @@ $refShort = [
     🕒 Cafétéria ouverte du lundi au vendredi : les moyennes sont ramenées aux <strong>jours d'ouverture réels</strong> de la période analysée.
     « Vendus » = quantité totale sur la période · Conso / jour = vendus ÷ jours d'ouverture · Conso / semaine = conso / jour × 5 · Conso / mois = conso / jour × 21,77.
     « À commander » = besoin sur l'horizon de couverture − stock saisi (optionnel : sans saisie, à commander = besoin).
+    💶 « Coût unit. » = coût de revient du lot en cours (page Coûts) · « Coût ligne » = à commander × coût unit. · le total ≈ prix d'achat du panier (produits sans coût saisi exclus, ils sont comptés sous le total).
 </p>
 
 <script>
@@ -251,10 +288,12 @@ $refShort = [
     var tbody = document.querySelector('.reorder-table tbody');
     var rows = Array.prototype.slice.call(document.querySelectorAll('.reorder-table tbody tr[data-name]'));
     var totalEl = document.getElementById('reorder-total');
+    var totalCostEl = document.getElementById('reorder-total-cost');
     var total = rows.length;
 
     function norm(s) { return String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim(); }
     function num(tr, attr) { return parseFloat(tr.getAttribute(attr)) || 0; }
+    function fmtPrice(v) { return v.toFixed(2).replace('.', ',') + ' €'; }
 
     // Remplit le filtre catégorie avec les catégories présentes.
     if (catSel) {
@@ -268,14 +307,31 @@ $refShort = [
         });
     }
 
+    function renderCostCell(tr, toOrder) {
+        var cell = tr.querySelector('.cost-line-cell');
+        if (!cell) return;
+        var unit = parseFloat(tr.getAttribute('data-unitcost'));
+        if (isNaN(unit)) {
+            cell.innerHTML = '<span class="muted" title="Coût de revient non saisi">—</span>';
+        } else if (toOrder > 0) {
+            cell.innerHTML = '<strong>' + fmtPrice(toOrder * unit) + '</strong>';
+        } else {
+            cell.innerHTML = '<span class="muted">0 €</span>';
+        }
+    }
+
     function recomputeTotal() {
-        var sum = 0;
+        var sum = 0, cost = 0;
         rows.forEach(function (tr) {
             if (tr.style.display === 'none') return;
             var cell = tr.querySelector('.to-order-cell strong');
-            if (cell) sum += parseInt(cell.textContent.replace(/[^\d-]/g, ''), 10) || 0;
+            var toOrder = cell ? (parseInt(cell.textContent.replace(/[^\d-]/g, ''), 10) || 0) : 0;
+            sum += toOrder;
+            var unit = parseFloat(tr.getAttribute('data-unitcost'));
+            if (!isNaN(unit)) cost += toOrder * unit;
         });
         if (totalEl) totalEl.textContent = sum;
+        if (totalCostEl) totalCostEl.textContent = '≈ ' + fmtPrice(cost);
     }
 
     // Recalcul live : à commander = max(0, besoin − stock saisi).
@@ -299,6 +355,7 @@ $refShort = [
                     ? '<strong style="color:var(--primary)">' + toOrder + '</strong>'
                     : '<span class="muted">0</span>';
             }
+            renderCostCell(tr, toOrder);
             recomputeTotal();
         });
     });

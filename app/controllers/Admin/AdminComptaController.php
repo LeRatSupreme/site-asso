@@ -936,6 +936,12 @@ final class AdminComptaController extends AdminBaseController
             $need   = (int) ceil($avgDay * $targetDays);
             $toOrder = max(0, $need - ($stock ?? 0));
 
+            // Coût unitaire actuel (lot en cours à aujourd'hui) et coût
+            // estimé de la ligne (qté à commander × coût unitaire).
+            $unitCostRaw = ProductCost::costAt($key, date('Y-m-d'));
+            $unitCost = $unitCostRaw !== null ? (float) $unitCostRaw : null;
+            $orderCost = $unitCost !== null ? round($toOrder * $unitCost, 2) : null;
+
             if ($stock === null) {
                 $state = 'unknown';
             } elseif ($stock <= 0 || ($autonomy !== null && $autonomy < 7)) {
@@ -949,18 +955,20 @@ final class AdminComptaController extends AdminBaseController
             }
 
             $rows[] = [
-                'name'      => $key,
-                'category'  => (string) ($data['category'] ?? '—'),
-                'qty'       => $qty,
-                'stock'     => $stock,
-                'avg_day'   => $avgDay,
-                'avg_week'  => $avgWeek,
-                'avg_month' => $avgMonth,
-                'autonomy'  => $autonomy,
-                'need'      => $need,
-                'to_order'  => $toOrder,
-                'state'     => $state,
-                'is_alert'  => $isAlert,
+                'name'       => $key,
+                'category'   => (string) ($data['category'] ?? '—'),
+                'qty'        => $qty,
+                'stock'      => $stock,
+                'avg_day'    => $avgDay,
+                'avg_week'   => $avgWeek,
+                'avg_month'  => $avgMonth,
+                'unit_cost'  => $unitCost,
+                'order_cost' => $orderCost,
+                'autonomy'   => $autonomy,
+                'need'       => $need,
+                'to_order'   => $toOrder,
+                'state'      => $state,
+                'is_alert'   => $isAlert,
             ];
         }
 
