@@ -135,6 +135,43 @@ final class ComptaCalc
     }
 
     /**
+     * Nombre de jours d'ouverture (lundi→vendredi) entre deux dates, bornes
+     * incluses. Sert à rapporter une consommation à des journées réelles
+     * d'activité de la cafétéria.
+     *
+     * @param string $fromDay « YYYY-MM-DD » (inclus).
+     * @param string $toDay   « YYYY-MM-DD » (inclus).
+     */
+    public static function openDaysBetween(string $fromDay, string $toDay): int
+    {
+        try {
+            $cur = new \DateTimeImmutable($fromDay);
+            $end = new \DateTimeImmutable($toDay);
+        } catch (\Exception) {
+            return 0;
+        }
+
+        if ($cur > $end) {
+            return 0;
+        }
+
+        // Garde-fou : plage absurde (> ~10 ans) plafonnée.
+        if ($end->getTimestamp() - $cur->getTimestamp() > 3660 * 86400) {
+            $end = $cur->modify('+3660 days');
+        }
+
+        $count = 0;
+        while ($cur <= $end) {
+            if ((int) $cur->format('N') <= 5) {
+                $count++;
+            }
+            $cur = $cur->modify('+1 day');
+        }
+
+        return $count;
+    }
+
+    /**
      * Nombre de jours d'autonomie restants (stock / conso journalière moyenne).
      * Renvoie null si la consommation est inconnue (aucune vente).
      */

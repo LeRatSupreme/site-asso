@@ -420,12 +420,80 @@ final class Sale extends Model
     }
 
     /**
+     * Consommation par produit canonique sur une période donnée.
+     *
+     * Contrairement à consumptionByProductKey (fenêtre glissante en mois),
+     * cette méthode travaille sur une plage de dates explicite (bornes
+     * incluses), ce qui permet d'analyser n'importe quelle période
+     * (7 jours, 30 jours, année civile, tout l'historique…).
+     *
+     * @param string|null $fromDay Jour de début « YYYY-MM-DD » (inclus), ou null.
+     * @param string|null $toDay   Jour de fin « YYYY-MM-DD » (inclus), ou null.
+     *
+     * @return array<string,array{qty:int,category:string}>
+     */
+    public static function consumptionBetween(?string $fromDay, ?string $toDay): array
+    {
+        $where = ['is_custom_amount = 0'];
+        $args = [];
+        if ($fromDay !== null && $fromDay !== '') {
+            $where[] = 'sold_at >= ?';
+            $args[] = $fromDay . ' 00:00:00';
+        }
+        if ($toDay !== null && $toDay !== '') {
+            $where[] = 'sold_at <= ?';
+            $args[] = $toDay . ' 23:59:59';
+        }
+
+        $sql = 'SELECT COALESCE(product_key, description) AS product_key,
+                       MAX(NULLIF(category, \'\')) AS category,
+                       SUM(quantity) AS qty
+                FROM sales
+                WHERE ' . implode(' AND ', $where) . '
+                GROUP BY COALESCE(product_key, description)';
+
+        try {
+            $stmt = self::pdo()->prepare($sql);
+            $stmt->execute($args);
+        } catch (\Throwable) {
+            return [];
+        }
+
+        $byProduct = [];
+        foreach ($stmt->fetchAll() as $row) {
+            $key = (string) $row['product_key'];
+            if ($key === '') {
+                continue;
+            }
+            $byProduct[$key] = [
+                'qty'       => (int) $row['qty'],
+                'category'  => (string) ($row['category'] ?? '—'),
+            ];
+        }
+
+        return $byProduct;
+    }
+
+    /**
+     * Date de la toute première vente importée (ou null si aucune).
+     */
+    public static function firstSoldDay(): ?string
+    {
+        try {
+            $day = self::pdo()->query('SELECT DATE(MIN(sold_at)) FROM sales')->fetchColumn();
+        } catch (\Throwable) {
+            return null;
+        }
+
+        return $day ? (string) $day : null;
+    }
+
+    /**
      * Descriptions distinctes non encore mappées (product_key IS NULL).
      *
      * @return list<array<string,mixed>>
      */
-    public static function unmappedDescriptions(): array
-    {
+    public static function unmappedDescriptions(): array    {
         $sql = 'SELECT description, COUNT(*) AS occurrences, MAX(sold_at) AS last_seen
                 FROM sales
                 WHERE product_key IS NULL
