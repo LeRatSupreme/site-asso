@@ -94,4 +94,29 @@ final class SaleDedupTest extends TestCase
         self::assertSame(2, $r['inserted']);
         self::assertSame(2, Sale::count());
     }
+
+    public function test_consumption_between_par_plage_de_dates(): void
+    {
+        $rows = [
+            ['transaction_ref' => 'C1', 'sold_at' => '2026-06-01 10:00:00', 'payment_method' => 'CARTE', 'payment_raw' => 'Visa', 'quantity' => 2, 'description' => 'Coca', 'product_key' => 'Coca', 'category' => 'Boisson', 'sku' => null, 'currency' => 'EUR', 'price_ttc' => 2.0, 'price_ht' => null, 'vat' => null, 'vat_rate' => null, 'seller_account' => 't', 'is_custom_amount' => 0],
+            ['transaction_ref' => 'C2', 'sold_at' => '2026-09-05 10:00:00', 'payment_method' => 'CARTE', 'payment_raw' => 'Visa', 'quantity' => 3, 'description' => 'Coca', 'product_key' => 'Coca', 'category' => 'Boisson', 'sku' => null, 'currency' => 'EUR', 'price_ttc' => 3.0, 'price_ht' => null, 'vat' => null, 'vat_rate' => null, 'seller_account' => 't', 'is_custom_amount' => 0],
+            ['transaction_ref' => 'C3', 'sold_at' => '2026-09-06 10:00:00', 'payment_method' => 'CARTE', 'payment_raw' => 'Visa', 'quantity' => 1, 'description' => 'Fanta', 'product_key' => null, 'category' => 'Boisson', 'sku' => null, 'currency' => 'EUR', 'price_ttc' => 1.5, 'price_ht' => null, 'vat' => null, 'vat_rate' => null, 'seller_account' => 't', 'is_custom_amount' => 0],
+        ];
+        Sale::importBatch('batch_consumption', $rows);
+
+        // Plage englobant tout.
+        $all = Sale::consumptionBetween('2026-01-01', '2026-12-31');
+        self::assertSame(5, $all['Coca']['qty']);
+        self::assertSame(1, $all['Fanta']['qty'], 'Sans product_key, la description sert de clé.');
+
+        // Plage limitée à juin : bornes incluses.
+        $june = Sale::consumptionBetween('2026-06-01', '2026-06-30');
+        self::assertSame(2, $june['Coca']['qty']);
+        self::assertArrayNotHasKey('Fanta', $june);
+
+        // Sans bornes : tout l'historique.
+        self::assertSame($all, Sale::consumptionBetween(null, null));
+
+        self::assertSame('2026-06-01', Sale::firstSoldDay());
+    }
 }

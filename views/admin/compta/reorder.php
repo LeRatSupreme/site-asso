@@ -3,15 +3,28 @@
 declare(strict_types=1);
 
 /**
- * @var list<array<string,mixed>> $rows
- * @var array<string,array{label:string,days:int}> $periods
- * @var string $currentPeriod
- * @var int $targetDays
- * @var int $alerts
+ * @var list<array<string,mixed>>                    $rows
+ * @var array<string,array{label:string,days:int}>   $periods
+ * @var string                                       $currentPeriod
+ * @var int                                          $targetDays
+ * @var int                                          $alerts
+ * @var array<string,string>                         $refOptions
+ * @var string                                       $currentRef
+ * @var string|null                                  $refFrom
+ * @var string|null                                  $refTo
+ * @var int                                          $refOpenDays
+ * @var string                                       $du
+ * @var string                                       $au
  */
 
 function reorder_qty(float $v): string {
     return number_format($v, ($v >= 10 ? 0 : 1), ',', ' ');
+}
+
+function reorder_date_fr(?string $day): string {
+    if ($day === null || $day === '') { return '—'; }
+    $t = strtotime($day);
+    return $t === false ? $day : date('d/m/Y', $t);
 }
 ?>
 <div class="compta-head">
@@ -19,21 +32,47 @@ function reorder_qty(float $v): string {
         <div>
             <p class="eyebrow">Comptabilité</p>
             <h1 class="page-title">Réapprovisionnement</h1>
-            <p class="muted">Basé sur <strong>toutes les ventes importées</strong> (SumUp). Saisis le stock de chaque produit : la quantité à commander se recalcule (besoin sur la période − stock).</p>
+            <p class="muted">Consommation moyenne <strong>sur la période analysée</strong> → quantité à commander pour couvrir l'horizon choisi. Idéal pour faire les stocks chaque semaine.</p>
         </div>
-        <form method="get" class="compta-monthselect">
-            <label for="period" class="muted" style="display:block;font-size:0.75rem;margin-bottom:0.3rem">Couvrir pour :</label>
-            <select name="period" id="period" onchange="this.form.submit()">
-                <?php foreach ($periods as $k => $p): ?>
-                    <option value="<?= e($k) ?>" <?= $k === $currentPeriod ? 'selected' : '' ?>><?= e($p['label']) ?></option>
-                <?php endforeach; ?>
-            </select>
-        </form>
     </div>
 </div>
 
+<form method="get" class="card surface glass" style="display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end;padding:14px 18px;margin-bottom:14px;">
+    <div>
+        <label for="ref" class="muted" style="display:block;font-size:0.75rem;margin-bottom:0.3rem">📅 Période analysée</label>
+        <select name="ref" id="ref" onchange="this.form.submit()">
+            <?php foreach ($refOptions as $k => $label): ?>
+                <option value="<?= e($k) ?>" <?= $k === $currentRef ? 'selected' : '' ?>><?= e($label) ?></option>
+            <?php endforeach; ?>
+        </select>
+    </div>
+    <div id="ref-custom" style="<?= $currentRef === 'custom' ? 'display:flex;gap:8px;align-items:flex-end;' : 'display:none;' ?>">
+        <div>
+            <label for="du" class="muted" style="display:block;font-size:0.75rem;margin-bottom:0.3rem">Du</label>
+            <input type="date" name="du" id="du" value="<?= e($du) ?>">
+        </div>
+        <div>
+            <label for="au" class="muted" style="display:block;font-size:0.75rem;margin-bottom:0.3rem">Au</label>
+            <input type="date" name="au" id="au" value="<?= e($au) ?>">
+        </div>
+    </div>
+    <div>
+        <label for="period" class="muted" style="display:block;font-size:0.75rem;margin-bottom:0.3rem">Couvrir pour :</label>
+        <select name="period" id="period" onchange="this.form.submit()">
+            <?php foreach ($periods as $k => $p): ?>
+                <option value="<?= e($k) ?>" <?= $k === $currentPeriod ? 'selected' : '' ?>><?= e($p['label']) ?></option>
+            <?php endforeach; ?>
+        </select>
+    </div>
+    <button type="submit" class="btn btn-primary btn-sm">Appliquer</button>
+    <span class="muted" style="font-size:0.8rem;">
+        Du <strong><?= e(reorder_date_fr($refFrom)) ?></strong> au <strong><?= e(reorder_date_fr($refTo)) ?></strong>
+        · <?= (int) $refOpenDays ?> jour<?= $refOpenDays > 1 ? 's' : '' ?> d'ouverture
+    </span>
+</form>
+
 <div class="alert alert-info">
-    🕒 <strong>Cafétéria ouverte du lundi au vendredi</strong> (fermée samedi/dimanche). Les consommations moyennes et les besoins sont calculés en <strong>jours d'ouverture</strong> (5 j/sem ≈ 22 j/mois).
+    🕒 <strong>Cafétéria ouverte du lundi au vendredi</strong> (fermée samedi/dimanche). Les consommations moyennes sont calculées sur les <strong>jours d'ouverture réels</strong> de la période analysée.
 </div>
 
 <?php if ($alerts > 0): ?>
@@ -45,6 +84,9 @@ function reorder_qty(float $v): string {
 <form method="post" action="<?= e(url('/admin/compta/reappro/stocks')) ?>" id="reorder-form">
     <?= csrf_field() ?>
     <input type="hidden" name="period" value="<?= e($currentPeriod) ?>">
+    <input type="hidden" name="ref" value="<?= e($currentRef) ?>">
+    <input type="hidden" name="du" value="<?= e($du) ?>">
+    <input type="hidden" name="au" value="<?= e($au) ?>">
 
     <div class="costs-toolbar">
         <div class="search-box">
@@ -74,6 +116,7 @@ function reorder_qty(float $v): string {
                 <tr>
                     <th>Produit</th>
                     <th>Catégorie</th>
+                    <th class="th-num">Vendus<br>(période)</th>
                     <th class="th-num">Stock actuel</th>
                     <th class="th-num">Conso moy.<br>/ jour <small>(ouv.)</small></th>
                     <th class="th-num">Conso moy.<br>/ semaine</th>
@@ -99,6 +142,7 @@ function reorder_qty(float $v): string {
                         data-need-orig="<?= (int) $r['need'] ?>">
                         <td><strong><?= e($key) ?></strong></td>
                         <td><?= e((string) $r['category']) ?></td>
+                        <td class="num muted"><?= e((string) ($r['qty'] ?? 0)) ?></td>
                         <td class="num">
                             <input type="hidden" name="keys[]" value="<?= e($key) ?>">
                             <input type="number" class="stock-input" name="values[]"
@@ -128,13 +172,13 @@ function reorder_qty(float $v): string {
                     </tr>
                 <?php endforeach; ?>
                 <?php if ($rows === []): ?>
-                    <tr><td colspan="9" class="muted">Aucun produit à analyser. Importe d'abord un rapport SumUp.</td></tr>
+                    <tr><td colspan="10" class="muted">Aucun produit à analyser sur cette période. Importe d'abord un rapport SumUp.</td></tr>
                 <?php endif; ?>
             </tbody>
             <?php if ($rows !== []): ?>
                 <tfoot>
                     <tr>
-                        <th colspan="7" style="text-align:right">Total à commander (<?= e($periods[$currentPeriod]['label']) ?>) :</th>
+                        <th colspan="8" style="text-align:right">Total à commander (<?= e($periods[$currentPeriod]['label']) ?>) :</th>
                         <th class="num"><strong id="reorder-total" style="color:var(--primary)">0</strong></th>
                         <th></th>
                     </tr>
@@ -145,9 +189,24 @@ function reorder_qty(float $v): string {
 </form>
 
 <p class="card-meta">
-    Conso / jour = moyenne mensuelle ÷ 22 (jours d'ouverture) · Conso / semaine = conso / jour × 5 (lun-ven) · Moyenne mobile 3 mois (ventes SumUp).
-    « À commander » = besoin sur la période − stock saisi. Modifie le stock puis <strong>Enregistre</strong>.
+    « Vendus » = quantité totale sur la période analysée · Conso / jour = vendus ÷ jours d'ouverture de la période · Conso / semaine = conso / jour × 5 (lun-ven) · Conso / mois = conso / jour × 21,77.
+    « À commander » = besoin sur l'horizon de couverture − stock saisi (le stock est optionnel : sans saisie, à commander = besoin).
 </p>
+
+<script>
+(function () {
+    // Affiche/masque les bornes « Personnalisé » au changement de période.
+    var refSel = document.getElementById('ref');
+    var custom = document.getElementById('ref-custom');
+    if (refSel && custom) {
+        refSel.addEventListener('change', function () {
+            custom.style.display = refSel.value === 'custom'
+                ? 'flex'
+                : 'none';
+        });
+    }
+})();
+</script>
 
 <script>
 (function () {

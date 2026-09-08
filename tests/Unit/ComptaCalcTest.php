@@ -144,4 +144,29 @@ final class ComptaCalcTest extends TestCase
         self::assertSame(0.30, $beneficeJuillet);
         self::assertSame(30.0, $margeJuillet);
     }
+
+    public function test_open_days_between_semaine_complete(): void
+    {
+        // Lundi 7 → dimanche 13 septembre 2026 : 5 jours ouvrés.
+        self::assertSame(5, ComptaCalc::openDaysBetween('2026-09-07', '2026-09-13'));
+    }
+
+    public function test_open_days_between_bornes_incluses(): void
+    {
+        // Samedi → dimanche : 0 jour. Samedi → lundi : 1 jour (lundi inclus).
+        self::assertSame(0, ComptaCalc::openDaysBetween('2026-09-12', '2026-09-13'));
+        self::assertSame(1, ComptaCalc::openDaysBetween('2026-09-12', '2026-09-14'));
+    }
+
+    public function test_open_days_between_plage_inversee_ou_invalide(): void
+    {
+        self::assertSame(0, ComptaCalc::openDaysBetween('2026-09-13', '2026-09-07'));
+        self::assertSame(0, ComptaCalc::openDaysBetween('pas-une-date', '2026-09-07'));
+    }
+
+    public function test_open_days_between_mois_complet(): void
+    {
+        // Septembre 2026 : 30 jours dont 22 ouvrés (lun-ven).
+        self::assertSame(22, ComptaCalc::openDaysBetween('2026-09-01', '2026-09-30'));
+    }
 }

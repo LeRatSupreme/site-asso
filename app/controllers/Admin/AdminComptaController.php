@@ -736,8 +736,57 @@ final class AdminComptaController extends AdminBaseController
     {
         $user = $this->guardCompta();
 
-        // Période cible d'approvisionnement, exprimée en JOURS D'OUVERTURE
-        // (la cafétéria est ouverte du lundi au vendredi : 5 j/semaine).
+        // ── Période d'ANALYSE (sur quoi calculer les moyennes) ──────────
+        $refOptions = [
+            '7d'     => '7 derniers jours',
+            '30d'    => '30 derniers jours',
+            '3m'     => '3 derniers mois',
+            '6m'     => '6 derniers mois',
+            '12m'    => '12 derniers mois',
+            'ytd'    => 'Année civile',
+            'all'    => 'Tout',
+            'custom' => 'Personnalisé',
+        ];
+        $ref = (string) ($_GET['ref'] ?? '3m');
+        if (!array_key_exists($ref, $refOptions)) {
+            $ref = '3m';
+        }
+
+        $today = date('Y-m-d');
+        $fromDay = null;
+        $toDay = $today;
+
+        $du = trim((string) ($_GET['du'] ?? ''));
+        $au = trim((string) ($_GET['au'] ?? ''));
+        $duOk = preg_match('/^\d{4}-\d{2}-\d{2}$/', $du) === 1;
+        $auOk = preg_match('/^\d{4}-\d{2}-\d{2}$/', $au) === 1;
+
+        switch ($ref) {
+            case '7d':  $fromDay = date('Y-m-d', strtotime('-6 days')); break;
+            case '30d': $fromDay = date('Y-m-d', strtotime('-29 days')); break;
+            case '3m':  $fromDay = date('Y-m-d', strtotime('-3 months')); break;
+            case '6m':  $fromDay = date('Y-m-d', strtotime('-6 months')); break;
+            case '12m': $fromDay = date('Y-m-d', strtotime('-12 months')); break;
+            case 'ytd': $fromDay = date('Y-01-01'); break;
+            case 'all': $fromDay = Sale::firstSoldDay(); $toDay = $today; break;
+            case 'custom':
+                if ($duOk) { $fromDay = $du; }
+                if ($auOk) { $toDay = $au; }
+                if ($fromDay === null || !$auOk) {
+                    // Bornes invalides : bascule sur tout l'historique.
+                    $ref = 'all';
+                    $fromDay = Sale::firstSoldDay();
+                    $toDay = $today;
+                }
+                break;
+        }
+
+        // Jours d'ouverture réels dans la période (lun-ven).
+        $openDays = ($fromDay !== null && $toDay !== null)
+            ? ComptaCalc::openDaysBetween($fromDay, $toDay)
+            : 0;
+
+        // ── Horizon de COUVERTURE (pour quoi commander) ─────────────────
         $periods = [
             '1w' => ['label' => '1 semaine',  'days' => 5],   // 5 j d'ouverture
             '2w' => ['label' => '2 semaines', 'days' => 10],
@@ -751,16 +800,23 @@ final class AdminComptaController extends AdminBaseController
         }
         $targetDays = $periods[$periodKey]['days'];
 
-        $data = $this->reorderData($targetDays);
+        $data = $this->reorderData($targetDays, $fromDay, $toDay, $openDays);
 
         $this->renderAdmin('admin/compta/reorder', [
-            'title'        => 'Réapprovisionnement',
-            'user'         => $user,
-            'rows'         => $data['rows'],
-            'alerts'       => $data['alerts'],
-            'periods'      => $periods,
-            'currentPeriod'=> $periodKey,
-            'targetDays'   => $targetDays,
+            'title'         => 'Réapprovisionnement',
+            'user'          => $user,
+            'rows'          => $data['rows'],
+            'alerts'        => $data['alerts'],
+            'periods'       => $periods,
+            'currentPeriod' => $periodKey,
+            'targetDays'    => $targetDays,
+            'refOptions'    => $refOptions,
+            'currentRef'    => $ref,
+            'refFrom'       => $fromDay,
+            'refTo'         => $toDay,
+            'refOpenDays'   => $openDays,
+            'du'            => $duOk ? $du : '',
+            'au'            => $auOk ? $au : '',
         ]);
     }
 
@@ -801,27 +857,43 @@ final class AdminComptaController extends AdminBaseController
         $this->audit('compta.reappro.stocks', 'product_stocks', null, ['count' => $count]);
         $this->setFlash('success', sprintf('%d stock(s) mis à jour.', $count));
 
-        $period = (string) ($_POST['period'] ?? '1m');
-        redirect(url('/admin/compta/reappro?period=' . rawurlencode($period)));
+        // Conserve la période d'analyse et l'horizon de couverture.
+        $params = ['period' => (string) ($_POST['period'] ?? '1m')];
+        $ref = (string) ($_POST['ref'] ?? '');
+        if ($ref !== '') {
+            $params['ref'] = $ref;
+            foreach (['du', 'au'] as $bound) {
+                $v = (string) ($_POST[$bound] ?? '');
+                if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $v) === 1) {
+                    $params[$bound] = $v;
+                }
+            }
+        }
+        redirect(url('/admin/compta/reappro?' . http_build_query($params)));
     }
 
     /**
-     * Calcule l'analyse de réapprovisionnement.
+     * Calcule l'analyse de réapprovisionnement sur une période donnée.
      *
-     * Basée sur TOUTES les ventes importées (table sales) : chaque produit
-     * présent dans les rapports SumUp est listé, avec sa consommation moyenne
-     * (moyenne mobile 3 mois) par jour / semaine / mois et la quantité à
-     * commander pour couvrir la période cible. Le stock n'est connu que pour
-     * les produits présents dans la table cafétéria (sinon : « — »).
+     * Chaque produit vendu dans la période d'analyse est listé avec sa
+     * consommation moyenne (rapportée aux jours d'ouverture réels de la
+     * période) par jour / semaine / mois, et la quantité à commander pour
+     * couvrir l'horizon cible. Le stock n'est connu que s'il a été saisi
+     * sur Réappro (sinon : « — »).
+     *
+     * @param string|null $fromDay  Début de la période d'analyse (inclus).
+     * @param string|null $toDay    Fin de la période d'analyse (inclus).
+     * @param int         $openDays Jours d'ouverture (lun-ven) de la période.
      *
      * @return array{rows:list<array<string,mixed>>, alerts:int}
      */
-    private function reorderData(int $targetDays): array
+    private function reorderData(int $targetDays, ?string $fromDay, ?string $toDay, int $openDays): array
     {
         // 100 % basé sur les ventes SumUp : chaque produit du CSV est listé,
         // sa catégorie vient du CSV, et son stock est celui saisi sur Réappro
         // (table product_stocks). Plus aucun mélange avec l'ancienne cafétéria.
-        $consumption = Sale::consumptionByProductKey(3);
+        $consumption = Sale::consumptionBetween($fromDay, $toDay);
+        $openDays = max(1, $openDays);
 
         // Stocks saisis, indexés en minuscules pour un rapprochement
         // insensible à la casse (ex. « Red bull » == « Red Bull »).
@@ -839,11 +911,10 @@ final class AdminComptaController extends AdminBaseController
                 continue;
             }
 
-            $monthly  = $data['monthly'] ?? [];
-            $avgMonth = ComptaCalc::movingAverage($monthly, 3);
-            // Jours d'ouverture : CAF ouvert lun-ven ≈ 21,77 j/mois.
-            $avgDay   = $avgMonth / 21.77;
+            $qty      = (int) ($data['qty'] ?? 0);
+            $avgDay   = $qty / $openDays;
             $avgWeek  = $avgDay * 5.0;
+            $avgMonth = $avgDay * 21.77;
 
             $lookupKey = strtolower(trim($key));
             $hasStock = array_key_exists($lookupKey, $stocksInputLower);
@@ -871,6 +942,7 @@ final class AdminComptaController extends AdminBaseController
             $rows[] = [
                 'name'      => $key,
                 'category'  => (string) ($data['category'] ?? '—'),
+                'qty'       => $qty,
                 'stock'     => $stock,
                 'avg_day'   => $avgDay,
                 'avg_week'  => $avgWeek,
