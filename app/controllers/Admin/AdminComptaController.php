@@ -93,7 +93,16 @@ final class AdminComptaController extends AdminBaseController
         $top = Sale::topProducts($month['year'], $month['month']);
         $byCategory = Sale::byCategory($month['year'], $month['month']);
 
-        $reorderAlerts = $this->reorderData(30)['alerts'];
+        // Alerte stock faible : analyse des 30 derniers jours.
+        // (L'horizon de couverture n'influence pas les alertes, seul
+        // compte le rythme de consommation journalier.)
+        $refFrom = date('Y-m-d', strtotime('-29 days'));
+        $reorderAlerts = $this->reorderData(
+            5,
+            $refFrom,
+            date('Y-m-d'),
+            ComptaCalc::openDaysBetween($refFrom, date('Y-m-d'))
+        )['alerts'];
 
         $this->renderAdmin('admin/compta/dashboard', [
             'title'        => 'Comptabilité',
