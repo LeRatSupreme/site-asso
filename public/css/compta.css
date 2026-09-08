@@ -634,6 +634,105 @@
 .row-muted { opacity: 0.85; }
 .row-muted td code { color: var(--muted); }
 
+/* =========================================================
+   Page « Réappro » : barre de filtres (période + horizon)
+   ========================================================= */
+.reappro-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 0.9rem 1.4rem;
+    margin-bottom: 1.25rem;
+    padding: 1.1rem 1.35rem;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+}
+.reappro-field .field-label {
+    display: block;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    font-weight: 800;
+    color: var(--muted);
+    margin-bottom: 0.45rem;
+}
+
+/* Pastilles de choix de période (radios masqués) */
+.chip-row { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.chip { position: relative; display: inline-flex; }
+.chip input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+.chip span {
+    display: inline-block;
+    padding: 0.42rem 0.9rem;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: rgba(255, 255, 255, 0.03);
+    color: var(--muted);
+    font-size: 0.85rem;
+    font-weight: 700;
+    cursor: pointer;
+    user-select: none;
+    transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+.chip:hover span { border-color: var(--primary); color: var(--foreground); }
+.chip input:checked + span {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: var(--primary-foreground);
+}
+.chip input:focus-visible + span { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+/* Bornes « Personnalisé » */
+.reappro-dates { display: flex; align-items: flex-end; gap: 0.55rem; }
+.reappro-dates[hidden] { display: none; }
+.reappro-dates .field-label { margin-bottom: 0.45rem; }
+.reappro-dates input[type="date"] {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--foreground);
+    padding: 0.42rem 0.6rem;
+    font-size: 0.88rem;
+    font-weight: 600;
+}
+.reappro-dates input[type="date"]:focus { outline: none; border-color: var(--primary); }
+
+.reappro-bar select {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--foreground);
+    padding: 0.45rem 0.7rem;
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+.reappro-bar select:focus { outline: none; border-color: var(--primary); }
+
+/* Badge récapitulatif de la période analysée */
+.reappro-meta {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.42rem 0.9rem;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--primary) 14%, transparent);
+    border: 1px solid color-mix(in srgb, var(--primary) 35%, transparent);
+    color: var(--primary);
+    font-size: 0.82rem;
+    font-weight: 800;
+    white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+    .reappro-meta { margin-left: 0; }
+}
+
 
 
 
