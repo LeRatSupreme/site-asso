@@ -103,4 +103,18 @@ final class ProductAlias extends Model
         $stmt = self::pdo()->prepare('DELETE FROM product_aliases WHERE id = ?');
         $stmt->execute([$id]);
     }
+
+    /**
+     * Ré-affecte tous les alias pointant vers une clé canonique vers une
+     * autre (fusion de doublons).
+     */
+    public static function reassign(string $from, string $to): int
+    {
+        $stmt = self::pdo()->prepare(
+            'UPDATE product_aliases SET product_key = ? WHERE product_key = ?'
+        );
+        $stmt->execute([$to, $from]);
+
+        return $stmt->rowCount();
+    }
 }

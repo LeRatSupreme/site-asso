@@ -380,6 +380,30 @@ final class AdminComptaController extends AdminBaseController
         }
         usort($items, static function ($a, $b) { return strnatcasecmp($a['name'], $b['name']); });
 
+        // Doublons : produits distincts en apparence mais identiques une fois
+        // normalisés (« redbull Peach » vs « Redbull Peach »).
+        $infoByName = [];
+        foreach ($items as $it) {
+            $infoByName[$it['name']] = $it;
+        }
+        $dupes = [];
+        foreach (AliasSuggester::groupDuplicates(array_keys($infoByName)) as $members) {
+            $enriched = [];
+            foreach ($members as $m) {
+                $enriched[] = [
+                    'name'    => $m,
+                    'qty'     => (int) ($infoByName[$m]['qty'] ?? 0),
+                    'lots'    => (int) ($infoByName[$m]['lotsCount'] ?? 0),
+                    'current' => ($infoByName[$m]['currentCost'] ?? null) !== null,
+                ];
+            }
+            // Survivant suggéré : celui qui a un lot en cours, sinon le plus vendu.
+            usort($enriched, static function ($a, $b) {
+                return [$b['current'], $b['qty']] <=> [$a['current'], $a['qty']];
+            });
+            $dupes[] = ['suggested' => $enriched[0]['name'], 'members' => $enriched];
+        }
+
         // Édition d'un lot existant (?edit=ID) : le formulaire latéral se
         // pré-remplit et bascule en mode « mise à jour ».
         $editLot = null;
@@ -400,6 +424,7 @@ final class AdminComptaController extends AdminBaseController
             'items'       => $items,
             'categories'  => array_values(array_unique(array_filter($catByProduct))),
             'productKeys' => $keys,
+            'dupes'       => $dupes,
             'editLot'     => $editLot,
             'form'        => [
                 'product_key' => (string) ($editLot['product_key'] ?? ($_GET['product_key'] ?? '')),
@@ -468,6 +493,89 @@ final class AdminComptaController extends AdminBaseController
             $this->setFlash('error', 'Lot introuvable ou date de début invalide.');
         }
 
+        redirect(url('/admin/compta/couts'));
+    }
+
+    /**
+     * Fusionne un groupe de produits dupliqués vers un survivant choisi.
+     *
+     * Revalide côté serveur que le survivant fait bien partie d'un groupe de
+     * doublons (même clé normalisée), puis regroupe en une transaction :
+     * ventes, lots de coûts et alias, et crée un alias pour chaque libellé
+     * fusionné afin que les prochains imports pointent au bon endroit.
+     */
+    public function mergeProducts(): void
+    {
+        $this->guardCompta();
+
+        $keep = trim((string) ($_POST['keep'] ?? ''));
+        if ($keep === '') {
+            $this->setFlash('error', 'Produit à conserver manquant.');
+            redirect(url('/admin/compta/couts'));
+        }
+
+        // Recalcule les groupes sur données fraîches (ne jamais se fier au
+        // formulaire affiché, potentiellement périmé).
+        $names = array_unique(array_merge(
+            Sale::distinctProducts(),
+            array_column(ProductCost::all(), 'product_key')
+        ));
+        $group = null;
+        foreach (AliasSuggester::groupDuplicates(array_map('strval', $names)) as $members) {
+            if (in_array($keep, $members, true)) {
+                $group = $members;
+                break;
+            }
+        }
+
+        if ($group === null) {
+            $this->setFlash('error', sprintf('« %s » ne fait partie d\'aucun groupe de doublons.', $keep));
+            redirect(url('/admin/compta/couts'));
+        }
+
+        $others = array_values(array_filter($group, static fn ($m): bool => $m !== $keep));
+        if ($others === []) {
+            $this->setFlash('success', 'Rien à fusionner : le groupe ne contient qu\'un produit.');
+            redirect(url('/admin/compta/couts'));
+        }
+
+        $pdo = db();
+        $salesMoved = 0;
+        $lotsMoved = 0;
+        $aliasesMoved = 0;
+
+        try {
+            $pdo->beginTransaction();
+
+            foreach ($others as $old) {
+                $salesMoved += Sale::mergeInto($keep, [$old]);
+                $lotsMoved += ProductCost::reassign($old, $keep);
+                $aliasesMoved += ProductAlias::reassign($old, $keep);
+                // Alias résiduel : tout futur import du libellé fusionné
+                // résoudra directement vers le survivant.
+                ProductAlias::save(['raw_description' => $old, 'product_key' => $keep]);
+            }
+
+            $pdo->commit();
+        } catch (\Throwable $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            $this->audit('compta.product.merge_failed', 'product', $keep, ['error' => $e->getMessage()]);
+            $this->setFlash('error', 'Fusion annulée : ' . $e->getMessage());
+            redirect(url('/admin/compta/couts'));
+        }
+
+        $this->audit('compta.product.merge', 'product', $keep, [
+            'merged'  => $others,
+            'sales'   => $salesMoved,
+            'lots'    => $lotsMoved,
+            'aliases' => $aliasesMoved,
+        ]);
+        $this->setFlash(
+            'success',
+            sprintf('Fusion effectuée vers « %s » : %d vente(s), %d lot(s), %d alias re-groupés.', $keep, $salesMoved, $lotsMoved, $aliasesMoved)
+        );
         redirect(url('/admin/compta/couts'));
     }
 

@@ -52,8 +52,33 @@ final class AliasSuggester
 
     public static function suggest(string $description): string
     {
+        $s = self::normalizeKey($description);
+
+        if ($s === '') {
+            return '';
+        }
+
+        // Retrait itératif des suffixes de couleur/gout.
+        $tokens = explode(' ', $s);
+        while ($tokens !== [] && in_array(end($tokens), self::SUFFIX_STOPWORDS, true)) {
+            array_pop($tokens);
+        }
+
+        return implode(' ', $tokens);
+    }
+
+    /**
+     * Normalisation légère (sans retrait de suffixe) : minuscules, sans
+     * accents, séparateurs repliés en espaces, espaces multiples repliées.
+     *
+     * Sert à détecter les doublons entre produits canoniques (« redbull
+     * Peach » vs « Redbull Peach ») : deux libellés différents mais de
+     * même clé normalisée désignent le même produit.
+     */
+    public static function normalizeKey(string $value): string
+    {
         // 1) Minuscules.
-        $s = mb_strtolower(trim($description));
+        $s = mb_strtolower(trim($value));
 
         // 2) Suppression des accents (table manuelle — aucune dépendance intl).
         $s = strtr($s, self::ACCENTS);
@@ -62,18 +87,42 @@ final class AliasSuggester
         $s = (string) preg_replace('/[_\-\.()\[\]\{\},;:\/]+/u', ' ', $s);
 
         // 4) Repliement des espaces multiples + bornes.
-        $s = trim((string) preg_replace('/\s+/u', ' ', $s));
+        return trim((string) preg_replace('/\s+/u', ' ', $s));
+    }
 
-        if ($s === '') {
-            return '';
+    /**
+     * Regroupe les noms de produits dont la clé normalisée est identique.
+     *
+     * Ne retourne que les groupes comportant au moins 2 libellés distincts
+     * (c'est-à-dire les vrais doublons), triés par nom.
+     *
+     * @param list<string> $names
+     *
+     * @return list<list<string>> Groupes de doublons (liste de libellés originaux).
+     */
+    public static function groupDuplicates(array $names): array
+    {
+        $byNorm = [];
+        foreach ($names as $name) {
+            $name = trim((string) $name);
+            if ($name === '') {
+                continue;
+            }
+            $byNorm[self::normalizeKey($name)][] = $name;
         }
 
-        // 5) Retrait itératif des suffixes de couleur/gout.
-        $tokens = explode(' ', $s);
-        while ($tokens !== [] && in_array(end($tokens), self::SUFFIX_STOPWORDS, true)) {
-            array_pop($tokens);
+        $groups = [];
+        foreach ($byNorm as $norm => $members) {
+            $members = array_values(array_unique($members));
+            if (count($members) < 2) {
+                continue;
+            }
+            usort($members, static fn (string $a, string $b): int => strnatcasecmp($a, $b));
+            $groups[] = $members;
         }
 
-        return implode(' ', $tokens);
+        usort($groups, static fn (array $a, array $b): int => strnatcasecmp($a[0], $b[0]));
+
+        return $groups;
     }
 }
