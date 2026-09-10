@@ -239,6 +239,116 @@ final class Loss extends Model
     }
 
     /**
+     * Pertes sur une plage de jours (bornes incluses sur lost_at), de la
+     * plus récente à la plus ancienne. Bornes null = tout l'historique.
+     *
+     * @param string|null $fromDay Jour de début « YYYY-MM-DD » (inclus), ou null.
+     * @param string|null $toDay   Jour de fin « YYYY-MM-DD » (inclus), ou null.
+     *
+     * @return list<array<string,mixed>>
+     */
+    public static function between(?string $fromDay, ?string $toDay): array
+    {
+        $where = [];
+        $args = [];
+        if ($fromDay !== null && $fromDay !== '') {
+            $where[] = 'lost_at >= ?';
+            $args[] = $fromDay;
+        }
+        if ($toDay !== null && $toDay !== '') {
+            $where[] = 'lost_at <= ?';
+            $args[] = $toDay;
+        }
+        $whereSql = $where === [] ? '' : 'WHERE ' . implode(' AND ', $where);
+
+        try {
+            $stmt = self::pdo()->prepare('SELECT * FROM losses ' . $whereSql . ' ORDER BY lost_at DESC');
+            $stmt->execute($args);
+
+            /** @var list<array<string,mixed>> $r */
+            return $stmt->fetchAll();
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    /**
+     * Agrégats par motif sur une plage de jours (bornes incluses), avec la
+     * même valorisation et le même tri que byReason().
+     *
+     * @param string|null $fromDay Jour de début « YYYY-MM-DD » (inclus), ou null.
+     * @param string|null $toDay   Jour de fin « YYYY-MM-DD » (inclus), ou null.
+     *
+     * @return list<array{reason:string, qty:int, value:float}>
+     */
+    public static function byReasonBetween(?string $fromDay, ?string $toDay): array
+    {
+        $where = [];
+        $args = [];
+        if ($fromDay !== null && $fromDay !== '') {
+            $where[] = 'lost_at >= ?';
+            $args[] = $fromDay;
+        }
+        if ($toDay !== null && $toDay !== '') {
+            $where[] = 'lost_at <= ?';
+            $args[] = $toDay;
+        }
+        $whereSql = $where === [] ? '' : 'WHERE ' . implode(' AND ', $where);
+
+        try {
+            $stmt = self::pdo()->prepare(
+                'SELECT reason, COALESCE(SUM(quantity), 0) AS qty
+                 FROM losses ' . $whereSql . '
+                 GROUP BY reason'
+            );
+            $stmt->execute($args);
+
+            /** @var list<array<string,mixed>> $grouped */
+            $grouped = $stmt->fetchAll();
+        } catch (\Throwable) {
+            return [];
+        }
+
+        // Valeur par motif : même valorisation que valueBetween().
+        $values = [];
+        foreach (self::between($fromDay, $toDay) as $r) {
+            $reason = (string) $r['reason'];
+            $values[$reason] = ($values[$reason] ?? 0.0) + self::rowValue($r);
+        }
+
+        $out = [];
+        foreach ($grouped as $g) {
+            $out[] = [
+                'reason' => (string) $g['reason'],
+                'qty'    => (int) $g['qty'],
+                'value'  => (float) ($values[(string) $g['reason']] ?? 0.0),
+            ];
+        }
+
+        usort($out, static fn (array $a, array $b): int => $b['value'] <=> $a['value']);
+
+        return $out;
+    }
+
+    /**
+     * Valeur totale des pertes sur une plage de jours (bornes incluses),
+     * valorisées au coût du lot applicable à chaque date de perte
+     * (0.0 si rien). Bornes null = tout l'historique.
+     *
+     * @param string|null $fromDay Jour de début « YYYY-MM-DD » (inclus), ou null.
+     * @param string|null $toDay   Jour de fin « YYYY-MM-DD » (inclus), ou null.
+     */
+    public static function valueBetween(?string $fromDay, ?string $toDay): float
+    {
+        $total = 0.0;
+        foreach (self::between($fromDay, $toDay) as $r) {
+            $total += self::rowValue($r);
+        }
+
+        return $total;
+    }
+
+    /**
      * Valeur d'une ligne de perte : quantité × coût du lot applicable à la
      * date de perte (0 si aucun lot connu).
      *

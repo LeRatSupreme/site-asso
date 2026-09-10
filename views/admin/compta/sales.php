@@ -4,10 +4,11 @@ declare(strict_types=1);
 
 /**
  * @var list<array<string,mixed>> $rows
- * @var list<array{value:string,label:string}> $months
+ * @var array{preset:string,from:?string,to:?string} $period
+ * @var array<string,string> $periodOptions
  * @var list<string> $categories
  * @var list<string> $products
- * @var array{month:string,category:string,product:string,payment:string} $filters
+ * @var array{period:string,from:string,to:string,category:string,product:string,payment:string} $filters
  */
 
 // Totaux sur les ventes affichées.
@@ -24,7 +25,7 @@ foreach ($rows as $r) {
     <div>
         <p class="eyebrow">Comptabilité</p>
         <h1 class="page-title">Journal des ventes</h1>
-        <p class="muted">Toutes les ventes importées de SumUp, filtrables par mois, catégorie, produit et moyen de paiement.</p>
+        <p class="muted">Toutes les ventes importées de SumUp, filtrables par période, catégorie, produit et moyen de paiement.</p>
     </div>
 </div>
 
@@ -49,13 +50,26 @@ foreach ($rows as $r) {
 </div>
 
 <!-- Barre de filtres -->
-<form method="get" class="costs-toolbar">
-    <select name="month" aria-label="Mois">
-        <option value="all" <?= ($filters['month'] ?? '') === 'all' ? 'selected' : '' ?>>Tous les mois</option>
-        <?php foreach ($months as $m): ?>
-            <option value="<?= e($m['value']) ?>" <?= $m['value'] === ($filters['month'] ?? '') ? 'selected' : '' ?>><?= e($m['label']) ?></option>
-        <?php endforeach; ?>
-    </select>
+<form method="get" class="costs-toolbar" id="period-filters">
+    <div class="reappro-field">
+        <label class="field-label" for="period">📅 Période</label>
+        <select name="period" id="period">
+            <?php foreach ($periodOptions as $k => $label): ?>
+                <option value="<?= e($k) ?>" <?= $k === $period['preset'] ? 'selected' : '' ?>><?= e($label) ?></option>
+            <?php endforeach; ?>
+        </select>
+    </div>
+
+    <div class="reappro-dates" id="period-custom" <?= $period['preset'] === 'custom' ? '' : 'hidden' ?>>
+        <div>
+            <label class="field-label" for="from">Du</label>
+            <input type="date" name="from" id="from" value="<?= e($period['from'] ?? '') ?>">
+        </div>
+        <div>
+            <label class="field-label" for="to">Au</label>
+            <input type="date" name="to" id="to" value="<?= e($period['to'] ?? '') ?>">
+        </div>
+    </div>
 
     <select name="category" aria-label="Catégorie">
         <option value="">Toutes catégories</option>
@@ -149,3 +163,28 @@ foreach ($rows as $r) {
 <p class="card-meta">
     Le journal liste chaque ligne du rapport SumUp importé. Les « Montants personnalisés » (perso) sont inclus dans le CA mais exclus du bénéfice.
 </p>
+
+<script>
+(function () {
+    // Sélecteur « 📅 Période » : les presets soumettent seuls, comme sur
+    // Réappro ; « Personnalisé » révèle d'abord les bornes de dates.
+    var form = document.getElementById('period-filters');
+    var custom = document.getElementById('period-custom');
+    if (!form) return;
+
+    var select = form.querySelector('select[name="period"]');
+    if (!select) return;
+
+    select.addEventListener('change', function () {
+        if (custom) {
+            custom.hidden = select.value !== 'custom';
+        }
+        if (select.value === 'custom') {
+            var from = document.getElementById('from');
+            if (from) from.focus();
+        } else {
+            form.submit();
+        }
+    });
+})();
+</script>
