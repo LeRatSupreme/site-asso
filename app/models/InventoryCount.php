@@ -7,9 +7,9 @@ namespace App\Models;
 /**
  * Comptages physiques d'inventaire (table `inventory_counts`).
  *
- * Stock théorique = dernier comptage + achats − ventes depuis la date
- * du comptage. L'écart (gap = compté − théorique) révèle pertes,
- * casses, offerts ou erreurs de saisie.
+ * Stock théorique = dernier comptage + achats − ventes − pertes depuis la
+ * date du comptage. L'écart (gap = compté − théorique) révèle pertes,
+ * casses, offerts ou erreurs de saisie non encore journalisées.
  */
 final class InventoryCount extends Model
 {
@@ -99,7 +99,7 @@ final class InventoryCount extends Model
     /**
      * Stock théorique actuel d'un produit (null si jamais compté).
      *
-     * Théorique = quantité du dernier comptage + achats − ventes
+     * Théorique = quantité du dernier comptage + achats − ventes − pertes
      * depuis la date de ce comptage.
      */
     public static function theoreticalStock(string $productKey): ?int
@@ -186,7 +186,8 @@ final class InventoryCount extends Model
 
     /**
      * Calcule le stock théorique depuis un dernier comptage connu :
-     * quantité comptée + achats − ventes depuis la date du comptage.
+     * quantité comptée + achats − ventes − pertes depuis la date du
+     * comptage.
      */
     private static function theoreticalFromLast(string $productKey, string $at, int $qty): int
     {
@@ -194,6 +195,7 @@ final class InventoryCount extends Model
 
         return $qty
             + Purchase::qtySince($productKey, $day)
-            - Sale::soldQtySince($productKey, $day);
+            - Sale::soldQtySince($productKey, $day)
+            - Loss::qtySince($productKey, $day);
     }
 }
