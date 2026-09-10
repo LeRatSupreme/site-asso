@@ -45,22 +45,24 @@ $sections = [
     ],
     'Comptabilité' => [
         'Dashboard'        => '/admin/compta',
+        'Rapport annuel'   => '/admin/compta/annuel',
+        'Analytics'        => '/admin/analytics',
+        'Dashboard SumUp'  => '/admin/sumup',
+    ],
+    'Ventes & produits' => [
         'Importer CSV'     => '/admin/compta/import',
         'Journal ventes'   => '/admin/compta/ventes',
-        'Dépenses'         => '/admin/compta/depenses',
-        'Budgets'          => '/admin/compta/budgets',
-        'Achats & stock'   => '/admin/compta/achats',
-        'Inventaire'       => '/admin/compta/inventaire',
         'Produits'         => '/admin/compta/produits',
         'Catégories'       => '/admin/compta/categories',
         'Coûts de revient' => '/admin/compta/couts',
         'Mapping libellés' => '/admin/compta/aliases',
-        'Réappro'          => '/admin/compta/reappro',
-        'Rapport annuel'   => '/admin/compta/annuel',
-        'Analytics'        => '/admin/analytics',
     ],
-    'SumUp' => [
-        'Dashboard SumUp' => '/admin/sumup',
+    'Trésorerie & stock' => [
+        'Dépenses'       => '/admin/compta/depenses',
+        'Budgets'        => '/admin/compta/budgets',
+        'Achats & stock' => '/admin/compta/achats',
+        'Inventaire'     => '/admin/compta/inventaire',
+        'Réappro'        => '/admin/compta/reappro',
     ],
     'Système' => [
         'Utilisateurs' => '/admin/users',
@@ -68,11 +70,12 @@ $sections = [
     ],
 ];
 
-// Le rôle TRESORERIE n'a accès qu'à la comptabilité et au dashboard SumUp.
+// Le rôle TRESORERIE n'a accès qu'aux modules comptabilité.
 if (($user['role'] ?? null) === 'TRESORERIE') {
     $sections = [
         'Comptabilité' => $sections['Comptabilité'],
-        'SumUp' => $sections['SumUp'],
+        'Ventes & produits' => $sections['Ventes & produits'],
+        'Trésorerie & stock' => $sections['Trésorerie & stock'],
     ];
 }
 ?>
