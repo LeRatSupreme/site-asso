@@ -105,8 +105,10 @@ declare(strict_types=1);
                 <input type="text" id="supplier" name="supplier" placeholder="ex: Metro">
             </div>
 
-            <button type="submit" class="btn btn-primary btn-block">Enregistrer l'achat</button>
-            <button type="button" class="btn btn-ghost btn-block" onclick="if (confirm('Effacer la saisie en cours ?')) this.form.reset();">Annuler la saisie</button>
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">Enregistrer l'achat</button>
+                <button type="button" class="btn btn-ghost" onclick="if (confirm('Effacer la saisie en cours ?')) this.form.reset();">Annuler</button>
+            </div>
         </form>
     </section>
 

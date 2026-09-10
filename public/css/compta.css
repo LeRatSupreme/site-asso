@@ -780,6 +780,30 @@
 .alert-item.alert-warning a { color: #92400e; }
 .alert-item.alert-ok a { color: #047857; }
 
+/* ---- Pieds de formulaire : valider / annuler côte à côte ---- */
+.form-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 2px;
+}
+
+.form-actions .btn-primary {
+    flex: 1 1 auto;
+    min-width: 140px;
+}
+
+.form-actions .btn-ghost {
+    flex: 0 0 auto;
+}
+
+@media (max-width: 520px) {
+    .form-actions .btn-primary,
+    .form-actions .btn-ghost {
+        flex: 1 1 100%;
+    }
+}
+
 
 
 
