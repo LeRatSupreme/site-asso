@@ -1,0 +1,205 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Controllers\Admin;
+
+use App\Models\InventoryCount;
+use App\Models\ProductStock;
+use App\Models\Purchase;
+use App\Models\Sale;
+
+/**
+ * Suivi des achats réels et des inventaires.
+ *
+ * Achats : ce qui a été réellement commandé (alimente le stock théorique).
+ * Inventaire : comptage physique comparé au théorique (dernier comptage +
+ * achats − ventes) pour détecter pertes et casses. Réservé aux rôles
+ * ADMIN et TRESORERIE (voir guardCompta()).
+ */
+final class AdminStockController extends AdminBaseController
+{
+    // -----------------------------------------------------------------
+    //  Achats
+    // -----------------------------------------------------------------
+
+    public function purchases(): void
+    {
+        $user = $this->guardCompta();
+
+        $rows = Purchase::recent(100);
+        $since30 = date('Y-m-d', strtotime('-29 days'));
+        $since365 = date('Y-m-d', strtotime('-364 days'));
+
+        // Nombre d'achats sur les 30 derniers jours (calculé en PHP).
+        $count30 = 0;
+        foreach ($rows as $r) {
+            if ((string) ($r['purchased_at'] ?? '') >= $since30) {
+                $count30++;
+            }
+        }
+
+        $this->renderAdmin('admin/compta/purchases', [
+            'title'    => 'Achats & stock',
+            'user'     => $user,
+            'rows'     => $rows,
+            'products' => Sale::distinctProducts(),
+            'total30'  => Purchase::totalForPeriod($since30, date('Y-m-d')),
+            'total365' => Purchase::totalForPeriod($since365, date('Y-m-d')),
+            'count30'  => $count30,
+        ]);
+    }
+
+    public function savePurchase(): void
+    {
+        $user = $this->guardCompta();
+
+        $purchasedAt = trim((string) ($_POST['purchased_at'] ?? ''));
+        if ($purchasedAt === '') {
+            $purchasedAt = date('Y-m-d');
+        }
+        $productKey = trim((string) ($_POST['product_key'] ?? ''));
+        $quantity = (int) ($_POST['quantity'] ?? 0);
+        $unitCost = parseFrenchFloat((string) ($_POST['unit_cost'] ?? ''));
+        $supplier = trim((string) ($_POST['supplier'] ?? ''));
+        $notes = trim((string) ($_POST['notes'] ?? ''));
+
+        if ($productKey === '' || $quantity < 1 || $unitCost <= 0.0) {
+            $this->setFlash('error', 'Produit, quantité et coût unitaire requis.');
+            redirect(url('/admin/compta/achats'));
+        }
+
+        $id = Purchase::create([
+            'purchased_at' => $purchasedAt,
+            'product_key'  => $productKey,
+            'quantity'     => $quantity,
+            'unit_cost'    => $unitCost,
+            'supplier'     => $supplier,
+            'notes'        => $notes,
+            'created_by'   => $user['id'] ?? null,
+        ]);
+
+        $this->audit('compta.purchase.create', 'purchase', $id, [
+            'product_key' => $productKey,
+            'quantity'    => $quantity,
+            'unit_cost'   => $unitCost,
+        ]);
+
+        $this->setFlash('success', 'Achat enregistré.');
+        redirect(url('/admin/compta/achats'));
+    }
+
+    public function deletePurchase(string $id): void
+    {
+        $user = $this->guardCompta();
+
+        Purchase::delete($id);
+
+        $this->audit('compta.purchase.delete', 'purchase', $id);
+        $this->setFlash('success', 'Achat supprimé.');
+        redirect(url('/admin/compta/achats'));
+    }
+
+    // -----------------------------------------------------------------
+    //  Inventaire
+    // -----------------------------------------------------------------
+
+    public function inventory(): void
+    {
+        $user = $this->guardCompta();
+
+        $lastCounts = InventoryCount::lastCountsMap();
+        $theoretical = InventoryCount::theoreticalStocksMap();
+        $stockMap = ProductStock::allMap();
+
+        $rows = [];
+        foreach (Sale::distinctProducts() as $key) {
+            $last = $lastCounts[$key] ?? null;
+            $rows[] = [
+                'key'         => $key,
+                'stock'       => $stockMap[$key] ?? null,
+                'counted_at'  => $last !== null ? $last['at'] : null,
+                'counted_qty' => $last !== null ? $last['qty'] : null,
+                'gap'         => $last !== null ? $last['gap'] : null,
+                'theoretical' => $theoretical[$key] ?? null,
+            ];
+        }
+
+        // Produits déjà comptés en premier (du plus récemment compté au plus
+        // ancien), puis les produits jamais comptés par ordre alphabétique.
+        usort($rows, static function (array $a, array $b): int {
+            if ($a['counted_at'] !== null && $b['counted_at'] !== null) {
+                return strcmp((string) $b['counted_at'], (string) $a['counted_at']);
+            }
+            if ($a['counted_at'] !== null) {
+                return -1;
+            }
+            if ($b['counted_at'] !== null) {
+                return 1;
+            }
+
+            return strcmp((string) $a['key'], (string) $b['key']);
+        });
+
+        $this->renderAdmin('admin/compta/inventory', [
+            'title'   => 'Inventaire',
+            'user'    => $user,
+            'rows'    => $rows,
+            'history' => InventoryCount::history(50),
+            'gaps'    => InventoryCount::recentGaps(30),
+        ]);
+    }
+
+    public function saveCount(): void
+    {
+        $user = $this->guardCompta();
+
+        $counts = $_POST['count'] ?? [];
+        if (!is_array($counts)) {
+            $counts = [];
+        }
+
+        $done = 0;
+        $gaps = 0;
+
+        foreach ($counts as $key => $value) {
+            $productKey = trim((string) $key);
+            if ($productKey === '' || trim((string) $value) === '') {
+                continue;
+            }
+
+            $counted = (int) $value;
+            if ($counted < 0) {
+                continue;
+            }
+
+            // L'écart doit être calculé AVANT le record : chaque comptage
+            // devient la nouvelle référence du stock théorique.
+            $theoretical = InventoryCount::theoreticalStock($productKey);
+            $gap = $counted - ($theoretical ?? 0);
+
+            InventoryCount::record($productKey, $counted, null, $user['id'] ?? null);
+
+            $done++;
+            if ($gap !== 0) {
+                $gaps++;
+            }
+        }
+
+        if ($done === 0) {
+            $this->setFlash('error', 'Aucun comptage saisi.');
+            redirect(url('/admin/compta/inventaire'));
+        }
+
+        $this->audit('compta.inventory.count', 'inventory_count', null, [
+            'products' => $done,
+            'gaps'     => $gaps,
+        ]);
+
+        $this->setFlash(
+            'success',
+            sprintf('%d produit(s) compté(s) — %d écart(s) détecté(s).', $done, $gaps)
+        );
+        redirect(url('/admin/compta/inventaire'));
+    }
+}

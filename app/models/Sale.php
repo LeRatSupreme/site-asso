@@ -616,4 +616,217 @@ final class Sale extends Model
 
         return $out;
     }
+
+    /**
+     * Ventilation HT/TVA/TTC par taux de TVA (année obligatoire, mois optionnel).
+     *
+     * @return list<array<string,mixed>>
+     */
+    public static function vatByRate(?int $year, ?int $month): array
+    {
+        $where = [];
+        $args = [];
+        if ($year !== null) {
+            $where[] = 'YEAR(sold_at) = ?';
+            $args[] = $year;
+        }
+        if ($month !== null) {
+            $where[] = 'MONTH(sold_at) = ?';
+            $args[] = $month;
+        }
+        $whereSql = $where === [] ? '' : 'WHERE ' . implode(' AND ', $where);
+
+        $sql = 'SELECT COALESCE(vat_rate, "—") AS rate,
+                       COALESCE(SUM(price_ht), 0) AS ht,
+                       COALESCE(SUM(vat), 0) AS vat,
+                       COALESCE(SUM(price_ttc), 0) AS ttc
+                FROM sales
+                ' . $whereSql . '
+                GROUP BY COALESCE(vat_rate, "—")
+                ORDER BY vat DESC';
+
+        try {
+            $stmt = self::pdo()->prepare($sql);
+            $stmt->execute($args);
+
+            /** @var list<array<string,mixed>> $r */
+            return $stmt->fetchAll();
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    /**
+     * Part du CA produits couverte par un coût de revient connu.
+     *
+     * Une vente est « couverte » si le produit canonique
+     * (COALESCE(product_key, description)) possède au moins un lot
+     * dans product_costs (même fallback que COST_SUBQUERY).
+     *
+     * @return array{covered:float, uncovered:float}
+     */
+    public static function costCoverage(int $year, int $month): array
+    {
+        $sql = 'SELECT
+                    COALESCE(SUM(
+                        CASE WHEN EXISTS (
+                            SELECT 1 FROM product_costs pc
+                            WHERE pc.product_key = COALESCE(sales.product_key, sales.description)
+                        ) THEN price_ttc ELSE 0 END
+                    ), 0) AS covered,
+                    COALESCE(SUM(
+                        CASE WHEN NOT EXISTS (
+                            SELECT 1 FROM product_costs pc
+                            WHERE pc.product_key = COALESCE(sales.product_key, sales.description)
+                        ) THEN price_ttc ELSE 0 END
+                    ), 0) AS uncovered
+                FROM sales
+                WHERE YEAR(sold_at) = ? AND MONTH(sold_at) = ? AND is_custom_amount = 0';
+
+        try {
+            $stmt = self::pdo()->prepare($sql);
+            $stmt->execute([$year, $month]);
+            $row = $stmt->fetch() ?: [];
+        } catch (\Throwable) {
+            return ['covered' => 0.0, 'uncovered' => 0.0];
+        }
+
+        return [
+            'covered'   => (float) ($row['covered'] ?? 0),
+            'uncovered' => (float) ($row['uncovered'] ?? 0),
+        ];
+    }
+
+    /**
+     * Statistiques de paniers (une transaction = un panier).
+     *
+     * @return array{baskets:int, avg_basket:float, avg_items:float}
+     */
+    public static function basketStats(?int $year, ?int $month): array
+    {
+        $where = [];
+        $args = [];
+        if ($year !== null) {
+            $where[] = 'YEAR(sold_at) = ?';
+            $args[] = $year;
+        }
+        if ($month !== null) {
+            $where[] = 'MONTH(sold_at) = ?';
+            $args[] = $month;
+        }
+        $whereSql = $where === [] ? '' : 'WHERE ' . implode(' AND ', $where);
+
+        $sql = 'SELECT COUNT(*) AS baskets,
+                       COALESCE(AVG(t.total), 0) AS avg_basket,
+                       COALESCE(AVG(t.items), 0) AS avg_items
+                FROM (
+                    SELECT transaction_ref, SUM(price_ttc) AS total, SUM(quantity) AS items
+                    FROM sales
+                    ' . $whereSql . '
+                    GROUP BY transaction_ref
+                ) t';
+
+        try {
+            $stmt = self::pdo()->prepare($sql);
+            $stmt->execute($args);
+            $row = $stmt->fetch() ?: [];
+        } catch (\Throwable) {
+            return ['baskets' => 0, 'avg_basket' => 0.0, 'avg_items' => 0.0];
+        }
+
+        return [
+            'baskets'    => (int) ($row['baskets'] ?? 0),
+            'avg_basket' => round((float) ($row['avg_basket'] ?? 0), 2),
+            'avg_items'  => round((float) ($row['avg_items'] ?? 0), 2),
+        ];
+    }
+
+    /**
+     * Produits vendus à perte sur un mois (prix moyen unitaire < coût applicable).
+     *
+     * @return list<array<string,mixed>>
+     */
+    public static function lossLeaders(int $year, int $month): array
+    {
+        $sql = 'SELECT COALESCE(product_key, description) AS product,
+                       AVG(price_ttc / NULLIF(quantity, 0)) AS avg_price,
+                       IFNULL((' . self::COST_SUBQUERY . '), 0) AS cost,
+                       SUM(quantity) AS qty
+                FROM sales
+                WHERE YEAR(sold_at) = ? AND MONTH(sold_at) = ? AND is_custom_amount = 0
+                GROUP BY COALESCE(product_key, description)
+                HAVING cost > 0 AND avg_price < cost
+                ORDER BY (cost - avg_price) DESC
+                LIMIT 10';
+
+        try {
+            $stmt = self::pdo()->prepare($sql);
+            $stmt->execute([$year, $month]);
+
+            /** @var list<array<string,mixed>> $r */
+            return $stmt->fetchAll();
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    /**
+     * Quantité totale vendue d'un produit depuis un jour donné (inclus).
+     *
+     * @param string $day Jour « YYYY-MM-DD » (borne inférieure incluse).
+     */
+    public static function soldQtySince(string $productKey, string $day): int
+    {
+        try {
+            $stmt = self::pdo()->prepare(
+                'SELECT COALESCE(SUM(quantity), 0)
+                 FROM sales
+                 WHERE (product_key = ? OR description = ?)
+                   AND sold_at >= ?
+                   AND is_custom_amount = 0'
+            );
+            $stmt->execute([$productKey, $productKey, $day . ' 00:00:00']);
+
+            return (int) $stmt->fetchColumn();
+        } catch (\Throwable) {
+            return 0;
+        }
+    }
+
+    /**
+     * Date du dernier import de ventes (null si aucun).
+     */
+    public static function lastImportAt(): ?string
+    {
+        try {
+            $at = self::pdo()->query('SELECT MAX(imported_at) FROM sales')->fetchColumn();
+        } catch (\Throwable) {
+            return null;
+        }
+
+        return $at ? (string) $at : null;
+    }
+
+    /**
+     * Années distinctes présentes dans les ventes (desc).
+     *
+     * @return list<int>
+     */
+    public static function distinctYears(): array
+    {
+        try {
+            $rows = self::pdo()
+                ->query('SELECT DISTINCT YEAR(sold_at) AS y FROM sales ORDER BY y DESC')
+                ->fetchAll();
+        } catch (\Throwable) {
+            return [];
+        }
+
+        $out = [];
+        foreach ($rows as $r) {
+            $out[] = (int) $r['y'];
+        }
+
+        return $out;
+    }
 }
