@@ -101,8 +101,10 @@ declare(strict_types=1);
             </tbody>
         </table>
         <p class="muted">Seules les lignes renseignées sont comptées. Chaque comptage devient le nouveau point de départ du stock théorique.</p>
-        <button type="submit" class="btn btn-primary">Enregistrer le comptage</button>
-        <button type="button" class="btn btn-ghost" onclick="if (confirm('Effacer les quantités saisies ?')) this.form.reset();">Annuler le comptage</button>
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">Enregistrer le comptage</button>
+            <button type="button" class="btn btn-ghost" onclick="if (confirm('Effacer les quantités saisies ?')) this.form.reset();">Annuler</button>
+        </div>
     </form>
 </section>
 

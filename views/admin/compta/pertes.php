@@ -122,8 +122,10 @@ $topReason = $byReason[0] ?? null;
                 <input type="text" id="note" name="note" placeholder="ex: bouteille cassée en réserve">
             </div>
 
-            <button type="submit" class="btn btn-primary btn-block">Enregistrer la perte</button>
-            <button type="button" class="btn btn-ghost btn-block" onclick="if (confirm('Effacer la saisie en cours ?')) this.form.reset();">Annuler la saisie</button>
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">Enregistrer la perte</button>
+                <button type="button" class="btn btn-ghost" onclick="if (confirm('Effacer la saisie en cours ?')) this.form.reset();">Annuler</button>
+            </div>
         </form>
     </section>
 
