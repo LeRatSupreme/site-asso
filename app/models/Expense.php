@@ -201,6 +201,126 @@ final class Expense extends Model
     }
 
     /**
+     * Construit le WHERE « entre deux jours » partagé par les variantes
+     * Between (bornes incluses, chaque condition seulement si non null).
+     *
+     * @return array{0:string,1:list<string>} [SQL WHERE avec préfixe, arguments]
+     */
+    private static function betweenWhere(?string $fromDay, ?string $toDay): array
+    {
+        $where = [];
+        $args = [];
+        if ($fromDay !== null && $fromDay !== '') {
+            $where[] = 'spent_at >= ?';
+            $args[] = $fromDay;
+        }
+        if ($toDay !== null && $toDay !== '') {
+            $where[] = 'spent_at <= ?';
+            $args[] = $toDay;
+        }
+
+        return [$where === [] ? '' : 'WHERE ' . implode(' AND ', $where), $args];
+    }
+
+    /**
+     * Dépenses d'une plage de jours (bornes incluses), de la plus récente
+     * à la plus ancienne.
+     *
+     * @param string|null $fromDay Jour de début « YYYY-MM-DD » (inclus), ou null.
+     * @param string|null $toDay   Jour de fin « YYYY-MM-DD » (inclus), ou null.
+     *
+     * @return list<array<string,mixed>>
+     */
+    public static function between(?string $fromDay, ?string $toDay): array
+    {
+        [$whereSql, $args] = self::betweenWhere($fromDay, $toDay);
+
+        try {
+            $stmt = self::pdo()->prepare(
+                'SELECT * FROM expenses ' . $whereSql . ' ORDER BY spent_at DESC, created_at DESC'
+            );
+            $stmt->execute($args);
+
+            /** @var list<array<string,mixed>> $r */
+            return $stmt->fetchAll();
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    /**
+     * Totaux d'une plage de jours (bornes incluses).
+     *
+     * @param string|null $fromDay Jour de début « YYYY-MM-DD » (inclus), ou null.
+     * @param string|null $toDay   Jour de fin « YYYY-MM-DD » (inclus), ou null.
+     *
+     * @return array{ttc:float, ht:float, count:int}
+     */
+    public static function aggregatesBetween(?string $fromDay, ?string $toDay): array
+    {
+        [$whereSql, $args] = self::betweenWhere($fromDay, $toDay);
+
+        try {
+            $stmt = self::pdo()->prepare(
+                'SELECT COALESCE(SUM(amount_ttc), 0) AS ttc,
+                        COALESCE(SUM(amount_ht), 0) AS ht,
+                        COUNT(*) AS count
+                 FROM expenses ' . $whereSql
+            );
+            $stmt->execute($args);
+            $row = $stmt->fetch() ?: [];
+        } catch (\Throwable) {
+            return ['ttc' => 0.0, 'ht' => 0.0, 'count' => 0];
+        }
+
+        return [
+            'ttc'   => (float) ($row['ttc'] ?? 0),
+            'ht'    => (float) ($row['ht'] ?? 0),
+            'count' => (int) ($row['count'] ?? 0),
+        ];
+    }
+
+    /**
+     * Dépenses groupées par catégorie sur une plage de jours (bornes
+     * incluses), du plus lourd au plus léger.
+     *
+     * @param string|null $fromDay Jour de début « YYYY-MM-DD » (inclus), ou null.
+     * @param string|null $toDay   Jour de fin « YYYY-MM-DD » (inclus), ou null.
+     *
+     * @return list<array{category:string, ttc:float, count:int}>
+     */
+    public static function byCategoryBetween(?string $fromDay, ?string $toDay): array
+    {
+        [$whereSql, $args] = self::betweenWhere($fromDay, $toDay);
+
+        try {
+            $stmt = self::pdo()->prepare(
+                'SELECT category,
+                        COALESCE(SUM(amount_ttc), 0) AS ttc,
+                        COUNT(*) AS count
+                 FROM expenses ' . $whereSql . '
+                 GROUP BY category
+                 ORDER BY ttc DESC'
+            );
+            $stmt->execute($args);
+            $rows = $stmt->fetchAll();
+        } catch (\Throwable) {
+            return [];
+        }
+
+        $out = [];
+        foreach ($rows as $r) {
+            $out[] = [
+                'category' => (string) $r['category'],
+                'ttc'      => (float) $r['ttc'],
+                'count'    => (int) $r['count'],
+            ];
+        }
+
+        return $out;
+    }
+
+    /**
      * Totaux TTC par mois pour une année donnée.
      *
      * @return list<array{m:int, ttc:float}>

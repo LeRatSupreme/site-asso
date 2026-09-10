@@ -4,19 +4,13 @@ declare(strict_types=1);
 
 /**
  * @var array<string,mixed> $user
- * @var array{year:int,month:int,value:string} $month
- * @var list<array{value:string,label:string}> $months
+ * @var array{preset:string,from:?string,to:?string} $period
+ * @var array<string,string> $periodOptions
+ * @var array{year:int,month:int,value:string} $editMonth
+ * @var int $monthsCount
  * @var list<array{key:string,label:string,planned:float,realized:float}> $rows
  * @var array{planned:float,realized:float} $totals
  */
-
-// Nombre de lignes réellement budgétées sur le mois.
-$budgetedLines = 0;
-foreach ($rows as $r) {
-    if ($r['planned'] > 0) {
-        $budgetedLines++;
-    }
-}
 
 // Écart global = somme des écarts affichés (CA : réalisé − prévu,
 // dépenses : prévu − réalisé).
@@ -31,37 +25,50 @@ $totalGap = 0.0;
 </div>
 
 <div class="admin-actions">
-    <form method="get" class="compta-monthselect">
-        <label for="month">Mois :</label>
-        <select id="month" name="month" onchange="this.form.submit()">
-            <?php foreach ($months as $m): ?>
-                <option value="<?= e($m['value']) ?>" <?= $m['value'] === $month['value'] ? 'selected' : '' ?>><?= e($m['label']) ?></option>
-            <?php endforeach; ?>
-            <?php if ($months === []): ?>
-                <option value="<?= e($month['value']) ?>" selected><?= e($month['value']) ?></option>
-            <?php endif; ?>
-        </select>
+    <form method="get" class="reappro-bar" id="period-filters">
+        <div class="reappro-field">
+            <label class="field-label" for="period">📅 Période</label>
+            <select name="period" id="period">
+                <?php foreach ($periodOptions as $k => $label): ?>
+                    <option value="<?= e($k) ?>" <?= $k === $period['preset'] ? 'selected' : '' ?>><?= e($label) ?></option>
+                <?php endforeach; ?>
+            </select>
+        </div>
+
+        <div class="reappro-dates" id="period-custom" <?= $period['preset'] === 'custom' ? '' : 'hidden' ?>>
+            <div>
+                <label class="field-label" for="from">Du</label>
+                <input type="date" name="from" id="from" value="<?= e($period['from'] ?? '') ?>">
+            </div>
+            <div>
+                <label class="field-label" for="to">Au</label>
+                <input type="date" name="to" id="to" value="<?= e($period['to'] ?? '') ?>">
+            </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-sm">Appliquer</button>
     </form>
 </div>
 
 <div class="compta-kpis">
     <div class="card surface glass kpi">
-        <p class="kpi-label">Prévu (total)</p>
+        <p class="kpi-label">Prévu (période)</p>
         <p class="kpi-value"><?= e(formatPrice($totals['planned'])) ?></p>
-        <p class="kpi-sub"><?= $budgetedLines ?> ligne<?= $budgetedLines > 1 ? 's' : '' ?> budgétée<?= $budgetedLines > 1 ? 's' : '' ?></p>
+        <p class="kpi-sub"><?= sprintf('%d mois couverts', $monthsCount) ?></p>
     </div>
     <div class="card surface glass kpi">
-        <p class="kpi-label">Réalisé (total)</p>
+        <p class="kpi-label">Réalisé (période)</p>
         <p class="kpi-value"><?= e(formatPrice($totals['realized'])) ?></p>
-        <p class="kpi-sub"><?= $budgetedLines ?> ligne<?= $budgetedLines > 1 ? 's' : '' ?> budgétée<?= $budgetedLines > 1 ? 's' : '' ?></p>
+        <p class="kpi-sub"><?= sprintf('%d mois couverts', $monthsCount) ?></p>
     </div>
 </div>
 
 <div class="card surface glass table-wrap">
     <h2 class="card-title">Prévu vs Réalisé</h2>
+    <p class="muted">Période affichée : <?= (int) $monthsCount ?> mois — tu édites le budget du mois <strong><?= e(sprintf('%02d/%04d', $editMonth['month'], $editMonth['year'])) ?></strong> (dernier mois de la période).</p>
     <form method="post" action="<?= e(url('/admin/compta/budgets/save')) ?>">
         <?= csrf_field() ?>
-        <input type="hidden" name="month" value="<?= e($month['value']) ?>">
+        <input type="hidden" name="month" value="<?= e($editMonth['value']) ?>">
         <table class="table">
             <thead>
                 <tr>
@@ -120,3 +127,28 @@ $totalGap = 0.0;
         <p class="muted" style="font-size:0.85rem">Les montants se saisissent à la française (ex : 250,50). Laisse vide ou mets 0 pour supprimer une ligne du budget.</p>
     </form>
 </div>
+
+<script>
+(function () {
+    // Sélecteur « 📅 Période » : les presets soumettent seuls, comme sur
+    // Réappro ; « Personnalisé » révèle d'abord les bornes de dates.
+    var form = document.getElementById('period-filters');
+    var custom = document.getElementById('period-custom');
+    if (!form) return;
+
+    var select = form.querySelector('select[name="period"]');
+    if (!select) return;
+
+    select.addEventListener('change', function () {
+        if (custom) {
+            custom.hidden = select.value !== 'custom';
+        }
+        if (select.value === 'custom') {
+            var from = document.getElementById('from');
+            if (from) from.focus();
+        } else {
+            form.submit();
+        }
+    });
+})();
+</script>

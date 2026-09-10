@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Controllers\Admin;
 
+use App\Core\Compta\ComptaCalc;
 use App\Models\Budget;
 use App\Models\Expense;
 use App\Models\Sale;
@@ -11,47 +12,12 @@ use App\Models\Sale;
 /**
  * Budgets prévisionnels vs réalisé : objectif de CA et enveloppes de
  * dépenses par mois. Réservé aux rôles ADMIN et TRESORERIE.
+ *
+ * La consultation agrège les mois couverts par la période « 📅 Période » ;
+ * l'édition (formulaire de save) cible toujours le DERNIER mois couvert.
  */
 final class AdminBudgetController extends AdminBaseController
 {
-    /**
-     * Résout le mois demandé (GET « YYYY-MM »), sinon mois calendaire courant.
-     *
-     * @return array{year:int,month:int,value:string}
-     */
-    private function resolveMonth(?string $param): array
-    {
-        if (preg_match('/^(\d{4})-(\d{2})$/', (string) $param, $m)) {
-            return ['year' => (int) $m[1], 'month' => (int) $m[2], 'value' => $param];
-        }
-
-        $now = new \DateTimeImmutable('first day of this month');
-
-        return ['year' => (int) $now->format('Y'), 'month' => (int) $now->format('n'), 'value' => $now->format('Y-m')];
-    }
-
-    /**
-     * Les 12 derniers mois glissants (du mois courant à mois courant − 11),
-     * du plus récent au plus ancien — sans requête SQL.
-     *
-     * @return list<array{value:string,label:string}>
-     */
-    private function recentMonths(int $year, int $month): array
-    {
-        $current = new \DateTimeImmutable(sprintf('%04d-%02d-01', $year, $month));
-
-        $months = [];
-        for ($i = 0; $i < 12; $i++) {
-            $d = $current->modify('-' . $i . ' months');
-            $months[] = [
-                'value' => $d->format('Y-m'),
-                'label' => $d->format('m/Y'),
-            ];
-        }
-
-        return $months;
-    }
-
     // -----------------------------------------------------------------
     //  Prévu vs réalisé
     // -----------------------------------------------------------------
@@ -60,21 +26,53 @@ final class AdminBudgetController extends AdminBaseController
     {
         $user = $this->guardCompta();
 
-        $month = $this->resolveMonth($_GET['month'] ?? null);
+        $period = ComptaCalc::resolvePeriod($_GET['period'] ?? null, $_GET['from'] ?? null, $_GET['to'] ?? null);
 
-        $months = $this->recentMonths((int) (new \DateTimeImmutable())->format('Y'), (int) (new \DateTimeImmutable())->format('n'));
-        if (!in_array($month['value'], array_column($months, 'value'), true)) {
-            // Mois demandé hors fenêtre glissante : on le propose quand même.
-            array_unshift($months, ['value' => $month['value'], 'label' => $month['value']]);
+        // Mois couverts par la période (plafonnés aux 24 derniers mois) :
+        // du 1er jour du mois de départ à celui du mois d'arrivée. Sans
+        // bornes (« Tout ») → 24 derniers mois.
+        $today = new \DateTimeImmutable('today');
+        $start = ($period['from'] !== null
+            ? new \DateTimeImmutable($period['from'])
+            : $today->modify('first day of this month')->modify('-23 months'))
+            ->modify('first day of this month');
+        $end = ($period['to'] !== null
+            ? new \DateTimeImmutable($period['to'])
+            : $today)
+            ->modify('first day of this month');
+
+        $months = [];
+        $cur = $start;
+        while ($cur <= $end) {
+            $months[] = [(int) $cur->format('Y'), (int) $cur->format('n')];
+            $cur = $cur->modify('+1 month');
+        }
+        if (count($months) > 24) {
+            // Période trop large : on garde les 24 derniers mois.
+            $months = array_slice($months, -24);
         }
 
-        $budget = Budget::forMonth($month['year'], $month['month']);
-        $realizedCa = (float) Sale::monthAggregates($month['year'], $month['month'])['ca'];
-
+        // Agrégation en PHP des budgets et des réalisés sur ces mois.
+        $plannedByCat = [];
+        $realizedCa = 0.0;
         $realizedExpenses = [];
-        foreach (Expense::byCategory($month['year'], $month['month']) as $c) {
-            $realizedExpenses[$c['category']] = (float) $c['ttc'];
+        foreach ($months as [$y, $m]) {
+            foreach (Budget::forMonth($y, $m) as $cat => $planned) {
+                $plannedByCat[$cat] = ($plannedByCat[$cat] ?? 0.0) + $planned;
+            }
+            $realizedCa += (float) Sale::monthAggregates($y, $m)['ca'];
+            foreach (Expense::byCategory($y, $m) as $c) {
+                $realizedExpenses[$c['category']] = ($realizedExpenses[$c['category']] ?? 0.0) + (float) $c['ttc'];
+            }
         }
+
+        // Le formulaire édite le dernier mois couvert par la période.
+        [$lastY, $lastM] = $months[count($months) - 1];
+        $editMonth = [
+            'year'  => $lastY,
+            'month' => $lastM,
+            'value' => sprintf('%04d-%02d', $lastY, $lastM),
+        ];
 
         $labels = [
             'CA'        => "Chiffre d'affaires",
@@ -89,7 +87,7 @@ final class AdminBudgetController extends AdminBaseController
             [
                 'key'      => 'CA',
                 'label'    => $labels['CA'],
-                'planned'  => (float) ($budget['CA'] ?? 0),
+                'planned'  => (float) ($plannedByCat['CA'] ?? 0),
                 'realized' => $realizedCa,
             ],
         ];
@@ -97,7 +95,7 @@ final class AdminBudgetController extends AdminBaseController
             $rows[] = [
                 'key'      => $cat,
                 'label'    => $labels[$cat] ?? $cat,
-                'planned'  => (float) ($budget[$cat] ?? 0),
+                'planned'  => (float) ($plannedByCat[$cat] ?? 0),
                 'realized' => (float) ($realizedExpenses[$cat] ?? 0),
             ];
         }
@@ -109,12 +107,14 @@ final class AdminBudgetController extends AdminBaseController
         }
 
         $this->renderAdmin('admin/compta/budgets', [
-            'title'  => 'Budgets',
-            'user'   => $user,
-            'month'  => $month,
-            'months' => $months,
-            'rows'   => $rows,
-            'totals' => $totals,
+            'title'         => 'Budgets',
+            'user'          => $user,
+            'period'        => $period,
+            'periodOptions' => ComptaCalc::PERIOD_OPTIONS,
+            'editMonth'     => $editMonth,
+            'monthsCount'   => count($months),
+            'rows'          => $rows,
+            'totals'        => $totals,
         ]);
     }
 

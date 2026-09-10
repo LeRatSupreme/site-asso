@@ -84,6 +84,76 @@ final class Purchase extends Model
     }
 
     /**
+     * Achats d'une plage de jours (bornes incluses), du plus récent au
+     * plus ancien.
+     *
+     * @param string|null $fromDay Jour de début « YYYY-MM-DD » (inclus), ou null.
+     * @param string|null $toDay   Jour de fin « YYYY-MM-DD » (inclus), ou null.
+     *
+     * @return list<array<string,mixed>>
+     */
+    public static function between(?string $fromDay, ?string $toDay, int $limit = 200): array
+    {
+        $limit = max(1, (int) $limit);
+
+        $where = [];
+        $args = [];
+        if ($fromDay !== null && $fromDay !== '') {
+            $where[] = 'purchased_at >= ?';
+            $args[] = $fromDay;
+        }
+        if ($toDay !== null && $toDay !== '') {
+            $where[] = 'purchased_at <= ?';
+            $args[] = $toDay;
+        }
+        $whereSql = $where === [] ? '' : 'WHERE ' . implode(' AND ', $where);
+
+        try {
+            $stmt = self::pdo()->prepare(
+                'SELECT * FROM purchases ' . $whereSql . ' ORDER BY purchased_at DESC, created_at DESC LIMIT ' . $limit
+            );
+            $stmt->execute($args);
+
+            /** @var list<array<string,mixed>> $r */
+            return $stmt->fetchAll();
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    /**
+     * Total TTC des achats sur une plage de jours (bornes incluses).
+     *
+     * @param string|null $fromDay Jour de début « YYYY-MM-DD » (inclus), ou null.
+     * @param string|null $toDay   Jour de fin « YYYY-MM-DD » (inclus), ou null.
+     */
+    public static function totalBetween(?string $fromDay, ?string $toDay): float
+    {
+        $where = [];
+        $args = [];
+        if ($fromDay !== null && $fromDay !== '') {
+            $where[] = 'purchased_at >= ?';
+            $args[] = $fromDay;
+        }
+        if ($toDay !== null && $toDay !== '') {
+            $where[] = 'purchased_at <= ?';
+            $args[] = $toDay;
+        }
+        $whereSql = $where === [] ? '' : 'WHERE ' . implode(' AND ', $where);
+
+        try {
+            $stmt = self::pdo()->prepare(
+                'SELECT COALESCE(SUM(total_ttc), 0) FROM purchases ' . $whereSql
+            );
+            $stmt->execute($args);
+
+            return (float) $stmt->fetchColumn();
+        } catch (\Throwable) {
+            return 0.0;
+        }
+    }
+
+    /**
      * Quantité totale achetée pour un produit depuis un jour donné (inclus).
      *
      * @param string $day Jour « YYYY-MM-DD » (borne inférieure incluse).

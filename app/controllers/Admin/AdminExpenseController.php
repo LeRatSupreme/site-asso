@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Controllers\Admin;
 
+use App\Core\Compta\ComptaCalc;
 use App\Models\Expense;
 
 /**
@@ -13,22 +14,6 @@ use App\Models\Expense;
  */
 final class AdminExpenseController extends AdminBaseController
 {
-    /**
-     * Résout le mois demandé (GET « YYYY-MM »), sinon mois calendaire courant.
-     *
-     * @return array{year:int,month:int,value:string}
-     */
-    private function resolveMonth(?string $param): array
-    {
-        if (preg_match('/^(\d{4})-(\d{2})$/', (string) $param, $m)) {
-            return ['year' => (int) $m[1], 'month' => (int) $m[2], 'value' => $param];
-        }
-
-        $now = new \DateTimeImmutable('first day of this month');
-
-        return ['year' => (int) $now->format('Y'), 'month' => (int) $now->format('n'), 'value' => $now->format('Y-m')];
-    }
-
     // -----------------------------------------------------------------
     //  Journal des dépenses
     // -----------------------------------------------------------------
@@ -37,24 +22,16 @@ final class AdminExpenseController extends AdminBaseController
     {
         $user = $this->guardCompta();
 
-        $month = $this->resolveMonth($_GET['month'] ?? null);
-
-        $months = Expense::monthsWithExpenses();
-        if ($months === []) {
-            $months = [['value' => $month['value'], 'label' => $month['value']]];
-        } elseif (!in_array($month['value'], array_column($months, 'value'), true)) {
-            // Le mois affiché doit rester sélectionnable dans le sélecteur.
-            array_unshift($months, ['value' => $month['value'], 'label' => $month['value']]);
-        }
+        $period = ComptaCalc::resolvePeriod($_GET['period'] ?? null, $_GET['from'] ?? null, $_GET['to'] ?? null);
 
         $this->renderAdmin('admin/compta/expenses', [
-            'title'      => 'Dépenses',
-            'user'       => $user,
-            'month'      => $month,
-            'months'     => $months,
-            'expenses'   => Expense::forPeriod($month['year'], $month['month']),
-            'agg'        => Expense::aggregates($month['year'], $month['month']),
-            'byCategory' => Expense::byCategory($month['year'], $month['month']),
+            'title'         => 'Dépenses',
+            'user'          => $user,
+            'period'        => $period,
+            'periodOptions' => ComptaCalc::PERIOD_OPTIONS,
+            'expenses'      => Expense::between($period['from'], $period['to']),
+            'agg'           => Expense::aggregatesBetween($period['from'], $period['to']),
+            'byCategory'    => Expense::byCategoryBetween($period['from'], $period['to']),
         ]);
     }
 

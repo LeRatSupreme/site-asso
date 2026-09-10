@@ -230,6 +230,56 @@ final class Sale extends Model
     }
 
     /**
+     * Agrégats par catégorie sur une plage de jours (bornes incluses).
+     *
+     * Même agrégation que byCategory(), mais le filtre porte sur des
+     * jours explicites plutôt que sur une année/un mois.
+     *
+     * @param string|null $fromDay Jour de début « YYYY-MM-DD » (inclus), ou null.
+     * @param string|null $toDay   Jour de fin « YYYY-MM-DD » (inclus), ou null.
+     *
+     * @return list<array<string,mixed>>
+     */
+    public static function byCategoryBetween(?string $fromDay, ?string $toDay): array
+    {
+        $where = [];
+        $args = [];
+        if ($fromDay !== null && $fromDay !== '') {
+            $where[] = 'sold_at >= ?';
+            $args[] = $fromDay . ' 00:00:00';
+        }
+        if ($toDay !== null && $toDay !== '') {
+            $where[] = 'sold_at <= ?';
+            $args[] = $toDay . ' 23:59:59';
+        }
+        $whereSql = $where === [] ? '' : 'WHERE ' . implode(' AND ', $where);
+
+        $sql = 'SELECT
+                    COALESCE(NULLIF(category, ""), "Non classé") AS category,
+                    COALESCE(SUM(price_ttc), 0) AS ca,
+                    COALESCE(SUM(
+                        CASE WHEN is_custom_amount = 0
+                             THEN price_ttc - IFNULL((' . self::COST_SUBQUERY . '), 0) * quantity
+                             ELSE 0 END
+                    ), 0) AS profit,
+                    COALESCE(SUM(quantity), 0) AS qty
+                FROM sales
+                ' . $whereSql . '
+                GROUP BY COALESCE(NULLIF(category, ""), "Non classé")
+                ORDER BY ca DESC';
+
+        try {
+            $stmt = self::pdo()->prepare($sql);
+            $stmt->execute($args);
+
+            /** @var list<array<string,mixed>> $r */
+            return $stmt->fetchAll();
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    /**
      * Agrégats par produit canonique pour un mois donné.
      *
      * @return list<array<string,mixed>>
