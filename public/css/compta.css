@@ -733,6 +733,53 @@
     .reappro-meta { margin-left: 0; }
 }
 
+/* ---- Alertes & suivi (dashboard) ---- */
+.alert-card { margin-bottom: 1.5rem; }
+
+.alert-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 8px;
+}
+
+.alert-item {
+    padding: 10px 12px;
+    border-radius: 10px;
+    font-size: 0.9rem;
+    border: 1px solid;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Variantes scopées sous .alert-item pour ne pas écraser la bannière
+   .alert-warning existante (page-level). */
+.alert-item.alert-danger {
+    background: rgba(220, 38, 38, 0.08);
+    border-color: rgba(220, 38, 38, 0.35);
+    color: #b91c1c;
+}
+.alert-item.alert-warning {
+    background: rgba(217, 119, 6, 0.10);
+    border-color: rgba(217, 119, 6, 0.35);
+    color: #92400e;
+}
+.alert-item.alert-ok {
+    background: rgba(5, 150, 105, 0.08);
+    border-color: rgba(5, 150, 105, 0.3);
+    color: #047857;
+}
+
+.alert-item a {
+    font-weight: 700;
+    white-space: nowrap;
+}
+.alert-item.alert-danger a { color: #b91c1c; }
+.alert-item.alert-warning a { color: #92400e; }
+.alert-item.alert-ok a { color: #047857; }
+
 
 
 

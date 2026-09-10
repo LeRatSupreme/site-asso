@@ -7,7 +7,9 @@ namespace App\Controllers\Admin;
 use App\Core\Compta\AliasSuggester;
 use App\Core\Compta\ComptaCalc;
 use App\Core\Compta\SumUpCsvParser;
+use App\Models\Expense;
 use App\Models\ImportBatch;
+use App\Models\InventoryCount;
 use App\Models\Product;
 use App\Models\ProductAlias;
 use App\Models\ProductCost;
@@ -30,7 +32,6 @@ final class AdminComptaController extends AdminBaseController
     private function availableMonths(): array
     {
         try {
-            $rows = Sale::class;
             $stmt = \db()->query(
                 'SELECT DISTINCT YEAR(sold_at) AS y, MONTH(sold_at) AS m
                  FROM sales ORDER BY y DESC, m DESC'
@@ -104,6 +105,23 @@ final class AdminComptaController extends AdminBaseController
             ComptaCalc::openDaysBetween($refFrom, date('Y-m-d'))
         )['alerts'];
 
+        // Suivi avancé : dépenses, résultat net, fiabilité des coûts, alertes.
+        $expenseAgg = Expense::aggregates($month['year'], $month['month']);
+        $coverage = Sale::costCoverage($month['year'], $month['month']);
+        $vat = Sale::vatByRate($month['year'], $month['month']);
+        $lossLeaders = Sale::lossLeaders($month['year'], $month['month']);
+        $invGaps = InventoryCount::recentGaps(30);
+        $lastImport = Sale::lastImportAt();
+
+        $vatTotal = 0.0;
+        foreach ($vat as $v) {
+            $vatTotal += (float) ($v['vat'] ?? 0);
+        }
+
+        $daysSinceImport = $lastImport !== null
+            ? (new \DateTimeImmutable($lastImport))->diff(new \DateTimeImmutable('now'))->days
+            : null;
+
         $this->renderAdmin('admin/compta/dashboard', [
             'title'        => 'Comptabilité',
             'user'         => $user,
@@ -115,6 +133,14 @@ final class AdminComptaController extends AdminBaseController
             'byCategory'   => $byCategory,
             'reorderAlerts'=> $reorderAlerts,
             'margin'       => ComptaCalc::marginPercent($agg['profit'], $agg['ca_products']),
+            'expenseTtc'   => $expenseAgg['ttc'],
+            'netResult'    => $agg['profit'] - $expenseAgg['ttc'],
+            'noCostCa'     => $coverage['uncovered'],
+            'vatTotal'     => $vatTotal,
+            'lossLeaders'  => $lossLeaders,
+            'invGaps'      => array_slice($invGaps, 0, 5),
+            'lastImport'   => $lastImport,
+            'daysSinceImport' => $daysSinceImport,
         ]);
     }
 
