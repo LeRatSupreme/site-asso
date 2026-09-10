@@ -821,12 +821,20 @@ final class Sale extends Model
     }
 
     /**
-     * Quantité totale vendue d'un produit depuis un jour donné (inclus).
+     * Quantité totale vendue d'un produit depuis une date ou datetime donné.
      *
-     * @param string $day Jour « YYYY-MM-DD » (borne inférieure incluse).
+     * Accepte « YYYY-MM-DD » (borne à 00:00:00) ou « YYYY-MM-DD HH:MM:SS »
+     * (borne exacte, utilisée par l'inventaire pour ne déduire que les
+     * ventes postérieures au comptage).
+     *
+     * @param string $since Jour ou datetime de borne inférieure (inclus).
      */
-    public static function soldQtySince(string $productKey, string $day): int
+    public static function soldQtySince(string $productKey, string $since): int
     {
+        // Granularité : une date seule borne au début du jour ; un
+        // datetime complet (comptage d'inventaire) borne à la seconde.
+        $bound = strlen($since) > 10 ? $since : $since . ' 00:00:00';
+
         try {
             $stmt = self::pdo()->prepare(
                 'SELECT COALESCE(SUM(quantity), 0)
@@ -835,7 +843,7 @@ final class Sale extends Model
                    AND sold_at >= ?
                    AND is_custom_amount = 0'
             );
-            $stmt->execute([$productKey, $productKey, $day . ' 00:00:00']);
+            $stmt->execute([$productKey, $productKey, $bound]);
 
             return (int) $stmt->fetchColumn();
         } catch (\Throwable) {

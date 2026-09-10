@@ -188,6 +188,11 @@ final class InventoryCount extends Model
      * Calcule le stock théorique depuis un dernier comptage connu :
      * quantité comptée + achats − ventes − pertes depuis la date du
      * comptage.
+     *
+     * Les ventes (DATETIME) sont comparées à l'heure exacte du comptage :
+     * une vente antérieure au comptage est déjà reflétée dans la quantité
+     * comptée. Les achats et pertes (colonnes DATE) sont comparés au jour
+     * du comptage.
      */
     private static function theoreticalFromLast(string $productKey, string $at, int $qty): int
     {
@@ -195,7 +200,7 @@ final class InventoryCount extends Model
 
         return $qty
             + Purchase::qtySince($productKey, $day)
-            - Sale::soldQtySince($productKey, $day)
+            - Sale::soldQtySince($productKey, $at)
             - Loss::qtySince($productKey, $day);
     }
 }
