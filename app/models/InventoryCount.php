@@ -36,7 +36,7 @@ final class InventoryCount extends Model
         self::pdo()->prepare(
             'INSERT INTO inventory_counts
                 (id, counted_at, product_key, counted_qty, theoretical_qty, gap, note, created_by, created_at)
-             VALUES (?,?,NOW(),?,?,?,?,?,NOW())'
+             VALUES (?,NOW(),?,?,?,?,?,?,NOW())'
         )->execute([$id, $productKey, $countedQty, $theoretical, $gap, $note, $userId]);
 
         // Le comptage devient la nouvelle référence de stock du produit.
