@@ -250,12 +250,14 @@ Pour calculer le **bénéfice réel**, tu dois saisir le **prix d'achat** de cha
 
 ### D. Journal des ventes
 **Admin → Comptabilité → Journal ventes** :
-- Toutes les ventes importées, **filtrables** (mois, catégorie, produit, paiement)
+- Toutes les ventes importées, **filtrables** (catégorie, produit, paiement)
+- Filtre **📅 Période** (7 jours → Tout, ou dates personnalisées), comme sur Réappro.
 - **Export CSV** disponible
 - **Totaux** en bas (CA, quantité, bénéfice)
 
 ### E. Bénéfice par produit
 **Admin → Comptabilité → Produits** :
+- Filtre **📅 Période** (7 jours → Tout, ou dates personnalisées), comme sur Réappro.
 - **Recherche** + **tri** par colonne (CA, bénéfice, marge)
 - **Filtre par catégorie**
 
@@ -339,9 +341,10 @@ Tu comptes physiquement le rayon, tu saisis le nombre réel, et le site calcule 
 ### K. Nouveaux indicateurs du Dashboard
 Le **Dashboard compta** (`/admin/compta`) affiche de nouvelles cartes :
 
-- **Résultat net** : bénéfice − dépenses du mois
+- Filtre **📅 Période** (7 jours → Tout, ou dates personnalisées), comme sur Réappro.
+- **Résultat net** : bénéfice − dépenses sur la période
 - **CA sans coût** : part du CA sans coût de revient connu → au-delà de **20 %**, le bénéfice affiché n'est pas fiable (complète les coûts)
-- **TVA collectée** : total TVA du mois (sous la barre Carte/Liquide)
+- **TVA collectée** : total TVA sur la période (sous la barre Carte/Liquide)
 
 Le panneau **🔔 Alertes & suivi** regroupe :
 - **Import obsolète** : dernier import SumUp ≥ 14 jours (rouge)
@@ -351,6 +354,8 @@ Le panneau **🔔 Alertes & suivi** regroupe :
 
 ### L. Pertes (`/admin/compta/pertes`)
 **Admin → Trésorerie & stock → Pertes** (ou `/admin/compta/pertes`).
+
+Filtre **📅 Période** (7 jours → Tout, ou dates personnalisées), comme sur Réappro.
 
 #### Principe
 Chaque perte enregistrée est :

@@ -162,6 +162,59 @@ final class Sale extends Model
     }
 
     /**
+     * Agrégats (CA, bénéfice, quantité) sur une plage de jours (bornes
+     * incluses), ou sur tout l'historique si les bornes sont null.
+     *
+     * Même calcul que monthAggregates(), mais la période est libre.
+     *
+     * @param string|null $fromDay Jour de début « YYYY-MM-DD » (inclus), ou null.
+     * @param string|null $toDay   Jour de fin « YYYY-MM-DD » (inclus), ou null.
+     *
+     * @return array{ca:float, profit:float, qty:int, ca_products:float}
+     */
+    public static function aggregatesBetween(?string $fromDay, ?string $toDay): array
+    {
+        $where = [];
+        $args = [];
+        if ($fromDay !== null && $fromDay !== '') {
+            $where[] = 'sold_at >= ?';
+            $args[] = $fromDay . ' 00:00:00';
+        }
+        if ($toDay !== null && $toDay !== '') {
+            $where[] = 'sold_at <= ?';
+            $args[] = $toDay . ' 23:59:59';
+        }
+        $whereSql = $where === [] ? '' : 'WHERE ' . implode(' AND ', $where);
+
+        $sql = 'SELECT
+                    COALESCE(SUM(price_ttc), 0) AS ca,
+                    COALESCE(SUM(
+                        CASE WHEN is_custom_amount = 0
+                             THEN price_ttc - IFNULL((' . self::COST_SUBQUERY . '), 0) * quantity
+                             ELSE 0 END
+                    ), 0) AS profit,
+                    COALESCE(SUM(quantity), 0) AS qty,
+                    COALESCE(SUM(CASE WHEN is_custom_amount = 0 THEN price_ttc ELSE 0 END), 0) AS ca_products
+                FROM sales
+                ' . $whereSql;
+
+        try {
+            $stmt = self::pdo()->prepare($sql);
+            $stmt->execute($args);
+            $row = $stmt->fetch() ?: [];
+        } catch (\Throwable) {
+            return ['ca' => 0.0, 'profit' => 0.0, 'qty' => 0, 'ca_products' => 0.0];
+        }
+
+        return [
+            'ca'          => (float) ($row['ca'] ?? 0),
+            'profit'      => (float) ($row['profit'] ?? 0),
+            'qty'         => (int) ($row['qty'] ?? 0),
+            'ca_products' => (float) ($row['ca_products'] ?? 0),
+        ];
+    }
+
+    /**
      * CA par mois pour une année donnée.
      *
      * @return list<array<string,mixed>>
@@ -314,6 +367,52 @@ final class Sale extends Model
     }
 
     /**
+     * Agrégats par produit canonique sur une plage de jours (bornes
+     * incluses), ou sur tout l'historique si les bornes sont null.
+     *
+     * @param string|null $fromDay Jour de début « YYYY-MM-DD » (inclus), ou null.
+     * @param string|null $toDay   Jour de fin « YYYY-MM-DD » (inclus), ou null.
+     *
+     * @return list<array<string,mixed>>
+     */
+    public static function byProductBetween(?string $fromDay, ?string $toDay): array
+    {
+        $where = ['is_custom_amount = 0'];
+        $args = [];
+        if ($fromDay !== null && $fromDay !== '') {
+            $where[] = 'sold_at >= ?';
+            $args[] = $fromDay . ' 00:00:00';
+        }
+        if ($toDay !== null && $toDay !== '') {
+            $where[] = 'sold_at <= ?';
+            $args[] = $toDay . ' 23:59:59';
+        }
+
+        $sql = 'SELECT
+                    COALESCE(product_key, description) AS product_key,
+                    COALESCE(NULLIF(category, ""), "Non classé") AS category,
+                    SUM(quantity) AS qty,
+                    SUM(price_ttc) AS ca,
+                    AVG(price_ttc / NULLIF(quantity, 0)) AS avg_price,
+                    IFNULL((' . self::COST_SUBQUERY . '), 0) AS cost_price,
+                    SUM(price_ttc - IFNULL((' . self::COST_SUBQUERY . '), 0) * quantity) AS profit
+                FROM sales
+                WHERE ' . implode(' AND ', $where) . '
+                GROUP BY COALESCE(product_key, description)
+                ORDER BY ca DESC';
+
+        try {
+            $stmt = self::pdo()->prepare($sql);
+            $stmt->execute($args);
+
+            /** @var list<array<string,mixed>> $r */
+            return $stmt->fetchAll();
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    /**
      * Répartition du CA par moyen de paiement pour un mois donné.
      *
      * @return array<string,float>  ex: ['CARTE' => 123.4, 'LIQUIDE' => 12.0]
@@ -337,6 +436,50 @@ final class Sale extends Model
 
         $split = ['CARTE' => 0.0, 'LIQUIDE' => 0.0];
         foreach ($stmt->fetchAll() as $row) {
+            $split[(string) $row['payment_method']] = (float) $row['ca'];
+        }
+
+        return $split;
+    }
+
+    /**
+     * Répartition du CA par moyen de paiement sur une plage de jours
+     * (bornes incluses), ou sur tout l'historique si les bornes sont null.
+     *
+     * @param string|null $fromDay Jour de début « YYYY-MM-DD » (inclus), ou null.
+     * @param string|null $toDay   Jour de fin « YYYY-MM-DD » (inclus), ou null.
+     *
+     * @return array<string,float>  ex: ['CARTE' => 123.4, 'LIQUIDE' => 12.0]
+     */
+    public static function paymentSplitBetween(?string $fromDay, ?string $toDay): array
+    {
+        $where = [];
+        $args = [];
+        if ($fromDay !== null && $fromDay !== '') {
+            $where[] = 'sold_at >= ?';
+            $args[] = $fromDay . ' 00:00:00';
+        }
+        if ($toDay !== null && $toDay !== '') {
+            $where[] = 'sold_at <= ?';
+            $args[] = $toDay . ' 23:59:59';
+        }
+        $whereSql = $where === [] ? '' : 'WHERE ' . implode(' AND ', $where);
+
+        $sql = 'SELECT payment_method, COALESCE(SUM(price_ttc), 0) AS ca
+                FROM sales
+                ' . $whereSql . '
+                GROUP BY payment_method';
+
+        try {
+            $stmt = self::pdo()->prepare($sql);
+            $stmt->execute($args);
+            $rows = $stmt->fetchAll();
+        } catch (\Throwable) {
+            return ['CARTE' => 0.0, 'LIQUIDE' => 0.0];
+        }
+
+        $split = ['CARTE' => 0.0, 'LIQUIDE' => 0.0];
+        foreach ($rows as $row) {
             $split[(string) $row['payment_method']] = (float) $row['ca'];
         }
 
@@ -404,6 +547,80 @@ final class Sale extends Model
     }
 
     /**
+     * Journal filtrable des ventes sur une plage de jours (bornes incluses),
+     * ou sur tout l'historique si les bornes sont null.
+     *
+     * Combine les bornes de période avec les filtres catégorie / produit /
+     * paiement existants.
+     *
+     * @param string|null $fromDay    Jour de début « YYYY-MM-DD » (inclus), ou null.
+     * @param string|null $toDay      Jour de fin « YYYY-MM-DD » (inclus), ou null.
+     * @param string|null $category   Filtre catégorie exacte (null = toutes).
+     * @param string|null $productKey Filtre produit canonique (null = tous).
+     * @param string|null $payment    Filtre moyen de paiement (null = tous).
+     *
+     * @return list<array<string,mixed>>
+     */
+    public static function journalBetween(
+        ?string $fromDay,
+        ?string $toDay,
+        ?string $category,
+        ?string $productKey,
+        ?string $payment,
+        int $limit = 500
+    ): array {
+        $where = [];
+        $args = [];
+        if ($fromDay !== null && $fromDay !== '') {
+            $where[] = 'sold_at >= ?';
+            $args[] = $fromDay . ' 00:00:00';
+        }
+        if ($toDay !== null && $toDay !== '') {
+            $where[] = 'sold_at <= ?';
+            $args[] = $toDay . ' 23:59:59';
+        }
+        if ($category !== null && $category !== '') {
+            $where[] = 'category = ?';
+            $args[] = $category;
+        }
+        if ($productKey !== null && $productKey !== '') {
+            $where[] = '(product_key = ? OR description = ?)';
+            $args[] = $productKey;
+            $args[] = $productKey;
+        }
+        if ($payment !== null && $payment !== '') {
+            $where[] = 'payment_method = ?';
+            $args[] = $payment;
+        }
+
+        $whereSql = $where === [] ? '' : 'WHERE ' . implode(' AND ', $where);
+        $limit = (int) $limit;
+        if ($limit < 1) {
+            $limit = 500;
+        }
+
+        $sql = 'SELECT *,
+                    IFNULL((' . self::COST_SUBQUERY . '), 0) AS cost_price,
+                    (CASE WHEN is_custom_amount = 0
+                          THEN price_ttc - IFNULL((' . self::COST_SUBQUERY . '), 0) * quantity
+                          ELSE 0 END) AS profit
+                FROM sales
+                ' . $whereSql . '
+                ORDER BY sold_at DESC, id DESC
+                LIMIT ' . $limit;
+
+        try {
+            $stmt = self::pdo()->prepare($sql);
+            $stmt->execute($args);
+
+            /** @var list<array<string,mixed>> $r */
+            return $stmt->fetchAll();
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    /**
      * Top produits (CA) pour un mois donné.
      *
      * @return list<array<string,mixed>>
@@ -428,6 +645,53 @@ final class Sale extends Model
 
         /** @var list<array<string,mixed>> $r */
         return $stmt->fetchAll();
+    }
+
+    /**
+     * Top produits (CA) sur une plage de jours (bornes incluses), ou sur
+     * tout l'historique si les bornes sont null.
+     *
+     * @param string|null $fromDay Jour de début « YYYY-MM-DD » (inclus), ou null.
+     * @param string|null $toDay   Jour de fin « YYYY-MM-DD » (inclus), ou null.
+     *
+     * @return list<array<string,mixed>>
+     */
+    public static function topProductsBetween(?string $fromDay, ?string $toDay, int $limit = 8): array
+    {
+        $limit = (int) $limit;
+        if ($limit < 1) {
+            $limit = 8;
+        }
+
+        $where = [];
+        $args = [];
+        if ($fromDay !== null && $fromDay !== '') {
+            $where[] = 'sold_at >= ?';
+            $args[] = $fromDay . ' 00:00:00';
+        }
+        if ($toDay !== null && $toDay !== '') {
+            $where[] = 'sold_at <= ?';
+            $args[] = $toDay . ' 23:59:59';
+        }
+        $whereSql = $where === [] ? '' : 'WHERE ' . implode(' AND ', $where);
+
+        $sql = 'SELECT COALESCE(product_key, description) AS label,
+                       SUM(price_ttc) AS ca, SUM(quantity) AS qty
+                FROM sales
+                ' . $whereSql . '
+                GROUP BY COALESCE(product_key, description)
+                ORDER BY ca DESC
+                LIMIT ' . $limit;
+
+        try {
+            $stmt = self::pdo()->prepare($sql);
+            $stmt->execute($args);
+
+            /** @var list<array<string,mixed>> $r */
+            return $stmt->fetchAll();
+        } catch (\Throwable) {
+            return [];
+        }
     }
 
     /**
@@ -707,6 +971,49 @@ final class Sale extends Model
     }
 
     /**
+     * Ventilation HT/TVA/TTC par taux de TVA sur une plage de jours
+     * (bornes incluses), ou sur tout l'historique si les bornes sont null.
+     *
+     * @param string|null $fromDay Jour de début « YYYY-MM-DD » (inclus), ou null.
+     * @param string|null $toDay   Jour de fin « YYYY-MM-DD » (inclus), ou null.
+     *
+     * @return list<array<string,mixed>>
+     */
+    public static function vatByRateBetween(?string $fromDay, ?string $toDay): array
+    {
+        $where = [];
+        $args = [];
+        if ($fromDay !== null && $fromDay !== '') {
+            $where[] = 'sold_at >= ?';
+            $args[] = $fromDay . ' 00:00:00';
+        }
+        if ($toDay !== null && $toDay !== '') {
+            $where[] = 'sold_at <= ?';
+            $args[] = $toDay . ' 23:59:59';
+        }
+        $whereSql = $where === [] ? '' : 'WHERE ' . implode(' AND ', $where);
+
+        $sql = 'SELECT COALESCE(vat_rate, "—") AS rate,
+                       COALESCE(SUM(price_ht), 0) AS ht,
+                       COALESCE(SUM(vat), 0) AS vat,
+                       COALESCE(SUM(price_ttc), 0) AS ttc
+                FROM sales
+                ' . $whereSql . '
+                GROUP BY COALESCE(vat_rate, "—")
+                ORDER BY vat DESC';
+
+        try {
+            $stmt = self::pdo()->prepare($sql);
+            $stmt->execute($args);
+
+            /** @var list<array<string,mixed>> $r */
+            return $stmt->fetchAll();
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    /**
      * Part du CA produits couverte par un coût de revient connu.
      *
      * Une vente est « couverte » si le produit canonique
@@ -736,6 +1043,62 @@ final class Sale extends Model
         try {
             $stmt = self::pdo()->prepare($sql);
             $stmt->execute([$year, $month]);
+            $row = $stmt->fetch() ?: [];
+        } catch (\Throwable) {
+            return ['covered' => 0.0, 'uncovered' => 0.0];
+        }
+
+        return [
+            'covered'   => (float) ($row['covered'] ?? 0),
+            'uncovered' => (float) ($row['uncovered'] ?? 0),
+        ];
+    }
+
+    /**
+     * Part du CA produits couverte par un coût de revient connu, sur une
+     * plage de jours (bornes incluses) ou tout l'historique (bornes null).
+     *
+     * Une vente est « couverte » si le produit canonique
+     * (COALESCE(product_key, description)) possède au moins un lot
+     * dans product_costs (même fallback que COST_SUBQUERY).
+     *
+     * @param string|null $fromDay Jour de début « YYYY-MM-DD » (inclus), ou null.
+     * @param string|null $toDay   Jour de fin « YYYY-MM-DD » (inclus), ou null.
+     *
+     * @return array{covered:float, uncovered:float}
+     */
+    public static function costCoverageBetween(?string $fromDay, ?string $toDay): array
+    {
+        $where = ['is_custom_amount = 0'];
+        $args = [];
+        if ($fromDay !== null && $fromDay !== '') {
+            $where[] = 'sold_at >= ?';
+            $args[] = $fromDay . ' 00:00:00';
+        }
+        if ($toDay !== null && $toDay !== '') {
+            $where[] = 'sold_at <= ?';
+            $args[] = $toDay . ' 23:59:59';
+        }
+
+        $sql = 'SELECT
+                    COALESCE(SUM(
+                        CASE WHEN EXISTS (
+                            SELECT 1 FROM product_costs pc
+                            WHERE pc.product_key = COALESCE(sales.product_key, sales.description)
+                        ) THEN price_ttc ELSE 0 END
+                    ), 0) AS covered,
+                    COALESCE(SUM(
+                        CASE WHEN NOT EXISTS (
+                            SELECT 1 FROM product_costs pc
+                            WHERE pc.product_key = COALESCE(sales.product_key, sales.description)
+                        ) THEN price_ttc ELSE 0 END
+                    ), 0) AS uncovered
+                FROM sales
+                WHERE ' . implode(' AND ', $where);
+
+        try {
+            $stmt = self::pdo()->prepare($sql);
+            $stmt->execute($args);
             $row = $stmt->fetch() ?: [];
         } catch (\Throwable) {
             return ['covered' => 0.0, 'uncovered' => 0.0];
@@ -812,6 +1175,50 @@ final class Sale extends Model
         try {
             $stmt = self::pdo()->prepare($sql);
             $stmt->execute([$year, $month]);
+
+            /** @var list<array<string,mixed>> $r */
+            return $stmt->fetchAll();
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    /**
+     * Produits vendus à perte sur une plage de jours (bornes incluses),
+     * ou sur tout l'historique si les bornes sont null.
+     *
+     * @param string|null $fromDay Jour de début « YYYY-MM-DD » (inclus), ou null.
+     * @param string|null $toDay   Jour de fin « YYYY-MM-DD » (inclus), ou null.
+     *
+     * @return list<array<string,mixed>>
+     */
+    public static function lossLeadersBetween(?string $fromDay, ?string $toDay): array
+    {
+        $where = ['is_custom_amount = 0'];
+        $args = [];
+        if ($fromDay !== null && $fromDay !== '') {
+            $where[] = 'sold_at >= ?';
+            $args[] = $fromDay . ' 00:00:00';
+        }
+        if ($toDay !== null && $toDay !== '') {
+            $where[] = 'sold_at <= ?';
+            $args[] = $toDay . ' 23:59:59';
+        }
+
+        $sql = 'SELECT COALESCE(product_key, description) AS product,
+                       AVG(price_ttc / NULLIF(quantity, 0)) AS avg_price,
+                       IFNULL((' . self::COST_SUBQUERY . '), 0) AS cost,
+                       SUM(quantity) AS qty
+                FROM sales
+                WHERE ' . implode(' AND ', $where) . '
+                GROUP BY COALESCE(product_key, description)
+                HAVING cost > 0 AND avg_price < cost
+                ORDER BY (cost - avg_price) DESC
+                LIMIT 10';
+
+        try {
+            $stmt = self::pdo()->prepare($sql);
+            $stmt->execute($args);
 
             /** @var list<array<string,mixed>> $r */
             return $stmt->fetchAll();

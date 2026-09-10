@@ -6,8 +6,8 @@ use App\Models\Loss;
 
 /**
  * @var array<string,mixed> $user
- * @var array{year:int,month:int,value:string} $month
- * @var list<array{value:string,label:string}> $months
+ * @var array{preset:string,from:?string,to:?string} $period
+ * @var array<string,string> $periodOptions
  * @var list<array<string,mixed>> $rows
  * @var array{qty:int,value:float} $agg
  * @var list<array{reason:string,qty:int,value:float}> $byReason
@@ -43,16 +43,28 @@ $topReason = $byReason[0] ?? null;
 </div>
 
 <div class="admin-actions">
-    <form method="get" class="compta-monthselect">
-        <label for="month">Mois :</label>
-        <select id="month" name="month" onchange="this.form.submit()">
-            <?php foreach ($months as $m): ?>
-                <option value="<?= e($m['value']) ?>" <?= $m['value'] === $month['value'] ? 'selected' : '' ?>><?= e($m['label']) ?></option>
-            <?php endforeach; ?>
-            <?php if ($months === []): ?>
-                <option value="<?= e($month['value']) ?>" selected><?= e($month['value']) ?></option>
-            <?php endif; ?>
-        </select>
+    <form method="get" class="reappro-bar" id="period-filters">
+        <div class="reappro-field">
+            <label class="field-label" for="period">📅 Période</label>
+            <select name="period" id="period">
+                <?php foreach ($periodOptions as $k => $label): ?>
+                    <option value="<?= e($k) ?>" <?= $k === $period['preset'] ? 'selected' : '' ?>><?= e($label) ?></option>
+                <?php endforeach; ?>
+            </select>
+        </div>
+
+        <div class="reappro-dates" id="period-custom" <?= $period['preset'] === 'custom' ? '' : 'hidden' ?>>
+            <div>
+                <label class="field-label" for="from">Du</label>
+                <input type="date" name="from" id="from" value="<?= e($period['from'] ?? '') ?>">
+            </div>
+            <div>
+                <label class="field-label" for="to">Au</label>
+                <input type="date" name="to" id="to" value="<?= e($period['to'] ?? '') ?>">
+            </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-sm">Appliquer</button>
     </form>
 </div>
 
@@ -195,3 +207,28 @@ $topReason = $byReason[0] ?? null;
         </tbody>
     </table>
 </div>
+
+<script>
+(function () {
+    // Sélecteur « 📅 Période » : les presets soumettent seuls, comme sur
+    // Réappro ; « Personnalisé » révèle d'abord les bornes de dates.
+    var form = document.getElementById('period-filters');
+    var custom = document.getElementById('period-custom');
+    if (!form) return;
+
+    var select = form.querySelector('select[name="period"]');
+    if (!select) return;
+
+    select.addEventListener('change', function () {
+        if (custom) {
+            custom.hidden = select.value !== 'custom';
+        }
+        if (select.value === 'custom') {
+            var from = document.getElementById('from');
+            if (from) from.focus();
+        } else {
+            form.submit();
+        }
+    });
+})();
+</script>

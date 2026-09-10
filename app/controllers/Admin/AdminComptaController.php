@@ -28,58 +28,6 @@ use App\Models\SaleAdjustment;
  */
 final class AdminComptaController extends AdminBaseController
 {
-    /** Mois disponibles dans les ventes (pour les sélecteurs). */
-    private function availableMonths(): array
-    {
-        try {
-            $stmt = \db()->query(
-                'SELECT DISTINCT YEAR(sold_at) AS y, MONTH(sold_at) AS m
-                 FROM sales ORDER BY y DESC, m DESC'
-            );
-            $months = [];
-            foreach ($stmt->fetchAll() as $r) {
-                $months[] = [
-                    'value' => sprintf('%04d-%02d', (int) $r['y'], (int) $r['m']),
-                    'label' => sprintf('%02d/%04d', (int) $r['m'], (int) $r['y']),
-                ];
-            }
-
-            return $months;
-        } catch (\Throwable) {
-            return [];
-        }
-    }
-
-    private function resolveMonth(?string $param): array
-    {
-        // Si un mois est explicitement demandé via l'URL, l'utiliser.
-        if (preg_match('/^(\d{4})-(\d{2})$/', (string) $param, $m)) {
-            return ['year' => (int) $m[1], 'month' => (int) $m[2], 'value' => $param];
-        }
-
-        // Sinon, défaut = dernier mois qui a des ventes (pas le mois calendaire actuel).
-        try {
-            $stmt = \db()->query(
-                'SELECT YEAR(sold_at) AS y, MONTH(sold_at) AS m
-                 FROM sales
-                 GROUP BY YEAR(sold_at), MONTH(sold_at)
-                 ORDER BY y DESC, m DESC
-                 LIMIT 1'
-            );
-            $row = $stmt->fetch();
-            if ($row) {
-                $val = sprintf('%04d-%02d', (int) $row['y'], (int) $row['m']);
-                return ['year' => (int) $row['y'], 'month' => (int) $row['m'], 'value' => $val];
-            }
-        } catch (\Throwable) {
-            // Ignore et fallback ci-dessous.
-        }
-
-        // Fallback : mois calendaire actuel.
-        $now = new \DateTimeImmutable('first day of this month');
-        return ['year' => (int) $now->format('Y'), 'month' => (int) $now->format('n'), 'value' => $now->format('Y-m')];
-    }
-
     // -----------------------------------------------------------------
     //  Dashboard
     // -----------------------------------------------------------------
@@ -88,11 +36,11 @@ final class AdminComptaController extends AdminBaseController
     {
         $user = $this->guardCompta();
 
-        $month = $this->resolveMonth($_GET['month'] ?? null);
-        $agg = Sale::monthAggregates($month['year'], $month['month']);
-        $split = Sale::paymentSplit($month['year'], $month['month']);
-        $top = Sale::topProducts($month['year'], $month['month']);
-        $byCategory = Sale::byCategory($month['year'], $month['month']);
+        $period = ComptaCalc::resolvePeriod($_GET['period'] ?? null, $_GET['from'] ?? null, $_GET['to'] ?? null);
+        $agg = Sale::aggregatesBetween($period['from'], $period['to']);
+        $split = Sale::paymentSplitBetween($period['from'], $period['to']);
+        $top = Sale::topProductsBetween($period['from'], $period['to']);
+        $byCategory = Sale::byCategoryBetween($period['from'], $period['to']);
 
         // Alerte stock faible : analyse des 30 derniers jours.
         // (L'horizon de couverture n'influence pas les alertes, seul
@@ -106,10 +54,10 @@ final class AdminComptaController extends AdminBaseController
         )['alerts'];
 
         // Suivi avancé : dépenses, résultat net, fiabilité des coûts, alertes.
-        $expenseAgg = Expense::aggregates($month['year'], $month['month']);
-        $coverage = Sale::costCoverage($month['year'], $month['month']);
-        $vat = Sale::vatByRate($month['year'], $month['month']);
-        $lossLeaders = Sale::lossLeaders($month['year'], $month['month']);
+        $expenseAgg = Expense::aggregatesBetween($period['from'], $period['to']);
+        $coverage = Sale::costCoverageBetween($period['from'], $period['to']);
+        $vat = Sale::vatByRateBetween($period['from'], $period['to']);
+        $lossLeaders = Sale::lossLeadersBetween($period['from'], $period['to']);
         $invGaps = InventoryCount::recentGaps(30);
         $lastImport = Sale::lastImportAt();
 
@@ -125,8 +73,8 @@ final class AdminComptaController extends AdminBaseController
         $this->renderAdmin('admin/compta/dashboard', [
             'title'        => 'Comptabilité',
             'user'         => $user,
-            'month'        => $month,
-            'months'       => $this->availableMonths(),
+            'period'       => $period,
+            'periodOptions'=> ComptaCalc::PERIOD_OPTIONS,
             'agg'          => $agg,
             'split'        => $split,
             'top'          => $top,
@@ -229,43 +177,32 @@ final class AdminComptaController extends AdminBaseController
     {
         $user = $this->guardCompta();
 
-        $month = $this->resolveMonth($_GET['month'] ?? null);
+        $period = ComptaCalc::resolvePeriod($_GET['period'] ?? null, $_GET['from'] ?? null, $_GET['to'] ?? null);
         $category = isset($_GET['category']) && $_GET['category'] !== '' ? (string) $_GET['category'] : null;
         $product = isset($_GET['product']) && $_GET['product'] !== '' ? (string) $_GET['product'] : null;
         $payment = isset($_GET['payment']) && $_GET['payment'] !== '' ? (string) $_GET['payment'] : null;
-        $allMonths = isset($_GET['month']) && $_GET['month'] === 'all';
 
         // Export CSV ?
         if (isset($_GET['export']) && $_GET['export'] === 'csv') {
-            $this->exportSalesCsv(
-                $allMonths ? null : $month['year'],
-                $allMonths ? null : $month['month'],
-                $category,
-                $product,
-                $payment
-            );
+            $this->exportSalesCsvBetween($period, $category, $product, $payment);
 
             return;
         }
 
-        $rows = Sale::journal(
-            $allMonths ? null : $month['year'],
-            $allMonths ? null : $month['month'],
-            $category,
-            $product,
-            $payment,
-            2000
-        );
+        $rows = Sale::journalBetween($period['from'], $period['to'], $category, $product, $payment, 500);
 
         $this->renderAdmin('admin/compta/sales', [
-            'title'      => 'Journal des ventes',
-            'user'       => $user,
-            'rows'       => $rows,
-            'months'     => $this->availableMonths(),
-            'categories' => Sale::distinctCategories(),
-            'products'   => Sale::distinctProducts(),
+            'title'         => 'Journal des ventes',
+            'user'          => $user,
+            'rows'          => $rows,
+            'period'        => $period,
+            'periodOptions' => ComptaCalc::PERIOD_OPTIONS,
+            'categories'    => Sale::distinctCategories(),
+            'products'      => Sale::distinctProducts(),
             'filters' => [
-                'month'    => $allMonths ? 'all' : $month['value'],
+                'period'   => $period['preset'],
+                'from'     => $period['from'] ?? '',
+                'to'       => $period['to'] ?? '',
                 'category' => $category ?? '',
                 'product'  => $product ?? '',
                 'payment'  => $payment ?? '',
@@ -273,9 +210,15 @@ final class AdminComptaController extends AdminBaseController
         ]);
     }
 
-    private function exportSalesCsv(?int $year, ?int $month, ?string $category, ?string $product, ?string $payment): void
+    /**
+     * Export CSV du journal des ventes sur la période résolue, avec les
+     * filtres catégorie / produit / paiement éventuels.
+     *
+     * @param array{preset:string,from:?string,to:?string} $period
+     */
+    private function exportSalesCsvBetween(array $period, ?string $category, ?string $product, ?string $payment): void
     {
-        $rows = Sale::journal($year, $month, $category, $product, $payment, 100000);
+        $rows = Sale::journalBetween($period['from'], $period['to'], $category, $product, $payment, 100000);
 
         header('Content-Type: text/csv; charset=utf-8');
         header('Content-Disposition: attachment; filename="ventes_aeic.csv"');
@@ -309,23 +252,15 @@ final class AdminComptaController extends AdminBaseController
     {
         $user = $this->guardCompta();
 
-        $month = $this->resolveMonth($_GET['month'] ?? null);
-        $allMonths = isset($_GET['month']) && $_GET['month'] === 'all';
-
-        // « Toute l'année » : on agrège sur l'année courante (mois = null).
-        if ($allMonths) {
-            $rows = Sale::byProduct((int) date('Y'), null);
-        } else {
-            $rows = Sale::byProduct($month['year'], $month['month']);
-        }
+        $period = ComptaCalc::resolvePeriod($_GET['period'] ?? null, $_GET['from'] ?? null, $_GET['to'] ?? null);
+        $rows = Sale::byProductBetween($period['from'], $period['to']);
 
         $this->renderAdmin('admin/compta/products', [
-            'title'  => 'Bénéfice par produit',
-            'user'   => $user,
-            'rows'   => $rows,
-            'month'  => $month,
-            'months' => $this->availableMonths(),
-            'all'    => $allMonths,
+            'title'         => 'Bénéfice par produit',
+            'user'          => $user,
+            'rows'          => $rows,
+            'period'        => $period,
+            'periodOptions' => ComptaCalc::PERIOD_OPTIONS,
         ]);
     }
 

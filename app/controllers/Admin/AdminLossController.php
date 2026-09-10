@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Controllers\Admin;
 
+use App\Core\Compta\ComptaCalc;
 use App\Models\Loss;
 use App\Models\ProductCost;
 use App\Models\Sale;
@@ -15,44 +16,6 @@ use App\Models\Sale;
  */
 final class AdminLossController extends AdminBaseController
 {
-    /**
-     * Résout le mois demandé (GET « YYYY-MM »), sinon mois calendaire courant.
-     *
-     * @return array{year:int,month:int,value:string}
-     */
-    private function resolveMonth(?string $param): array
-    {
-        if (preg_match('/^(\d{4})-(\d{2})$/', (string) $param, $m)) {
-            return ['year' => (int) $m[1], 'month' => (int) $m[2], 'value' => $param];
-        }
-
-        $now = new \DateTimeImmutable('first day of this month');
-
-        return ['year' => (int) $now->format('Y'), 'month' => (int) $now->format('n'), 'value' => $now->format('Y-m')];
-    }
-
-    /**
-     * Les 12 derniers mois glissants (du mois courant à mois courant − 11),
-     * du plus récent au plus ancien — sans requête SQL.
-     *
-     * @return list<array{value:string,label:string}>
-     */
-    private function recentMonths(int $year, int $month): array
-    {
-        $current = new \DateTimeImmutable(sprintf('%04d-%02d-01', $year, $month));
-
-        $months = [];
-        for ($i = 0; $i < 12; $i++) {
-            $d = $current->modify('-' . $i . ' months');
-            $months[] = [
-                'value' => $d->format('Y-m'),
-                'label' => $d->format('m/Y'),
-            ];
-        }
-
-        return $months;
-    }
-
     // -----------------------------------------------------------------
     //  Journal des pertes
     // -----------------------------------------------------------------
@@ -61,20 +24,14 @@ final class AdminLossController extends AdminBaseController
     {
         $user = $this->guardCompta();
 
-        $month = $this->resolveMonth($_GET['month'] ?? null);
-
-        $months = $this->recentMonths((int) (new \DateTimeImmutable())->format('Y'), (int) (new \DateTimeImmutable())->format('n'));
-        if (!in_array($month['value'], array_column($months, 'value'), true)) {
-            // Mois demandé hors fenêtre glissante : on le propose quand même.
-            array_unshift($months, ['value' => $month['value'], 'label' => $month['value']]);
-        }
+        $period = ComptaCalc::resolvePeriod($_GET['period'] ?? null, $_GET['from'] ?? null, $_GET['to'] ?? null);
 
         // Journal enrichi : coût unitaire du lot applicable à la date de
         // perte + valeur de la ligne (quantité × coût).
         $rows = [];
         $aggQty = 0;
         $aggValue = 0.0;
-        foreach (Loss::forPeriod($month['year'], $month['month']) as $r) {
+        foreach (Loss::between($period['from'], $period['to']) as $r) {
             $unitCost = (float) (ProductCost::costAt((string) $r['product_key'], (string) $r['lost_at']) ?? 0);
             $r['unit_cost'] = $unitCost;
             $r['value'] = (int) $r['quantity'] * $unitCost;
@@ -85,15 +42,15 @@ final class AdminLossController extends AdminBaseController
         }
 
         $this->renderAdmin('admin/compta/pertes', [
-            'title'    => 'Pertes',
-            'user'     => $user,
-            'month'    => $month,
-            'months'   => $months,
-            'rows'     => $rows,
-            'agg'      => ['qty' => $aggQty, 'value' => $aggValue],
-            'byReason' => Loss::byReason($month['year'], $month['month']),
-            'value30'  => Loss::valueForDays(30),
-            'products' => Sale::distinctProducts(),
+            'title'         => 'Pertes',
+            'user'          => $user,
+            'period'        => $period,
+            'periodOptions' => ComptaCalc::PERIOD_OPTIONS,
+            'rows'          => $rows,
+            'agg'           => ['qty' => $aggQty, 'value' => $aggValue],
+            'byReason'      => Loss::byReasonBetween($period['from'], $period['to']),
+            'value30'       => Loss::valueForDays(30),
+            'products'      => Sale::distinctProducts(),
         ]);
     }
 
