@@ -264,6 +264,108 @@ Pour calculer le **bénéfice réel**, tu dois saisir le **prix d'achat** de cha
 - Vue d'ensemble par catégorie (Boisson, Nourriture, Spécial)
 - **Cartes KPI** : CA, bénéfice, marge, % du CA total
 
+### G. Dépenses (résultat net)
+
+> 💡 Avant d'utiliser ces pages, exécute la migration `database/migrations/2026_compta_suivi.sql` (via **phpMyAdmin** ou en CLI mysql : `mysql -u user -p base < database/migrations/2026_compta_suivi.sql`). Elle crée les tables `expenses`, `budgets`, `purchases` et `inventory_counts`.
+
+**Admin → Comptabilité → Dépenses** (ou `/admin/compta/depenses`).
+
+Le **résultat net** = **bénéfice** − **dépenses** :
+- Le bénéfice ne couvre que la matière vendue à la cafétéria
+- Les dépenses couvrent tout le reste : c'est ce qui donne le vrai solde de l'asso
+
+#### Catégories de dépenses
+| Catégorie | Usage |
+|-----------|-------|
+| **Matière** | Matière première cafétéria (farine, napkins...) |
+| **Matériel** | Matériel (plaque de cuisson, frigo...) |
+| **Événements** | Soirées, sorties, intégrations |
+| **Frais** | Frais bancaires, abonnements |
+| **Divers** | Tout ce qui ne rentre nulle part ailleurs |
+
+#### Saisir une dépense
+1. Choisis la **date**, la **catégorie** et saisis un **libellé**
+2. Renseigne le montant **TTC** (obligatoire) ; **HT** et **TVA** sont optionnels
+3. **Enregistrer**
+
+La table d'écritures liste tout, avec **suppression** possible en un clic.
+
+### H. Budgets prévisionnels
+**Admin → Comptabilité → Budgets** (ou `/admin/compta/budgets`).
+
+- Une ligne **CA** (objectif de chiffre d'affaires) + une **enveloppe par catégorie de dépense**
+- Saisie **à la française** (ex : `250,50`)
+- **0 ou champ vide** = suppression de la ligne de budget
+- Les montants **réalisés** se remplissent tout seuls depuis les ventes et dépenses
+
+#### Badges d'état
+| Badge | Signification |
+|-------|---------------|
+| **Objectif dépassé** | CA réalisé ≥ CA prévu |
+| **Sous l'objectif** | CA réalisé < CA prévu |
+| **Dans le budget** | Dépenses ≤ enveloppe |
+| **Dépassé** | Dépenses > enveloppe |
+
+### I. Achats & inventaire
+**Admin → Comptabilité → Achats & stock** (`/admin/compta/achats`) et **Inventaire** (`/admin/compta/inventaire`).
+
+#### Achats ≠ Réappro
+- **Réappro** te dit *ce qu'il faudrait* commander (calculé depuis les ventes)
+- **Achats** enregistre *ce qui a réellement été commandé* (date, produit, quantité, prix)
+
+#### Inventaire
+Le **stock théorique** = dernier comptage + achats − ventes (depuis la date du comptage).
+Tu comptes physiquement le rayon, tu saisis le nombre réel, et le site calcule l'**écart** :
+- Écart négatif → **pertes, casses, offerts** ou erreurs de saisie
+- Écart nul → nickel 🔥
+
+> 💡 Fais un inventaire **régulièrement** : en fin de semaine ou en fin de mois, avant de commander. Chaque comptage devient la nouvelle référence de stock.
+
+### J. Rapport annuel
+**Admin → Comptabilité → Rapport annuel** (ou `/admin/compta/annuel`).
+
+- Vue **12 mois** : CA, bénéfice, dépenses et **résultat net** mois par mois
+- **Comparaison N-1** (évolution du CA vs l'an dernier)
+- **TVA par taux** et stats **paniers** (panier moyen, articles/panier)
+- **Export CSV** pour Excel / trésorier
+
+### K. Nouveaux indicateurs du Dashboard
+Le **Dashboard compta** (`/admin/compta`) affiche de nouvelles cartes :
+
+- **Résultat net** : bénéfice − dépenses du mois
+- **CA sans coût** : part du CA sans coût de revient connu → au-delà de **20 %**, le bénéfice affiché n'est pas fiable (complète les coûts)
+- **TVA collectée** : total TVA du mois (sous la barre Carte/Liquide)
+
+Le panneau **🔔 Alertes & suivi** regroupe :
+- **Import obsolète** : dernier import SumUp ≥ 14 jours (rouge)
+- **Produits vendus à perte** : prix moyen < coût de revient
+- **Écarts d'inventaire** : pertes/casses détectées sur 30 jours
+- **Réappro** : produits à racheter
+
+### L. Pertes (`/admin/compta/pertes`)
+**Admin → Trésorerie & stock → Pertes** (ou `/admin/compta/pertes`).
+
+#### Principe
+Chaque perte enregistrée est :
+- **déduite du stock théorique** de l'inventaire : théorique = dernier comptage + achats − ventes **− pertes**
+- **valorisée au coût de revient** du lot applicable à la date de la perte
+
+Résultat : une perte enregistrée **explique un écart d'inventaire** au lieu de le laisser mystérieux.
+
+#### Motifs disponibles
+| Motif | Usage |
+|-------|-------|
+| **Casse** | Produit cassé, endommagé, renversé |
+| **Périmé** | Produit périmé, invendable |
+| **Vol** | Disparition inexpliquée |
+| **Offert** | Offert ou consommé gratuitement |
+| **Erreur de saisie** | Correction d'une erreur de comptage/saisie |
+| **Divers** | Tout le reste |
+
+> 💡 Enregistre la perte **dès que tu la constates**, AVANT l'inventaire suivant : l'écart détecté au prochain comptage se résorbe tout seul.
+>
+> 💡 Pense à exécuter la migration `database/migrations/2026_compta_pertes.sql` (table `losses`) si elle n'est pas encore en base.
+
 ---
 
 ## 8. 📦 Le réapprovisionnement

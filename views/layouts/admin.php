@@ -62,6 +62,7 @@ $sections = [
         'Budgets'        => '/admin/compta/budgets',
         'Achats & stock' => '/admin/compta/achats',
         'Inventaire'     => '/admin/compta/inventaire',
+        'Pertes'         => '/admin/compta/pertes',
         'Réappro'        => '/admin/compta/reappro',
     ],
     'Système' => [

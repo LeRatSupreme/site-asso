@@ -11,6 +11,7 @@ use App\Controllers\Admin\AdminController;
 use App\Controllers\Admin\AdminEventController;
 use App\Controllers\Admin\AdminExpenseController;
 use App\Controllers\Admin\AdminGameController;
+use App\Controllers\Admin\AdminLossController;
 use App\Controllers\Admin\AdminMembershipController;
 use App\Controllers\Admin\AdminMediaController;
 use App\Controllers\Admin\AdminPageController;
@@ -234,7 +235,7 @@ function aeic_register_routes(Router $router): void
     $router->get('/admin/compta/reappro', [AdminComptaController::class, 'reorder']);
     $router->post('/admin/compta/reappro/stocks', [AdminComptaController::class, 'saveStocks']);
 
-    // Suivi avancé : dépenses, budgets, achats, inventaire, rapport annuel.
+    // Suivi avancé : dépenses, budgets, achats, inventaire, pertes, rapport annuel.
     $router->get('/admin/compta/depenses', [AdminExpenseController::class, 'index']);
     $router->post('/admin/compta/depenses/save', [AdminExpenseController::class, 'save']);
     $router->post('/admin/compta/depenses/{id}/delete', [AdminExpenseController::class, 'delete']);
@@ -245,6 +246,9 @@ function aeic_register_routes(Router $router): void
     $router->post('/admin/compta/achats/{id}/delete', [AdminStockController::class, 'deletePurchase']);
     $router->get('/admin/compta/inventaire', [AdminStockController::class, 'inventory']);
     $router->post('/admin/compta/inventaire/save', [AdminStockController::class, 'saveCount']);
+    $router->get('/admin/compta/pertes', [AdminLossController::class, 'index']);
+    $router->post('/admin/compta/pertes/save', [AdminLossController::class, 'save']);
+    $router->post('/admin/compta/pertes/{id}/delete', [AdminLossController::class, 'delete']);
     $router->get('/admin/compta/annuel', [AdminReportingController::class, 'annual']);
 
     // Mini dashboard SumUp (fondé sur les ventes importées ; ADMIN/TRESORERIE).
