@@ -14,6 +14,105 @@ namespace App\Core\Compta;
 final class ComptaCalc
 {
     /**
+     * Options du sélecteur « 📅 Période » (pages Catégories, Dépenses,
+     * Budgets, Achats) — mêmes bornes que la page Réappro.
+     *
+     * @var array<string,string>
+     */
+    public const PERIOD_OPTIONS = [
+        '7d'     => '7 derniers jours',
+        '30d'    => '30 derniers jours',
+        '3m'     => '3 derniers mois',
+        '6m'     => '6 derniers mois',
+        '12m'    => '12 derniers mois',
+        'ytd'    => 'Année civile',
+        'all'    => 'Tout',
+        'custom' => 'Personnalisé',
+    ];
+
+    /**
+     * Résout une période d'analyse depuis les paramètres GET (period/from/to),
+     * avec la même sémantique que la page Réappro.
+     *
+     * Règles :
+     *  - preset inconnu/null → « 30d » ;
+     *  - « Nd » → from = aujourd'hui −(N−1) jours ;
+     *  - « Nm » → from = aujourd'hui −N mois (calendaire, comme Réappro) ;
+     *  - « ytd » → 1er janvier de l'année courante ;
+     *  - « all » → bornes null (toute la période disponible) ;
+     *  - « custom » → from/to validés au format YYYY-MM-DD (from <= to,
+     *    sinon échange) ; bornes invalides → repli sur « 30d ».
+     *
+     * @param string|null $preset Clé de PERIOD_OPTIONS (« period » en GET).
+     * @param string|null $from   Jour de début saisi (« from » en GET).
+     * @param string|null $to     Jour de fin saisi (« to » en GET).
+     *
+     * @return array{preset:string, from:?string, to:?string} Dates « YYYY-MM-DD »
+     *                                                          (null pour « all »).
+     */
+    public static function resolvePeriod(?string $preset, ?string $from, ?string $to): array
+    {
+        $preset = (string) $preset;
+        if (!array_key_exists($preset, self::PERIOD_OPTIONS)) {
+            $preset = '30d';
+        }
+
+        $fromDay = null;
+        $toDay = null;
+
+        switch ($preset) {
+            case '7d':
+                $fromDay = date('Y-m-d', strtotime('-6 days'));
+                $toDay = date('Y-m-d');
+                break;
+            case '3m':
+                $fromDay = date('Y-m-d', strtotime('-3 months'));
+                $toDay = date('Y-m-d');
+                break;
+            case '6m':
+                $fromDay = date('Y-m-d', strtotime('-6 months'));
+                $toDay = date('Y-m-d');
+                break;
+            case '12m':
+                $fromDay = date('Y-m-d', strtotime('-12 months'));
+                $toDay = date('Y-m-d');
+                break;
+            case 'ytd':
+                $fromDay = date('Y-01-01');
+                $toDay = date('Y-m-d');
+                break;
+            case 'all':
+                $fromDay = null;
+                $toDay = null;
+                break;
+            case 'custom':
+                $from = trim((string) $from);
+                $to = trim((string) $to);
+                $fromOk = preg_match('/^\d{4}-\d{2}-\d{2}$/', $from) === 1;
+                $toOk = preg_match('/^\d{4}-\d{2}-\d{2}$/', $to) === 1;
+                if ($fromOk && $toOk) {
+                    if ($from > $to) {
+                        [$from, $to] = [$to, $from];
+                    }
+                    $fromDay = $from;
+                    $toDay = $to;
+                } else {
+                    // Bornes invalides : bascule sur les 30 derniers jours.
+                    $preset = '30d';
+                    $fromDay = date('Y-m-d', strtotime('-29 days'));
+                    $toDay = date('Y-m-d');
+                }
+                break;
+            default: // '30d'
+                $fromDay = date('Y-m-d', strtotime('-29 days'));
+                $toDay = date('Y-m-d');
+                break;
+        }
+
+        return ['preset' => $preset, 'from' => $fromDay, 'to' => $toDay];
+    }
+
+    /**
      * Bénéfice d'une ligne de vente.
      *
      * Formule : price_ttc − (cost_price × quantity).

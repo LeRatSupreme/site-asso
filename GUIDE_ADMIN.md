@@ -263,12 +263,15 @@ Pour calculer le **bénéfice réel**, tu dois saisir le **prix d'achat** de cha
 **Admin → Comptabilité → Catégories** :
 - Vue d'ensemble par catégorie (Boisson, Nourriture, Spécial)
 - **Cartes KPI** : CA, bénéfice, marge, % du CA total
+- Filtre **📅 Période** (7 jours → Tout, ou dates personnalisées), comme sur la page Réappro.
 
 ### G. Dépenses (résultat net)
 
 > 💡 Avant d'utiliser ces pages, exécute la migration `database/migrations/2026_compta_suivi.sql` (via **phpMyAdmin** ou en CLI mysql : `mysql -u user -p base < database/migrations/2026_compta_suivi.sql`). Elle crée les tables `expenses`, `budgets`, `purchases` et `inventory_counts`.
 
 **Admin → Comptabilité → Dépenses** (ou `/admin/compta/depenses`).
+
+Filtre **📅 Période** (7 jours → Tout, ou dates personnalisées), comme sur la page Réappro.
 
 Le **résultat net** = **bénéfice** − **dépenses** :
 - Le bénéfice ne couvre que la matière vendue à la cafétéria
@@ -293,6 +296,8 @@ La table d'écritures liste tout, avec **suppression** possible en un clic.
 ### H. Budgets prévisionnels
 **Admin → Comptabilité → Budgets** (ou `/admin/compta/budgets`).
 
+Filtre **📅 Période** (7 jours → Tout, ou dates personnalisées), comme sur la page Réappro. La période agrège plusieurs mois (24 max) pour le prévu et le réalisé, mais l'édition cible toujours le **dernier mois de la période**.
+
 - Une ligne **CA** (objectif de chiffre d'affaires) + une **enveloppe par catégorie de dépense**
 - Saisie **à la française** (ex : `250,50`)
 - **0 ou champ vide** = suppression de la ligne de budget
@@ -308,6 +313,8 @@ La table d'écritures liste tout, avec **suppression** possible en un clic.
 
 ### I. Achats & inventaire
 **Admin → Comptabilité → Achats & stock** (`/admin/compta/achats`) et **Inventaire** (`/admin/compta/inventaire`).
+
+Filtre **📅 Période** (7 jours → Tout, ou dates personnalisées) sur les achats, comme sur la page Réappro.
 
 #### Achats ≠ Réappro
 - **Réappro** te dit *ce qu'il faudrait* commander (calculé depuis les ventes)

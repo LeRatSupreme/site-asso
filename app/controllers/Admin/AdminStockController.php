@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Controllers\Admin;
 
+use App\Core\Compta\ComptaCalc;
 use App\Models\InventoryCount;
 use App\Models\ProductStock;
 use App\Models\Purchase;
@@ -27,26 +28,18 @@ final class AdminStockController extends AdminBaseController
     {
         $user = $this->guardCompta();
 
-        $rows = Purchase::recent(100);
-        $since30 = date('Y-m-d', strtotime('-29 days'));
-        $since365 = date('Y-m-d', strtotime('-364 days'));
-
-        // Nombre d'achats sur les 30 derniers jours (calculé en PHP).
-        $count30 = 0;
-        foreach ($rows as $r) {
-            if ((string) ($r['purchased_at'] ?? '') >= $since30) {
-                $count30++;
-            }
-        }
+        $period = ComptaCalc::resolvePeriod($_GET['period'] ?? null, $_GET['from'] ?? null, $_GET['to'] ?? null);
+        $rows = Purchase::between($period['from'], $period['to'], 200);
 
         $this->renderAdmin('admin/compta/purchases', [
-            'title'    => 'Achats & stock',
-            'user'     => $user,
-            'rows'     => $rows,
-            'products' => Sale::distinctProducts(),
-            'total30'  => Purchase::totalForPeriod($since30, date('Y-m-d')),
-            'total365' => Purchase::totalForPeriod($since365, date('Y-m-d')),
-            'count30'  => $count30,
+            'title'         => 'Achats & stock',
+            'user'          => $user,
+            'rows'          => $rows,
+            'products'      => Sale::distinctProducts(),
+            'period'        => $period,
+            'periodOptions' => ComptaCalc::PERIOD_OPTIONS,
+            'total'         => Purchase::totalBetween($period['from'], $period['to']),
+            'count'         => count($rows),
         ]);
     }
 

@@ -337,21 +337,15 @@ final class AdminComptaController extends AdminBaseController
     {
         $user = $this->guardCompta();
 
-        $month = $this->resolveMonth($_GET['month'] ?? null);
-        $allMonths = isset($_GET['month']) && $_GET['month'] === 'all';
-
-        $rows = Sale::byCategory(
-            $allMonths ? null : $month['year'],
-            $allMonths ? null : $month['month']
-        );
+        $period = ComptaCalc::resolvePeriod($_GET['period'] ?? null, $_GET['from'] ?? null, $_GET['to'] ?? null);
+        $rows = Sale::byCategoryBetween($period['from'], $period['to']);
 
         $this->renderAdmin('admin/compta/categories', [
-            'title'  => 'Bénéfice par catégorie',
-            'user'   => $user,
-            'rows'   => $rows,
-            'month'  => $month,
-            'months' => $this->availableMonths(),
-            'all'    => $allMonths,
+            'title'         => 'Bénéfice par catégorie',
+            'user'          => $user,
+            'rows'          => $rows,
+            'period'        => $period,
+            'periodOptions' => ComptaCalc::PERIOD_OPTIONS,
         ]);
     }
 
