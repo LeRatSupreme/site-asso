@@ -129,6 +129,7 @@ foreach ($byCategory as $c) {
             </div>
 
             <button type="submit" class="btn btn-primary btn-block">Enregistrer</button>
+            <button type="button" class="btn btn-ghost btn-block" onclick="if (confirm('Effacer la saisie en cours ?')) this.form.reset();">Annuler la saisie</button>
         </form>
     </section>
 

@@ -123,6 +123,7 @@ $topReason = $byReason[0] ?? null;
             </div>
 
             <button type="submit" class="btn btn-primary btn-block">Enregistrer la perte</button>
+            <button type="button" class="btn btn-ghost btn-block" onclick="if (confirm('Effacer la saisie en cours ?')) this.form.reset();">Annuler la saisie</button>
         </form>
     </section>
 
