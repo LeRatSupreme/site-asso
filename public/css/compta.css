@@ -822,6 +822,69 @@ details.howto p {
     font-size: 0.92rem;
 }
 
+/* ---- Barre « 📅 Période » partagée (pastilles) ---- */
+.period-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 12px;
+    margin-bottom: 1.25rem;
+}
+.period-bar-label {
+    color: var(--muted, #6b7280);
+    font-weight: 700;
+    font-size: 0.85rem;
+    white-space: nowrap;
+}
+.period-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+.period-pill {
+    display: inline-block;
+    padding: 5px 12px;
+    border-radius: 999px;
+    border: 1px solid var(--border, #d1d5db);
+    background: transparent;
+    color: inherit;
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-decoration: none;
+    cursor: pointer;
+    line-height: 1.4;
+    transition: background .15s ease, border-color .15s ease, color .15s ease;
+}
+.period-pill:hover {
+    border-color: var(--primary, #4f46e5);
+    color: var(--primary, #4f46e5);
+}
+.period-pill.is-active {
+    background: var(--primary, #4f46e5);
+    border-color: var(--primary, #4f46e5);
+    color: #fff;
+}
+.period-dates {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.85rem;
+}
+.period-dates label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--muted, #6b7280);
+    font-weight: 700;
+}
+.period-dates input[type="date"] {
+    border: 1px solid var(--border, #d1d5db);
+    border-radius: 8px;
+    padding: 4px 8px;
+    font: inherit;
+}
+
 
 
 

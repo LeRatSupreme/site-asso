@@ -1,0 +1,65 @@
+<?php
+
+declare(strict_types=1);
+
+/**
+ * Barre « 📅 Période » partagée : pastilles cliquables + dates personnalisées.
+ *
+ * Attend en scope : $period (array{preset:string, from:?string, to:?string})
+ * et $periodOptions (array<string,string>). Les autres paramètres GET de la
+ * page (filtres catégorie/produit/paiement…) sont conservés par les pastilles
+ * comme par le formulaire de dates personnalisées.
+ */
+
+/** @var array{preset:string,from:?string,to:?string} $period */
+/** @var array<string,string> $periodOptions */
+
+// Paramètres GET courants à conserver (hors période elle-même).
+$keep = $_GET;
+unset($keep['period'], $keep['from'], $keep['to']);
+?>
+<div class="period-bar" id="period-filters">
+    <span class="period-bar-label">📅 Période</span>
+
+    <nav class="period-pills" aria-label="Sélection de période">
+        <?php foreach ($periodOptions as $k => $label): ?>
+            <?php if ($k === 'custom') { continue; } ?>
+            <?php $q = http_build_query(array_merge($keep, ['period' => $k])); ?>
+            <a class="period-pill<?= $k === $period['preset'] ? ' is-active' : '' ?>" href="?<?= e($q) ?>"><?= e($label) ?></a>
+        <?php endforeach; ?>
+        <button type="button" id="period-custom-toggle" class="period-pill<?= $period['preset'] === 'custom' ? ' is-active' : '' ?>">Personnalisé</button>
+    </nav>
+
+    <form method="get" class="period-dates" id="period-custom" <?= $period['preset'] === 'custom' ? '' : 'hidden' ?>>
+        <?php foreach ($keep as $name => $value): ?>
+            <?php if (is_string($name) && $name !== '' && is_scalar($value)): ?>
+                <input type="hidden" name="<?= e($name) ?>" value="<?= e((string) $value) ?>">
+            <?php endif; ?>
+        <?php endforeach; ?>
+        <input type="hidden" name="period" value="custom">
+        <label>Du <input type="date" name="from" value="<?= e($period['from'] ?? '') ?>"></label>
+        <label>Au <input type="date" name="to" value="<?= e($period['to'] ?? '') ?>"></label>
+        <button type="submit" class="btn btn-primary btn-sm">Appliquer</button>
+    </form>
+</div>
+
+<script>
+(function () {
+    var toggle = document.getElementById('period-custom-toggle');
+    var custom = document.getElementById('period-custom');
+    if (!toggle || !custom) return;
+
+    toggle.addEventListener('click', function () {
+        custom.hidden = false;
+        var pills = document.querySelectorAll('#period-filters .period-pill');
+        Array.prototype.forEach.call(pills, function (p) { p.classList.remove('is-active'); });
+        toggle.classList.add('is-active');
+        var from = custom.querySelector('input[name="from"]');
+        if (from) from.focus();
+    });
+
+    custom.addEventListener('submit', function () {
+        toggle.classList.add('is-active');
+    });
+})();
+</script>

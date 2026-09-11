@@ -49,28 +49,14 @@ foreach ($rows as $r) {
     </div>
 </div>
 
+<?php require AEIC_VIEWS . '/admin/compta/_period_bar.php'; ?>
+
 <!-- Barre de filtres -->
-<form method="get" class="costs-toolbar" id="period-filters">
-    <div class="reappro-field">
-        <label class="field-label" for="period">📅 Période</label>
-        <select name="period" id="period">
-            <?php foreach ($periodOptions as $k => $label): ?>
-                <option value="<?= e($k) ?>" <?= $k === $period['preset'] ? 'selected' : '' ?>><?= e($label) ?></option>
-            <?php endforeach; ?>
-        </select>
-    </div>
-
-    <div class="reappro-dates" id="period-custom" <?= $period['preset'] === 'custom' ? '' : 'hidden' ?>>
-        <div>
-            <label class="field-label" for="from">Du</label>
-            <input type="date" name="from" id="from" value="<?= e($period['from'] ?? '') ?>">
-        </div>
-        <div>
-            <label class="field-label" for="to">Au</label>
-            <input type="date" name="to" id="to" value="<?= e($period['to'] ?? '') ?>">
-        </div>
-    </div>
-
+<form method="get" class="costs-toolbar">
+    <!-- Conserve la période sélectionnée lors d'un Filtrer -->
+    <input type="hidden" name="period" value="<?= e($period['preset']) ?>">
+    <?php if ($period['from'] !== null): ?><input type="hidden" name="from" value="<?= e($period['from']) ?>"><?php endif; ?>
+    <?php if ($period['to'] !== null): ?><input type="hidden" name="to" value="<?= e($period['to']) ?>"><?php endif; ?>
     <select name="category" aria-label="Catégorie">
         <option value="">Toutes catégories</option>
         <?php foreach ($categories as $c): ?>
@@ -164,27 +150,3 @@ foreach ($rows as $r) {
     Le journal liste chaque ligne du rapport SumUp importé. Les « Montants personnalisés » (perso) sont inclus dans le CA mais exclus du bénéfice.
 </p>
 
-<script>
-(function () {
-    // Sélecteur « 📅 Période » : les presets soumettent seuls, comme sur
-    // Réappro ; « Personnalisé » révèle d'abord les bornes de dates.
-    var form = document.getElementById('period-filters');
-    var custom = document.getElementById('period-custom');
-    if (!form) return;
-
-    var select = form.querySelector('select[name="period"]');
-    if (!select) return;
-
-    select.addEventListener('change', function () {
-        if (custom) {
-            custom.hidden = select.value !== 'custom';
-        }
-        if (select.value === 'custom') {
-            var from = document.getElementById('from');
-            if (from) from.focus();
-        } else {
-            form.submit();
-        }
-    });
-})();
-</script>
