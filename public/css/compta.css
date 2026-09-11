@@ -804,6 +804,24 @@
     }
 }
 
+/* ---- Événements : aide repliable ---- */
+details.howto > summary {
+    cursor: pointer;
+    font-weight: 900;
+    font-size: 1.05rem;
+    list-style-position: inside;
+}
+details.howto > summary::marker {
+    font-size: 1rem;
+}
+details.howto[open] > summary {
+    margin-bottom: 0.75rem;
+}
+details.howto p {
+    margin: 0.5rem 0;
+    font-size: 0.92rem;
+}
+
 
 
 
