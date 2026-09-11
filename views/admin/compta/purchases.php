@@ -10,6 +10,11 @@ declare(strict_types=1);
  * @var array<string,string>      $periodOptions
  * @var float                     $total
  * @var int                       $count
+ * @var int                       $qtyTotal
+ * @var array<string,array{lines:int,qty:int,total:float}> $bySupplier
+ * @var array<string,array{qty:int,total:float}>           $byProduct
+ * @var string|null               $topSupplierName
+ * @var float                     $topSupplierTotal
  */
 ?>
 <div class="compta-head">
@@ -50,12 +55,22 @@ declare(strict_types=1);
     <div class="card surface glass kpi">
         <p class="kpi-label">Total des achats</p>
         <p class="kpi-value"><?= e(formatPrice($total)) ?></p>
-        <p class="kpi-sub">sur la période sélectionnée</p>
+        <p class="kpi-sub"><?= (int) $count ?> ligne<?= $count > 1 ? 's' : '' ?> · sur la période</p>
     </div>
     <div class="card surface glass kpi">
-        <p class="kpi-label">Commandes</p>
-        <p class="kpi-value"><?= (int) $count ?></p>
-        <p class="kpi-sub">sur la période sélectionnée</p>
+        <p class="kpi-label">Quantité reçue</p>
+        <p class="kpi-value"><?= (int) $qtyTotal ?></p>
+        <p class="kpi-sub">unités entrées en stock</p>
+    </div>
+    <div class="card surface glass kpi">
+        <p class="kpi-label">Top fournisseur</p>
+        <?php if ($topSupplierName !== null && $topSupplierName !== '—'): ?>
+            <p class="kpi-value" style="font-size:1.15rem"><?= e($topSupplierName) ?></p>
+            <p class="kpi-sub"><?= e(formatPrice($topSupplierTotal)) ?> · sur la période</p>
+        <?php else: ?>
+            <p class="kpi-value muted">—</p>
+            <p class="kpi-sub">aucun fournisseur saisi</p>
+        <?php endif; ?>
     </div>
     <div class="card surface glass kpi">
         <p class="kpi-label">Voir aussi</p>
@@ -128,6 +143,48 @@ declare(strict_types=1);
     </section>
 </div>
 
+<div class="compta-grid">
+    <section class="card surface glass">
+        <h2 class="card-title">Par fournisseur</h2>
+        <table class="table">
+            <thead><tr><th>Fournisseur</th><th class="th-num">Lignes</th><th class="th-num">Qté</th><th class="th-num">Total</th></tr></thead>
+            <tbody>
+                <?php $i = 0; foreach ($bySupplier as $name => $s): $i++; ?>
+                    <tr>
+                        <td><?= e((string) $name) ?> <?= $i === 1 && $name !== '—' ? '<span class="badge badge-success">Top</span>' : '' ?></td>
+                        <td class="num"><?= (int) $s['lines'] ?></td>
+                        <td class="num"><?= (int) $s['qty'] ?></td>
+                        <td class="num"><strong><?= e(formatPrice((float) $s['total'])) ?></strong></td>
+                    </tr>
+                <?php endforeach; ?>
+                <?php if ($bySupplier === []): ?>
+                    <tr><td colspan="4" class="muted">Aucun achat sur la période sélectionnée.</td></tr>
+                <?php endif; ?>
+            </tbody>
+        </table>
+    </section>
+
+    <section class="card surface glass">
+        <h2 class="card-title">Par produit</h2>
+        <table class="table">
+            <thead><tr><th>Produit</th><th class="th-num">Qté</th><th class="th-num">Coût unit. moyen</th><th class="th-num">Total</th></tr></thead>
+            <tbody>
+                <?php foreach ($byProduct as $name => $p): ?>
+                    <tr>
+                        <td><strong><?= e((string) $name) ?></strong></td>
+                        <td class="num"><?= (int) $p['qty'] ?></td>
+                        <td class="num"><?= e(formatPrice((float) $p['total'] / max(1, (int) $p['qty']))) ?></td>
+                        <td class="num"><strong><?= e(formatPrice((float) $p['total'])) ?></strong></td>
+                    </tr>
+                <?php endforeach; ?>
+                <?php if ($byProduct === []): ?>
+                    <tr><td colspan="4" class="muted">Aucun achat sur la période sélectionnée.</td></tr>
+                <?php endif; ?>
+            </tbody>
+        </table>
+    </section>
+</div>
+
 <div class="card surface glass table-wrap">
     <h2 class="card-title">Derniers achats</h2>
     <p class="muted">Achats de la période sélectionnée (200 lignes max).</p>
@@ -165,6 +222,17 @@ declare(strict_types=1);
                 <tr><td colspan="7" class="muted">Aucun achat sur la période sélectionnée.</td></tr>
             <?php endif; ?>
         </tbody>
+        <?php if ($rows !== []): ?>
+            <tfoot>
+                <tr>
+                    <th colspan="2">Total période</th>
+                    <th class="num"><?= (int) $qtyTotal ?></th>
+                    <th></th>
+                    <th class="num"><?= e(formatPrice($total)) ?></th>
+                    <th colspan="2"></th>
+                </tr>
+            </tfoot>
+        <?php endif; ?>
     </table>
 </div>
 
