@@ -8,7 +8,7 @@ use App\Models\Expense;
 use App\Models\Sale;
 
 /**
- * Rapport annuel : vue 12 mois (CA, bénéfice, dépenses, résultat net) avec
+ * Bilan annuel : vue 12 mois (CA, bénéfice, dépenses, résultat net) avec
  * comparaison N-1, synthèse TVA et statistiques de paniers.
  *
  * Réservé aux rôles ADMIN et TRESORERIE (voir guardCompta()).
@@ -91,7 +91,7 @@ final class AdminReportingController extends AdminBaseController
         }
 
         $this->renderAdmin('admin/compta/annual', [
-            'title'   => sprintf('Rapport annuel %d', $year),
+            'title'   => sprintf('Bilan annuel %d', $year),
             'user'    => $user,
             'year'    => $year,
             'years'   => $years,

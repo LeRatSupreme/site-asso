@@ -45,7 +45,7 @@ $sections = [
     ],
     'Comptabilité' => [
         'Dashboard'        => '/admin/compta',
-        'Rapport annuel'   => '/admin/compta/annuel',
+        'Bilan annuel'    => '/admin/compta/annuel',
         'Analytics'        => '/admin/analytics',
         'Dashboard SumUp'  => '/admin/sumup',
     ],
