@@ -329,9 +329,9 @@ Tu comptes physiquement le rayon, tu saisis le nombre réel, et le site calcule 
 - Écart nul → nickel 🔥
 
 > 💡 Fais un inventaire **régulièrement** : en fin de semaine ou en fin de mois, avant de commander. Chaque comptage devient la nouvelle référence de stock.
+### J. Bilan annuel
 
-### J. Rapport annuel
-**Admin → Comptabilité → Rapport annuel** (ou `/admin/compta/annuel`).
+**Admin → Comptabilité → Bilan annuel** (ou `/admin/compta/annuel`).
 
 - Vue **12 mois** : CA, bénéfice, dépenses et **résultat net** mois par mois
 - **Comparaison N-1** (évolution du CA vs l'an dernier)

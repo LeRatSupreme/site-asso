@@ -13,11 +13,6 @@ declare(strict_types=1);
  */
 ?>
 <?php
-$vatTotal = 0.0;
-foreach ($vat as $v) {
-    $vatTotal += (float) $v['vat'];
-}
-$caDiff = $totals['ca'] - $totals['caPrev'];
 $totalMargin = $totals['ca'] > 0 ? round($totals['profit'] / $totals['ca'] * 100, 1) : null;
 $totalDelta = $totals['caPrev'] > 0 ? round(($totals['ca'] - $totals['caPrev']) / $totals['caPrev'] * 100, 1) : null;
 ?>
@@ -26,8 +21,8 @@ $totalDelta = $totals['caPrev'] > 0 ? round(($totals['ca'] - $totals['caPrev']) 
     <div class="compta-head-row">
         <div>
             <p class="eyebrow">Comptabilité</p>
-            <h1 class="page-title"><?= e(sprintf('Rapport annuel %d', $year)) ?></h1>
-            <p class="muted">Vue 12 mois : CA, bénéfice, dépenses et <strong>résultat net</strong>, avec comparaison N-1. Le must du suivi trésorerie.</p>
+            <h1 class="page-title"><?= e(sprintf('Bilan annuel %d', $year)) ?></h1>
+            <p class="muted">L'année en 12 mois : CA, bénéfice, dépenses et <strong>résultat net</strong>, avec comparaison N-1. Pour le bilan de fin de saison et l'AG.</p>
         </div>
     </div>
 </div>
@@ -45,29 +40,6 @@ $totalDelta = $totals['caPrev'] > 0 ? round(($totals['ca'] - $totals['caPrev']) 
         </select>
     </form>
     <a class="btn btn-outline" href="<?= e(url('/admin/compta/annuel?year=' . $year . '&export=csv')) ?>">📄 Exporter CSV</a>
-</div>
-
-<div class="compta-kpis">
-    <div class="card surface glass kpi">
-        <p class="kpi-label">CA TTC</p>
-        <p class="kpi-value"><?= e(formatPrice($totals['ca'])) ?></p>
-        <p class="kpi-sub">vs N-1 : <?= $caDiff >= 0 ? '+' : '−' ?><?= e(formatPrice(abs($caDiff))) ?></p>
-    </div>
-    <div class="card surface glass kpi">
-        <p class="kpi-label">Résultat net</p>
-        <p class="kpi-value <?= $totals['net'] >= 0 ? 'is-positive' : 'is-negative' ?>"><?= e(formatPrice($totals['net'])) ?></p>
-        <p class="kpi-sub">bénéfice − dépenses</p>
-    </div>
-    <div class="card surface glass kpi">
-        <p class="kpi-label">Panier moyen</p>
-        <p class="kpi-value"><?= e(formatPrice($baskets['avg_basket'])) ?></p>
-        <p class="kpi-sub"><?= e(sprintf('%d transactions', $baskets['baskets'])) ?> — <?= e(number_format($baskets['avg_items'], 1, ',', ' ')) ?> articles/panier</p>
-    </div>
-    <div class="card surface glass kpi">
-        <p class="kpi-label">TVA collectée</p>
-        <p class="kpi-value"><?= e(formatPrice($vatTotal)) ?></p>
-        <p class="kpi-sub"><?= e(sprintf('%d taux', count($vat))) ?></p>
-    </div>
 </div>
 
 <div class="card surface glass table-wrap">
