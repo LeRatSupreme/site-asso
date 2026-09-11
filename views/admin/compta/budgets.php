@@ -114,10 +114,17 @@ $resultGap = $resultRealized - $resultPlanned;
                             $state = $r['realized'] > 0
                                 ? '<span class="badge badge-danger">Dépassé</span>'
                                 : '<span class="badge badge-muted">—</span>';
+                        } elseif ($r['realized'] <= 0) {
+                            // Enveloppe prévue mais rien dépensé pour l'instant.
+                            $state = '<span class="badge badge-muted">Non entamé</span>';
                         } else {
+                            // Taux de consommation de l'enveloppe (arrondi).
+                            $pct = (int) round($r['realized'] / $r['planned'] * 100);
                             $state = $r['realized'] <= $r['planned']
-                                ? '<span class="badge badge-success">Dans le budget</span>'
-                                : '<span class="badge badge-danger">Dépassé</span>';
+                                ? ($pct >= 85
+                                    ? sprintf('<span class="badge badge-warning">Presque épuisé (%d %%)</span>', $pct)
+                                    : sprintf('<span class="badge badge-success">Dans le budget (%d %%)</span>', $pct))
+                                : sprintf('<span class="badge badge-danger">Dépassé (%d %%)</span>', $pct);
                         }
                     ?>
                     <tr>
