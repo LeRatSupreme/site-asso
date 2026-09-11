@@ -48,6 +48,10 @@ final class AdminComptaEventController extends AdminBaseController
             'costsT'        => $costsT,
             'profitT'       => $profitT,
             'count'         => count($events),
+            // Sélecteur d'événements du formulaire de coût : les 50 plus
+            // récents, indépendamment du filtre de période.
+            'allEvents'     => array_slice(ComptaEvent::listBetween(null, null), 0, 50),
+            'recentCosts'   => ComptaEventCost::recentWithEvent(15),
         ]);
     }
 
@@ -156,6 +160,42 @@ final class AdminComptaEventController extends AdminBaseController
         redirect(url('/admin/compta/evenements/' . rawurlencode($id)));
     }
 
+    /**
+     * Ajout rapide de coût DEPUIS LA PAGE DE LISTE : l'événement est
+     * choisi dans un sélecteur (POST event_id) plutôt que via l'URL.
+     */
+    public function saveCostQuick(): void
+    {
+        $user = $this->guardCompta();
+
+        $eventId = trim((string) ($_POST['event_id'] ?? ''));
+        $event = $eventId !== '' ? ComptaEvent::findForDetail($eventId) : null;
+        if ($event === null) {
+            $this->setFlash('error', 'Événement introuvable.');
+            redirect(url('/admin/compta/evenements'));
+        }
+
+        $costId = ComptaEventCost::create($eventId, [
+            'spent_at'          => trim((string) ($_POST['spent_at'] ?? '')),
+            'label'             => trim((string) ($_POST['label'] ?? '')),
+            'amount_ttc'        => parseFrenchFloat((string) ($_POST['amount'] ?? '')),
+            'linked_event_name' => (string) $event['name'],
+            'created_by'        => $user['id'] ?? null,
+        ]);
+
+        if ($costId === '') {
+            $this->setFlash('error', 'Libellé et montant requis.');
+            redirect(url('/admin/compta/evenements'));
+        }
+
+        $this->audit('compta.event.cost.create', 'compta_event_cost', $costId, [
+            'event_id' => $eventId,
+            'label'    => trim((string) ($_POST['label'] ?? '')),
+        ]);
+        $this->setFlash('success', 'Coût enregistré (dépense Événements créée).');
+        redirect(url('/admin/compta/evenements'));
+    }
+
     public function deleteCost(string $id, string $cid): void
     {
         $user = $this->guardCompta();
@@ -164,6 +204,11 @@ final class AdminComptaEventController extends AdminBaseController
 
         $this->audit('compta.event.cost.delete', 'compta_event_cost', $cid, ['event_id' => $id]);
         $this->setFlash('success', 'Coût supprimé (dépense liée également).');
+
+        // Retour : page de liste ou page de détail selon l'origine.
+        if (($_POST['back'] ?? '') === 'list') {
+            redirect(url('/admin/compta/evenements'));
+        }
         redirect(url('/admin/compta/evenements/' . rawurlencode($id)));
     }
 }

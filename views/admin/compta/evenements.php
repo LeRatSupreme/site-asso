@@ -11,6 +11,8 @@ declare(strict_types=1);
  * @var float                     $costsT
  * @var float                     $profitT
  * @var int                       $count
+ * @var list<array<string,mixed>> $allEvents
+ * @var list<array<string,mixed>> $recentCosts
  */
 ?>
 <div class="compta-head">
@@ -107,12 +109,52 @@ declare(strict_types=1);
     </section>
 
     <section class="card surface glass">
-        <h2 class="card-title">Comment ça marche</h2>
-        <p>📌 Le <strong>nom de l'événement = bouton SumUp</strong> : les ventes importées en CSV portant ce libellé se rattachent toutes seules.</p>
-        <p>📌 Les coûts saisis créent des <strong>dépenses « Événements »</strong> : les <a href="<?= e(url('/admin/compta/budgets')) ?>">budgets</a> et le <a href="<?= e(url('/admin/compta/depenses')) ?>">résultat net</a> restent à jour.</p>
-        <p>📌 Si aucune vente ne se rattache, vérifie l'orthographe du nom ou passe par le <a href="<?= e(url('/admin/compta/aliases')) ?>">Mapping libellés</a>.</p>
+        <h2 class="card-title">Ajouter un coût</h2>
+        <form method="post" action="<?= e(url('/admin/compta/evenements/couts/save')) ?>">
+            <?= csrf_field() ?>
+
+            <div class="field">
+                <label for="cost_event">Événement</label>
+                <select id="cost_event" name="event_id" required>
+                    <?php foreach ($allEvents as $ev): ?>
+                        <option value="<?= e((string) $ev['id']) ?>">
+                            <?= e((string) $ev['name']) ?> — <?= e(formatDate((string) $ev['date_from'])) ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+                <p class="field-help">Ex : l'achat de fromage pour la soirée raclette.</p>
+            </div>
+
+            <div class="field">
+                <label for="cost_date">Date</label>
+                <input type="date" id="cost_date" name="spent_at" value="<?= e(date('Y-m-d')) ?>" required>
+            </div>
+
+            <div class="field-row">
+                <div class="field">
+                    <label for="cost_label">Libellé</label>
+                    <input type="text" id="cost_label" name="label" placeholder="ex : Fromage" required>
+                </div>
+                <div class="field">
+                    <label for="cost_amount">Montant TTC (€)</label>
+                    <input type="text" id="cost_amount" name="amount" placeholder="ex: 25,90" inputmode="decimal" required>
+                </div>
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">Enregistrer le coût</button>
+                <button type="button" class="btn btn-ghost" onclick="if (confirm('Effacer la saisie en cours ?')) this.form.reset();">Annuler</button>
+            </div>
+        </form>
     </section>
 </div>
+
+<section class="card surface glass">
+    <h2 class="card-title">Comment ça marche</h2>
+    <p>📌 Le <strong>nom de l'événement = bouton SumUp</strong> : les ventes importées en CSV portant ce libellé se rattachent toutes seules.</p>
+    <p>📌 Les coûts saisis créent des <strong>dépenses « Événements »</strong> : les <a href="<?= e(url('/admin/compta/budgets')) ?>">budgets</a> et le <a href="<?= e(url('/admin/compta/depenses')) ?>">résultat net</a> restent à jour.</p>
+    <p>📌 Si aucune vente ne se rattache, vérifie l'orthographe du nom ou passe par le <a href="<?= e(url('/admin/compta/aliases')) ?>">Mapping libellés</a>. Clique sur le nom d'un événement pour son <strong>détail complet</strong> (ventes rattachées, seuil de rentabilité).</p>
+</section>
 
 <div class="card surface glass table-wrap">
     <h2 class="card-title">Événements de la période</h2>
@@ -177,6 +219,41 @@ declare(strict_types=1);
         </tbody>
     </table>
 </div>
+
+<?php if ($recentCosts !== []): ?>
+<div class="card surface glass table-wrap">
+    <h2 class="card-title">Derniers coûts saisis</h2>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Événement</th>
+                <th>Libellé</th>
+                <th class="th-num">Montant</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            <?php foreach ($recentCosts as $c): ?>
+                <tr>
+                    <td><?= e(formatDate((string) $c['spent_at'])) ?></td>
+                    <td><strong><?= e((string) $c['event_name']) ?></strong></td>
+                    <td><?= e((string) $c['label']) ?></td>
+                    <td class="num"><?= e(formatPrice((float) $c['amount_ttc'])) ?></td>
+                    <td class="row-actions">
+                        <form method="post" action="<?= e(url('/admin/compta/evenements/' . rawurlencode((string) $c['event_id']) . '/couts/' . rawurlencode((string) $c['id']) . '/delete')) ?>"
+                              data-confirm="Supprimer ce coût (et sa dépense liée) ?">
+                            <?= csrf_field() ?>
+                            <input type="hidden" name="back" value="list">
+                            <button type="submit" class="btn btn-danger btn-sm" aria-label="Supprimer">🗑</button>
+                        </form>
+                    </td>
+                </tr>
+            <?php endforeach; ?>
+        </tbody>
+    </table>
+</div>
+<?php endif; ?>
 
 <script>
 (function () {
