@@ -44,26 +44,30 @@ $sections = [
         'Énigmes'       => '/admin/jeux/enigmes',
     ],
     'Comptabilité' => [
-        'Dashboard'        => '/admin/compta',
-        'Bilan annuel'    => '/admin/compta/annuel',
-        'Analytics'        => '/admin/analytics',
-        'Dashboard SumUp'  => '/admin/sumup',
+        'Dashboard'     => '/admin/compta',
+        'Bilan annuel'  => '/admin/compta/annuel',
+        'Analytics'     => '/admin/analytics',
     ],
-    'Ventes & produits' => [
-        'Importer CSV'     => '/admin/compta/import',
-        'Journal ventes'   => '/admin/compta/ventes',
+    'Ventes' => [
+        'Importer CSV'    => '/admin/compta/import',
+        'Journal ventes'  => '/admin/compta/ventes',
+        'Dashboard SumUp' => '/admin/sumup',
+    ],
+    'Produits & coûts' => [
         'Produits'         => '/admin/compta/produits',
         'Catégories'       => '/admin/compta/categories',
         'Coûts de revient' => '/admin/compta/couts',
         'Mapping libellés' => '/admin/compta/aliases',
     ],
-    'Trésorerie & stock' => [
-        'Dépenses'       => '/admin/compta/depenses',
-        'Budgets'        => '/admin/compta/budgets',
+    'Trésorerie' => [
+        'Dépenses'   => '/admin/compta/depenses',
+        'Budgets'    => '/admin/compta/budgets',
+        'Événements' => '/admin/compta/evenements',
+    ],
+    'Stock' => [
         'Achats & stock' => '/admin/compta/achats',
         'Inventaire'     => '/admin/compta/inventaire',
         'Pertes'         => '/admin/compta/pertes',
-        'Événements'     => '/admin/compta/evenements',
         'Réappro'        => '/admin/compta/reappro',
     ],
     'Système' => [
@@ -76,8 +80,10 @@ $sections = [
 if (($user['role'] ?? null) === 'TRESORERIE') {
     $sections = [
         'Comptabilité' => $sections['Comptabilité'],
-        'Ventes & produits' => $sections['Ventes & produits'],
-        'Trésorerie & stock' => $sections['Trésorerie & stock'],
+        'Ventes' => $sections['Ventes'],
+        'Produits & coûts' => $sections['Produits & coûts'],
+        'Trésorerie' => $sections['Trésorerie'],
+        'Stock' => $sections['Stock'],
     ];
 }
 ?>
