@@ -151,7 +151,7 @@ $resultGap = $resultRealized - $resultPlanned;
             </tfoot>
         </table>
         <button type="submit" class="btn btn-primary">Enregistrer le budget</button>
-        <p class="muted" style="font-size:0.85rem">Les montants se saisissent à la française (ex : 250,50 ou 10 000). Laisse vide ou mets 0 pour supprimer une ligne. La ligne « Bilan » compare le résultat (CA − dépenses) prévu au réalisé.</p>
+        <p class="muted" style="font-size:0.85rem">Les montants se saisissent à la française (ex : 250,50 ou 10 000). Laisse vide ou mets 0 pour supprimer une ligne. La ligne « Bilan » compare le résultat (CA − dépenses) prévu au réalisé. <strong>Matière (cafétéria)</strong> se remplit automatiquement avec tes achats enregistrés (page Achats &amp; stock) — inutile de les ressaisir en dépenses.</p>
     </form>
 </div>
 

@@ -7,6 +7,7 @@ namespace App\Controllers\Admin;
 use App\Core\Compta\ComptaCalc;
 use App\Models\Budget;
 use App\Models\Expense;
+use App\Models\Purchase;
 use App\Models\Sale;
 
 /**
@@ -53,9 +54,13 @@ final class AdminBudgetController extends AdminBaseController
         }
 
         // Agrégation en PHP des budgets et des réalisés sur ces mois.
+        // L'enveloppe MATIERE se nourrit des ACHATS de stock (page Achats
+        // & stock) : c'est la vraie sortie d'argent « courses cafétéria »,
+        // en plus d'éventuelles dépenses MATIERE saisies manuellement.
         $plannedByCat = [];
         $realizedCa = 0.0;
         $realizedExpenses = [];
+        $purchasesByYear = [];
         foreach ($months as [$y, $m]) {
             foreach (Budget::forMonth($y, $m) as $cat => $planned) {
                 $plannedByCat[$cat] = ($plannedByCat[$cat] ?? 0.0) + $planned;
@@ -64,6 +69,15 @@ final class AdminBudgetController extends AdminBaseController
             foreach (Expense::byCategory($y, $m) as $c) {
                 $realizedExpenses[$c['category']] = ($realizedExpenses[$c['category']] ?? 0.0) + (float) $c['ttc'];
             }
+
+            if (!isset($purchasesByYear[$y])) {
+                $purchasesByYear[$y] = [];
+                foreach (Purchase::monthlyTotals($y) as $p) {
+                    $purchasesByYear[$y][(int) $p['m']] = (float) $p['ttc'];
+                }
+            }
+            $realizedExpenses['MATIERE'] = ($realizedExpenses['MATIERE'] ?? 0.0)
+                + ($purchasesByYear[$y][$m] ?? 0.0);
         }
 
         // Le formulaire édite le dernier mois couvert par la période.
