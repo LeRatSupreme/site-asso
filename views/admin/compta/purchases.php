@@ -11,10 +11,6 @@ declare(strict_types=1);
  * @var float                     $total
  * @var int                       $count
  * @var int                       $qtyTotal
- * @var array<string,array{lines:int,qty:int,total:float}> $bySupplier
- * @var array<string,array{qty:int,total:float}>           $byProduct
- * @var string|null               $topSupplierName
- * @var float                     $topSupplierTotal
  */
 ?>
 <div class="compta-head">
@@ -61,16 +57,6 @@ declare(strict_types=1);
         <p class="kpi-label">Quantité reçue</p>
         <p class="kpi-value"><?= (int) $qtyTotal ?></p>
         <p class="kpi-sub">unités entrées en stock</p>
-    </div>
-    <div class="card surface glass kpi">
-        <p class="kpi-label">Top fournisseur</p>
-        <?php if ($topSupplierName !== null && $topSupplierName !== '—'): ?>
-            <p class="kpi-value" style="font-size:1.15rem"><?= e($topSupplierName) ?></p>
-            <p class="kpi-sub"><?= e(formatPrice($topSupplierTotal)) ?> · sur la période</p>
-        <?php else: ?>
-            <p class="kpi-value muted">—</p>
-            <p class="kpi-sub">aucun fournisseur saisi</p>
-        <?php endif; ?>
     </div>
     <div class="card surface glass kpi">
         <p class="kpi-label">Voir aussi</p>
@@ -140,48 +126,6 @@ declare(strict_types=1);
         <p>📌 Le <a href="<?= e(url('/admin/compta/reappro')) ?>">réappro</a> calcule ce qu'il <strong>FAUT</strong> commander ; cette page trace ce qui a <strong>ÉTÉ</strong> commandé.</p>
         <p>📌 Par défaut, l'achat crée un <strong>nouveau lot de coût</strong> à ce prix dans <a href="<?= e(url('/admin/compta/couts')) ?>">Coûts de revient</a> — décoche la case pour un prix inhabituel.</p>
         <p>📌 Les achats alimentent le <strong>stock théorique</strong> visible dans <a href="<?= e(url('/admin/compta/inventaire')) ?>">l'inventaire</a> : dernier comptage + achats − ventes.</p>
-    </section>
-</div>
-
-<div class="compta-grid">
-    <section class="card surface glass">
-        <h2 class="card-title">Par fournisseur</h2>
-        <table class="table">
-            <thead><tr><th>Fournisseur</th><th class="th-num">Lignes</th><th class="th-num">Qté</th><th class="th-num">Total</th></tr></thead>
-            <tbody>
-                <?php $i = 0; foreach ($bySupplier as $name => $s): $i++; ?>
-                    <tr>
-                        <td><?= e((string) $name) ?> <?= $i === 1 && $name !== '—' ? '<span class="badge badge-success">Top</span>' : '' ?></td>
-                        <td class="num"><?= (int) $s['lines'] ?></td>
-                        <td class="num"><?= (int) $s['qty'] ?></td>
-                        <td class="num"><strong><?= e(formatPrice((float) $s['total'])) ?></strong></td>
-                    </tr>
-                <?php endforeach; ?>
-                <?php if ($bySupplier === []): ?>
-                    <tr><td colspan="4" class="muted">Aucun achat sur la période sélectionnée.</td></tr>
-                <?php endif; ?>
-            </tbody>
-        </table>
-    </section>
-
-    <section class="card surface glass">
-        <h2 class="card-title">Par produit</h2>
-        <table class="table">
-            <thead><tr><th>Produit</th><th class="th-num">Qté</th><th class="th-num">Coût unit. moyen</th><th class="th-num">Total</th></tr></thead>
-            <tbody>
-                <?php foreach ($byProduct as $name => $p): ?>
-                    <tr>
-                        <td><strong><?= e((string) $name) ?></strong></td>
-                        <td class="num"><?= (int) $p['qty'] ?></td>
-                        <td class="num"><?= e(formatPrice((float) $p['total'] / max(1, (int) $p['qty']))) ?></td>
-                        <td class="num"><strong><?= e(formatPrice((float) $p['total'])) ?></strong></td>
-                    </tr>
-                <?php endforeach; ?>
-                <?php if ($byProduct === []): ?>
-                    <tr><td colspan="4" class="muted">Aucun achat sur la période sélectionnée.</td></tr>
-                <?php endif; ?>
-            </tbody>
-        </table>
     </section>
 </div>
 

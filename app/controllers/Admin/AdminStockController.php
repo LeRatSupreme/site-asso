@@ -32,46 +32,22 @@ final class AdminStockController extends AdminBaseController
         $period = ComptaCalc::resolvePeriod($_GET['period'] ?? null, $_GET['from'] ?? null, $_GET['to'] ?? null);
         $rows = Purchase::between($period['from'], $period['to'], 200);
 
-        // Agrégats de la période, calculés sur les lignes affichées :
-        // quantité totale, ventilation par fournisseur et par produit.
+        // Quantité totale reçue sur la période (KPI + pied du journal).
         $qtyTotal = 0;
-        $bySupplier = [];
-        $byProduct = [];
         foreach ($rows as $r) {
-            $supplier = trim((string) ($r['supplier'] ?? ''));
-            $supplier = $supplier !== '' ? $supplier : '—';
-            $key = (string) $r['product_key'];
-            $qty = (int) $r['quantity'];
-            $lineTotal = (float) $r['total_ttc'];
-
-            $qtyTotal += $qty;
-            $bySupplier[$supplier]['lines'] = ($bySupplier[$supplier]['lines'] ?? 0) + 1;
-            $bySupplier[$supplier]['qty'] = ($bySupplier[$supplier]['qty'] ?? 0) + $qty;
-            $bySupplier[$supplier]['total'] = ($bySupplier[$supplier]['total'] ?? 0.0) + $lineTotal;
-
-            $byProduct[$key]['qty'] = ($byProduct[$key]['qty'] ?? 0) + $qty;
-            $byProduct[$key]['total'] = ($byProduct[$key]['total'] ?? 0.0) + $lineTotal;
+            $qtyTotal += (int) $r['quantity'];
         }
-        uasort($bySupplier, static fn (array $a, array $b): int => $b['total'] <=> $a['total']);
-        uasort($byProduct, static fn (array $a, array $b): int => $b['total'] <=> $a['total']);
-
-        $topSupplierName = $bySupplier === [] ? null : (string) array_key_first($bySupplier);
-        $topSupplierTotal = $topSupplierName !== null ? (float) $bySupplier[$topSupplierName]['total'] : 0.0;
 
         $this->renderAdmin('admin/compta/purchases', [
-            'title'           => 'Achats & stock',
-            'user'            => $user,
-            'rows'            => $rows,
-            'products'        => Sale::distinctProducts(),
-            'period'          => $period,
-            'periodOptions'   => ComptaCalc::PERIOD_OPTIONS,
-            'total'           => Purchase::totalBetween($period['from'], $period['to']),
-            'count'           => count($rows),
-            'qtyTotal'        => $qtyTotal,
-            'bySupplier'      => $bySupplier,
-            'byProduct'       => $byProduct,
-            'topSupplierName' => $topSupplierName,
-            'topSupplierTotal'=> $topSupplierTotal,
+            'title'         => 'Achats & stock',
+            'user'          => $user,
+            'rows'          => $rows,
+            'products'      => Sale::distinctProducts(),
+            'period'        => $period,
+            'periodOptions' => ComptaCalc::PERIOD_OPTIONS,
+            'total'         => Purchase::totalBetween($period['from'], $period['to']),
+            'count'         => count($rows),
+            'qtyTotal'      => $qtyTotal,
         ]);
     }
 
