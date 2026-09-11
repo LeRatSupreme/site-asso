@@ -7,6 +7,7 @@ use App\Controllers\Admin\AdminAnalyticsController;
 use App\Controllers\Admin\AdminBudgetController;
 use App\Controllers\Admin\AdminCafeteriaController;
 use App\Controllers\Admin\AdminComptaController;
+use App\Controllers\Admin\AdminComptaEventController;
 use App\Controllers\Admin\AdminController;
 use App\Controllers\Admin\AdminEventController;
 use App\Controllers\Admin\AdminExpenseController;
@@ -235,7 +236,7 @@ function aeic_register_routes(Router $router): void
     $router->get('/admin/compta/reappro', [AdminComptaController::class, 'reorder']);
     $router->post('/admin/compta/reappro/stocks', [AdminComptaController::class, 'saveStocks']);
 
-    // Suivi avancé : dépenses, budgets, achats, inventaire, pertes, rapport annuel.
+    // Suivi avancé : dépenses, budgets, achats, inventaire, pertes, événements, rapport annuel.
     $router->get('/admin/compta/depenses', [AdminExpenseController::class, 'index']);
     $router->post('/admin/compta/depenses/save', [AdminExpenseController::class, 'save']);
     $router->post('/admin/compta/depenses/{id}/delete', [AdminExpenseController::class, 'delete']);
@@ -249,6 +250,12 @@ function aeic_register_routes(Router $router): void
     $router->get('/admin/compta/pertes', [AdminLossController::class, 'index']);
     $router->post('/admin/compta/pertes/save', [AdminLossController::class, 'save']);
     $router->post('/admin/compta/pertes/{id}/delete', [AdminLossController::class, 'delete']);
+    $router->get('/admin/compta/evenements', [AdminComptaEventController::class, 'index']);
+    $router->post('/admin/compta/evenements/save', [AdminComptaEventController::class, 'save']);
+    $router->get('/admin/compta/evenements/{id}', [AdminComptaEventController::class, 'detail']);
+    $router->post('/admin/compta/evenements/{id}/delete', [AdminComptaEventController::class, 'delete']);
+    $router->post('/admin/compta/evenements/{id}/couts/save', [AdminComptaEventController::class, 'saveCost']);
+    $router->post('/admin/compta/evenements/{id}/couts/{cid}/delete', [AdminComptaEventController::class, 'deleteCost']);
     $router->get('/admin/compta/annuel', [AdminReportingController::class, 'annual']);
 
     // Mini dashboard SumUp (fondé sur les ventes importées ; ADMIN/TRESORERIE).

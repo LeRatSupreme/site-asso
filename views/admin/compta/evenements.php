@@ -1,0 +1,204 @@
+<?php
+
+declare(strict_types=1);
+
+/**
+ * @var array<string,mixed>       $user
+ * @var array{preset:string,from:?string,to:?string} $period
+ * @var array<string,string>      $periodOptions
+ * @var list<array<string,mixed>> $events lignes enrichies (+ ca, qty, costs, profit)
+ * @var float                     $caT
+ * @var float                     $costsT
+ * @var float                     $profitT
+ * @var int                       $count
+ */
+?>
+<div class="compta-head">
+    <div>
+        <p class="eyebrow">Comptabilité</p>
+        <h1 class="page-title">Événements</h1>
+        <p class="muted">Crée un événement avec le <strong>nom exact du bouton SumUp</strong> : les ventes importées s'y rattachent automatiquement, tu saisis les coûts, et le bénéfice se calcule tout seul.</p>
+    </div>
+</div>
+
+<div class="admin-actions">
+    <form method="get" class="reappro-bar" id="period-filters">
+        <div class="reappro-field">
+            <label class="field-label" for="period">📅 Période</label>
+            <select name="period" id="period">
+                <?php foreach ($periodOptions as $k => $label): ?>
+                    <option value="<?= e($k) ?>" <?= $k === $period['preset'] ? 'selected' : '' ?>><?= e($label) ?></option>
+                <?php endforeach; ?>
+            </select>
+        </div>
+
+        <div class="reappro-dates" id="period-custom" <?= $period['preset'] === 'custom' ? '' : 'hidden' ?>>
+            <div>
+                <label class="field-label" for="from">Du</label>
+                <input type="date" name="from" id="from" value="<?= e($period['from'] ?? '') ?>">
+            </div>
+            <div>
+                <label class="field-label" for="to">Au</label>
+                <input type="date" name="to" id="to" value="<?= e($period['to'] ?? '') ?>">
+            </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-sm">Appliquer</button>
+    </form>
+</div>
+
+<div class="compta-kpis">
+    <div class="card surface glass kpi">
+        <p class="kpi-label">Revenu événements</p>
+        <p class="kpi-value"><?= e(formatPrice($caT)) ?></p>
+        <p class="kpi-sub"><?= (int) $count ?> événement<?= $count > 1 ? 's' : '' ?></p>
+    </div>
+    <div class="card surface glass kpi">
+        <p class="kpi-label">Coûts</p>
+        <p class="kpi-value"><?= e(formatPrice($costsT)) ?></p>
+        <p class="kpi-sub">dépenses Événements liées</p>
+    </div>
+    <div class="card surface glass kpi">
+        <p class="kpi-label">Bénéfice net</p>
+        <p class="kpi-value <?= $profitT >= 0 ? 'is-positive' : 'is-negative' ?>"><?= e(formatPrice($profitT)) ?></p>
+        <p class="kpi-sub">revenu − coûts</p>
+    </div>
+    <div class="card surface glass kpi">
+        <p class="kpi-label">Seuil global atteint</p>
+        <p class="kpi-value"><?= $profitT >= 0 ? '✅' : '❌' ?></p>
+        <p class="kpi-sub">rentabilité globale</p>
+    </div>
+</div>
+
+<div class="compta-grid">
+    <section class="card surface glass">
+        <h2 class="card-title">Créer un événement</h2>
+        <form method="post" action="<?= e(url('/admin/compta/evenements/save')) ?>">
+            <?= csrf_field() ?>
+
+            <div class="field">
+                <label for="name">Nom</label>
+                <input type="text" id="name" name="name" placeholder="ex : Soirée Intégration" autocomplete="off" required>
+                <p class="field-help">Doit correspondre EXACTEMENT au libellé SumUp utilisé pour vendre.</p>
+            </div>
+
+            <div class="field-row">
+                <div class="field">
+                    <label for="date_from">Date</label>
+                    <input type="date" id="date_from" name="date_from" value="<?= e(date('Y-m-d')) ?>" required>
+                </div>
+                <div class="field">
+                    <label for="date_to">Jusqu'au <span class="muted">(optionnel)</span></label>
+                    <input type="date" id="date_to" name="date_to">
+                    <p class="field-help">Défaut : même jour.</p>
+                </div>
+            </div>
+
+            <div class="field">
+                <label for="notes">Notes <span class="muted">(optionnel)</span></label>
+                <input type="text" id="notes" name="notes" placeholder="ex : édition 2026, prévoir la sonorisation">
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">Créer l'événement</button>
+                <button type="button" class="btn btn-ghost" onclick="if (confirm('Effacer la saisie en cours ?')) this.form.reset();">Annuler</button>
+            </div>
+        </form>
+    </section>
+
+    <section class="card surface glass">
+        <h2 class="card-title">Comment ça marche</h2>
+        <p>📌 Le <strong>nom de l'événement = bouton SumUp</strong> : les ventes importées en CSV portant ce libellé se rattachent toutes seules.</p>
+        <p>📌 Les coûts saisis créent des <strong>dépenses « Événements »</strong> : les <a href="<?= e(url('/admin/compta/budgets')) ?>">budgets</a> et le <a href="<?= e(url('/admin/compta/depenses')) ?>">résultat net</a> restent à jour.</p>
+        <p>📌 Si aucune vente ne se rattache, vérifie l'orthographe du nom ou passe par le <a href="<?= e(url('/admin/compta/aliases')) ?>">Mapping libellés</a>.</p>
+    </section>
+</div>
+
+<div class="card surface glass table-wrap">
+    <h2 class="card-title">Événements de la période</h2>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Événement</th>
+                <th class="th-num">Entrées</th>
+                <th class="th-num">Revenu</th>
+                <th class="th-num">Coûts</th>
+                <th class="th-num">Bénéfice</th>
+                <th class="th-num">Marge</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            <?php foreach ($events as $ev): ?>
+                <?php
+                    $ca = (float) $ev['ca'];
+                    $qty = (int) $ev['qty'];
+                    $costs = (float) $ev['costs'];
+                    $profit = (float) $ev['profit'];
+                    $margin = $ca > 0.0 ? round($profit / $ca * 100.0, 1) : null;
+                ?>
+                <tr>
+                    <td>
+                        <?= e(formatDate((string) $ev['date_from'])) ?>
+                        <?php if ((string) $ev['date_to'] !== (string) $ev['date_from']): ?>
+                            → <?= e(formatDate((string) $ev['date_to'])) ?>
+                        <?php endif; ?>
+                    </td>
+                    <td><strong><a href="<?= e(url('/admin/compta/evenements/' . rawurlencode((string) $ev['id']))) ?>"><?= e((string) $ev['name']) ?></a></strong></td>
+                    <td class="num">
+                        <?php if ($qty > 0): ?>
+                            <?= $qty ?>
+                        <?php else: ?>
+                            —<br><span class="badge badge-muted">Aucune vente rattachée</span>
+                        <?php endif; ?>
+                    </td>
+                    <td class="num"><?= e(formatPrice($ca)) ?></td>
+                    <td class="num"><?= e(formatPrice($costs)) ?></td>
+                    <td class="num <?= $profit >= 0 ? 'is-positive' : 'is-negative' ?>">
+                        <strong><?= e(formatPrice($profit)) ?></strong>
+                        <?php if ($ca > 0): ?>
+                            <span class="badge <?= $profit >= 0 ? 'badge-success' : 'badge-danger' ?>"><?= $profit >= 0 ? 'Rentable' : 'Déficitaire' ?></span>
+                        <?php endif; ?>
+                    </td>
+                    <td class="num"><?= $margin !== null ? e(number_format($margin, 1, ',', ' ')) . ' %' : '—' ?></td>
+                    <td class="row-actions">
+                        <form method="post" action="<?= e(url('/admin/compta/evenements/' . rawurlencode((string) $ev['id']) . '/delete')) ?>"
+                              data-confirm="Supprimer cet événement, ses coûts et ses dépenses liées ?">
+                            <?= csrf_field() ?>
+                            <button type="submit" class="btn btn-danger btn-sm" aria-label="Supprimer">🗑</button>
+                        </form>
+                    </td>
+                </tr>
+            <?php endforeach; ?>
+            <?php if ($events === []): ?>
+                <tr><td colspan="8" class="muted">Aucun événement sur la période.</td></tr>
+            <?php endif; ?>
+        </tbody>
+    </table>
+</div>
+
+<script>
+(function () {
+    // Sélecteur « 📅 Période » : les presets soumettent seuls, comme sur
+    // Réappro ; « Personnalisé » révèle d'abord les bornes de dates.
+    var form = document.getElementById('period-filters');
+    var custom = document.getElementById('period-custom');
+    if (!form) return;
+
+    var select = form.querySelector('select[name="period"]');
+    if (!select) return;
+
+    select.addEventListener('change', function () {
+        if (custom) {
+            custom.hidden = select.value !== 'custom';
+        }
+        if (select.value === 'custom') {
+            var from = document.getElementById('from');
+            if (from) from.focus();
+        } else {
+            form.submit();
+        }
+    });
+})();
+</script>
