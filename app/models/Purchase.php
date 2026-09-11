@@ -50,6 +50,10 @@ final class Purchase extends Model
              VALUES (?,?,?,?,?,?,?,?,?,NOW())'
         )->execute([$id, $purchasedAt, $supplier, $productKey, $quantity, $unitCost, $totalTtc, $notes, $createdBy]);
 
+        // L'achat entre physiquement en stock : la référence de stock
+        // (utilisée par le réappro) suit le stock théorique de l'inventaire.
+        ProductStock::adjust($productKey, $quantity);
+
         return $id;
     }
 

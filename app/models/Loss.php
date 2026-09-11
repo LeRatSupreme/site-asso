@@ -58,6 +58,9 @@ final class Loss extends Model
              VALUES (?,?,?,?,?,?,?,NOW())'
         )->execute([$id, $lostAt, $productKey, $quantity, $reason, $note, $createdBy]);
 
+        // La perte sort du stock : la référence (réappro) suit le théorique.
+        ProductStock::adjust($productKey, -$quantity);
+
         return $id;
     }
 

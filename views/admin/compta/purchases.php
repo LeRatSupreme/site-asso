@@ -105,6 +105,14 @@ declare(strict_types=1);
                 <input type="text" id="supplier" name="supplier" placeholder="ex: Metro">
             </div>
 
+            <div class="field">
+                <label style="display:flex;align-items:center;gap:8px;font-weight:400;cursor:pointer;">
+                    <input type="checkbox" name="update_cost" value="1" checked>
+                    Mettre à jour le coût de revient <span class="muted">(nouveau lot à ce prix)</span>
+                </label>
+                <p class="field-help">Décoche si ce prix est inhabituel (promo, erreur, test…) pour ne pas fausser le calcul du bénéfice.</p>
+            </div>
+
             <div class="form-actions">
                 <button type="submit" class="btn btn-primary">Enregistrer l'achat</button>
                 <button type="button" class="btn btn-ghost" onclick="if (confirm('Effacer la saisie en cours ?')) this.form.reset();">Annuler</button>
@@ -115,7 +123,7 @@ declare(strict_types=1);
     <section class="card surface glass">
         <h2 class="card-title">Comment ça marche</h2>
         <p>📌 Le <a href="<?= e(url('/admin/compta/reappro')) ?>">réappro</a> calcule ce qu'il <strong>FAUT</strong> commander ; cette page trace ce qui a <strong>ÉTÉ</strong> commandé.</p>
-        <p>📌 Le coût saisi ici peut aussi être reporté dans <a href="<?= e(url('/admin/compta/couts')) ?>">Coûts de revient</a> (lot daté) pour un bénéfice juste.</p>
+        <p>📌 Par défaut, l'achat crée un <strong>nouveau lot de coût</strong> à ce prix dans <a href="<?= e(url('/admin/compta/couts')) ?>">Coûts de revient</a> — décoche la case pour un prix inhabituel.</p>
         <p>📌 Les achats alimentent le <strong>stock théorique</strong> visible dans <a href="<?= e(url('/admin/compta/inventaire')) ?>">l'inventaire</a> : dernier comptage + achats − ventes.</p>
     </section>
 </div>
