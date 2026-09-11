@@ -209,4 +209,31 @@ final class Purchase extends Model
             return 0.0;
         }
     }
+
+    /**
+     * Total TTC des achats par mois pour une année donnée.
+     *
+     * Utilisé par les budgets : l'enveloppe « Matière » se nourrit des
+     * achats de stock réellement enregistrés.
+     *
+     * @return list<array{m:int, ttc:float}>
+     */
+    public static function monthlyTotals(int $year): array
+    {
+        try {
+            $stmt = self::pdo()->prepare(
+                'SELECT MONTH(purchased_at) AS m, COALESCE(SUM(total_ttc), 0) AS ttc
+                 FROM purchases
+                 WHERE YEAR(purchased_at) = ?
+                 GROUP BY MONTH(purchased_at)
+                 ORDER BY m'
+            );
+            $stmt->execute([$year]);
+
+            /** @var list<array<string,mixed>> $r */
+            return $stmt->fetchAll();
+        } catch (\Throwable) {
+            return [];
+        }
+    }
 }
