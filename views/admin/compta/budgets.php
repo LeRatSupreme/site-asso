@@ -12,9 +12,25 @@ declare(strict_types=1);
  * @var array{planned:float,realized:float} $totals
  */
 
-// Écart global = somme des écarts affichés (CA : réalisé − prévu,
-// dépenses : prévu − réalisé).
-$totalGap = 0.0;
+// Totaux par nature : le CA (objectif) et les dépenses (enveloppes) ne se
+// somment pas dans le même sens. Le bilan pertinent est le RÉSULTAT :
+// CA − dépenses, côté prévu comme côté réalisé.
+$plannedCa = 0.0;
+$plannedExp = 0.0;
+$realizedCa = 0.0;
+$realizedExp = 0.0;
+foreach ($rows as $r) {
+    if ($r['key'] === 'CA') {
+        $plannedCa += $r['planned'];
+        $realizedCa += $r['realized'];
+    } else {
+        $plannedExp += $r['planned'];
+        $realizedExp += $r['realized'];
+    }
+}
+$resultPlanned = $plannedCa - $plannedExp;
+$resultRealized = $realizedCa - $realizedExp;
+$resultGap = $resultRealized - $resultPlanned;
 ?>
 <div class="compta-head">
     <div>
@@ -52,14 +68,14 @@ $totalGap = 0.0;
 
 <div class="compta-kpis">
     <div class="card surface glass kpi">
-        <p class="kpi-label">Prévu (période)</p>
-        <p class="kpi-value"><?= e(formatPrice($totals['planned'])) ?></p>
-        <p class="kpi-sub"><?= sprintf('%d mois couverts', $monthsCount) ?></p>
+        <p class="kpi-label">Résultat prévu</p>
+        <p class="kpi-value"><?= e(formatPrice($resultPlanned)) ?></p>
+        <p class="kpi-sub">CA prévu − dépenses prévues · <?= sprintf('%d mois couverts', $monthsCount) ?></p>
     </div>
     <div class="card surface glass kpi">
-        <p class="kpi-label">Réalisé (période)</p>
-        <p class="kpi-value"><?= e(formatPrice($totals['realized'])) ?></p>
-        <p class="kpi-sub"><?= sprintf('%d mois couverts', $monthsCount) ?></p>
+        <p class="kpi-label">Résultat réalisé</p>
+        <p class="kpi-value <?= $resultRealized >= 0 ? 'is-positive' : 'is-negative' ?>"><?= e(formatPrice($resultRealized)) ?></p>
+        <p class="kpi-sub">CA réalisé − dépenses réalisées · <?= sprintf('%d mois couverts', $monthsCount) ?></p>
     </div>
 </div>
 
@@ -86,14 +102,18 @@ $totalGap = 0.0;
 
                         // CA : positif = objectif dépassé. Dépenses : positif = reste disponible.
                         $gap = $isCa ? $r['realized'] - $r['planned'] : $r['planned'] - $r['realized'];
-                        $totalGap += $gap;
 
-                        if ($r['planned'] <= 0) {
-                            $state = '<span class="badge badge-muted">—</span>';
-                        } elseif ($isCa) {
-                            $state = $r['realized'] >= $r['planned']
-                                ? '<span class="badge badge-success">Objectif dépassé</span>'
-                                : '<span class="badge badge-warning">Sous l\'objectif</span>';
+                        if ($isCa) {
+                            $state = $r['planned'] <= 0
+                                ? '<span class="badge badge-muted">—</span>'
+                                : ($r['realized'] >= $r['planned']
+                                    ? '<span class="badge badge-success">Objectif dépassé</span>'
+                                    : '<span class="badge badge-warning">Sous l\'objectif</span>');
+                        } elseif ($r['planned'] <= 0) {
+                            // Dépense sans enveloppe budgétée : dépassée dès le 1er euro.
+                            $state = $r['realized'] > 0
+                                ? '<span class="badge badge-danger">Dépassé</span>'
+                                : '<span class="badge badge-muted">—</span>';
                         } else {
                             $state = $r['realized'] <= $r['planned']
                                 ? '<span class="badge badge-success">Dans le budget</span>'
@@ -104,8 +124,8 @@ $totalGap = 0.0;
                         <td><?= $isCa ? '<strong>' . e($r['label']) . '</strong>' : e($r['label']) ?></td>
                         <td>
                             <input type="text" name="planned[<?= e($r['key']) ?>]"
-                                value="<?= $r['planned'] > 0 ? e(number_format($r['planned'], 2, ',', '')) : '' ?>"
-                                inputmode="decimal" style="width:110px" placeholder="—">
+                                value="<?= $r['planned'] > 0 ? e(number_format($r['planned'], 2, ',', ' ')) : '' ?>"
+                                inputmode="decimal" style="width:130px" placeholder="—">
                         </td>
                         <td class="num"><?= e(formatPrice($r['realized'])) ?></td>
                         <td class="num"><?= e(($gap > 0 ? '+' : '') . formatPrice($gap)) ?></td>
@@ -115,16 +135,16 @@ $totalGap = 0.0;
             </tbody>
             <tfoot>
                 <tr>
-                    <th>Total</th>
-                    <th><?= e(formatPrice($totals['planned'])) ?></th>
-                    <th class="num"><?= e(formatPrice($totals['realized'])) ?></th>
-                    <th class="num"><?= e(($totalGap > 0 ? '+' : '') . formatPrice($totalGap)) ?></th>
+                    <th>Bilan (CA − dépenses)</th>
+                    <th><?= e(formatPrice($resultPlanned)) ?></th>
+                    <th class="num"><?= e(formatPrice($resultRealized)) ?></th>
+                    <th class="num"><span class="<?= $resultGap >= 0 ? 'is-positive' : 'is-negative' ?>"><?= e(($resultGap > 0 ? '+' : '') . formatPrice($resultGap)) ?></span></th>
                     <th></th>
                 </tr>
             </tfoot>
         </table>
         <button type="submit" class="btn btn-primary">Enregistrer le budget</button>
-        <p class="muted" style="font-size:0.85rem">Les montants se saisissent à la française (ex : 250,50). Laisse vide ou mets 0 pour supprimer une ligne du budget.</p>
+        <p class="muted" style="font-size:0.85rem">Les montants se saisissent à la française (ex : 250,50 ou 10 000). Laisse vide ou mets 0 pour supprimer une ligne. La ligne « Bilan » compare le résultat (CA − dépenses) prévu au réalisé.</p>
     </form>
 </div>
 
