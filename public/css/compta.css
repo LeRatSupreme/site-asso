@@ -822,6 +822,66 @@ details.howto p {
     font-size: 0.92rem;
 }
 
+/* ---- Import SumUp : zone de dépôt & étapes ---- */
+.dropzone {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 2.2rem 1.5rem;
+    border: 2px dashed var(--border, #d1d5db);
+    border-radius: 14px;
+    background: rgba(0, 0, 0, 0.02);
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease;
+}
+.dropzone:hover,
+.dropzone.is-dragover {
+    border-color: var(--primary, #4f46e5);
+    background: rgba(79, 70, 229, 0.05);
+}
+.dropzone.has-file {
+    border-style: solid;
+    border-color: rgba(5, 150, 105, 0.55);
+    background: rgba(5, 150, 105, 0.06);
+}
+.dropzone-icon {
+    font-size: 2rem;
+    line-height: 1;
+}
+.dropzone-main {
+    font-weight: 700;
+    font-size: 0.95rem;
+}
+.dropzone-main small {
+    display: block;
+    font-weight: 600;
+    color: var(--muted, #6b7280);
+    margin-top: 2px;
+    font-size: 0.85rem;
+}
+.dropzone-hint {
+    font-size: 0.8rem;
+    color: var(--muted, #6b7280);
+}
+.dropzone-filename {
+    color: #047857;
+    word-break: break-all;
+}
+.import-steps {
+    margin: 0;
+    padding-left: 1.2rem;
+    display: grid;
+    gap: 0.6rem;
+    font-size: 0.92rem;
+}
+.import-steps li::marker {
+    font-weight: 900;
+    color: var(--primary, #4f46e5);
+}
+
 /* ---- Barre « 📅 Période » partagée (pastilles) ---- */
 .period-bar {
     display: flex;
