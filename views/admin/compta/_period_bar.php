@@ -27,7 +27,19 @@ unset($keep['period'], $keep['from'], $keep['to']);
             <?php $q = http_build_query(array_merge($keep, ['period' => $k])); ?>
             <a class="period-pill<?= $k === $period['preset'] ? ' is-active' : '' ?>" href="?<?= e($q) ?>"><?= e($label) ?></a>
         <?php endforeach; ?>
-        <button type="button" id="period-custom-toggle" class="period-pill<?= $period['preset'] === 'custom' ? ' is-active' : '' ?>">Personnalisé</button>
+        <?php
+            // En mode personnalisé, la pastille affiche la plage active pour
+            // que la sélection reste lisible d'un coup d'œil.
+            $customLabel = 'Personnalisé';
+            if ($period['preset'] === 'custom' && !empty($period['from']) && !empty($period['to'])) {
+                $customLabel = sprintf(
+                    'Personnalisé : %s → %s',
+                    formatDate($period['from'], 'd/m/Y'),
+                    formatDate($period['to'], 'd/m/Y')
+                );
+            }
+        ?>
+        <button type="button" id="period-custom-toggle" class="period-pill<?= $period['preset'] === 'custom' ? ' is-active' : '' ?>"><?= e($customLabel) ?></button>
     </nav>
 
     <form method="get" class="period-dates" id="period-custom" <?= $period['preset'] === 'custom' ? '' : 'hidden' ?>>
