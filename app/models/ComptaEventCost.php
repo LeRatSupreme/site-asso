@@ -103,4 +103,32 @@ final class ComptaEventCost extends Model
 
         return $stmt->rowCount() === 1;
     }
+
+    /**
+     * Derniers coûts tous événements confondus, avec le nom de l'événement.
+     *
+     * Utilisé par la page de liste pour gérer les coûts sans passer par
+     * les pages de détail.
+     *
+     * @return list<array<string,mixed>>
+     */
+    public static function recentWithEvent(int $limit = 20): array
+    {
+        $limit = max(1, (int) $limit);
+
+        try {
+            /** @var list<array<string,mixed>> $r */
+            return self::pdo()
+                ->query(
+                    'SELECT c.*, e.name AS event_name
+                     FROM compta_event_costs c
+                     JOIN compta_events e ON e.id = c.event_id
+                     ORDER BY c.spent_at DESC, c.created_at DESC
+                     LIMIT ' . $limit
+                )
+                ->fetchAll();
+        } catch (\Throwable) {
+            return [];
+        }
+    }
 }

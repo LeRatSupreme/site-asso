@@ -256,6 +256,7 @@ function aeic_register_routes(Router $router): void
     $router->post('/admin/compta/evenements/{id}/delete', [AdminComptaEventController::class, 'delete']);
     $router->post('/admin/compta/evenements/{id}/couts/save', [AdminComptaEventController::class, 'saveCost']);
     $router->post('/admin/compta/evenements/{id}/couts/{cid}/delete', [AdminComptaEventController::class, 'deleteCost']);
+    $router->post('/admin/compta/evenements/couts/save', [AdminComptaEventController::class, 'saveCostQuick']);
     $router->get('/admin/compta/annuel', [AdminReportingController::class, 'annual']);
 
     // Mini dashboard SumUp (fondé sur les ventes importées ; ADMIN/TRESORERIE).
