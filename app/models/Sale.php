@@ -621,6 +621,50 @@ final class Sale extends Model
     }
 
     /**
+     * Journal des ventes d'un produit canonique sur une plage de jours
+     * (bornes incluses) : lignes dont product_key = clé OU description = clé.
+     *
+     * Utilisé par le détail d'un événement de trésorerie pour lister les
+     * ventes rattachées au nom de l'événement (libellé du bouton SumUp).
+     *
+     * @param string $productKey Clé produit (ou libellé exact SumUp).
+     * @param string $fromDay    Jour de début « YYYY-MM-DD » (inclus).
+     * @param string $toDay      Jour de fin « YYYY-MM-DD » (inclus).
+     *
+     * @return list<array<string,mixed>>
+     */
+    public static function journalForProductBetween(string $productKey, string $fromDay, string $toDay, int $limit = 200): array
+    {
+        $limit = (int) $limit;
+        if ($limit < 1) {
+            $limit = 200;
+        }
+
+        try {
+            $stmt = self::pdo()->prepare(
+                'SELECT sold_at, transaction_ref, payment_method, description, product_key, quantity, price_ttc
+                 FROM sales
+                 WHERE (product_key = ? OR description = ?)
+                   AND sold_at >= ?
+                   AND sold_at <= ?
+                 ORDER BY sold_at DESC
+                 LIMIT ' . $limit
+            );
+            $stmt->execute([
+                $productKey,
+                $productKey,
+                $fromDay . ' 00:00:00',
+                $toDay . ' 23:59:59',
+            ]);
+
+            /** @var list<array<string,mixed>> $r */
+            return $stmt->fetchAll();
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    /**
      * Top produits (CA) pour un mois donné.
      *
      * @return list<array<string,mixed>>

@@ -378,6 +378,27 @@ Résultat : une perte enregistrée **explique un écart d'inventaire** au lieu d
 >
 > 💡 Pense à exécuter la migration `database/migrations/2026_compta_pertes.sql` (table `losses`) si elle n'est pas encore en base.
 
+### M. Événements (`/admin/compta/evenements`)
+**Admin → Trésorerie & stock → Événements** (ou `/admin/compta/evenements`).
+
+Filtre **📅 Période** (7 jours → Tout, ou dates personnalisées), comme sur Réappro.
+
+#### Principe
+Un événement porte le **nom exact du bouton SumUp** :
+- les ventes importées portant ce nom (produit OU description) s'y **rattachent automatiquement** sur sa fenêtre de dates ;
+- chaque **coût** saisi crée une **dépense liée « Événements »** → les budgets et le résultat net restent à jour ;
+- la page détail calcule le **bénéfice** (ventes rattachées − coûts) et le **seuil de rentabilité** (nombre d'entrées à vendre pour couvrir les coûts).
+
+#### Mode d'emploi
+1. **Crée l'événement AVANT de vendre**, avec le nom exact du futur bouton SumUp
+2. **Vends avec ce nom** (bouton SumUp au libellé identique)
+3. **Importe le CSV** SumUp (voir section A) : les ventes se rattachent toutes seules
+4. **Saisis les coûts** au fil de l'eau (déco, location, bar...) : bénéfice et seuil se recalculent
+
+> 💡 Si aucune vente ne se rattache, vérifie l'orthographe du nom ou crée un alias dans le **Mapping libellés**.
+>
+> 💡 Pense à exécuter la migration `database/migrations/2026_compta_events.sql` (tables `compta_events` et `compta_event_costs`) si elle n'est pas encore en base.
+
 ---
 
 ## 8. 📦 Le réapprovisionnement
