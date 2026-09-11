@@ -66,4 +66,21 @@ final class ProductStock extends Model
         );
         $stmt->execute([$productKey, max(0, $stock)]);
     }
+
+    /**
+     * Ajuste le stock d'un product_key d'un delta donné.
+     *
+     * Utilisé par les mouvements physiques : achat (+qty), perte (−qty).
+     * Ainsi la référence de stock (affichée par le réappro) suit le stock
+     * théorique de l'inventaire au fil des mouvements.
+     */
+    public static function adjust(string $productKey, int $delta): void
+    {
+        if ($delta === 0) {
+            return;
+        }
+
+        $current = self::get($productKey) ?? 0;
+        self::set($productKey, $current + $delta);
+    }
 }

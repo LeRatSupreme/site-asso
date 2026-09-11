@@ -6,6 +6,7 @@ namespace App\Controllers\Admin;
 
 use App\Core\Compta\ComptaCalc;
 use App\Models\InventoryCount;
+use App\Models\ProductCost;
 use App\Models\ProductStock;
 use App\Models\Purchase;
 use App\Models\Sale;
@@ -72,13 +73,34 @@ final class AdminStockController extends AdminBaseController
             'created_by'   => $user['id'] ?? null,
         ]);
 
+        // Option (cochée par défaut) : l'achat crée un nouveau lot de coût
+        // de revient à ce prix — chaque achat à un prix différent ouvre un
+        // nouveau lot daté, le bénéfice suit les vrais coûts d'achat.
+        $lotNote = '';
+        if (isset($_POST['update_cost'])) {
+            $lotId = ProductCost::create([
+                'product_key' => $productKey,
+                'cost_price'  => $unitCost,
+                'valid_from'  => $purchasedAt,
+                'supplier'    => $supplier,
+            ]);
+            if ($lotId !== '') {
+                $this->audit('compta.cost.auto_from_purchase', 'product_cost', $lotId, [
+                    'product_key'    => $productKey,
+                    'cost_price'     => $unitCost,
+                    'from_purchase'  => $id,
+                ]);
+                $lotNote = sprintf(' Nouveau lot de coût : %s /unité.', formatPrice($unitCost));
+            }
+        }
+
         $this->audit('compta.purchase.create', 'purchase', $id, [
             'product_key' => $productKey,
             'quantity'    => $quantity,
             'unit_cost'   => $unitCost,
         ]);
 
-        $this->setFlash('success', 'Achat enregistré.');
+        $this->setFlash('success', 'Achat enregistré — stock mis à jour.' . $lotNote);
         redirect(url('/admin/compta/achats'));
     }
 
