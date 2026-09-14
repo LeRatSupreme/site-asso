@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Controllers\Admin;
 
 use App\Core\Discord;
+use App\Core\Permissions;
 use App\Models\Event;
 use App\Models\EventWaitlist;
 use App\Models\Notification;
@@ -17,7 +18,7 @@ final class AdminEventController extends AdminBaseController
 {
     public function index(): void
     {
-        $this->guard();
+        $this->guardModule(Permissions::MODULE_EVENTS);
 
         $this->renderAdmin('admin/events/index', [
             'title'  => 'Événements',
@@ -27,7 +28,7 @@ final class AdminEventController extends AdminBaseController
 
     public function form(?string $slug = null): void
     {
-        $this->guard();
+        $this->guardModule(Permissions::MODULE_EVENTS);
 
         $event = ['is_published' => 0, 'is_featured' => 0];
         if ($slug !== null) {
@@ -45,7 +46,7 @@ final class AdminEventController extends AdminBaseController
 
     public function save(): void
     {
-        $this->guard();
+        $this->guardModule(Permissions::MODULE_EVENTS);
 
         $data = $_POST;
         $isNew = empty($data['id']);
@@ -53,6 +54,28 @@ final class AdminEventController extends AdminBaseController
         // Normalisations.
         $data['price'] = ($data['price'] ?? '') !== '' ? parseFrenchFloat((string) $data['price']) : null;
         $data['max_capacity'] = ($data['max_capacity'] ?? '') !== '' ? (int) $data['max_capacity'] : null;
+
+        // Validations : lien SumUp en https ; image en chemin local (/…)
+        // ou URL https. Sinon, la valeur est rejetée (null) avec un avertissement.
+        $warnings = [];
+
+        $sumupLink = trim((string) ($data['sumup_link'] ?? ''));
+        if ($sumupLink !== '' && strtolower((string) parse_url($sumupLink, PHP_URL_SCHEME)) !== 'https') {
+            $data['sumup_link'] = null;
+            $warnings[] = 'Lien SumUp ignoré : une URL https est attendue.';
+        }
+
+        $image = trim((string) ($data['image'] ?? ''));
+        if ($image !== ''
+            && !str_starts_with($image, '/')
+            && strtolower((string) parse_url($image, PHP_URL_SCHEME)) !== 'https') {
+            $data['image'] = null;
+            $warnings[] = 'Image ignorée : chemin local (/assets/…) ou URL https attendu.';
+        }
+
+        if ($warnings !== []) {
+            $this->setFlash('warning', implode(' ', $warnings));
+        }
 
         // Carte : si demandée et qu'on a un lieu, on géocode (une seule fois
         // par enregistrement ; les coords sont réutilisées à l'affichage).
@@ -102,7 +125,7 @@ final class AdminEventController extends AdminBaseController
 
     public function delete(string $slug): void
     {
-        $this->guard();
+        $this->guardModule(Permissions::MODULE_EVENTS);
 
         $event = Event::findBySlugAny($slug);
         if ($event !== null) {
@@ -116,7 +139,7 @@ final class AdminEventController extends AdminBaseController
 
     public function registrations(string $slug): void
     {
-        $this->guard();
+        $this->guardModule(Permissions::MODULE_EVENTS);
 
         $event = Event::findBySlugAny($slug);
         if ($event === null) {
@@ -141,7 +164,7 @@ final class AdminEventController extends AdminBaseController
      */
     public function checkinForm(string $slug): void
     {
-        $this->guard();
+        $this->guardModule(Permissions::MODULE_EVENTS);
 
         $event = Event::findBySlugAny($slug);
         if ($event === null) {
@@ -165,7 +188,7 @@ final class AdminEventController extends AdminBaseController
      */
     public function checkinScan(string $slug): void
     {
-        $this->guard();
+        $this->guardModule(Permissions::MODULE_EVENTS);
 
         $event = Event::findBySlugAny($slug);
         if ($event === null) {
@@ -195,7 +218,7 @@ final class AdminEventController extends AdminBaseController
      */
     public function toggleCheckedIn(string $slug): void
     {
-        $this->guard();
+        $this->guardModule(Permissions::MODULE_EVENTS);
 
         $event = Event::findBySlugAny($slug);
         if ($event === null) {
@@ -221,7 +244,7 @@ final class AdminEventController extends AdminBaseController
      */
     public function promoteWaitlist(string $slug): void
     {
-        $this->guard();
+        $this->guardModule(Permissions::MODULE_EVENTS);
 
         $event = Event::findBySlugAny($slug);
         if ($event === null) {

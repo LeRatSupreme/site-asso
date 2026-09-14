@@ -28,6 +28,9 @@ use App\Models\SaleAdjustment;
  */
 final class AdminComptaController extends AdminBaseController
 {
+    /** Taille maximale d'un CSV importé (5 Mo). */
+    private const MAX_CSV_SIZE = 5_242_880;
+
     // -----------------------------------------------------------------
     //  Dashboard
     // -----------------------------------------------------------------
@@ -117,6 +120,14 @@ final class AdminComptaController extends AdminBaseController
         }
 
         $filename = (string) $_FILES['csv']['name'];
+
+        // Garde de taille : on refuse les rapports anormalement gros avant
+        // toute lecture / parsing en mémoire.
+        if ((int) ($_FILES['csv']['size'] ?? 0) > self::MAX_CSV_SIZE) {
+            $this->setFlash('error', 'Fichier trop volumineux (5 Mo maximum).');
+            redirect(url('/admin/compta/import'));
+        }
+
         $content = (string) file_get_contents((string) $_FILES['csv']['tmp_name']);
 
         // Validation minimale : on s'attend à du CSV texte contenant "Prix (TTC)".
@@ -228,11 +239,11 @@ final class AdminComptaController extends AdminBaseController
         foreach ($rows as $r) {
             fputcsv($out, [
                 $r['sold_at'],
-                $r['transaction_ref'],
-                $r['payment_method'],
-                $r['description'],
-                $r['product_key'],
-                $r['category'],
+                self::csvSafe($r['transaction_ref'] ?? null),
+                self::csvSafe($r['payment_method'] ?? null),
+                self::csvSafe($r['description'] ?? null),
+                self::csvSafe($r['product_key'] ?? null),
+                self::csvSafe($r['category'] ?? null),
                 $r['quantity'],
                 $r['price_ttc'],
                 $r['cost_price'],
@@ -242,6 +253,30 @@ final class AdminComptaController extends AdminBaseController
         }
         fclose($out);
         exit;
+    }
+
+    /**
+     * Neutralise l'injection de formules dans les exports CSV/Excel
+     * (« CSV injection ») : si la valeur (une fois les espaces initiaux
+     * retirés) commence par un caractère interprété comme formule
+     * (=, +, -, @, tabulation, CR ou LF), on la préfixe d'une apostrophe
+     * simple pour qu'elle soit traitée comme du texte.
+     */
+    private static function csvSafe(?string $v): string
+    {
+        if ($v === null || $v === '') {
+            return '';
+        }
+
+        $trimmed = ltrim($v);
+        $first = $trimmed === '' ? '' : $trimmed[0];
+        if (in_array($first, ['=', '+', '-', '@', "\t", "\r", "\n"], true)
+            || in_array($v[0], ["\t", "\r", "\n"], true)
+        ) {
+            return "'" . $v;
+        }
+
+        return $v;
     }
 
     // -----------------------------------------------------------------

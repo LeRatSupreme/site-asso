@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Controllers\Admin;
 
+use App\Core\Permissions;
 use App\Models\DailyEnigma;
 use App\Models\GameScore;
 use App\Models\User;
@@ -20,7 +21,7 @@ final class AdminGameController extends AdminBaseController
      */
     public function index(): void
     {
-        $this->guard();
+        $this->guardModule(Permissions::MODULE_GAMES);
 
         $stats = [
             'wordsFr'       => WordleWord::countForDifficulty('fr', 'facile')
@@ -49,7 +50,7 @@ final class AdminGameController extends AdminBaseController
      */
     public function scores(): void
     {
-        $this->guard();
+        $this->guardModule(Permissions::MODULE_GAMES);
 
         $players = GameScore::playersForAdmin();
 
@@ -64,7 +65,7 @@ final class AdminGameController extends AdminBaseController
      */
     public function setPseudo(): void
     {
-        $this->guard();
+        $this->guardModule(Permissions::MODULE_GAMES);
 
         $userId = (string) ($_POST['user_id'] ?? '');
         $pseudo = trim((string) ($_POST['pseudo'] ?? ''));
@@ -105,7 +106,7 @@ final class AdminGameController extends AdminBaseController
      */
     public function resetPlayer(): void
     {
-        $this->guard();
+        $this->guardModule(Permissions::MODULE_GAMES);
 
         $userId = (string) ($_POST['user_id'] ?? '');
         if ($userId === '') {
@@ -126,7 +127,7 @@ final class AdminGameController extends AdminBaseController
      */
     public function wordleIndex(): void
     {
-        $this->guard();
+        $this->guardModule(Permissions::MODULE_GAMES);
 
         $search = trim((string) ($_GET['q'] ?? ''));
         $language = trim((string) ($_GET['lang'] ?? ''));
@@ -166,7 +167,7 @@ final class AdminGameController extends AdminBaseController
      */
     public function wordleForm(?string $id = null): void
     {
-        $this->guard();
+        $this->guardModule(Permissions::MODULE_GAMES);
 
         $word = ['id' => 0, 'word' => '', 'language' => 'fr', 'difficulty' => 'facile', 'is_active' => 1];
         if ($id !== null && $id !== 'new') {
@@ -187,7 +188,7 @@ final class AdminGameController extends AdminBaseController
      */
     public function saveWordle(): void
     {
-        $this->guard();
+        $this->guardModule(Permissions::MODULE_GAMES);
 
         $id = WordleWord::save($_POST);
         if ($id > 0) {
@@ -205,7 +206,7 @@ final class AdminGameController extends AdminBaseController
      */
     public function deleteWordle(string $id): void
     {
-        $this->guard();
+        $this->guardModule(Permissions::MODULE_GAMES);
 
         WordleWord::deleteRow((int) $id);
         $this->audit('wordle.word.delete', 'wordle_word', $id);
@@ -220,7 +221,7 @@ final class AdminGameController extends AdminBaseController
      */
     public function enigmaIndex(): void
     {
-        $this->guard();
+        $this->guardModule(Permissions::MODULE_GAMES);
 
         $enigmas = DailyEnigma::allForAdmin();
 
@@ -235,7 +236,7 @@ final class AdminGameController extends AdminBaseController
      */
     public function enigmaForm(?string $id = null): void
     {
-        $this->guard();
+        $this->guardModule(Permissions::MODULE_GAMES);
 
         $enigma = [
             'id' => 0, 'question_fr' => '', 'question_en' => '',
@@ -259,7 +260,7 @@ final class AdminGameController extends AdminBaseController
      */
     public function saveEnigma(): void
     {
-        $this->guard();
+        $this->guardModule(Permissions::MODULE_GAMES);
 
         $id = DailyEnigma::save($_POST);
         if ($id > 0) {
@@ -277,7 +278,7 @@ final class AdminGameController extends AdminBaseController
      */
     public function deleteEnigma(string $id): void
     {
-        $this->guard();
+        $this->guardModule(Permissions::MODULE_GAMES);
 
         DailyEnigma::deleteRow((int) $id);
         $this->audit('enigma.delete', 'daily_enigma', $id);

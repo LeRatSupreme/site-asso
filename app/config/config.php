@@ -87,8 +87,20 @@ function env(string $key, string $default = ''): string
 define('APP_ENV', env('APP_ENV', 'prod'));
 define('APP_DEBUG', env('APP_DEBUG', APP_ENV === 'dev' ? 'true' : 'false') === 'true');
 define('APP_URL', rtrim(env('APP_URL', ''), '/'));
+
+// Fail-closed : le flag de test ne peut jamais être actif en production
+// (il neutralise la vérification CSRF côté Csrf::checkRequest).
+if (APP_ENV === 'prod' && getenv('APP_TESTING') === 'true') {
+    putenv('APP_TESTING=false');
+    $_ENV['APP_TESTING'] = 'false';
+    $_SERVER['APP_TESTING'] = 'false';
+    error_log('APP_TESTING ignore en production');
+}
 // Flag d'environnement de test (tests d'intégration PHPUnit). Jamais true en prod.
 define('APP_TESTING', env('APP_TESTING', 'false') === 'true');
+
+// Clé applicative (base64 de 32 octets, cf. config.env.example) : vide si absente.
+define('APP_KEY', env('APP_KEY', ''));
 
 // --- Configuration du reporting d'erreurs -----------------------------------
 
@@ -111,6 +123,11 @@ if (session_status() !== PHP_SESSION_ACTIVE) {
     ini_set('session.use_only_cookies', '1');
     ini_set('session.cookie_httponly', '1');
     ini_set('session.cookie_samesite', 'Lax');
+    // Cookie de session réservé au HTTPS en production (dev/test : HTTP possible).
+    if (APP_ENV === 'prod') {
+        ini_set('session.cookie_secure', '1');
+    }
+    ini_set('session.gc_maxlifetime', '7200');
 }
 
 // Handler d'erreurs fatals : affiche une page d'erreur propre en production.

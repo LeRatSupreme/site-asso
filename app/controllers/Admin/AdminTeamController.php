@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Controllers\Admin;
 
+use App\Core\Permissions;
 use App\Models\TeamMember;
 
 /**
@@ -13,7 +14,7 @@ final class AdminTeamController extends AdminBaseController
 {
     public function index(): void
     {
-        $this->guard();
+        $this->guardModule(Permissions::MODULE_CONTENT);
 
         $this->renderAdmin('admin/team/index', [
             'title'   => 'Équipe',
@@ -23,7 +24,7 @@ final class AdminTeamController extends AdminBaseController
 
     public function form(?string $id = null): void
     {
-        $this->guard();
+        $this->guardModule(Permissions::MODULE_CONTENT);
 
         $member = ['is_active' => 1, 'is_highlight' => 0, 'order' => 0];
         if ($id !== null) {
@@ -41,7 +42,7 @@ final class AdminTeamController extends AdminBaseController
 
     public function save(): void
     {
-        $this->guard();
+        $this->guardModule(Permissions::MODULE_CONTENT);
 
         $isNew = empty($_POST['id']);
         $id = TeamMember::save($_POST);
@@ -53,7 +54,7 @@ final class AdminTeamController extends AdminBaseController
 
     public function delete(string $id): void
     {
-        $this->guard();
+        $this->guardModule(Permissions::MODULE_CONTENT);
 
         TeamMember::deleteRow($id);
         $this->audit('team.delete', 'team_member', $id);

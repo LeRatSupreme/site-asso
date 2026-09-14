@@ -10,6 +10,7 @@ use App\Core\Mailer;
 use App\Core\Middleware;
 use App\Models\Consent;
 use App\Models\User;
+use App\Models\UserPolicy;
 
 /**
  * Exercice des droits RGPD depuis l'espace membre.
@@ -137,6 +138,11 @@ final class AccountController extends Controller
     /**
      * Traitement de la suppression : notifie l'utilisateur puis anonymise le
      * compte et déconnecte.
+     *
+     * Garde-fous :
+     *  - ré-authentification par mot de passe (champ `current_password`) ;
+     *  - impossible de s'auto-supprimer en étant le dernier administrateur
+     *    actif (l'anonymisation désactive le compte).
      */
     public function delete(): void
     {
@@ -144,6 +150,25 @@ final class AccountController extends Controller
 
         $user = Auth::user();
         $userId = (string) $user['id'];
+
+        // Ré-authentification : le mot de passe actuel est requis (si le
+        // compte en possède un) pour confirmer la suppression.
+        $currentPassword = (string) ($_POST['current_password'] ?? '');
+        if ($user['password'] !== null && !password_verify($currentPassword, (string) $user['password'])) {
+            $this->setFlash('error', 'Mot de passe incorrect. La suppression du compte a été annulée.');
+            redirect(url('/account/delete'));
+        }
+
+        // Le dernier administrateur actif ne peut pas supprimer son compte
+        // (l'anonymisation désactive le compte : plus aucun ADMIN actif).
+        if (UserPolicy::deactivationRemovesLastAdmin(
+            (string) $user['role'],
+            (int) $user['is_active'] === 1,
+            User::countActiveAdmins()
+        )) {
+            $this->setFlash('error', 'Impossible : vous êtes le dernier administrateur actif. Nommez un autre administrateur avant de supprimer votre compte.');
+            redirect(url('/account/delete'));
+        }
 
         // Capture des données avant anonymisation (pour la notification).
         $email = (string) ($user['email'] ?? '');
@@ -168,6 +193,10 @@ final class AccountController extends Controller
                 // L'échec d'envoi ne doit pas empêcher la suppression.
             }
         }
+
+        // RGPD : pseudonymisation des e-mails dans les consentements
+        // (la preuve datée est conservée, l'identité est déliée).
+        Consent::pseudonymizeForUser($userId);
 
         // Anonymisation (commandes conservées mais déliées de l'identité).
         User::anonymize($userId);

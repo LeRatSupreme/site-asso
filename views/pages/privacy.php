@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+use App\Core\Security\HtmlSanitizer;
+
 /** @var array<string,mixed>|null $page */
 $isFr = current_lang() === 'fr';
 ?>
@@ -16,7 +18,7 @@ $isFr = current_lang() === 'fr';
 <section class="section">
     <div class="container narrow">
         <?php if ($isFr && !empty($page['content'])): ?>
-            <div class="prose surface glass"><?= $page['content'] ?></div>
+            <div class="prose surface glass"><?= HtmlSanitizer::clean((string) $page['content']) ?></div>
         <?php else: ?>
             <div class="prose surface glass">
                 <?php if ($isFr): ?>

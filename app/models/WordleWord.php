@@ -194,7 +194,7 @@ final class WordleWord extends Model
 
         if ($search !== null && $search !== '') {
             $where[] = 'word LIKE :q';
-            $params[':q'] = '%' . $search . '%';
+            $params[':q'] = '%' . str_replace(['%', '_', '\\'], ['\%', '\_', '\\\\'], $search) . '%';
         }
         if ($language !== null && in_array($language, self::LANGUAGES, true)) {
             $where[] = 'language = :lang';

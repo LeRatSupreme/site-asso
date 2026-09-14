@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Controllers\Admin;
 
+use App\Core\Permissions;
 use App\Models\Promotion;
 
 /**
@@ -13,7 +14,7 @@ final class AdminPromotionController extends AdminBaseController
 {
     public function index(): void
     {
-        $this->guard();
+        $this->guardModule(Permissions::MODULE_CONTENT);
 
         $this->renderAdmin('admin/promotions/index', [
             'title' => 'Promotions',
@@ -23,7 +24,7 @@ final class AdminPromotionController extends AdminBaseController
 
     public function form(?string $id = null): void
     {
-        $this->guard();
+        $this->guardModule(Permissions::MODULE_CONTENT);
 
         $promo = ['is_active' => 1, 'badge' => 'PROMO'];
 
@@ -42,7 +43,7 @@ final class AdminPromotionController extends AdminBaseController
 
     public function save(): void
     {
-        $this->guard();
+        $this->guardModule(Permissions::MODULE_CONTENT);
 
         $data  = $_POST;
         $isNew = empty($data['id']);
@@ -57,7 +58,7 @@ final class AdminPromotionController extends AdminBaseController
 
     public function delete(string $id): void
     {
-        $this->guard();
+        $this->guardModule(Permissions::MODULE_CONTENT);
 
         $promo = Promotion::find($id);
         if ($promo !== null) {

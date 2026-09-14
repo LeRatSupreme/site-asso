@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Tests\Integration;
 
 /**
- * Tests d'intégration du parcours commande cafétéria
- * (panier en session → POST /eleve/cafeteria/checkout → base cafeteria_orders).
+ * Tests d'intÃ©gration du parcours commande cafÃ©tÃ©ria
+ * (panier en session â†’ POST /eleve/cafeteria/checkout â†’ base cafeteria_orders).
  */
 final class CafeteriaOrderTest extends IntegrationTestCase
 {
@@ -20,12 +20,12 @@ final class CafeteriaOrderTest extends IntegrationTestCase
         $this->reset(['cafeteria_order_items', 'cafeteria_orders', 'products', 'users', 'settings']);
 
         $this->seedUser($this->userId, 'caf@exemple.fr');
-        $this->seedProduct($this->productId, 'Café', 1.20, 5);
+        $this->seedProduct($this->productId, 'CafÃ©', 1.20, 5);
     }
 
     public function test_checkout_cree_commande_et_decremente_le_stock(): void
     {
-        $this->login('caf@exemple.fr', 'Password1');
+        $this->login('caf@exemple.fr', 'Password123456');
 
         // 1. Ajout au panier (panier en session).
         $add = $this->request('POST', '/eleve/cafeteria/add', [
@@ -38,29 +38,29 @@ final class CafeteriaOrderTest extends IntegrationTestCase
         $checkout = $this->request('POST', '/eleve/cafeteria/checkout');
         self::assertStringContainsString('/eleve/commandes', $this->location($checkout));
 
-        // Commande créée avec total recalculé serveur (2 × 1,20 = 2,40).
+        // Commande crÃ©Ã©e avec total recalculÃ© serveur (2 Ã— 1,20 = 2,40).
         $order = $this->pdo->prepare('SELECT * FROM cafeteria_orders WHERE user_id = ?');
         $order->execute([$this->userId]);
         $row = $order->fetch();
         self::assertNotNull($row);
         self::assertSame('2.40', (string) $row['total']);
 
-        // 1 ligne d'item, quantité 2.
+        // 1 ligne d'item, quantitÃ© 2.
         $items = $this->pdo->prepare('SELECT * FROM cafeteria_order_items WHERE order_id = ?');
         $items->execute([$row['id']]);
         $lines = $items->fetchAll();
         self::assertCount(1, $lines);
         self::assertSame('2', (string) $lines[0]['quantity']);
 
-        // Stock décrémenté : 5 - 2 = 3.
+        // Stock dÃ©crÃ©mentÃ© : 5 - 2 = 3.
         self::assertSame(3, (int) $this->stock($this->productId));
     }
 
     public function test_produit_indisponible_rejete_la_commande(): void
     {
-        $this->login('caf@exemple.fr', 'Password1');
+        $this->login('caf@exemple.fr', 'Password123456');
 
-        // On rend le produit indisponible côté serveur.
+        // On rend le produit indisponible cÃ´tÃ© serveur.
         $this->pdo->prepare('UPDATE products SET is_available = 0 WHERE id = ?')->execute([$this->productId]);
 
         $this->request('POST', '/eleve/cafeteria/add', [
@@ -68,15 +68,15 @@ final class CafeteriaOrderTest extends IntegrationTestCase
             'quantity'   => 1,
         ]);
 
-        // L'ajout lui-même refuse déjà un produit indisponible : le panier reste vide,
-        // donc le checkout échoue et aucune commande n'est écrite.
+        // L'ajout lui-mÃªme refuse dÃ©jÃ  un produit indisponible : le panier reste vide,
+        // donc le checkout Ã©choue et aucune commande n'est Ã©crite.
         $this->request('POST', '/eleve/cafeteria/checkout');
 
         $count = (int) $this->pdo
             ->query("SELECT COUNT(*) FROM cafeteria_orders WHERE user_id = '{$this->userId}'")
             ->fetchColumn();
         self::assertSame(0, $count);
-        self::assertSame(5, (int) $this->stock($this->productId), 'Stock intact (rien écrit).');
+        self::assertSame(5, (int) $this->stock($this->productId), 'Stock intact (rien Ã©crit).');
     }
 
     private function stock(string $productId): int

@@ -6,6 +6,7 @@ namespace App\Controllers\Admin;
 
 use App\Core\Auth;
 use App\Core\Mailer;
+use App\Core\Permissions;
 use App\Models\AuditLog;
 use App\Models\Membership;
 use App\Models\User;
@@ -49,7 +50,7 @@ final class AdminUserController extends AdminBaseController
         $newRole = (string) ($_POST['role'] ?? '');
         $oldRole = (string) $target['role'];
 
-        if (!in_array($newRole, [Auth::ROLE_ADMIN, Auth::ROLE_TRESORERIE, Auth::ROLE_ELEVE], true)) {
+        if (!array_key_exists($newRole, Permissions::roles())) {
             $this->setFlash('error', 'Rôle invalide.');
             redirect(url('/admin/users'));
         }
@@ -141,12 +142,20 @@ final class AdminUserController extends AdminBaseController
             'role'  => (string) $target['role'],
         ]);
 
-        $this->setFlash('success', sprintf(
-            'Mot de passe temporaire pour %s : %s — Un email a été envoyé à %s. Il devra le changer rapidement.',
-            e(trim((string) $target['prenom'] . ' ' . (string) $target['nom'])),
-            e($temporary),
-            e($email !== '' ? $email : '(pas d\'email)')
-        ));
+        if (APP_ENV !== 'prod') {
+            // Hors production uniquement : le mot de passe temporaire est
+            // affiché dans le flash pour faciliter les tests.
+            $this->setFlash('success', sprintf(
+                'Mot de passe temporaire pour %s : %s — Un email a été envoyé à %s. Il devra le changer rapidement.',
+                e(trim((string) $target['prenom'] . ' ' . (string) $target['nom'])),
+                e($temporary),
+                e($email !== '' ? $email : '(pas d\'email)')
+            ));
+        } else {
+            // En production, aucun secret dans le flash : le mot de passe
+            // temporaire transite uniquement par e-mail.
+            $this->setFlash('success', 'Le mot de passe a été envoyé par e-mail.');
+        }
         redirect(url('/admin/users'));
     }
 

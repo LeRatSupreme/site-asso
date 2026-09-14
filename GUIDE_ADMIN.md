@@ -43,6 +43,10 @@
 |------|-------|
 | **ADMIN** | Tout l'espace d'administration |
 | **TRESORERIE** | Uniquement la comptabilité (dashboard, import, coûts, réappro) |
+| **EVENEMENTS** | Gestion des événements, inscriptions et check-in |
+| **COMMUNICATION** | Pages, équipe, sondages, promotions, médias |
+| **CAFETERIA** | Produits et catégories de la cafétéria |
+| **JEUX** | Gestion des jeux (Wordle, énigmes, classements) |
 | **ELEVE** | Aucun accès à l'admin |
 
 ### Mot de passe oublié
@@ -481,7 +485,7 @@ En haut de la page :
 
 | Action | Description |
 |--------|-------------|
-| **Changer le rôle** | ELEVE → ADMIN ou TRESORERIE |
+| **Changer le rôle** | ELEVE → ADMIN, TRESORERIE, EVENEMENTS, COMMUNICATION, CAFETERIA ou JEUX |
 | **Activer/Désactiver** | Bloque l'accès au site |
 | **Reset MDP** | Génère un mot de passe temporaire (envoyé par email) |
 | **Supprimer** | Anonymise les données (RGPD) — les commandes sont conservées |

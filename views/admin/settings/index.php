@@ -56,7 +56,7 @@ $niceLabels = [
 ];
 
 $boolKeys = ['maintenance_mode', 'orders_enabled', 'registrations_enabled', 'sumup_enabled', 'discord_enabled', 'membership_enabled'];
-$passwordKeys = ['smtp_pass', 'brevo_api_key'];
+$passwordKeys = ['smtp_pass', 'brevo_api_key', 'discord_webhook_url'];
 ?>
 <form method="post" action="<?= e(url('/admin/settings/save')) ?>" id="settings-form">
     <?= csrf_field() ?>

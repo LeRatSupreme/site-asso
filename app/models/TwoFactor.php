@@ -4,14 +4,18 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Core\Security\Crypto;
 use App\Core\Security\RecoveryCodes;
 use App\Core\Security\Totp;
 
 /**
  * Modèle du 2FA (table `two_factor`) : secret TOTP + codes de récupération.
  *
- * Le secret est stocké en clair (chiffrage au repos recommandé en production
- * via une clé applicative). Les codes de récupération sont stockés hachés.
+ * Le secret et la liste hachée des codes de récupération sont chiffrés au
+ * repos (AES-256-GCM, voir Crypto) lorsque APP_KEY est définie ; sinon ils
+ * sont stockés en clair (fallback historique, avertissement journalisé).
+ * La lecture accepte les deux formes : migration transparente des valeurs
+ * existantes.
  */
 final class TwoFactor extends Model
 {
@@ -56,10 +60,20 @@ final class TwoFactor extends Model
         $secret = Totp::generateSecret();
         $recovery = RecoveryCodes::generate();
 
+        $storedSecret = $secret;
+        $recoveryJson = json_encode(RecoveryCodes::hash($recovery), JSON_UNESCAPED_UNICODE);
+
+        if (Crypto::available()) {
+            $storedSecret = Crypto::encrypt($secret);
+            $recoveryJson = Crypto::encrypt($recoveryJson);
+        } else {
+            error_log('TwoFactor: APP_KEY absente — secret TOTP et codes de récupération stockés en clair.');
+        }
+
         self::upsert($userId, [
-            'secret'         => $secret,
+            'secret'         => $storedSecret,
             'enabled'        => 0,
-            'recovery_codes' => json_encode(RecoveryCodes::hash($recovery), JSON_UNESCAPED_UNICODE),
+            'recovery_codes' => $recoveryJson,
             'enabled_at'     => null,
         ]);
 
@@ -96,7 +110,7 @@ final class TwoFactor extends Model
             return false;
         }
 
-        return Totp::verify((string) $row['secret'], $code);
+        return Totp::verify(self::decryptStored((string) $row['secret']), $code);
     }
 
     /**
@@ -111,15 +125,22 @@ final class TwoFactor extends Model
             return false;
         }
 
+        $json = self::decryptStored((string) $row['recovery_codes']);
+
         /** @var list<string> $hashed */
-        $hashed = json_decode((string) $row['recovery_codes'], true) ?: [];
+        $hashed = json_decode($json, true) ?: [];
         [$ok, $remaining] = RecoveryCodes::verifyAndConsume($code, $hashed);
 
         if ($ok) {
+            $remainingJson = json_encode($remaining, JSON_UNESCAPED_UNICODE);
+            if (Crypto::available()) {
+                $remainingJson = Crypto::encrypt($remainingJson);
+            }
+
             $stmt = static::pdo()->prepare(
                 'UPDATE two_factor SET recovery_codes = ? WHERE user_id = ?'
             );
-            $stmt->execute([json_encode($remaining, JSON_UNESCAPED_UNICODE), $userId]);
+            $stmt->execute([$remainingJson, $userId]);
         }
 
         return $ok;
@@ -135,6 +156,29 @@ final class TwoFactor extends Model
         }
 
         return self::useRecoveryCode($userId, $code);
+    }
+
+    /**
+     * Déchiffre une valeur stockée (secret ou JSON des codes de récupération).
+     *
+     * Migration transparente : une valeur historique en clair (préfixe "v1:"
+     * absent) est renvoyée telle quelle ; une valeur chiffrée illisible
+     * (clé APP_KEY changée, données corrompues) est journalisée et renvoyée
+     * vide (la vérification échouera proprement).
+     */
+    private static function decryptStored(string $value): string
+    {
+        if (!Crypto::isEncrypted($value)) {
+            return $value;
+        }
+
+        try {
+            return Crypto::decrypt($value);
+        } catch (\Throwable) {
+            error_log('TwoFactor: déchiffrement impossible (clé APP_KEY modifiée ou données corrompues ?).');
+
+            return '';
+        }
     }
 
     /**

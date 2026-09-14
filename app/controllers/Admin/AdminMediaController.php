@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Controllers\Admin;
 
+use App\Core\Permissions;
 use App\Models\Media;
 
 /**
@@ -25,12 +26,23 @@ final class AdminMediaController extends AdminBaseController
         'png' => 'image/png',
         'gif' => 'image/gif',
         'webp' => 'image/webp',
-        'svg' => 'image/svg+xml',
+    ];
+
+    /**
+     * Segments de nom de fichier interdits hors extension finale (anti
+     * double extension : « photo.php.jpg », « shell.phar.png »…).
+     *
+     * @var list<string>
+     */
+    private const FORBIDDEN_SEGMENTS = [
+        'php', 'phtml', 'php3', 'php4', 'php5', 'php7', 'php8', 'pht',
+        'phar', 'cgi', 'pl', 'py', 'sh', 'asp', 'aspx', 'jsp',
+        'exe', 'bat', 'cmd', 'js', 'html', 'htm', 'svg',
     ];
 
     public function index(): void
     {
-        $this->guard();
+        $this->guardModule(Permissions::MODULE_CONTENT);
 
         $this->renderAdmin('admin/media/index', [
             'title'  => 'Médias',
@@ -40,7 +52,7 @@ final class AdminMediaController extends AdminBaseController
 
     public function upload(): void
     {
-        $this->guard();
+        $this->guardModule(Permissions::MODULE_CONTENT);
 
         $file = $_FILES['file'] ?? null;
 
@@ -60,10 +72,33 @@ final class AdminMediaController extends AdminBaseController
             redirect(url('/admin/media'));
         }
 
-        // Validation MIME réelle.
-        $detected = function_exists('mime_content_type')
-            ? (string) mime_content_type((string) $file['tmp_name'])
-            : self::ALLOWED[$ext];
+        // Anti double extension : aucun segment du nom ne doit correspondre
+        // à un type exécutable ou actif.
+        $segments = explode('.', strtolower(pathinfo((string) $file['name'], PATHINFO_FILENAME)));
+        foreach ($segments as $segment) {
+            if (in_array($segment, self::FORBIDDEN_SEGMENTS, true)) {
+                $this->setFlash('error', 'Nom de fichier invalide (double extension suspecte).');
+                redirect(url('/admin/media'));
+            }
+        }
+
+        // Validation MIME réelle — obligatoire : sans outil de détection
+        // disponible, l'upload est refusé (l'extension déclarée n'est jamais
+        // une preuve du contenu réel).
+        $detected = null;
+        if (function_exists('mime_content_type')) {
+            $detected = mime_content_type((string) $file['tmp_name']);
+        } elseif (function_exists('finfo_open')) {
+            $finfo = finfo_open(FILEINFO_MIME_TYPE);
+            if ($finfo !== false) {
+                $detected = finfo_file($finfo, (string) $file['tmp_name']);
+                finfo_close($finfo);
+            }
+        }
+        if (!is_string($detected) || $detected === '') {
+            $this->setFlash('error', 'Impossible de vérifier le type réel du fichier : upload refusé.');
+            redirect(url('/admin/media'));
+        }
         if ($detected !== self::ALLOWED[$ext]) {
             $this->setFlash('error', 'Le type MIME ne correspond pas à l\'extension.');
             redirect(url('/admin/media'));
@@ -98,7 +133,7 @@ final class AdminMediaController extends AdminBaseController
 
     public function delete(string $id): void
     {
-        $this->guard();
+        $this->guardModule(Permissions::MODULE_CONTENT);
 
         $media = Media::find($id);
         if ($media !== null) {
@@ -115,7 +150,7 @@ final class AdminMediaController extends AdminBaseController
 
     public function update(string $id): void
     {
-        $this->guard();
+        $this->guardModule(Permissions::MODULE_CONTENT);
 
         $alt = trim((string) ($_POST['alt'] ?? ''));
         $name = trim((string) ($_POST['name'] ?? ''));

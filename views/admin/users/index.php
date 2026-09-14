@@ -2,16 +2,21 @@
 
 declare(strict_types=1);
 
-use App\Core\Auth;
+use App\Core\Permissions;
 
 /**
  * @var list<array<string,mixed>> $users
  * @var string $currentId
  */
-$roleLabels = [
-    Auth::ROLE_ADMIN      => 'Administrateur',
-    Auth::ROLE_TRESORERIE => 'Trésorerie',
-    Auth::ROLE_ELEVE      => 'Élève',
+$roleLabels = Permissions::roles();
+$roleIcons = [
+    'ADMIN'         => '👑',
+    'TRESORERIE'    => '💰',
+    'EVENEMENTS'    => '📅',
+    'COMMUNICATION' => '📣',
+    'CAFETERIA'     => '🥤',
+    'JEUX'          => '🎮',
+    'ELEVE'         => '🎓',
 ];
 ?>
 <!-- Barre de filtres horizontale -->
@@ -19,9 +24,9 @@ $roleLabels = [
     <input type="text" id="user-search" class="user-filter-search" placeholder="🔎 Rechercher…" autocomplete="off">
     <select id="user-role-filter" class="user-filter-select">
         <option value="">Tous les rôles</option>
-        <option value="admin">👑 Admin</option>
-        <option value="eleve">🎓 Élève</option>
-        <option value="tresorerie">💰 Trésorerie</option>
+        <?php foreach ($roleLabels as $value => $label): ?>
+            <option value="<?= e(strtolower($value)) ?>"><?= e(($roleIcons[$value] ?? '•') . ' ' . $label) ?></option>
+        <?php endforeach; ?>
     </select>
     <select id="user-status-filter" class="user-filter-select">
         <option value="">Tous</option>

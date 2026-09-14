@@ -64,4 +64,18 @@ final class Consent extends Model
             return [];
         }
     }
+
+    /**
+     * Pseudonymise les e-mails des consentements d'un utilisateur (RGPD,
+     * droit à l'effacement) : chaque adresse est remplacée par une sentinelle
+     * invalide dérivée d'un SHA-256 tronqué de l'ID utilisateur. La preuve
+     * datée du consentement est conservée, sans l'identité réelle.
+     */
+    public static function pseudonymizeForUser(string $userId): void
+    {
+        $pseudonym = 'anon_' . substr(hash('sha256', $userId), 0, 16) . '@invalid.local';
+
+        $stmt = static::pdo()->prepare('UPDATE consents SET email = ? WHERE user_id = ?');
+        $stmt->execute([$pseudonym, $userId]);
+    }
 }

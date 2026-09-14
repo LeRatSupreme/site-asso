@@ -1,7 +1,6 @@
 # AEIC — fichiers à ignorer par Git
 /config.env
 /vendor/
-/composer.lock
 /node_modules/
 
 # Uploads & cache générés
@@ -15,8 +14,19 @@
 # Cache (rate limiter, etc.)
 /cache/
 
+# Cache PHPUnit
+/.phpunit.cache/
+
 # Sauvegardes (scripts/backup.sh)
 /backups/
+
+# Sauvegardes base de données
+/database/backup/
+
+# Archives & exports
+*.tgz
+site_final.zip
+Rapport-ventes-*.csv
 
 # OS / éditeurs
 .DS_Store

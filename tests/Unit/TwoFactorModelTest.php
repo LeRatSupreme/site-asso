@@ -13,7 +13,7 @@ use PDO;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Tests du modèle 2FA sur la base `aeic_test`.
+ * Tests du modÃ¨le 2FA sur la base `aeic_test`.
  *
  * Saute automatiquement si la base n'est pas joignable.
  */
@@ -35,7 +35,7 @@ final class TwoFactorModelTest extends TestCase
         $this->reset($pdo, ['two_factor', 'audit_logs', 'users']);
         Model::setTestPdo($pdo);
 
-        $hash = password_hash('Secret123', PASSWORD_BCRYPT);
+        $hash = password_hash('SecretPassword123', PASSWORD_BCRYPT);
         $stmt = $pdo->prepare(
             'INSERT INTO users (id, prenom, nom, email, password, role, is_active) VALUES (?, ?, ?, ?, ?, ?, 1)'
         );
@@ -61,7 +61,7 @@ final class TwoFactorModelTest extends TestCase
         $setup = TwoFactor::beginSetup($this->userId);
         self::assertNotEmpty($setup['secret']);
         self::assertCount(RecoveryCodes::DEFAULT_COUNT, $setup['recovery']);
-        // Secret pas encore confirmé.
+        // Secret pas encore confirmÃ©.
         self::assertFalse(TwoFactor::isEnabled($this->userId));
 
         TwoFactor::enable($this->userId);
@@ -84,7 +84,7 @@ final class TwoFactorModelTest extends TestCase
 
         $code = $setup['recovery'][0];
         self::assertTrue(TwoFactor::verify($this->userId, $code));
-        // Un second usage du même code échoue (usage unique).
+        // Un second usage du mÃªme code Ã©choue (usage unique).
         self::assertFalse(TwoFactor::verify($this->userId, $code));
     }
 

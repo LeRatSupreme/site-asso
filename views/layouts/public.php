@@ -11,6 +11,7 @@ declare(strict_types=1);
  */
 
 use App\Core\Auth;
+use App\Core\Permissions;
 use App\Models\Setting;
 
 $siteName     = Setting::get('site_name', 'AEIC');
@@ -165,11 +166,11 @@ $twitterHandle = Setting::get('twitter_handle', '');
                 <?php endif; ?>
 
                 <?php if ($user !== null): ?>
-                    <?php if (($user['role'] ?? '') === 'ADMIN' || ($user['role'] ?? '') === 'TRESORERIE'): ?>
+                    <?php if (Permissions::isAdminRole((string) ($user['role'] ?? ''))): ?>
                         <a class="btn btn-primary btn-sm" href="<?= e(url('/admin')) ?>"><?= e(t('nav.admin')) ?></a>
                     <?php endif; ?>
                     <a class="btn btn-outline btn-sm" href="<?= e(url('/account/privacy')) ?>"><?= e($user['prenom'] ?? t('nav.account')) ?></a>
-                    <a class="btn btn-ghost btn-sm" href="<?= e(url('/logout')) ?>"><?= e(t('nav.logout')) ?></a>
+                    <a class="btn btn-ghost btn-sm" href="<?= e(url('/logout') . '?t=' . csrf_token()) ?>"><?= e(t('nav.logout')) ?></a>
                 <?php else: ?>
                     <a class="btn btn-ghost btn-sm" href="<?= e(url('/login')) ?>"><?= e(t('nav.login')) ?></a>
                     <a class="btn btn-primary btn-sm" href="<?= e(url('/register')) ?>"><?= e(t('nav.register')) ?></a>
@@ -207,11 +208,11 @@ $twitterHandle = Setting::get('twitter_handle', '');
 
             <div class="mobile-nav-section mobile-nav-account">
                 <?php if ($user !== null): ?>
-                    <?php if (($user['role'] ?? '') === 'ADMIN' || ($user['role'] ?? '') === 'TRESORERIE'): ?>
+                    <?php if (Permissions::isAdminRole((string) ($user['role'] ?? ''))): ?>
                         <a class="btn btn-primary btn-sm" href="<?= e(url('/admin')) ?>"><?= e(t('nav.admin')) ?></a>
                     <?php endif; ?>
                     <a class="btn btn-outline btn-sm" href="<?= e(url('/account/privacy')) ?>"><?= e(t('nav.data')) ?></a>
-                    <a class="btn btn-ghost btn-sm" href="<?= e(url('/logout')) ?>"><?= e(t('nav.logout')) ?></a>
+                    <a class="btn btn-ghost btn-sm" href="<?= e(url('/logout') . '?t=' . csrf_token()) ?>"><?= e(t('nav.logout')) ?></a>
                 <?php else: ?>
                     <a class="btn btn-ghost btn-sm" href="<?= e(url('/login')) ?>"><?= e(t('nav.login')) ?></a>
                     <a class="btn btn-primary btn-sm" href="<?= e(url('/register')) ?>"><?= e(t('nav.register')) ?></a>

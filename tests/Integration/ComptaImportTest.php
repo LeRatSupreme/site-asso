@@ -5,11 +5,11 @@ declare(strict_types=1);
 namespace Tests\Integration;
 
 /**
- * Tests d'intégration de l'import de ventes SumUp
- * (route POST /admin/compta/import → parseur + Sale::importBatch + base).
+ * Tests d'intÃ©gration de l'import de ventes SumUp
+ * (route POST /admin/compta/import â†’ parseur + Sale::importBatch + base).
  *
- * Le login admin est forcé (bypass 2FA via APP_TESTING) pour isoler le test
- * du flux d'authentification, déjà couvert par ailleurs.
+ * Le login admin est forcÃ© (bypass 2FA via APP_TESTING) pour isoler le test
+ * du flux d'authentification, dÃ©jÃ  couvert par ailleurs.
  */
 final class ComptaImportTest extends IntegrationTestCase
 {
@@ -22,13 +22,13 @@ final class ComptaImportTest extends IntegrationTestCase
         $pdo = $this->requireDatabase();
         $this->reset(['sale_adjustments', 'sales', 'import_batches', 'product_aliases', 'settings']);
 
-        $this->seedUser($this->adminId, 'admin-int@exemple.fr', 'Password1', 'ADMIN');
+        $this->seedUser($this->adminId, 'admin-int@exemple.fr', 'Password123456', 'ADMIN');
 
-        // Mini rapport SumUp (3 lignes) en mémoire, posé sur disque pour l'upload.
-        $csv = "Date,Type,Réf. transaction,Moyen de paiement,Quantité,Description,Catégorie,SKU,Devise,Prix avant réduction,Réduction,Prix (TTC),Prix (HT),TVA,Taux de TVA,Compte"
-            . "\n1 juin 2026 09:59,Vente,TINT001,Visa - Débit,1,Bueno,Nourriture,,EUR,1,0,1,1,0,,Alex"
-            . "\n1 juin 2026 10:01,Vente,TINT002,Mastercard - Débit,1,Coca,Boissons,,EUR,1,0,1,1,0,,Alex"
-            . "\n1 juin 2026 11:27,Vente,TINT003,Visa - Débit,1,Montant personnalisé,,,EUR,1,0,1,1,0,,Alex";
+        // Mini rapport SumUp (3 lignes) en mÃ©moire, posÃ© sur disque pour l'upload.
+        $csv = "Date,Type,RÃ©f. transaction,Moyen de paiement,QuantitÃ©,Description,CatÃ©gorie,SKU,Devise,Prix avant rÃ©duction,RÃ©duction,Prix (TTC),Prix (HT),TVA,Taux de TVA,Compte"
+            . "\n1 juin 2026 09:59,Vente,TINT001,Visa - DÃ©bit,1,Bueno,Nourriture,,EUR,1,0,1,1,0,,Alex"
+            . "\n1 juin 2026 10:01,Vente,TINT002,Mastercard - DÃ©bit,1,Coca,Boissons,,EUR,1,0,1,1,0,,Alex"
+            . "\n1 juin 2026 11:27,Vente,TINT003,Visa - DÃ©bit,1,Montant personnalisÃ©,,,EUR,1,0,1,1,0,,Alex";
         $this->csvPath = sys_get_temp_dir() . '/aeic_import_' . bin2hex(random_bytes(4)) . '.csv';
         file_put_contents($this->csvPath, $csv);
     }
@@ -45,12 +45,12 @@ final class ComptaImportTest extends IntegrationTestCase
     {
         $files = ['csv' => ['name' => 'rapport.csv', 'tmp_name' => $this->csvPath]];
 
-        // 1er import : 3 lignes insérées.
+        // 1er import : 3 lignes insÃ©rÃ©es.
         $r1 = $this->request('POST', '/admin/compta/import', [], $files, $this->adminId);
         self::assertStringContainsString('/admin/compta/import', $this->location($r1));
         self::assertSame(3, (int) $this->pdo->query('SELECT COUNT(*) FROM sales')->fetchColumn());
 
-        // Réimport du même fichier : aucune ligne en double (déduplication).
+        // RÃ©import du mÃªme fichier : aucune ligne en double (dÃ©duplication).
         $this->request('POST', '/admin/compta/import', [], $files, $this->adminId);
         self::assertSame(3, (int) $this->pdo->query('SELECT COUNT(*) FROM sales')->fetchColumn());
     }
