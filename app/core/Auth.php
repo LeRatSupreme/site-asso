@@ -14,7 +14,17 @@ final class Auth
 {
     public const ROLE_ADMIN = 'ADMIN';
     public const ROLE_TRESORERIE = 'TRESORERIE';
+    public const ROLE_EVENEMENTS = 'EVENEMENTS';
+    public const ROLE_COMMUNICATION = 'COMMUNICATION';
+    public const ROLE_CAFETERIA = 'CAFETERIA';
+    public const ROLE_JEUX = 'JEUX';
     public const ROLE_ELEVE = 'ELEVE';
+
+    /** Cache de l'utilisateur chargé depuis la base (une fois par requête). */
+    private static ?array $user = null;
+
+    /** Indique si le cache utilisateur a été chargé pour la requête courante. */
+    private static bool $userLoaded = false;
 
     /**
      * Démarre la session si elle ne l'est pas déjà.
@@ -28,15 +38,21 @@ final class Auth
 
     /**
      * Connecte un utilisateur : stocke son ID et son rôle en session,
-     * puis régénère l'ID de session (anti-fixation).
+     * puis régénère l'ID de session (anti-fixation). Le token CSRF est
+     * renouvelé à l'élévation de privilège.
      */
     public static function login(string $userId, string $role): void
     {
         self::startSession();
+        unset($_SESSION['_csrf_token']);
         session_regenerate_id(true);
 
         $_SESSION['user_id'] = $userId;
         $_SESSION['user_role'] = $role;
+        $_SESSION['_last_regen'] = time();
+
+        self::$user = null;
+        self::$userLoaded = false;
     }
 
     /**
@@ -49,6 +65,8 @@ final class Auth
         $_SESSION = [];
 
         if (ini_get('session.use_cookies')) {
+            // Mêmes paramètres de cookie que ceux posés par config.php
+            // (secure en production) pour une invalidation effective.
             $params = session_get_cookie_params();
             setcookie(
                 session_name(),
@@ -56,8 +74,8 @@ final class Auth
                 time() - 42000,
                 $params['path'],
                 $params['domain'],
-                $params['secure'],
-                $params['httponly']
+                (bool) $params['secure'],
+                (bool) $params['httponly']
             );
         }
 
@@ -71,7 +89,49 @@ final class Auth
     {
         self::startSession();
 
-        return isset($_SESSION['user_id']);
+        self::refreshUser();
+
+        if (!isset($_SESSION['user_id'])) {
+            return false;
+        }
+
+        // Régénération périodique de l'ID de session (au plus toutes les 30 min).
+        $lastRegen = (int) ($_SESSION['_last_regen'] ?? 0);
+        if ($lastRegen === 0 || (time() - $lastRegen) > 1800) {
+            session_regenerate_id(true);
+            $_SESSION['_last_regen'] = time();
+        }
+
+        return true;
+    }
+
+    /**
+     * Recharge l'utilisateur connecté depuis la base (une seule fois par
+     * requête) et rafraîchit son rôle en session. Déconnecte si le compte
+     * n'existe plus ou a été désactivé.
+     */
+    private static function refreshUser(): void
+    {
+        if (self::$userLoaded || !isset($_SESSION['user_id'])) {
+            return;
+        }
+
+        self::$userLoaded = true;
+
+        try {
+            $user = \App\Models\User::find((string) $_SESSION['user_id']);
+        } catch (\Throwable) {
+            return;
+        }
+
+        if ($user === null || (int) ($user['is_active'] ?? 0) !== 1) {
+            self::logout();
+
+            return;
+        }
+
+        $_SESSION['user_role'] = (string) ($user['role'] ?? self::ROLE_ELEVE);
+        self::$user = $user;
     }
 
     /**
@@ -103,27 +163,17 @@ final class Auth
     }
 
     /**
-     * Renvoie l'enregistrement complet de l'utilisateur connecté (depuis la DB),
-     * ou null s'il n'est pas connecté / introuvable.
+     * Renvoie l'enregistrement complet de l'utilisateur connecté (depuis la DB,
+     * une requête par requête HTTP), ou null s'il n'est pas connecté /
+     * introuvable / désactivé.
      *
      * @return array<string,mixed>|null
      */
     public static function user(): ?array
     {
-        $id = self::id();
-        if ($id === null) {
-            return null;
-        }
+        self::startSession();
+        self::refreshUser();
 
-        try {
-            $stmt = db()->prepare('SELECT * FROM users WHERE id = ? LIMIT 1');
-            $stmt->execute([$id]);
-
-            $user = $stmt->fetch();
-        } catch (\Throwable) {
-            return null;
-        }
-
-        return $user ?: null;
+        return self::$user;
     }
 }

@@ -135,6 +135,25 @@ final class Router
             return;
         }
 
+        // Autorisation par défaut par préfixe (défense en profondeur ; les
+        // guards contrôleurs restent en place). Toutes les routes /admin/*,
+        // /eleve/* et /account/* du projet sont réservées : aucune route
+        // publique ne commence par ces préfixes (cf. app/config/routes.php).
+        $routePath = (string) (parse_url($path, PHP_URL_PATH) ?: $path);
+        if (str_starts_with($routePath, '/admin')) {
+            if (!Auth::check() || Auth::role() === Auth::ROLE_ELEVE) {
+                http_response_code(403);
+                echo '<h1>Erreur 403 — Accès refusé.</h1>';
+
+                return;
+            }
+        } elseif (str_starts_with($routePath, '/eleve') || str_starts_with($routePath, '/account')) {
+            if (!Auth::check()) {
+                $callback = $_SERVER['REQUEST_URI'] ?? '/';
+                redirect(url('/login?callbackUrl=') . rawurlencode($callback));
+            }
+        }
+
         http_response_code($match['status']);
 
         [$class, $action] = $handler;

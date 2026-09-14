@@ -9,15 +9,15 @@ use PDOException;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Base des tests d'intégration : exécute de VRAIES requêtes HTTP simulées
- * contre l'application branchée sur la base de test `aeic_test`.
+ * Base des tests d'intÃ©gration : exÃ©cute de VRAIES requÃªtes HTTP simulÃ©es
+ * contre l'application branchÃ©e sur la base de test `aeic_test`.
  *
- * Chaque requête est jouée dans un sous-processus PHP dédié
- * (tests/Integration/runner.php) car les contrôleurs utilisent `exit` (via
- * redirect()). La réponse est renvoyée sérialisée (code, en-têtes, corps,
+ * Chaque requÃªte est jouÃ©e dans un sous-processus PHP dÃ©diÃ©
+ * (tests/Integration/runner.php) car les contrÃ´leurs utilisent `exit` (via
+ * redirect()). La rÃ©ponse est renvoyÃ©e sÃ©rialisÃ©e (code, en-tÃªtes, corps,
  * session, nouvel ID de session).
  *
- * La base `aeic_test` doit exister et avoir importé database/schema.sql.
+ * La base `aeic_test` doit exister et avoir importÃ© database/schema.sql.
  * Les tests sautent automatiquement si la base n'est pas joignable.
  */
 abstract class IntegrationTestCase extends TestCase
@@ -33,7 +33,7 @@ abstract class IntegrationTestCase extends TestCase
     }
 
     /**
-     * Connexion à la base de test (null si indisponible).
+     * Connexion Ã  la base de test (null si indisponible).
      */
     protected function connect(): ?PDO
     {
@@ -61,13 +61,13 @@ abstract class IntegrationTestCase extends TestCase
     }
 
     /**
-     * Vérifie la disponibilité de la base de test et marque le test skipped sinon.
+     * VÃ©rifie la disponibilitÃ© de la base de test et marque le test skipped sinon.
      */
     protected function requireDatabase(): PDO
     {
         $pdo = $this->connect();
         if ($pdo === null) {
-            self::markTestSkipped('Base aeic_test indisponible : créez-la et importez database/schema.sql.');
+            self::markTestSkipped('Base aeic_test indisponible : crÃ©ez-la et importez database/schema.sql.');
         }
         $this->pdo = $pdo;
 
@@ -75,7 +75,7 @@ abstract class IntegrationTestCase extends TestCase
     }
 
     /**
-     * Vide les tables données (contraintes FK temporairement désactivées).
+     * Vide les tables donnÃ©es (contraintes FK temporairement dÃ©sactivÃ©es).
      *
      * @param list<string> $tables
      */
@@ -95,7 +95,7 @@ abstract class IntegrationTestCase extends TestCase
         $this->lastSessionId = $this->sessionId;
 
         // Le RateLimiter (login) repose sur des fichiers persistants ; on le
-        // nettoie pour éviter qu'une accumulation de tentatives (toujours
+        // nettoie pour Ã©viter qu'une accumulation de tentatives (toujours
         // depuis 127.0.0.1) ne verrouille les tests d'authentification.
         $this->clearRateLimiter();
     }
@@ -120,11 +120,11 @@ abstract class IntegrationTestCase extends TestCase
     }
 
     /**
-     * Exécute une requête simulée et renvoie la réponse parsée.
+     * ExÃ©cute une requÃªte simulÃ©e et renvoie la rÃ©ponse parsÃ©e.
      *
      * @param array<string,mixed>                $post
      * @param array<string,array{name:string,tmp_name:string,size?:int}> $files
-     * @param string                             $forceUserId Login forcé (admin) sans passer par /login.
+     * @param string                             $forceUserId Login forcÃ© (admin) sans passer par /login.
      */
     protected function request(
         string $method,
@@ -133,7 +133,7 @@ abstract class IntegrationTestCase extends TestCase
         array $files = [],
         string $forceUserId = ''
     ): array {
-        // On hérite de l'environnement système (PATH, SYSTEMROOT, TEMP…)
+        // On hÃ©rite de l'environnement systÃ¨me (PATH, SYSTEMROOT, TEMPâ€¦)
         // puis on applique les variables de test (surcharge).
         $env = array_merge(
             $this->inheritedEnv(),
@@ -157,7 +157,7 @@ abstract class IntegrationTestCase extends TestCase
         $output = $this->runPhp($this->runnerPath(), $env);
         $response = $this->parseResponse($output);
 
-        // Chaînage : on reprend le nouvel ID de session (régénéré au login).
+        // ChaÃ®nage : on reprend le nouvel ID de session (rÃ©gÃ©nÃ©rÃ© au login).
         if ($response['sessionId'] !== '') {
             $this->lastSessionId = $response['sessionId'];
         }
@@ -176,8 +176,8 @@ abstract class IntegrationTestCase extends TestCase
     }
 
     /**
-     * Récupère l'environnement courant à transmettre au sous-processus
-     * (nécessaire sous Windows : SYSTEMROOT, TEMP, PATH…).
+     * RÃ©cupÃ¨re l'environnement courant Ã  transmettre au sous-processus
+     * (nÃ©cessaire sous Windows : SYSTEMROOT, TEMP, PATHâ€¦).
      *
      * @return array<string,string>
      */
@@ -194,7 +194,7 @@ abstract class IntegrationTestCase extends TestCase
     }
 
     /**
-     * Connecte un utilisateur via le vrai flux /login et chaîne la session.
+     * Connecte un utilisateur via le vrai flux /login et chaÃ®ne la session.
      */
     protected function login(string $email, string $password): array
     {
@@ -205,7 +205,7 @@ abstract class IntegrationTestCase extends TestCase
     }
 
     /**
-     * Renvoie l'en-tête Location d'une réponse (ou '').
+     * Renvoie l'en-tÃªte Location d'une rÃ©ponse (ou '').
      */
     protected function location(array $response): string
     {
@@ -219,7 +219,7 @@ abstract class IntegrationTestCase extends TestCase
     }
 
     /**
-     * Exécute un script PHP dans un sous-processus et renvoie stdout.
+     * ExÃ©cute un script PHP dans un sous-processus et renvoie stdout.
      *
      * @param array<string,string> $env
      */
@@ -231,7 +231,7 @@ abstract class IntegrationTestCase extends TestCase
             2 => ['pipe', 'w'],
         ];
 
-        // On passe l'environnement via proc_open (pas d'héritage du shell parent).
+        // On passe l'environnement via proc_open (pas d'hÃ©ritage du shell parent).
         $proc = @proc_open([PHP_BINARY, $script], $descriptors, $pipes, null, $env);
         if (!is_resource($proc)) {
             self::fail('Impossible de lancer le sous-processus PHP (' . PHP_BINARY . ').');
@@ -261,13 +261,13 @@ abstract class IntegrationTestCase extends TestCase
         $marker = "\n--AEIC_TEST_RESPONSE--\n";
         $pos = strpos($output, $marker);
         if ($pos === false) {
-            self::fail('Réponse du runner illisible (marqueur absent). Sortie : ' . substr($output, 0, 1000));
+            self::fail('RÃ©ponse du runner illisible (marqueur absent). Sortie : ' . substr($output, 0, 1000));
         }
 
         $json = substr($output, $pos + strlen($marker));
         $data = json_decode($json, true);
         if (!is_array($data)) {
-            self::fail('JSON de réponse invalide : ' . substr($json, 0, 1000));
+            self::fail('JSON de rÃ©ponse invalide : ' . substr($json, 0, 1000));
         }
 
         return $data;
@@ -278,12 +278,12 @@ abstract class IntegrationTestCase extends TestCase
     // -----------------------------------------------------------------
 
     /**
-     * Crée un utilisateur direct en base avec un mot de passe known.
+     * CrÃ©e un utilisateur direct en base avec un mot de passe known.
      */
     protected function seedUser(
         string $id,
         string $email,
-        string $password = 'Password1',
+        string $password = 'Password123456',
         string $role = 'ELEVE',
         int $active = 1
     ): string {

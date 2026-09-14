@@ -51,6 +51,13 @@ declare(strict_types=1);
                 <?= csrf_field() ?>
 
                 <div class="field">
+                    <label for="current_password"><?= e(t('account.password.current')) ?></label>
+                    <input type="password" id="current_password" name="current_password"
+                           required
+                           autocomplete="current-password">
+                </div>
+
+                <div class="field">
                     <label for="confirm_text"><?= e(t('account.delete.type_confirm')) ?></label>
                     <input type="text" id="confirm_text" name="confirm_text"
                            placeholder="SUPPRIMER"

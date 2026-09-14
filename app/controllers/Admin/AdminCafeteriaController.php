@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Controllers\Admin;
 
+use App\Core\Permissions;
 use App\Models\Product;
 use App\Models\ProductCategory;
 
@@ -18,7 +19,7 @@ final class AdminCafeteriaController extends AdminBaseController
 
     public function products(): void
     {
-        $this->guard();
+        $this->guardModule(Permissions::MODULE_CAFETERIA);
 
         $this->renderAdmin('admin/cafeteria/products', [
             'title'    => 'Produits',
@@ -28,7 +29,7 @@ final class AdminCafeteriaController extends AdminBaseController
 
     public function productForm(?string $id = null): void
     {
-        $this->guard();
+        $this->guardModule(Permissions::MODULE_CAFETERIA);
 
         $product = ['is_available' => 1, 'is_active' => 1, 'stock' => 0];
         if ($id !== null) {
@@ -47,7 +48,7 @@ final class AdminCafeteriaController extends AdminBaseController
 
     public function saveProduct(): void
     {
-        $this->guard();
+        $this->guardModule(Permissions::MODULE_CAFETERIA);
 
         $data = $_POST;
         $isNew = empty($data['id']);
@@ -63,7 +64,7 @@ final class AdminCafeteriaController extends AdminBaseController
 
     public function deleteProduct(string $id): void
     {
-        $this->guard();
+        $this->guardModule(Permissions::MODULE_CAFETERIA);
 
         Product::deleteRow($id);
         $this->audit('product.delete', 'product', $id);
@@ -77,7 +78,7 @@ final class AdminCafeteriaController extends AdminBaseController
 
     public function categories(): void
     {
-        $this->guard();
+        $this->guardModule(Permissions::MODULE_CAFETERIA);
 
         $this->renderAdmin('admin/cafeteria/categories', [
             'title'      => 'Catégories',
@@ -87,7 +88,7 @@ final class AdminCafeteriaController extends AdminBaseController
 
     public function saveCategory(): void
     {
-        $this->guard();
+        $this->guardModule(Permissions::MODULE_CAFETERIA);
 
         $id = ProductCategory::save($_POST);
 
@@ -98,7 +99,7 @@ final class AdminCafeteriaController extends AdminBaseController
 
     public function deleteCategory(string $id): void
     {
-        $this->guard();
+        $this->guardModule(Permissions::MODULE_CAFETERIA);
 
         ProductCategory::deleteRow($id);
         $this->audit('category.delete', 'product_category', $id);

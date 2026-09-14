@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+use App\Core\Security\HtmlSanitizer;
+
 /**
  * Page CMS générique (/p/{slug}).
  *
@@ -33,7 +35,7 @@ declare(strict_types=1);
 </header>
 <section class="section">
     <div class="container narrow">
-        <div class="prose surface glass"><?= $page['content'] ?></div>
+        <div class="prose surface glass"><?= HtmlSanitizer::clean((string) $page['content']) ?></div>
     </div>
 </section>
 <?php endif; ?>

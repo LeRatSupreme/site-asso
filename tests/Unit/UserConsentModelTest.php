@@ -12,7 +12,7 @@ use PDO;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Tests des modèles User & Consent sur la base `aeic_test`.
+ * Tests des modÃ¨les User & Consent sur la base `aeic_test`.
  *
  * Saute automatiquement si la base n'est pas joignable (voir TestDatabaseTrait).
  */
@@ -30,7 +30,7 @@ final class UserConsentModelTest extends TestCase
         $this->reset($pdo, ['consents', 'users']);
         Model::setTestPdo($pdo);
 
-        $this->seedUser($pdo, 'u_existing', 'Alex', 'Martin', 'alex@exemple.fr', password_hash('Secret123', PASSWORD_BCRYPT));
+        $this->seedUser($pdo, 'u_existing', 'Alex', 'Martin', 'alex@exemple.fr', password_hash('SecretPassword123', PASSWORD_BCRYPT));
     }
 
     protected function tearDown(): void
@@ -40,7 +40,7 @@ final class UserConsentModelTest extends TestCase
 
     public function test_find_by_email_trouve_l_utilisateur(): void
     {
-        $user = User::findByEmail('ALEX@EXEMPLE.FR'); // insensible à la casse
+        $user = User::findByEmail('ALEX@EXEMPLE.FR'); // insensible Ã  la casse
 
         self::assertNotNull($user);
         self::assertSame('alex@exemple.fr', $user['email']);
@@ -58,7 +58,7 @@ final class UserConsentModelTest extends TestCase
             'prenom'   => 'Sarah',
             'nom'      => 'Lopez',
             'email'    => 'sarah@exemple.fr',
-            'password' => password_hash('Secret123', PASSWORD_BCRYPT),
+            'password' => password_hash('SecretPassword123', PASSWORD_BCRYPT),
         ]);
 
         self::assertNotEmpty($id);
@@ -75,8 +75,8 @@ final class UserConsentModelTest extends TestCase
 
         $user = User::find('u_existing');
 
-        self::assertSame('Compte supprimé', $user['prenom']);
-        // email NOT NULL/UNIQUE en base : anonymisé en sentinelle invalide.
+        self::assertSame('Compte supprimÃ©', $user['prenom']);
+        // email NOT NULL/UNIQUE en base : anonymisÃ© en sentinelle invalide.
         self::assertNotSame('alex@exemple.fr', $user['email']);
         self::assertSame('deleted_u_existing@invalid.local', $user['email']);
         self::assertNull($user['password']);

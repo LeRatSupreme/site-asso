@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Core\Auth;
+use App\Core\Security\HtmlSanitizer;
 
 /**
  * Détail d'un événement.
@@ -108,7 +109,7 @@ $priceLabel = ($price === null || (float) $price <= 0)
             </article>
 
             <?php if ($description !== ''): ?>
-                <div class="prose surface glass"><?= $description ?></div>
+                <div class="prose surface glass"><?= HtmlSanitizer::clean($description) ?></div>
             <?php endif; ?>
 
             <?php if (!empty($photos)): ?>

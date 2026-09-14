@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Controllers\Admin;
 
 use App\Core\Discord;
+use App\Core\Permissions;
 use App\Models\Poll;
 use App\Models\PollOption;
 
@@ -15,7 +16,7 @@ final class AdminPollController extends AdminBaseController
 {
     public function index(): void
     {
-        $this->guard();
+        $this->guardModule(Permissions::MODULE_CONTENT);
 
         $this->renderAdmin('admin/polls/index', [
             'title' => 'Sondages',
@@ -25,7 +26,7 @@ final class AdminPollController extends AdminBaseController
 
     public function form(?string $id = null): void
     {
-        $this->guard();
+        $this->guardModule(Permissions::MODULE_CONTENT);
 
         $poll = ['is_published' => 0, 'is_multiple' => 0];
         $options = [];
@@ -47,7 +48,7 @@ final class AdminPollController extends AdminBaseController
 
     public function save(): void
     {
-        $this->guard();
+        $this->guardModule(Permissions::MODULE_CONTENT);
 
         $data  = $_POST;
         $isNew = empty($data['id']);
@@ -92,7 +93,7 @@ final class AdminPollController extends AdminBaseController
 
     public function delete(string $id): void
     {
-        $this->guard();
+        $this->guardModule(Permissions::MODULE_CONTENT);
 
         $poll = Poll::find($id);
         if ($poll !== null) {

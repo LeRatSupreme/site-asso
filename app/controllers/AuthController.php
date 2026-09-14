@@ -32,7 +32,17 @@ final class AuthController extends Controller
     private const LOGIN_WINDOW = 600;
 
     /** Longueur du mot de passe temporaire généré à l'inscription. */
-    private const PASSWORD_LENGTH = 8;
+    private const PASSWORD_LENGTH = 12;
+
+    /**
+     * Hash bcrypt factice (d'une chaîne aléatoire fixe, jamais utilisée) :
+     * vérifié quand le compte est introuvable afin d'égaliser la durée de
+     * réponse et d'empêcher une énumération de comptes par analyse de timing.
+     */
+    private const DUMMY_HASH = '$2y$12$7wdQ2flty/7SpR8STMR1j.a4zv07u4ae40JqV6qYc1m1h.nwe6x5i';
+
+    /** Cost bcrypt appliqué aux nouveaux hash (et cible du rehash automatique). */
+    private const BCRYPT_COST = 12;
 
     /**
      * Génère un mot de passe aléatoire lisible (sans caractères ambigus) et
@@ -128,7 +138,7 @@ final class AuthController extends Controller
         $password = self::generatePassword();
 
         // Création du compte.
-        $hash = password_hash($password, PASSWORD_BCRYPT);
+        $hash = password_hash($password, PASSWORD_BCRYPT, ['cost' => self::BCRYPT_COST]);
         $userId = User::create([
             'prenom'   => $data['prenom'],
             'nom'      => $data['nom'],
@@ -164,14 +174,16 @@ final class AuthController extends Controller
 
         if ($smtpConfigured && $sent) {
             $this->setFlash('success', 'Votre compte a été créé. Votre mot de passe vient de vous être envoyé par e-mail.');
-        } else {
+        } elseif (APP_ENV !== 'prod') {
             // Fallback (SMTP non configuré ou envoi échoué) : on expose le mot
-            // de passe dans le flash. À utiliser en développement ; en
-            // production, configurez SMTP (admin > Paramètres).
+            // de passe dans le flash, UNIQUEMENT hors production. En prod,
+            // configurez SMTP (admin > Paramètres).
             $this->setFlash('info', sprintf(
                 'Compte créé. Aucun envoi SMTP configuré (développement uniquement) — mot de passe temporaire : %s',
                 $password
             ));
+        } else {
+            $this->setFlash('info', 'Compte créé. Si tu n\'as pas reçu l\'e-mail, contacte l\'équipe.');
         }
 
         redirect(url('/login'));
@@ -207,8 +219,16 @@ final class AuthController extends Controller
         $limiter = new RateLimiter();
         $ipKey = 'login:' . client_ip();
 
-        // Limitation des tentatives (anti brute-force).
-        if ($limiter->tooManyAttempts($ipKey, self::LOGIN_MAX_ATTEMPTS, self::LOGIN_WINDOW)) {
+        $email = trim((string) ($_POST['email'] ?? ''));
+        $password = (string) ($_POST['password'] ?? '');
+
+        // 2e clé par compte (anti brute-force ciblé sur un seul e-mail),
+        // soumise aux mêmes limites que la clé IP.
+        $userKey = 'login-user:' . User::normalizeEmail($email);
+
+        // Limitation des tentatives (anti brute-force) : IP ET compte.
+        if ($limiter->tooManyAttempts($ipKey, self::LOGIN_MAX_ATTEMPTS, self::LOGIN_WINDOW)
+            || $limiter->tooManyAttempts($userKey, self::LOGIN_MAX_ATTEMPTS, self::LOGIN_WINDOW)) {
             $minutes = (int) ceil($limiter->availableIn($ipKey, self::LOGIN_WINDOW) / 60);
             $this->setFlash('error', sprintf(
                 'Trop de tentatives échouées. Réessayez dans %d minute(s).',
@@ -217,14 +237,22 @@ final class AuthController extends Controller
             redirect(url('/login'));
         }
 
-        $email = trim((string) ($_POST['email'] ?? ''));
-        $password = (string) ($_POST['password'] ?? '');
-
-        $user = User::findByEmail($email);
+        $user = $email !== '' && Validator::isValidEmail($email) ? User::findByEmail($email) : null;
 
         // Message générique : on ne révèle jamais si l'e-mail existe.
-        if ($user === null || $user['password'] === null || !password_verify($password, (string) $user['password'])) {
+        if ($user === null || $user['password'] === null) {
+            // Égalisation de la durée de réponse (anti timing attack) : on
+            // vérifie un hash factice avant l'erreur générique.
+            password_verify($password, self::DUMMY_HASH);
             $limiter->hit($ipKey);
+            $limiter->hit($userKey);
+            $this->setFlash('error', 'Identifiants incorrects.');
+            redirect(url('/login'));
+        }
+
+        if (!password_verify($password, (string) $user['password'])) {
+            $limiter->hit($ipKey);
+            $limiter->hit($userKey);
             $this->setFlash('error', 'Identifiants incorrects.');
             redirect(url('/login'));
         }
@@ -232,6 +260,7 @@ final class AuthController extends Controller
         // Compte désactivé par un administrateur.
         if ((int) $user['is_active'] !== 1) {
             $limiter->hit($ipKey);
+            $limiter->hit($userKey);
             $this->setFlash('error', 'Ce compte est désactivé. Contactez l\'AEIC.');
             redirect(url('/login'));
         }
@@ -239,6 +268,7 @@ final class AuthController extends Controller
         // E-mail non confirmé : la connexion est bloquée jusqu'à vérification.
         if ($user['email_verified_at'] === null) {
             $limiter->hit($ipKey);
+            $limiter->hit($userKey);
             $this->setFlash('error', sprintf(
                 'Tu dois confirmer ton adresse e-mail avant de te connecter. Vérifie ta boîte mail (et tes spams), '
                 . 'ou demande un nouvel e-mail de confirmation : %s',
@@ -247,19 +277,29 @@ final class AuthController extends Controller
             redirect(url('/login'));
         }
 
+        // Rehash automatique : le hash vérifié est régénéré au cost courant
+        // si son cost d'origine est plus faible (migration transparente).
+        if (password_needs_rehash((string) $user['password'], PASSWORD_BCRYPT, ['cost' => self::BCRYPT_COST])) {
+            User::changePassword((string) $user['id'], $password);
+        }
+
+        // Identifiants validés : purge des compteurs IP ET compte.
+        $limiter->clear($ipKey);
+        $limiter->clear($userKey);
+
         // Succès des identifiants : étape 2FA si activée.
         if (TwoFactor::isEnabled((string) $user['id'])) {
             Auth::startSession();
             $_SESSION['_2fa_pending'] = [
-                'user_id' => (string) $user['id'],
-                'role'    => (string) $user['role'],
-                'expires' => time() + 600,
+                'user_id'  => (string) $user['id'],
+                'role'     => (string) $user['role'],
+                'expires'  => time() + 600,
+                'attempts' => 0,
             ];
             redirect(url('/login/verify'));
         }
 
         // Sans 2FA : connexion directe (l'obligation 2FA est vérifiée plus loin).
-        $limiter->clear($ipKey);
         Auth::login((string) $user['id'], (string) $user['role']);
 
         $callback = (string) ($_POST['callbackUrl'] ?? '');
@@ -275,9 +315,20 @@ final class AuthController extends Controller
 
     /**
      * Déconnexion : détruit la session et revient à l'accueil.
+     *
+     * La route étant en GET, un token (token CSRF de session passé en query
+     * string `?t=...`) est exigé pour empêcher les déconnexions forcées via
+     * un simple lien/img externe (logout CSRF).
      */
     public function logout(): void
     {
+        $token = (string) ($_GET['t'] ?? '');
+
+        if (!hash_equals(csrf_token(), $token)) {
+            // Token absent/invalide : pas de déconnexion, retour à l'accueil.
+            redirect(url('/'));
+        }
+
         Auth::logout();
         redirect(url('/'));
     }

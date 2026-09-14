@@ -12,7 +12,7 @@ use PDO;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Tests de la gestion des comptes en admin : rôles, activation, audit.
+ * Tests de la gestion des comptes en admin : rÃ´les, activation, audit.
  *
  * Saute si la base aeic_test est indisponible.
  */
@@ -33,7 +33,7 @@ final class AdminUserModelTest extends TestCase
         $this->reset($pdo, ['audit_logs', 'users']);
         Model::setTestPdo($pdo);
 
-        $hash = password_hash('Secret123', PASSWORD_BCRYPT);
+        $hash = password_hash('SecretPassword123', PASSWORD_BCRYPT);
         $this->seedUser($pdo, 'adm1', 'Admin', 'Un', 'a@ex.fr', Auth::ROLE_ADMIN, 1, $hash);
         $this->seedUser($pdo, 'adm2', 'Admin', 'Deux', 'b@ex.fr', Auth::ROLE_ADMIN, 1, $hash);
         $this->seedUser($pdo, 'ele1', 'Eleve', 'Un', 'e@ex.fr', Auth::ROLE_ELEVE, 1, $hash);

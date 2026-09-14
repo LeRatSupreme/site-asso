@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Tests\Integration;
 
 /**
- * Tests d'intégration de l'inscription aux événements
+ * Tests d'intÃ©gration de l'inscription aux Ã©vÃ©nements
  * (route POST /events/{slug}/register + base event_registrations).
  */
 final class EventRegistrationTest extends IntegrationTestCase
@@ -29,12 +29,12 @@ final class EventRegistrationTest extends IntegrationTestCase
         $future = date('Y-m-d H:i:s', time() + 86400 * 7);
         $pdo->prepare(
             'INSERT INTO events (id, slug, title, date, is_published) VALUES (?,?,?,? ,1)'
-        )->execute([$this->eventId, $this->slug, 'Soirée test', $future]);
+        )->execute([$this->eventId, $this->slug, 'SoirÃ©e test', $future]);
     }
 
     public function test_inscription_cree_une_ligne_event_registrations(): void
     {
-        $this->login('evt@exemple.fr', 'Password1');
+        $this->login('evt@exemple.fr', 'Password123456');
 
         $response = $this->request('POST', '/events/' . $this->slug . '/register');
 
@@ -48,7 +48,7 @@ final class EventRegistrationTest extends IntegrationTestCase
 
     public function test_double_inscription_rejete_l_unicite(): void
     {
-        $this->login('evt@exemple.fr', 'Password1');
+        $this->login('evt@exemple.fr', 'Password123456');
 
         $this->request('POST', '/events/' . $this->slug . '/register');
         $this->request('POST', '/events/' . $this->slug . '/register');

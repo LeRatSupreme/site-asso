@@ -7,11 +7,17 @@ namespace App\Controllers\Admin;
 use App\Core\Auth;
 use App\Core\Controller;
 use App\Core\Middleware;
+use App\Core\Permissions;
 
 /**
  * Contrôleur de base de l'espace d'administration.
  *
- * Toutes les actions admin requièrent le rôle ADMIN.
+ * Trois niveaux d'accès :
+ *  - guard()          : réservé à ADMIN (utilisateurs, paramètres, adhésions…) ;
+ *  - guardModule(x)   : ADMIN + rôles auxquels le module x est ouvert
+ *                      (voir App\Core\Permissions) ;
+ *  - guardAdminArea() : tout rôle ayant accès à au moins un module
+ *                      (tableau de bord, wiki).
  */
 abstract class AdminBaseController extends Controller
 {
@@ -28,18 +34,42 @@ abstract class AdminBaseController extends Controller
     }
 
     /**
+     * Garde-fou par module : ADMIN + rôles autorisés pour ce module.
+     *
+     * @return array<string,mixed>
+     */
+    protected function guardModule(string $module): array
+    {
+        Middleware::requireRole(Permissions::rolesForModule($module));
+
+        return Auth::user();
+    }
+
+    /**
+     * Garde-fou de l'espace d'administration (tableau de bord, wiki) :
+     * tout rôle ayant accès à au moins un module.
+     *
+     * @return array<string,mixed>
+     */
+    protected function guardAdminArea(): array
+    {
+        Middleware::requireRole(Permissions::adminRoles());
+
+        return Auth::user();
+    }
+
+    /**
      * Garde-fou spécifique au module comptabilité.
      *
      * Les routes /admin/compta/* sont accessibles aux rôles ADMIN et
-     * TRESORERIE ; toutes les autres routes /admin/* restent réservées à ADMIN.
+     * TRESORERIE (voir Permissions) ; toutes les autres routes /admin/*
+     * restent régies par guard() / guardModule().
      *
      * @return array<string,mixed>
      */
     protected function guardCompta(): array
     {
-        Middleware::requireRole([Auth::ROLE_ADMIN, Auth::ROLE_TRESORERIE]);
-
-        return Auth::user();
+        return $this->guardModule(Permissions::MODULE_COMPTA);
     }
 
     /**

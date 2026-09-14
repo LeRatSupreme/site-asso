@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Controllers\Admin;
 
+use App\Core\Permissions;
 use App\Models\Page;
 
 /**
@@ -13,7 +14,7 @@ final class AdminPageController extends AdminBaseController
 {
     public function index(): void
     {
-        $this->guard();
+        $this->guardModule(Permissions::MODULE_CONTENT);
 
         $this->renderAdmin('admin/pages/index', [
             'title' => 'Pages',
@@ -23,7 +24,7 @@ final class AdminPageController extends AdminBaseController
 
     public function form(?string $slug = null): void
     {
-        $this->guard();
+        $this->guardModule(Permissions::MODULE_CONTENT);
 
         $page = ['is_published' => 1];
         if ($slug !== null) {
@@ -41,7 +42,7 @@ final class AdminPageController extends AdminBaseController
 
     public function save(): void
     {
-        $this->guard();
+        $this->guardModule(Permissions::MODULE_CONTENT);
 
         $isNew = empty($_POST['id']);
         $id = Page::save($_POST);
@@ -53,7 +54,7 @@ final class AdminPageController extends AdminBaseController
 
     public function delete(string $slug): void
     {
-        $this->guard();
+        $this->guardModule(Permissions::MODULE_CONTENT);
 
         $page = Page::findBySlugAny($slug);
         if ($page !== null) {

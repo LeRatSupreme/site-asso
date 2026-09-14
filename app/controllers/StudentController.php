@@ -6,6 +6,7 @@ namespace App\Controllers;
 
 use App\Core\Auth;
 use App\Core\Controller;
+use App\Core\Mailer;
 use App\Core\Middleware;
 use App\Core\Validator;
 use App\Models\CafeteriaOrder;
@@ -16,6 +17,7 @@ use App\Models\ProductCategory;
 use App\Models\Registration;
 use App\Models\Setting;
 use App\Models\User;
+use App\Models\VerificationToken;
 
 /**
  * Espace élève : tableau de bord, profil, inscriptions, commandes et cafétéria.
@@ -116,6 +118,10 @@ final class StudentController extends Controller
             redirect(url('/eleve/profile'));
         }
 
+        // E-mail réellement modifié (et pas re-soumis à l'identique) ?
+        // (l'e-mail stocké est normalisé : comparaison sur la même forme)
+        $emailChanged = User::normalizeEmail($email) !== (string) $user['email'];
+
         User::updateProfile($userId, [
             'prenom' => $prenom,
             'nom'    => $nom,
@@ -124,6 +130,31 @@ final class StudentController extends Controller
 
         if ($passwordChanged) {
             User::changePassword($userId, $newPassword);
+        }
+
+        // Nouvelle adresse : la vérification doit être refaite (l'ancienne
+        // preuve ne porte plus). L'utilisateur reste connecté mais sera
+        // bloqué à sa prochaine connexion tant que l'e-mail n'est pas confirmé.
+        if ($emailChanged) {
+            $stmt = db()->prepare('UPDATE users SET email_verified_at = NULL WHERE id = ?');
+            $stmt->execute([$userId]);
+
+            if (Mailer::isSmtpConfigured()) {
+                $token = VerificationToken::createToken($userId);
+
+                try {
+                    Mailer::send('verify_email', User::normalizeEmail($email), 'Confirme ton adresse e-mail — AEIC', [
+                        'prenom'    => $prenom,
+                        'verifyUrl' => APP_URL . url('/verify-email?token=' . $token),
+                        'expiresIn' => VerificationToken::EXPIRES_HOURS,
+                    ]);
+                } catch (\Throwable) {
+                    // L'échec d'envoi ne doit pas bloquer la mise à jour.
+                }
+            }
+
+            $this->setFlash('info', 'Profil mis à jour. Ton adresse e-mail a changé : confirme ta nouvelle adresse via l\'e-mail qui vient de t\'être envoyé (elle sera exigée à ta prochaine connexion).');
+            redirect(url('/eleve/profile'));
         }
 
         $this->setFlash('success', 'Profil mis à jour.');

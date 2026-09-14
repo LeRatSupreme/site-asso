@@ -13,6 +13,25 @@ use App\Models\Setting;
  */
 final class AdminSettingController extends AdminBaseController
 {
+    /**
+     * Whitelist des clés éditables via le formulaire admin
+     * (cf. views/admin/settings/index.php). Toute autre clé
+     * soumise est ignorée.
+     */
+    private const EDITABLE_KEYS = [
+        'site_name', 'site_description', 'contact_email', 'logo_url',
+        'address', 'map_lat', 'map_lon',
+        'mailer_from', 'mailer_from_name',
+        'smtp_host', 'smtp_port', 'smtp_user', 'smtp_pass', 'smtp_encryption',
+        'brevo_api_key',
+        'sumup_default_link', 'sumup_enabled', 'default_sumup_link',
+        'maintenance_mode', 'orders_enabled', 'registrations_enabled',
+        'og_image', 'twitter_handle', 'csp_directives',
+        'facebook_url', 'instagram_url', 'linkedin_url',
+        'discord_webhook_url', 'discord_enabled',
+        'membership_price', 'membership_enabled', 'membership_season',
+    ];
+
     public function index(): void
     {
         $this->guard();
@@ -37,7 +56,7 @@ final class AdminSettingController extends AdminBaseController
 
         foreach (($_POST['settings'] ?? []) as $key => $value) {
             $key = (string) $key;
-            if ($key === '') {
+            if ($key === '' || !in_array($key, self::EDITABLE_KEYS, true)) {
                 continue;
             }
             Setting::set($key, (string) $value);

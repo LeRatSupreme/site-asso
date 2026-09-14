@@ -67,7 +67,7 @@ $nav = [
             <div class="nav-actions">
                 <?php if ($user !== null): ?>
                     <a class="btn btn-outline btn-sm" href="<?= e(url('/eleve')) ?>"><?= e($user['prenom'] ?? t('nav.account')) ?></a>
-                    <a class="btn btn-ghost btn-sm" href="<?= e(url('/logout')) ?>"><?= e(t('nav.logout')) ?></a>
+                    <a class="btn btn-ghost btn-sm" href="<?= e(url('/logout') . '?t=' . csrf_token()) ?>"><?= e(t('nav.logout')) ?></a>
                 <?php else: ?>
                     <a class="btn btn-ghost btn-sm" href="<?= e(url('/login')) ?>"><?= e(t('nav.login')) ?></a>
                     <a class="btn btn-primary btn-sm" href="<?= e(url('/register')) ?>"><?= e(t('nav.register')) ?></a>

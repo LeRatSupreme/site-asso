@@ -154,7 +154,7 @@ if (($user['role'] ?? null) === 'TRESORERIE') {
                     <button type="submit" name="lang" value="en" class="lang-btn<?= $lang === 'en' ? ' is-active' : '' ?>" title="English">🇬🇧</button>
                 </form>
                 <a class="admin-link" href="<?= e(url('/')) ?>" target="_blank">Voir le site →</a>
-                <a class="admin-link" href="<?= e(url('/logout')) ?>">Déconnexion (<?= e($user['prenom'] ?? '') ?>)</a>
+                <a class="admin-link" href="<?= e(url('/logout') . '?t=' . csrf_token()) ?>">Déconnexion (<?= e($user['prenom'] ?? '') ?>)</a>
             </div>
         </aside>
 

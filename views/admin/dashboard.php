@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+use App\Core\Auth;
+
 /**
  * Tableau de bord admin.
  *
@@ -9,10 +11,13 @@ declare(strict_types=1);
  * @var int $eventsCount
  * @var float $monthCa
  * @var float $monthProfit
+ * @var bool $showFinance
  * @var list<array<string,mixed>> $recentAudit
  */
+$showFinance = $showFinance ?? false;
+$gridClass = $showFinance ? 'grid grid-4' : 'grid grid-2';
 ?>
-<div class="grid grid-4 stat-cards">
+<div class="<?= e($gridClass) ?> stat-cards">
     <div class="stat-card surface glass">
         <span class="stat-value"><?= e((string) $usersCount) ?></span>
         <span class="stat-label">Membres actifs</span>
@@ -21,6 +26,7 @@ declare(strict_types=1);
         <span class="stat-value"><?= e((string) $eventsCount) ?></span>
         <span class="stat-label">Événements publiés</span>
     </div>
+    <?php if ($showFinance): ?>
     <div class="stat-card surface glass">
         <span class="stat-value"><?= e(formatPrice($monthCa)) ?></span>
         <span class="stat-label">CA ce mois</span>
@@ -29,8 +35,10 @@ declare(strict_types=1);
         <span class="stat-value is-positive"><?= e(formatPrice($monthProfit)) ?></span>
         <span class="stat-label">Bénéfice ce mois</span>
     </div>
+    <?php endif; ?>
 </div>
 
+<?php if (Auth::isAdmin()): ?>
 <section class="card surface glass">
     <h2 class="card-title">Journal d'audit</h2>
     <?php if (!empty($recentAudit)): ?>
@@ -47,3 +55,4 @@ declare(strict_types=1);
         <p class="card-meta">Aucune action enregistrée.</p>
     <?php endif; ?>
 </section>
+<?php endif; ?>

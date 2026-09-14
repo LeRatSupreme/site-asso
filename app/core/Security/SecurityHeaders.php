@@ -37,7 +37,7 @@ final class SecurityHeaders
         $headers['Content-Security-Policy'] = $csp !== '' ? $csp : self::defaultCsp();
 
         if ($https) {
-            $headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains';
+            $headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains; preload';
         }
 
         return $headers;

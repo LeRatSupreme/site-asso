@@ -72,13 +72,17 @@ declare(strict_types=1);
     </div>
 
     <div class="wiki-block">
-        <h3>Les 3 rôles</h3>
+        <h3>Les rôles</h3>
         <div class="wiki-table">
             <div class="wiki-table-row wiki-table-head">
                 <span>Rôle</span><span>Accès</span><span>Qui ?</span>
             </div>
             <div class="wiki-table-row"><span class="wiki-tag wiki-tag-teal">ADMIN</span><span>Tout l'espace d'administration</span><span>Président, membres du bureau de confiance</span></div>
             <div class="wiki-table-row"><span class="wiki-tag wiki-tag-violet">TRESORERIE</span><span>Uniquement la comptabilité (import, coûts, réappro, analytics)</span><span>Trésorier</span></div>
+            <div class="wiki-table-row"><span class="wiki-tag wiki-tag-violet">EVENEMENTS</span><span>Gestion des événements, inscriptions et check-in</span><span>Resp. événements</span></div>
+            <div class="wiki-table-row"><span class="wiki-tag wiki-tag-violet">COMMUNICATION</span><span>Pages, équipe, sondages, promotions, médias</span><span>Resp. communication</span></div>
+            <div class="wiki-table-row"><span class="wiki-tag wiki-tag-violet">CAFETERIA</span><span>Produits et catégories de la cafétéria</span><span>Resp. cafétéria</span></div>
+            <div class="wiki-table-row"><span class="wiki-tag wiki-tag-violet">JEUX</span><span>Gestion des jeux (Wordle, énigmes, classements)</span><span>Resp. jeux</span></div>
             <div class="wiki-table-row"><span class="wiki-tag wiki-tag-muted">ELEVE</span><span>Espace membre uniquement (pas d'admin)</span><span>Tous les étudiants inscrits</span></div>
         </div>
     </div>
@@ -326,7 +330,7 @@ declare(strict_types=1);
         <h3>Actions possibles sur un utilisateur</h3>
         <div class="wiki-table">
             <div class="wiki-table-row wiki-table-head"><span>Action</span><span>Effet</span></div>
-            <div class="wiki-table-row"><span>🔄 <strong>Changer le rôle</strong></span><span>ELEVE → ADMIN ou TRESORERIE. Journalisé + email envoyé.</span></div>
+            <div class="wiki-table-row"><span>🔄 <strong>Changer le rôle</strong></span><span>ELEVE → ADMIN, TRESORERIE, EVENEMENTS, COMMUNICATION, CAFETERIA ou JEUX</span></div>
             <div class="wiki-table-row"><span>🔒 <strong>Désactiver</strong></span><span>Bloque la connexion. Données conservées.</span></div>
             <div class="wiki-table-row"><span>🔑 <strong>Reset MDP</strong></span><span>Génère un mot de passe temporaire envoyé par email.</span></div>
             <div class="wiki-table-row"><span>🗑️ <strong>Supprimer</strong></span><span>Anonymise les données (RGPD). Comptabilité conservée anonyme.</span></div>

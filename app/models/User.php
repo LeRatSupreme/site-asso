@@ -319,11 +319,11 @@ final class User extends Model
     }
 
     /**
-     * Change le mot de passe (hash bcrypt).
+     * Change le mot de passe (hash bcrypt, cost 12).
      */
     public static function changePassword(string $userId, string $newPassword): void
     {
-        $hash = password_hash($newPassword, PASSWORD_BCRYPT);
+        $hash = password_hash($newPassword, PASSWORD_BCRYPT, ['cost' => 12]);
 
         $stmt = static::pdo()->prepare('UPDATE users SET password = ? WHERE id = ?');
         $stmt->execute([$hash, $userId]);

@@ -268,19 +268,102 @@ function sumup_enabled(): bool
 }
 
 /**
- * Renvoie l'adresse IP du client (premier de la chaîne X-Forwarded-For, sinon REMOTE_ADDR).
+ * Vérifie qu'une IP appartient à un réseau CIDR (ou à une IP exacte si le
+ * masque est absent). Gère IPv4 (masque préfixe ou notation pointée) et
+ * IPv6 en best effort (masque préfixe).
+ */
+function cidr_match(string $ip, string $cidr): bool
+{
+    $cidr = trim($cidr);
+    if (str_contains($cidr, '/')) {
+        [$subnet, $mask] = explode('/', $cidr, 2);
+    } else {
+        $subnet = $cidr;
+        $mask = null;
+    }
+
+    $ipBin = @inet_pton(trim($ip));
+    $subnetBin = @inet_pton(trim($subnet));
+    if ($ipBin === false || $subnetBin === false || strlen($ipBin) !== strlen($subnetBin)) {
+        return false;
+    }
+
+    if ($mask === null) {
+        return $ipBin === $subnetBin;
+    }
+
+    // Masque IPv4 en notation pointée (ex: 255.255.0.0).
+    if (!str_contains($cidr, ':') && !ctype_digit($mask)) {
+        $maskBin = @inet_pton(trim($mask));
+        if ($maskBin === false || strlen($maskBin) !== 4) {
+            return false;
+        }
+
+        return ($ipBin & $maskBin) === ($subnetBin & $maskBin);
+    }
+
+    $bits = (int) $mask;
+    if ($bits < 0 || $bits > strlen($ipBin) * 8) {
+        return false;
+    }
+
+    $fullBytes = intdiv($bits, 8);
+    if ($fullBytes > 0 && substr($ipBin, 0, $fullBytes) !== substr($subnetBin, 0, $fullBytes)) {
+        return false;
+    }
+
+    $remBits = $bits % 8;
+    if ($remBits > 0) {
+        $maskByte = (0xFF << (8 - $remBits)) & 0xFF;
+
+        return ((ord($ipBin[$fullBytes]) ^ ord($subnetBin[$fullBytes])) & $maskByte) === 0;
+    }
+
+    return true;
+}
+
+/**
+ * Renvoie l'adresse IP du client.
+ *
+ * L'en-tête X-Forwarded-For étant forgeable, il n'est pris en compte que si
+ * REMOTE_ADDR appartient aux proxies de confiance (TRUSTED_PROXIES, liste
+ * d'IP/CIDR séparés par des virgules). Dans ce cas on parcourt la chaîne de
+ * droite à gauche et on retient la première IP hors proxies de confiance.
  */
 function client_ip(): string
 {
+    $remote = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
+
+    $trusted = array_values(array_filter(array_map('trim', explode(',', (string) getenv('TRUSTED_PROXIES')))));
+    if ($trusted === []) {
+        return $remote;
+    }
+
+    $isTrusted = static function (string $ip) use ($trusted): bool {
+        foreach ($trusted as $cidr) {
+            if (cidr_match($ip, $cidr)) {
+                return true;
+            }
+        }
+
+        return false;
+    };
+
+    if (!$isTrusted($remote)) {
+        return $remote;
+    }
+
     $forwarded = $_SERVER['HTTP_X_FORWARDED_FOR'] ?? '';
     if ($forwarded !== '') {
-        $first = trim(explode(',', $forwarded)[0]);
-        if ($first !== '') {
-            return $first;
+        $parts = array_map('trim', explode(',', $forwarded));
+        for ($i = count($parts) - 1; $i >= 0; $i--) {
+            if ($parts[$i] !== '' && !$isTrusted($parts[$i])) {
+                return $parts[$i];
+            }
         }
     }
 
-    return $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
+    return $remote;
 }
 
 /**
