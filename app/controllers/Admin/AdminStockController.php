@@ -75,7 +75,7 @@ final class AdminStockController extends AdminBaseController
         if ($vatRaw !== '') {
             $candidate = parseFrenchFloat($vatRaw);
             if (!in_array($candidate, self::VAT_RATES, true)) {
-                $this->setFlash('error', 'Produit, quantité et coût unitaire requis.');
+                $this->setFlash('error', 'Taux de TVA invalide.');
                 redirect(url('/admin/compta/achats'));
             }
             $vatRate = $candidate;

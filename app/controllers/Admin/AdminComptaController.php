@@ -527,7 +527,7 @@ final class AdminComptaController extends AdminBaseController
             'editLot'     => $editLot,
             'form'        => [
                 'product_key' => (string) ($editLot['product_key'] ?? ($_GET['product_key'] ?? '')),
-                'cost_price'  => $editLot !== null ? number_format((float) $editLot['cost_price'], 2, ',', '') : '',
+                'cost_price'  => $editLot !== null ? number_format((float) $editLot['cost_price'], 3, ',', '') : '',
                 'valid_from'  => $editLot !== null ? substr((string) $editLot['valid_from'], 0, 10) : date('Y-m-d'),
                 'supplier'    => $editLot !== null ? (string) ($editLot['supplier'] ?? '') : '',
                 'notes'       => '',

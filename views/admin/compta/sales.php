@@ -116,7 +116,7 @@ foreach ($rows as $r) {
                     <td><?= e((string) ($r['category'] ?? '—')) ?></td>
                     <td class="num"><?= e((string) ($r['quantity'] ?? 1)) ?></td>
                     <td class="num"><strong><?= e(formatPrice($r['price_ttc'] ?? 0)) ?></strong></td>
-                    <td class="num muted"><?= e(formatPrice($r['cost_price'] ?? 0)) ?></td>
+                    <td class="num muted"><?= e(formatPrice($r['cost_price'] ?? 0, 3)) ?></td>
                     <td class="num <?= $profit >= 0 ? 'is-positive' : 'is-negative' ?>"><?= $isCustom ? '<span class="muted">—</span>' : e(formatPrice($profit)) ?></td>
                     <td>
                         <?php if (($r['payment_method'] ?? '') === 'LIQUIDE'): ?>

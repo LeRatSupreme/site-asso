@@ -173,7 +173,7 @@ $refShort = [
                         <td class="num muted"><?= reorder_qty((float) $r['avg_week']) ?></td>
                         <td class="num muted"><?= reorder_qty((float) $r['avg_month']) ?></td>
                         <td class="num muted">
-                            <?= $r['unit_cost'] !== null ? e(formatPrice((float) $r['unit_cost'])) : '—' ?>
+                            <?= $r['unit_cost'] !== null ? e(formatPrice((float) $r['unit_cost'], 3)) : '—' ?>
                         </td>
                         <td class="num"><?= e((string) $r['need']) ?></td>
                         <td class="num to-order-cell">
