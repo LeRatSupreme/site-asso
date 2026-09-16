@@ -81,7 +81,7 @@ declare(strict_types=1);
                             <td class="num"><?= e((string) $r['qty']) ?></td>
                             <td class="num"><?= e(formatPrice($r['avg_price'] ?? 0)) ?></td>
                             <td class="num"><?= e(formatPrice($ca)) ?></td>
-                            <td class="num"><?= e(formatPrice($r['cost_price'] ?? 0)) ?></td>
+                            <td class="num"><?= e(formatPrice($r['cost_price'] ?? 0, 3)) ?></td>
                             <td class="num <?= $profit >= 0 ? 'is-positive' : 'is-negative' ?>"><?= e(formatPrice($profit)) ?></td>
                             <td class="num"><?= e(number_format($marg, 1, ',', ' ')) ?> %</td>
                         </tr>

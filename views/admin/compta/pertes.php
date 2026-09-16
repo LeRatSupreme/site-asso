@@ -167,7 +167,7 @@ $topReason = $byReason[0] ?? null;
                     <td><strong><?= e((string) $r['product_key']) ?></strong></td>
                     <td class="num"><?= (int) $r['quantity'] ?></td>
                     <td><span class="<?= e($reasonBadges[(string) $r['reason']] ?? 'badge') ?>"><?= e($reasonLabels[(string) $r['reason']] ?? (string) $r['reason']) ?></span></td>
-                    <td class="num"><?= e(formatPrice((float) $r['unit_cost'])) ?></td>
+                    <td class="num"><?= e(formatPrice((float) $r['unit_cost'], 3)) ?></td>
                     <td class="num"><strong><?= e(formatPrice((float) $r['value'])) ?></strong></td>
                     <td><?= e((string) ($r['note'] ?? '') !== '' ? (string) $r['note'] : '—') ?></td>
                     <td class="row-actions">

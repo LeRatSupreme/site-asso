@@ -175,7 +175,7 @@ declare(strict_types=1);
                                     <div class="cost-card-current">
                                         <?php if ($hasCost): ?>
                                             <span class="badge badge-success">Lot en cours</span>
-                                            <strong class="cost-card-price"><?= e(formatPrice($it['currentCost'])) ?><span class="muted"> /unité</span></strong>
+                                            <strong class="cost-card-price"><?= e(formatPrice($it['currentCost'], 3)) ?><span class="muted"> /unité</span></strong>
                                             <a class="btn btn-outline btn-sm" href="<?= e(url('/admin/compta/couts?edit=' . rawurlencode((string) $it['currentLotId']) . '#costs-form')) ?>">✏️ Modifier</a>
                                         <?php else: ?>
                                             <span class="badge badge-warning">Aucun coût</span>
@@ -191,7 +191,7 @@ declare(strict_types=1);
                                             <tbody>
                                                 <?php foreach ($it['lots'] as $c): ?>
                                                     <tr class="<?= empty($c['valid_to']) ? 'row-current' : '' ?>">
-                                                        <td><strong><?= e(formatPrice($c['cost_price'])) ?></strong></td>
+                                                        <td><strong><?= e(formatPrice($c['cost_price'], 3)) ?></strong></td>
                                                         <td><?= e(formatDate($c['valid_from'])) ?></td>
                                                         <td>
                                                             <?php if (!empty($c['valid_to'])): ?>
