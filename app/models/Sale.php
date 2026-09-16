@@ -8,9 +8,15 @@ namespace App\Models;
  * Ventes importées depuis les rapports SumUp (table `sales`).
  *
  * Les lignes de ventes sont IMMUABLES après import : on ne les modifie ni ne
- * les supprime. L'anti-doublon repose sur la clé unique MySQL
- * (transaction_ref, sold_at, description, quantity, price_ttc) ; un réimport
- * du même fichier n'insère donc aucune ligne supplémentaire.
+ * les supprime. L'anti-doublon repose sur :
+ *   1. un dédoublonnage en mémoire dans importBatch() (clé md5
+ *      transaction_ref|sold_at|description|quantity|price_ttc) pour les
+ *      occurrences au sein d'un même fichier ;
+ *   2. la clé unique MySQL (transaction_ref, sold_at, description, quantity,
+ *      price_ttc) via INSERT IGNORE : un réimport du même fichier (ou d'un
+ *      fichier en chevauchement) n'insère aucune ligne supplémentaire.
+ * La colonne description est NOT NULL DEFAULT '' : un NULL l'aurait fait
+ * sortir de la clé unique (MySQL ignore les NULL dans les index UNIQUE).
  */
 final class Sale extends Model
 {
@@ -20,8 +26,14 @@ final class Sale extends Model
      * Insère un lot de lignes normalisées en ignorant les doublons
      * (INSERT IGNORE sur la clé unique de la ligne).
      *
+     * - Les occurrences en double AU SEIN du fichier sont écartées avant
+     *   insertion et comptées dans `file_duplicates`.
+     * - L'ensemble tourne dans une transaction SQL : en cas d'échec, rien
+     *   n'est inséré (pas de demi-import), l'exception est relancée.
+     *
      * @param list<array<string,mixed>> $rows Lignes issues du parseur.
-     * @return array{inserted:int, skipped:int}
+     * @return array{inserted:int, skipped:int, file_duplicates:int}
+     *         inserted = nouvelles lignes, skipped = déjà présentes en base.
      */
     public static function importBatch(string $batchId, array $rows): array
     {
@@ -37,37 +49,66 @@ final class Sale extends Model
 
         $inserted = 0;
         $skipped = 0;
+        $fileDuplicates = 0;
+        $seen = [];
 
-        foreach ($rows as $r) {
-            $stmt->execute([
-                'sale_' . bin2hex(random_bytes(10)),
-                (string) ($r['transaction_ref'] ?? ''),
-                (string) ($r['sold_at'] ?? null),
-                (string) ($r['payment_method'] ?? 'CARTE'),
-                $r['payment_raw'] ?? null,
-                (int) ($r['quantity'] ?? 1),
-                $r['description'] ?? null,
-                $r['product_key'] ?? null,
-                $r['category'] ?? null,
-                $r['sku'] ?? null,
-                $r['currency'] !== '' ? $r['currency'] : 'EUR',
-                $r['price_ttc'] ?? 0,
-                $r['price_ht'] ?? null,
-                $r['vat'] ?? null,
-                $r['vat_rate'] ?? null,
-                $r['seller_account'] ?? null,
-                (int) ($r['is_custom_amount'] ?? 0),
-                $batchId,
-            ]);
+        try {
+            $pdo->beginTransaction();
 
-            if ($stmt->rowCount() === 1) {
-                $inserted++;
-            } else {
-                $skipped++;
+            foreach ($rows as $r) {
+                $ref = (string) ($r['transaction_ref'] ?? '');
+                $soldAt = (string) ($r['sold_at'] ?? '');
+                $description = (string) ($r['description'] ?? '');
+                $quantity = (int) ($r['quantity'] ?? 1);
+                $priceTtc = number_format((float) ($r['price_ttc'] ?? 0), 2, '.', '');
+
+                // Dédoublonnage dans le fichier : la 2e occurrence (et
+                // suivantes) d'une ligne identique est écartée d'office.
+                $dedupKey = md5($ref . '|' . $soldAt . '|' . $description . '|' . $quantity . '|' . $priceTtc);
+                if (isset($seen[$dedupKey])) {
+                    $fileDuplicates++;
+                    continue;
+                }
+                $seen[$dedupKey] = true;
+
+                $stmt->execute([
+                    'sale_' . bin2hex(random_bytes(10)),
+                    $ref,
+                    $soldAt,
+                    (string) ($r['payment_method'] ?? 'CARTE'),
+                    $r['payment_raw'] ?? null,
+                    $quantity,
+                    $description,
+                    $r['product_key'] ?? null,
+                    $r['category'] ?? null,
+                    $r['sku'] ?? null,
+                    (($r['currency'] ?? '') !== '' ? $r['currency'] : 'EUR'),
+                    $r['price_ttc'] ?? 0,
+                    $r['price_ht'] ?? null,
+                    $r['vat'] ?? null,
+                    $r['vat_rate'] ?? null,
+                    $r['seller_account'] ?? null,
+                    (int) ($r['is_custom_amount'] ?? 0),
+                    $batchId,
+                ]);
+
+                if ($stmt->rowCount() === 1) {
+                    $inserted++;
+                } else {
+                    $skipped++;
+                }
             }
+
+            $pdo->commit();
+        } catch (\Throwable $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+
+            throw $e;
         }
 
-        return ['inserted' => $inserted, 'skipped' => $skipped];
+        return ['inserted' => $inserted, 'skipped' => $skipped, 'file_duplicates' => $fileDuplicates];
     }
 
     /**
@@ -856,6 +897,7 @@ final class Sale extends Model
                 FROM sales
                 WHERE product_key IS NULL
                   AND description IS NOT NULL
+                  AND description <> ""
                   AND description NOT LIKE "%Montant personnalisé%"
                 GROUP BY description
                 ORDER BY occurrences DESC, last_seen DESC';

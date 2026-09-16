@@ -150,4 +150,100 @@ final class SumUpCsvParserTest extends TestCase
         self::assertSame('2026-06-19', $parsed['meta']['period_end']);
         self::assertSame(2, $parsed['meta']['total']);
     }
+
+    // -----------------------------------------------------------------
+    //  Validation renforcée : lignes invalides classées avec raison
+    // -----------------------------------------------------------------
+
+    public function test_ligne_sans_reference_transaction_est_invalide(): void
+    {
+        $csv = $this->header()
+            . "\n1 juin 2026 10:00,Vente,,Visa - Débit,1,Bueno,Nourriture,,EUR,1,0,1,1,0,,Alex"
+            . "\n1 juin 2026 10:01,Vente,T2,Visa - Débit,1,Bueno,Nourriture,,EUR,1,0,1,1,0,,Alex";
+
+        $parsed = $this->parser()->parse($csv);
+
+        self::assertCount(1, $parsed['rows']);
+        self::assertSame('T2', $parsed['rows'][0]['transaction_ref']);
+        self::assertSame(1, $parsed['meta']['invalid']['sans référence de transaction']);
+        self::assertSame(1, $parsed['meta']['total']);
+    }
+
+    public function test_prix_negatif_est_invalide(): void
+    {
+        $csv = $this->header()
+            . "\n1 juin 2026 10:00,Vente,T1,Visa - Débit,1,Bueno,Nourriture,,EUR,1,0,\"-2,5\",\"-2,5\",0,,Alex";
+
+        $parsed = $this->parser()->parse($csv);
+
+        self::assertCount(0, $parsed['rows']);
+        self::assertSame(1, $parsed['meta']['invalid']['prix négatif']);
+    }
+
+    public function test_date_hors_plage_est_invalide(): void
+    {
+        $csv = $this->header()
+            . "\n1 juin 2019 10:00,Vente,T1,Visa - Débit,1,Bueno,Nourriture,,EUR,1,0,1,1,0,,Alex"
+            . "\n1 juin 2035 10:00,Vente,T2,Visa - Débit,1,Bueno,Nourriture,,EUR,1,0,1,1,0,,Alex"
+            . "\n1 juin 2026 10:00,Vente,T3,Visa - Débit,1,Bueno,Nourriture,,EUR,1,0,1,1,0,,Alex";
+
+        $parsed = $this->parser()->parse($csv);
+
+        self::assertCount(1, $parsed['rows']);
+        self::assertSame('T3', $parsed['rows'][0]['transaction_ref']);
+        self::assertSame(2, $parsed['meta']['invalid']['date hors plage']);
+    }
+
+    public function test_date_invalide_est_comptee(): void
+    {
+        $csv = $this->header()
+            . "\n15 sploutch 2026 10:00,Vente,T1,Visa - Débit,1,Bueno,Nourriture,,EUR,1,0,1,1,0,,Alex";
+
+        $parsed = $this->parser()->parse($csv);
+
+        self::assertCount(0, $parsed['rows']);
+        self::assertSame(1, $parsed['meta']['invalid']['date invalide']);
+    }
+
+    public function test_prix_manquant_ou_non_parsable_est_invalide(): void
+    {
+        $csv = $this->header()
+            . "\n1 juin 2026 10:00,Vente,T1,Visa - Débit,1,Bueno,Nourriture,,EUR,1,0,,0,,Alex"
+            . "\n1 juin 2026 10:01,Vente,T2,Visa - Débit,1,Bueno,Nourriture,,EUR,1,0,oh,0,,Alex";
+
+        $parsed = $this->parser()->parse($csv);
+
+        self::assertCount(0, $parsed['rows']);
+        self::assertSame(2, $parsed['meta']['invalid']['prix manquant']);
+    }
+
+    public function test_description_vide_devient_chaine_vide_pas_null(): void
+    {
+        $csv = $this->header()
+            . "\n1 juin 2026 10:00,Vente,T1,Visa - Débit,1,,,,EUR,1,0,1,1,0,,Alex";
+
+        $parsed = $this->parser()->parse($csv);
+
+        self::assertCount(1, $parsed['rows']);
+        self::assertSame('', $parsed['rows'][0]['description']);
+        self::assertNotNull($parsed['rows'][0]['description']);
+    }
+
+    public function test_meta_invalid_compte_les_raisons(): void
+    {
+        $csv = $this->header()
+            . "\n1 juin 2026 10:00,Vente,,Visa - Débit,1,Bueno,Nourriture,,EUR,1,0,1,1,0,,Alex"
+            . "\n1 juin 2026 10:01,Vente,T2,Visa - Débit,1,Bueno,Nourriture,,EUR,1,0,\"-1\",\"-1\",0,,Alex"
+            . "\n1 juin 2026 10:02,Vente,T3,Visa - Débit,1,Bueno,Nourriture,,EUR,1,0,1,1,0,,Alex";
+
+        $parsed = $this->parser()->parse($csv);
+
+        self::assertSame(1, $parsed['meta']['total']);
+        self::assertSame(
+            ['sans référence de transaction' => 1, 'prix négatif' => 1],
+            $parsed['meta']['invalid']
+        );
+        self::assertSame('2026-06-01', $parsed['meta']['period_start']);
+        self::assertSame('2026-06-01', $parsed['meta']['period_end']);
+    }
 }

@@ -21,7 +21,7 @@ $lastImport = $batches[0]['imported_at'] ?? null;
     <div>
         <p class="eyebrow">Comptabilité</p>
         <h1 class="page-title">Importer un rapport SumUp</h1>
-        <p class="muted">Dépose le CSV exporté depuis SumUp — les doublons sont <strong>ignorés automatiquement</strong>, réimporter le même fichier n'ajoute aucune ligne.</p>
+        <p class="muted">Dépose le CSV exporté depuis SumUp — import <strong>blindé</strong> : un fichier déjà importé est <strong>refusé</strong> (empreinte), les doublons sont <strong>ignorés</strong>, les lignes invalides sont <strong>écartées avec leur motif</strong> et le dédoublonnage est <strong>garanti en base</strong> : réimporter ne crée jamais de doublon.</p>
     </div>
 </div>
 

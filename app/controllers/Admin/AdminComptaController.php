@@ -136,48 +136,136 @@ final class AdminComptaController extends AdminBaseController
             redirect(url('/admin/compta/import'));
         }
 
+        // ── 1. Anti-réimport : une empreinte déjà connue bloque le fichier
+        //       avant tout traitement (aucun lot créé).
+        $fileHash = hash('sha256', $content);
+        $existing = ImportBatch::findByHash($fileHash);
+        if ($existing !== null) {
+            $this->setFlash('error', sprintf(
+                'Ce fichier a déjà été importé le %s (%s). Import refusé.',
+                formatDateTime((string) ($existing['imported_at'] ?? '')),
+                (string) ($existing['filename'] ?? 'fichier inconnu')
+            ));
+            redirect(url('/admin/compta/import'));
+        }
+
+        // ── 2. Parsing : lignes valides + invalides classées avec motif.
         $parser = new SumUpCsvParser();
         $parsed = $parser->parse($content, [ProductAlias::class, 'resolve']);
 
-        // On écarte les lignes dont la date n'a pas pu être parsée
-        // (colonne sold_at NOT NULL en base).
-        $rows = array_values(array_filter(
-            $parsed['rows'],
-            static fn ($r): bool => !empty($r['sold_at'])
-        ));
-        $parsed['rows'] = $rows;
+        $rows = $parsed['rows'];
+        $invalidCounts = $parsed['meta']['invalid'] ?? [];
+        $invalidTotal = array_sum($invalidCounts);
 
-        // Création du lot d'import (avant insertion effective).
+        // Aucune vente exploitable : rien à importer (les dates invalides ou
+        // hors plage ont été écartées par le parseur, sold_at est NOT NULL).
+        if ($rows === [] || $parsed['meta']['period_start'] === null) {
+            $message = 'Aucune vente exploitable dans ce fichier — import refusé.';
+            if ($invalidTotal > 0) {
+                $message .= sprintf(
+                    ' %d ligne(s) invalide(s) : %s.',
+                    $invalidTotal,
+                    self::invalidSummary($invalidCounts)
+                );
+            }
+            $this->setFlash('error', $message);
+            redirect(url('/admin/compta/import'));
+        }
+
+        // ── 3. Chevauchement de périodes avec des imports précédents
+        //       (avertissement non bloquant : la clé unique écarte de toute
+        //       façon les ventes identiques).
+        $overlaps = ImportBatch::overlapping(
+            (string) $parsed['meta']['period_start'],
+            (string) $parsed['meta']['period_end'],
+            $fileHash
+        );
+
+        // ── 4. Lot + insertion (valides uniquement).
         $batchId = ImportBatch::create([
             'filename'      => $filename,
+            'file_hash'     => $fileHash,
             'period_start'  => $parsed['meta']['period_start'],
             'period_end'    => $parsed['meta']['period_end'],
             'rows_total'    => $parsed['meta']['total'],
             'imported_by'   => $user['id'] ?? null,
         ]);
 
-        $result = Sale::importBatch($batchId, $parsed['rows']);
+        try {
+            $result = Sale::importBatch($batchId, $rows);
+        } catch (\Throwable $e) {
+            $this->audit('compta.import_failed', 'import_batch', $batchId, [
+                'filename' => $filename,
+                'error'    => $e->getMessage(),
+            ]);
+            $this->setFlash('error', 'Import interrompu, aucune ligne enregistrée : ' . $e->getMessage());
+            redirect(url('/admin/compta/import'));
+        }
 
         ImportBatch::finalize($batchId, $result['inserted'], $result['skipped']);
 
         $this->audit('compta.import', 'import_batch', $batchId, [
-            'filename' => $filename,
-            'inserted' => $result['inserted'],
-            'skipped'  => $result['skipped'],
+            'filename'        => $filename,
+            'file_hash'       => $fileHash,
+            'inserted'        => $result['inserted'],
+            'skipped'         => $result['skipped'],
+            'file_duplicates' => $result['file_duplicates'],
+            'invalid'         => $invalidTotal,
         ]);
 
         $unmapped = count(Sale::unmappedDescriptions());
 
-        $this->setFlash(
-            'success',
-            sprintf(
-                'Import terminé : %d nouvelle(s) ligne(s), %d ignorée(s) (doublons). %d libellé(s) à classer.',
-                $result['inserted'],
-                $result['skipped'],
-                $unmapped
-            )
+        // ── 5. Flash : 100 % doublon (fichier différent mais lignes déjà
+        //       en base) ou bilan détaillé.
+        if ($result['inserted'] === 0 && $result['file_duplicates'] > 0 && $result['skipped'] > 0) {
+            $this->setFlash('warning', 'Aucune nouvelle ligne — ce fichier était déjà importé (ou 100 % doublon).');
+            redirect(url('/admin/compta/import'));
+        }
+
+        $message = sprintf(
+            'Import terminé : %d insérée(s) · %d déjà en base · %d doublon(s) dans le fichier',
+            $result['inserted'],
+            $result['skipped'],
+            $result['file_duplicates']
         );
+        if ($invalidTotal > 0) {
+            $message .= sprintf(
+                ' · %d ligne(s) invalide(s) (%s)',
+                $invalidTotal,
+                self::invalidSummary($invalidCounts)
+            );
+        }
+        $message .= sprintf(' · %d libellé(s) à classer.', $unmapped);
+        $this->setFlash('success', $message);
+
+        if ($overlaps !== []) {
+            $periods = [];
+            foreach ($overlaps as $o) {
+                $periods[] = (string) ($o['period_start'] ?? '?') . ' → ' . (string) ($o['period_end'] ?? '?');
+            }
+            $this->setFlash('warning', sprintf(
+                'Périodes en chevauchement avec les imports du %s — les ventes identiques ont été ignorées.',
+                implode(', ', $periods)
+            ));
+        }
+
         redirect(url('/admin/compta/import'));
+    }
+
+    /**
+     * Résumé lisible des lignes invalides : « 3 sans référence de
+     * transaction, 2 prix négatif ».
+     *
+     * @param array<string,int> $invalidCounts
+     */
+    private static function invalidSummary(array $invalidCounts): string
+    {
+        $parts = [];
+        foreach ($invalidCounts as $reason => $count) {
+            $parts[] = $count . ' ' . $reason;
+        }
+
+        return implode(', ', $parts);
     }
 
     // -----------------------------------------------------------------

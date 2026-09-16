@@ -49,6 +49,15 @@ final class SumUpCsvParser
     /**
      * Analyse un contenu CSV SumUp et renvoie des lignes normalisées.
      *
+     * Chaque ligne « Vente » est classée valide ou invalide (avec raison) :
+     *   - sans référence de transaction ;
+     *   - date imparsable (« date invalide ») ;
+     *   - date hors plage plausible : avant 2020-01-01 ou plus d'un jour
+     *     dans le futur (« date hors plage ») ;
+     *   - prix TTC manquant ou non parsable (« prix manquant ») ;
+     *   - prix TTC négatif (« prix négatif ») : les remboursements réels
+     *     sont déjà filtrés par Type, un prix négatif est donc suspect.
+     *
      * @param string        $csvContent Contenu brut du fichier CSV.
      * @param callable|null $resolver   function(string $description): ?string
      *                                  qui résout un libellé en product_key.
@@ -56,7 +65,8 @@ final class SumUpCsvParser
      *
      * @return array{
      *     rows: list<array<string,mixed>>,
-     *     meta: array{period_start:?string, period_end:?string, total:int}
+     *     meta: array{period_start:?string, period_end:?string, total:int,
+     *                invalid:array<string,int>}
      * }
      */
     public function parse(string $csvContent, ?callable $resolver = null): array
@@ -67,7 +77,10 @@ final class SumUpCsvParser
 
         $lines = explode("\n", $csvContent);
         if ($lines === []) {
-            return ['rows' => [], 'meta' => ['period_start' => null, 'period_end' => null, 'total' => 0]];
+            return [
+                'rows' => [],
+                'meta' => ['period_start' => null, 'period_end' => null, 'total' => 0, 'invalid' => []],
+            ];
         }
 
         // En-tête : index des colonnes par nom.
@@ -75,8 +88,11 @@ final class SumUpCsvParser
         $index = $this->mapHeader($header);
 
         $rows = [];
+        $invalid = [];
         $minDate = null;
         $maxDate = null;
+        // Plage haute plausible : maintenant + 1 jour (tolérance fuseau).
+        $maxPlausible = date('Y-m-d H:i:s', strtotime('+1 day'));
 
         foreach ($lines as $line) {
             if (trim($line) === '') {
@@ -106,7 +122,35 @@ final class SumUpCsvParser
             $rawPayment = $get('Moyen de paiement');
             $description = $get('Description');
             $quantity = (int) ($get('Quantité') !== '' ? $get('Quantité') : '1');
-            $priceTtc = parseFrenchFloat($get('Prix (TTC)'));
+            $ref = $get('Réf. transaction');
+
+            // ── Validation ligne à ligne (la 1ère raison gagne) ──────────
+            if ($ref === '') {
+                $invalid['sans référence de transaction'] = ($invalid['sans référence de transaction'] ?? 0) + 1;
+                continue;
+            }
+            if ($soldAt === null) {
+                $invalid['date invalide'] = ($invalid['date invalide'] ?? 0) + 1;
+                continue;
+            }
+            if ($soldAt < '2020-01-01 00:00:00' || $soldAt > $maxPlausible) {
+                $invalid['date hors plage'] = ($invalid['date hors plage'] ?? 0) + 1;
+                continue;
+            }
+            $priceRaw = $get('Prix (TTC)');
+            $priceIsNumeric = preg_match(
+                '/^-?\d+([.,]\d+)?$/',
+                str_replace([' ', "\u{00a0}", "\u{202f}"], '', $priceRaw)
+            ) === 1;
+            if ($priceRaw === '' || !$priceIsNumeric) {
+                $invalid['prix manquant'] = ($invalid['prix manquant'] ?? 0) + 1;
+                continue;
+            }
+            $priceTtc = parseFrenchFloat($priceRaw);
+            if ($priceTtc < 0) {
+                $invalid['prix négatif'] = ($invalid['prix négatif'] ?? 0) + 1;
+                continue;
+            }
 
             $isCustom = $this->isCustomAmount($description);
 
@@ -117,12 +161,12 @@ final class SumUpCsvParser
             }
 
             $rows[] = [
-                'transaction_ref'  => $get('Réf. transaction'),
+                'transaction_ref'  => $ref,
                 'sold_at'          => $soldAt,
                 'payment_method'   => $this->normalizePayment($rawPayment),
                 'payment_raw'      => $rawPayment,
                 'quantity'         => $quantity > 0 ? $quantity : 1,
-                'description'      => $description !== '' ? $description : null,
+                'description'      => $description,
                 'product_key'      => $productKey,
                 'category'         => $get('Catégorie') !== '' ? $get('Catégorie') : null,
                 'sku'              => $get('SKU') !== '' ? $get('SKU') : null,
@@ -153,6 +197,7 @@ final class SumUpCsvParser
                 'period_start' => $minDate,
                 'period_end'   => $maxDate,
                 'total'        => count($rows),
+                'invalid'      => $invalid,
             ],
         ];
     }
