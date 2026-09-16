@@ -44,6 +44,7 @@ final class SaleDedupTest extends TestCase
         }
 
         $this->reset($pdo, ['sale_adjustments', 'sales', 'import_batches', 'product_aliases']);
+        $this->applyImportDedupMigration($pdo);
         Model::setTestPdo($pdo);
     }
 
@@ -118,5 +119,59 @@ final class SaleDedupTest extends TestCase
         self::assertSame($all, Sale::consumptionBetween(null, null));
 
         self::assertSame('2026-06-01', Sale::firstSoldDay());
+    }
+
+    public function test_description_null_normalisee_et_dedupliquee(): void
+    {
+        // Scénario historique de la faille : des lignes sans libellé
+        // (description NULL) sortaient de la clé unique (MySQL ignore les
+        // NULL) et se dupliquaient à chaque réimport, faussant le stock.
+        $line = static fn (): array => [
+            'transaction_ref' => 'TNULL1', 'sold_at' => '2026-06-01 10:00:00',
+            'payment_method' => 'CARTE', 'payment_raw' => 'Visa', 'quantity' => 1,
+            'description' => null, 'product_key' => null, 'category' => null,
+            'sku' => null, 'currency' => 'EUR', 'price_ttc' => 1.0, 'price_ht' => null,
+            'vat' => null, 'vat_rate' => null, 'seller_account' => null, 'is_custom_amount' => 0,
+        ];
+        $rows = [$line(), $line()];
+
+        // 1er import : les deux occurrences identiques du fichier sont
+        // dédupliquées (1 insérée, 1 doublon fichier), description = ''.
+        $r1 = Sale::importBatch('batch_null_a', $rows);
+        self::assertSame(1, $r1['inserted']);
+        self::assertSame(0, $r1['skipped']);
+        self::assertSame(1, $r1['file_duplicates']);
+        self::assertSame(1, Sale::count());
+
+        $desc = (string) $this->pdo->query(
+            "SELECT description FROM sales WHERE transaction_ref = 'TNULL1' LIMIT 1"
+        )->fetchColumn();
+        self::assertSame('', $desc, 'La description NULL doit être normalisée en chaîne vide.');
+
+        // 2e import du même lot : tout est déjà en base (la clé unique
+        // matche désormais : '' n'est plus ignoré comme un NULL).
+        $r2 = Sale::importBatch('batch_null_b', $rows);
+        self::assertSame(0, $r2['inserted']);
+        self::assertSame(1, $r2['skipped']);
+        self::assertSame(1, $r2['file_duplicates']);
+        self::assertSame(1, Sale::count(), 'Aucune ligne ne doit être dupliquée.');
+    }
+
+    public function test_doublons_dans_le_meme_fichier_comptes(): void
+    {
+        // Ligne dupliquée au sein du MÊME fichier : une seule insérée, la
+        // 2e occurrence comptée dans file_duplicates (distinct de skipped).
+        $csv = "Date,Type,Réf. transaction,Moyen de paiement,Quantité,Description,Catégorie,SKU,Devise,Prix avant réduction,Réduction,Prix (TTC),Prix (HT),TVA,Taux de TVA,Compte"
+            . "\n1 juin 2026 09:59,Vente,TDUP1,Visa - Débit,1,Bueno,Nourriture,,EUR,1,0,1,1,0,,Alex"
+            . "\n1 juin 2026 09:59,Vente,TDUP1,Visa - Débit,1,Bueno,Nourriture,,EUR,1,0,1,1,0,,Alex"
+            . "\n1 juin 2026 10:05,Vente,TDUP2,Visa - Débit,1,Coca,Boisson,,EUR,1,0,2,2,0,,Alex";
+
+        $parsed = (new SumUpCsvParser())->parse($csv, [ProductAlias::class, 'resolve']);
+        $r = Sale::importBatch('batch_dupfile', $parsed['rows']);
+
+        self::assertSame(2, $r['inserted']);
+        self::assertSame(0, $r['skipped']);
+        self::assertSame(1, $r['file_duplicates']);
+        self::assertSame(2, Sale::count(), 'Le doublon du fichier ne doit pas être inséré.');
     }
 }

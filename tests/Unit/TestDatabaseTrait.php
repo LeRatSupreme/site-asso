@@ -64,4 +64,28 @@ trait TestDatabaseTrait
         }
         $pdo->exec('SET FOREIGN_KEY_CHECKS = 1');
     }
+
+    /**
+     * Applique (best effort) la migration anti-réimport / dédoublonnage
+     * (database/migrations/2026_import_dedup.sql) sur la base de test.
+     *
+     * Chaque statement est indépendant : une erreur (colonne ou index déjà
+     * présent) est ignorée, la migration est donc ré-idempotente en pratique.
+     */
+    protected function applyImportDedupMigration(PDO $pdo): void
+    {
+        $statements = [
+            "UPDATE sales SET description = '' WHERE description IS NULL",
+            "ALTER TABLE sales MODIFY description VARCHAR(255) NOT NULL DEFAULT ''",
+            'ALTER TABLE import_batches ADD COLUMN file_hash CHAR(64) NULL AFTER filename',
+            'ALTER TABLE import_batches ADD UNIQUE KEY uniq_import_hash (file_hash)',
+        ];
+        foreach ($statements as $sql) {
+            try {
+                $pdo->exec($sql);
+            } catch (PDOException) {
+                // Déjà appliqué : non bloquant.
+            }
+        }
+    }
 }

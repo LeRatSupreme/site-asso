@@ -279,7 +279,7 @@ CREATE TABLE IF NOT EXISTS sales (
     payment_method   ENUM('CARTE','LIQUIDE') NOT NULL,
     payment_raw      VARCHAR(50) NULL,
     quantity         INT NOT NULL DEFAULT 1,
-    description      VARCHAR(255) NULL,
+    description      VARCHAR(255) NOT NULL DEFAULT '',
     product_key      VARCHAR(255) NULL,
     category         VARCHAR(100) NULL,
     sku              VARCHAR(100) NULL,
@@ -328,6 +328,7 @@ CREATE TABLE IF NOT EXISTS product_costs (
 CREATE TABLE IF NOT EXISTS import_batches (
     id             VARCHAR(255) NOT NULL PRIMARY KEY,
     filename       VARCHAR(255) NULL,
+    file_hash      CHAR(64) NULL,
     period_start   DATE NULL,
     period_end     DATE NULL,
     rows_total     INT NULL,
@@ -335,6 +336,7 @@ CREATE TABLE IF NOT EXISTS import_batches (
     rows_skipped   INT NULL,
     imported_by    VARCHAR(255) NULL,
     imported_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uniq_import_hash (file_hash),
     KEY idx_import_period (period_start, period_end)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
