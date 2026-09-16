@@ -11,8 +11,9 @@ use PDO;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Tests du modèle Purchase : calcul HT/TTC selon le taux de TVA,
- * conservation du coût unitaire à 3 décimales et sommes de période.
+ * Tests du modèle Purchase : création par montant total (coût unitaire
+ * dérivé à 3 décimales), calcul HT/TTC selon le taux de TVA et sommes
+ * de période.
  *
  * Saute automatiquement si la base aeic_test est indisponible.
  */
@@ -84,15 +85,16 @@ final class PurchaseTest extends TestCase
     }
 
     /**
-     * 24 unités à 1,05 € HT + TVA 20 % : HT 25,20 €, TTC 30,24 €.
+     * 18,60 € HT les 120 + TVA 20 % : coût unitaire dérivé 0,155 €,
+     * HT 18,600 €, TTC 22,320 €.
      */
     public function test_create_avec_tva_20_calcule_ht_et_ttc(): void
     {
         $id = Purchase::create([
             'purchased_at' => '2026-09-10',
             'product_key'  => 'Coca 33cl',
-            'quantity'     => 24,
-            'unit_cost'    => 1.05,
+            'quantity'     => 120,
+            'total_ht'     => 18.60,
             'vat_rate'     => 20.0,
             'supplier'     => 'Metro',
         ]);
@@ -100,41 +102,42 @@ final class PurchaseTest extends TestCase
         self::assertNotSame('', $id);
 
         $row = $this->fetchPurchase($id);
-        self::assertSame('1.050', $row['unit_cost']);
-        self::assertSame('25.200', $row['total_ht']);
-        self::assertSame('30.240', $row['total_ttc']);
+        self::assertSame('0.155', $row['unit_cost'], '18,60 € / 120 = 0,155 € par unité.');
+        self::assertSame('18.600', $row['total_ht']);
+        self::assertSame('22.320', $row['total_ttc']);
         self::assertSame('20.00', (string) $row['vat_rate']);
 
         // Effet de bord conservé : l'achat entre en stock théorique.
-        self::assertSame(24, ProductStock::get('Coca 33cl'));
+        self::assertSame(120, ProductStock::get('Coca 33cl'));
     }
 
     /**
-     * Sans taux (prix saisi déjà TTC) : total_ht = total_ttc, vat_rate NULL
-     * (comportement historique).
+     * Sans taux (montant saisi déjà TTC) : total_ht = total_ttc, vat_rate
+     * NULL (comportement historique) ; le coût unitaire reste dérivé du
+     * montant : 25,152 € / 24 = 1,048 €.
      */
     public function test_create_sans_tva_prix_deja_ttc(): void
     {
         $id = Purchase::create([
             'purchased_at' => '2026-09-10',
             'product_key'  => 'Bueno',
-            'quantity'     => 10,
-            'unit_cost'    => 0.99,
+            'quantity'     => 24,
+            'total_ht'     => 25.152,
             'vat_rate'     => null,
         ]);
 
         self::assertNotSame('', $id);
 
         $row = $this->fetchPurchase($id);
-        self::assertSame('0.990', $row['unit_cost']);
-        self::assertSame('9.900', $row['total_ht']);
-        self::assertSame('9.900', $row['total_ttc'], 'Sans TVA, HT et TTC sont identiques.');
+        self::assertSame('1.048', $row['unit_cost']);
+        self::assertSame('25.152', $row['total_ht']);
+        self::assertSame('25.152', $row['total_ttc'], 'Sans TVA, HT et TTC sont identiques.');
         self::assertNull($row['vat_rate']);
     }
 
     /**
-     * Le coût unitaire garde ses 3 décimales : 0,155 € ne doit pas être
-     * arrondi à 0,16 € (E1).
+     * Le coût unitaire dérivé garde ses 3 décimales : 15,50 € les 100 →
+     * 0,155 € ne doit pas être arrondi à 0,16 € (E1).
      */
     public function test_create_conserve_3_decimales(): void
     {
@@ -142,19 +145,20 @@ final class PurchaseTest extends TestCase
             'purchased_at' => '2026-09-10',
             'product_key'  => 'Bonbon',
             'quantity'     => 100,
-            'unit_cost'    => 0.155,
+            'total_ht'     => 15.50,
             'vat_rate'     => 5.5,
         ]);
 
         $row = $this->fetchPurchase($id);
         self::assertSame('0.155', $row['unit_cost']);
-        self::assertSame('15.500', $row['total_ht'], '100 × 0,155 = 15,500 € (et non 16,00 €).');
+        self::assertSame('15.500', $row['total_ht']);
         self::assertSame('16.353', $row['total_ttc'], '15,500 € HT + TVA 5,5 % = 16,353 € (et non 16,35 €).');
     }
 
     /**
      * Total HT exact à 3 décimales non exactes en centimes :
-     * 3 × 0,155 € = 0,465 € (DECIMAL(10,2) aurait stocké 0,47 €).
+     * 0,465 € pour 3 unités (unité dérivée 0,155 €) — DECIMAL(10,2)
+     * aurait stocké 0,47 €.
      */
     public function test_create_total_ht_3_decimales_non_exactes(): void
     {
@@ -162,19 +166,20 @@ final class PurchaseTest extends TestCase
             'purchased_at' => '2026-09-10',
             'product_key'  => 'Bonbon',
             'quantity'     => 3,
-            'unit_cost'    => 0.155,
+            'total_ht'     => 0.465,
             'vat_rate'     => 5.5,
         ]);
 
         $row = $this->fetchPurchase($id);
-        self::assertSame('0.465', $row['total_ht'], '3 × 0,155 = 0,465 € stocké exactement.');
+        self::assertSame('0.155', $row['unit_cost'], '0,465 € / 3 = 0,155 € par unité.');
+        self::assertSame('0.465', $row['total_ht'], '0,465 € stocké exactement.');
         self::assertSame('0.491', $row['total_ttc'], '0,465 € × 1,055 = 0,490575 €, stocké 0,491 € (DECIMAL(10,2) aurait stocké 0,49 €).');
     }
 
     /**
-     * TTC à 3 décimales calculé depuis le HT non arrondi :
-     * 24 × 1,048 € = 25,152 € HT, + TVA 5,5 % = 26,53536 € → 26,535 €
-     * (DECIMAL(10,2) et un arrondi au centime auraient donné 26,54 €).
+     * TTC à 3 décimales calculé depuis le HT : 25,152 € HT + TVA 5,5 %
+     * = 26,53536 € → 26,535 € (DECIMAL(10,2) et un arrondi au centime
+     * auraient donné 26,54 €).
      */
     public function test_create_ttc_3_decimales_depuis_ht_non_arrondi(): void
     {
@@ -182,18 +187,39 @@ final class PurchaseTest extends TestCase
             'purchased_at' => '2026-09-10',
             'product_key'  => 'Sirop',
             'quantity'     => 24,
-            'unit_cost'    => 1.048,
+            'total_ht'     => 25.152,
             'vat_rate'     => 5.5,
         ]);
 
         $row = $this->fetchPurchase($id);
-        self::assertSame('1.048', $row['unit_cost']);
+        self::assertSame('1.048', $row['unit_cost'], '25,152 € / 24 = 1,048 € par unité.');
         self::assertSame('25.152', $row['total_ht']);
         self::assertSame('26.535', $row['total_ttc'], '25,152 € HT + TVA 5,5 % = 26,535 € (et non 26,54 €).');
     }
 
     /**
-     * Données invalides : pas de création.
+     * Division non exacte : 10 € pour 3 unités → coût unitaire arrondi
+     * à 3 décimales (3,333 €), le total reste le montant saisi.
+     */
+    public function test_create_division_non_exacte(): void
+    {
+        $id = Purchase::create([
+            'purchased_at' => '2026-09-10',
+            'product_key'  => 'Kit',
+            'quantity'     => 3,
+            'total_ht'     => 10.00,
+            'vat_rate'     => 20.0,
+        ]);
+
+        $row = $this->fetchPurchase($id);
+        self::assertSame('3.333', $row['unit_cost'], '10 € / 3 = 3,333333… → 3,333 €.');
+        self::assertSame('10.000', $row['total_ht'], 'Le montant saisi fait foi.');
+        self::assertSame('12.000', $row['total_ttc'], '10,000 € HT + TVA 20 % = 12,000 €.');
+    }
+
+    /**
+     * Données invalides : pas de création (montant absent, nul ou
+     * négatif, produit vide, quantité nulle).
      */
     public function test_create_refuse_donnees_invalides(): void
     {
@@ -201,14 +227,25 @@ final class PurchaseTest extends TestCase
             'purchased_at' => '2026-09-10',
             'product_key'  => '',
             'quantity'     => 1,
-            'unit_cost'    => 1.0,
+            'total_ht'     => 10.0,
         ]));
         self::assertSame('', Purchase::create([
             'purchased_at' => '2026-09-10',
             'product_key'  => 'Bueno',
             'quantity'     => 0,
-            'unit_cost'    => 1.0,
+            'total_ht'     => 10.0,
         ]));
+        self::assertSame('', Purchase::create([
+            'purchased_at' => '2026-09-10',
+            'product_key'  => 'Bueno',
+            'quantity'     => 1,
+            'total_ht'     => 0.0,
+        ]), 'Montant total nul : refusé.');
+        self::assertSame('', Purchase::create([
+            'purchased_at' => '2026-09-10',
+            'product_key'  => 'Bueno',
+            'quantity'     => 1,
+        ]), 'Montant total absent : refusé.');
     }
 
     /**
@@ -222,7 +259,7 @@ final class PurchaseTest extends TestCase
             'purchased_at' => '2026-09-10',
             'product_key'  => 'Coca 33cl',
             'quantity'     => 24,
-            'unit_cost'    => 1.05,
+            'total_ht'     => 25.20,
             'vat_rate'     => 20.0,
         ]);
         // Achat déjà TTC (vat null) : 10,00 € comptés en HT et TTC.
@@ -230,7 +267,7 @@ final class PurchaseTest extends TestCase
             'purchased_at' => '2026-09-11',
             'product_key'  => 'Bueno',
             'quantity'     => 10,
-            'unit_cost'    => 1.00,
+            'total_ht'     => 10.00,
             'vat_rate'     => null,
         ]);
         // Ligne « historique » (avant la TVA) : total_ht NULL.
@@ -243,7 +280,7 @@ final class PurchaseTest extends TestCase
             'purchased_at' => '2026-08-01',
             'product_key'  => 'Café',
             'quantity'     => 1,
-            'unit_cost'    => 50.00,
+            'total_ht'     => 50.00,
             'vat_rate'     => 20.0,
         ]);
 

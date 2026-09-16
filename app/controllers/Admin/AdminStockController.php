@@ -65,11 +65,11 @@ final class AdminStockController extends AdminBaseController
         }
         $productKey = trim((string) ($_POST['product_key'] ?? ''));
         $quantity = (int) ($_POST['quantity'] ?? 0);
-        $unitCost = parseFrenchFloat((string) ($_POST['unit_cost'] ?? ''));
+        $totalAmount = parseFrenchFloat((string) ($_POST['total_amount'] ?? ''));
         $supplier = trim((string) ($_POST['supplier'] ?? ''));
         $notes = trim((string) ($_POST['notes'] ?? ''));
 
-        // '' = prix saisi déjà TTC (pas de TVA à calculer), sinon taux en %.
+        // '' = montant saisi déjà TTC (pas de TVA à calculer), sinon taux en %.
         $vatRaw = trim((string) ($_POST['vat_rate'] ?? ''));
         $vatRate = null;
         if ($vatRaw !== '') {
@@ -81,16 +81,22 @@ final class AdminStockController extends AdminBaseController
             $vatRate = $candidate;
         }
 
-        if ($productKey === '' || $quantity < 1 || $unitCost <= 0.0) {
-            $this->setFlash('error', 'Produit, quantité et coût unitaire requis.');
+        if ($productKey === '' || $quantity < 1 || $totalAmount <= 0.0) {
+            $this->setFlash('error', 'Produit, quantité et montant total requis.');
             redirect(url('/admin/compta/achats'));
         }
+
+        // Le montant saisi fait foi : HT si un taux est choisi, déjà TTC sinon.
+        $totalHt = round($totalAmount, 3);
+        // Coût unitaire dérivé (même calcul que Purchase::create) : sert au
+        // lot de coût de revient et à l'audit.
+        $unitCost = round($totalHt / $quantity, 3);
 
         $id = Purchase::create([
             'purchased_at' => $purchasedAt,
             'product_key'  => $productKey,
             'quantity'     => $quantity,
-            'unit_cost'    => $unitCost,
+            'total_ht'     => $totalHt,
             'vat_rate'     => $vatRate,
             'supplier'     => $supplier,
             'notes'        => $notes,
@@ -124,8 +130,9 @@ final class AdminStockController extends AdminBaseController
         $this->audit('compta.purchase.create', 'purchase', $id, [
             'product_key' => $productKey,
             'quantity'    => $quantity,
-            'unit_cost'   => $unitCost,
+            'total_ht'    => $totalHt,
             'vat_rate'    => $vatRate,
+            'unit_cost'   => $unitCost,
         ]);
 
         $this->setFlash('success', 'Achat enregistré — stock mis à jour.' . $lotNote);
