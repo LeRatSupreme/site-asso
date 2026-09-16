@@ -49,11 +49,12 @@ final class PurchaseTest extends TestCase
     }
 
     /**
-     * Applique (best effort) la migration TVA achats
-     * (database/migrations/2026_purchases_vat.sql) sur la base de test.
+     * Applique (best effort) les migrations achats
+     * (database/migrations/2026_purchases_vat.sql puis
+     * 2026_purchases_ht3.sql) sur la base de test.
      *
      * Une erreur (colonne déjà présente, type déjà modifié) est ignorée :
-     * la migration est ré-idempotente en pratique.
+     * les migrations sont ré-idempotentes en pratique.
      */
     private function applyPurchasesVatMigration(PDO $pdo): void
     {
@@ -67,7 +68,8 @@ final class PurchaseTest extends TestCase
             'ALTER TABLE purchases
                 MODIFY unit_cost DECIMAL(10,3) NOT NULL DEFAULT 0,
                 ADD COLUMN vat_rate DECIMAL(5,2) NULL AFTER unit_cost,
-                ADD COLUMN total_ht DECIMAL(10,2) NULL AFTER total_ttc',
+                ADD COLUMN total_ht DECIMAL(10,3) NULL AFTER total_ttc',
+            'ALTER TABLE purchases MODIFY total_ht DECIMAL(10,3) NULL',
             'ALTER TABLE product_costs MODIFY cost_price DECIMAL(10,3) NOT NULL',
         ];
         foreach ($statements as $sql) {
@@ -97,7 +99,7 @@ final class PurchaseTest extends TestCase
 
         $row = $this->fetchPurchase($id);
         self::assertSame('1.050', $row['unit_cost']);
-        self::assertSame('25.20', $row['total_ht']);
+        self::assertSame('25.200', $row['total_ht']);
         self::assertSame('30.24', $row['total_ttc']);
         self::assertSame('20.00', (string) $row['vat_rate']);
 
@@ -123,7 +125,7 @@ final class PurchaseTest extends TestCase
 
         $row = $this->fetchPurchase($id);
         self::assertSame('0.990', $row['unit_cost']);
-        self::assertSame('9.90', $row['total_ht']);
+        self::assertSame('9.900', $row['total_ht']);
         self::assertSame('9.90', $row['total_ttc'], 'Sans TVA, HT et TTC sont identiques.');
         self::assertNull($row['vat_rate']);
     }
@@ -144,8 +146,27 @@ final class PurchaseTest extends TestCase
 
         $row = $this->fetchPurchase($id);
         self::assertSame('0.155', $row['unit_cost']);
-        self::assertSame('15.50', $row['total_ht'], '100 × 0,155 = 15,50 € (et non 16,00 €).');
+        self::assertSame('15.500', $row['total_ht'], '100 × 0,155 = 15,500 € (et non 16,00 €).');
         self::assertSame('16.35', $row['total_ttc'], '15,50 € HT + TVA 5,5 % = 16,35 €.');
+    }
+
+    /**
+     * Total HT exact à 3 décimales non exactes en centimes :
+     * 3 × 0,155 € = 0,465 € (DECIMAL(10,2) aurait stocké 0,47 €).
+     */
+    public function test_create_total_ht_3_decimales_non_exactes(): void
+    {
+        $id = Purchase::create([
+            'purchased_at' => '2026-09-10',
+            'product_key'  => 'Bonbon',
+            'quantity'     => 3,
+            'unit_cost'    => 0.155,
+            'vat_rate'     => 5.5,
+        ]);
+
+        $row = $this->fetchPurchase($id);
+        self::assertSame('0.465', $row['total_ht'], '3 × 0,155 = 0,465 € stocké exactement.');
+        self::assertSame('0.49', $row['total_ttc'], 'Montant payé arrondi au centime : 0,465 € × 1,055 = 0,49 €.');
     }
 
     /**

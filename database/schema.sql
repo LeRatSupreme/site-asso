@@ -386,7 +386,7 @@ CREATE TABLE IF NOT EXISTS purchases (
     unit_cost    DECIMAL(10,3) NOT NULL DEFAULT 0,
     vat_rate     DECIMAL(5,2) NULL,
     total_ttc    DECIMAL(10,2) NOT NULL DEFAULT 0,
-    total_ht     DECIMAL(10,2) NULL,
+    total_ht     DECIMAL(10,3) NULL,
     notes        TEXT NULL,
     created_by   VARCHAR(255) NULL,
     created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
