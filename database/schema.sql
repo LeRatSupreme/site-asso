@@ -310,11 +310,12 @@ CREATE TABLE IF NOT EXISTS product_aliases (
     KEY idx_alias_product (product_key)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Coûts de revient par lot daté
+-- Coûts de revient par lot daté (cost_price en TTC : comparable aux
+-- prix de vente TTC, pour des bénéfices cohérents)
 CREATE TABLE IF NOT EXISTS product_costs (
     id           VARCHAR(255) NOT NULL PRIMARY KEY,
     product_key  VARCHAR(255) NOT NULL,
-    cost_price   DECIMAL(10,2) NOT NULL,
+    cost_price   DECIMAL(10,3) NOT NULL,
     valid_from   DATE NOT NULL,
     valid_to     DATE NULL,
     supplier     VARCHAR(255) NULL,
@@ -373,15 +374,19 @@ CREATE TABLE IF NOT EXISTS expenses (
     KEY idx_expenses_category (category)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Achats réels de réapprovisionnement (base du stock théorique)
+-- Achats réels de réapprovisionnement (base du stock théorique).
+-- vat_rate NULL = prix saisi déjà TTC ; total_ht NULL = ligne historique
+-- (à traiter comme du TTC).
 CREATE TABLE IF NOT EXISTS purchases (
     id           VARCHAR(255) NOT NULL PRIMARY KEY,
     purchased_at DATE NOT NULL,
     supplier     VARCHAR(255) NULL,
     product_key  VARCHAR(255) NOT NULL,
     quantity     INT NOT NULL DEFAULT 1,
-    unit_cost    DECIMAL(10,2) NOT NULL DEFAULT 0,
+    unit_cost    DECIMAL(10,3) NOT NULL DEFAULT 0,
+    vat_rate     DECIMAL(5,2) NULL,
     total_ttc    DECIMAL(10,2) NOT NULL DEFAULT 0,
+    total_ht     DECIMAL(10,2) NULL,
     notes        TEXT NULL,
     created_by   VARCHAR(255) NULL,
     created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,

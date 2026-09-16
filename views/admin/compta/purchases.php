@@ -9,6 +9,7 @@ declare(strict_types=1);
  * @var array{preset:string,from:?string,to:?string} $period
  * @var array<string,string>      $periodOptions
  * @var float                     $total
+ * @var array{ht:float,ttc:float,vat:float} $sums
  * @var int                       $count
  * @var int                       $qtyTotal
  */
@@ -75,7 +76,19 @@ declare(strict_types=1);
                 </div>
                 <div class="field">
                     <label for="unit_cost">Coût unitaire (€)</label>
-                    <input type="text" id="unit_cost" name="unit_cost" placeholder="ex: 0,45" inputmode="decimal" required>
+                    <input type="text" id="unit_cost" name="unit_cost" placeholder="ex: 0,155" inputmode="decimal" required>
+                </div>
+                <div class="field">
+                    <label for="vat_rate">TVA</label>
+                    <select id="vat_rate" name="vat_rate">
+                        <option value="20" selected>HT + TVA 20 %</option>
+                        <option value="10">HT + TVA 10 %</option>
+                        <option value="5.5">HT + TVA 5,5 %</option>
+                        <option value="2.1">HT + TVA 2,1 %</option>
+                        <option value="0">HT sans TVA</option>
+                        <option value="">Prix déjà TTC</option>
+                    </select>
+                    <p class="field-help">Les prix Metro/fournisseurs sont souvent HT.</p>
                 </div>
             </div>
 
@@ -117,18 +130,24 @@ declare(strict_types=1);
                 <th>Produit</th>
                 <th class="th-num">Qté</th>
                 <th class="th-num">Coût unit.</th>
-                <th class="th-num">Total</th>
+                <th class="th-num">Total HT</th>
+                <th class="th-num">Total TTC</th>
                 <th>Fournisseur</th>
                 <th>Actions</th>
             </tr>
         </thead>
         <tbody>
             <?php foreach ($rows as $r): ?>
+                <?php $hasVat = $r['vat_rate'] !== null; ?>
                 <tr>
                     <td><?= e(formatDate((string) $r['purchased_at'])) ?></td>
                     <td><strong><?= e((string) $r['product_key']) ?></strong></td>
                     <td class="num"><?= (int) $r['quantity'] ?></td>
-                    <td class="num"><?= e(formatPrice((float) $r['unit_cost'])) ?></td>
+                    <td class="num">
+                        <?= e(formatPrice((float) $r['unit_cost'], 3)) ?>
+                        <?php if ($hasVat): ?><small class="muted">HT</small><?php endif; ?>
+                    </td>
+                    <td class="num"><?= e(formatPrice((float) ($r['total_ht'] ?? $r['total_ttc']))) ?></td>
                     <td class="num"><strong><?= e(formatPrice((float) $r['total_ttc'])) ?></strong></td>
                     <td><?= e((string) ($r['supplier'] ?? '—')) ?></td>
                     <td class="row-actions">
@@ -141,7 +160,7 @@ declare(strict_types=1);
                 </tr>
             <?php endforeach; ?>
             <?php if ($rows === []): ?>
-                <tr><td colspan="7" class="muted">Aucun achat sur la période sélectionnée.</td></tr>
+                <tr><td colspan="8" class="muted">Aucun achat sur la période sélectionnée.</td></tr>
             <?php endif; ?>
         </tbody>
         <?php if ($rows !== []): ?>
@@ -150,8 +169,10 @@ declare(strict_types=1);
                     <th colspan="2">Total période</th>
                     <th class="num"><?= (int) $qtyTotal ?></th>
                     <th></th>
-                    <th class="num"><?= e(formatPrice($total)) ?></th>
-                    <th colspan="2"></th>
+                    <th class="num"><?= e(formatPrice($sums['ht'])) ?></th>
+                    <th class="num"><?= e(formatPrice($sums['ttc'])) ?></th>
+                    <th class="num muted">dont TVA <?= e(formatPrice($sums['vat'])) ?></th>
+                    <th></th>
                 </tr>
             </tfoot>
         <?php endif; ?>
