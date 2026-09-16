@@ -148,7 +148,7 @@ declare(strict_types=1);
                         <?php if ($hasVat): ?><small class="muted">HT</small><?php endif; ?>
                     </td>
                     <td class="num"><?= e(formatPrice((float) ($r['total_ht'] ?? $r['total_ttc']), 3)) ?></td>
-                    <td class="num"><strong><?= e(formatPrice((float) $r['total_ttc'])) ?></strong></td>
+                    <td class="num"><strong><?= e(formatPrice((float) $r['total_ttc'], 3)) ?></strong></td>
                     <td><?= e((string) ($r['supplier'] ?? '—')) ?></td>
                     <td class="row-actions">
                         <form method="post" action="<?= e(url('/admin/compta/achats/' . rawurlencode((string) $r['id']) . '/delete')) ?>"
@@ -170,8 +170,8 @@ declare(strict_types=1);
                     <th class="num"><?= (int) $qtyTotal ?></th>
                     <th></th>
                     <th class="num"><?= e(formatPrice($sums['ht'], 3)) ?></th>
-                    <th class="num"><?= e(formatPrice($sums['ttc'])) ?></th>
-                    <th class="num muted">dont TVA <?= e(formatPrice($sums['vat'])) ?></th>
+                    <th class="num"><?= e(formatPrice($sums['ttc'], 3)) ?></th>
+                    <th class="num muted">dont TVA <?= e(formatPrice($sums['vat'], 3)) ?></th>
                     <th></th>
                 </tr>
             </tfoot>

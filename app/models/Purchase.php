@@ -50,7 +50,9 @@ final class Purchase extends Model
         if ($vatRate === null) {
             $totalHt = $totalTtc = $totalHt;
         } else {
-            $totalTtc = round($totalHt * (1 + $vatRate / 100), 2);
+            // 3 décimales, depuis le HT non arrondi : 25,152 € HT
+            // + TVA 5,5 % = 26,535 € (et non 26,54 €).
+            $totalTtc = round($totalHt * (1 + $vatRate / 100), 3);
         }
 
         $supplier = ($data['supplier'] ?? '') !== '' ? (string) $data['supplier'] : null;
@@ -210,7 +212,7 @@ final class Purchase extends Model
             $ht = (float) ($row['ht'] ?? 0);
             $ttc = (float) ($row['ttc'] ?? 0);
 
-            return ['ht' => $ht, 'ttc' => $ttc, 'vat' => round($ttc - $ht, 2)];
+            return ['ht' => $ht, 'ttc' => $ttc, 'vat' => round($ttc - $ht, 3)];
         } catch (\Throwable) {
             return ['ht' => 0.0, 'ttc' => 0.0, 'vat' => 0.0];
         }
