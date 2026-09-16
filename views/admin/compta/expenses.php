@@ -171,7 +171,7 @@ foreach ($byCategory as $c) {
                     <td class="num muted"><?= ($x['amount_ht'] ?? null) !== null ? e(formatPrice($x['amount_ht'])) : '—' ?></td>
                     <td><?= (string) ($x['supplier'] ?? '') !== '' ? e((string) $x['supplier']) : '—' ?></td>
                     <td class="row-actions">
-                        <form method="post" action="<?= e(url('/admin/compta/depenses/' . rawurlencode((string) ($x['id'] ?? '')) . '/delete')) ?>" data-confirm="Supprimer cette dépense ?">
+                        <form method="post" action="<?= e(url('/admin/compta/depenses/' . rawurlencode((string) ($x['id'] ?? '')) . '/delete')) ?>" data-confirm="Supprimer cette dépense ?" data-preserve-scroll>
                             <?= csrf_field() ?>
                             <button type="submit" class="btn btn-danger btn-sm" aria-label="Supprimer">🗑</button>
                         </form>

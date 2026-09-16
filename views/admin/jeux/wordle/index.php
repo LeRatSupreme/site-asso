@@ -114,7 +114,7 @@ function wordlePageWindow(int $current, int $total): array
                         <td class="row-actions">
                             <a class="btn btn-outline btn-sm" href="<?= e(url('/admin/jeux/wordle/' . (int) $w['id'])) ?>" title="Modifier">✏️</a>
                             <form method="post" action="<?= e(url('/admin/jeux/wordle/' . (int) $w['id'] . '/delete')) ?>" class="inline-form"
-                                  data-confirm="Supprimer le mot « <?= e((string) $w['word']) ?> » ?">
+                                  data-confirm="Supprimer le mot « <?= e((string) $w['word']) ?> » ?" data-preserve-scroll>
                                 <?= csrf_field() ?>
                                 <button type="submit" class="btn btn-danger btn-sm" title="Supprimer">🗑️</button>
                             </form>

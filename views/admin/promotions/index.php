@@ -73,7 +73,7 @@ declare(strict_types=1);
                     <td class="row-actions">
                         <a class="btn btn-outline btn-sm" href="<?= e(url('/admin/promotions/' . rawurlencode($promoId))) ?>">Éditer</a>
                         <form method="post" action="<?= e(url('/admin/promotions/' . rawurlencode($promoId) . '/delete')) ?>"
-                              data-confirm="Supprimer cette promotion ?">
+                              data-confirm="Supprimer cette promotion ?" data-preserve-scroll>
                             <?= csrf_field() ?>
                             <button type="submit" class="btn btn-destructive btn-sm">Supprimer</button>
                         </form>

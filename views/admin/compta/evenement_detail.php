@@ -111,7 +111,7 @@ $profit = (float) $stats['ca'] - $costsTotal;
                         <td class="num"><strong><?= e(formatPrice((float) $c['amount_ttc'])) ?></strong></td>
                         <td class="row-actions">
                             <form method="post" action="<?= e(url('/admin/compta/evenements/' . rawurlencode((string) $event['id']) . '/couts/' . rawurlencode((string) $c['id']) . '/delete')) ?>"
-                                  data-confirm="Supprimer ce coût (et sa dépense liée) ?">
+                                  data-confirm="Supprimer ce coût (et sa dépense liée) ?" data-preserve-scroll>
                                 <?= csrf_field() ?>
                                 <button type="submit" class="btn btn-danger btn-sm" aria-label="Supprimer">🗑</button>
                             </form>

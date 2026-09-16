@@ -172,7 +172,7 @@ $topReason = $byReason[0] ?? null;
                     <td><?= e((string) ($r['note'] ?? '') !== '' ? (string) $r['note'] : '—') ?></td>
                     <td class="row-actions">
                         <form method="post" action="<?= e(url('/admin/compta/pertes/' . rawurlencode((string) $r['id']) . '/delete')) ?>"
-                              data-confirm="Supprimer cette perte ? Le stock théorique sera recalculé.">
+                              data-confirm="Supprimer cette perte ? Le stock théorique sera recalculé." data-preserve-scroll>
                             <?= csrf_field() ?>
                             <button type="submit" class="btn btn-danger btn-sm" aria-label="Supprimer">🗑</button>
                         </form>

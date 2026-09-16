@@ -74,3 +74,74 @@
         open(link.getAttribute('data-confirm'), null, link.href);
     });
 })();
+
+/**
+ * AEIC — Préservation de la position de scroll après une action POST.
+ * Usage : ajouter data-preserve-scroll sur un <form> qui POSTe puis redirige
+ * vers la même page (ex : suppression d'une ligne dans une longue liste).
+ * La position est sauvegardée au submit (phase capture, donc avant le modal
+ * data-confirm) puis restaurée au chargement suivant de la même page.
+ * NB : le modal data-confirm re-soumet via form.submit(), qui ne déclenche
+ * pas d'événement submit — le scroll n'est donc sauvegardé qu'une fois, ici.
+ */
+(function () {
+    var PREFIX = 'aeic_scroll:';
+
+    function storageKey() {
+        return PREFIX + location.pathname;
+    }
+
+    function saveScroll() {
+        try {
+            sessionStorage.setItem(storageKey(), String(window.scrollY));
+        } catch (e) { /* stockage indisponible (navigation privée…) */ }
+    }
+
+    function clearScroll() {
+        try {
+            sessionStorage.removeItem(storageKey());
+        } catch (e) { /* ignoré */ }
+    }
+
+    function restoreScroll() {
+        var raw = null;
+        try {
+            raw = sessionStorage.getItem(storageKey());
+        } catch (e) { /* ignoré */ }
+        if (raw === null) return;
+        try {
+            sessionStorage.removeItem(storageKey());
+        } catch (e) { /* ignoré */ }
+        var y = parseInt(raw, 10);
+        if (!isNaN(y) && y > 0) window.scrollTo(0, y);
+    }
+
+    // Phase capture : passe avant le handler data-confirm (phase bulle),
+    // qui fait preventDefault() puis ré-affiche/re-soumet le formulaire en JS.
+    document.addEventListener('submit', function (e) {
+        var form = e.target;
+        if (form && form.getAttribute && form.hasAttribute('data-preserve-scroll')) {
+            saveScroll();
+        }
+    }, true);
+
+    // Annulation du modal de confirmation : on jette la position sauvegardée
+    // pour ne pas restaurer un scroll obsolète lors d'une navigation ultérieure.
+    document.addEventListener('click', function (e) {
+        var modal = document.getElementById('confirm-modal');
+        if (!modal || modal.hidden) return;
+        var t = e.target;
+        if (t === modal || (t && t.id === 'confirm-cancel')) clearScroll();
+    }, true);
+    document.addEventListener('keydown', function (e) {
+        if (e.key !== 'Escape') return;
+        var modal = document.getElementById('confirm-modal');
+        if (modal && !modal.hidden) clearScroll();
+    });
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', restoreScroll);
+    } else {
+        restoreScroll();
+    }
+})();

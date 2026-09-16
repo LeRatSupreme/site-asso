@@ -197,7 +197,7 @@ foreach ($events as $ev) {
                         <button type="button" class="btn btn-outline btn-sm" title="Ajouter un coût à cet événement"
                                 data-pick-event="<?= e((string) $ev['id']) ?>">＋ Coût</button>
                         <form method="post" action="<?= e(url('/admin/compta/evenements/' . rawurlencode((string) $ev['id']) . '/delete')) ?>"
-                              data-confirm="Supprimer cet événement, ses coûts et ses dépenses liées ?">
+                              data-confirm="Supprimer cet événement, ses coûts et ses dépenses liées ?" data-preserve-scroll>
                             <?= csrf_field() ?>
                             <button type="submit" class="btn btn-danger btn-sm" aria-label="Supprimer">🗑</button>
                         </form>
@@ -233,7 +233,7 @@ foreach ($events as $ev) {
                     <td class="num"><?= e(formatPrice((float) $c['amount_ttc'])) ?></td>
                     <td class="row-actions">
                         <form method="post" action="<?= e(url('/admin/compta/evenements/' . rawurlencode((string) $c['event_id']) . '/couts/' . rawurlencode((string) $c['id']) . '/delete')) ?>"
-                              data-confirm="Supprimer ce coût (et sa dépense liée) ?">
+                              data-confirm="Supprimer ce coût (et sa dépense liée) ?" data-preserve-scroll>
                             <?= csrf_field() ?>
                             <input type="hidden" name="back" value="list">
                             <button type="submit" class="btn btn-danger btn-sm" aria-label="Supprimer">🗑</button>
