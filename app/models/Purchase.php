@@ -44,7 +44,9 @@ final class Purchase extends Model
             return '';
         }
 
-        $totalHt = round($quantity * $unitCost, 2);
+        // 3 décimales, comme unit_cost : 3 × 0,155 € = 0,465 € doit
+        // rester exact (et non être arrondi à 0,47 €).
+        $totalHt = round($quantity * $unitCost, 3);
         if ($vatRate === null) {
             $totalHt = $totalTtc = $totalHt;
         } else {

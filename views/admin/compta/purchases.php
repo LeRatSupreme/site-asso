@@ -147,7 +147,7 @@ declare(strict_types=1);
                         <?= e(formatPrice((float) $r['unit_cost'], 3)) ?>
                         <?php if ($hasVat): ?><small class="muted">HT</small><?php endif; ?>
                     </td>
-                    <td class="num"><?= e(formatPrice((float) ($r['total_ht'] ?? $r['total_ttc']))) ?></td>
+                    <td class="num"><?= e(formatPrice((float) ($r['total_ht'] ?? $r['total_ttc']), 3)) ?></td>
                     <td class="num"><strong><?= e(formatPrice((float) $r['total_ttc'])) ?></strong></td>
                     <td><?= e((string) ($r['supplier'] ?? '—')) ?></td>
                     <td class="row-actions">
@@ -169,7 +169,7 @@ declare(strict_types=1);
                     <th colspan="2">Total période</th>
                     <th class="num"><?= (int) $qtyTotal ?></th>
                     <th></th>
-                    <th class="num"><?= e(formatPrice($sums['ht'])) ?></th>
+                    <th class="num"><?= e(formatPrice($sums['ht'], 3)) ?></th>
                     <th class="num"><?= e(formatPrice($sums['ttc'])) ?></th>
                     <th class="num muted">dont TVA <?= e(formatPrice($sums['vat'])) ?></th>
                     <th></th>
