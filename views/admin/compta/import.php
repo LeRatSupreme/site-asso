@@ -70,7 +70,7 @@ $lastImport = $batches[0]['imported_at'] ?? null;
         <ol class="import-steps">
             <li>Ouvre <strong>SumUp</strong> (app ou dashboard) → onglet <strong>Reports</strong> / Rapports</li>
             <li>Choisis la <strong>période</strong> voulue → <strong>Export CSV</strong> (format français)</li>
-            <li>Dépose le fichier ici — les <strong>doublons sont ignorés</strong>, tu peux réimporter sans risque</li>
+            <li>Dépose le fichier ici — un <strong>fichier déjà importé est refusé</strong> (empreinte), mais un export différent couvrant une période similaire ne crée aucun doublon : les lignes identiques sont <strong>ignorées</strong></li>
         </ol>
         <p class="muted" style="font-size:0.85rem">Après l'import, les ventes alimentent automatiquement le Dashboard, le Journal, les Produits, les Catégories, les Événements et les rapports.</p>
     </section>
