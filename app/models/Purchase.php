@@ -18,10 +18,14 @@ final class Purchase extends Model
     /**
      * Crée un achat réel.
      *
-     * Le total TTC est calculé : quantité × coût unitaire.
+     * Sémantique TVA : unit_cost est le prix affiché du produit. Si
+     * vat_rate vaut null, il est considéré comme déjà TTC (comportement
+     * historique) ; sinon il est HT et la TVA est ajoutée :
+     * total_ht = qté × unit_cost, total_ttc = total_ht × (1 + taux/100).
      *
      * @param array<string,mixed> $data purchased_at (« YYYY-MM-DD »),
      *                                  product_key, quantity, unit_cost,
+     *                                  vat_rate (?float, null = déjà TTC),
      *                                  supplier, notes, created_by
      *
      * @return string Identifiant créé ('' si données invalides).
@@ -31,13 +35,22 @@ final class Purchase extends Model
         $purchasedAt = substr((string) ($data['purchased_at'] ?? ''), 0, 10);
         $productKey = trim((string) ($data['product_key'] ?? ''));
         $quantity = (int) ($data['quantity'] ?? 0);
-        $unitCost = (float) ($data['unit_cost'] ?? 0);
+        // 3 décimales : un coût de 0,155 € doit rester 0,155 €.
+        $unitCost = round((float) ($data['unit_cost'] ?? 0), 3);
+        $vatRate = $data['vat_rate'] ?? null;
+        $vatRate = $vatRate === null ? null : (float) $vatRate;
 
         if ($purchasedAt === '' || $productKey === '' || $quantity < 1) {
             return '';
         }
 
-        $totalTtc = $quantity * $unitCost;
+        $totalHt = round($quantity * $unitCost, 2);
+        if ($vatRate === null) {
+            $totalHt = $totalTtc = $totalHt;
+        } else {
+            $totalTtc = round($totalHt * (1 + $vatRate / 100), 2);
+        }
+
         $supplier = ($data['supplier'] ?? '') !== '' ? (string) $data['supplier'] : null;
         $notes = ($data['notes'] ?? '') !== '' ? (string) $data['notes'] : null;
         $createdBy = ($data['created_by'] ?? '') !== '' ? (string) $data['created_by'] : null;
@@ -46,9 +59,9 @@ final class Purchase extends Model
 
         self::pdo()->prepare(
             'INSERT INTO purchases
-                (id, purchased_at, supplier, product_key, quantity, unit_cost, total_ttc, notes, created_by, created_at)
-             VALUES (?,?,?,?,?,?,?,?,?,NOW())'
-        )->execute([$id, $purchasedAt, $supplier, $productKey, $quantity, $unitCost, $totalTtc, $notes, $createdBy]);
+                (id, purchased_at, supplier, product_key, quantity, unit_cost, vat_rate, total_ttc, total_ht, notes, created_by, created_at)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,NOW())'
+        )->execute([$id, $purchasedAt, $supplier, $productKey, $quantity, $unitCost, $vatRate, $totalTtc, $totalHt, $notes, $createdBy]);
 
         // L'achat entre physiquement en stock : la référence de stock
         // (utilisée par le réappro) suit le stock théorique de l'inventaire.
@@ -154,6 +167,50 @@ final class Purchase extends Model
             return (float) $stmt->fetchColumn();
         } catch (\Throwable) {
             return 0.0;
+        }
+    }
+
+    /**
+     * Sommes HT / TVA / TTC des achats sur une plage de jours (bornes
+     * incluses), en une seule requête.
+     *
+     * Les lignes historiques (total_ht NULL, saisies avant la TVA) sont
+     * considérées comme déjà TTC : COALESCE(total_ht, total_ttc).
+     *
+     * @param string|null $fromDay Jour de début « YYYY-MM-DD » (inclus), ou null.
+     * @param string|null $toDay   Jour de fin « YYYY-MM-DD » (inclus), ou null.
+     *
+     * @return array{ht:float, ttc:float, vat:float}
+     */
+    public static function sumsBetween(?string $fromDay, ?string $toDay): array
+    {
+        $where = [];
+        $args = [];
+        if ($fromDay !== null && $fromDay !== '') {
+            $where[] = 'purchased_at >= ?';
+            $args[] = $fromDay;
+        }
+        if ($toDay !== null && $toDay !== '') {
+            $where[] = 'purchased_at <= ?';
+            $args[] = $toDay;
+        }
+        $whereSql = $where === [] ? '' : 'WHERE ' . implode(' AND ', $where);
+
+        try {
+            $stmt = self::pdo()->prepare(
+                'SELECT COALESCE(SUM(COALESCE(total_ht, total_ttc)), 0) AS ht,
+                        COALESCE(SUM(total_ttc), 0) AS ttc
+                 FROM purchases ' . $whereSql
+            );
+            $stmt->execute($args);
+            $row = $stmt->fetch();
+
+            $ht = (float) ($row['ht'] ?? 0);
+            $ttc = (float) ($row['ttc'] ?? 0);
+
+            return ['ht' => $ht, 'ttc' => $ttc, 'vat' => round($ttc - $ht, 2)];
+        } catch (\Throwable) {
+            return ['ht' => 0.0, 'ttc' => 0.0, 'vat' => 0.0];
         }
     }
 

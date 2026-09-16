@@ -57,19 +57,22 @@ function formatDateTime(string|DateTimeInterface|null $date): string
 }
 
 /**
- * Formate un nombre en prix euros français (2 décimales, virgule, suffixe " €").
+ * Formate un nombre en prix euros français (2 décimales par défaut,
+ * virgule, suffixe " €").
  *
  * @param float|int|string|null $n
  */
-function formatPrice(float|int|string|null $n): string
+function formatPrice(float|int|string|null $n, int $decimals = 2): string
 {
+    $decimals = max(0, min(4, $decimals));
+
     if ($n === null || $n === '') {
-        return '0,00 €';
+        return number_format(0, $decimals, ',', ' ') . ' €';
     }
 
     $value = (float) $n;
 
-    return number_format($value, 2, ',', ' ') . ' €';
+    return number_format($value, $decimals, ',', ' ') . ' €';
 }
 
 /**

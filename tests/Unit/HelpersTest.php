@@ -62,6 +62,13 @@ final class HelpersTest extends TestCase
         self::assertSame('0,00 €', formatPrice(''));
     }
 
+    public function test_format_price_avec_3_decimales(): void
+    {
+        self::assertSame('0,155 €', formatPrice(0.155, 3));
+        self::assertSame('1,055 €', formatPrice('1.055', 3));
+        self::assertSame('0,000 €', formatPrice(null, 3));
+    }
+
     public function test_parse_french_float_avec_virgule(): void
     {
         self::assertSame(1.75, parseFrenchFloat('1,75'));

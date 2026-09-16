@@ -46,10 +46,14 @@ final class AdminStockController extends AdminBaseController
             'period'        => $period,
             'periodOptions' => ComptaCalc::PERIOD_OPTIONS,
             'total'         => Purchase::totalBetween($period['from'], $period['to']),
+            'sums'          => Purchase::sumsBetween($period['from'], $period['to']),
             'count'         => count($rows),
             'qtyTotal'      => $qtyTotal,
         ]);
     }
+
+    /** Taux de TVA autorisés pour les achats. */
+    private const VAT_RATES = [20.0, 10.0, 5.5, 2.1, 0.0];
 
     public function savePurchase(): void
     {
@@ -65,6 +69,18 @@ final class AdminStockController extends AdminBaseController
         $supplier = trim((string) ($_POST['supplier'] ?? ''));
         $notes = trim((string) ($_POST['notes'] ?? ''));
 
+        // '' = prix saisi déjà TTC (pas de TVA à calculer), sinon taux en %.
+        $vatRaw = trim((string) ($_POST['vat_rate'] ?? ''));
+        $vatRate = null;
+        if ($vatRaw !== '') {
+            $candidate = parseFrenchFloat($vatRaw);
+            if (!in_array($candidate, self::VAT_RATES, true)) {
+                $this->setFlash('error', 'Produit, quantité et coût unitaire requis.');
+                redirect(url('/admin/compta/achats'));
+            }
+            $vatRate = $candidate;
+        }
+
         if ($productKey === '' || $quantity < 1 || $unitCost <= 0.0) {
             $this->setFlash('error', 'Produit, quantité et coût unitaire requis.');
             redirect(url('/admin/compta/achats'));
@@ -75,6 +91,7 @@ final class AdminStockController extends AdminBaseController
             'product_key'  => $productKey,
             'quantity'     => $quantity,
             'unit_cost'    => $unitCost,
+            'vat_rate'     => $vatRate,
             'supplier'     => $supplier,
             'notes'        => $notes,
             'created_by'   => $user['id'] ?? null,
@@ -85,19 +102,22 @@ final class AdminStockController extends AdminBaseController
         // nouveau lot daté, le bénéfice suit les vrais coûts d'achat.
         $lotNote = '';
         if (isset($_POST['update_cost'])) {
+            // Coût de revient en TTC pour bénéfices cohérents avec ventes TTC :
+            // les prix de vente sont TTC, le coût doit l'être aussi.
+            $costTtc = $vatRate === null ? $unitCost : round($unitCost * (1 + $vatRate / 100), 3);
             $lotId = ProductCost::create([
                 'product_key' => $productKey,
-                'cost_price'  => $unitCost,
+                'cost_price'  => $costTtc,
                 'valid_from'  => $purchasedAt,
                 'supplier'    => $supplier,
             ]);
             if ($lotId !== '') {
                 $this->audit('compta.cost.auto_from_purchase', 'product_cost', $lotId, [
                     'product_key'    => $productKey,
-                    'cost_price'     => $unitCost,
+                    'cost_price'     => $costTtc,
                     'from_purchase'  => $id,
                 ]);
-                $lotNote = sprintf(' Nouveau lot de coût : %s /unité.', formatPrice($unitCost));
+                $lotNote = sprintf(' Nouveau lot de coût : %s /unité.', formatPrice($costTtc, 3));
             }
         }
 
@@ -105,6 +125,7 @@ final class AdminStockController extends AdminBaseController
             'product_key' => $productKey,
             'quantity'    => $quantity,
             'unit_cost'   => $unitCost,
+            'vat_rate'    => $vatRate,
         ]);
 
         $this->setFlash('success', 'Achat enregistré — stock mis à jour.' . $lotNote);
