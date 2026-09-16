@@ -18,15 +18,19 @@ final class Purchase extends Model
     /**
      * Crée un achat réel.
      *
-     * Sémantique TVA : unit_cost est le prix affiché du produit. Si
-     * vat_rate vaut null, il est considéré comme déjà TTC (comportement
-     * historique) ; sinon il est HT et la TVA est ajoutée :
-     * total_ht = qté × unit_cost, total_ttc = total_ht × (1 + taux/100).
+     * Sémantique : le montant total saisi fait foi. total_ht est le
+     * montant payé pour la ligne (HT si un taux est fourni, déjà TTC si
+     * vat_rate vaut null — comportement historique) ; le coût unitaire
+     * est une valeur dérivée : unit_cost = total_ht / quantité, arrondi
+     * à 3 décimales — c'est lui qui alimente coûts de revient et
+     * bénéfices. total_ttc = total_ht × (1 + taux/100) quand un taux
+     * est fourni.
      *
      * @param array<string,mixed> $data purchased_at (« YYYY-MM-DD »),
-     *                                  product_key, quantity, unit_cost,
-     *                                  vat_rate (?float, null = déjà TTC),
-     *                                  supplier, notes, created_by
+     *                                  product_key, quantity, total_ht
+     *                                  (montant total), vat_rate (?float,
+     *                                  null = déjà TTC), supplier, notes,
+     *                                  created_by
      *
      * @return string Identifiant créé ('' si données invalides).
      */
@@ -35,23 +39,24 @@ final class Purchase extends Model
         $purchasedAt = substr((string) ($data['purchased_at'] ?? ''), 0, 10);
         $productKey = trim((string) ($data['product_key'] ?? ''));
         $quantity = (int) ($data['quantity'] ?? 0);
-        // 3 décimales : un coût de 0,155 € doit rester 0,155 €.
-        $unitCost = round((float) ($data['unit_cost'] ?? 0), 3);
+        // Le montant saisi fait foi : 3 décimales, stocké tel quel
+        // (0,465 € doit rester 0,465 € et non être arrondi à 0,47 €).
+        $totalHt = round((float) ($data['total_ht'] ?? 0), 3);
         $vatRate = $data['vat_rate'] ?? null;
         $vatRate = $vatRate === null ? null : (float) $vatRate;
 
-        if ($purchasedAt === '' || $productKey === '' || $quantity < 1) {
+        if ($purchasedAt === '' || $productKey === '' || $quantity < 1 || $totalHt <= 0.0) {
             return '';
         }
 
-        // 3 décimales, comme unit_cost : 3 × 0,155 € = 0,465 € doit
-        // rester exact (et non être arrondi à 0,47 €).
-        $totalHt = round($quantity * $unitCost, 3);
+        // Coût unitaire dérivé du montant total, 3 décimales :
+        // 18,60 € les 120 → 0,155 €/unité.
+        $unitCost = round($totalHt / $quantity, 3);
+
         if ($vatRate === null) {
-            $totalHt = $totalTtc = $totalHt;
+            $totalTtc = $totalHt;
         } else {
-            // 3 décimales, depuis le HT non arrondi : 25,152 € HT
-            // + TVA 5,5 % = 26,535 € (et non 26,54 €).
+            // 3 décimales : 25,152 € HT + TVA 5,5 % = 26,535 € (et non 26,54 €).
             $totalTtc = round($totalHt * (1 + $vatRate / 100), 3);
         }
 

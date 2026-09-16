@@ -75,18 +75,19 @@ declare(strict_types=1);
                     <input type="number" id="quantity" name="quantity" value="1" min="1" step="1" required>
                 </div>
                 <div class="field">
-                    <label for="unit_cost">Coût unitaire (€)</label>
-                    <input type="text" id="unit_cost" name="unit_cost" placeholder="ex: 0,155" inputmode="decimal" required>
+                    <label for="total_amount">Montant total (€)</label>
+                    <input type="text" id="total_amount" name="total_amount" placeholder="ex: 18,60" inputmode="decimal" required>
+                    <p class="field-help" id="unit-cost-hint" hidden>≈ <span id="unit-cost-value"></span> € / unité</p>
                 </div>
                 <div class="field">
                     <label for="vat_rate">TVA</label>
                     <select id="vat_rate" name="vat_rate">
-                        <option value="20" selected>HT + TVA 20 %</option>
-                        <option value="10">HT + TVA 10 %</option>
-                        <option value="5.5">HT + TVA 5,5 %</option>
-                        <option value="2.1">HT + TVA 2,1 %</option>
-                        <option value="0">HT sans TVA</option>
-                        <option value="">Prix déjà TTC</option>
+                        <option value="20" selected>Montant HT + TVA 20 %</option>
+                        <option value="10">Montant HT + TVA 10 %</option>
+                        <option value="5.5">Montant HT + TVA 5,5 %</option>
+                        <option value="2.1">Montant HT + TVA 2,1 %</option>
+                        <option value="0">Montant HT sans TVA</option>
+                        <option value="">Montant déjà TTC</option>
                     </select>
                     <p class="field-help">Les prix Metro/fournisseurs sont souvent HT.</p>
                 </div>
@@ -110,6 +111,26 @@ declare(strict_types=1);
                 <button type="button" class="btn btn-ghost" onclick="if (confirm('Effacer la saisie en cours ?')) this.form.reset();">Annuler</button>
             </div>
         </form>
+        <script>
+            (function () {
+                var amount = document.getElementById('total_amount');
+                var qty = document.getElementById('quantity');
+                var hint = document.getElementById('unit-cost-hint');
+                var value = document.getElementById('unit-cost-value');
+                function updateHint() {
+                    var a = parseFloat(String(amount.value).replace(/\s/g, '').replace(',', '.'));
+                    var q = parseInt(qty.value, 10);
+                    if (!isFinite(a) || a <= 0 || !q || q < 1) {
+                        hint.hidden = true;
+                        return;
+                    }
+                    value.textContent = (a / q).toFixed(3).replace('.', ',');
+                    hint.hidden = false;
+                }
+                amount.addEventListener('input', updateHint);
+                qty.addEventListener('input', updateHint);
+            })();
+        </script>
     </section>
 
     <section class="card surface glass">
