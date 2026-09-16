@@ -194,6 +194,18 @@ final class AdminComptaController extends AdminBaseController
         try {
             $result = Sale::importBatch($batchId, $rows);
         } catch (\Throwable $e) {
+            // Lot fantôme : l'insertion a échoué, on supprime le lot fraîchement
+            // créé (aucune ligne insérée) pour que son empreinte UNIQUE ne
+            // bloque pas à tort le ré-import du même fichier. Nettoyage
+            // silencieux : ne jamais masquer l'erreur initiale.
+            if ($batchId !== null) {
+                try {
+                    ImportBatch::delete($batchId);
+                } catch (\Throwable) {
+                    // Le lot reste éventuellement en base ; l'erreur d'import
+                    // d'origine prime sur cet échec de nettoyage.
+                }
+            }
             $this->audit('compta.import_failed', 'import_batch', $batchId, [
                 'filename' => $filename,
                 'error'    => $e->getMessage(),

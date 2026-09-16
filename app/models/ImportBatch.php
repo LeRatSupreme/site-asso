@@ -106,6 +106,18 @@ final class ImportBatch extends Model
     }
 
     /**
+     * Supprime un lot. Utilisé par le contrôleur pour nettoyer un lot créé
+     * juste avant un échec d'insertion : sans quoi son empreinte (colonne
+     * file_hash UNIQUE) bloquerait à tort le ré-import du même fichier.
+     */
+    public static function delete(string $id): void
+    {
+        self::pdo()->prepare(
+            'DELETE FROM import_batches WHERE id = ?'
+        )->execute([$id]);
+    }
+
+    /**
      * Tous les lots, du plus récent au plus ancien.
      *
      * @return list<array<string,mixed>>
