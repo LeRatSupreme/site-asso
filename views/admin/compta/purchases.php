@@ -152,7 +152,7 @@ declare(strict_types=1);
                     <td><?= e((string) ($r['supplier'] ?? '—')) ?></td>
                     <td class="row-actions">
                         <form method="post" action="<?= e(url('/admin/compta/achats/' . rawurlencode((string) $r['id']) . '/delete')) ?>"
-                              data-confirm="Supprimer cet achat ?">
+                              data-confirm="Supprimer cet achat ?" data-preserve-scroll>
                             <?= csrf_field() ?>
                             <button type="submit" class="btn btn-danger btn-sm" aria-label="Supprimer">🗑</button>
                         </form>

@@ -209,7 +209,7 @@ declare(strict_types=1);
                                                                     <button type="submit" class="btn btn-outline btn-sm">Clôturer</button>
                                                                 </form>
                                                             <?php endif; ?>
-                                                            <form method="post" action="<?= e(url('/admin/compta/couts/' . rawurlencode((string) $c['id']) . '/delete')) ?>" data-confirm="Supprimer ce lot ? Action irréversible.">
+                                                            <form method="post" action="<?= e(url('/admin/compta/couts/' . rawurlencode((string) $c['id']) . '/delete')) ?>" data-confirm="Supprimer ce lot ? Action irréversible." data-preserve-scroll>
                                                                 <?= csrf_field() ?>
                                                                 <button type="submit" class="btn btn-danger btn-sm" aria-label="Supprimer">🗑</button>
                                                             </form>

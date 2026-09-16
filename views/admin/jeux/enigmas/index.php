@@ -59,7 +59,7 @@ declare(strict_types=1);
                         <td class="row-actions">
                             <a class="btn btn-outline btn-sm" href="<?= e(url('/admin/jeux/enigmes/' . (int) $en['id'])) ?>" title="Modifier">✏️</a>
                             <form method="post" action="<?= e(url('/admin/jeux/enigmes/' . (int) $en['id'] . '/delete')) ?>" class="inline-form"
-                                  data-confirm="Supprimer cette énigme ?">
+                                  data-confirm="Supprimer cette énigme ?" data-preserve-scroll>
                                 <?= csrf_field() ?>
                                 <button type="submit" class="btn btn-danger btn-sm" title="Supprimer">🗑️</button>
                             </form>
