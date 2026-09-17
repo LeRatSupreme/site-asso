@@ -97,7 +97,7 @@ final class TwoFactorController extends Controller
             redirect(url('/login'));
         }
 
-        $this->setFlash('error', 'Code incorrect.');
+        $this->setFlash('error', 'Code incorrect. Vérifie que l\'horloge de ton téléphone est en réglage automatique et que le code est frais (régénéré il y a moins de 30 s).');
         redirect(url('/login/verify'));
     }
 
@@ -112,11 +112,29 @@ final class TwoFactorController extends Controller
         $userId = (string) Auth::id();
         $enabled = TwoFactor::isEnabled($userId);
 
-        // Si le 2FA est déjà activé, on n'affiche pas le secret.
         if (!$enabled) {
-            $setup = TwoFactor::beginSetup($userId);
-            $_SESSION['_2fa_pending_secret'] = $setup['secret'];
-            $_SESSION['_2fa_pending_recovery'] = $setup['recovery'];
+            // Source de vérité : le secret en attente EN BASE. Tant que le
+            // 2FA n'est pas activé, on réaffiche TOUJOURS le même secret :
+            // aucune régénération au chargement de la page (c'était la cause
+            // de codes toujours refusés : le secret changeait à chaque
+            // affichage pendant que l'application gardait l'ancien).
+            $secret = TwoFactor::pendingSecret($userId);
+
+            if ($secret === null) {
+                // Première visite : on amorce le setup.
+                $setup = TwoFactor::beginSetup($userId);
+                $_SESSION['_2fa_pending_secret'] = $setup['secret'];
+                $_SESSION['_2fa_pending_recovery'] = $setup['recovery'];
+            } elseif (!isset($_SESSION['_2fa_pending_secret'])
+                || !hash_equals((string) $_SESSION['_2fa_pending_secret'], $secret)
+            ) {
+                // Setup déjà commencé mais session perdue/désynchronisée :
+                // on resynchronise sur le secret existant (jamais régénéré).
+                // Les codes de récupération en clair étant perdus avec la
+                // session, on en regénère (le secret TOTP reste stable).
+                $_SESSION['_2fa_pending_secret'] = $secret;
+                $_SESSION['_2fa_pending_recovery'] = TwoFactor::regenerateRecoveryCodes($userId);
+            }
         }
 
         $this->render('account/twofactor_setup', [
@@ -129,21 +147,53 @@ final class TwoFactorController extends Controller
         ]);
     }
 
+    /**
+     * Régénération explicite de la clé (bouton « Générer une nouvelle clé ») :
+     * c'est le SEUL chemin qui renouvelle le secret pendant le setup.
+     */
+    public function setupRegenerate(): void
+    {
+        Middleware::requireLogin();
+
+        $userId = (string) Auth::id();
+        if (TwoFactor::isEnabled($userId)) {
+            redirect(url('/account/2fa/setup'));
+        }
+
+        $setup = TwoFactor::beginSetup($userId);
+        $_SESSION['_2fa_pending_secret'] = $setup['secret'];
+        $_SESSION['_2fa_pending_recovery'] = $setup['recovery'];
+
+        $this->setFlash('info', 'Nouvelle clé générée : remplacez l\'ancienne entrée dans votre application d\'authentification, puis confirmez avec un code.');
+        redirect(url('/account/2fa/setup'));
+    }
+
     public function setupConfirm(): void
     {
         Middleware::requireLogin();
 
         $userId = (string) Auth::id();
-        $secret = (string) ($_SESSION['_2fa_pending_secret'] ?? '');
-        $code = trim((string) ($_POST['code'] ?? ''));
+        $code = str_replace(' ', '', trim((string) ($_POST['code'] ?? '')));
 
-        if ($secret === '' || !Totp::verify($secret, str_replace(' ', '', $code))) {
-            $this->setFlash('error', 'Code incorrect. Réessayez.');
+        // On vérifie contre le secret en attente EN BASE (et non la session) :
+        // plusieurs onglets ou une session reconstruite comparent ainsi bien
+        // le secret affiché à l'utilisateur.
+        $secret = TwoFactor::pendingSecret($userId);
+
+        if ($secret === null) {
+            // Pas de setup en cours (session perdue avant écriture, etc.) :
+            // le chargement de la page setup en amorce un nouveau.
+            $this->setFlash('error', 'Configuration expirée : une nouvelle clé vous a été attribuée, recommencez l\'ajout dans votre application.');
+            redirect(url('/account/2fa/setup'));
+        }
+
+        if (!Totp::verify($secret, $code)) {
+            $this->setFlash('error', 'Code incorrect. Vérifie que l\'horloge de ton téléphone est en réglage automatique et que le code est frais (régénéré il y a moins de 30 s), puis réessaie.');
             redirect(url('/account/2fa/setup'));
         }
 
         TwoFactor::enable($userId);
-        unset($_SESSION['_2fa_pending_secret']);
+        unset($_SESSION['_2fa_pending_secret'], $_SESSION['_2fa_pending_recovery']);
 
         // Journalisation.
         \App\Models\AuditLog::log('twofactor.enable', $userId, 'user', $userId);

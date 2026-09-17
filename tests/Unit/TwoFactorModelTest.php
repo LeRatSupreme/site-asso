@@ -77,6 +77,54 @@ final class TwoFactorModelTest extends TestCase
         self::assertTrue(TwoFactor::verify($this->userId, $code));
     }
 
+    public function test_le_secret_en_attente_est_stable_malgre_les_echecs(): void
+    {
+        $setup = TwoFactor::beginSetup($this->userId);
+
+        // Rechargements de page successifs : le même secret est renvoyé.
+        self::assertSame($setup['secret'], TwoFactor::pendingSecret($this->userId));
+        self::assertSame($setup['secret'], TwoFactor::pendingSecret($this->userId));
+
+        // Un code refusé ne régénère PAS le secret.
+        self::assertFalse(Totp::verify((string) TwoFactor::pendingSecret($this->userId), '000000'));
+        self::assertSame($setup['secret'], TwoFactor::pendingSecret($this->userId));
+    }
+
+    public function test_seule_la_regeneration_explicite_change_le_secret(): void
+    {
+        $s1 = TwoFactor::beginSetup($this->userId)['secret'];
+        self::assertSame($s1, TwoFactor::pendingSecret($this->userId));
+
+        // beginSetup = action explicite (bouton « Générer une nouvelle clé »).
+        $s2 = TwoFactor::beginSetup($this->userId)['secret'];
+        self::assertNotSame($s1, $s2);
+        self::assertSame($s2, TwoFactor::pendingSecret($this->userId));
+    }
+
+    public function test_verification_accepte_plus_ou_moins_2_pas(): void
+    {
+        $secret = TwoFactor::beginSetup($this->userId)['secret'];
+        $t = 1800000000;
+
+        self::assertTrue(Totp::verify($secret, Totp::code($secret, $t), 2, $t));
+        self::assertTrue(Totp::verify($secret, Totp::code($secret, $t - 60), 2, $t));
+        self::assertTrue(Totp::verify($secret, Totp::code($secret, $t + 60), 2, $t));
+        self::assertFalse(Totp::verify($secret, Totp::code($secret, $t - 90), 2, $t));
+        self::assertFalse(Totp::verify($secret, Totp::code($secret, $t - 60), 1, $t));
+    }
+
+    public function test_regeneration_recovery_codes_conserve_le_secret(): void
+    {
+        $secret = TwoFactor::beginSetup($this->userId)['secret'];
+
+        $recovery = TwoFactor::regenerateRecoveryCodes($this->userId);
+        self::assertCount(RecoveryCodes::DEFAULT_COUNT, $recovery);
+        self::assertSame($secret, TwoFactor::pendingSecret($this->userId));
+
+        TwoFactor::enable($this->userId);
+        self::assertTrue(TwoFactor::verify($this->userId, $recovery[0]));
+    }
+
     public function test_use_recovery_code_le_consomme(): void
     {
         $setup = TwoFactor::beginSetup($this->userId);
