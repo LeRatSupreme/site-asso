@@ -116,6 +116,9 @@ final class AdminStockController extends AdminBaseController
                 'cost_price'  => $costTtc,
                 'valid_from'  => $purchasedAt,
                 'supplier'    => $supplier,
+                // Lie le lot à l'achat : sa suppression en cascade
+                // (deletePurchase) saura exactement quel lot retirer.
+                'purchase_id' => $id,
             ]);
             if ($lotId !== '') {
                 $this->audit('compta.cost.auto_from_purchase', 'product_cost', $lotId, [
@@ -139,14 +142,57 @@ final class AdminStockController extends AdminBaseController
         redirect(url('/admin/compta/achats'));
     }
 
+    /**
+     * Supprime un achat avec cascade complète.
+     *
+     * La logique reste dans le contrôleur (et non dans Purchase::delete)
+     * par symétrie avec savePurchase() : la création du lot lié s'y fait
+     * déjà (elle dépend de l'option update_cost du POST) — son inverse
+     * vit au même endroit, les modèles restant des primitives. Contre-
+     * passe aussi le stock de référence : Purchase::create() avait fait
+     * ProductStock::adjust(+qty), la suppression retire la quantité.
+     */
     public function deletePurchase(string $id): void
     {
-        $user = $this->guardCompta();
+        $this->guardCompta();
+
+        // Lecture AVANT suppression : la contre-passation (stock) et
+        // l'audit ont besoin des données de l'achat.
+        $purchase = Purchase::find($id);
+        if ($purchase === null) {
+            $this->setFlash('error', 'Achat introuvable (déjà supprimé ?).');
+            redirect(url('/admin/compta/achats'));
+        }
+
+        $productKey = (string) $purchase['product_key'];
+        $quantity = (int) $purchase['quantity'];
+
+        // Cascade : supprime les lots de coût liés à l'achat ; si l'un
+        // d'eux était « en cours », le lot antérieur est réouvert
+        // (ProductCost::delete) pour ne pas casser la chaîne de coûts.
+        $lotsDeleted = ProductCost::deleteByPurchase($id);
 
         Purchase::delete($id);
 
-        $this->audit('compta.purchase.delete', 'purchase', $id);
-        $this->setFlash('success', 'Achat supprimé.');
+        // Contre-passation du stock de référence : ajusté de +quantity à
+        // la création de l'achat.
+        ProductStock::adjust($productKey, -$quantity);
+
+        $this->audit('compta.purchase.delete', 'purchase', $id, [
+            'product_key'    => $productKey,
+            'quantity'       => $quantity,
+            'lots_deleted'   => $lotsDeleted,
+            'stock_adjusted' => -$quantity,
+        ]);
+
+        $flash = sprintf(
+            'Achat supprimé — stock de référence ajusté (−%d).',
+            $quantity
+        );
+        if ($lotsDeleted > 0) {
+            $flash .= sprintf(' %d lot(s) de coût lié(s) supprimé(s), lot antérieur réouvert.', $lotsDeleted);
+        }
+        $this->setFlash('success', $flash);
         redirect(url('/admin/compta/achats'));
     }
 

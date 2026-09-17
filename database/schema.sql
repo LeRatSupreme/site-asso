@@ -311,7 +311,9 @@ CREATE TABLE IF NOT EXISTS product_aliases (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Coûts de revient par lot daté (cost_price en TTC : comparable aux
--- prix de vente TTC, pour des bénéfices cohérents)
+-- prix de vente TTC, pour des bénéfices cohérents).
+-- purchase_id : achat (purchases.id) à l'origine du lot — NULL pour les
+-- lots manuels ; sert à la suppression en cascade d'un achat.
 CREATE TABLE IF NOT EXISTS product_costs (
     id           VARCHAR(255) NOT NULL PRIMARY KEY,
     product_key  VARCHAR(255) NOT NULL,
@@ -320,9 +322,11 @@ CREATE TABLE IF NOT EXISTS product_costs (
     valid_to     DATE NULL,
     supplier     VARCHAR(255) NULL,
     notes        TEXT NULL,
+    purchase_id  VARCHAR(255) NULL,
     created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     KEY idx_costs_product (product_key),
-    KEY idx_costs_period (valid_from, valid_to)
+    KEY idx_costs_period (valid_from, valid_to),
+    KEY idx_pc_purchase (purchase_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Traçabilité des imports

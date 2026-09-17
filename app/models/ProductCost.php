@@ -93,7 +93,10 @@ final class ProductCost extends Model
      * Clôt automatiquement le lot précédent en cours (valid_to = veille du
      * nouveau valid_from) pour conserver des périodes strictement consécutives.
      *
-     * @param array<string,mixed> $data
+     * @param array<string,mixed> $data purchase_id optionnel : id de l'achat
+     *                                  (purchases.id) à l'origine du lot,
+     *                                  pour la suppression en cascade —
+     *                                  absent/'' pour un lot manuel.
      */
     public static function create(array $data): string
     {
@@ -108,6 +111,7 @@ final class ProductCost extends Model
         $costPrice = (float) ($data['cost_price'] ?? 0);
         $supplier = ($data['supplier'] ?? '') !== '' ? (string) $data['supplier'] : null;
         $notes = ($data['notes'] ?? '') !== '' ? (string) $data['notes'] : null;
+        $purchaseId = ($data['purchase_id'] ?? '') !== '' ? (string) $data['purchase_id'] : null;
 
         // Clôture du lot précédent ouvert (veille du nouveau valid_from).
         $pdo->prepare(
@@ -118,9 +122,9 @@ final class ProductCost extends Model
 
         $id = 'cost_' . bin2hex(random_bytes(10));
         $pdo->prepare(
-            'INSERT INTO product_costs (id, product_key, cost_price, valid_from, valid_to, supplier, notes, created_at)
-             VALUES (?,?,?,?, NULL, ?, ?, NOW())'
-        )->execute([$id, $productKey, $costPrice, $validFrom, $supplier, $notes]);
+            'INSERT INTO product_costs (id, product_key, cost_price, valid_from, valid_to, supplier, notes, purchase_id, created_at)
+             VALUES (?,?,?,?, NULL, ?, ?, ?, NOW())'
+        )->execute([$id, $productKey, $costPrice, $validFrom, $supplier, $notes, $purchaseId]);
 
         return $id;
     }
@@ -168,13 +172,82 @@ final class ProductCost extends Model
 
     /**
      * Supprime un lot (utile pour nettoyer les doublons / saisies erronées).
+     *
+     * Si le lot supprimé était « en cours » (valid_to NULL), le lot
+     * antérieur le plus récent du même produit est réouvert (valid_to =
+     * NULL) : sans cela le produit perdrait tout coût applicable et les
+     * ventes suivantes n'auraient plus de coût de revient.
      */
     public static function delete(string $id): bool
     {
-        $stmt = self::pdo()->prepare('DELETE FROM product_costs WHERE id = ?');
-        $stmt->execute([$id]);
+        $pdo = self::pdo();
 
-        return $stmt->rowCount() === 1;
+        // État avant suppression : la réouverture ne concerne que les lots
+        // en cours (supprimer un lot déjà clôturé ne change pas la chaîne).
+        $stmt = $pdo->prepare('SELECT product_key, valid_to FROM product_costs WHERE id = ?');
+        $stmt->execute([$id]);
+        $lot = $stmt->fetch();
+        if ($lot === false) {
+            return false;
+        }
+
+        $del = $pdo->prepare('DELETE FROM product_costs WHERE id = ?');
+        $del->execute([$id]);
+        if ($del->rowCount() !== 1) {
+            return false;
+        }
+
+        if (($lot['valid_to'] ?? null) === null) {
+            self::reopenPreviousLot((string) $lot['product_key']);
+        }
+
+        return true;
+    }
+
+    /**
+     * Supprime tous les lots liés à un achat (product_costs.purchase_id).
+     *
+     * Cascade de la suppression d'un achat : chaque lot supprimé « en
+     * cours » fait réouvrir le lot antérieur du produit (via self::delete).
+     *
+     * @return int Nombre de lots supprimés.
+     */
+    public static function deleteByPurchase(string $purchaseId): int
+    {
+        if ($purchaseId === '') {
+            return 0;
+        }
+
+        $stmt = self::pdo()->prepare('SELECT id FROM product_costs WHERE purchase_id = ?');
+        $stmt->execute([$purchaseId]);
+
+        $deleted = 0;
+        foreach ($stmt->fetchAll() as $row) {
+            if (self::delete((string) $row['id'])) {
+                $deleted++;
+            }
+        }
+
+        return $deleted;
+    }
+
+    /**
+     * Réouvre le lot le plus récent restant d'un produit (valid_to = NULL).
+     *
+     * Le lot supprimé était en cours : aucun lot postérieur ne peut exister
+     * (il l'aurait clôturé), le plus récent restant redevient donc le lot
+     * courant. Inutile si le produit n'a plus aucun lot (aucune ligne mise
+     * à jour).
+     */
+    private static function reopenPreviousLot(string $productKey): void
+    {
+        self::pdo()->prepare(
+            'UPDATE product_costs
+                SET valid_to = NULL
+              WHERE product_key = ?
+              ORDER BY valid_from DESC, created_at DESC
+              LIMIT 1'
+        )->execute([$productKey]);
     }
 
     /**
