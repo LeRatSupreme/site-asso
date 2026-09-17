@@ -154,22 +154,47 @@ final class Sale extends Model
     }
 
     /**
-     * Fragment SQL donnant le coût unitaire applicable à une vente
-     * (lot valide à la date de la vente). Renvoie 0 si aucun lot.
+     * Fragment SQL donnant le coût unitaire applicable à une vente —
+     * le lot valable À LA DATE de la vente (jamais rétroactif) :
+     *  1. lot couvrant la vente (valid_from <= DATE(sold_at) ET valid_to
+     *     NULL ou DATE(sold_at) <= valid_to), le plus récent ;
+     *  2. sinon (trou entre deux lots, ou après le dernier lot) le lot
+     *     précédent : le plus récent avec valid_from <= DATE(sold_at) ;
+     *  3. sinon (vente antérieure au premier lot) le lot le plus ancien.
+     *
+     * Créer un lot postérieur ne modifie donc jamais le coût des ventes
+     * antérieures. Renvoie NULL si aucun lot n'existe pour le produit.
+     *
+     * La table product_costs est petite : trois sous-requêtes scalaires
+     * bornées dans un COALESCE privilégient la clarté.
      */
     private const COST_SUBQUERY = '
-        SELECT pc.cost_price
-        FROM product_costs pc
-        WHERE pc.product_key = COALESCE(sales.product_key, sales.description)
-        ORDER BY
-            CASE
-                WHEN pc.valid_from <= DATE(sales.sold_at)
-                     AND (pc.valid_to IS NULL OR DATE(sales.sold_at) < pc.valid_to)
-                THEN 0
-                ELSE 1
-            END,
-            pc.valid_from DESC
-        LIMIT 1';
+        COALESCE(
+            (
+                SELECT pc.cost_price
+                FROM product_costs pc
+                WHERE pc.product_key = COALESCE(sales.product_key, sales.description)
+                  AND pc.valid_from <= DATE(sales.sold_at)
+                  AND (pc.valid_to IS NULL OR DATE(sales.sold_at) <= pc.valid_to)
+                ORDER BY pc.valid_from DESC
+                LIMIT 1
+            ),
+            (
+                SELECT pc.cost_price
+                FROM product_costs pc
+                WHERE pc.product_key = COALESCE(sales.product_key, sales.description)
+                  AND pc.valid_from <= DATE(sales.sold_at)
+                ORDER BY pc.valid_from DESC
+                LIMIT 1
+            ),
+            (
+                SELECT pc.cost_price
+                FROM product_costs pc
+                WHERE pc.product_key = COALESCE(sales.product_key, sales.description)
+                ORDER BY pc.valid_from ASC
+                LIMIT 1
+            )
+        )';
 
     /**
      * Agrégats (CA, bénéfice, quantité) pour un mois donné.

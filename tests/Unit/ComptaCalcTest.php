@@ -71,17 +71,68 @@ final class ComptaCalcTest extends TestCase
         self::assertSame(0.60, (float) $lotJune['cost_price']);
     }
 
-    public function test_aucun_lot_valide_renvoie_null(): void
+    public function test_vente_avant_le_premier_lot_utilise_le_premier_lot(): void
     {
         $lots = [
             ['valid_from' => '2026-06-01', 'valid_to' => '2026-07-01', 'cost_price' => 0.60],
         ];
 
-        // Vente AVANT le premier lot.
-        self::assertNull(ComptaCalc::selectCostLot('2026-05-01', $lots));
-        // Vente APRÈS la fin du lot (valid_to exclusive).
-        self::assertNull(ComptaCalc::selectCostLot('2026-07-01', $lots));
-        self::assertNotNull(ComptaCalc::selectCostLot('2026-06-30', $lots));
+        // Vente AVANT le premier lot → lot le plus ancien connu (jamais null,
+        // jamais un lot postérieur : créer un lot ne réécrit pas le passé).
+        $lot = ComptaCalc::selectCostLot('2026-05-01', $lots);
+        self::assertNotNull($lot);
+        self::assertSame(0.60, (float) $lot['cost_price']);
+
+        // Le jour de valid_to (borne incluse) → toujours couvert.
+        self::assertSame(0.60, ComptaCalc::costAt('2026-07-01', $lots));
+    }
+
+    public function test_vente_dans_un_trou_entre_deux_lots_utilise_le_lot_precedent(): void
+    {
+        $lots = [
+            ['valid_from' => '2026-07-01', 'valid_to' => null,      'cost_price' => 0.75],
+            ['valid_from' => '2026-06-01', 'valid_to' => '2026-06-20', 'cost_price' => 0.60],
+        ];
+
+        // Dans le trou (21 → 30 juin) → lot précédent (0,60).
+        self::assertSame(0.60, ComptaCalc::costAt('2026-06-21', $lots));
+        self::assertSame(0.60, ComptaCalc::costAt('2026-06-30', $lots));
+
+        // Dernier jour couvert par le lot 1 / premier jour du lot 2.
+        self::assertSame(0.60, ComptaCalc::costAt('2026-06-20', $lots));
+        self::assertSame(0.75, ComptaCalc::costAt('2026-07-01', $lots));
+    }
+
+    public function test_creer_un_lot_posterieur_ne_change_pas_les_ventes_anterieures(): void
+    {
+        // Reproduction du bug signalé : un lot « cafe » créé le 17/09 ne doit
+        // pas modifier le profit des ventes antérieures au 17/09.
+        $lotsAvant = [
+            ['valid_from' => '2026-09-17', 'valid_to' => null, 'cost_price' => 0.80],
+        ];
+
+        // Avant création : ventes du 10/09 valorisées au lot le plus ancien.
+        self::assertSame(0.80, ComptaCalc::costAt('2026-09-10', $lotsAvant));
+
+        // Création d'un lot POSTÉRIEUR (20/09)…
+        $lotsApres = [
+            ['valid_from' => '2026-09-20', 'valid_to' => null, 'cost_price' => 0.90],
+            ['valid_from' => '2026-09-17', 'valid_to' => '2026-09-19', 'cost_price' => 0.80],
+        ];
+
+        // …les ventes antérieures gardent EXACTEMENT le même coût.
+        self::assertSame(0.80, ComptaCalc::costAt('2026-09-10', $lotsApres));
+        self::assertSame(0.80, ComptaCalc::costAt('2026-09-17', $lotsApres));
+        self::assertSame(0.80, ComptaCalc::costAt('2026-09-19', $lotsApres));
+
+        // Et les ventes postérieures utilisent le nouveau lot.
+        self::assertSame(0.90, ComptaCalc::costAt('2026-09-20', $lotsApres));
+        self::assertSame(0.90, ComptaCalc::costAt('2026-09-25', $lotsApres));
+    }
+
+    public function test_aucun_lot_renvoie_null(): void
+    {
+        self::assertNull(ComptaCalc::selectCostLot('2026-05-01', []));
     }
 
     public function test_cost_at_raccourci_renvoie_le_prix(): void
@@ -91,7 +142,8 @@ final class ComptaCalcTest extends TestCase
         ];
 
         self::assertSame(0.60, ComptaCalc::costAt('2026-06-15', $lots));
-        self::assertNull(ComptaCalc::costAt('2026-05-15', $lots));
+        // Vente antérieure au premier lot → lot le plus ancien (0,60).
+        self::assertSame(0.60, ComptaCalc::costAt('2026-05-15', $lots));
     }
 
     public function test_moyenne_mobile_3_mois(): void
