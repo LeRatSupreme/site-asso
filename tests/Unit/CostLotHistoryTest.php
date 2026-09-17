@@ -13,7 +13,8 @@ use PHPUnit\Framework\TestCase;
 /**
  * Règle métier « as-of » du coût de revient : le coût appliqué à une vente
  * est celui du lot valable À LA DATE de la vente — créer un lot ne modifie
- * JAMAIS rétroactivement le coût des ventes qui ont déjà un lot applicable.
+ * JAMAIS rétroactivement le coût des ventes qui ont déjà un lot applicable,
+ * et une vente antérieure au premier lot reste à coût inconnu (0).
  *
  * Reproduit le bug signalé : un lot « Cafe » créé le 17/09 (premier lot du
  * produit) ne doit pas changer les ventes antérieures une fois valorisées,
@@ -74,24 +75,25 @@ final class CostLotHistoryTest extends TestCase
         // Premier (et unique) lot du produit, créé « aujourd'hui » (17/09).
         ProductCost::create(['product_key' => 'Cafe', 'cost_price' => 0.80, 'valid_from' => '2026-09-17']);
 
-        // Vente antérieure au premier lot → lot le plus ancien connu (0,80).
-        self::assertSame(0.80, (float) ProductCost::costAt('Cafe', '2026-09-10'));
+        // Vente antérieure au premier lot → coût inconnu (null → 0,
+        // pas de rétroactivité).
+        self::assertNull(ProductCost::costAt('Cafe', '2026-09-10'));
         // Vente postérieure → lot couvrant (0,80).
         self::assertSame(0.80, (float) ProductCost::costAt('Cafe', '2026-09-25'));
 
-        // Profit global : 2.00 − 0.80 ×2 = 2.40.
+        // Profit global : (2.00 − 0) + (2.00 − 0.80) = 3.20.
         $agg = Sale::aggregatesBetween('2026-09-01', '2026-09-30');
-        self::assertSame(2.40, round((float) $agg['profit'], 2));
+        self::assertSame(3.20, round((float) $agg['profit'], 2));
 
         // Création d'un lot POSTÉRIEUR (20/09 à 0,90) : le lot 1 est clôturé
         // à la veille (chaînage de ProductCost::create).
         ProductCost::create(['product_key' => 'Cafe', 'cost_price' => 0.90, 'valid_from' => '2026-09-20']);
 
-        // La vente antérieure garde EXACTEMENT le même coût : le profit du
-        // 01 → 16/09 n'a pas bougé (jamais rétroactif).
-        self::assertSame(0.80, (float) ProductCost::costAt('Cafe', '2026-09-10'));
+        // La vente antérieure au 1er lot garde EXACTEMENT le même coût
+        // inconnu : le profit du 01 → 16/09 n'a pas bougé (jamais rétroactif).
+        self::assertNull(ProductCost::costAt('Cafe', '2026-09-10'));
         $before = Sale::aggregatesBetween('2026-09-01', '2026-09-16');
-        self::assertSame(1.20, round((float) $before['profit'], 2));
+        self::assertSame(2.00, round((float) $before['profit'], 2));
 
         // La vente du 25/09 bascule sur le nouveau lot.
         self::assertSame(0.90, (float) ProductCost::costAt('Cafe', '2026-09-25'));

@@ -21,11 +21,12 @@ final class Analytics extends Model
 
     /**
      * Coût unitaire applicable à une vente — le lot valable À LA DATE de la
-     * vente (jamais rétroactif). Renvoie NULL si aucun lot n'est défini pour
-     * le produit. Reproduction fidèle du fragment Sale::COST_SUBQUERY :
+     * vente (jamais rétroactif). Renvoie NULL si aucun lot couvrant ni
+     * antérieur n'est défini pour le produit (coût inconnu avant le premier
+     * lot = 0). Reproduction fidèle du fragment Sale::COST_SUBQUERY :
      *  1. lot couvrant la vente, le plus récent ;
      *  2. sinon le lot précédent (trou entre deux lots / après le dernier) ;
-     *  3. sinon le lot le plus ancien (vente antérieure au premier lot).
+     *  3. sinon (vente antérieure au premier lot) NULL — pas de rétroactivité.
      */
     private const COST_SUBQUERY = '
         COALESCE(
@@ -44,13 +45,6 @@ final class Analytics extends Model
                 WHERE pc.product_key = COALESCE(sales.product_key, sales.description)
                   AND pc.valid_from <= DATE(sales.sold_at)
                 ORDER BY pc.valid_from DESC
-                LIMIT 1
-            ),
-            (
-                SELECT pc.cost_price
-                FROM product_costs pc
-                WHERE pc.product_key = COALESCE(sales.product_key, sales.description)
-                ORDER BY pc.valid_from ASC
                 LIMIT 1
             )
         )';
@@ -567,8 +561,8 @@ final class Analytics extends Model
         $months = max(1, $months);
 
         // Coût actuel par produit : même règle « as-of » que COST_SUBQUERY,
-        // à la date du jour (lot couvrant, sinon lot précédent, sinon le
-        // plus ancien — jamais un lot futur).
+        // à la date du jour (lot couvrant, sinon lot précédent — sinon aucun :
+        // coût inconnu = 0, jamais un lot futur).
         $sql = 'SELECT COALESCE(SUM(ps.stock * COALESCE(
                     (
                         SELECT pc.cost_price
@@ -585,13 +579,6 @@ final class Analytics extends Model
                         WHERE pc.product_key = ps.product_key
                           AND pc.valid_from <= CURDATE()
                         ORDER BY pc.valid_from DESC
-                        LIMIT 1
-                    ),
-                    (
-                        SELECT pc.cost_price
-                        FROM product_costs pc
-                        WHERE pc.product_key = ps.product_key
-                        ORDER BY pc.valid_from ASC
                         LIMIT 1
                     ),
                     0
