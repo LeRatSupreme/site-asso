@@ -160,12 +160,13 @@ final class Sale extends Model
      *     NULL ou DATE(sold_at) <= valid_to), le plus récent ;
      *  2. sinon (trou entre deux lots, ou après le dernier lot) le lot
      *     précédent : le plus récent avec valid_from <= DATE(sold_at) ;
-     *  3. sinon (vente antérieure au premier lot) le lot le plus ancien.
+     *  3. sinon (vente antérieure au premier lot) NULL : coût inconnu
+     *     avant le premier lot = 0 (pas de rétroactivité).
      *
      * Créer un lot postérieur ne modifie donc jamais le coût des ventes
-     * antérieures. Renvoie NULL si aucun lot n'existe pour le produit.
+     * antérieures. Les usages wrappent le fragment dans IFNULL(…, 0).
      *
-     * La table product_costs est petite : trois sous-requêtes scalaires
+     * La table product_costs est petite : deux sous-requêtes scalaires
      * bornées dans un COALESCE privilégient la clarté.
      */
     private const COST_SUBQUERY = '
@@ -185,13 +186,6 @@ final class Sale extends Model
                 WHERE pc.product_key = COALESCE(sales.product_key, sales.description)
                   AND pc.valid_from <= DATE(sales.sold_at)
                 ORDER BY pc.valid_from DESC
-                LIMIT 1
-            ),
-            (
-                SELECT pc.cost_price
-                FROM product_costs pc
-                WHERE pc.product_key = COALESCE(sales.product_key, sales.description)
-                ORDER BY pc.valid_from ASC
                 LIMIT 1
             )
         )';
@@ -436,6 +430,12 @@ final class Sale extends Model
      * Agrégats par produit canonique sur une plage de jours (bornes
      * incluses), ou sur tout l'historique si les bornes sont null.
      *
+     * Le bénéfice valorise chaque vente au lot applicable à SA date
+     * (COST_SUBQUERY dans l'agrégat). « cost_price » est le coût moyen
+     * unitaire de la période (coût total / quantité vendue, 0 si qté 0) :
+     * il reflète le bénéfice affiché à côté, sans prétendre représenter
+     * le lot courant ni un coût daté unique.
+     *
      * @param string|null $fromDay Jour de début « YYYY-MM-DD » (inclus), ou null.
      * @param string|null $toDay   Jour de fin « YYYY-MM-DD » (inclus), ou null.
      *
@@ -460,7 +460,7 @@ final class Sale extends Model
                     SUM(quantity) AS qty,
                     SUM(price_ttc) AS ca,
                     AVG(price_ttc / NULLIF(quantity, 0)) AS avg_price,
-                    IFNULL((' . self::COST_SUBQUERY . '), 0) AS cost_price,
+                    IFNULL(SUM(IFNULL((' . self::COST_SUBQUERY . '), 0) * quantity) / NULLIF(SUM(quantity), 0), 0) AS cost_price,
                     SUM(price_ttc - IFNULL((' . self::COST_SUBQUERY . '), 0) * quantity) AS profit
                 FROM sales
                 WHERE ' . implode(' AND ', $where) . '

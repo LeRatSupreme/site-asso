@@ -463,8 +463,8 @@ final class AdminComptaController extends AdminBaseController
         foreach ($allNames as $name) {
             $lots = $lotsByProduct[$name] ?? [];
             // Lot en cours = lot applicable à aujourd'hui (même règle « as-of »
-            // que les calculs : couvrant, sinon précédent, sinon le plus
-            // ancien — jamais un lot futur).
+            // que les calculs : couvrant, sinon précédent — sinon aucun :
+            // coût inconnu avant le premier lot, jamais un lot futur).
             $current = $lots === [] ? null : ComptaCalc::selectCostLot(date('Y-m-d'), $lots);
             $items[] = [
                 'name'         => $name,

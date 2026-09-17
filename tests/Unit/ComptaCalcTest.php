@@ -71,17 +71,16 @@ final class ComptaCalcTest extends TestCase
         self::assertSame(0.60, (float) $lotJune['cost_price']);
     }
 
-    public function test_vente_avant_le_premier_lot_utilise_le_premier_lot(): void
+    public function test_vente_avant_le_premier_lot_cout_inconnu(): void
     {
         $lots = [
             ['valid_from' => '2026-06-01', 'valid_to' => '2026-07-01', 'cost_price' => 0.60],
         ];
 
-        // Vente AVANT le premier lot → lot le plus ancien connu (jamais null,
-        // jamais un lot postérieur : créer un lot ne réécrit pas le passé).
-        $lot = ComptaCalc::selectCostLot('2026-05-01', $lots);
-        self::assertNotNull($lot);
-        self::assertSame(0.60, (float) $lot['cost_price']);
+        // Vente AVANT le premier lot → coût inconnu (null) : coût inconnu
+        // avant le premier lot = 0 (pas de rétroactivité).
+        self::assertNull(ComptaCalc::selectCostLot('2026-05-01', $lots));
+        self::assertNull(ComptaCalc::costAt('2026-05-01', $lots));
 
         // Le jour de valid_to (borne incluse) → toujours couvert.
         self::assertSame(0.60, ComptaCalc::costAt('2026-07-01', $lots));
@@ -111,8 +110,8 @@ final class ComptaCalcTest extends TestCase
             ['valid_from' => '2026-09-17', 'valid_to' => null, 'cost_price' => 0.80],
         ];
 
-        // Avant création : ventes du 10/09 valorisées au lot le plus ancien.
-        self::assertSame(0.80, ComptaCalc::costAt('2026-09-10', $lotsAvant));
+        // Ventes du 10/09 antérieures au premier lot → coût inconnu (null).
+        self::assertNull(ComptaCalc::costAt('2026-09-10', $lotsAvant));
 
         // Création d'un lot POSTÉRIEUR (20/09)…
         $lotsApres = [
@@ -120,8 +119,9 @@ final class ComptaCalcTest extends TestCase
             ['valid_from' => '2026-09-17', 'valid_to' => '2026-09-19', 'cost_price' => 0.80],
         ];
 
-        // …les ventes antérieures gardent EXACTEMENT le même coût.
-        self::assertSame(0.80, ComptaCalc::costAt('2026-09-10', $lotsApres));
+        // …les ventes antérieures au 1er lot gardent EXACTEMENT le même
+        // coût inconnu (null → 0) : jamais rétroactif.
+        self::assertNull(ComptaCalc::costAt('2026-09-10', $lotsApres));
         self::assertSame(0.80, ComptaCalc::costAt('2026-09-17', $lotsApres));
         self::assertSame(0.80, ComptaCalc::costAt('2026-09-19', $lotsApres));
 
@@ -142,8 +142,8 @@ final class ComptaCalcTest extends TestCase
         ];
 
         self::assertSame(0.60, ComptaCalc::costAt('2026-06-15', $lots));
-        // Vente antérieure au premier lot → lot le plus ancien (0,60).
-        self::assertSame(0.60, ComptaCalc::costAt('2026-05-15', $lots));
+        // Vente antérieure au premier lot → coût inconnu (null → 0).
+        self::assertNull(ComptaCalc::costAt('2026-05-15', $lots));
     }
 
     public function test_moyenne_mobile_3_mois(): void

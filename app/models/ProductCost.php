@@ -38,12 +38,12 @@ final class ProductCost extends Model
      *     date <= valid_to), le plus récent ;
      *  2. sinon (trou / après le dernier lot) le lot précédent, c'est-à-dire
      *     le plus récent avec valid_from <= date ;
-     *  3. sinon (date antérieure au premier lot) le lot le plus ancien connu.
+     *  3. sinon (date antérieure au premier lot) null : coût inconnu avant
+     *     le premier lot = 0 (pas de rétroactivité).
      *
      * Aux étapes 1-2, jamais un lot dont valid_from est postérieur à la
      * date : créer un lot ne modifie pas rétroactivement les calculs des
-     * ventes déjà couvertes. L'étape 3 est le cas voulu « vente antérieure
-     * au premier lot → premier lot connu ».
+     * ventes déjà couvertes.
      *
      * @return array<string,mixed>|null
      */
@@ -66,24 +66,13 @@ final class ProductCost extends Model
         }
 
         // 2) Lot précédent (trou entre deux lots, ou après le dernier).
+        //    Aucun lot antérieur → null (vente avant le premier lot).
         $stmt = $pdo->prepare(
             'SELECT * FROM product_costs
              WHERE product_key = ? AND valid_from <= ?
              ORDER BY valid_from DESC LIMIT 1'
         );
         $stmt->execute([$productKey, $day]);
-        $row = $stmt->fetch();
-        if ($row !== false) {
-            return $row;
-        }
-
-        // 3) Lot le plus ancien connu (date antérieure au premier lot).
-        $stmt = $pdo->prepare(
-            'SELECT * FROM product_costs
-             WHERE product_key = ?
-             ORDER BY valid_from ASC LIMIT 1'
-        );
-        $stmt->execute([$productKey]);
         $row = $stmt->fetch();
 
         return $row !== false ? $row : null;

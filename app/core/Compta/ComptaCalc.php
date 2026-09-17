@@ -147,13 +147,14 @@ final class ComptaCalc
      *  2. sinon — vente dans un « trou » entre deux lots, ou après la fin
      *     du dernier lot — le lot précédent : le plus récent dont
      *     valid_from <= date ;
-     *  3. sinon — vente antérieure au premier lot — le lot le plus ancien
-     *     connu (jamais un lot postérieur à la vente).
+     *  3. sinon — vente antérieure au premier lot — null : coût inconnu
+     *     avant le premier lot = 0 (pas de rétroactivité).
      *
      * @param list<array<string,mixed>> $lots Chaque lot doit contenir
      *                                        'valid_from', 'valid_to' (nullable),
      *                                        'cost_price', etc.
-     * @return array<string,mixed>|null Le lot retenu, ou null si aucun lot.
+     * @return array<string,mixed>|null Le lot retenu, ou null si aucun lot
+     *                                  couvrant ni antérieur.
      */
     public static function selectCostLot(string $date, array $lots): ?array
     {
@@ -163,18 +164,11 @@ final class ComptaCalc
         $coveredFrom = '';
         $prior = null;      // lot le plus récent avec valid_from <= date
         $priorFrom = '';
-        $oldest = null;     // lot le plus ancien de tous
-        $oldestFrom = '';
 
         foreach ($lots as $lot) {
             $from = self::datePart((string) ($lot['valid_from'] ?? ''));
             if ($from === '') {
                 continue;
-            }
-
-            if ($oldest === null || $from < $oldestFrom) {
-                $oldest = $lot;
-                $oldestFrom = $from;
             }
 
             // Jamais un lot dont valid_from est postérieur à la date.
@@ -197,7 +191,7 @@ final class ComptaCalc
             }
         }
 
-        return $covered ?? $prior ?? $oldest;
+        return $covered ?? $prior;
     }
 
     /**
