@@ -137,43 +137,67 @@ final class ComptaCalc
     }
 
     /**
-     * Sélectionne le lot de coût valide à une date donnée.
+     * Sélectionne le lot de coût applicable à une date donnée — règle
+     * « as-of » : le coût d'une vente est celui du lot valable À LA DATE de
+     * la vente, jamais un lot créé après coup (pas de rétroactivité).
      *
-     * Un lot est valide si : valid_from <= date ET (valid_to est NULL
-     * OU date < valid_to). En cas de lots chevauchants, on retient celui dont
-     * le valid_from est le plus récent (le plus précis pour la période).
+     * Ordre de sélection :
+     *  1. lot couvrant la date : valid_from <= date ET (valid_to est NULL
+     *     OU date <= valid_to) → le plus récent (valid_from max) ;
+     *  2. sinon — vente dans un « trou » entre deux lots, ou après la fin
+     *     du dernier lot — le lot précédent : le plus récent dont
+     *     valid_from <= date ;
+     *  3. sinon — vente antérieure au premier lot — le lot le plus ancien
+     *     connu (jamais un lot postérieur à la vente).
      *
      * @param list<array<string,mixed>> $lots Chaque lot doit contenir
      *                                        'valid_from', 'valid_to' (nullable),
      *                                        'cost_price', etc.
-     * @return array<string,mixed>|null Le lot retenu, ou null si aucun valide.
+     * @return array<string,mixed>|null Le lot retenu, ou null si aucun lot.
      */
     public static function selectCostLot(string $date, array $lots): ?array
     {
         $day = self::datePart($date);
 
-        $best = null;
-        $bestFrom = '';
+        $covered = null;    // lot couvrant la date, valid_from max
+        $coveredFrom = '';
+        $prior = null;      // lot le plus récent avec valid_from <= date
+        $priorFrom = '';
+        $oldest = null;     // lot le plus ancien de tous
+        $oldestFrom = '';
 
         foreach ($lots as $lot) {
             $from = self::datePart((string) ($lot['valid_from'] ?? ''));
-            if ($from === '' || $from > $day) {
+            if ($from === '') {
                 continue;
+            }
+
+            if ($oldest === null || $from < $oldestFrom) {
+                $oldest = $lot;
+                $oldestFrom = $from;
+            }
+
+            // Jamais un lot dont valid_from est postérieur à la date.
+            if ($from > $day) {
+                continue;
+            }
+
+            if ($prior === null || $from > $priorFrom) {
+                $prior = $lot;
+                $priorFrom = $from;
             }
 
             $toRaw = $lot['valid_to'] ?? null;
             $to = $toRaw === null ? null : self::datePart((string) $toRaw);
-            if ($to !== null && $day >= $to) {
-                continue;
-            }
-
-            if ($best === null || $from > $bestFrom) {
-                $best = $lot;
-                $bestFrom = $from;
+            if ($to === null || $day <= $to) {
+                if ($covered === null || $from > $coveredFrom) {
+                    $covered = $lot;
+                    $coveredFrom = $from;
+                }
             }
         }
 
-        return $best;
+        return $covered ?? $prior ?? $oldest;
     }
 
     /**

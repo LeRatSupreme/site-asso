@@ -33,42 +33,82 @@ final class ProductCost extends Model
     }
 
     /**
-     * Coût unitaire applicable à un produit à une date donnée.
+     * Lot applicable à un produit à une date donnée — règle « as-of » :
+     *  1. lot couvrant la date (valid_from <= date ET valid_to NULL ou
+     *     date <= valid_to), le plus récent ;
+     *  2. sinon (trou / après le dernier lot) le lot précédent, c'est-à-dire
+     *     le plus récent avec valid_from <= date ;
+     *  3. sinon (date antérieure au premier lot) le lot le plus ancien connu.
+     *
+     * Aux étapes 1-2, jamais un lot dont valid_from est postérieur à la
+     * date : créer un lot ne modifie pas rétroactivement les calculs des
+     * ventes déjà couvertes. L'étape 3 est le cas voulu « vente antérieure
+     * au premier lot → premier lot connu ».
+     *
+     * @return array<string,mixed>|null
      */
-    public static function costAt(string $productKey, string $date): ?string
+    public static function lotAt(string $productKey, string $date): ?array
     {
-        $stmt = self::pdo()->prepare(
-            'SELECT cost_price FROM product_costs
-             WHERE product_key = ?
-               AND valid_from <= ?
-               AND (valid_to IS NULL OR ? < valid_to)
-             ORDER BY valid_from DESC
-             LIMIT 1'
-        );
-        // Comparaison sur la partie DATE uniquement.
         $day = substr($date, 0, 10);
+        $pdo = self::pdo();
+
+        // 1) Lot couvrant la date, le plus récent.
+        $stmt = $pdo->prepare(
+            'SELECT * FROM product_costs
+             WHERE product_key = ? AND valid_from <= ?
+               AND (valid_to IS NULL OR ? <= valid_to)
+             ORDER BY valid_from DESC LIMIT 1'
+        );
         $stmt->execute([$productKey, $day, $day]);
         $row = $stmt->fetch();
+        if ($row !== false) {
+            return $row;
+        }
 
-        return $row ? (string) $row['cost_price'] : null;
+        // 2) Lot précédent (trou entre deux lots, ou après le dernier).
+        $stmt = $pdo->prepare(
+            'SELECT * FROM product_costs
+             WHERE product_key = ? AND valid_from <= ?
+             ORDER BY valid_from DESC LIMIT 1'
+        );
+        $stmt->execute([$productKey, $day]);
+        $row = $stmt->fetch();
+        if ($row !== false) {
+            return $row;
+        }
+
+        // 3) Lot le plus ancien connu (date antérieure au premier lot).
+        $stmt = $pdo->prepare(
+            'SELECT * FROM product_costs
+             WHERE product_key = ?
+             ORDER BY valid_from ASC LIMIT 1'
+        );
+        $stmt->execute([$productKey]);
+        $row = $stmt->fetch();
+
+        return $row !== false ? $row : null;
     }
 
     /**
-     * Lot actuellement en cours (valid_to IS NULL) pour un produit.
+     * Coût unitaire applicable à un produit à une date donnée
+     * (même règle « as-of » que lotAt()).
+     */
+    public static function costAt(string $productKey, string $date): ?string
+    {
+        $lot = self::lotAt($productKey, $date);
+
+        return $lot === null ? null : (string) $lot['cost_price'];
+    }
+
+    /**
+     * Lot actuellement en cours pour un produit : le lot applicable à
+     * aujourd'hui (même règle « as-of », date = aujourd'hui).
      *
      * @return array<string,mixed>|null
      */
     public static function current(string $productKey): ?array
     {
-        $stmt = self::pdo()->prepare(
-            'SELECT * FROM product_costs
-             WHERE product_key = ? AND valid_to IS NULL
-             ORDER BY valid_from DESC LIMIT 1'
-        );
-        $stmt->execute([$productKey]);
-        $row = $stmt->fetch();
-
-        return $row ?: null;
+        return self::lotAt($productKey, date('Y-m-d'));
     }
 
     /**

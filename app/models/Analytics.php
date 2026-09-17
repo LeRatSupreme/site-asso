@@ -20,24 +20,40 @@ final class Analytics extends Model
     protected static string $table = 'sales';
 
     /**
-     * Coût unitaire applicable à une vente (lot valide à la date de la vente).
-     * Renvoie 0 si aucun lot n'est défini pour le produit.
-     *
-     * Reproduction fidèle du sous-requête de Sale::COST_SUBQUERY.
+     * Coût unitaire applicable à une vente — le lot valable À LA DATE de la
+     * vente (jamais rétroactif). Renvoie NULL si aucun lot n'est défini pour
+     * le produit. Reproduction fidèle du fragment Sale::COST_SUBQUERY :
+     *  1. lot couvrant la vente, le plus récent ;
+     *  2. sinon le lot précédent (trou entre deux lots / après le dernier) ;
+     *  3. sinon le lot le plus ancien (vente antérieure au premier lot).
      */
     private const COST_SUBQUERY = '
-        SELECT pc.cost_price
-        FROM product_costs pc
-        WHERE pc.product_key = COALESCE(sales.product_key, sales.description)
-        ORDER BY
-            CASE
-                WHEN pc.valid_from <= DATE(sales.sold_at)
-                     AND (pc.valid_to IS NULL OR DATE(sales.sold_at) < pc.valid_to)
-                THEN 0
-                ELSE 1
-            END,
-            pc.valid_from DESC
-        LIMIT 1';
+        COALESCE(
+            (
+                SELECT pc.cost_price
+                FROM product_costs pc
+                WHERE pc.product_key = COALESCE(sales.product_key, sales.description)
+                  AND pc.valid_from <= DATE(sales.sold_at)
+                  AND (pc.valid_to IS NULL OR DATE(sales.sold_at) <= pc.valid_to)
+                ORDER BY pc.valid_from DESC
+                LIMIT 1
+            ),
+            (
+                SELECT pc.cost_price
+                FROM product_costs pc
+                WHERE pc.product_key = COALESCE(sales.product_key, sales.description)
+                  AND pc.valid_from <= DATE(sales.sold_at)
+                ORDER BY pc.valid_from DESC
+                LIMIT 1
+            ),
+            (
+                SELECT pc.cost_price
+                FROM product_costs pc
+                WHERE pc.product_key = COALESCE(sales.product_key, sales.description)
+                ORDER BY pc.valid_from ASC
+                LIMIT 1
+            )
+        )';
 
     /**
      * Construit la clause WHERE de fenêtre + filtres optionnels.
@@ -550,11 +566,37 @@ final class Analytics extends Model
     {
         $months = max(1, $months);
 
-        $sql = 'SELECT COALESCE(SUM(ps.stock * IFNULL(pc.cost_price, 0)), 0) AS value
-                FROM product_stocks ps
-                LEFT JOIN product_costs pc ON pc.product_key = ps.product_key
-                   AND (pc.valid_to IS NULL OR pc.valid_to > CURDATE())
-                ORDER BY pc.valid_from DESC';
+        // Coût actuel par produit : même règle « as-of » que COST_SUBQUERY,
+        // à la date du jour (lot couvrant, sinon lot précédent, sinon le
+        // plus ancien — jamais un lot futur).
+        $sql = 'SELECT COALESCE(SUM(ps.stock * COALESCE(
+                    (
+                        SELECT pc.cost_price
+                        FROM product_costs pc
+                        WHERE pc.product_key = ps.product_key
+                          AND pc.valid_from <= CURDATE()
+                          AND (pc.valid_to IS NULL OR CURDATE() <= pc.valid_to)
+                        ORDER BY pc.valid_from DESC
+                        LIMIT 1
+                    ),
+                    (
+                        SELECT pc.cost_price
+                        FROM product_costs pc
+                        WHERE pc.product_key = ps.product_key
+                          AND pc.valid_from <= CURDATE()
+                        ORDER BY pc.valid_from DESC
+                        LIMIT 1
+                    ),
+                    (
+                        SELECT pc.cost_price
+                        FROM product_costs pc
+                        WHERE pc.product_key = ps.product_key
+                        ORDER BY pc.valid_from ASC
+                        LIMIT 1
+                    ),
+                    0
+                )), 0) AS value
+                FROM product_stocks ps';
 
         try {
             $value = (float) (self::pdo()->query($sql)->fetchColumn() ?: 0);
