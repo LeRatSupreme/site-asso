@@ -47,7 +47,13 @@ $otpauth = $secret !== '' ? Totp::uri($secret, (string) ($user['email'] ?? '')) 
             <p class="card-meta">Ou scannez / ouvrez ce lien (otpauth) :</p>
             <p><code class="totp-uri"><?= e($otpauth) ?></code></p>
 
+            <form method="post" action="<?= e(url('/account/2fa/regenerate')) ?>" data-confirm="Générer une nouvelle clé ? L'ancienne clé ci-dessus cessera de fonctionner.">
+                <?= csrf_field() ?>
+                <button type="submit" class="btn btn-outline">Générer une nouvelle clé</button>
+            </form>
+
             <h2 class="card-title">2. Confirmez avec un code</h2>
+            <p class="card-meta">Le code est refusé ? Vérifie que l'horloge de ton téléphone est en réglage automatique et saisis un code frais (régénéré il y a moins de 30 s).</p>
             <form method="post" action="<?= e(url('/account/2fa/confirm')) ?>">
                 <?= csrf_field() ?>
                 <div class="field">

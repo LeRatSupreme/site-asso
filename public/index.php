@@ -83,7 +83,7 @@ if (!APP_TESTING
 // des flux admin sans activer le 2FA au préalable.
 if (!APP_TESTING && Auth::check()) {
     $role = (string) Auth::role();
-    $allowed2fa = ['/account/2fa/setup', '/account/2fa/confirm', '/account/2fa/disable', '/logout'];
+    $allowed2fa = ['/account/2fa/setup', '/account/2fa/confirm', '/account/2fa/regenerate', '/account/2fa/disable', '/logout'];
     if (TwoFactorPolicy::requires($role)
         && !TwoFactor::isEnabled((string) Auth::id())
         && !in_array($path, $allowed2fa, true)

@@ -112,6 +112,7 @@ function aeic_register_routes(Router $router): void
     $router->post('/login/verify', [TwoFactorController::class, 'verify']);
     $router->get('/account/2fa/setup', [TwoFactorController::class, 'setupForm']);
     $router->post('/account/2fa/confirm', [TwoFactorController::class, 'setupConfirm']);
+    $router->post('/account/2fa/regenerate', [TwoFactorController::class, 'setupRegenerate']);
     $router->post('/account/2fa/disable', [TwoFactorController::class, 'disable']);
 
     // Espace compte (RGPD).

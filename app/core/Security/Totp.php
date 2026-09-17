@@ -44,12 +44,16 @@ final class Totp
         return self::hotp($secret, $counter);
     }
 
+    /** Fenêtre de tolérance par défaut : ±2 pas (90 s), les horloges des
+     * téléphones dérivent souvent de quelques dizaines de secondes. */
+    public const DEFAULT_WINDOW = 2;
+
     /**
      * Vérifie un code en acceptant une fenêtre de tolérance (± `window` pas).
      *
      * @param int $window Nombre de pas de tolérance avant/après (0 = strict).
      */
-    public static function verify(string $secret, string $code, int $window = 1, ?int $timestamp = null): bool
+    public static function verify(string $secret, string $code, int $window = self::DEFAULT_WINDOW, ?int $timestamp = null): bool
     {
         if (strlen($code) !== self::DIGITS || !ctype_digit($code)) {
             return false;

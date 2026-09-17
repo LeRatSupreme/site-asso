@@ -81,6 +81,48 @@ final class TwoFactor extends Model
     }
 
     /**
+     * Renvoie le secret TOTP en attente de confirmation (2FA non activé),
+     * déchiffré — ou null s'il n'y en a pas.
+     *
+     * C'est la source de vérité du flux de configuration : la page setup
+     * l'affiche et la confirmation le vérifie, ce qui garantit que le secret
+     * affiché est bien celui contre lequel le code est comparé, même si la
+     * session change (nouvel onglet, session reconstruite).
+     */
+    public static function pendingSecret(string $userId): ?string
+    {
+        $row = self::forUser($userId);
+        if ($row === null || (int) ($row['enabled']) === 1 || empty($row['secret'])) {
+            return null;
+        }
+
+        $secret = self::decryptStored((string) $row['secret']);
+
+        return $secret !== '' ? $secret : null;
+    }
+
+    /**
+     * Régénère uniquement les codes de récupération (le secret TOTP reste
+     * inchangé) — utilisé quand les codes en clair ont été perdus (session
+     * expirée) alors qu'un setup est déjà en cours.
+     *
+     * @return list<string>
+     */
+    public static function regenerateRecoveryCodes(string $userId): array
+    {
+        $recovery = RecoveryCodes::generate();
+        $json = json_encode(RecoveryCodes::hash($recovery), JSON_UNESCAPED_UNICODE);
+        if (Crypto::available()) {
+            $json = Crypto::encrypt($json);
+        }
+
+        $stmt = static::pdo()->prepare('UPDATE two_factor SET recovery_codes = ? WHERE user_id = ?');
+        $stmt->execute([$json, $userId]);
+
+        return $recovery;
+    }
+
+    /**
      * Confirme l'activation après vérification d'un code valide.
      */
     public static function enable(string $userId): void

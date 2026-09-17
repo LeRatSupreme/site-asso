@@ -72,6 +72,18 @@ final class TotpTest extends TestCase
         self::assertFalse(Totp::verify($secret, $old, 1));
     }
 
+    public function test_fenetre_par_defaut_accepte_deux_pas_d_ecart(): void
+    {
+        $secret = Totp::generateSecret();
+        $t = 1800000000;
+
+        // Fenêtre par défaut = ±2 pas (90 s) : codes à -60 s et +60 s acceptés.
+        self::assertTrue(Totp::verify($secret, Totp::code($secret, $t - 60), timestamp: $t));
+        self::assertTrue(Totp::verify($secret, Totp::code($secret, $t + 60), timestamp: $t));
+        // À -90 s (3 pas) : refusé même avec la fenêtre par défaut.
+        self::assertFalse(Totp::verify($secret, Totp::code($secret, $t - 90), timestamp: $t));
+    }
+
     public function test_base32_round_trip(): void
     {
         $data = random_bytes(20);
