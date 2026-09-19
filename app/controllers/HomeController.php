@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Controllers;
 
+use App\Core\Compta\StockPublic;
 use App\Core\Controller;
 use App\Models\Event;
 use App\Models\Product;
@@ -57,6 +58,11 @@ final class HomeController extends Controller
      * Construit la carte de la cafétéria : catégories actives avec leurs
      * produits disponibles (is_active = 1 ET is_available = 1).
      *
+     * Le stock affiché est le stock THÉORIQUE issu de l'inventaire compta
+     * (cache 5 min, voir StockPublic::menuStockMap()) apparié au nom du
+     * produit ; `menu_stock` vaut null quand aucune clé d'inventaire ne
+     * correspond (aucun repli sur products.stock, obsolète).
+     *
      * @return list<array<string,mixed>>
      */
     private function buildMenu(): array
@@ -67,6 +73,7 @@ final class HomeController extends Controller
         }
 
         $products = Product::available();
+        $stockMap = StockPublic::menuStockMap();
 
         $byCat = [];
         foreach ($products as $product) {
@@ -74,6 +81,10 @@ final class HomeController extends Controller
             if ($catId === '') {
                 continue;
             }
+            $product['menu_stock'] = StockPublic::stockForMenuProduct(
+                (string) ($product['name'] ?? ''),
+                $stockMap
+            );
             $byCat[$catId][] = $product;
         }
 
