@@ -9,10 +9,29 @@ use App\Core\Permissions;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Tests de la matrice rôles → modules de l'espace d'administration.
+ * Tests de la matrice rôles → modules de l'espace d'administration
+ * et de la liste SYSTEM_ADMINS (groupe « Système »).
  */
 final class PermissionsTest extends TestCase
 {
+    /** Valeur de SYSTEM_ADMINS avant le test (null = variable absente). */
+    private ?string $systemAdminsBackup;
+
+    protected function setUp(): void
+    {
+        $backup = getenv('SYSTEM_ADMINS');
+        $this->systemAdminsBackup = $backup === false ? null : $backup;
+    }
+
+    protected function tearDown(): void
+    {
+        if ($this->systemAdminsBackup === null) {
+            putenv('SYSTEM_ADMINS');
+        } else {
+            putenv('SYSTEM_ADMINS=' . $this->systemAdminsBackup);
+        }
+    }
+
     public function test_admin_a_tous_les_modules(): void
     {
         foreach (Permissions::roleModules()[Auth::ROLE_ADMIN] as $module) {
@@ -64,5 +83,33 @@ final class PermissionsTest extends TestCase
             [Permissions::MODULE_COMPTA, Permissions::MODULE_EVENTS, Permissions::MODULE_CONTENT, Permissions::MODULE_CAFETERIA, Permissions::MODULE_GAMES],
             array_values(array_unique($all))
         );
+    }
+
+    public function test_system_admins_absente_ou_vide_aucun_acces(): void
+    {
+        putenv('SYSTEM_ADMINS');
+        self::assertFalse(Permissions::isSystemAdmin('admin@aeic.fr'));
+
+        putenv('SYSTEM_ADMINS=');
+        self::assertFalse(Permissions::isSystemAdmin('admin@aeic.fr'));
+        self::assertFalse(Permissions::isSystemAdmin());
+    }
+
+    public function test_system_admins_email_liste_insensible_casse_et_espaces(): void
+    {
+        putenv('SYSTEM_ADMINS= Adrien.Remond@ProtonMail.com , autre@aeic.fr');
+
+        self::assertTrue(Permissions::isSystemAdmin('adrien.remond@protonmail.com'));
+        self::assertTrue(Permissions::isSystemAdmin('  ADRIEN.REMOND@PROTONMAIL.COM '));
+        self::assertFalse(Permissions::isSystemAdmin('intrus@aeic.fr'));
+    }
+
+    public function test_system_admins_entrees_vides_ignorees(): void
+    {
+        putenv('SYSTEM_ADMINS=a@b.fr ,,');
+
+        self::assertTrue(Permissions::isSystemAdmin('a@b.fr'));
+        self::assertFalse(Permissions::isSystemAdmin(''));
+        self::assertFalse(Permissions::isSystemAdmin(null));
     }
 }

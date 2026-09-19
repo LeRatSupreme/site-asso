@@ -12,8 +12,10 @@ use App\Core\Permissions;
 /**
  * Contrôleur de base de l'espace d'administration.
  *
- * Trois niveaux d'accès :
- *  - guard()          : réservé à ADMIN (utilisateurs, paramètres, adhésions…) ;
+ * Quatre niveaux d'accès :
+ *  - guard()          : réservé à ADMIN (inventaire…) ;
+ *  - guardSystem()    : ADMIN explicitement autorisé via SYSTEM_ADMINS
+ *                      (utilisateurs, paramètres, adhésions…) ;
  *  - guardModule(x)   : ADMIN + rôles auxquels le module x est ouvert
  *                      (voir App\Core\Permissions) ;
  *  - guardAdminArea() : tout rôle ayant accès à au moins un module
@@ -29,6 +31,25 @@ abstract class AdminBaseController extends Controller
     protected function guard(): array
     {
         Middleware::requireRole([Auth::ROLE_ADMIN]);
+
+        return Auth::user();
+    }
+
+    /**
+     * Garde-fou du groupe « Système » (Utilisateurs, Paramètres, adhésions) :
+     * ADMIN et explicitement autorisé par la liste SYSTEM_ADMINS
+     * (voir Permissions::isSystemAdmin()). Liste absente ou vide : aucun
+     * accès, y compris pour un ADMIN non listé.
+     *
+     * @return array<string,mixed>
+     */
+    protected function guardSystem(): array
+    {
+        Middleware::requireRole([Auth::ROLE_ADMIN]);
+
+        if (!Permissions::isSystemAdmin()) {
+            Middleware::forbidden();
+        }
 
         return Auth::user();
     }

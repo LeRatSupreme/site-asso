@@ -13,6 +13,7 @@ declare(strict_types=1);
  */
 
 use App\Core\Auth;
+use App\Core\Permissions;
 use App\Models\Setting;
 
 $siteName    = Setting::get('site_name', 'AEIC');
@@ -70,20 +71,30 @@ $sections = [
         'Pertes'         => '/admin/compta/pertes',
         'Réappro'        => '/admin/compta/reappro',
     ],
-    'Système' => [
-        'Utilisateurs' => '/admin/users',
-        'Paramètres'  => '/admin/settings',
-    ],
 ];
 
-// Le rôle TRESORERIE n'a accès qu'aux modules comptabilité.
-if (($user['role'] ?? null) === 'TRESORERIE') {
+// Groupe « Système » (Utilisateurs, Paramètres) : réservé aux ADMIN
+// explicitement autorisés par SYSTEM_ADMINS (voir Permissions::isSystemAdmin()
+// et AdminBaseController::guardSystem()). Liste vide : groupe masqué pour tous.
+if (($user['role'] ?? null) === Auth::ROLE_ADMIN && Permissions::isSystemAdmin()) {
+    $sections['Système'] = [
+        'Utilisateurs' => '/admin/users',
+        'Paramètres'  => '/admin/settings',
+    ];
+}
+
+// Le rôle TRESORERIE n'a accès qu'aux modules comptabilité, hors inventaire
+// (réservé à ADMIN).
+if (($user['role'] ?? null) === Auth::ROLE_TRESORERIE) {
+    $stock = $sections['Stock'];
+    unset($stock['Inventaire']);
+
     $sections = [
         'Comptabilité' => $sections['Comptabilité'],
         'Ventes' => $sections['Ventes'],
         'Produits & coûts' => $sections['Produits & coûts'],
         'Trésorerie' => $sections['Trésorerie'],
-        'Stock' => $sections['Stock'],
+        'Stock' => $stock,
     ];
 }
 ?>

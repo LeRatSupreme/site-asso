@@ -52,10 +52,18 @@ final class Middleware
         }
 
         if ($status === self::FORBIDDEN) {
-            http_response_code(403);
-            echo '<h1>Erreur 403 — Accès refusé.</h1>';
-            exit;
+            self::forbidden();
         }
+    }
+
+    /**
+     * Réponse 403 uniforme des garde-fous (accès refusé).
+     */
+    public static function forbidden(): never
+    {
+        http_response_code(403);
+        echo '<h1>Erreur 403 — Accès refusé.</h1>';
+        exit;
     }
 
     /** Statuts de décision d'accès (testables sans effet de bord). */

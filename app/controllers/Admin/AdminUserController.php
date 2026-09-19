@@ -24,7 +24,7 @@ final class AdminUserController extends AdminBaseController
 {
     public function index(): void
     {
-        $this->guard();
+        $this->guardSystem();
 
         $this->renderAdmin('admin/users/index', [
             'title'        => 'Utilisateurs',
@@ -40,7 +40,7 @@ final class AdminUserController extends AdminBaseController
      */
     public function changeRole(string $id): void
     {
-        $this->guard();
+        $this->guardSystem();
 
         $target = User::find($id);
         if ($target === null) {
@@ -78,7 +78,7 @@ final class AdminUserController extends AdminBaseController
      */
     public function toggleActive(string $id): void
     {
-        $this->guard();
+        $this->guardSystem();
 
         $target = User::find($id);
         if ($target === null) {
@@ -113,7 +113,7 @@ final class AdminUserController extends AdminBaseController
      */
     public function resetPassword(string $id): void
     {
-        $this->guard();
+        $this->guardSystem();
 
         $target = User::find($id);
         if ($target === null) {
@@ -192,7 +192,7 @@ final class AdminUserController extends AdminBaseController
      */
     public function delete(string $id): void
     {
-        $this->guard();
+        $this->guardSystem();
 
         $target = User::find($id);
         if ($target === null) {
