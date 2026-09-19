@@ -123,8 +123,9 @@ $allPromoEmpty = empty($promotions);
                         $emoji = product_emoji((string) ($product['name'] ?? ''));
                         $img   = trim((string) ($product['image'] ?? ''));
                         $imgUrl = $img !== '' ? (is_absolute_url($img) ? $img : asset(ltrim($img, '/'))) : '';
+                        $isOut = (int) ($product['stock'] ?? 0) <= 0;
                         ?>
-                        <article class="menu-item surface glass" data-cat="<?= e((string) $cat['id']) ?>">
+                        <article class="menu-item surface glass<?= $isOut ? ' is-out' : '' ?>" data-cat="<?= e((string) $cat['id']) ?>">
                             <?php if ($imgUrl !== ''): ?>
                                 <img src="<?= e($imgUrl) ?>" alt="" class="menu-item-img" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='';">
                                 <span class="menu-item-emoji" aria-hidden="true" style="display:none;"><?= e($emoji) ?></span>
@@ -133,6 +134,9 @@ $allPromoEmpty = empty($promotions);
                             <?php endif; ?>
                             <span class="menu-item-name"><?= e($name) ?></span>
                             <span class="menu-item-price"><?= e(formatPrice($product['price'] ?? 0)) ?></span>
+                            <?php if ($isOut): ?>
+                                <span class="badge badge-danger">Épuisé</span>
+                            <?php endif; ?>
                         </article>
                     <?php endforeach; ?>
                 <?php endforeach; ?>

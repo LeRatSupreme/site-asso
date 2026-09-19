@@ -514,6 +514,15 @@
     color: var(--primary);
     font-size: 1.05rem;
 }
+.menu-item.is-out {
+    opacity: 0.55;
+    filter: grayscale(0.85);
+}
+.menu-item.is-out:hover {
+    transform: none;
+    border-color: var(--border);
+}
+.menu-item.is-out .badge { margin-top: 0.15rem; }
 
 .menu-empty-results {
     text-align: center;

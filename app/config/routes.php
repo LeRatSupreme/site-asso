@@ -127,6 +127,12 @@ function aeic_register_routes(Router $router): void
     $router->get('/eleve/profile', [StudentController::class, 'profile']);
     $router->post('/eleve/profile', [StudentController::class, 'updateProfile']);
     $router->get('/eleve/inscriptions', [StudentController::class, 'inscriptions']);
+    $router->get('/eleve/commandes', [StudentController::class, 'commandes']);
+    $router->get('/eleve/cafeteria', [StudentController::class, 'cafeteria']);
+    $router->post('/eleve/cafeteria/add', [StudentController::class, 'cartAdd']);
+    $router->post('/eleve/cafeteria/remove', [StudentController::class, 'cartRemove']);
+    $router->post('/eleve/cafeteria/checkout', [StudentController::class, 'checkout']);
+    $router->post('/eleve/cafeteria/clear', [StudentController::class, 'cartClear']);
 
     // Pages d'erreur.
     $router->notFound([PageController::class, 'notFound']);
