@@ -123,4 +123,40 @@ final class Permissions
 
         return $roles;
     }
+
+    /**
+     * Indique si l'administrateur connecté (ou l'email fourni) est explicitement
+     * autorisé à accéder au groupe « Système » (Utilisateurs, Paramètres,
+     * adhésions) — voir AdminBaseController::guardSystem().
+     *
+     * La liste SYSTEM_ADMINS (variable d'environnement, cf. config.env.example)
+     * contient des emails séparés par des virgules ; la comparaison est faite
+     * en minuscules et sans espaces superflus. Variable absente ou vide :
+     * aucun accès, y compris pour ADMIN.
+     */
+    public static function isSystemAdmin(?string $email = null): bool
+    {
+        $raw = trim((string) getenv('SYSTEM_ADMINS'));
+        if ($raw === '') {
+            return false;
+        }
+
+        $allowed = [];
+        foreach (explode(',', $raw) as $entry) {
+            $entry = mb_strtolower(trim($entry));
+            if ($entry !== '') {
+                $allowed[] = $entry;
+            }
+        }
+
+        if ($allowed === []) {
+            return false;
+        }
+
+        if ($email === null) {
+            $email = (string) (Auth::user()['email'] ?? '');
+        }
+
+        return in_array(mb_strtolower(trim($email)), $allowed, true);
+    }
 }

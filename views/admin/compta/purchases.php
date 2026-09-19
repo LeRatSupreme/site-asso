@@ -40,7 +40,9 @@ declare(strict_types=1);
     <div class="card surface glass kpi">
         <p class="kpi-label">Voir aussi</p>
         <p class="kpi-sub">
-            <a href="<?= e(url('/admin/compta/inventaire')) ?>">Faire un inventaire →</a><br>
+            <?php if (\App\Core\Auth::isAdmin()): ?>
+                <a href="<?= e(url('/admin/compta/inventaire')) ?>">Faire un inventaire →</a><br>
+            <?php endif; ?>
             <a href="<?= e(url('/admin/compta/reappro')) ?>">Calculer le réappro →</a>
         </p>
     </div>

@@ -58,12 +58,16 @@ foreach (array_slice($lossLeaders, 0, 5) as $l) {
 }
 
 if ($invGaps !== []) {
+    // Lien inventaire réservé à ADMIN (TRESORERIE reçoit 403 sur la page).
+    $invLink = \App\Core\Auth::isAdmin()
+        ? ' <a href="' . e(url('/admin/compta/inventaire')) . '">voir l\'inventaire →</a>'
+        : '';
     $alerts[] = [
         'level' => 'warning',
         'html'  => sprintf(
-            '%d écart(s) d\'inventaire sur 30 j (pertes/casses ?) %s',
+            '%d écart(s) d\'inventaire sur 30 j (pertes/casses ?)%s',
             count($invGaps),
-            '<a href="' . e(url('/admin/compta/inventaire')) . '">voir l\'inventaire →</a>'
+            $invLink
         ),
     ];
 }
@@ -203,7 +207,9 @@ if ($reorderAlerts > 0) {
         <a class="btn btn-outline btn-sm" href="<?= e(url('/admin/compta/depenses')) ?>">Dépenses</a>
         <a class="btn btn-outline btn-sm" href="<?= e(url('/admin/compta/budgets')) ?>">Budgets</a>
         <a class="btn btn-outline btn-sm" href="<?= e(url('/admin/compta/achats')) ?>">Achats &amp; stock</a>
-        <a class="btn btn-outline btn-sm" href="<?= e(url('/admin/compta/inventaire')) ?>">Inventaire</a>
+        <?php if (\App\Core\Auth::isAdmin()): ?>
+            <a class="btn btn-outline btn-sm" href="<?= e(url('/admin/compta/inventaire')) ?>">Inventaire</a>
+        <?php endif; ?>
         <a class="btn btn-outline btn-sm" href="<?= e(url('/admin/compta/annuel')) ?>">Rapport annuel</a>
     </p>
 </div>

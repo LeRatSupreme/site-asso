@@ -15,9 +15,11 @@ use App\Models\Sale;
  * Suivi des achats réels et des inventaires.
  *
  * Achats : ce qui a été réellement commandé (alimente le stock théorique).
+ * Réservé aux rôles ADMIN et TRESORERIE (voir guardCompta()).
+ *
  * Inventaire : comptage physique comparé au théorique (dernier comptage +
- * achats − ventes) pour détecter pertes et casses. Réservé aux rôles
- * ADMIN et TRESORERIE (voir guardCompta()).
+ * achats − ventes) pour détecter pertes et casses. Réservé à ADMIN
+ * (voir guard()), TRESORERIE comprise.
  */
 final class AdminStockController extends AdminBaseController
 {
@@ -197,12 +199,12 @@ final class AdminStockController extends AdminBaseController
     }
 
     // -----------------------------------------------------------------
-    //  Inventaire
+    //  Inventaire (réservé à ADMIN, voir guard())
     // -----------------------------------------------------------------
 
     public function inventory(): void
     {
-        $user = $this->guardCompta();
+        $user = $this->guard();
 
         $lastCounts = InventoryCount::lastCountsMap();
         $theoretical = InventoryCount::theoreticalStocksMap();
@@ -248,7 +250,7 @@ final class AdminStockController extends AdminBaseController
 
     public function saveCount(): void
     {
-        $user = $this->guardCompta();
+        $user = $this->guard();
 
         $counts = $_POST['count'] ?? [];
         if (!is_array($counts)) {

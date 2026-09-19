@@ -16,20 +16,37 @@ use PHPUnit\Framework\TestCase;
  * un visiteur est redirigé vers la connexion, un rôle sans le module
  * requis reçoit 403, les rôles autorisés passent.
  *
- * On teste Middleware::resolve() (logique pure, sans redirection réelle).
+ * Le groupe « Système » (Utilisateurs, Paramètres) exige en plus ADMIN dans
+ * la liste SYSTEM_ADMINS (guardSystem = Middleware::resolve + isSystemAdmin).
+ * L'inventaire est passé en ADMIN seul.
+ *
+ * On teste Middleware::resolve() et Permissions::isSystemAdmin() (logique
+ * pure, sans redirection/exit réels).
  */
 final class AdminGuardTest extends TestCase
 {
+    /** Valeur de SYSTEM_ADMINS avant le test (null = variable absente). */
+    private ?string $systemAdminsBackup;
+
     protected function setUp(): void
     {
         if (session_status() === PHP_SESSION_NONE) {
             @session_start();
         }
         $_SESSION = [];
+
+        $backup = getenv('SYSTEM_ADMINS');
+        $this->systemAdminsBackup = $backup === false ? null : $backup;
     }
 
     protected function tearDown(): void
     {
+        if ($this->systemAdminsBackup === null) {
+            putenv('SYSTEM_ADMINS');
+        } else {
+            putenv('SYSTEM_ADMINS=' . $this->systemAdminsBackup);
+        }
+
         $_SESSION = [];
     }
 
@@ -91,5 +108,71 @@ final class AdminGuardTest extends TestCase
     {
         self::assertContains(Auth::ROLE_EVENEMENTS, Permissions::adminRoles());
         self::assertNotContains(Auth::ROLE_ELEVE, Permissions::adminRoles());
+    }
+
+    // -----------------------------------------------------------------
+    //  Groupe « Système » : ADMIN + SYSTEM_ADMINS (guardSystem)
+    // -----------------------------------------------------------------
+
+    public function test_admin_hors_liste_refuse_users_et_settings(): void
+    {
+        putenv('SYSTEM_ADMINS=autre@aeic.fr');
+        $_SESSION['user_id'] = 'adm1';
+        $_SESSION['user_role'] = Auth::ROLE_ADMIN;
+
+        // Le rôle passe, mais l'email n'est pas dans SYSTEM_ADMINS :
+        // guardSystem() renvoie 403 sur /admin/users et /admin/settings.
+        self::assertSame(Middleware::OK, Middleware::resolve([Auth::ROLE_ADMIN]));
+        self::assertFalse(Permissions::isSystemAdmin());
+        self::assertFalse(Permissions::isSystemAdmin('adm1@aeic.fr'));
+    }
+
+    public function test_admin_sans_liste_refuse_users_et_settings(): void
+    {
+        // Liste absente : volontairement, personne n'a accès.
+        putenv('SYSTEM_ADMINS');
+        $_SESSION['user_id'] = 'adm1';
+        $_SESSION['user_role'] = Auth::ROLE_ADMIN;
+
+        self::assertSame(Middleware::OK, Middleware::resolve([Auth::ROLE_ADMIN]));
+        self::assertFalse(Permissions::isSystemAdmin('admin@aeic.fr'));
+    }
+
+    public function test_admin_email_liste_accede_users_et_settings(): void
+    {
+        putenv('SYSTEM_ADMINS=adrien.remond@protonmail.com');
+        $_SESSION['user_id'] = 'adm1';
+        $_SESSION['user_role'] = Auth::ROLE_ADMIN;
+
+        // guardSystem() : rôle OK + email listé → accès.
+        self::assertSame(Middleware::OK, Middleware::resolve([Auth::ROLE_ADMIN]));
+        self::assertTrue(Permissions::isSystemAdmin('Adrien.Remond@ProtonMail.com'));
+    }
+
+    public function test_tresorerie_refuse_users_et_settings_meme_email_liste(): void
+    {
+        putenv('SYSTEM_ADMINS=tresorerie@aeic.fr');
+        $_SESSION['user_id'] = 'tres1';
+        $_SESSION['user_role'] = Auth::ROLE_TRESORERIE;
+
+        // Le rôle TRESORERIE ne suffit pas, l'email listé ne change rien.
+        self::assertSame(Middleware::FORBIDDEN, Middleware::resolve([Auth::ROLE_ADMIN]));
+    }
+
+    // -----------------------------------------------------------------
+    //  Inventaire : ADMIN seul (TRESORERIE garde achats/pertes/réappro)
+    // -----------------------------------------------------------------
+
+    public function test_tresorerie_refuse_inventaire_mais_garde_achats_pertes_reappro(): void
+    {
+        $_SESSION['user_id'] = 'tres1';
+        $_SESSION['user_role'] = Auth::ROLE_TRESORERIE;
+
+        // Inventaire passé en ADMIN seul : 403 pour TRESORERIE.
+        self::assertSame(Middleware::FORBIDDEN, Middleware::resolve([Auth::ROLE_ADMIN]));
+
+        // Achats, pertes, réappro restent dans le module compta : OK.
+        $compta = Permissions::rolesForModule(Permissions::MODULE_COMPTA);
+        self::assertSame(Middleware::OK, Middleware::resolve($compta));
     }
 }

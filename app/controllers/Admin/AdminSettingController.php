@@ -34,7 +34,7 @@ final class AdminSettingController extends AdminBaseController
 
     public function index(): void
     {
-        $this->guard();
+        $this->guardSystem();
 
         $settings = Setting::all();
 
@@ -52,7 +52,7 @@ final class AdminSettingController extends AdminBaseController
 
     public function save(): void
     {
-        $this->guard();
+        $this->guardSystem();
 
         foreach (($_POST['settings'] ?? []) as $key => $value) {
             $key = (string) $key;
@@ -73,7 +73,7 @@ final class AdminSettingController extends AdminBaseController
      */
     public function testEmail(): void
     {
-        $this->guard();
+        $this->guardSystem();
 
         $to = trim((string) ($_POST['test_email'] ?? ''));
 
