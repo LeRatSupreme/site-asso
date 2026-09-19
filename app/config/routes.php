@@ -231,6 +231,7 @@ function aeic_register_routes(Router $router): void
     $router->get('/admin/compta/categories', [AdminComptaController::class, 'categories']);
     $router->get('/admin/compta/couts', [AdminComptaController::class, 'costs']);
     $router->post('/admin/compta/couts/save', [AdminComptaController::class, 'saveCost']);
+    $router->post('/admin/compta/couts/save-bulk', [AdminComptaController::class, 'saveCostsBulk']);
     $router->post('/admin/compta/couts/merge', [AdminComptaController::class, 'mergeProducts']);
     $router->post('/admin/compta/couts/{id}/update', [AdminComptaController::class, 'updateCost']);
     $router->post('/admin/compta/couts/{id}/close', [AdminComptaController::class, 'closeCost']);
@@ -250,7 +251,7 @@ function aeic_register_routes(Router $router): void
     $router->get('/admin/compta/budgets', [AdminBudgetController::class, 'index']);
     $router->post('/admin/compta/budgets/save', [AdminBudgetController::class, 'save']);
     $router->get('/admin/compta/achats', [AdminStockController::class, 'purchases']);
-    $router->post('/admin/compta/achats/save', [AdminStockController::class, 'savePurchase']);
+    $router->post('/admin/compta/achats/save-bulk', [AdminStockController::class, 'savePurchasesBulk']);
     $router->post('/admin/compta/achats/{id}/delete', [AdminStockController::class, 'deletePurchase']);
     $router->get('/admin/compta/inventaire', [AdminStockController::class, 'inventory']);
     $router->post('/admin/compta/inventaire/save', [AdminStockController::class, 'saveCount']);

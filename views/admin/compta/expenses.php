@@ -90,21 +90,24 @@ foreach ($byCategory as $c) {
                 <input type="text" id="amount_ttc" name="amount_ttc" inputmode="decimal" placeholder="ex: 25,90" required>
             </div>
 
-            <div class="field-row">
+            <details style="margin:12px 0;">
+                <summary>Détails (TVA, fournisseur)</summary>
                 <div class="field">
-                    <label for="amount_ht">Montant HT (€) <span class="muted">(optionnel)</span></label>
-                    <input type="text" id="amount_ht" name="amount_ht" inputmode="decimal" placeholder="ex: 21,58">
+                    <label for="vat_rate">Taux de TVA <span class="muted">(optionnel — HT et TVA déduites du TTC)</span></label>
+                    <select id="vat_rate" name="vat_rate">
+                        <option value="">Aucun</option>
+                        <option value="20">20 %</option>
+                        <option value="10">10 %</option>
+                        <option value="5.5">5,5 %</option>
+                        <option value="2.1">2,1 %</option>
+                        <option value="0">0 %</option>
+                    </select>
                 </div>
                 <div class="field">
-                    <label for="vat">TVA (€) <span class="muted">(optionnel)</span></label>
-                    <input type="text" id="vat" name="vat" inputmode="decimal" placeholder="ex: 4,32">
+                    <label for="supplier">Fournisseur <span class="muted">(optionnel)</span></label>
+                    <input type="text" id="supplier" name="supplier" placeholder="ex: Metro…">
                 </div>
-            </div>
-
-            <div class="field">
-                <label for="supplier">Fournisseur <span class="muted">(optionnel)</span></label>
-                <input type="text" id="supplier" name="supplier" placeholder="ex: Metro…">
-            </div>
+            </details>
 
             <div class="form-actions">
                 <button type="submit" class="btn btn-primary">Enregistrer</button>

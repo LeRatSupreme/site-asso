@@ -56,13 +56,27 @@ final class AdminExpenseController extends AdminBaseController
             $category = 'DIVERS';
         }
 
+        // TVA : si un taux est choisi, HT et TVA sont déduites du TTC
+        // (round 2) — plus besoin de saisir les montants à la main.
+        // Aucun taux : écriture sans détail TVA (null).
+        $amountHt = null;
+        $vat = null;
+        $vatRaw = trim((string) ($_POST['vat_rate'] ?? ''));
+        if ($vatRaw !== '') {
+            $rate = parseFrenchFloat($vatRaw);
+            if (in_array($rate, [20.0, 10.0, 5.5, 2.1, 0.0], true)) {
+                $amountHt = round($amountTtc / (1 + $rate / 100), 2);
+                $vat = round($amountTtc - $amountHt, 2);
+            }
+        }
+
         $id = Expense::create([
             'spent_at'   => (string) ($_POST['spent_at'] ?? '') !== '' ? (string) $_POST['spent_at'] : date('Y-m-d'),
             'category'   => $category,
             'label'      => $label,
             'amount_ttc' => $amountTtc,
-            'amount_ht'  => parseFrenchFloat((string) ($_POST['amount_ht'] ?? '')),
-            'vat'        => parseFrenchFloat((string) ($_POST['vat'] ?? '')),
+            'amount_ht'  => $amountHt,
+            'vat'        => $vat,
             'supplier'   => (string) ($_POST['supplier'] ?? ''),
             'notes'      => (string) ($_POST['notes'] ?? ''),
             'created_by' => (string) ($user['id'] ?? ''),

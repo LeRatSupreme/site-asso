@@ -57,7 +57,14 @@ final class AdminStockController extends AdminBaseController
     /** Taux de TVA autorisés pour les achats. */
     private const VAT_RATES = [20.0, 10.0, 5.5, 2.1, 0.0];
 
-    public function savePurchase(): void
+    /**
+     * Enregistre une grille d'achats en un seul POST (une ligne par
+     * produit — une course entière en une fois). Les champs communs
+     * (date, TVA, fournisseur, update_cost) s'appliquent à toutes les
+     * lignes ; les lignes totalement vides sont ignorées, les lignes
+     * invalides sont signalées dans le flash.
+     */
+    public function savePurchasesBulk(): void
     {
         $user = $this->guardCompta();
 
@@ -65,27 +72,130 @@ final class AdminStockController extends AdminBaseController
         if ($purchasedAt === '') {
             $purchasedAt = date('Y-m-d');
         }
-        $productKey = trim((string) ($_POST['product_key'] ?? ''));
-        $quantity = (int) ($_POST['quantity'] ?? 0);
-        $totalAmount = parseFrenchFloat((string) ($_POST['total_amount'] ?? ''));
         $supplier = trim((string) ($_POST['supplier'] ?? ''));
         $notes = trim((string) ($_POST['notes'] ?? ''));
+        $updateCost = isset($_POST['update_cost']);
+
+        // '' = montants saisis déjà TTC (pas de TVA à calculer), sinon taux en %.
+        $vatRaw = trim((string) ($_POST['vat_rate'] ?? ''));
+
+        $keys = is_array($_POST['product_key'] ?? null) ? $_POST['product_key'] : [];
+        $quantities = is_array($_POST['quantity'] ?? null) ? $_POST['quantity'] : [];
+        $amounts = is_array($_POST['total_amount'] ?? null) ? $_POST['total_amount'] : [];
+
+        $inserted = 0;
+        $products = [];
+        $errors = [];
+        $count = max(count($keys), count($quantities), count($amounts));
+
+        for ($i = 0; $i < $count; $i++) {
+            $key = trim((string) ($keys[$i] ?? ''));
+            $amountRaw = trim((string) ($amounts[$i] ?? ''));
+
+            // Ligne totalement vide (jamais remplie) : ignorée sans bruit.
+            if ($key === '' && $amountRaw === '') {
+                continue;
+            }
+
+            $reason = $this->createOne([
+                'purchased_at' => $purchasedAt,
+                'product_key'  => $key,
+                'quantity'     => (string) ($quantities[$i] ?? ''),
+                'total_amount' => $amountRaw,
+                'vat_rate'     => $vatRaw,
+                'update_cost'  => $updateCost ? '1' : '',
+                'supplier'     => $supplier,
+                'notes'        => $notes,
+            ], $user);
+
+            if ($reason === '') {
+                $inserted++;
+                $products[$key] = true;
+            } else {
+                $errors[] = ($key !== '' ? $key : '(sans nom)') . ' : ' . $reason;
+            }
+        }
+
+        if ($inserted === 0) {
+            $flash = $errors === []
+                ? 'Aucun achat saisi.'
+                : 'Aucun achat enregistré — ' . implode(' · ', $errors);
+            $this->setFlash('error', $flash);
+            redirect(url('/admin/compta/achats'));
+        }
+
+        // Audit agrégé unique : un seul evénement pour toute la grille
+        // (les ids des achats/ lots restent consultables dans le journal).
+        $this->audit('compta.purchase.create_bulk', 'purchase', null, [
+            'inserted'    => $inserted,
+            'products'    => count($products),
+            'ignored'     => count($errors),
+            'vat_rate'    => $vatRaw === '' ? null : parseFrenchFloat($vatRaw),
+            'update_cost' => $updateCost,
+            'supplier'    => $supplier,
+            'purchased_at' => $purchasedAt,
+        ]);
+
+        $flash = sprintf(
+            '%d achat%s enregistré%s pour %d produit%s — stock mis à jour.',
+            $inserted,
+            $inserted > 1 ? 's' : '',
+            $inserted > 1 ? 's' : '',
+            count($products),
+            count($products) > 1 ? 's' : ''
+        );
+        if ($errors !== []) {
+            $flash .= ' Lignes ignorées : ' . implode(' · ', $errors);
+        }
+        $this->setFlash('success', $flash);
+        redirect(url('/admin/compta/achats'));
+    }
+
+    /**
+     * Crée UN achat (et son lot de coût optionnel) à partir d'un jeu de
+     * champs — cœur partagé de la saisie en lot.
+     *
+     * Sémantique du montant : la saisie fait foi. HT si un taux de TVA
+     * est fourni, déjà TTC sinon (vat_rate null — comportement historique).
+     *
+     * @param array<string,mixed> $data purchased_at, product_key,
+     *                                  quantity, total_amount, vat_rate
+     *                                  ('' = déjà TTC), update_cost,
+     *                                  supplier, notes
+     * @param array<string,mixed> $user Utilisateur courant (created_by).
+     *
+     * @return string '' si l'achat est créé, sinon le motif d'erreur
+     *                (affiché ligne par ligne dans le flash).
+     */
+    private function createOne(array $data, array $user): string
+    {
+        $purchasedAt = trim((string) ($data['purchased_at'] ?? ''));
+        if ($purchasedAt === '') {
+            $purchasedAt = date('Y-m-d');
+        }
+        $productKey = trim((string) ($data['product_key'] ?? ''));
+        $quantity = (int) ($data['quantity'] ?? 0);
+        $totalAmount = parseFrenchFloat((string) ($data['total_amount'] ?? ''));
 
         // '' = montant saisi déjà TTC (pas de TVA à calculer), sinon taux en %.
-        $vatRaw = trim((string) ($_POST['vat_rate'] ?? ''));
+        $vatRaw = trim((string) ($data['vat_rate'] ?? ''));
         $vatRate = null;
         if ($vatRaw !== '') {
             $candidate = parseFrenchFloat($vatRaw);
             if (!in_array($candidate, self::VAT_RATES, true)) {
-                $this->setFlash('error', 'Taux de TVA invalide.');
-                redirect(url('/admin/compta/achats'));
+                return 'Taux de TVA invalide.';
             }
             $vatRate = $candidate;
         }
 
-        if ($productKey === '' || $quantity < 1 || $totalAmount <= 0.0) {
-            $this->setFlash('error', 'Produit, quantité et montant total requis.');
-            redirect(url('/admin/compta/achats'));
+        if ($productKey === '') {
+            return 'produit manquant';
+        }
+        if ($quantity < 1) {
+            return 'quantité invalide';
+        }
+        if ($totalAmount <= 0.0) {
+            return 'montant invalide';
         }
 
         // Le montant saisi fait foi : HT si un taux est choisi, déjà TTC sinon.
@@ -100,55 +210,41 @@ final class AdminStockController extends AdminBaseController
             'quantity'     => $quantity,
             'total_ht'     => $totalHt,
             'vat_rate'     => $vatRate,
-            'supplier'     => $supplier,
-            'notes'        => $notes,
+            'supplier'     => trim((string) ($data['supplier'] ?? '')),
+            'notes'        => trim((string) ($data['notes'] ?? '')),
             'created_by'   => $user['id'] ?? null,
         ]);
+
+        if ($id === '') {
+            return 'création impossible';
+        }
 
         // Option (cochée par défaut) : l'achat crée un nouveau lot de coût
         // de revient à ce prix — chaque achat à un prix différent ouvre un
         // nouveau lot daté, le bénéfice suit les vrais coûts d'achat.
-        $lotNote = '';
-        if (isset($_POST['update_cost'])) {
+        if (!empty($data['update_cost'])) {
             // Coût de revient en TTC pour bénéfices cohérents avec ventes TTC :
             // les prix de vente sont TTC, le coût doit l'être aussi.
             $costTtc = $vatRate === null ? $unitCost : round($unitCost * (1 + $vatRate / 100), 3);
-            $lotId = ProductCost::create([
+            ProductCost::create([
                 'product_key' => $productKey,
                 'cost_price'  => $costTtc,
                 'valid_from'  => $purchasedAt,
-                'supplier'    => $supplier,
+                'supplier'    => trim((string) ($data['supplier'] ?? '')),
                 // Lie le lot à l'achat : sa suppression en cascade
                 // (deletePurchase) saura exactement quel lot retirer.
                 'purchase_id' => $id,
             ]);
-            if ($lotId !== '') {
-                $this->audit('compta.cost.auto_from_purchase', 'product_cost', $lotId, [
-                    'product_key'    => $productKey,
-                    'cost_price'     => $costTtc,
-                    'from_purchase'  => $id,
-                ]);
-                $lotNote = sprintf(' Nouveau lot de coût : %s /unité.', formatPrice($costTtc, 3));
-            }
         }
 
-        $this->audit('compta.purchase.create', 'purchase', $id, [
-            'product_key' => $productKey,
-            'quantity'    => $quantity,
-            'total_ht'    => $totalHt,
-            'vat_rate'    => $vatRate,
-            'unit_cost'   => $unitCost,
-        ]);
-
-        $this->setFlash('success', 'Achat enregistré — stock mis à jour.' . $lotNote);
-        redirect(url('/admin/compta/achats'));
+        return '';
     }
 
     /**
      * Supprime un achat avec cascade complète.
      *
      * La logique reste dans le contrôleur (et non dans Purchase::delete)
-     * par symétrie avec savePurchase() : la création du lot lié s'y fait
+     * par symétrie avec createOne() : la création du lot lié s'y fait
      * déjà (elle dépend de l'option update_cost du POST) — son inverse
      * vit au même endroit, les modèles restant des primitives. Contre-
      * passe aussi le stock de référence : Purchase::create() avait fait

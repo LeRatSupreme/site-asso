@@ -48,97 +48,156 @@ declare(strict_types=1);
     </div>
 </div>
 
-<div class="compta-grid">
-    <section class="card surface glass">
-        <h2 class="card-title">Enregistrer un achat</h2>
-        <form method="post" action="<?= e(url('/admin/compta/achats/save')) ?>">
-            <?= csrf_field() ?>
+<section class="card surface glass">
+    <h2 class="card-title">Enregistrer des achats</h2>
+    <p class="muted">Une ligne par produit, un seul « Enregistrer » à la fin — une course entière (Metro…) en une fois. Champs communs en tête : date, TVA, fournisseur.</p>
 
+    <form method="post" action="<?= e(url('/admin/compta/achats/save-bulk')) ?>">
+        <?= csrf_field() ?>
+
+        <div class="field-row">
             <div class="field">
                 <label for="purchased_at">Date</label>
                 <input type="date" id="purchased_at" name="purchased_at" value="<?= e(date('Y-m-d')) ?>" required>
             </div>
-
             <div class="field">
-                <label for="product_key">Produit</label>
-                <input type="text" id="product_key" name="product_key" list="purchase-products"
-                    placeholder="ex: Coca 33cl" autocomplete="off" required>
-                <datalist id="purchase-products">
-                    <?php foreach ($products as $p): ?>
-                        <option value="<?= e($p) ?>"></option>
-                    <?php endforeach; ?>
-                </datalist>
-                <p class="field-help">Choisis un nom existant (mêmes noms que dans les ventes) pour alimenter le bon stock théorique.</p>
+                <label for="vat_rate">TVA (toutes les lignes)</label>
+                <select id="vat_rate" name="vat_rate">
+                    <option value="20" selected>Montants HT + TVA 20 %</option>
+                    <option value="10">Montants HT + TVA 10 %</option>
+                    <option value="5.5">Montants HT + TVA 5,5 %</option>
+                    <option value="2.1">Montants HT + TVA 2,1 %</option>
+                    <option value="0">Montants HT sans TVA</option>
+                    <option value="">Montants déjà TTC</option>
+                </select>
+                <p class="field-help">Les prix Metro/fournisseurs sont souvent HT.</p>
             </div>
-
-            <div class="field-row">
-                <div class="field">
-                    <label for="quantity">Quantité</label>
-                    <input type="number" id="quantity" name="quantity" value="1" min="1" step="1" required>
-                </div>
-                <div class="field">
-                    <label for="total_amount">Montant total (€)</label>
-                    <input type="text" id="total_amount" name="total_amount" placeholder="ex: 18,60" inputmode="decimal" required>
-                    <p class="field-help" id="unit-cost-hint" hidden>≈ <span id="unit-cost-value"></span> € / unité</p>
-                </div>
-                <div class="field">
-                    <label for="vat_rate">TVA</label>
-                    <select id="vat_rate" name="vat_rate">
-                        <option value="20" selected>Montant HT + TVA 20 %</option>
-                        <option value="10">Montant HT + TVA 10 %</option>
-                        <option value="5.5">Montant HT + TVA 5,5 %</option>
-                        <option value="2.1">Montant HT + TVA 2,1 %</option>
-                        <option value="0">Montant HT sans TVA</option>
-                        <option value="">Montant déjà TTC</option>
-                    </select>
-                    <p class="field-help">Les prix Metro/fournisseurs sont souvent HT.</p>
-                </div>
-            </div>
-
             <div class="field">
-                <label for="supplier">Fournisseur <span class="muted">(optionnel)</span></label>
+                <label for="supplier">Fournisseur <span class="muted">(optionnel, appliqué à toutes les lignes)</span></label>
                 <input type="text" id="supplier" name="supplier" placeholder="ex: Metro">
             </div>
+        </div>
 
-            <div class="field">
-                <label style="display:flex;align-items:center;gap:8px;font-weight:400;cursor:pointer;">
-                    <input type="checkbox" name="update_cost" value="1" checked>
-                    Mettre à jour le coût de revient <span class="muted">(nouveau lot à ce prix)</span>
-                </label>
-                <p class="field-help">Décoche si ce prix est inhabituel (promo, erreur, test…) pour ne pas fausser le calcul du bénéfice.</p>
-            </div>
+        <div class="field">
+            <label style="display:flex;align-items:center;gap:8px;font-weight:400;cursor:pointer;">
+                <input type="checkbox" name="update_cost" value="1" checked>
+                Mettre à jour le coût de revient <span class="muted">(un lot par produit, en TTC)</span>
+            </label>
+            <p class="field-help">Décoche si ces prix sont inhabituels (promo, erreur, test…) pour ne pas fausser le calcul du bénéfice.</p>
+        </div>
 
-            <div class="form-actions">
-                <button type="submit" class="btn btn-primary">Enregistrer l'achat</button>
-                <button type="button" class="btn btn-ghost" onclick="if (confirm('Effacer la saisie en cours ?')) this.form.reset();">Annuler</button>
-            </div>
-        </form>
-        <script>
-            (function () {
-                var amount = document.getElementById('total_amount');
-                var qty = document.getElementById('quantity');
-                var hint = document.getElementById('unit-cost-hint');
-                var value = document.getElementById('unit-cost-value');
-                function updateHint() {
-                    var a = parseFloat(String(amount.value).replace(/\s/g, '').replace(',', '.'));
-                    var q = parseInt(qty.value, 10);
-                    if (!isFinite(a) || a <= 0 || !q || q < 1) {
-                        hint.hidden = true;
-                        return;
-                    }
-                    value.textContent = (a / q).toFixed(3).replace('.', ',');
+        <table class="table" id="purchases-grid">
+            <thead>
+                <tr>
+                    <th>Produit</th>
+                    <th style="width:90px;">Qté</th>
+                    <th style="width:140px;">Montant total (€)</th>
+                    <th style="width:150px;">≈ / unité</th>
+                    <th style="width:50px;"></th>
+                </tr>
+            </thead>
+            <tbody id="purchases-lines">
+                <tr class="purchase-line">
+                    <td><input type="text" name="product_key[]" list="purchase-products" placeholder="ex: Coca 33cl" autocomplete="off" style="width:100%;"></td>
+                    <td><input type="number" name="quantity[]" value="1" min="1" step="1" style="width:100%;"></td>
+                    <td><input type="text" name="total_amount[]" placeholder="ex: 18,60" inputmode="decimal" style="width:100%;"></td>
+                    <td class="muted line-unit" hidden></td>
+                    <td><button type="button" class="btn btn-ghost btn-sm line-remove" aria-label="Supprimer la ligne">✕</button></td>
+                </tr>
+            </tbody>
+            <tfoot>
+                <tr>
+                    <th colspan="2" class="num">Total des montants</th>
+                    <th class="num" id="purchases-total">0,000 €</th>
+                    <th colspan="2"></th>
+                </tr>
+            </tfoot>
+        </table>
+        <datalist id="purchase-products">
+            <?php foreach ($products as $p): ?>
+                <option value="<?= e($p) ?>"></option>
+            <?php endforeach; ?>
+        </datalist>
+        <p class="field-help">Choisis des noms existants (mêmes noms que dans les ventes) pour alimenter le bon stock théorique. Les lignes vides sont ignorées.</p>
+
+        <div class="form-actions">
+            <button type="button" class="btn btn-ghost" id="purchase-line-add">+ Ajouter une ligne</button>
+            <button type="submit" class="btn btn-primary">Enregistrer les achats</button>
+            <button type="button" class="btn btn-ghost" onclick="if (confirm('Effacer la saisie en cours ?')) this.form.reset();">Annuler</button>
+        </div>
+    </form>
+    <script>
+        (function () {
+            var tbody = document.getElementById('purchases-lines');
+            var addBtn = document.getElementById('purchase-line-add');
+            var totalEl = document.getElementById('purchases-total');
+            if (!tbody || !addBtn) return;
+
+            function parseAmount(v) {
+                return parseFloat(String(v).replace(/\s/g, '').replace(',', '.'));
+            }
+
+            function updateRow(tr) {
+                var a = parseAmount(tr.querySelector('[name="total_amount[]"]').value);
+                var q = parseInt(tr.querySelector('[name="quantity[]"]').value, 10);
+                var hint = tr.querySelector('.line-unit');
+                if (!isFinite(a) || a <= 0 || !q || q < 1) {
+                    hint.hidden = true;
+                    hint.textContent = '';
+                } else {
+                    hint.textContent = '≈ ' + (a / q).toFixed(3).replace('.', ',') + ' € / unité';
                     hint.hidden = false;
                 }
-                amount.addEventListener('input', updateHint);
-                qty.addEventListener('input', updateHint);
-            })();
-        </script>
-    </section>
+            }
 
+            function updateTotal() {
+                var sum = 0;
+                Array.prototype.forEach.call(tbody.querySelectorAll('tr.purchase-line'), function (tr) {
+                    var a = parseAmount(tr.querySelector('[name="total_amount[]"]').value);
+                    if (isFinite(a) && a > 0) sum += a;
+                });
+                totalEl.textContent = sum.toFixed(3).replace('.', ',') + ' €';
+            }
+
+            function wireRow(tr) {
+                tr.querySelector('[name="total_amount[]"]').addEventListener('input', function () {
+                    updateRow(tr); updateTotal();
+                });
+                tr.querySelector('[name="quantity[]"]').addEventListener('input', function () {
+                    updateRow(tr);
+                });
+                tr.querySelector('.line-remove').addEventListener('click', function () {
+                    tr.remove(); updateTotal();
+                });
+                updateRow(tr);
+            }
+
+            function addLine(focus) {
+                var tr = document.createElement('tr');
+                tr.className = 'purchase-line';
+                tr.innerHTML =
+                    '<td><input type="text" name="product_key[]" list="purchase-products" placeholder="ex: Coca 33cl" autocomplete="off" style="width:100%;"></td>' +
+                    '<td><input type="number" name="quantity[]" value="1" min="1" step="1" style="width:100%;"></td>' +
+                    '<td><input type="text" name="total_amount[]" placeholder="ex: 18,60" inputmode="decimal" style="width:100%;"></td>' +
+                    '<td class="muted line-unit" hidden></td>' +
+                    '<td><button type="button" class="btn btn-ghost btn-sm line-remove" aria-label="Supprimer la ligne">✕</button></td>';
+                tbody.appendChild(tr);
+                wireRow(tr);
+                if (focus) tr.querySelector('[name="product_key[]"]').focus();
+            }
+
+            Array.prototype.forEach.call(tbody.querySelectorAll('tr.purchase-line'), wireRow);
+            addBtn.addEventListener('click', function () { addLine(true); });
+            updateTotal();
+        })();
+    </script>
+</section>
+
+<div class="compta-grid" style="margin-top:24px;">
     <section class="card surface glass">
         <h2 class="card-title">Comment ça marche</h2>
         <p>📌 Le <a href="<?= e(url('/admin/compta/reappro')) ?>">réappro</a> calcule ce qu'il <strong>FAUT</strong> commander ; cette page trace ce qui a <strong>ÉTÉ</strong> commandé.</p>
-        <p>📌 Par défaut, l'achat crée un <strong>nouveau lot de coût</strong> à ce prix dans <a href="<?= e(url('/admin/compta/couts')) ?>">Coûts de revient</a> — décoche la case pour un prix inhabituel.</p>
+        <p>📌 Par défaut, chaque achat crée un <strong>nouveau lot de coût</strong> à ce prix dans <a href="<?= e(url('/admin/compta/couts')) ?>">Coûts de revient</a> — décoche la case pour des prix inhabituels.</p>
         <p>📌 Les achats alimentent le <strong>stock théorique</strong> visible dans <a href="<?= e(url('/admin/compta/inventaire')) ?>">l'inventaire</a> : dernier comptage + achats − ventes.</p>
     </section>
 </div>
@@ -170,7 +229,13 @@ declare(strict_types=1);
                         <?= e(formatPrice((float) $r['unit_cost'], 3)) ?>
                         <?php if ($hasVat): ?><small class="muted">HT</small><?php endif; ?>
                     </td>
-                    <td class="num"><?= e(formatPrice((float) ($r['total_ht'] ?? $r['total_ttc']), 3)) ?></td>
+                    <td class="num">
+                        <?php if ($hasVat && ($r['total_ht'] ?? null) !== null): ?>
+                            <?= e(formatPrice((float) $r['total_ht'], 3)) ?>
+                        <?php else: ?>
+                            <span class="muted">—</span>
+                        <?php endif; ?>
+                    </td>
                     <td class="num"><strong><?= e(formatPrice((float) $r['total_ttc'], 3)) ?></strong></td>
                     <td><?= e((string) ($r['supplier'] ?? '—')) ?></td>
                     <td class="row-actions">
