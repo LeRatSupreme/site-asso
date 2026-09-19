@@ -129,8 +129,12 @@ $allPromoEmpty = empty($promotions);
                         ? max(0, $product['menu_stock'])
                         : null;
                     $isOut = $menuStock !== null && $menuStock <= 0;
+                    $catName = trim((string) ($product['category_name'] ?? ''));
                     ?>
                         <article class="menu-item surface glass<?= $isOut ? ' is-out' : '' ?>" data-cat="<?= e((string) $cat['id']) ?>">
+                            <?php if ($catName !== ''): ?>
+                                <span class="menu-item-cat"><?= e(tc($catName)) ?></span>
+                            <?php endif; ?>
                             <?php if ($imgUrl !== ''): ?>
                                 <img src="<?= e($imgUrl) ?>" alt="" class="menu-item-img" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='';">
                                 <span class="menu-item-emoji" aria-hidden="true" style="display:none;"><?= e($emoji) ?></span>
