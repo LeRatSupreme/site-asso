@@ -503,6 +503,13 @@
     object-fit: cover;
     border-radius: 10px;
 }
+.menu-item-cat {
+    color: var(--primary);
+    text-transform: uppercase;
+    letter-spacing: 0.22em;
+    font-size: 0.65rem;
+    font-weight: 800;
+}
 .menu-item-name {
     font-weight: 700;
     color: #fff;
