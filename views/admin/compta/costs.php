@@ -239,6 +239,82 @@ declare(strict_types=1);
     </section>
 </div>
 
+<!-- Ajout en lot : un prix par produit (course complète en un POST) -->
+<section class="card surface glass" id="costs-bulk" style="margin-top:24px;">
+    <h2 class="card-title">Ajouter en lot — un prix par produit</h2>
+    <p class="muted">Idéal après une course : une ligne par produit, un seul « Enregistrer ». Le formulaire ci-dessus reste là pour un lot isolé.</p>
+    <form method="post" action="<?= e(url('/admin/compta/couts/save-bulk')) ?>">
+        <?= csrf_field() ?>
+
+        <div class="field-row">
+            <div class="field">
+                <label for="bulk_valid_from">Du <span class="muted">(commun à tous les lots)</span></label>
+                <input type="date" id="bulk_valid_from" name="valid_from" value="<?= e(date('Y-m-d')) ?>" required>
+            </div>
+            <div class="field">
+                <label for="bulk_supplier">Fournisseur <span class="muted">(optionnel, commun)</span></label>
+                <input type="text" id="bulk_supplier" name="supplier" placeholder="ex: Metro…">
+            </div>
+        </div>
+
+        <table class="table" id="costs-bulk-grid">
+            <thead>
+                <tr>
+                    <th>Produit</th>
+                    <th style="width:180px;">Coût d'achat (€ / unité)</th>
+                    <th style="width:50px;"></th>
+                </tr>
+            </thead>
+            <tbody id="costs-bulk-lines">
+                <tr class="cost-bulk-line">
+                    <td><input type="text" name="product_key[]" list="bulk-products" placeholder="Rechercher un produit…" autocomplete="off" style="width:100%;"></td>
+                    <td><input type="text" name="cost_price[]" placeholder="ex: 0,60" inputmode="decimal" style="width:100%;"></td>
+                    <td><button type="button" class="btn btn-ghost btn-sm cost-bulk-remove" aria-label="Supprimer la ligne">✕</button></td>
+                </tr>
+            </tbody>
+        </table>
+        <datalist id="bulk-products">
+            <?php foreach ($productKeys as $k): ?>
+                <option value="<?= e($k) ?>"></option>
+            <?php endforeach; ?>
+        </datalist>
+        <p class="field-help">Les lignes vides sont ignorées ; un même produit deux fois ne crée qu'un seul lot (premier prix retenu).</p>
+
+        <div class="form-actions">
+            <button type="button" class="btn btn-ghost" id="cost-bulk-add">+ Ajouter une ligne</button>
+            <button type="submit" class="btn btn-primary">Enregistrer les lots</button>
+        </div>
+    </form>
+    <script>
+        (function () {
+            var tbody = document.getElementById('costs-bulk-lines');
+            var addBtn = document.getElementById('cost-bulk-add');
+            if (!tbody || !addBtn) return;
+
+            function wireRow(tr) {
+                tr.querySelector('.cost-bulk-remove').addEventListener('click', function () {
+                    tr.remove();
+                });
+            }
+
+            function addLine(focus) {
+                var tr = document.createElement('tr');
+                tr.className = 'cost-bulk-line';
+                tr.innerHTML =
+                    '<td><input type="text" name="product_key[]" list="bulk-products" placeholder="Rechercher un produit…" autocomplete="off" style="width:100%;"></td>' +
+                    '<td><input type="text" name="cost_price[]" placeholder="ex: 0,60" inputmode="decimal" style="width:100%;"></td>' +
+                    '<td><button type="button" class="btn btn-ghost btn-sm cost-bulk-remove" aria-label="Supprimer la ligne">✕</button></td>';
+                tbody.appendChild(tr);
+                wireRow(tr);
+                if (focus) tr.querySelector('[name="product_key[]"]').focus();
+            }
+
+            Array.prototype.forEach.call(tbody.querySelectorAll('tr.cost-bulk-line'), wireRow);
+            addBtn.addEventListener('click', function () { addLine(true); });
+        })();
+    </script>
+</section>
+
 <script type="application/json" id="pk-data"><?= json_encode($productKeys, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?></script>
 <script>
 /* Combobox produit (recherche du champ d'ajout) */

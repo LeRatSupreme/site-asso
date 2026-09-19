@@ -555,6 +555,80 @@ final class AdminComptaController extends AdminBaseController
         redirect(url('/admin/compta/couts'));
     }
 
+    /**
+     * Ajout en lot : un prix par produit en un seul POST (après une
+     * course, par exemple). valid_from et fournisseur sont communs ;
+     * les lignes vides sont ignorées, un même produit répété ne crée
+     * qu'un seul lot (premier prix retenu). La règle « as-of » des
+     * lots (clôture du lot précédent) est appliquée par ProductCost.
+     */
+    public function saveCostsBulk(): void
+    {
+        $this->guardCompta();
+
+        $validFrom = trim((string) ($_POST['valid_from'] ?? ''));
+        if ($validFrom === '') {
+            $validFrom = date('Y-m-d');
+        }
+        $supplier = trim((string) ($_POST['supplier'] ?? ''));
+
+        $keys = is_array($_POST['product_key'] ?? null) ? $_POST['product_key'] : [];
+        $prices = is_array($_POST['cost_price'] ?? null) ? $_POST['cost_price'] : [];
+
+        $created = 0;
+        $ignored = 0;
+        $seen = [];
+        $count = max(count($keys), count($prices));
+
+        for ($i = 0; $i < $count; $i++) {
+            $key = trim((string) ($keys[$i] ?? ''));
+            $priceRaw = trim((string) ($prices[$i] ?? ''));
+
+            // Ligne totalement vide (jamais remplie) : ignorée sans bruit.
+            if ($key === '' && $priceRaw === '') {
+                continue;
+            }
+
+            $price = parseFrenchFloat($priceRaw);
+            if ($key === '' || $price <= 0.0 || isset($seen[$key])) {
+                $ignored++;
+                continue;
+            }
+            $seen[$key] = true;
+
+            if (ProductCost::create([
+                'product_key' => $key,
+                'cost_price'  => $price,
+                'valid_from'  => $validFrom,
+                'supplier'    => $supplier,
+            ]) !== '') {
+                $created++;
+            } else {
+                $ignored++;
+            }
+        }
+
+        if ($created === 0) {
+            $this->setFlash('error', 'Aucun lot créé — produit et coût (> 0) requis.');
+            redirect(url('/admin/compta/couts'));
+        }
+
+        // Audit agrégé unique pour toute la grille.
+        $this->audit('compta.cost.create_bulk', 'product_cost', null, [
+            'lots'       => $created,
+            'ignored'    => $ignored,
+            'valid_from' => $validFrom,
+            'supplier'   => $supplier,
+        ]);
+
+        $flash = sprintf('%d lot%s de coût créé%s.', $created, $created > 1 ? 's' : '', $created > 1 ? 's' : '');
+        if ($ignored > 0) {
+            $flash .= sprintf(' %d ligne(s) ignorée(s) (produit ou coût manquant).', $ignored);
+        }
+        $this->setFlash('success', $flash);
+        redirect(url('/admin/compta/couts'));
+    }
+
     public function closeCost(string $id): void
     {
         $this->guardCompta();

@@ -260,9 +260,7 @@ Routes protégées par le rôle **ADMIN** (`/admin/*`) — layout dédié, `noin
 - **Événements** (`/admin/events`) : CRUD complet (création/édition/suppression),
   publication, **liste des inscrits** par événement.
 - **Cafétéria** : CRUD **produits** (`/admin/cafeteria`) et **catégories**,
-  **commandes** (`/admin/cafeteria/commandes`) avec changement de statut (workflow),
-  **caisse (POS)** (`/admin/cafeteria/pos`) pour les ventes au comptoir
-  (total recalculé serveur + décrément de stock).
+  **commandes** (`/admin/cafeteria/commandes`) avec changement de statut (workflow).
 - **Pages CMS** (`/admin/pages`) : CRUD pages (contenu HTML, SEO meta, publication).
 - **Équipe** (`/admin/team`) : CRUD membres du bureau (ordre, mise en avant, pôle).
 - **Médias** (`/admin/media`) : upload d'images (validation MIME réelle, 5 Mo max,

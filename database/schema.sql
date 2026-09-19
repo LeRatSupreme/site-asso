@@ -550,4 +550,124 @@ CREATE TABLE IF NOT EXISTS poll_votes (
     CONSTRAINT fk_votes_user   FOREIGN KEY (user_id)   REFERENCES users(id)        ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- -------------------------------------------------------------------
+--  Stocks saisis sur la page Réappro (référence du stock théorique)
+--  (migration 2026_product_stocks.sql)
+-- -------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS product_stocks (
+    product_key VARCHAR(255) NOT NULL,
+    stock       INT NOT NULL DEFAULT 0,
+    updated_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (product_key)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -------------------------------------------------------------------
+--  Jeux : scores (Wordle FR/EN + classement)
+--  (migration 2026_games.sql)
+-- -------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS game_scores (
+    id          VARCHAR(255) PRIMARY KEY,
+    user_id     VARCHAR(255) NOT NULL,
+    game        VARCHAR(50) NOT NULL,       -- 'wordle'
+    mode        VARCHAR(20) NOT NULL,      -- 'fr' ou 'en'
+    score       INT NOT NULL DEFAULT 0,     -- pour Wordle : streak (série de victoires)
+    won         TINYINT(1) NOT NULL DEFAULT 0,
+    word        VARCHAR(10) NULL,          -- le mot à deviner
+    attempts    INT NULL,                  -- nombre d'essais utilisés
+    played_at   DATE NOT NULL,             -- date de la partie (1 partie/jour pour Wordle)
+    created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uniq_game_day (user_id, game, mode, played_at),
+    KEY idx_game_user (user_id, game, mode),
+    KEY idx_game_mode (game, mode),
+    CONSTRAINT fk_gamescore_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -------------------------------------------------------------------
+--  Wordle v2 : mots (difficultés + mots longs)
+--  (migration 2026_wordle_v2.sql — remplace la v1 de 2026_wordle_words.sql)
+-- -------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS wordle_words (
+    id          INT AUTO_INCREMENT PRIMARY KEY,
+    word        VARCHAR(32) NOT NULL,
+    language    ENUM('fr','en') NOT NULL,
+    length      TINYINT UNSIGNED NOT NULL,
+    difficulty  ENUM('facile','moyen','difficile') NOT NULL,
+    is_active   TINYINT(1) NOT NULL DEFAULT 1,
+    created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uniq_word_lang (word, language),
+    KEY idx_lang_diff (language, difficulty, is_active),
+    KEY idx_lang_len (language, length, is_active)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -------------------------------------------------------------------
+--  Énigme quotidienne
+--  (migration 2026_wordle_v2.sql)
+-- -------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS daily_enigmas (
+    id          INT AUTO_INCREMENT PRIMARY KEY,
+    question_fr TEXT NOT NULL,
+    question_en TEXT NOT NULL,
+    answer      VARCHAR(500) NOT NULL,
+    hint_fr     VARCHAR(500) DEFAULT NULL,
+    hint_en     VARCHAR(500) DEFAULT NULL,
+    is_active   TINYINT(1) NOT NULL DEFAULT 1,
+    created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -------------------------------------------------------------------
+--  Notifications in-app
+--  (migration 2026_notifications.sql)
+-- -------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS notifications (
+    id VARCHAR(255) PRIMARY KEY,
+    user_id VARCHAR(255) NOT NULL,
+    type VARCHAR(50) NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    body TEXT NULL,
+    url VARCHAR(500) NULL,
+    is_read TINYINT(1) NOT NULL DEFAULT 0,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_notif_user (user_id, is_read)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- -------------------------------------------------------------------
+--  Adhésions / cotisations annuelles
+--  (migration 2026_memberships.sql)
+-- -------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS memberships (
+    id          VARCHAR(255) PRIMARY KEY,
+    user_id     VARCHAR(255) NOT NULL,
+    season      VARCHAR(10) NOT NULL,   -- ex: "2026-2027"
+    amount_paid DECIMAL(10,2) NOT NULL DEFAULT 0,
+    paid_at     DATETIME NULL,
+    status      ENUM('PENDING','PAID','EXPIRED') NOT NULL DEFAULT 'PENDING',
+    sumup_ref   VARCHAR(255) NULL,
+    created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uniq_membership (user_id, season),
+    KEY idx_memberships_season (season),
+    KEY idx_memberships_status (status),
+    CONSTRAINT fk_memberships_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -------------------------------------------------------------------
+--  Promotions (menus cafétéria, ventes spéciales)
+--  (migration 2026_promotions.sql)
+-- -------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS promotions (
+    id          VARCHAR(255) PRIMARY KEY,
+    title       VARCHAR(255) NOT NULL,
+    description TEXT NULL,
+    product_key VARCHAR(255) NULL,      -- produit concerné (optionnel)
+    old_price   DECIMAL(10,2) NULL,     -- ancien prix
+    new_price   DECIMAL(10,2) NOT NULL, -- prix promo
+    image       VARCHAR(255) NULL,
+    badge       VARCHAR(50) NULL,       -- ex: "PROMO", "NOUVEAU", "-20%"
+    starts_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    ends_at     DATETIME NULL,          -- NULL = illimité
+    is_active   TINYINT(1) NOT NULL DEFAULT 1,
+    created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_promotions_active (is_active),
+    KEY idx_promotions_period (starts_at, ends_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 SET FOREIGN_KEY_CHECKS = 1;
