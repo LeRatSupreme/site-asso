@@ -118,13 +118,18 @@ $allPromoEmpty = empty($promotions);
             <div class="menu-grid">
                 <?php foreach ($menuCategories as $cat): ?>
                     <?php foreach ($cat['products'] as $product): ?>
-                        <?php
-                        $name  = tc((string) ($product['name'] ?? ''));
-                        $emoji = product_emoji((string) ($product['name'] ?? ''));
-                        $img   = trim((string) ($product['image'] ?? ''));
-                        $imgUrl = $img !== '' ? (is_absolute_url($img) ? $img : asset(ltrim($img, '/'))) : '';
-                        $isOut = (int) ($product['stock'] ?? 0) <= 0;
-                        ?>
+                    <?php
+                    $name  = tc((string) ($product['name'] ?? ''));
+                    $emoji = product_emoji((string) ($product['name'] ?? ''));
+                    $img   = trim((string) ($product['image'] ?? ''));
+                    $imgUrl = $img !== '' ? (is_absolute_url($img) ? $img : asset(ltrim($img, '/'))) : '';
+                    // Stock issu de l'inventaire compta (cache 5 min) apparié au nom ;
+                    // null = aucune clé d'inventaire correspondante → rien d'affiché.
+                    $menuStock = isset($product['menu_stock']) && is_int($product['menu_stock'])
+                        ? max(0, $product['menu_stock'])
+                        : null;
+                    $isOut = $menuStock !== null && $menuStock <= 0;
+                    ?>
                         <article class="menu-item surface glass<?= $isOut ? ' is-out' : '' ?>" data-cat="<?= e((string) $cat['id']) ?>">
                             <?php if ($imgUrl !== ''): ?>
                                 <img src="<?= e($imgUrl) ?>" alt="" class="menu-item-img" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='';">
@@ -136,6 +141,10 @@ $allPromoEmpty = empty($promotions);
                             <span class="menu-item-price"><?= e(formatPrice($product['price'] ?? 0)) ?></span>
                             <?php if ($isOut): ?>
                                 <span class="badge badge-danger">Épuisé</span>
+                            <?php elseif ($menuStock === 1): ?>
+                                <span class="menu-item-stock">1 unité</span>
+                            <?php elseif ($menuStock !== null): ?>
+                                <span class="menu-item-stock"><?= e((string) $menuStock) ?> en stock</span>
                             <?php endif; ?>
                         </article>
                     <?php endforeach; ?>

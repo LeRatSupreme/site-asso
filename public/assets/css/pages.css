@@ -514,6 +514,10 @@
     color: var(--primary);
     font-size: 1.05rem;
 }
+.menu-item-stock {
+    font-size: 0.75rem;
+    color: var(--muted);
+}
 .menu-item.is-out {
     opacity: 0.55;
     filter: grayscale(0.85);
