@@ -83,7 +83,16 @@ final class Permissions
                 self::MODULE_CAFETERIA,
                 self::MODULE_GAMES,
             ],
-            Auth::ROLE_TRESORERIE    => [self::MODULE_COMPTA],
+            // Trésorerie : la comptabilité + la gestion des jeux, du contenu
+            // (communication, événements inclus) et de la cafétéria.
+            // L'inventaire reste réservé au niveau admin (voir guard()).
+            Auth::ROLE_TRESORERIE    => [
+                self::MODULE_COMPTA,
+                self::MODULE_CONTENT,
+                self::MODULE_EVENTS,
+                self::MODULE_CAFETERIA,
+                self::MODULE_GAMES,
+            ],
             Auth::ROLE_COMMUNICATION => [self::MODULE_CONTENT, self::MODULE_EVENTS],
             Auth::ROLE_CAFETERIA     => [self::MODULE_CAFETERIA],
             Auth::ROLE_JEUX          => [self::MODULE_GAMES],

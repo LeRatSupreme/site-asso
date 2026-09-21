@@ -41,11 +41,15 @@ final class PermissionsTest extends TestCase
         self::assertContains(Permissions::MODULE_EVENTS, Permissions::modulesFor(Auth::ROLE_ADMIN));
     }
 
-    public function test_tresorerie_limite_a_la_compta(): void
+    public function test_tresorerie_compta_plus_modules_gestion(): void
     {
+        // La trésorerie a la compta + les jeux, le contenu (communication,
+        // événements inclus) et la cafétéria.
         self::assertTrue(Permissions::allows(Auth::ROLE_TRESORERIE, Permissions::MODULE_COMPTA));
-        self::assertFalse(Permissions::allows(Auth::ROLE_TRESORERIE, Permissions::MODULE_EVENTS));
-        self::assertFalse(Permissions::allows(Auth::ROLE_TRESORERIE, Permissions::MODULE_CONTENT));
+        self::assertTrue(Permissions::allows(Auth::ROLE_TRESORERIE, Permissions::MODULE_CONTENT));
+        self::assertTrue(Permissions::allows(Auth::ROLE_TRESORERIE, Permissions::MODULE_EVENTS));
+        self::assertTrue(Permissions::allows(Auth::ROLE_TRESORERIE, Permissions::MODULE_CAFETERIA));
+        self::assertTrue(Permissions::allows(Auth::ROLE_TRESORERIE, Permissions::MODULE_GAMES));
     }
 
     public function test_roles_module_n_ont_qu_un_module(): void
