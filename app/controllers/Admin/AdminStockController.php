@@ -19,8 +19,9 @@ use App\Models\Sale;
  * Réservé aux rôles ADMIN et TRESORERIE (voir guardCompta()).
  *
  * Inventaire : comptage physique comparé au théorique (dernier comptage +
- * achats − ventes) pour détecter pertes et casses. Réservé à ADMIN
- * (voir guard()), TRESORERIE comprise.
+ * achats − ventes) pour détecter pertes et casses. Fait partie du groupe
+ * « Système » : réservé au Fondateur et aux ADMIN listés dans SYSTEM_ADMINS
+ * (voir guardSystem()), la trésorerie n'y accède pas.
  */
 final class AdminStockController extends AdminBaseController
 {
@@ -308,12 +309,12 @@ final class AdminStockController extends AdminBaseController
     }
 
     // -----------------------------------------------------------------
-    //  Inventaire (réservé à ADMIN, voir guard())
+    //  Inventaire (groupe « Système », voir guardSystem())
     // -----------------------------------------------------------------
 
     public function inventory(): void
     {
-        $user = $this->guard();
+        $user = $this->guardSystem();
 
         $lastCounts = InventoryCount::lastCountsMap();
         $theoretical = InventoryCount::theoreticalStocksMap();
@@ -359,7 +360,7 @@ final class AdminStockController extends AdminBaseController
 
     public function saveCount(): void
     {
-        $user = $this->guard();
+        $user = $this->guardSystem();
 
         $counts = $_POST['count'] ?? [];
         if (!is_array($counts)) {

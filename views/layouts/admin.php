@@ -58,7 +58,6 @@ $sections = [
     'Produits & coûts' => [
         'Produits'         => '/admin/compta/produits',
         'Catégories'       => '/admin/compta/categories',
-        'Coûts de revient' => '/admin/compta/couts',
         'Mapping libellés' => '/admin/compta/aliases',
     ],
     'Trésorerie' => [
@@ -68,7 +67,6 @@ $sections = [
     ],
     'Stock' => [
         'Achats & stock' => '/admin/compta/achats',
-        'Inventaire'     => '/admin/compta/inventaire',
         'Pertes'         => '/admin/compta/pertes',
         'Réappro'        => '/admin/compta/reappro',
     ],
@@ -111,31 +109,20 @@ if (isset($sections['Contenu']) && $sections['Contenu'] === []) {
     unset($sections['Contenu']);
 }
 
-// Coûts de revient : réservés au niveau admin (lien masqué à la trésorerie,
-// l'accès direct est bloqué par AdminComptaController::guardCosts()).
-if ($viewerRole === Auth::ROLE_TRESORERIE
-    && isset($sections['Produits & coûts']['Coûts de revient'])) {
-    unset($sections['Produits & coûts']['Coûts de revient']);
-}
-
-// Groupe « Système » (Utilisateurs, Paramètres) : réservé au Fondateur
-// (SUPERADMIN) et aux ADMIN explicitement listés dans SYSTEM_ADMINS
-// (voir Permissions::isSystemAdmin() et AdminBaseController::guardSystem()).
+// Groupe « Système » (Utilisateurs, Caisses, Inventaire, Coûts de revient,
+// Paramètres) : réservé au Fondateur (SUPERADMIN) et aux ADMIN explicitement
+// listés dans SYSTEM_ADMINS (voir Permissions::isSystemAdmin() et
+// AdminBaseController::guardSystem()). Les liens d'inventaire et de coûts
+// de revient y vivent : ces pages sont gardées par guardSystem().
 if (in_array($user['role'] ?? null, [Auth::ROLE_SUPERADMIN, Auth::ROLE_ADMIN], true)
     && Permissions::isSystemAdmin()) {
     $sections['Système'] = [
-        'Utilisateurs' => '/admin/users',
-        'Caisses'      => '/admin/caisses',
-        'Paramètres'  => '/admin/settings',
+        'Utilisateurs'     => '/admin/users',
+        'Caisses'          => '/admin/caisses',
+        'Inventaire'       => '/admin/compta/inventaire',
+        'Coûts de revient' => '/admin/compta/couts',
+        'Paramètres'       => '/admin/settings',
     ];
-}
-
-// Le rôle TRESORERIE n'a pas accès à l'inventaire (réservé au niveau admin) :
-// on retire simplement ce lien, les autres groupes suivent ses modules.
-if (($user['role'] ?? null) === Auth::ROLE_TRESORERIE) {
-    $stock = $sections['Stock'];
-    unset($stock['Inventaire']);
-    $sections['Stock'] = $stock;
 }
 
 // Comptage de caisse : visible de tout le bureau (hors élèves), y compris les

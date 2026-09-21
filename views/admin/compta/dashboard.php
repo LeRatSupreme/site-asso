@@ -58,8 +58,9 @@ foreach (array_slice($lossLeaders, 0, 5) as $l) {
 }
 
 if ($invGaps !== []) {
-    // Lien inventaire réservé à ADMIN (TRESORERIE reçoit 403 sur la page).
-    $invLink = \App\Core\Auth::isAdmin()
+    // Lien inventaire réservé au groupe Système (Fondateur) ; les rôles
+    // compta (TRESORERIE notamment) reçoivent 403 sur la page.
+    $invLink = \App\Core\Permissions::isSystemAdmin()
         ? ' <a href="' . e(url('/admin/compta/inventaire')) . '">voir l\'inventaire →</a>'
         : '';
     $alerts[] = [
@@ -115,7 +116,7 @@ if ($reorderAlerts > 0) {
     <div class="card surface glass kpi">
         <p class="kpi-label">CA sans coût</p>
         <p class="kpi-value <?= $noCostPct >= 20 ? 'is-negative' : '' ?>"><?= e(number_format($noCostPct, 1, ',', ' ')) ?> %</p>
-        <p class="kpi-sub">fiabilité du bénéfice — <a href="<?= e(url('/admin/compta/couts')) ?>">compléter →</a></p>
+        <p class="kpi-sub">fiabilité du bénéfice<?php if (\App\Core\Permissions::isSystemAdmin()): ?> — <a href="<?= e(url('/admin/compta/couts')) ?>">compléter →</a><?php endif; ?></p>
     </div>
     <div class="card surface glass kpi">
         <p class="kpi-label">Alertes réappro</p>
@@ -207,7 +208,7 @@ if ($reorderAlerts > 0) {
         <a class="btn btn-outline btn-sm" href="<?= e(url('/admin/compta/depenses')) ?>">Dépenses</a>
         <a class="btn btn-outline btn-sm" href="<?= e(url('/admin/compta/budgets')) ?>">Budgets</a>
         <a class="btn btn-outline btn-sm" href="<?= e(url('/admin/compta/achats')) ?>">Achats &amp; stock</a>
-        <?php if (\App\Core\Auth::isAdmin()): ?>
+        <?php if (\App\Core\Permissions::isSystemAdmin()): ?>
             <a class="btn btn-outline btn-sm" href="<?= e(url('/admin/compta/inventaire')) ?>">Inventaire</a>
         <?php endif; ?>
         <a class="btn btn-outline btn-sm" href="<?= e(url('/admin/compta/annuel')) ?>">Rapport annuel</a>

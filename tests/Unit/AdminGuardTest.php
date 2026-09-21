@@ -16,9 +16,10 @@ use PHPUnit\Framework\TestCase;
  * un visiteur est redirigé vers la connexion, un rôle sans le module
  * requis reçoit 403, les rôles autorisés passent.
  *
- * Le groupe « Système » (Utilisateurs, Paramètres) exige en plus ADMIN dans
- * la liste SYSTEM_ADMINS (guardSystem = Middleware::resolve + isSystemAdmin).
- * L'inventaire est passé en ADMIN seul.
+ * Le groupe « Système » (Utilisateurs, Caisses, Inventaire, Coûts de
+ * revient, Paramètres) exige en plus ADMIN dans la liste SYSTEM_ADMINS
+ * (guardSystem = Middleware::resolve + isSystemAdmin). L'inventaire et
+ * les coûts de revient appartiennent à ce groupe.
  *
  * On teste Middleware::resolve() et Permissions::isSystemAdmin() (logique
  * pure, sans redirection/exit réels).
@@ -174,7 +175,8 @@ final class AdminGuardTest extends TestCase
     }
 
     // -----------------------------------------------------------------
-    //  Inventaire : ADMIN seul (TRESORERIE garde achats/pertes/réappro)
+    //  Inventaire & coûts : groupe Système (TRESORERIE garde
+    //  achats/pertes/réappro)
     // -----------------------------------------------------------------
 
     public function test_tresorerie_refuse_inventaire_mais_garde_achats_pertes_reappro(): void
@@ -182,8 +184,10 @@ final class AdminGuardTest extends TestCase
         $_SESSION['user_id'] = 'tres1';
         $_SESSION['user_role'] = Auth::ROLE_TRESORERIE;
 
-        // Inventaire passé en ADMIN seul : 403 pour TRESORERIE.
-        self::assertSame(Middleware::FORBIDDEN, Middleware::resolve([Auth::ROLE_ADMIN]));
+        // Inventaire et coûts de revient sont passés dans le groupe « Système »
+        // (guardSystem) : TRESORERIE est refusé à la fois par le rôle
+        // (requireRole = SUPERADMIN + ADMIN) et par isSystemAdmin().
+        self::assertSame(Middleware::FORBIDDEN, Middleware::resolve([Auth::ROLE_SUPERADMIN, Auth::ROLE_ADMIN]));
 
         // Achats, pertes, réappro restent dans le module compta : OK.
         $compta = Permissions::rolesForModule(Permissions::MODULE_COMPTA);

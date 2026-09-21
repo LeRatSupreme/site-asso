@@ -40,7 +40,7 @@ declare(strict_types=1);
     <div class="card surface glass kpi">
         <p class="kpi-label">Voir aussi</p>
         <p class="kpi-sub">
-            <?php if (\App\Core\Auth::isAdmin()): ?>
+            <?php if (\App\Core\Permissions::isSystemAdmin()): ?>
                 <a href="<?= e(url('/admin/compta/inventaire')) ?>">Faire un inventaire →</a><br>
             <?php endif; ?>
             <a href="<?= e(url('/admin/compta/reappro')) ?>">Calculer le réappro →</a>
@@ -197,8 +197,8 @@ declare(strict_types=1);
     <section class="card surface glass">
         <h2 class="card-title">Comment ça marche</h2>
         <p>📌 Le <a href="<?= e(url('/admin/compta/reappro')) ?>">réappro</a> calcule ce qu'il <strong>FAUT</strong> commander ; cette page trace ce qui a <strong>ÉTÉ</strong> commandé.</p>
-        <p>📌 Par défaut, chaque achat crée un <strong>nouveau lot de coût</strong> à ce prix dans <a href="<?= e(url('/admin/compta/couts')) ?>">Coûts de revient</a> — décoche la case pour des prix inhabituels.</p>
-        <p>📌 Les achats alimentent le <strong>stock théorique</strong> visible dans <a href="<?= e(url('/admin/compta/inventaire')) ?>">l'inventaire</a> : dernier comptage + achats − ventes.</p>
+        <p>📌 Par défaut, chaque achat crée un <strong>nouveau lot de coût</strong> à ce prix<?php if (\App\Core\Permissions::isSystemAdmin()): ?> dans <a href="<?= e(url('/admin/compta/couts')) ?>">Coûts de revient</a><?php endif; ?> — décoche la case pour des prix inhabituels.</p>
+        <p>📌 Les achats alimentent le <strong>stock théorique</strong> visible<?php if (\App\Core\Permissions::isSystemAdmin()): ?> dans <a href="<?= e(url('/admin/compta/inventaire')) ?>">l'inventaire</a><?php endif; ?> : dernier comptage + achats − ventes.</p>
     </section>
 </div>
 
