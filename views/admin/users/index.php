@@ -58,9 +58,11 @@ $roleIcons = [
                     <td><?= e($u['email'] ?? '') ?></td>
                     <td>
                         <?php
-                        // Rôles sensibles, gérés par le Fondateur seul :
+                        // Rôles sensibles :
                         //  - FONDATEUR : jamais attribuable depuis le site ;
-                        //  - TRÉSORERIE : ni attribué, ni retiré par un ADMIN.
+                        //  - TRÉSORERIE : visible et attribuable par un ADMIN,
+                        //    mais le retrait reste réservé au Fondateur
+                        //    (la ligne d'un trésorier reste verrouillée ici).
                         $viewerRole = Auth::role();
                         $viewerIsFondateur = $viewerRole === Auth::ROLE_SUPERADMIN;
                         $isFondateurRow = ($u['role'] ?? '') === Auth::ROLE_SUPERADMIN;
@@ -77,10 +79,7 @@ $roleIcons = [
                             <?= csrf_field() ?>
                             <select name="role" onchange="this.form.submit()" <?= $selectLock ?>>
                                 <?php foreach ($roleLabels as $val => $label): ?>
-                                    <?php
-                                    if ($val === Auth::ROLE_SUPERADMIN && !$isFondateurRow) continue;
-                                    if ($val === Auth::ROLE_TRESORERIE && !$viewerIsFondateur && !$isTresorierRow) continue;
-                                    ?>
+                                    <?php if ($val === Auth::ROLE_SUPERADMIN && !$isFondateurRow) continue; ?>
                                     <option value="<?= e($val) ?>" <?= ($u['role'] ?? '') === $val ? 'selected' : '' ?>><?= e($label) ?></option>
                                 <?php endforeach; ?>
                             </select>

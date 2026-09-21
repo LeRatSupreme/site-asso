@@ -62,11 +62,11 @@ final class AdminUserController extends AdminBaseController
             redirect(url('/admin/users'));
         }
 
-        // Le rôle TRÉSORERIE est géré par le Fondateur seul : un ADMIN ne
-        // peut ni l'attribuer, ni retirer le rôle d'un trésorier.
-        if (Auth::role() !== Auth::ROLE_SUPERADMIN
-            && ($oldRole === Auth::ROLE_TRESORERIE || $newRole === Auth::ROLE_TRESORERIE)) {
-            $this->setFlash('error', 'Le rôle Trésorerie est géré par le Fondateur.');
+        // Le rôle TRÉSORERIE peut être attribué par un ADMIN, mais le retrait
+        // ou la modification d'un trésorier existant reste réservé au
+        // Fondateur.
+        if (Auth::role() !== Auth::ROLE_SUPERADMIN && $oldRole === Auth::ROLE_TRESORERIE) {
+            $this->setFlash('error', 'Le retrait du rôle Trésorerie est réservé au Fondateur.');
             redirect(url('/admin/users'));
         }
 
