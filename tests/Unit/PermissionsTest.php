@@ -52,14 +52,19 @@ final class PermissionsTest extends TestCase
         self::assertTrue(Permissions::allows(Auth::ROLE_TRESORERIE, Permissions::MODULE_GAMES));
     }
 
-    public function test_roles_module_n_ont_qu_un_module(): void
+    public function test_roles_modules_specifiques(): void
     {
+        // Communication : contenu + événements + cafétéria.
         self::assertSame(
-            [Permissions::MODULE_CONTENT, Permissions::MODULE_EVENTS],
+            [Permissions::MODULE_CONTENT, Permissions::MODULE_EVENTS, Permissions::MODULE_CAFETERIA],
             Permissions::modulesFor(Auth::ROLE_COMMUNICATION)
         );
+        // Jeux : les jeux + la cafétéria.
+        self::assertSame(
+            [Permissions::MODULE_GAMES, Permissions::MODULE_CAFETERIA],
+            Permissions::modulesFor(Auth::ROLE_JEUX)
+        );
         self::assertSame([Permissions::MODULE_CAFETERIA], Permissions::modulesFor(Auth::ROLE_CAFETERIA));
-        self::assertSame([Permissions::MODULE_GAMES], Permissions::modulesFor(Auth::ROLE_JEUX));
     }
 
     public function test_eleve_et_visiteur_n_ont_acces_a_rien(): void
