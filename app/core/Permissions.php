@@ -93,9 +93,9 @@ final class Permissions
                 self::MODULE_CAFETERIA,
                 self::MODULE_GAMES,
             ],
-            Auth::ROLE_COMMUNICATION => [self::MODULE_CONTENT, self::MODULE_EVENTS],
+            Auth::ROLE_COMMUNICATION => [self::MODULE_CONTENT, self::MODULE_EVENTS, self::MODULE_CAFETERIA],
             Auth::ROLE_CAFETERIA     => [self::MODULE_CAFETERIA],
-            Auth::ROLE_JEUX          => [self::MODULE_GAMES],
+            Auth::ROLE_JEUX          => [self::MODULE_GAMES, self::MODULE_CAFETERIA],
             Auth::ROLE_ELEVE         => [],
         ];
     }
