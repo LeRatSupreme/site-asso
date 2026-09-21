@@ -58,21 +58,28 @@ $roleIcons = [
                     <td><?= e($u['email'] ?? '') ?></td>
                     <td>
                         <?php
-                        // Le rôle FONDATEUR n'est visible/gérable que par le Fondateur lui-même.
+                        // Rôles sensibles, gérés par le Fondateur seul :
+                        //  - FONDATEUR : jamais attribuable depuis le site ;
+                        //  - TRÉSORERIE : ni attribué, ni retiré par un ADMIN.
                         $viewerRole = Auth::role();
+                        $viewerIsFondateur = $viewerRole === Auth::ROLE_SUPERADMIN;
                         $isFondateurRow = ($u['role'] ?? '') === Auth::ROLE_SUPERADMIN;
-                        $canSeeFondateur = $viewerRole === Auth::ROLE_SUPERADMIN || $isFondateurRow;
+                        $isTresorierRow = ($u['role'] ?? '') === Auth::ROLE_TRESORERIE;
+
+                        $selectLock = '';
+                        if ($isSelf) {
+                            $selectLock = 'disabled title="Vous ne pouvez pas modifier votre propre rôle"';
+                        } elseif (!$viewerIsFondateur && ($isFondateurRow || $isTresorierRow)) {
+                            $selectLock = 'disabled title="Réservé au Fondateur"';
+                        }
                         ?>
                         <form method="post" action="<?= e(url('/admin/users/' . rawurlencode((string) $u['id']) . '/role')) ?>" class="inline-form">
                             <?= csrf_field() ?>
-                            <select name="role" onchange="this.form.submit()"
-                                <?= $isSelf ? 'disabled title="Vous ne pouvez pas modifier votre propre rôle"' : '' ?>
-                                <?php if ($isFondateurRow && $viewerRole !== Auth::ROLE_SUPERADMIN): ?>disabled title="Réservé au Fondateur"<?php endif; ?>>
+                            <select name="role" onchange="this.form.submit()" <?= $selectLock ?>>
                                 <?php foreach ($roleLabels as $val => $label): ?>
                                     <?php
-                                    // Le rôle Fondateur n'est JAMAIS attribuable depuis le site :
-                                    // il n'apparaît que sur la ligne du Fondateur lui-même (select désactivé).
                                     if ($val === Auth::ROLE_SUPERADMIN && !$isFondateurRow) continue;
+                                    if ($val === Auth::ROLE_TRESORERIE && !$viewerIsFondateur && !$isTresorierRow) continue;
                                     ?>
                                     <option value="<?= e($val) ?>" <?= ($u['role'] ?? '') === $val ? 'selected' : '' ?>><?= e($label) ?></option>
                                 <?php endforeach; ?>

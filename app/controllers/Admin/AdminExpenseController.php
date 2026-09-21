@@ -44,10 +44,11 @@ final class AdminExpenseController extends AdminBaseController
         $user = $this->guardCompta();
 
         $label = trim((string) ($_POST['label'] ?? ''));
-        $amountTtc = parseFrenchFloat((string) ($_POST['amount_ttc'] ?? ''));
+        // Saisie en HT : la TVA est AJOUTÉE pour former le TTC.
+        $amountHtInput = parseFrenchFloat((string) ($_POST['amount_ht'] ?? ''));
 
-        if ($label === '' || $amountTtc <= 0) {
-            $this->setFlash('error', 'Libellé et montant TTC (> 0) requis.');
+        if ($label === '' || $amountHtInput <= 0) {
+            $this->setFlash('error', 'Libellé et montant HT (> 0) requis.');
             redirect(url('/admin/compta/depenses'));
         }
 
@@ -56,17 +57,18 @@ final class AdminExpenseController extends AdminBaseController
             $category = 'DIVERS';
         }
 
-        // TVA : si un taux est choisi, HT et TVA sont déduites du TTC
-        // (round 2) — plus besoin de saisir les montants à la main.
-        // Aucun taux : écriture sans détail TVA (null).
-        $amountHt = null;
+        // Le montant est saisi en HT : la TVA (taux choisi) est ajoutée pour
+        // former le TTC (round 2). Aucun taux : écriture sans détail TVA
+        // (null), le TTC vaut alors le HT.
+        $amountHt = round($amountHtInput, 2);
         $vat = null;
+        $amountTtc = $amountHt;
         $vatRaw = trim((string) ($_POST['vat_rate'] ?? ''));
         if ($vatRaw !== '') {
             $rate = parseFrenchFloat($vatRaw);
             if (in_array($rate, [20.0, 10.0, 5.5, 2.1, 0.0], true)) {
-                $amountHt = round($amountTtc / (1 + $rate / 100), 2);
-                $vat = round($amountTtc - $amountHt, 2);
+                $vat = round($amountHt * $rate / 100, 2);
+                $amountTtc = round($amountHt + $vat, 2);
             }
         }
 
@@ -83,13 +85,14 @@ final class AdminExpenseController extends AdminBaseController
         ]);
 
         if ($id === '') {
-            $this->setFlash('error', 'Libellé et montant TTC (> 0) requis.');
+            $this->setFlash('error', 'Libellé et montant HT (> 0) requis.');
             redirect(url('/admin/compta/depenses'));
         }
 
         $this->audit('compta.expense.create', 'expense', $id, [
             'label'      => $label,
             'category'   => $category,
+            'amount_ht'  => $amountHt,
             'amount_ttc' => $amountTtc,
         ]);
         $this->setFlash('success', 'Dépense enregistrée.');
