@@ -76,7 +76,6 @@ $sections = [
 // Filtre les groupes de menu selon les modules autorisés au rôle :
 // un rôle ne doit jamais voir un lien vers une page qui lui est interdite.
 $sectionModules = [
-    'Contenu'          => Permissions::MODULE_CONTENT,
     'Cafétéria'        => Permissions::MODULE_CAFETERIA,
     'Jeux'             => Permissions::MODULE_GAMES,
     'Comptabilité'     => Permissions::MODULE_COMPTA,
@@ -92,6 +91,25 @@ foreach ($sectionModules as $group => $module) {
     }
 }
 
+// Groupe « Contenu » : filtrage PAR LIEN (les pages appartiennent à des
+// modules distincts : Événements = events, le reste = content).
+$contentLinkModules = [
+    'Événements' => Permissions::MODULE_EVENTS,
+    'Pages'      => Permissions::MODULE_CONTENT,
+    'Équipe'     => Permissions::MODULE_CONTENT,
+    'Sondages'   => Permissions::MODULE_CONTENT,
+    'Promotions' => Permissions::MODULE_CONTENT,
+    'Médias'     => Permissions::MODULE_CONTENT,
+];
+foreach ($contentLinkModules as $label => $module) {
+    if (isset($sections['Contenu'][$label]) && !Permissions::allows($viewerRole, $module)) {
+        unset($sections['Contenu'][$label]);
+    }
+}
+if (isset($sections['Contenu']) && $sections['Contenu'] === []) {
+    unset($sections['Contenu']);
+}
+
 // Groupe « Système » (Utilisateurs, Paramètres) : réservé au Fondateur
 // (SUPERADMIN) et aux ADMIN explicitement listés dans SYSTEM_ADMINS
 // (voir Permissions::isSystemAdmin() et AdminBaseController::guardSystem()).
@@ -103,19 +121,12 @@ if (in_array($user['role'] ?? null, [Auth::ROLE_SUPERADMIN, Auth::ROLE_ADMIN], t
     ];
 }
 
-// Le rôle TRESORERIE n'a accès qu'aux modules comptabilité, hors inventaire
-// (réservé à ADMIN).
+// Le rôle TRESORERIE n'a pas accès à l'inventaire (réservé au niveau admin) :
+// on retire simplement ce lien, les autres groupes suivent ses modules.
 if (($user['role'] ?? null) === Auth::ROLE_TRESORERIE) {
     $stock = $sections['Stock'];
     unset($stock['Inventaire']);
-
-    $sections = [
-        'Comptabilité' => $sections['Comptabilité'],
-        'Ventes' => $sections['Ventes'],
-        'Produits & coûts' => $sections['Produits & coûts'],
-        'Trésorerie' => $sections['Trésorerie'],
-        'Stock' => $stock,
-    ];
+    $sections['Stock'] = $stock;
 }
 ?>
 <!DOCTYPE html>
