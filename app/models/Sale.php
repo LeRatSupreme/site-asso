@@ -112,6 +112,42 @@ final class Sale extends Model
     }
 
     /**
+     * Références de transaction déjà présentes en base, parmi celles fournies.
+     *
+     * Utilisé par la synchro automatique SumUp : une transaction dont la
+     * « Réf. transaction » figure déjà dans `sales` (peu importe la ligne)
+     * est considérée comme déjà comptabilisée, quelle que soit son origine
+     * (import CSV ou synchro antérieure).
+     *
+     * @param list<string> $refs
+     * @return list<string>
+     */
+    public static function existingTransactionRefs(array $refs): array
+    {
+        $refs = array_values(array_unique(array_filter(array_map('strval', $refs), static fn ($r): bool => $r !== '')));
+        if ($refs === []) {
+            return [];
+        }
+
+        $found = [];
+        foreach (array_chunk($refs, 100) as $chunk) {
+            $placeholders = implode(',', array_fill(0, count($chunk), '?'));
+            $stmt = self::pdo()->prepare(
+                "SELECT DISTINCT transaction_ref FROM sales WHERE transaction_ref IN ($placeholders)"
+            );
+            $stmt->execute($chunk);
+
+            /** @var list<array<string,mixed>> $rows */
+            $rows = $stmt->fetchAll();
+            foreach ($rows as $row) {
+                $found[] = (string) $row['transaction_ref'];
+            }
+        }
+
+        return $found;
+    }
+
+    /**
      * Regroupe les ventes de plusieurs clés produit vers une clé canonique.
      *
      * Cible les lignes dont product_key = ancienne clé, OU dont product_key
