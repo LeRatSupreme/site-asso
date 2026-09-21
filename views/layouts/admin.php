@@ -110,6 +110,13 @@ if (isset($sections['Contenu']) && $sections['Contenu'] === []) {
     unset($sections['Contenu']);
 }
 
+// Coûts de revient : réservés au niveau admin (lien masqué à la trésorerie,
+// l'accès direct est bloqué par AdminComptaController::guardCosts()).
+if ($viewerRole === Auth::ROLE_TRESORERIE
+    && isset($sections['Produits & coûts']['Coûts de revient'])) {
+    unset($sections['Produits & coûts']['Coûts de revient']);
+}
+
 // Groupe « Système » (Utilisateurs, Paramètres) : réservé au Fondateur
 // (SUPERADMIN) et aux ADMIN explicitement listés dans SYSTEM_ADMINS
 // (voir Permissions::isSystemAdmin() et AdminBaseController::guardSystem()).
