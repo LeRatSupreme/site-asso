@@ -124,6 +124,7 @@ if (in_array($user['role'] ?? null, [Auth::ROLE_SUPERADMIN, Auth::ROLE_ADMIN], t
     && Permissions::isSystemAdmin()) {
     $sections['Système'] = [
         'Utilisateurs' => '/admin/users',
+        'Caisses'      => '/admin/caisses',
         'Paramètres'  => '/admin/settings',
     ];
 }

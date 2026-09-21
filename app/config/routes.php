@@ -6,6 +6,7 @@ use App\Controllers\AccountController;
 use App\Controllers\Admin\AdminAnalyticsController;
 use App\Controllers\Admin\AdminBudgetController;
 use App\Controllers\Admin\AdminCafeteriaController;
+use App\Controllers\Admin\AdminCashController;
 use App\Controllers\Admin\AdminComptaController;
 use App\Controllers\Admin\AdminComptaEventController;
 use App\Controllers\Admin\AdminController;
@@ -219,6 +220,12 @@ function aeic_register_routes(Router $router): void
     $router->post('/admin/jeux/enigmes/{id}/delete', [AdminGameController::class, 'deleteEnigma']);
 
     $router->get('/admin/settings', [AdminSettingController::class, 'index']);
+
+    // Caisses — traçabilité du liquide (groupe Système, cf. guardSystem).
+    $router->get('/admin/caisses', [AdminCashController::class, 'index']);
+    $router->post('/admin/caisses/depot', [AdminCashController::class, 'deposit']);
+    $router->post('/admin/caisses/comptage', [AdminCashController::class, 'count']);
+    $router->post('/admin/caisses/fond', [AdminCashController::class, 'fund']);
     $router->get('/admin/wiki', [AdminController::class, 'wiki']);
     $router->post('/admin/settings/save', [AdminSettingController::class, 'save']);
     $router->post('/admin/settings/test-email', [AdminSettingController::class, 'testEmail']);
