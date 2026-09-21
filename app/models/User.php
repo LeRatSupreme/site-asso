@@ -49,15 +49,15 @@ final class User extends Model
     }
 
     /**
-     * Nombre d'administrateurs actifs.
+     * Nombre de comptes de niveau administration actifs (SUPERADMIN + ADMIN).
      */
     public static function countActiveAdmins(): int
     {
         try {
             $stmt = static::pdo()->prepare(
-                'SELECT COUNT(*) FROM users WHERE role = ? AND is_active = 1'
+                'SELECT COUNT(*) FROM users WHERE role IN (?, ?) AND is_active = 1'
             );
-            $stmt->execute([Auth::ROLE_ADMIN]);
+            $stmt->execute([Auth::ROLE_SUPERADMIN, Auth::ROLE_ADMIN]);
 
             return (int) $stmt->fetchColumn();
         } catch (\Throwable) {

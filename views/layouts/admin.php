@@ -73,10 +73,30 @@ $sections = [
     ],
 ];
 
-// Groupe « Système » (Utilisateurs, Paramètres) : réservé aux ADMIN
-// explicitement autorisés par SYSTEM_ADMINS (voir Permissions::isSystemAdmin()
-// et AdminBaseController::guardSystem()). Liste vide : groupe masqué pour tous.
-if (($user['role'] ?? null) === Auth::ROLE_ADMIN && Permissions::isSystemAdmin()) {
+// Filtre les groupes de menu selon les modules autorisés au rôle :
+// un rôle ne doit jamais voir un lien vers une page qui lui est interdite.
+$sectionModules = [
+    'Contenu'          => Permissions::MODULE_CONTENT,
+    'Cafétéria'        => Permissions::MODULE_CAFETERIA,
+    'Jeux'             => Permissions::MODULE_GAMES,
+    'Comptabilité'     => Permissions::MODULE_COMPTA,
+    'Ventes'           => Permissions::MODULE_COMPTA,
+    'Produits & coûts' => Permissions::MODULE_COMPTA,
+    'Trésorerie'       => Permissions::MODULE_COMPTA,
+    'Stock'            => Permissions::MODULE_COMPTA,
+];
+$viewerRole = (string) ($user['role'] ?? '');
+foreach ($sectionModules as $group => $module) {
+    if (!Permissions::allows($viewerRole, $module)) {
+        unset($sections[$group]);
+    }
+}
+
+// Groupe « Système » (Utilisateurs, Paramètres) : réservé au Fondateur
+// (SUPERADMIN) et aux ADMIN explicitement listés dans SYSTEM_ADMINS
+// (voir Permissions::isSystemAdmin() et AdminBaseController::guardSystem()).
+if (in_array($user['role'] ?? null, [Auth::ROLE_SUPERADMIN, Auth::ROLE_ADMIN], true)
+    && Permissions::isSystemAdmin()) {
     $sections['Système'] = [
         'Utilisateurs' => '/admin/users',
         'Paramètres'  => '/admin/settings',

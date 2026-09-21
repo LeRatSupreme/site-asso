@@ -31,9 +31,9 @@ final class Permissions
     public static function roles(): array
     {
         return [
+            Auth::ROLE_SUPERADMIN    => 'Fondateur',
             Auth::ROLE_ADMIN         => 'Administrateur',
             Auth::ROLE_TRESORERIE    => 'Trésorerie',
-            Auth::ROLE_EVENEMENTS    => 'Événements',
             Auth::ROLE_COMMUNICATION => 'Communication',
             Auth::ROLE_CAFETERIA     => 'Cafétéria',
             Auth::ROLE_JEUX          => 'Jeux',
@@ -69,6 +69,13 @@ final class Permissions
     public static function roleModules(): array
     {
         return [
+            Auth::ROLE_SUPERADMIN => [
+                self::MODULE_COMPTA,
+                self::MODULE_EVENTS,
+                self::MODULE_CONTENT,
+                self::MODULE_CAFETERIA,
+                self::MODULE_GAMES,
+            ],
             Auth::ROLE_ADMIN => [
                 self::MODULE_COMPTA,
                 self::MODULE_EVENTS,
@@ -77,8 +84,7 @@ final class Permissions
                 self::MODULE_GAMES,
             ],
             Auth::ROLE_TRESORERIE    => [self::MODULE_COMPTA],
-            Auth::ROLE_EVENEMENTS    => [self::MODULE_EVENTS],
-            Auth::ROLE_COMMUNICATION => [self::MODULE_CONTENT],
+            Auth::ROLE_COMMUNICATION => [self::MODULE_CONTENT, self::MODULE_EVENTS],
             Auth::ROLE_CAFETERIA     => [self::MODULE_CAFETERIA],
             Auth::ROLE_JEUX          => [self::MODULE_GAMES],
             Auth::ROLE_ELEVE         => [],
@@ -125,19 +131,26 @@ final class Permissions
     }
 
     /**
-     * Indique si l'administrateur connecté (ou l'email fourni) est explicitement
-     * autorisé à accéder au groupe « Système » (Utilisateurs, Paramètres,
-     * adhésions) — voir AdminBaseController::guardSystem().
+     * Indique si l'administrateur connecté (ou l'email fourni) accède au
+     * groupe « Système » (Utilisateurs, Paramètres, adhésions) — voir
+     * AdminBaseController::guardSystem().
      *
-     * La liste SYSTEM_ADMINS (variable d'environnement, cf. config.env.example)
-     * contient des emails séparés par des virgules ; la comparaison est faite
-     * en minuscules et sans espaces superflus. Variable absente ou vide :
-     * aucun accès, y compris pour ADMIN.
+     * Hiérarchie « Fondateur » :
+     *  - SUPERADMIN (Fondateur) : accès systématique, sans condition ;
+     *  - ADMIN : accès UNIQUEMENT si listé dans SYSTEM_ADMINS (emails
+     *    séparés par des virgules, cf. config.env.example ; comparaison
+     *    en minuscules et sans espaces superflus). Liste absente ou vide :
+     *    réservé au Fondateur seul.
      */
     public static function isSystemAdmin(?string $email = null): bool
     {
+        if (Auth::role() === Auth::ROLE_SUPERADMIN) {
+            return true;
+        }
+
         $raw = trim((string) getenv('SYSTEM_ADMINS'));
         if ($raw === '') {
+            // Liste non configurée : le groupe Système est réservé au Fondateur.
             return false;
         }
 

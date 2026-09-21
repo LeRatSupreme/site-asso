@@ -80,14 +80,15 @@ final class AdminGuardTest extends TestCase
         self::assertTrue(Middleware::isAuthorized([Auth::ROLE_ADMIN]));
     }
 
-    public function test_role_evenements_accede_au_module_events_pas_aux_autres(): void
+    public function test_role_communication_accede_aux_events_et_contenu_pas_compta(): void
     {
-        $_SESSION['user_id'] = 'evt1';
-        $_SESSION['user_role'] = Auth::ROLE_EVENEMENTS;
+        $_SESSION['user_id'] = 'com1';
+        $_SESSION['user_role'] = Auth::ROLE_COMMUNICATION;
 
+        // Communication gère le contenu ET les événements.
         self::assertSame(Middleware::OK, Middleware::resolve(Permissions::rolesForModule(Permissions::MODULE_EVENTS)));
+        self::assertSame(Middleware::OK, Middleware::resolve(Permissions::rolesForModule(Permissions::MODULE_CONTENT)));
         self::assertSame(Middleware::FORBIDDEN, Middleware::resolve(Permissions::rolesForModule(Permissions::MODULE_COMPTA)));
-        self::assertSame(Middleware::FORBIDDEN, Middleware::resolve(Permissions::rolesForModule(Permissions::MODULE_CONTENT)));
         self::assertSame(Middleware::FORBIDDEN, Middleware::resolve([Auth::ROLE_ADMIN]));
     }
 
@@ -95,7 +96,7 @@ final class AdminGuardTest extends TestCase
     {
         $compta = Permissions::rolesForModule(Permissions::MODULE_COMPTA);
 
-        foreach ([Auth::ROLE_EVENEMENTS, Auth::ROLE_COMMUNICATION, Auth::ROLE_CAFETERIA, Auth::ROLE_JEUX] as $role) {
+        foreach ([Auth::ROLE_COMMUNICATION, Auth::ROLE_CAFETERIA, Auth::ROLE_JEUX] as $role) {
             $_SESSION['user_id'] = strtolower($role) . '1';
             $_SESSION['user_role'] = $role;
 
@@ -106,7 +107,7 @@ final class AdminGuardTest extends TestCase
 
     public function test_admin_roles_excluent_eleve(): void
     {
-        self::assertContains(Auth::ROLE_EVENEMENTS, Permissions::adminRoles());
+        self::assertContains(Auth::ROLE_COMMUNICATION, Permissions::adminRoles());
         self::assertNotContains(Auth::ROLE_ELEVE, Permissions::adminRoles());
     }
 
@@ -127,15 +128,28 @@ final class AdminGuardTest extends TestCase
         self::assertFalse(Permissions::isSystemAdmin('adm1@aeic.fr'));
     }
 
-    public function test_admin_sans_liste_refuse_users_et_settings(): void
+    public function test_admin_sans_liste_reserve_systeme_au_fondateur(): void
     {
-        // Liste absente : volontairement, personne n'a accès.
+        // Hiérarchie « Fondateur » : liste absente, le groupe Système est
+        // réservé au SUPERADMIN ; un ADMIN simple n'y accède pas.
         putenv('SYSTEM_ADMINS');
         $_SESSION['user_id'] = 'adm1';
         $_SESSION['user_role'] = Auth::ROLE_ADMIN;
 
         self::assertSame(Middleware::OK, Middleware::resolve([Auth::ROLE_ADMIN]));
         self::assertFalse(Permissions::isSystemAdmin('admin@aeic.fr'));
+    }
+
+    public function test_fondateur_accede_toujours_au_systeme(): void
+    {
+        // Le SUPERADMIN (Fondateur) accède au groupe Système sans condition.
+        putenv('SYSTEM_ADMINS');
+        $_SESSION['user_id'] = 'founder';
+        $_SESSION['user_role'] = Auth::ROLE_SUPERADMIN;
+
+        self::assertSame(Middleware::OK, Middleware::resolve([Auth::ROLE_SUPERADMIN, Auth::ROLE_ADMIN]));
+        self::assertTrue(Permissions::isSystemAdmin());
+        self::assertTrue(Permissions::isAdminRole(Auth::ROLE_SUPERADMIN));
     }
 
     public function test_admin_email_liste_accede_users_et_settings(): void
