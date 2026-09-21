@@ -1216,8 +1216,14 @@ final class AdminComptaController extends AdminBaseController
             redirect(url('/admin/compta/caisse'));
         }
 
+        $date = datetime_selects_value();
+        if (!$date['ok']) {
+            $this->setFlash('error', 'Date invalide.');
+            redirect(url('/admin/compta/caisse'));
+        }
+
         $label = trim((string) ($_POST['label'] ?? ''));
-        $res = CashLedger::recordCount($counted, $label, (string) $user['email'], $this->postedCaisseDate());
+        $res = CashLedger::recordCount($counted, $label, (string) $user['email'], $date['value']);
         $this->audit('cash.count', 'cash', $res['count_id'], [
             'counted'     => $counted,
             'theoretical' => round($counted - $res['ecart'], 2),
@@ -1234,25 +1240,5 @@ final class AdminComptaController extends AdminBaseController
         }
 
         redirect(url('/admin/compta/caisse'));
-    }
-
-    /**
-     * Date optionnelle postée (datetime-local « Y-m-d\TH:i ») → SQL UTC de
-     * saisie, bornée (≥ 2020, ≤ demain). Renvoie null = « maintenant ».
-     */
-    private function postedCaisseDate(): ?string
-    {
-        $raw = trim((string) ($_POST['date'] ?? ''));
-        if ($raw === '') {
-            return null;
-        }
-
-        $ts = strtotime($raw);
-        if ($ts === false || $ts < strtotime('2020-01-01') || $ts > strtotime('+1 day')) {
-            $this->setFlash('error', 'Date invalide.');
-            redirect(url('/admin/compta/caisse'));
-        }
-
-        return date('Y-m-d H:i:s', $ts);
     }
 }

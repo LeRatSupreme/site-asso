@@ -729,3 +729,102 @@ function t_category(string $category): string
 
     return $category;
 }
+
+/**
+ * Saisie de date/heure en listes déroulantes françaises (JJ / Mois / AAAA /
+ * hh h mm) — remplace le champ datetime-local natif. Tout laisser vide
+ * signifie « maintenant » (côté serveur).
+ */
+function datetime_selects_field(string $prefix = 'date', string $id = 'date'): void
+{
+    $months = [
+        1 => 'janvier', 'février', 'mars', 'avril', 'mai', 'juin',
+        'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre',
+    ];
+
+    $year = (int) date('Y');
+    $years = range($year, 2020);
+
+    $days = [];
+    for ($d = 1; $d <= 31; $d++) {
+        $days[] = sprintf('%02d', $d);
+    }
+    $hours = [];
+    for ($h = 0; $h <= 23; $h++) {
+        $hours[] = sprintf('%02d', $h);
+    }
+    $mins = [];
+    for ($m = 0; $m <= 59; $m++) {
+        $mins[] = sprintf('%02d', $m);
+    }
+
+    ?><div class="field">
+        <label for="<?= e($id) ?>">Date <span class="muted">(optionnel, par défaut maintenant)</span></label>
+        <div id="<?= e($id) ?>" class="datetime-selects" style="display:flex;gap:.45rem;align-items:center;flex-wrap:wrap">
+            <select name="<?= e($prefix) ?>_d" aria-label="Jour" style="width:auto">
+                <option value="">JJ</option>
+                <?php foreach ($days as $d): ?><option value="<?= $d ?>"><?= $d ?></option><?php endforeach; ?>
+            </select>
+            <select name="<?= e($prefix) ?>_m" aria-label="Mois" style="width:auto">
+                <option value="">Mois</option>
+                <?php foreach ($months as $num => $name): ?><option value="<?= $num ?>"><?= $name ?></option><?php endforeach; ?>
+            </select>
+            <select name="<?= e($prefix) ?>_y" aria-label="Année" style="width:auto">
+                <option value="">AAAA</option>
+                <?php foreach ($years as $y): ?><option value="<?= $y ?>"><?= $y ?></option><?php endforeach; ?>
+            </select>
+            <span class="muted">à</span>
+            <select name="<?= e($prefix) ?>_h" aria-label="Heure" style="width:auto">
+                <option value="">hh</option>
+                <?php foreach ($hours as $h): ?><option value="<?= $h ?>"><?= $h ?></option><?php endforeach; ?>
+            </select>
+            <span class="muted">h</span>
+            <select name="<?= e($prefix) ?>_i" aria-label="Minutes" style="width:auto">
+                <option value="">mm</option>
+                <?php foreach ($mins as $m): ?><option value="<?= $m ?>"><?= $m ?></option><?php endforeach; ?>
+            </select>
+        </div>
+    </div><?php
+}
+
+/**
+ * Valeur postée par datetime_selects_field().
+ *
+ * @param string $prefix Préfixe des champs (ex. « date » lit date_d…date_i).
+ * @return array{ok:bool, value:?string} value null = tout vide (« maintenant »,
+ *         le SQL appliquera NOW()) ; ok false = saisie partielle ou invalide.
+ */
+function datetime_selects_value(string $prefix = 'date'): array
+{
+    $d = trim((string) ($_POST[$prefix . '_d'] ?? ''));
+    $m = trim((string) ($_POST[$prefix . '_m'] ?? ''));
+    $y = trim((string) ($_POST[$prefix . '_y'] ?? ''));
+    $h = trim((string) ($_POST[$prefix . '_h'] ?? ''));
+    $i = trim((string) ($_POST[$prefix . '_i'] ?? ''));
+
+    if ($d === '' && $m === '' && $y === '' && $h === '' && $i === '') {
+        return ['ok' => true, 'value' => null];
+    }
+
+    // Sans jour ni mois, la saisie est ambiguë : on les exige.
+    if ($d === '' || $m === '') {
+        return ['ok' => false, 'value' => null];
+    }
+
+    $year = $y !== '' ? (int) $y : (int) date('Y');
+    $hour = $h !== '' ? (int) $h : 0;
+    $min = $i !== '' ? (int) $i : 0;
+    $day = (int) $d;
+    $month = (int) $m;
+
+    if (!checkdate($month, $day, $year) || $hour > 23 || $min > 59) {
+        return ['ok' => false, 'value' => null];
+    }
+
+    $ts = mktime($hour, $min, 0, $month, $day, $year);
+    if ($ts === false || $ts < strtotime('2020-01-01') || $ts > strtotime('+1 day')) {
+        return ['ok' => false, 'value' => null];
+    }
+
+    return ['ok' => true, 'value' => date('Y-m-d H:i:s', $ts)];
+}

@@ -37,10 +37,7 @@ declare(strict_types=1);
             <label for="count-label">Note <span class="muted">(optionnel — ex : comptage après soirée)</span></label>
             <input type="text" id="count-label" name="label" placeholder="ex: comptage après soirée">
         </div>
-        <div class="field">
-            <label for="count-date">Date <span class="muted">(optionnel, par défaut maintenant)</span></label>
-            <input type="datetime-local" id="count-date" name="date">
-        </div>
+        <?php datetime_selects_field('date', 'count-date'); ?>
         <div class="form-actions">
             <button type="submit" class="btn btn-primary">Vérifier la caisse</button>
             <button type="button" class="btn btn-ghost" onclick="if (confirm('Effacer la saisie ?')) this.form.reset();">Annuler</button>
