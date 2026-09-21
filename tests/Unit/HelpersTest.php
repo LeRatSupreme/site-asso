@@ -11,6 +11,11 @@ use PHPUnit\Framework\TestCase;
  */
 final class HelpersTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        $_POST = [];
+    }
+
     public function test_e_echappe_le_html(): void
     {
         self::assertSame(
@@ -88,5 +93,65 @@ final class HelpersTest extends TestCase
     public function test_parse_french_float_chaine_vide(): void
     {
         self::assertSame(0.0, parseFrenchFloat(''));
+    }
+
+    public function test_datetime_selects_value_tout_vide_signifie_maintenant(): void
+    {
+        $res = datetime_selects_value();
+
+        self::assertTrue($res['ok']);
+        self::assertNull($res['value']);
+    }
+
+    public function test_datetime_selects_value_31_fevrier_invalide(): void
+    {
+        $_POST = [
+            'date_d' => '31',
+            'date_m' => '2',
+            'date_y' => (string) (int) date('Y'),
+        ];
+
+        $res = datetime_selects_value();
+
+        self::assertFalse($res['ok']);
+        self::assertNull($res['value']);
+    }
+
+    public function test_datetime_selects_value_date_complete_sans_heure(): void
+    {
+        $_POST = [
+            'date_d' => '21',
+            'date_m' => '9',
+            'date_y' => (string) (int) date('Y'),
+        ];
+
+        $res = datetime_selects_value();
+
+        self::assertTrue($res['ok']);
+        self::assertSame(date('Y-m-d', mktime(0, 0, 0, 9, 21, (int) date('Y'))) . ' 00:00:00', $res['value']);
+    }
+
+    public function test_datetime_selects_value_sans_jour_est_partiel(): void
+    {
+        $_POST = ['date_m' => '9'];
+
+        $res = datetime_selects_value();
+
+        self::assertFalse($res['ok']);
+        self::assertNull($res['value']);
+    }
+
+    public function test_datetime_selects_value_hors_bornes_2019(): void
+    {
+        $_POST = [
+            'date_d' => '1',
+            'date_m' => '1',
+            'date_y' => '2019',
+        ];
+
+        $res = datetime_selects_value();
+
+        self::assertFalse($res['ok']);
+        self::assertNull($res['value']);
     }
 }

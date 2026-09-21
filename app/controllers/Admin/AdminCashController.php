@@ -47,10 +47,15 @@ final class AdminCashController extends AdminBaseController
             redirect(url('/admin/caisses'));
         }
 
-        $date = $this->postedDate();
+        $date = datetime_selects_value();
+        if (!$date['ok']) {
+            $this->setFlash('error', 'Date invalide.');
+            redirect(url('/admin/caisses'));
+        }
+
         $label = trim((string) ($_POST['label'] ?? ''));
 
-        $id = CashLedger::recordDeposit($amount, $label, (string) Auth::user()['email'], $date);
+        $id = CashLedger::recordDeposit($amount, $label, (string) Auth::user()['email'], $date['value']);
         AuditLog::log('cash.depot', Auth::id(), 'cash', $id, ['amount' => $amount, 'label' => $label]);
 
         $this->setFlash('success', sprintf('Dépôt de %s enregistré.', formatPrice($amount)));
@@ -70,8 +75,14 @@ final class AdminCashController extends AdminBaseController
             redirect(url('/admin/caisses'));
         }
 
+        $date = datetime_selects_value();
+        if (!$date['ok']) {
+            $this->setFlash('error', 'Date invalide.');
+            redirect(url('/admin/caisses'));
+        }
+
         $label = trim((string) ($_POST['label'] ?? ''));
-        $res = CashLedger::recordCount($counted, $label, (string) Auth::user()['email'], $this->postedDate());
+        $res = CashLedger::recordCount($counted, $label, (string) Auth::user()['email'], $date['value']);
         AuditLog::log('cash.count', Auth::id(), 'cash', $res['count_id'], [
             'counted'     => $counted,
             'theoretical' => round($counted - $res['ecart'], 2),
@@ -102,32 +113,17 @@ final class AdminCashController extends AdminBaseController
             redirect(url('/admin/caisses'));
         }
 
-        $label = trim((string) ($_POST['label'] ?? '')) ?: 'Fond de caisse';
-        $id = CashLedger::recordFund($amount, $label, (string) Auth::user()['email'], $this->postedDate());
-        AuditLog::log('cash.fond', Auth::id(), 'cash', $id, ['amount' => $amount, 'label' => $label]);
-
-        $this->setFlash('success', sprintf('Fond de caisse de %s enregistré.', formatPrice($amount)));
-        redirect(url('/admin/caisses'));
-    }
-
-    /**
-     * Date optionnelle postée (datetime-local « Y-m-d\TH:i ») → SQL UTC
-     * de saisie, bornée comme l'import CSV (≥ 2020, ≤ demain).
-     * Renvoie null = « maintenant ».
-     */
-    private function postedDate(): ?string
-    {
-        $raw = trim((string) ($_POST['date'] ?? ''));
-        if ($raw === '') {
-            return null;
-        }
-
-        $ts = strtotime($raw);
-        if ($ts === false || $ts < strtotime('2020-01-01') || $ts > strtotime('+1 day')) {
+        $date = datetime_selects_value();
+        if (!$date['ok']) {
             $this->setFlash('error', 'Date invalide.');
             redirect(url('/admin/caisses'));
         }
 
-        return date('Y-m-d H:i:s', $ts);
+        $label = trim((string) ($_POST['label'] ?? '')) ?: 'Fond de caisse';
+        $id = CashLedger::recordFund($amount, $label, (string) Auth::user()['email'], $date['value']);
+        AuditLog::log('cash.fond', Auth::id(), 'cash', $id, ['amount' => $amount, 'label' => $label]);
+
+        $this->setFlash('success', sprintf('Fond de caisse de %s enregistré.', formatPrice($amount)));
+        redirect(url('/admin/caisses'));
     }
 }

@@ -67,10 +67,7 @@ $typeLabels = [
                 <label for="count-label">Note <span class="muted">(optionnel)</span></label>
                 <input type="text" id="count-label" name="label" placeholder="ex: comptage soirée">
             </div>
-            <div class="field">
-                <label for="count-date">Date <span class="muted">(optionnel, par défaut maintenant)</span></label>
-                <input type="datetime-local" id="count-date" name="date">
-            </div>
+            <?php datetime_selects_field('date', 'count-date'); ?>
             <button type="submit" class="btn btn-primary btn-sm">Enregistrer le comptage</button>
         </form>
     </section>
@@ -83,10 +80,7 @@ $typeLabels = [
                 <label for="depot-amount">Montant déposé (€)</label>
                 <input type="text" id="depot-amount" name="amount" inputmode="decimal" placeholder="ex: 100" required>
             </div>
-            <div class="field">
-                <label for="depot-date">Date du dépôt <span class="muted">(optionnel)</span></label>
-                <input type="datetime-local" id="depot-date" name="date">
-            </div>
+            <?php datetime_selects_field('date', 'depot-date'); ?>
             <div class="field">
                 <label for="depot-label">Note <span class="muted">(n° de bordereau, banque…)</span></label>
                 <input type="text" id="depot-label" name="label" placeholder="ex: bordereau 4512 — La Banque Postale">
@@ -108,6 +102,7 @@ $typeLabels = [
                 <label for="fond-label">Note <span class="muted">(optionnel)</span></label>
                 <input type="text" id="fond-label" name="label" placeholder="ex: fond de caisse semaine">
             </div>
+            <?php datetime_selects_field('date', 'fond-date'); ?>
             <button type="submit" class="btn btn-outline btn-sm">Enregistrer le fond</button>
         </form>
     </section>
