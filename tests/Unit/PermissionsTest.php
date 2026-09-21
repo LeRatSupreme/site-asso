@@ -80,7 +80,8 @@ final class PermissionsTest extends TestCase
     {
         self::assertContains(Auth::ROLE_ADMIN, Permissions::rolesForModule(Permissions::MODULE_EVENTS));
         self::assertContains(Auth::ROLE_COMMUNICATION, Permissions::rolesForModule(Permissions::MODULE_EVENTS));
-        self::assertNotContains(Auth::ROLE_TRESORERIE, Permissions::rolesForModule(Permissions::MODULE_EVENTS));
+        // Trésorerie : accès aux événements voulu (commit 1935a7e).
+        self::assertContains(Auth::ROLE_TRESORERIE, Permissions::rolesForModule(Permissions::MODULE_EVENTS));
         self::assertNotContains(Auth::ROLE_ELEVE, Permissions::rolesForModule(Permissions::MODULE_EVENTS));
     }
 
