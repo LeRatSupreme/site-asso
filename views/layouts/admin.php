@@ -45,9 +45,10 @@ $sections = [
         'Énigmes'       => '/admin/jeux/enigmes',
     ],
     'Comptabilité' => [
-        'Dashboard'     => '/admin/compta',
-        'Bilan annuel'  => '/admin/compta/annuel',
-        'Analytics'     => '/admin/analytics',
+        'Dashboard'       => '/admin/compta',
+        'Comptage caisse' => '/admin/compta/caisse',
+        'Bilan annuel'    => '/admin/compta/annuel',
+        'Analytics'       => '/admin/analytics',
     ],
     'Ventes' => [
         'Importer CSV'    => '/admin/compta/import',
@@ -135,6 +136,12 @@ if (($user['role'] ?? null) === Auth::ROLE_TRESORERIE) {
     $stock = $sections['Stock'];
     unset($stock['Inventaire']);
     $sections['Stock'] = $stock;
+}
+
+// Comptage de caisse : visible de tout le bureau (hors élèves), y compris les
+// rôles sans module Compta — dans ce cas le groupe ne montre que ce lien.
+if (!isset($sections['Comptabilité']) && Permissions::isAdminRole($viewerRole)) {
+    $sections['Comptabilité'] = ['Comptage caisse' => '/admin/compta/caisse'];
 }
 ?>
 <!DOCTYPE html>
