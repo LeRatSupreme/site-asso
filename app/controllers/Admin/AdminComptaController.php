@@ -437,9 +437,25 @@ final class AdminComptaController extends AdminBaseController
     //  Coûts de revient
     // -----------------------------------------------------------------
 
-    public function costs(): void
+    /**
+     * Garde-fou spécifique aux coûts de revient : réservés au niveau admin
+     * (Fondateur/ADMIN) — la trésorerie gère les achats mais pas les coûts.
+     */
+    private function guardCosts(): array
     {
         $user = $this->guardCompta();
+
+        if ((string) ($user['role'] ?? '') === \App\Core\Auth::ROLE_TRESORERIE) {
+            $this->setFlash('error', 'Accès refusé : les coûts de revient sont réservés aux administrateurs.');
+            redirect(url('/admin/compta'));
+        }
+
+        return $user;
+    }
+
+    public function costs(): void
+    {
+        $user = $this->guardCosts();
 
         // Liste des produits connus pour l'autocomplétion (anti-fautes de frappe).
         $keys = Sale::distinctProducts();
@@ -550,7 +566,7 @@ final class AdminComptaController extends AdminBaseController
 
     public function saveCost(): void
     {
-        $user = $this->guardCompta();
+        $user = $this->guardCosts();
 
         $data = $_POST;
         $data['cost_price'] = parseFrenchFloat((string) ($data['cost_price'] ?? '0'));
@@ -578,7 +594,7 @@ final class AdminComptaController extends AdminBaseController
      */
     public function saveCostsBulk(): void
     {
-        $this->guardCompta();
+        $this->guardCosts();
 
         $validFrom = trim((string) ($_POST['valid_from'] ?? ''));
         if ($validFrom === '') {
@@ -665,7 +681,7 @@ final class AdminComptaController extends AdminBaseController
 
     public function updateCost(string $id): void
     {
-        $this->guardCompta();
+        $this->guardCosts();
 
         $data = $_POST;
         $data['cost_price'] = parseFrenchFloat((string) ($data['cost_price'] ?? '0'));
@@ -692,7 +708,7 @@ final class AdminComptaController extends AdminBaseController
      */
     public function mergeProducts(): void
     {
-        $this->guardCompta();
+        $this->guardCosts();
 
         $keep = trim((string) ($_POST['keep'] ?? ''));
         if ($keep === '') {
