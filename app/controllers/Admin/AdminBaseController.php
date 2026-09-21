@@ -13,9 +13,10 @@ use App\Core\Permissions;
  * Contrôleur de base de l'espace d'administration.
  *
  * Quatre niveaux d'accès :
- *  - guard()          : réservé à ADMIN (inventaire…) ;
+ *  - guard()          : réservé à ADMIN (hors groupe Système) ;
  *  - guardSystem()    : ADMIN explicitement autorisé via SYSTEM_ADMINS
- *                      (utilisateurs, paramètres, adhésions…) ;
+ *                      (utilisateurs, caisses, inventaire, coûts de
+ *                      revient, paramètres…) ;
  *  - guardModule(x)   : ADMIN + rôles auxquels le module x est ouvert
  *                      (voir App\Core\Permissions) ;
  *  - guardAdminArea() : tout rôle ayant accès à au moins un module

@@ -22,7 +22,10 @@ use App\Models\SaleAdjustment;
 /**
  * Module Comptabilité & gestion des achats (Cafétéria).
  *
- * Réservé aux rôles ADMIN et TRESORERIE (voir guardCompta()).
+ * Réservé aux rôles ADMIN et TRESORERIE (voir guardCompta()) ; la page
+ * « Coûts de revient » et ses actions font exception : elles appartiennent
+ * au groupe « Système » — réservées au Fondateur et aux ADMIN listés dans
+ * SYSTEM_ADMINS (voir guardSystem()).
  *
  * Flux : import CSV SumUp -> table `sales` (dédupliquée) -> mapping aliases
  * -> coûts de revient par lot daté -> calculs (CA, bénéfices, marge) ->
@@ -438,25 +441,9 @@ final class AdminComptaController extends AdminBaseController
     //  Coûts de revient
     // -----------------------------------------------------------------
 
-    /**
-     * Garde-fou spécifique aux coûts de revient : réservés au niveau admin
-     * (Fondateur/ADMIN) — la trésorerie gère les achats mais pas les coûts.
-     */
-    private function guardCosts(): array
-    {
-        $user = $this->guardCompta();
-
-        if ((string) ($user['role'] ?? '') === \App\Core\Auth::ROLE_TRESORERIE) {
-            $this->setFlash('error', 'Accès refusé : les coûts de revient sont réservés aux administrateurs.');
-            redirect(url('/admin/compta'));
-        }
-
-        return $user;
-    }
-
     public function costs(): void
     {
-        $user = $this->guardCosts();
+        $user = $this->guardSystem();
 
         // Liste des produits connus pour l'autocomplétion (anti-fautes de frappe).
         $keys = Sale::distinctProducts();
@@ -567,7 +554,7 @@ final class AdminComptaController extends AdminBaseController
 
     public function saveCost(): void
     {
-        $user = $this->guardCosts();
+        $user = $this->guardSystem();
 
         $data = $_POST;
         $data['cost_price'] = parseFrenchFloat((string) ($data['cost_price'] ?? '0'));
@@ -595,7 +582,7 @@ final class AdminComptaController extends AdminBaseController
      */
     public function saveCostsBulk(): void
     {
-        $this->guardCosts();
+        $this->guardSystem();
 
         $validFrom = trim((string) ($_POST['valid_from'] ?? ''));
         if ($validFrom === '') {
@@ -660,9 +647,13 @@ final class AdminComptaController extends AdminBaseController
         redirect(url('/admin/compta/couts'));
     }
 
+    /**
+     * Clôture un lot de coût. Action de la page « Coûts de revient » :
+     * groupe « Système » (Fondateur), comme costs() et updateCost().
+     */
     public function closeCost(string $id): void
     {
-        $this->guardCompta();
+        $this->guardSystem();
 
         ProductCost::close($id);
         $this->audit('compta.cost.close', 'product_cost', $id);
@@ -670,9 +661,13 @@ final class AdminComptaController extends AdminBaseController
         redirect(url('/admin/compta/couts'));
     }
 
+    /**
+     * Supprime un lot de coût. Action de la page « Coûts de revient » :
+     * groupe « Système » (Fondateur), comme costs() et updateCost().
+     */
     public function deleteCost(string $id): void
     {
-        $this->guardCompta();
+        $this->guardSystem();
 
         ProductCost::delete($id);
         $this->audit('compta.cost.delete', 'product_cost', $id);
@@ -682,7 +677,7 @@ final class AdminComptaController extends AdminBaseController
 
     public function updateCost(string $id): void
     {
-        $this->guardCosts();
+        $this->guardSystem();
 
         $data = $_POST;
         $data['cost_price'] = parseFrenchFloat((string) ($data['cost_price'] ?? '0'));
@@ -709,7 +704,7 @@ final class AdminComptaController extends AdminBaseController
      */
     public function mergeProducts(): void
     {
-        $this->guardCosts();
+        $this->guardSystem();
 
         $keep = trim((string) ($_POST['keep'] ?? ''));
         if ($keep === '') {
