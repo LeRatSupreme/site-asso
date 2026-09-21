@@ -62,6 +62,14 @@ final class AdminUserController extends AdminBaseController
             redirect(url('/admin/users'));
         }
 
+        // Le rôle TRÉSORERIE est géré par le Fondateur seul : un ADMIN ne
+        // peut ni l'attribuer, ni retirer le rôle d'un trésorier.
+        if (Auth::role() !== Auth::ROLE_SUPERADMIN
+            && ($oldRole === Auth::ROLE_TRESORERIE || $newRole === Auth::ROLE_TRESORERIE)) {
+            $this->setFlash('error', 'Le rôle Trésorerie est géré par le Fondateur.');
+            redirect(url('/admin/users'));
+        }
+
         // Protection du dernier admin : on ne quitte pas le rôle ADMIN
         // s'il s'agit du dernier administrateur actif.
         if (UserPolicy::demotionRemovesLastAdmin($oldRole, $newRole, User::countActiveAdmins())) {

@@ -85,17 +85,15 @@ foreach ($byCategory as $c) {
                 <input type="text" id="label" name="label" placeholder="ex: Achat frigo portable" required>
             </div>
 
-            <div class="field">
-                <label for="amount_ttc">Montant TTC (€)</label>
-                <input type="text" id="amount_ttc" name="amount_ttc" inputmode="decimal" placeholder="ex: 25,90" required>
-            </div>
-
-            <details style="margin:12px 0;">
-                <summary>Détails (TVA, fournisseur)</summary>
+            <div class="field-row">
                 <div class="field">
-                    <label for="vat_rate">Taux de TVA <span class="muted">(optionnel — HT et TVA déduites du TTC)</span></label>
+                    <label for="amount_ht">Montant HT (€)</label>
+                    <input type="text" id="amount_ht" name="amount_ht" inputmode="decimal" placeholder="ex: 21,58" required>
+                </div>
+                <div class="field">
+                    <label for="vat_rate">Taux de TVA</label>
                     <select id="vat_rate" name="vat_rate">
-                        <option value="">Aucun</option>
+                        <option value="">Aucune (0 %)</option>
                         <option value="20">20 %</option>
                         <option value="10">10 %</option>
                         <option value="5.5">5,5 %</option>
@@ -103,6 +101,12 @@ foreach ($byCategory as $c) {
                         <option value="0">0 %</option>
                     </select>
                 </div>
+            </div>
+
+            <p class="field-meta">Montant TTC calculé : <strong id="ttc-preview">0,00 €</strong> <span class="muted">(la TVA est ajoutée au montant HT)</span></p>
+
+            <details style="margin:12px 0;">
+                <summary>Détails (fournisseur)</summary>
                 <div class="field">
                     <label for="supplier">Fournisseur <span class="muted">(optionnel)</span></label>
                     <input type="text" id="supplier" name="supplier" placeholder="ex: Metro…">
@@ -114,6 +118,26 @@ foreach ($byCategory as $c) {
                 <button type="button" class="btn btn-ghost" onclick="if (confirm('Effacer la saisie en cours ?')) this.form.reset();">Annuler</button>
             </div>
         </form>
+
+        <script>
+        (function () {
+            var ht = document.getElementById('amount_ht');
+            var rate = document.getElementById('vat_rate');
+            var preview = document.getElementById('ttc-preview');
+            if (!ht || !rate || !preview) return;
+            function fr(n) { return n.toFixed(2).replace('.', ',') + ' €'; }
+            function update() {
+                var h = parseFloat(String(ht.value).replace(',', '.'));
+                if (!isFinite(h) || h < 0) h = 0;
+                var r = parseFloat(rate.value);
+                var ttc = h + (isFinite(r) ? h * r / 100 : 0);
+                preview.textContent = fr(ttc);
+            }
+            ht.addEventListener('input', update);
+            rate.addEventListener('change', update);
+            update();
+        })();
+        </script>
     </section>
 
     <section class="card surface glass">
