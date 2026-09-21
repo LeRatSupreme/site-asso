@@ -53,11 +53,13 @@ $isNew = empty($event['id']);
     <section class="card surface glass form-section">
         <h2 class="form-section-title">📅 Date & Lieu</h2>
         <div class="field-row">
-            <div class="field">
-                <label for="date">Date et heure</label>
-                <input type="datetime-local" id="date" name="date"
-                       value="<?= e(!empty($event['date']) ? date('Y-m-d\TH:i', strtotime((string) $event['date'])) : '') ?>">
-            </div>
+            <?php datetime_selects_field(
+                'date',
+                'date',
+                !empty($event['date']) ? (string) $event['date'] : null,
+                'Date et heure',
+                'optionnel — vide = maintenant',
+            ); ?>
             <div class="field">
                 <label for="location">Lieu</label>
                 <input type="text" id="location" name="location" value="<?= e($event['location'] ?? '') ?>" placeholder="Ex: IUT de Calais — Amphi A">

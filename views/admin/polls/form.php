@@ -9,14 +9,6 @@ declare(strict_types=1);
 
 $poll        = $poll ?? [];
 $options     = $options ?? [];
-$closesAt    = (string) ($poll['closes_at'] ?? '');
-$closesValue = '';
-if ($closesAt !== '' && $closesAt !== '0000-00-00 00:00:00') {
-    $ts = strtotime($closesAt);
-    if ($ts !== false) {
-        $closesValue = date('Y-m-d\TH:i', $ts);
-    }
-}
 ?>
 <form class="card surface glass" method="post" action="<?= e(url('/admin/sondages/save')) ?>">
     <?= csrf_field() ?>
@@ -53,10 +45,7 @@ if ($closesAt !== '' && $closesAt !== '0000-00-00 00:00:00') {
     </div>
 
     <div class="field-row">
-        <div class="field">
-            <label for="closes_at">Fermeture (vide = jamais)</label>
-            <input type="datetime-local" id="closes_at" name="closes_at" value="<?= e($closesValue) ?>">
-        </div>
+        <?php datetime_selects_field('closes_at', 'closes_at', $poll['closes_at'] ?? null, 'Fermeture', 'vide = jamais'); ?>
         <div class="field">
             <label><input type="checkbox" name="is_multiple" value="1" <?= !empty($poll['is_multiple']) ? 'checked' : '' ?>> Choix multiple</label>
             <label><input type="checkbox" name="is_published" value="1" <?= !empty($poll['is_published']) ? 'checked' : '' ?>> Publié</label>

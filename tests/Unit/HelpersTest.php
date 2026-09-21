@@ -154,4 +154,39 @@ final class HelpersTest extends TestCase
         self::assertFalse($res['ok']);
         self::assertNull($res['value']);
     }
+
+    public function test_datetime_selects_value_borne_haute_parametrable_accepte_le_futur(): void
+    {
+        [$datePart] = explode(' ', date('Y-m-d H:i:s', strtotime('+2 years')));
+        [$y, $m, $d] = explode('-', $datePart);
+        $_POST = [
+            'date_d' => $d,
+            'date_m' => $m,
+            'date_y' => $y,
+        ];
+
+        $res = datetime_selects_value('date', '+5 years');
+
+        self::assertTrue($res['ok']);
+        self::assertSame(
+            date('Y-m-d', mktime(0, 0, 0, (int) $m, (int) $d, (int) $y)) . ' 00:00:00',
+            $res['value']
+        );
+    }
+
+    public function test_datetime_selects_value_borne_par_defaut_rejete_le_futur_lointain(): void
+    {
+        [$datePart] = explode(' ', date('Y-m-d H:i:s', strtotime('+2 years')));
+        [$y, $m, $d] = explode('-', $datePart);
+        $_POST = [
+            'date_d' => $d,
+            'date_m' => $m,
+            'date_y' => $y,
+        ];
+
+        $res = datetime_selects_value();
+
+        self::assertFalse($res['ok']);
+        self::assertNull($res['value']);
+    }
 }
