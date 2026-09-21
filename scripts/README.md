@@ -60,3 +60,51 @@ cd /var/www/aeic
 ./scripts/backup.sh
 ls -lh backups/
 ```
+
+## `sync_sumup_sales.php` — Synchro automatique des ventes SumUp
+
+Récupère les ventes SumUp **en direct** (API, fenêtre glissante) et les
+insère dans la table `sales` via le même chemin que l'import CSV : même
+déduplication (clé unique `uniq_sale_line`), même traçabilité
+(`import_batches`, fichier « synchro-api-sumup.json »). Remplace l'import
+manuel des rapports : les ventes apparaissent dans la compta moins d'une
+minute après le paiement.
+
+**Idempotent** : relancer n'insère jamais deux fois une vente (dédup par
+« Réf. transaction »). Un CSV couvrant une période déjà synchronisée reste
+refusé/averti par l'anti-chevauchement des lots.
+
+### Configuration (`config.env`)
+
+```
+SUMUP_API_KEY=sup_sk_…                 # vide/absente = synchro désactivée
+# SUMUP_MERCHANT_CODE=MCMNHAA3         # optionnel, découvert automatiquement
+# SUMUP_SYNC_LOOKBACK_HOURS=24         # fenêtre de recherche (défaut 24)
+```
+
+> Clé API : me.sumup.com → Settings → **For Developers → API keys**.
+> Ne jamais committer la clé (config.env est ignoré par Git).
+
+### Planification en cron (chaque minute)
+
+```bash
+crontab -e
+```
+
+```
+* * * * *  cd /home/ubuntu/AEIC && php scripts/sync_sumup_sales.php >> /home/ubuntu/AEIC/logs/sumup-sync.log 2>&1
+```
+
+Un verrou empêche deux exécutions parallèles (cron lent → tick suivant
+ignoré). Sortie 0 = OK ou « rien à faire », 1 = erreur (clé invalide,
+API injoignable… → visible dans le log).
+
+### Test manuel / diagnostic
+
+```bash
+cd /home/ubuntu/AEIC
+php scripts/sync_sumup_sales.php --dry-run   # ne touche pas à la base
+php scripts/sync_sumup_sales.php             # exécution réelle
+tail -5 logs/sumup-sync.log
+```
+
