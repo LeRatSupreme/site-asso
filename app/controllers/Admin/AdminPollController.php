@@ -53,6 +53,14 @@ final class AdminPollController extends AdminBaseController
         $data  = $_POST;
         $isNew = empty($data['id']);
 
+        $closesSel = datetime_selects_value('closes_at', '+5 years');
+        if (!$closesSel['ok']) {
+            $this->setFlash('error', 'Date de fermeture invalide.');
+            redirect(url('/admin/sondages'));
+        }
+        // Chaîne vide : le modèle retombe sur son fallback (NULL = jamais).
+        $data['closes_at'] = $closesSel['value'] ?? '';
+
         $id = Poll::save($data);
 
         // Remplacement complet des options : on supprime les anciennes puis

@@ -101,6 +101,16 @@ final class AdminEventController extends AdminBaseController
             $data['map_lon'] = $data['map_lon'] ?? null;
         }
 
+        $dateSel = datetime_selects_value('date', '+5 years');
+        if (!$dateSel['ok']) {
+            $this->setFlash('error', 'Date invalide.');
+            $slug = trim((string) ($data['slug'] ?? ''));
+            // Le formulaire d'édition est ouvert via GET /admin/events/{slug}
+            // (ou /admin/events/new à la création) : on revient au bon endroit.
+            redirect($slug !== '' ? url('/admin/events/' . rawurlencode($slug)) : url('/admin/events/new'));
+        }
+        $data['date'] = $dateSel['value'] ?? date('Y-m-d H:i:s');
+
         $id = Event::save($data);
 
         $this->audit($isNew ? 'event.create' : 'event.update', 'event', $id);

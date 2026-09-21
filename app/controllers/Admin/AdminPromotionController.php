@@ -48,6 +48,17 @@ final class AdminPromotionController extends AdminBaseController
         $data  = $_POST;
         $isNew = empty($data['id']);
 
+        $startsSel = datetime_selects_value('starts_at', '+5 years');
+        $endsSel = datetime_selects_value('ends_at', '+5 years');
+        if (!$startsSel['ok'] || !$endsSel['ok']) {
+            $this->setFlash('error', 'Date invalide.');
+            redirect(url('/admin/promotions'));
+        }
+        // Chaîne vide : le modèle retombe sur ses fallbacks (début → maintenant,
+        // fin → NULL illimité).
+        $data['starts_at'] = $startsSel['value'] ?? '';
+        $data['ends_at'] = $endsSel['value'] ?? '';
+
         $id = Promotion::save($data);
 
         $this->audit($isNew ? 'promotion.create' : 'promotion.update', 'promotion', $id);

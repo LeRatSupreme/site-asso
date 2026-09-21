@@ -7,21 +7,6 @@ declare(strict_types=1);
  */
 
 $promo = $promo ?? [];
-
-$startsAt = (string) ($promo['starts_at'] ?? '');
-$endsAt   = (string) ($promo['ends_at'] ?? '');
-
-$toInput = static function (string $db): string {
-    if ($db === '' || $db === '0000-00-00 00:00:00') {
-        return '';
-    }
-    $ts = strtotime($db);
-
-    return $ts !== false ? date('Y-m-d\TH:i', $ts) : '';
-};
-
-$startsValue = $toInput($startsAt);
-$endsValue   = $toInput($endsAt);
 ?>
 <form class="card surface glass" method="post" action="<?= e(url('/admin/promotions/save')) ?>">
     <?= csrf_field() ?>
@@ -64,17 +49,11 @@ $endsValue   = $toInput($endsAt);
             <label for="image">Image (URL, optionnel)</label>
             <input type="text" id="image" name="image" value="<?= e($promo['image'] ?? '') ?>">
         </div>
-        <div class="field">
-            <label for="starts_at">Début</label>
-            <input type="datetime-local" id="starts_at" name="starts_at" value="<?= e($startsValue) ?>">
-        </div>
+        <?php datetime_selects_field('starts_at', 'starts_at', $promo['starts_at'] ?? null, 'Début', 'vide = maintenant'); ?>
     </div>
 
     <div class="field-row">
-        <div class="field">
-            <label for="ends_at">Fin (vide = illimité)</label>
-            <input type="datetime-local" id="ends_at" name="ends_at" value="<?= e($endsValue) ?>">
-        </div>
+        <?php datetime_selects_field('ends_at', 'ends_at', $promo['ends_at'] ?? null, 'Fin', 'vide = illimité'); ?>
         <div class="field">
             <label><input type="checkbox" name="is_active" value="1" <?= !empty($promo['is_active']) ? 'checked' : '' ?>> Active</label>
         </div>

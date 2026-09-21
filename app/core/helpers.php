@@ -734,15 +734,50 @@ function t_category(string $category): string
  * Saisie de date/heure en listes déroulantes françaises (JJ / Mois / AAAA /
  * hh h mm) — remplace le champ datetime-local natif. Tout laisser vide
  * signifie « maintenant » (côté serveur).
+ *
+ * @param string $prefix Préfixe des champs postés (ex. « date » génère date_d…date_i).
+ * @param string $id     Identifiant HTML du bloc (utilisé par le label).
+ * @param string|null $value Valeur pré-remplie, tout format parsable par
+ *                           strtotime (ex. « Y-m-d H:i:s » ou « Y-m-d\TH:i »).
+ *                           null, '', « 0000-00-00 00:00:00 » ou toute chaîne
+ *                           non parsable ⇒ listes vides (aucune sélection).
+ * @param string $label Libellé affiché devant les listes.
+ * @param string|null $hint Précision affichée entre parenthèses après le
+ *                          libellé ; null = pas de précision.
  */
-function datetime_selects_field(string $prefix = 'date', string $id = 'date'): void
-{
+function datetime_selects_field(
+    string $prefix = 'date',
+    string $id = 'date',
+    ?string $value = null,
+    string $label = 'Date',
+    ?string $hint = 'optionnel, par défaut maintenant',
+): void {
     $months = [
         1 => 'janvier', 'février', 'mars', 'avril', 'mai', 'juin',
         'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre',
     ];
 
+    $selD = null; // '01'…'31'
+    $selM = null; // 1…12
+    $selY = null; // '2026'
+    $selH = null; // '00'…'23'
+    $selI = null; // '00'…'59'
+    if ($value !== null && $value !== '') {
+        $ts = strtotime($value);
+        if ($ts !== false) {
+            $selD = date('d', $ts);
+            $selM = (int) date('n', $ts);
+            $selY = date('Y', $ts);
+            $selH = date('H', $ts);
+            $selI = date('i', $ts);
+        }
+    }
+
     $year = (int) date('Y');
+    // Une date pré-remplie dans le futur doit rester sélectionnable.
+    if ($selY !== null && (int) $selY > $year) {
+        $year = (int) $selY;
+    }
     $years = range($year, 2020);
 
     $days = [];
@@ -759,29 +794,29 @@ function datetime_selects_field(string $prefix = 'date', string $id = 'date'): v
     }
 
     ?><div class="field">
-        <label for="<?= e($id) ?>">Date <span class="muted">(optionnel, par défaut maintenant)</span></label>
+        <label for="<?= e($id) ?>"><?= e($label) ?><?php if ($hint !== null): ?> <span class="muted">(<?= e($hint) ?>)</span><?php endif; ?></label>
         <div id="<?= e($id) ?>" class="datetime-selects" style="display:flex;gap:.45rem;align-items:center;flex-wrap:wrap">
             <select name="<?= e($prefix) ?>_d" aria-label="Jour" style="width:auto">
                 <option value="">JJ</option>
-                <?php foreach ($days as $d): ?><option value="<?= $d ?>"><?= $d ?></option><?php endforeach; ?>
+                <?php foreach ($days as $d): ?><option value="<?= $d ?>"<?= $d === $selD ? ' selected' : '' ?>><?= $d ?></option><?php endforeach; ?>
             </select>
             <select name="<?= e($prefix) ?>_m" aria-label="Mois" style="width:auto">
                 <option value="">Mois</option>
-                <?php foreach ($months as $num => $name): ?><option value="<?= $num ?>"><?= $name ?></option><?php endforeach; ?>
+                <?php foreach ($months as $num => $name): ?><option value="<?= $num ?>"<?= $num === $selM ? ' selected' : '' ?>><?= $name ?></option><?php endforeach; ?>
             </select>
             <select name="<?= e($prefix) ?>_y" aria-label="Année" style="width:auto">
                 <option value="">AAAA</option>
-                <?php foreach ($years as $y): ?><option value="<?= $y ?>"><?= $y ?></option><?php endforeach; ?>
+                <?php foreach ($years as $y): ?><option value="<?= $y ?>"<?= (string) $y === $selY ? ' selected' : '' ?>><?= $y ?></option><?php endforeach; ?>
             </select>
             <span class="muted">à</span>
             <select name="<?= e($prefix) ?>_h" aria-label="Heure" style="width:auto">
                 <option value="">hh</option>
-                <?php foreach ($hours as $h): ?><option value="<?= $h ?>"><?= $h ?></option><?php endforeach; ?>
+                <?php foreach ($hours as $h): ?><option value="<?= $h ?>"<?= $h === $selH ? ' selected' : '' ?>><?= $h ?></option><?php endforeach; ?>
             </select>
             <span class="muted">h</span>
             <select name="<?= e($prefix) ?>_i" aria-label="Minutes" style="width:auto">
                 <option value="">mm</option>
-                <?php foreach ($mins as $m): ?><option value="<?= $m ?>"><?= $m ?></option><?php endforeach; ?>
+                <?php foreach ($mins as $m): ?><option value="<?= $m ?>"<?= $m === $selI ? ' selected' : '' ?>><?= $m ?></option><?php endforeach; ?>
             </select>
         </div>
     </div><?php
@@ -791,10 +826,14 @@ function datetime_selects_field(string $prefix = 'date', string $id = 'date'): v
  * Valeur postée par datetime_selects_field().
  *
  * @param string $prefix Préfixe des champs (ex. « date » lit date_d…date_i).
+ * @param string $until  Borne haute de la date acceptée, exprimée en relatif
+ *                       strtotime (ex. « +1 day » par défaut, « +5 years »
+ *                       pour autoriser les dates futures).
  * @return array{ok:bool, value:?string} value null = tout vide (« maintenant »,
- *         le SQL appliquera NOW()) ; ok false = saisie partielle ou invalide.
+ *         le SQL appliquera NOW()) ; ok false = saisie partielle, hors bornes
+ *         (avant 2020 ou après $until) ou invalide.
  */
-function datetime_selects_value(string $prefix = 'date'): array
+function datetime_selects_value(string $prefix = 'date', string $until = '+1 day'): array
 {
     $d = trim((string) ($_POST[$prefix . '_d'] ?? ''));
     $m = trim((string) ($_POST[$prefix . '_m'] ?? ''));
@@ -822,7 +861,7 @@ function datetime_selects_value(string $prefix = 'date'): array
     }
 
     $ts = mktime($hour, $min, 0, $month, $day, $year);
-    if ($ts === false || $ts < strtotime('2020-01-01') || $ts > strtotime('+1 day')) {
+    if ($ts === false || $ts < strtotime('2020-01-01') || $ts > strtotime($until)) {
         return ['ok' => false, 'value' => null];
     }
 
