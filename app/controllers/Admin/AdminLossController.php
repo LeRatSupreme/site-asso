@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Controllers\Admin;
 
 use App\Core\Compta\ComptaCalc;
+use App\Core\Compta\ProductAutoSync;
 use App\Models\Loss;
 use App\Models\ProductCost;
 use App\Models\Sale;
@@ -87,7 +88,21 @@ final class AdminLossController extends AdminBaseController
             'reason'      => $reason,
         ]);
 
-        $this->setFlash('success', 'Perte enregistrée (déduite du stock théorique).');
+        // Synchro automatique de la carte pour ce produit : une perte est
+        // parfois la première trace d'un produit jamais vendu ni compté.
+        // Jamais bloquant.
+        $sync = ['created' => []];
+        try {
+            $sync = ProductAutoSync::ensureKeys([$productKey]);
+        } catch (\Throwable) {
+            // Les pertes ne doivent jamais casser à cause de la synchro carte.
+        }
+
+        $flash = 'Perte enregistrée (déduite du stock théorique).';
+        if ($sync['created'] !== []) {
+            $flash .= ' Carte mise à jour automatiquement : ' . implode(', ', $sync['created']) . '.';
+        }
+        $this->setFlash('success', $flash);
         redirect(url('/admin/compta/pertes'));
     }
 

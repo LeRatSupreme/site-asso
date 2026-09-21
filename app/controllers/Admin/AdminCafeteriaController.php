@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Controllers\Admin;
 
+use App\Core\Compta\ProductAutoSync;
 use App\Core\Permissions;
 use App\Models\Product;
 use App\Models\ProductCategory;
@@ -69,6 +70,39 @@ final class AdminCafeteriaController extends AdminBaseController
         Product::deleteRow($id);
         $this->audit('product.delete', 'product', $id);
         $this->setFlash('success', 'Produit supprimé.');
+        redirect(url('/admin/cafeteria'));
+    }
+
+    /**
+     * Synchronisation manuelle de la carte (bouton de la page Produits) :
+     * crée les fiches des nouveaux produits détectés dans les ventes,
+     * achats, pertes et comptages. Le CSRF est vérifié globalement par le
+     * routeur sur tous les POST ; un échec de synchro ne casse jamais la
+     * page (flash de succès neutre).
+     */
+    public function syncProducts(): void
+    {
+        $this->guardModule(Permissions::MODULE_CAFETERIA);
+
+        $created = [];
+        try {
+            $created = ProductAutoSync::sync()['created'];
+        } catch (\Throwable) {
+            $created = [];
+        }
+
+        $this->audit('product.autosync', 'product', null, ['created' => count($created)]);
+
+        if ($created === []) {
+            $this->setFlash('success', 'Carte déjà à jour.');
+        } else {
+            $this->setFlash('success', sprintf(
+                'Carte synchronisée — %d nouveau(x) produit(s) : %s.',
+                count($created),
+                implode(', ', $created)
+            ));
+        }
+
         redirect(url('/admin/cafeteria'));
     }
 

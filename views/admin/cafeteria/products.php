@@ -6,8 +6,15 @@ declare(strict_types=1);
  * @var list<array<string,mixed>> $products
  */
 ?>
-<div class="admin-actions">
+<div class="admin-actions" style="display:flex;gap:1rem;align-items:center;flex-wrap:wrap;">
     <a class="btn btn-primary" href="<?= e(url('/admin/cafeteria/new')) ?>">+ Nouveau produit</a>
+    <form method="post" action="<?= e(url('/admin/cafeteria/sync')) ?>" data-preserve-scroll style="display:flex;gap:0.75rem;align-items:center;flex-wrap:wrap;">
+        <?= csrf_field() ?>
+        <button type="submit" class="btn btn-outline">⟳ Synchroniser la carte</button>
+        <span class="muted" style="font-size:0.82rem;max-width:480px;">
+            Crée automatiquement les fiches des nouveaux produits détectés dans les ventes, achats, pertes et comptages (catégorie + stock déduits).
+        </span>
+    </form>
 </div>
 
 <div class="card surface glass table-wrap">

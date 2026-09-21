@@ -15,23 +15,25 @@ use App\Core\Auth;
 final class UserPolicy
 {
     /**
-     * Indique si rétrograder (changement de rôle) un ADMIN entraînerait la
-     * disparition du dernier administrateur actif.
+     * Indique si rétrograder (changement de rôle) un compte de niveau
+     * administration (SUPERADMIN ou ADMIN) entraînerait la disparition du
+     * dernier administrateur actif.
      *
      * @param string $currentRole Rôle actuel de l'utilisateur ciblé.
      * @param string $newRole     Nouveau rôle souhaité.
-     * @param int    $activeAdmins Nombre d'administrateurs actuellement actifs.
+     * @param int    $activeAdmins Nombre de comptes de niveau admin actifs.
      */
     public static function demotionRemovesLastAdmin(
         string $currentRole,
         string $newRole,
         int $activeAdmins
     ): bool {
-        if ($currentRole !== Auth::ROLE_ADMIN) {
+        if (!in_array($currentRole, [Auth::ROLE_SUPERADMIN, Auth::ROLE_ADMIN], true)) {
             return false;
         }
 
-        return $newRole !== Auth::ROLE_ADMIN && $activeAdmins <= 1;
+        return !in_array($newRole, [Auth::ROLE_SUPERADMIN, Auth::ROLE_ADMIN], true)
+            && $activeAdmins <= 1;
     }
 
     /**
@@ -40,14 +42,15 @@ final class UserPolicy
      *
      * @param string $currentRole   Rôle actuel de l'utilisateur ciblé.
      * @param bool   $currentlyActive Le compte est-il actif ?
-     * @param int    $activeAdmins  Nombre d'administrateurs actuellement actifs.
+     * @param int    $activeAdmins  Nombre de comptes de niveau admin actifs.
      */
     public static function deactivationRemovesLastAdmin(
         string $currentRole,
         bool $currentlyActive,
         int $activeAdmins
     ): bool {
-        if (!$currentlyActive || $currentRole !== Auth::ROLE_ADMIN) {
+        if (!$currentlyActive
+            || !in_array($currentRole, [Auth::ROLE_SUPERADMIN, Auth::ROLE_ADMIN], true)) {
             return false;
         }
 

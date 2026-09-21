@@ -50,8 +50,10 @@ final class PermissionsTest extends TestCase
 
     public function test_roles_module_n_ont_qu_un_module(): void
     {
-        self::assertSame([Permissions::MODULE_EVENTS], Permissions::modulesFor(Auth::ROLE_EVENEMENTS));
-        self::assertSame([Permissions::MODULE_CONTENT], Permissions::modulesFor(Auth::ROLE_COMMUNICATION));
+        self::assertSame(
+            [Permissions::MODULE_CONTENT, Permissions::MODULE_EVENTS],
+            Permissions::modulesFor(Auth::ROLE_COMMUNICATION)
+        );
         self::assertSame([Permissions::MODULE_CAFETERIA], Permissions::modulesFor(Auth::ROLE_CAFETERIA));
         self::assertSame([Permissions::MODULE_GAMES], Permissions::modulesFor(Auth::ROLE_JEUX));
     }
@@ -68,8 +70,8 @@ final class PermissionsTest extends TestCase
     public function test_roles_for_module_incluent_admin(): void
     {
         self::assertContains(Auth::ROLE_ADMIN, Permissions::rolesForModule(Permissions::MODULE_EVENTS));
-        self::assertContains(Auth::ROLE_EVENEMENTS, Permissions::rolesForModule(Permissions::MODULE_EVENTS));
-        self::assertNotContains(Auth::ROLE_COMMUNICATION, Permissions::rolesForModule(Permissions::MODULE_EVENTS));
+        self::assertContains(Auth::ROLE_COMMUNICATION, Permissions::rolesForModule(Permissions::MODULE_EVENTS));
+        self::assertNotContains(Auth::ROLE_TRESORERIE, Permissions::rolesForModule(Permissions::MODULE_EVENTS));
         self::assertNotContains(Auth::ROLE_ELEVE, Permissions::rolesForModule(Permissions::MODULE_EVENTS));
     }
 

@@ -6,6 +6,7 @@ namespace App\Controllers\Admin;
 
 use App\Core\Compta\AliasSuggester;
 use App\Core\Compta\ComptaCalc;
+use App\Core\Compta\ProductAutoSync;
 use App\Core\Compta\SumUpCsvParser;
 use App\Models\Expense;
 use App\Models\ImportBatch;
@@ -225,6 +226,16 @@ final class AdminComptaController extends AdminBaseController
             'invalid'         => $invalidTotal,
         ]);
 
+        // ── Synchro automatique de la carte : les nouveaux libellés du lot
+        //       (ou tout libellé jamais couvert par une fiche) obtiennent
+        //       leur produit. Jamais bloquant : un échec est silencieux.
+        $sync = ['created' => []];
+        try {
+            $sync = ProductAutoSync::sync();
+        } catch (\Throwable) {
+            // La compta ne doit jamais casser à cause de la synchro carte.
+        }
+
         $unmapped = count(Sale::unmappedDescriptions());
 
         // ── 5. Flash : 100 % doublon (fichier différent mais lignes déjà
@@ -248,6 +259,9 @@ final class AdminComptaController extends AdminBaseController
             );
         }
         $message .= sprintf(' · %d libellé(s) à classer.', $unmapped);
+        if ($sync['created'] !== []) {
+            $message .= ' Carte mise à jour automatiquement : ' . implode(', ', $sync['created']) . '.';
+        }
         $this->setFlash('success', $message);
 
         if ($overlaps !== []) {

@@ -55,6 +55,13 @@ final class AdminUserController extends AdminBaseController
             redirect(url('/admin/users'));
         }
 
+        // Hiérarchie : le rôle SUPERADMIN (Fondateur) n'est JAMAIS attribuable
+        // ni retirable depuis le site — uniquement directement en base (SQL).
+        if ($oldRole === Auth::ROLE_SUPERADMIN || $newRole === Auth::ROLE_SUPERADMIN) {
+            $this->setFlash('error', 'Le rôle Fondateur ne peut pas être modifié depuis le site.');
+            redirect(url('/admin/users'));
+        }
+
         // Protection du dernier admin : on ne quitte pas le rôle ADMIN
         // s'il s'agit du dernier administrateur actif.
         if (UserPolicy::demotionRemovesLastAdmin($oldRole, $newRole, User::countActiveAdmins())) {
@@ -204,7 +211,8 @@ final class AdminUserController extends AdminBaseController
             redirect(url('/admin/users'));
         }
 
-        if ((string) $target['role'] === Auth::ROLE_ADMIN && User::countActiveAdmins() <= 1) {
+        if (in_array((string) $target['role'], [Auth::ROLE_SUPERADMIN, Auth::ROLE_ADMIN], true)
+            && User::countActiveAdmins() <= 1) {
             $this->setFlash('error', 'Impossible : c\'est le dernier administrateur actif.');
             redirect(url('/admin/users'));
         }

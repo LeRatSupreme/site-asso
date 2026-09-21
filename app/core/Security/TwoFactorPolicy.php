@@ -21,7 +21,7 @@ final class TwoFactorPolicy
      */
     public static function requiredRoles(): array
     {
-        return [Auth::ROLE_ADMIN, Auth::ROLE_TRESORERIE];
+        return [Auth::ROLE_SUPERADMIN, Auth::ROLE_ADMIN, Auth::ROLE_TRESORERIE];
     }
 
     /**

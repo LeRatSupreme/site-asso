@@ -112,6 +112,50 @@ final class StockPublic
     }
 
     /**
+     * Un libellé est-il déjà couvert par un des noms de produits passés,
+     * selon EXACTEMENT les mêmes règles que stockForMenuProduct() :
+     * match exact des clés normalisées, sinon inclusion symétrique avec
+     * une aiguille d'au moins 4 caractères normalisés.
+     *
+     * Sert à la synchronisation automatique de la carte
+     * (ProductAutoSync) : éviter de créer une fiche pour un libellé qui
+     * s'apparie déjà à un produit existant.
+     *
+     * @param list<string> $productNames Noms bruts des fiches existantes.
+     */
+    public static function matchesAnyProduct(string $label, array $productNames): bool
+    {
+        $labelKey = self::normalizeKey($label);
+        if ($labelKey === '') {
+            return false;
+        }
+
+        // 1) Match exact (indexé une seule fois pour toute la liste).
+        $nameKeys = [];
+        foreach ($productNames as $name) {
+            $key = self::normalizeKey((string) $name);
+            if ($key === $labelKey) {
+                return true;
+            }
+            if ($key !== '') {
+                $nameKeys[$key] = true;
+            }
+        }
+
+        // 2) Inclusion symétrique, aiguille >= 4 caractères.
+        foreach (array_keys($nameKeys) as $key) {
+            if (strlen($key) >= 4 && str_contains($labelKey, $key)) {
+                return true;
+            }
+            if (strlen($labelKey) >= 4 && str_contains($key, $labelKey)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * Normalisation réutilisable pour l'appariement : minuscules, sans
      * accents, ponctuation et espaces supprimés (« Red Bull », « RedBull »
      * et « red-bull » convergent vers « redbull »).

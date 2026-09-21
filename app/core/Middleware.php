@@ -57,10 +57,23 @@ final class Middleware
     }
 
     /**
-     * Réponse 403 uniforme des garde-fous (accès refusé).
+     * Réponse uniforme des garde-fous (accès refusé).
+     *
+     * Utilisateur connecté : redirection douce vers son espace avec un
+     * message explicite (jamais de page d'erreur abrupte pour un rôle du
+     * site). Visiteur non connecté : 403 brut (ne devrait jamais arriver
+     * via requireRole, qui redirige déjà vers le login).
      */
     public static function forbidden(): never
     {
+        if (Auth::check()) {
+            $_SESSION['_flash'][] = [
+                'type'    => 'error',
+                'message' => "Accès refusé : vous n'avez pas les droits requis pour cette page.",
+            ];
+            redirect(Permissions::isAdminRole(Auth::role()) ? url('/admin') : url('/'));
+        }
+
         http_response_code(403);
         echo '<h1>Erreur 403 — Accès refusé.</h1>';
         exit;

@@ -609,6 +609,7 @@ function product_emoji(string $name): string
         'cookies' => '🍪',
         'oreo'    => '🍪',
         'bonbon'  => '🍬',
+        'sucette' => '🍬',
         'dragée'  => '🍬',
         'dragee'  => '🍬',
         'haribo'  => '🍬',

@@ -12,6 +12,7 @@ namespace App\Core;
  */
 final class Auth
 {
+    public const ROLE_SUPERADMIN = 'SUPERADMIN';
     public const ROLE_ADMIN = 'ADMIN';
     public const ROLE_TRESORERIE = 'TRESORERIE';
     public const ROLE_EVENEMENTS = 'EVENEMENTS';
@@ -155,11 +156,12 @@ final class Auth
     }
 
     /**
-     * Indique si l'utilisateur courant est administrateur.
+     * Indique si l'utilisateur courant est administrateur (ADMIN ou
+     * Fondateur/SUPERADMIN).
      */
     public static function isAdmin(): bool
     {
-        return self::role() === self::ROLE_ADMIN;
+        return in_array(self::role(), [self::ROLE_SUPERADMIN, self::ROLE_ADMIN], true);
     }
 
     /**

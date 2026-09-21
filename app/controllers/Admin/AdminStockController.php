@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Controllers\Admin;
 
 use App\Core\Compta\ComptaCalc;
+use App\Core\Compta\ProductAutoSync;
 use App\Models\InventoryCount;
 use App\Models\ProductCost;
 use App\Models\ProductStock;
@@ -136,6 +137,15 @@ final class AdminStockController extends AdminBaseController
             'purchased_at' => $purchasedAt,
         ]);
 
+        // Synchro automatique de la carte limitée aux clés saisies :
+        // un achat sur un produit sans fiche crée la fiche. Jamais bloquant.
+        $sync = ['created' => []];
+        try {
+            $sync = ProductAutoSync::ensureKeys(array_keys($products));
+        } catch (\Throwable) {
+            // Le stock ne doit jamais casser à cause de la synchro carte.
+        }
+
         $flash = sprintf(
             '%d achat%s enregistré%s pour %d produit%s — stock mis à jour.',
             $inserted,
@@ -146,6 +156,9 @@ final class AdminStockController extends AdminBaseController
         );
         if ($errors !== []) {
             $flash .= ' Lignes ignorées : ' . implode(' · ', $errors);
+        }
+        if ($sync['created'] !== []) {
+            $flash .= ' Carte mise à jour automatiquement : ' . implode(', ', $sync['created']) . '.';
         }
         $this->setFlash('success', $flash);
         redirect(url('/admin/compta/achats'));
@@ -390,10 +403,20 @@ final class AdminStockController extends AdminBaseController
             'gaps'     => $gaps,
         ]);
 
-        $this->setFlash(
-            'success',
-            sprintf('%d produit(s) compté(s) — %d écart(s) détecté(s).', $done, $gaps)
-        );
+        // Synchro automatique de la carte : couvre les nouveaux produits
+        // comptés pour la première fois. Jamais bloquant.
+        $sync = ['created' => []];
+        try {
+            $sync = ProductAutoSync::sync();
+        } catch (\Throwable) {
+            // L'inventaire ne doit jamais casser à cause de la synchro carte.
+        }
+
+        $flash = sprintf('%d produit(s) compté(s) — %d écart(s) détecté(s).', $done, $gaps);
+        if ($sync['created'] !== []) {
+            $flash .= ' Carte mise à jour automatiquement : ' . implode(', ', $sync['created']) . '.';
+        }
+        $this->setFlash('success', $flash);
         redirect(url('/admin/compta/inventaire'));
     }
 }

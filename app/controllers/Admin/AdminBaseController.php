@@ -30,22 +30,21 @@ abstract class AdminBaseController extends Controller
      */
     protected function guard(): array
     {
-        Middleware::requireRole([Auth::ROLE_ADMIN]);
+        Middleware::requireRole([Auth::ROLE_SUPERADMIN, Auth::ROLE_ADMIN]);
 
         return Auth::user();
     }
 
     /**
      * Garde-fou du groupe « Système » (Utilisateurs, Paramètres, adhésions) :
-     * ADMIN et explicitement autorisé par la liste SYSTEM_ADMINS
-     * (voir Permissions::isSystemAdmin()). Liste absente ou vide : aucun
-     * accès, y compris pour un ADMIN non listé.
+     * rôle SUPERADMIN (Fondateur) = accès systématique ; ADMIN = accès si
+     * listé dans SYSTEM_ADMINS (voir Permissions::isSystemAdmin()).
      *
      * @return array<string,mixed>
      */
     protected function guardSystem(): array
     {
-        Middleware::requireRole([Auth::ROLE_ADMIN]);
+        Middleware::requireRole([Auth::ROLE_SUPERADMIN, Auth::ROLE_ADMIN]);
 
         if (!Permissions::isSystemAdmin()) {
             Middleware::forbidden();
