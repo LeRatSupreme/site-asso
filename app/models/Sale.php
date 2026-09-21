@@ -112,6 +112,24 @@ final class Sale extends Model
     }
 
     /**
+     * Somme TTC des ventes pour un moyen de paiement donné (CARTE/LIQUIDE).
+     *
+     * Utilisé par le livre de caisse : total du liquide encaissé.
+     */
+    public static function sumByPaymentMethod(string $method): float
+    {
+        $stmt = self::pdo()->prepare(
+            'SELECT COALESCE(SUM(price_ttc), 0) AS total FROM sales WHERE payment_method = ?'
+        );
+        $stmt->execute([$method]);
+
+        /** @var array<string,mixed> $r */
+        $r = $stmt->fetch();
+
+        return (float) ($r['total'] ?? 0);
+    }
+
+    /**
      * Références de transaction déjà présentes en base, parmi celles fournies.
      *
      * Utilisé par la synchro automatique SumUp : une transaction dont la

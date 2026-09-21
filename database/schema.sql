@@ -345,6 +345,31 @@ CREATE TABLE IF NOT EXISTS import_batches (
     KEY idx_import_period (period_start, period_end)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Traçabilité du liquide : mouvements manuels (les ventes LIQUIDE sont
+-- calculées en direct depuis `sales`, jamais dupliquées ici).
+CREATE TABLE IF NOT EXISTS cash_movements (
+    id         VARCHAR(255) NOT NULL PRIMARY KEY,
+    type       ENUM('FOND','DEPOT','AJUSTEMENT') NOT NULL,
+    amount     DECIMAL(10,2) NOT NULL,
+    label      VARCHAR(255) NOT NULL DEFAULT '',
+    created_by VARCHAR(255) NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_cash_mov_created (created_at),
+    KEY idx_cash_mov_type (type)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Comptages physiques de caisse (écart = compté − théorique).
+CREATE TABLE IF NOT EXISTS cash_counts (
+    id                 VARCHAR(255) NOT NULL PRIMARY KEY,
+    counted_amount     DECIMAL(10,2) NOT NULL,
+    theoretical_amount DECIMAL(10,2) NOT NULL,
+    ecart              DECIMAL(10,2) NOT NULL,
+    label              VARCHAR(255) NOT NULL DEFAULT '',
+    created_by         VARCHAR(255) NULL,
+    created_at         DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_cash_counts_created (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- Ajustements de vente (immuabilité financière)
 CREATE TABLE IF NOT EXISTS sale_adjustments (
     id          VARCHAR(255) NOT NULL PRIMARY KEY,
