@@ -263,6 +263,11 @@ function aeic_register_routes(Router $router): void
     $router->post('/admin/compta/achats/{id}/delete', [AdminStockController::class, 'deletePurchase']);
     $router->get('/admin/compta/inventaire', [AdminStockController::class, 'inventory']);
     $router->post('/admin/compta/inventaire/save', [AdminStockController::class, 'saveCount']);
+
+    // Comptage de caisse : saisie seule, tout le bureau hors élèves
+    // (historique et écarts réservés à Système → Caisses, Fondateur).
+    $router->get('/admin/compta/caisse', [AdminComptaController::class, 'caisse']);
+    $router->post('/admin/compta/caisse/comptage', [AdminComptaController::class, 'caisseCount']);
     $router->get('/admin/compta/pertes', [AdminLossController::class, 'index']);
     $router->post('/admin/compta/pertes/save', [AdminLossController::class, 'save']);
     $router->post('/admin/compta/pertes/{id}/delete', [AdminLossController::class, 'delete']);

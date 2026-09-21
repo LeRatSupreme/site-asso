@@ -189,4 +189,25 @@ final class AdminGuardTest extends TestCase
         $compta = Permissions::rolesForModule(Permissions::MODULE_COMPTA);
         self::assertSame(Middleware::OK, Middleware::resolve($compta));
     }
+
+    // -----------------------------------------------------------------
+    //  Comptage de caisse (Comptabilité) : tout le bureau, élèves exclus
+    // -----------------------------------------------------------------
+
+    public function test_comptage_caisse_ouvert_tout_le_bureau_sauf_eleve(): void
+    {
+        // Tous les rôles du bureau passent par adminRoles() (garde de la page).
+        foreach (Permissions::adminRoles() as $role) {
+            $_SESSION['user_id'] = 'u_' . strtolower((string) $role);
+            $_SESSION['user_role'] = $role;
+
+            self::assertSame(Middleware::OK, Middleware::resolve(Permissions::adminRoles()), $role);
+        }
+
+        // Les élèves restent exclus.
+        $_SESSION['user_id'] = 'eleve1';
+        $_SESSION['user_role'] = Auth::ROLE_ELEVE;
+
+        self::assertSame(Middleware::FORBIDDEN, Middleware::resolve(Permissions::adminRoles()));
+    }
 }

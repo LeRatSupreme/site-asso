@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Controllers\Admin;
 
 use App\Core\Compta\AliasSuggester;
+use App\Core\Compta\CashLedger;
 use App\Core\Compta\ComptaCalc;
 use App\Core\Compta\ProductAutoSync;
 use App\Core\Compta\SumUpCsvParser;
@@ -1177,5 +1178,81 @@ final class AdminComptaController extends AdminBaseController
         });
 
         return ['rows' => $rows, 'alerts' => $alerts];
+    }
+
+    // -----------------------------------------------------------------
+    //  Comptage de caisse
+    // -----------------------------------------------------------------
+
+    /**
+     * Comptage de caisse — saisie seule, ouverte à tout le bureau (hors élèves).
+     *
+     * Comptage « à l'aveugle » : le théorique n'est volontairement pas affiché
+     * (un comptage honnête ne doit pas pouvoir s'ajuster sur l'attendu).
+     * L'écart n'est révélé qu'après enregistrement, via le flash ; l'historique
+     * reste réservé au groupe Système → Caisses (Fondateur).
+     */
+    public function caisse(): void
+    {
+        $user = $this->guardAdminArea();
+
+        $this->renderAdmin('admin/compta/caisse', [
+            'title' => 'Comptage de caisse',
+            'user'  => $user,
+        ]);
+    }
+
+    /**
+     * Enregistre le comptage saisi (même mécanique que Système → Caisses) :
+     * écart figé dans cash_counts + mouvement AJUSTEMENT qui réaligne le théorique.
+     */
+    public function caisseCount(): void
+    {
+        $user = $this->guardAdminArea();
+
+        $counted = parseFrenchFloat((string) ($_POST['counted'] ?? ''));
+        if ($counted < 0) {
+            $this->setFlash('error', 'Montant compté invalide.');
+            redirect(url('/admin/compta/caisse'));
+        }
+
+        $label = trim((string) ($_POST['label'] ?? ''));
+        $res = CashLedger::recordCount($counted, $label, (string) $user['email'], $this->postedCaisseDate());
+        $this->audit('cash.count', 'cash', $res['count_id'], [
+            'counted'     => $counted,
+            'theoretical' => round($counted - $res['ecart'], 2),
+            'ecart'       => $res['ecart'],
+            'source'      => 'compta',
+        ]);
+
+        if ($res['ecart'] < 0) {
+            $this->setFlash('error', sprintf('⚠️ Manquant de %s constaté — caisse réalignée.', formatPrice(abs($res['ecart']))));
+        } elseif ($res['ecart'] > 0) {
+            $this->setFlash('success', sprintf('Surplus de %s constaté — caisse réalignée.', formatPrice($res['ecart'])));
+        } else {
+            $this->setFlash('success', 'Comptage exact : aucun écart. 👍');
+        }
+
+        redirect(url('/admin/compta/caisse'));
+    }
+
+    /**
+     * Date optionnelle postée (datetime-local « Y-m-d\TH:i ») → SQL UTC de
+     * saisie, bornée (≥ 2020, ≤ demain). Renvoie null = « maintenant ».
+     */
+    private function postedCaisseDate(): ?string
+    {
+        $raw = trim((string) ($_POST['date'] ?? ''));
+        if ($raw === '') {
+            return null;
+        }
+
+        $ts = strtotime($raw);
+        if ($ts === false || $ts < strtotime('2020-01-01') || $ts > strtotime('+1 day')) {
+            $this->setFlash('error', 'Date invalide.');
+            redirect(url('/admin/compta/caisse'));
+        }
+
+        return date('Y-m-d H:i:s', $ts);
     }
 }
