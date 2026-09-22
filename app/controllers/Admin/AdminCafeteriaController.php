@@ -6,7 +6,9 @@ namespace App\Controllers\Admin;
 
 use App\Core\Auth;
 use App\Core\Compta\ProductAutoSync;
+use App\Core\Compta\StockPublic;
 use App\Core\Permissions;
+use App\Models\InventoryCount;
 use App\Models\Product;
 use App\Models\ProductAlias;
 use App\Models\ProductCategory;
@@ -50,6 +52,11 @@ final class AdminCafeteriaController extends AdminBaseController
         ]);
     }
 
+    /**
+     * Crée ou met à jour une fiche produit (création si id absent).
+     *
+     * Le stock saisi devient la référence d'inventaire (InventoryCount) pour la clé résolue.
+     */
     public function saveProduct(): void
     {
         $this->guardModule(Permissions::MODULE_CAFETERIA);
@@ -58,9 +65,37 @@ final class AdminCafeteriaController extends AdminBaseController
         $isNew = empty($data['id']);
         $data['price'] = parseFrenchFloat((string) ($data['price'] ?? '0'));
 
+        // Ancien stock capturé AVANT la sauvegarde : la synchronisation
+        // inventaire n'a lieu que si le stock a réellement changé (une
+        // mise à jour sans changement de stock ne doit pas polluer
+        // l'historique des comptages).
+        $existing = $isNew ? null : Product::find((string) $data['id']);
+        $oldStock = $existing !== null ? (int) ($existing['stock'] ?? 0) : null;
+
         $id = Product::save($data);
 
         $this->audit($isNew ? 'product.create' : 'product.update', 'product', $id);
+
+        // La saisie du stock sur la fiche déclare le stock physique :
+        // elle devient la nouvelle référence d'inventaire (comme un
+        // comptage). Mêmes conventions que AdminStockController::saveCount :
+        // record() sans try/catch, audit, puis invalidation du cache carte.
+        $newStock = (int) ($data['stock'] ?? 0);
+        if ($oldStock === null || $newStock !== $oldStock) {
+            $stockKey = StockPublic::resolveKey((string) ($data['name'] ?? ''));
+            if ($stockKey !== null) {
+                InventoryCount::record($stockKey, max(0, $newStock), null, Auth::id());
+
+                $this->audit('inventory.stock_sync', 'product', $id, [
+                    'name' => (string) ($data['name'] ?? ''),
+                    'old'  => $oldStock,
+                    'new'  => $newStock,
+                ]);
+            }
+
+            // Le stock de la fiche bouge : la carte publique suit.
+            StockPublic::invalidate();
+        }
 
         $this->setFlash('success', 'Produit enregistré.');
         redirect(url('/admin/cafeteria'));
