@@ -252,6 +252,13 @@ $roleIcons = [
 .pages-chip.is-muted { opacity: 0.55; cursor: help; }
 
 .pages-dialog {
+    /* Centrage explicite : le reset global « * { margin: 0 } » du site
+       écrase le « margin: auto » natif des <dialog> modaux, ce qui les
+       colle en haut à gauche. */
+    position: fixed;
+    inset: 0;
+    margin: auto;
+    height: fit-content;
     border: 1px solid var(--border);
     border-radius: 14px;
     padding: 0;
