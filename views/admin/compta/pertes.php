@@ -13,6 +13,7 @@ use App\Models\Loss;
  * @var list<array{reason:string,qty:int,value:float}> $byReason
  * @var float $value30
  * @var list<string> $products
+ * @var list<string> $allKeys
  */
 
 // Libellés français des motifs (ordre = Loss::REASONS).
@@ -33,6 +34,18 @@ $reasonBadges = [
 ];
 
 $topReason = $byReason[0] ?? null;
+
+// Prévention de doublons : la liste des clés existantes est normalisée
+// côté PHP (même règle que StockPublic::normalizeKey) et injectée en JS
+// via l'attribut data-dup-keys du champ — le JS compare la saisie
+// normalisée à cette carte et avertit sans bloquer.
+$normKeys = [];
+foreach ($allKeys as $k) {
+    $n = \App\Core\Compta\StockPublic::normalizeKey((string) $k);
+    if ($n !== '' && !isset($normKeys[$n])) {
+        $normKeys[$n] = (string) $k;
+    }
+}
 ?>
 <div class="compta-head">
     <div>
@@ -83,12 +96,15 @@ $topReason = $byReason[0] ?? null;
             <div class="field">
                 <label for="product_key">Produit</label>
                 <input type="text" id="product_key" name="product_key" list="loss-products"
-                    placeholder="ex: Coca 33cl" autocomplete="off" required>
+                    placeholder="ex: Coca 33cl" autocomplete="off" required
+                    data-dup-keys="<?= e(json_encode($normKeys)) ?>">
                 <datalist id="loss-products">
                     <?php foreach ($products as $p): ?>
                         <option value="<?= e($p) ?>"></option>
                     <?php endforeach; ?>
                 </datalist>
+                <p class="field-help" id="loss-dup-warning" hidden
+                   style="padding:4px 8px;border-radius:6px;background:#fff3cd;border:1px solid #ffeeba;color:#7a5b00;"></p>
                 <p class="field-help">Choisis un nom existant (mêmes noms que dans les ventes) pour déduire le bon stock théorique.</p>
             </div>
 
@@ -185,4 +201,43 @@ $topReason = $byReason[0] ?? null;
         </tbody>
     </table>
 </div>
+<script>
+    (function () {
+        var input = document.getElementById('product_key');
+        var warn = document.getElementById('loss-dup-warning');
+        if (!input || !warn) return;
+
+        // Carte des clés existantes, normalisées côté PHP (data-dup-keys) :
+        // clé normalisée -> clé réelle à préférer.
+        var normKeys = {};
+        try { normKeys = JSON.parse(input.getAttribute('data-dup-keys') || '{}'); } catch (e) { normKeys = {}; }
+
+        // Règle de normalisation dupliquée en JS (pas de PHP côté client) :
+        // identique à StockPublic::normalizeKey — minuscules, sans accents,
+        // séparateurs et espaces supprimés.
+        function normKey(v) {
+            return String(v || '')
+                .toLowerCase()
+                .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+                .replace(/[_\-\.()\[\]\{\},;:\/]+/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim()
+                .replace(/ /g, '');
+        }
+
+        function check() {
+            var existing = normKeys[normKey(input.value)];
+            if (existing && existing !== input.value) {
+                warn.textContent = '⚠️ « ' + input.value + ' » ressemble à la clé existante « ' + existing + ' » — préfère-la (autocomplétion) pour éviter un doublon.';
+                warn.hidden = false;
+            } else {
+                warn.hidden = true;
+                warn.textContent = '';
+            }
+        }
+
+        input.addEventListener('blur', check);
+        input.addEventListener('change', check);
+    })();
+</script>
 

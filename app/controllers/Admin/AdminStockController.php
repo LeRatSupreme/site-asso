@@ -11,6 +11,7 @@ use App\Core\Compta\StockPublic;
 use App\Models\InventoryCount;
 use App\Models\ProductCost;
 use App\Models\ProductDiscontinued;
+use App\Models\ProductKeyMerge;
 use App\Models\ProductStock;
 use App\Models\Purchase;
 use App\Models\Sale;
@@ -57,6 +58,7 @@ final class AdminStockController extends AdminBaseController
             'sums'          => Purchase::sumsBetween($period['from'], $period['to']),
             'count'         => count($rows),
             'qtyTotal'      => $qtyTotal,
+            'allKeys'       => ProductKeyMerge::allKeys(),
         ]);
     }
 
@@ -391,6 +393,7 @@ final class AdminStockController extends AdminBaseController
             'discontinuedRows' => $discontinuedRows,
             'history'          => InventoryCount::history(50),
             'gaps'             => InventoryCount::recentGaps(30),
+            'allKeys'          => ProductKeyMerge::allKeys(),
         ]);
     }
 
@@ -610,6 +613,69 @@ final class AdminStockController extends AdminBaseController
         $this->audit('inventory.resume', 'product', $productKey, ['key' => $productKey]);
 
         $this->setFlash('success', 'Produit remis en vente.');
+        redirect(url('/admin/compta/inventaire'));
+    }
+
+    /**
+     * Fusionne deux clés produits (doublons) : toutes les données de la
+     * clé source — ventes, achats, pertes, alias, comptages, stock de
+     * référence, drapeau « plus en vente » — sont déplacées vers la clé
+     * cible conservée (ProductKeyMerge::merge, transactionnel).
+     */
+    public function mergeKeys(): void
+    {
+        $this->guardSystemOrPage('inventory');
+
+        $source = trim((string) ($_POST['source'] ?? ''));
+        $target = trim((string) ($_POST['target'] ?? ''));
+
+        if ($source === '' || $target === '') {
+            $this->setFlash('error', 'Clé source et clé cible requises.');
+            redirect(url('/admin/compta/inventaire'));
+        }
+        if ($source === $target) {
+            $this->setFlash('error', 'Les deux clés sont identiques : rien à fusionner.');
+            redirect(url('/admin/compta/inventaire'));
+        }
+
+        try {
+            $moved = ProductKeyMerge::merge($source, $target, Auth::id());
+        } catch (\InvalidArgumentException $e) {
+            $this->setFlash('error', 'Fusion refusée : ' . $e->getMessage());
+            redirect(url('/admin/compta/inventaire'));
+        } catch (\Throwable $e) {
+            $this->setFlash('error', 'Fusion impossible : ' . $e->getMessage());
+            redirect(url('/admin/compta/inventaire'));
+        }
+
+        $this->audit('inventory.merge', 'product_key', $target, [
+            'source' => $source,
+            'target' => $target,
+            'tables' => $moved,
+        ]);
+
+        $labels = [
+            'purchases'    => 'achat(s)',
+            'losses'       => 'perte(s)',
+            'sales'        => 'vente(s)',
+            'aliases'      => 'alias',
+            'counts'       => 'comptage(s)',
+            'stocks'       => 'stock additionné',
+            'discontinued' => 'drapeau « plus en vente »',
+        ];
+        $parts = [];
+        foreach ($moved as $table => $n) {
+            if ($n > 0) {
+                $parts[] = $n . ' ' . ($labels[$table] ?? $table);
+            }
+        }
+
+        $this->setFlash(
+            'success',
+            'Fusion effectuée : '
+            . ($parts === [] ? 'aucune donnée trouvée sur la clé source.' : implode(', ', $parts))
+            . '.'
+        );
         redirect(url('/admin/compta/inventaire'));
     }
 }
