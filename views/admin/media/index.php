@@ -15,7 +15,7 @@ declare(strict_types=1);
             <input type="file" id="media-file" name="file" accept="image/*" required hidden>
             <span class="dropzone-emoji">📦</span>
             <span class="dropzone-title">Clique ou dépose une image ici</span>
-            <span class="dropzone-sub" id="mediaFileName">JPG, PNG, GIF, WebP, SVG — 5 Mo max</span>
+            <span class="dropzone-sub" id="mediaFileName">JPG, PNG, GIF, WebP — 5 Mo max</span>
         </label>
 
         <div class="media-upload-fields">
@@ -27,7 +27,7 @@ declare(strict_types=1);
 
 <?php if ($medias === []): ?>
     <div class="empty-state card surface glass">
-        <p class="muted">Aucun média pour le moment. Ajoute ta première image ci-dessus.</p>
+        <p class="muted">Aucun média pour le moment.</p>
     </div>
 <?php else: ?>
     <div class="media-grid">
@@ -36,22 +36,57 @@ declare(strict_types=1);
             $fullUrl = asset($rel);
             $name = basename($rel);
             $size = isset($m['size']) ? round((int) $m['size'] / 1024) : null;
+            $id = (string) $m['id'];
+            // Identifiant DOM sûr (les ids médias sont med_hex, mais restons
+            // robustes — même assainissement que les dialogs « Pages + »).
+            $domId = preg_replace('#[^A-Za-z0-9_-]#', '', $id);
         ?>
             <figure class="media-card surface glass">
                 <div class="media-thumb">
-                    <img src="<?= e($fullUrl) ?>" alt="<?= e($m['alt'] ?? '') ?>" loading="lazy">
+                    <img src="<?= e($fullUrl) ?>" alt="<?= e((string) ($m['alt'] ?? '')) ?>" loading="lazy">
                 </div>
                 <figcaption>
                     <strong class="media-name" title="<?= e($name) ?>"><?= e($name) ?></strong>
                     <div class="media-meta">
                         <?php if ($size !== null): ?><span class="badge badge-muted"><?= (int) $size ?> Ko</span><?php endif; ?>
-                        <?php if (!empty($m['alt'])): ?><span class="badge badge-info">📝 <?= e($m['alt']) ?></span><?php endif; ?>
+                        <?php if (!empty($m['alt'])): ?><span class="badge badge-info" title="Texte alternatif">📝 <?= e((string) $m['alt']) ?></span><?php endif; ?>
                     </div>
-                    <code class="media-url" id="url-<?= e((string) $m['id']) ?>"><?= e($fullUrl) ?></code>
+                    <code class="media-url" id="media-url-<?= e($domId) ?>"><?= e($fullUrl) ?></code>
                     <div class="media-actions">
-                        <button type="button" class="btn btn-outline btn-sm copy-url" data-target="url-<?= e((string) $m['id']) ?>">Copier</button>
-                        <button type="button" class="btn btn-outline btn-sm media-edit-btn" data-id="<?= e((string) $m['id']) ?>" data-name="<?= e($name) ?>" data-alt="<?= e((string)($m['alt'] ?? '')) ?>">✏️ Éditer</button>
-                        <button type="button" class="btn btn-danger btn-sm media-delete-btn" data-url="<?= e(url('/admin/media/' . rawurlencode((string) $m['id']) . '/delete')) ?>" data-csrf="<?= e(csrf_token()) ?>" data-name="<?= e($name) ?>">🗑️</button>
+                        <button type="button" class="media-icon-btn copy-url" data-target="media-url-<?= e($domId) ?>" title="Copier l'URL">📋</button>
+                        <form method="post" action="<?= e(url('/admin/media/' . rawurlencode($id) . '/update')) ?>" class="inline-form media-edit-form">
+                            <?= csrf_field() ?>
+                            <button type="button" class="media-icon-btn" title="Éditer" onclick="document.getElementById('media-dialog-<?= e($domId) ?>').showModal()">✏️</button>
+                            <dialog id="media-dialog-<?= e($domId) ?>" class="media-dialog">
+                                <div class="media-dialog-head">
+                                    <div>
+                                        <p class="media-dialog-title">✏️ Éditer le média</p>
+                                        <p class="media-dialog-sub"><?= e($name) ?></p>
+                                    </div>
+                                    <button type="button" class="media-dialog-close" onclick="this.closest('dialog').close()" title="Fermer">✕</button>
+                                </div>
+                                <div class="media-dialog-body">
+                                    <div class="field">
+                                        <label for="media-edit-name-<?= e($domId) ?>">Nom du fichier</label>
+                                        <input type="text" id="media-edit-name-<?= e($domId) ?>" name="name" value="<?= e($name) ?>" maxlength="255" required>
+                                    </div>
+                                    <div class="field">
+                                        <label for="media-edit-alt-<?= e($domId) ?>">Texte alternatif (description)</label>
+                                        <input type="text" id="media-edit-alt-<?= e($domId) ?>" name="alt" value="<?= e((string) ($m['alt'] ?? '')) ?>" maxlength="255" placeholder="Ex : Photo du barbecue de rentrée">
+                                    </div>
+                                </div>
+                                <div class="media-dialog-foot">
+                                    <button type="button" class="btn btn-ghost btn-sm" onclick="this.closest('dialog').close()">Annuler</button>
+                                    <span class="media-dialog-spacer"></span>
+                                    <button type="submit" class="btn btn-primary btn-sm">💾 Enregistrer</button>
+                                </div>
+                            </dialog>
+                        </form>
+                        <form method="post" action="<?= e(url('/admin/media/' . rawurlencode($id) . '/delete')) ?>" class="inline-form media-delete-form"
+                              data-confirm="Supprimer définitivement « <?= e($name) ?> » ? Action irréversible." data-preserve-scroll>
+                            <?= csrf_field() ?>
+                            <button type="submit" class="media-icon-btn is-danger" title="Supprimer">🗑️</button>
+                        </form>
                     </div>
                 </figcaption>
             </figure>
@@ -89,29 +124,19 @@ declare(strict_types=1);
         });
     }
 
-    // Suppression via fetch (évite les problèmes de form imbriqué).
-    document.querySelectorAll('.media-delete-btn').forEach(function (btn) {
-        btn.addEventListener('click', function () {
-            if (!confirm('Supprimer "' + (btn.dataset.name || 'ce média') + '" ? Action irréversible.')) return;
-            fetch(btn.dataset.url, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: '_csrf=' + encodeURIComponent(btn.dataset.csrf),
-                credentials: 'same-origin'
-            }).then(function () { window.location.reload(); });
-        });
-    });
-
-    // Copier l'URL.
+    // Copier l'URL : feedback « is-done » 1,2 s, prompt de secours sinon.
     document.querySelectorAll('.copy-url').forEach(function (btn) {
         btn.addEventListener('click', function () {
             var el = document.getElementById(btn.getAttribute('data-target'));
             if (!el) return;
             var url = el.textContent.trim();
             var done = function () {
-                var orig = btn.textContent;
+                btn.classList.add('is-done');
                 btn.textContent = '✓';
-                setTimeout(function () { btn.textContent = orig; }, 1200);
+                setTimeout(function () {
+                    btn.classList.remove('is-done');
+                    btn.textContent = '📋';
+                }, 1200);
             };
             if (navigator.clipboard && navigator.clipboard.writeText) {
                 navigator.clipboard.writeText(url).then(done, function () { window.prompt('Copie :', url); });
@@ -120,85 +145,5 @@ declare(strict_types=1);
             }
         });
     });
-
-    function closeEditModal() {
-        var modal = document.getElementById('media-edit-modal');
-        var overlay = document.getElementById('media-edit-overlay');
-        if (modal) modal.hidden = true;
-        if (overlay) overlay.hidden = true;
-    }
-
-    // Ouvrir le modal.
-    document.querySelectorAll('.media-edit-btn').forEach(function (btn) {
-        btn.addEventListener('click', function () {
-            var modal = document.getElementById('media-edit-modal');
-            var overlay = document.getElementById('media-edit-overlay');
-            var idField = document.getElementById('edit-id');
-            var nameField = document.getElementById('edit-name');
-            var altField = document.getElementById('edit-alt');
-            var form = document.getElementById('edit-form');
-
-            idField.value = btn.dataset.id;
-            nameField.value = btn.dataset.name || '';
-            altField.value = btn.dataset.alt || '';
-            form.action = '<?= e(url('/admin/media')) ?>/' + encodeURIComponent(btn.dataset.id) + '/update';
-
-            if (overlay) overlay.hidden = false;
-            if (modal) modal.hidden = false;
-        });
-    });
-    var closeBtn = document.getElementById('media-edit-close');
-    if (closeBtn) closeBtn.addEventListener('click', closeEditModal);
-    var overlayEl = document.getElementById('media-edit-overlay');
-    if (overlayEl) overlayEl.addEventListener('click', closeEditModal);
-    document.addEventListener('keydown', function (e) {
-        if (e.key === 'Escape') closeEditModal();
-    });
 })();
 </script>
-
-<!-- Modal d'édition -->
-<div class="media-edit-overlay" id="media-edit-overlay" hidden></div>
-<div class="media-edit-modal" id="media-edit-modal" hidden>
-    <div class="media-edit-head">
-        <h2>✏️ Éditer le média</h2>
-        <button type="button" id="media-edit-close" class="btn btn-ghost btn-sm">✕</button>
-    </div>
-    <form method="post" id="edit-form">
-        <?= csrf_field() ?>
-        <input type="hidden" id="edit-id" name="id" value="">
-        <div class="field">
-            <label for="edit-name">Nom du fichier</label>
-            <input type="text" id="edit-name" name="name" value="">
-        </div>
-        <div class="field">
-            <label for="edit-alt">Texte alternatif (description)</label>
-            <input type="text" id="edit-alt" name="alt" value="" placeholder="Ex: Photo du barbecue de rentrée">
-        </div>
-        <button type="submit" class="btn btn-primary">💾 Enregistrer</button>
-    </form>
-</div>
-
-<style>
-.media-edit-overlay {
-    position: fixed; inset: 0; z-index: 9999;
-    background: rgba(0,0,0,0.5); backdrop-filter: blur(2px);
-}
-.media-edit-overlay[hidden] { display: none; }
-.media-edit-modal {
-    position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-    z-index: 10000; background: var(--card, #0f1e35);
-    border: 1px solid var(--border); border-radius: 16px;
-    padding: 1.75rem; width: 90%; max-width: 420px;
-    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
-    animation: mepop 0.25s ease;
-}
-.media-edit-modal[hidden] { display: none; }
-@keyframes mepop { from { opacity: 0; transform: translate(-50%, -45%); } }
-.media-edit-head {
-    display: flex; align-items: center; justify-content: space-between;
-    margin-bottom: 1.25rem;
-}
-.media-edit-head h2 { font-size: 1.1rem; font-weight: 800; margin: 0; color: var(--primary); }
-.media-edit-modal .field { margin-bottom: 0.85rem; }
-</style>

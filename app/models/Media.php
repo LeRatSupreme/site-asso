@@ -50,9 +50,34 @@ final class Media extends Model
         return $id;
     }
 
-    public static function deleteRow(string $id): void
+    /**
+     * Supprime la ligne et retourne le nombre de lignes effacées
+     * (0 = média introuvable).
+     */
+    public static function deleteRow(string $id): int
     {
         $stmt = static::pdo()->prepare('DELETE FROM media WHERE id = ?');
         $stmt->execute([$id]);
+
+        return $stmt->rowCount();
+    }
+
+    /**
+     * Nombre de produits dont l'image référence ce média
+     * (products.image stocke un chemin contenant l'URL relative du média).
+     */
+    public static function usedByCount(string $id): int
+    {
+        $media = static::find($id);
+        if ($media === null || (string) ($media['url'] ?? '') === '') {
+            return 0;
+        }
+
+        $stmt = static::pdo()->prepare(
+            "SELECT COUNT(*) FROM products WHERE image LIKE CONCAT('%', ?, '%')"
+        );
+        $stmt->execute([(string) $media['url']]);
+
+        return (int) $stmt->fetchColumn();
     }
 }
