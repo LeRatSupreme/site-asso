@@ -112,23 +112,20 @@ if (isset($sections['Contenu']) && $sections['Contenu'] === []) {
 // Groupe « Système » : réservé au Fondateur et aux ADMIN listés dans
 // SYSTEM_ADMINS, plus les pages attribuées individuellement à un membre
 // du bureau (users.extra_pages, gérées depuis Utilisateurs, voir
-// AdminBaseController::guardSystemOrPage()). Utilisateurs et Paramètres
-// restent « Système » strict.
+// AdminBaseController::guardSystemOrPage()). Chaque entrée est associée
+// à sa clé de page (null n'existe plus : tout est attribuable).
 $systemEntries = [
-    'Utilisateurs'     => ['/admin/users', null],
+    'Utilisateurs'     => ['/admin/users', 'users'],
     'Caisses'          => ['/admin/caisses', 'cash'],
     'Inventaire'       => ['/admin/compta/inventaire', 'inventory'],
     'Coûts de revient' => ['/admin/compta/couts', 'costs'],
-    'Paramètres'       => ['/admin/settings', null],
+    'Paramètres'       => ['/admin/settings', 'settings'],
 ];
 if (in_array($user['role'] ?? null, Permissions::adminRoles(), true)) {
     $system = [];
     foreach ($systemEntries as $label => [$path, $key]) {
-        // Utilisateurs / Paramètres ($key null) : Système strict.
-        // Pages attribuables : Système OU attribution individuelle.
-        $allowed = $key === null
-            ? Permissions::isSystemAdmin()
-            : (Permissions::isSystemAdmin() || Permissions::userHasExtraPage($key));
+        // Système OU attribution individuelle (users.extra_pages).
+        $allowed = Permissions::isSystemAdmin() || Permissions::userHasExtraPage($key);
 
         if ($allowed) {
             $system[$label] = $path;
