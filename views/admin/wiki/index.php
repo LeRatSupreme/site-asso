@@ -10,35 +10,48 @@ $wikiRole = (string) ($user['role'] ?? '');
 $wikiSystem = \App\Core\Permissions::isSystemAdmin();
 
 /** Chaque section n'est visible que pour les rôles qui gèrent le module
- *  correspondant ; les sections Système suivent isSystemAdmin(). */
+ *  correspondant ; les sections Système suivent isSystemAdmin() ou une
+ *  attribution individuelle (« Pages + » de la page Utilisateurs). */
+$wikiPage = static fn (string $key): bool => $wikiSystem || \App\Core\Permissions::userHasExtraPage($key);
+
 $wikiAccess = [
-    'sec-start'     => true,
-    'sec-events'    => \App\Core\Permissions::allows($wikiRole, \App\Core\Permissions::MODULE_EVENTS),
-    'sec-checkin'   => \App\Core\Permissions::allows($wikiRole, \App\Core\Permissions::MODULE_EVENTS),
-    'sec-sondages'  => \App\Core\Permissions::allows($wikiRole, \App\Core\Permissions::MODULE_CONTENT),
-    'sec-cafeteria' => \App\Core\Permissions::allows($wikiRole, \App\Core\Permissions::MODULE_CAFETERIA),
-    'sec-compta'    => \App\Core\Permissions::allows($wikiRole, \App\Core\Permissions::MODULE_COMPTA),
-    'sec-reappro'   => \App\Core\Permissions::allows($wikiRole, \App\Core\Permissions::MODULE_COMPTA),
-    'sec-analytics' => \App\Core\Permissions::allows($wikiRole, \App\Core\Permissions::MODULE_COMPTA),
-    'sec-users'     => $wikiSystem,
-    'sec-emails'    => true,
-    'sec-settings'  => $wikiSystem,
-    'sec-tips'      => true,
+    'sec-start'      => true,
+    'sec-events'     => \App\Core\Permissions::allows($wikiRole, \App\Core\Permissions::MODULE_EVENTS),
+    'sec-checkin'    => \App\Core\Permissions::allows($wikiRole, \App\Core\Permissions::MODULE_EVENTS),
+    'sec-sondages'   => \App\Core\Permissions::allows($wikiRole, \App\Core\Permissions::MODULE_CONTENT),
+    'sec-cafeteria'  => \App\Core\Permissions::allows($wikiRole, \App\Core\Permissions::MODULE_CAFETERIA),
+    'sec-jeux'       => \App\Core\Permissions::allows($wikiRole, \App\Core\Permissions::MODULE_GAMES),
+    'sec-compta'     => \App\Core\Permissions::allows($wikiRole, \App\Core\Permissions::MODULE_COMPTA),
+    'sec-couts'      => $wikiPage('costs'),
+    'sec-caisse'     => \App\Core\Permissions::isAdminRole($wikiRole),
+    'sec-reappro'    => \App\Core\Permissions::allows($wikiRole, \App\Core\Permissions::MODULE_COMPTA),
+    'sec-analytics'  => \App\Core\Permissions::allows($wikiRole, \App\Core\Permissions::MODULE_COMPTA),
+    'sec-caisses'    => $wikiPage('cash'),
+    'sec-inventaire' => $wikiPage('inventory'),
+    'sec-users'      => $wikiSystem,
+    'sec-emails'     => true,
+    'sec-settings'   => $wikiSystem,
+    'sec-tips'       => true,
 ];
 
 $wikiToc = [
-    'sec-start'     => '🚀 Démarrage',
-    'sec-events'    => '📅 Événements',
-    'sec-checkin'   => '📱 Check-in QR',
-    'sec-sondages'  => '📊 Sondages',
-    'sec-cafeteria' => '☕ Cafétéria',
-    'sec-compta'    => '💰 Compta',
-    'sec-reappro'   => '📦 Réappro',
-    'sec-analytics' => '📈 Analytics',
-    'sec-users'     => '👥 Utilisateurs',
-    'sec-emails'    => '📧 Emails',
-    'sec-settings'  => '⚙️ Paramètres',
-    'sec-tips'      => '💡 Conseils',
+    'sec-start'      => '🚀 Démarrage',
+    'sec-events'     => '📅 Événements',
+    'sec-checkin'    => '📱 Check-in QR',
+    'sec-sondages'   => '📊 Sondages',
+    'sec-cafeteria'  => '☕ Cafétéria',
+    'sec-jeux'       => '🎮 Jeux',
+    'sec-compta'     => '💰 Compta',
+    'sec-couts'      => '🛒 Coûts',
+    'sec-caisse'     => '🧾 Comptage caisse',
+    'sec-reappro'    => '📦 Réappro',
+    'sec-analytics'  => '📈 Analytics',
+    'sec-caisses'    => '🏦 Caisses',
+    'sec-inventaire' => '🧮 Inventaire',
+    'sec-users'      => '👥 Utilisateurs',
+    'sec-emails'     => '📧 Emails',
+    'sec-settings'   => '⚙️ Paramètres',
+    'sec-tips'       => '💡 Conseils',
 ];
 ?>
 <div class="wiki">
@@ -89,7 +102,7 @@ $wikiToc = [
 
     <div class="wiki-block">
         <h3>Le 2FA (authentification à deux facteurs)</h3>
-        <p>Le 2FA est <strong>obligatoire</strong> pour les administrateurs et trésoriers. Il ajoute une couche de sécurité : même si quelqu'un vole ton mot de passe, il ne peut pas se connecter sans ton téléphone.</p>
+        <p>Le 2FA est <strong>obligatoire</strong> pour le Fondateur, les administrateurs et les trésoriers. Il ajoute une couche de sécurité : même si quelqu'un vole ton mot de passe, il ne peut pas se connecter sans ton téléphone.</p>
         <div class="wiki-diagram">
             <div class="wiki-diagram-box">📧 Email + mot de passe</div>
             <div class="wiki-arrow">↓</div>
@@ -112,14 +125,15 @@ $wikiToc = [
             <div class="wiki-table-row wiki-table-head">
                 <span>Rôle</span><span>Accès</span><span>Qui ?</span>
             </div>
-            <div class="wiki-table-row"><span class="wiki-tag wiki-tag-teal">ADMIN</span><span>Tout l'espace d'administration</span><span>Président, membres du bureau de confiance</span></div>
-            <div class="wiki-table-row"><span class="wiki-tag wiki-tag-violet">TRESORERIE</span><span>Uniquement la comptabilité (import, coûts, réappro, analytics)</span><span>Trésorier</span></div>
-            <div class="wiki-table-row"><span class="wiki-tag wiki-tag-violet">EVENEMENTS</span><span>Gestion des événements, inscriptions et check-in</span><span>Resp. événements</span></div>
-            <div class="wiki-table-row"><span class="wiki-tag wiki-tag-violet">COMMUNICATION</span><span>Pages, équipe, sondages, promotions, médias</span><span>Resp. communication</span></div>
+            <div class="wiki-table-row"><span class="wiki-tag wiki-tag-teal">FONDATEUR</span><span>Tout l'espace, y compris le groupe Système (Utilisateurs, Caisses, Inventaire, Coûts, Paramètres)</span><span>Fondateur de l'asso (rôle non modifiable depuis le site)</span></div>
+            <div class="wiki-table-row"><span class="wiki-tag wiki-tag-teal">ADMIN</span><span>Tous les modules ; groupe Système seulement si listé dans <code>SYSTEM_ADMINS</code></span><span>Président, membres du bureau de confiance</span></div>
+            <div class="wiki-table-row"><span class="wiki-tag wiki-tag-violet">TRESORERIE</span><span>Comptabilité complète + contenu, événements, cafétéria et jeux</span><span>Trésorier</span></div>
+            <div class="wiki-table-row"><span class="wiki-tag wiki-tag-violet">COMMUNICATION</span><span>Pages, équipe, sondages, promotions, médias + événements + cafétéria</span><span>Resp. communication</span></div>
             <div class="wiki-table-row"><span class="wiki-tag wiki-tag-violet">CAFETERIA</span><span>Produits et catégories de la cafétéria</span><span>Resp. cafétéria</span></div>
-            <div class="wiki-table-row"><span class="wiki-tag wiki-tag-violet">JEUX</span><span>Gestion des jeux (Wordle, énigmes, classements)</span><span>Resp. jeux</span></div>
+            <div class="wiki-table-row"><span class="wiki-tag wiki-tag-violet">JEUX</span><span>Jeux (Wordle, énigmes, classements) + cafétéria</span><span>Resp. jeux</span></div>
             <div class="wiki-table-row"><span class="wiki-tag wiki-tag-muted">ELEVE</span><span>Espace membre uniquement (pas d'admin)</span><span>Tous les étudiants inscrits</span></div>
         </div>
+        <p><strong>Pages + :</strong> au-delà du rôle, le Fondateur peut attribuer des pages individuellement (Admin → Utilisateurs → « 🔑 Pages ») : un membre du bureau accède alors à Inventaire, Caisses, Coûts de revient, Utilisateurs, Paramètres — ou à un module complet — sans changer de rôle.</p>
     </div>
 
     <div class="wiki-block">
@@ -251,7 +265,25 @@ $wikiToc = [
 </section>
 <?php endif; ?>
 
-<!-- ===================== 6. COMPTABILITÉ ===================== -->
+<!-- ===================== 6. JEUX ===================== -->
+<?php if ($wikiAccess['sec-jeux'] ?? false): ?>
+<section class="wiki-section" id="sec-jeux">
+    <h2>🎮 Jeux</h2>
+
+    <div class="wiki-block">
+        <h3>Gérer les jeux</h3>
+        <p>Admin → Jeux : tout est regroupé en quatre pages :</p>
+        <ul class="wiki-list">
+            <li><strong>Vue d'ensemble</strong> : activité et statistiques des jeux</li>
+            <li><strong>Joueurs &amp; Pseudos</strong> : corriger un pseudo ou réinitialiser un joueur (classements)</li>
+            <li><strong>Mots Wordle</strong> : créer et modifier les mots proposés aux élèves</li>
+            <li><strong>Énigmes</strong> : créer et modifier les énigmes et leurs réponses</li>
+        </ul>
+    </div>
+</section>
+<?php endif; ?>
+
+<!-- ===================== 7. COMPTABILITÉ ===================== -->
 <?php if ($wikiAccess['sec-compta'] ?? false): ?>
 <section class="wiki-section" id="sec-compta">
     <h2>💰 Comptabilité — Importer SumUp</h2>
@@ -279,6 +311,7 @@ $wikiToc = [
             <div class="wiki-arrow">↓</div>
             <div class="wiki-diagram-box wiki-diagram-ok">✅ Ventes disponibles dans tout le module compta</div>
         </div>
+        <p>L'historique de la page garde les <strong>50 derniers imports manuels</strong>. La <strong>synchro API SumUp</strong> (automatique, toutes les minutes) est affichée à part et <strong>regroupée par jour</strong> : clique un jour pour voir le détail des passages.</p>
     </div>
 
     <div class="wiki-block">
@@ -291,11 +324,19 @@ $wikiToc = [
             <div class="wiki-table-row"><span>Monster Blanche / Monster_Bleue / Monster rose</span><span>Monster</span></div>
         </div>
         <p><strong>Solution :</strong> Admin → Comptabilité → Mapping libellés → <strong>« Auto-détecter les doublons »</strong> → vérifier → <strong>Appliquer</strong>. Toutes les ventes sont fusionnées sous un seul nom.</p>
+        <p>La <strong>catégorie</strong> de chaque alias (Boisson, Nourriture, Événement...) est éditable dans <strong>« Alias existants »</strong> et se <strong>synchronise sur les ventes déjà importées</strong> — indispensable pour des Analytics et un réappro fiables.</p>
     </div>
+</section>
+<?php endif; ?>
+
+<!-- ===================== 8. COÛTS DE REVIENT ===================== -->
+<?php if ($wikiAccess['sec-couts'] ?? false): ?>
+<section class="wiki-section" id="sec-couts">
+    <h2>🛒 Coûts de revient (bénéfice réel)</h2>
 
     <div class="wiki-block">
-        <h3>Coûts de revient (pour calculer le vrai bénéfice)</h3>
         <p>Le bénéfice = <strong>prix de vente − coût d'achat</strong>. Sans coût saisi → marge à 100% (faux).</p>
+        <p>Page du groupe <strong>Système</strong> (Admin → Système → Coûts de revient) : réservée au Fondateur, aux ADMIN explicitement autorisés, ou à qui la page a été attribuée (« Pages + »).</p>
         <div class="wiki-diagram">
             <div class="wiki-diagram-box">💵 Prix de vente TTC : 1,00 €</div>
             <div class="wiki-arrow">−</div>
@@ -303,24 +344,41 @@ $wikiToc = [
             <div class="wiki-arrow">=</div>
             <div class="wiki-diagram-box wiki-diagram-ok">💰 Bénéfice : 0,40 € (marge 40%)</div>
         </div>
-        <p><strong>Comment :</strong> Admin → Comptabilité → Coûts de revient → recherche le produit → saisis le coût → Enregistrer. Si le prix d'achat change → crée un nouveau lot daté.</p>
+        <p><strong>Comment :</strong> recherche le produit → saisis le coût → Enregistrer. Si le prix d'achat change → crée un nouveau lot daté (l'historique des coûts est conservé).</p>
     </div>
 </section>
 <?php endif; ?>
 
-<!-- ===================== 7. RÉAPPRO ===================== -->
+<!-- ===================== 9. COMPTAGE DE CAISSE ===================== -->
+<?php if ($wikiAccess['sec-caisse'] ?? false): ?>
+<section class="wiki-section" id="sec-caisse">
+    <h2>🧾 Comptage de caisse</h2>
+
+    <div class="wiki-block">
+        <p>Accessible à <strong>tout le bureau</strong> (hors élèves), même sans accès comptabilité : Admin → Comptabilité → <strong>Comptage caisse</strong>.</p>
+        <div class="wiki-steps">
+            <div class="wiki-step"><span class="wiki-step-n">1</span><div><strong>Compte physiquement</strong> le liquide présent dans la caisse</div></div>
+            <div class="wiki-step"><span class="wiki-step-n">2</span><div>Saisis le <strong>montant compté</strong> + une note optionnelle (ex: « comptage après soirée »)</div></div>
+            <div class="wiki-step"><span class="wiki-step-n">3</span><div>Enregistre → l'<strong>écart</strong> est révélé immédiatement</div></div>
+        </div>
+        <p>Le comptage est <strong>« à l'aveugle »</strong> : le montant théorique n'est volontairement pas affiché avant la saisie, pour un comptage honnête. Aucun historique sur cette page — la traçabilité complète (écarts, dépôts, ajustements) est dans <strong>Système → Caisses</strong>.</p>
+    </div>
+</section>
+<?php endif; ?>
+
+<!-- ===================== 10. RÉAPPRO ===================== -->
 <?php if ($wikiAccess['sec-reappro'] ?? false): ?>
 <section class="wiki-section" id="sec-reappro">
     <h2>📦 Réapprovisionnement</h2>
 
     <div class="wiki-block">
         <h3>Comment savoir combien racheter</h3>
-        <p>La page calcule automatiquement les quantités à racheter, basé sur :</p>
+        <p>La page est en <strong>lecture seule</strong> : plus aucune saisie de stock ici. Le stock affiché est le <strong>théorique de l'inventaire</strong> (dernier comptage + achats − ventes − pertes) : il suit automatiquement chaque mouvement.</p>
         <div class="wiki-diagram">
             <div class="wiki-diagram-row">
                 <div class="wiki-diagram-box">📊 Ventes réelles<br>(période analysée au choix)</div>
                 <div class="wiki-diagram-box">📅 Jours d'ouverture<br>(lun-ven = 22j/mois)</div>
-                <div class="wiki-diagram-box">📦 Stock actuel<br>(saisi par toi)</div>
+                <div class="wiki-diagram-box">🧮 Stock théorique<br>(issu de l'inventaire)</div>
             </div>
             <div class="wiki-arrow">↓</div>
             <div class="wiki-diagram-box wiki-diagram-ok">✅ « À commander : X unités »</div>
@@ -330,17 +388,17 @@ $wikiToc = [
     <div class="wiki-block">
         <h3>Utilisation</h3>
         <div class="wiki-steps">
-            <div class="wiki-step"><span class="wiki-step-n">1</span><div>Choisis la <strong>période</strong> à couvrir (1 semaine, 1 mois, 3 mois...)</div></div>
-            <div class="wiki-step"><span class="wiki-step-n">2</span><div>Saisis le <strong>stock actuel</strong> de chaque produit dans le champ</div></div>
-            <div class="wiki-step"><span class="wiki-step-n">3</span><div>La colonne <strong>« À commander »</strong> se recalcule automatiquement</div></div>
-            <div class="wiki-step"><span class="wiki-step-n">4</span><div>Clique <strong>« Enregistrer les stocks »</strong> pour sauvegarder</div></div>
-            <div class="wiki-step"><span class="wiki-step-n">5</span><div>Le <strong>total en bas</strong> donne la quantité globale à commander et le <strong>coût estimé du panier</strong> (× coût de revient du lot en cours)</div></div>
+            <div class="wiki-step"><span class="wiki-step-n">1</span><div>Choisis la <strong>période analysée</strong> (7 j, 30 j, 3 mois... ou dates personnalisées)</div></div>
+            <div class="wiki-step"><span class="wiki-step-n">2</span><div>Choisis l'<strong>horizon à couvrir</strong> (1 semaine, 1 mois...) : la colonne <strong>« À commander »</strong> se recalcule automatiquement</div></div>
+            <div class="wiki-step"><span class="wiki-step-n">3</span><div>Suis l'<strong>autonomie</strong> de chaque produit (jours d'ouverture avant rupture) — pastille rouge si &lt; 7 jours</div></div>
+            <div class="wiki-step"><span class="wiki-step-n">4</span><div>Le <strong>total en bas</strong> donne la quantité globale à commander et le <strong>coût estimé du panier</strong> (× coût de revient du lot en cours)</div></div>
         </div>
+        <p>Un produit <strong>jamais compté</strong> apparaît « à compter » : son besoin est calculé sans stock déduit. Fais l'inventaire régulièrement (voir <strong>Inventaire</strong>) pour fiabiliser l'analyse.</p>
     </div>
 </section>
 <?php endif; ?>
 
-<!-- ===================== 8. ANALYTICS ===================== -->
+<!-- ===================== 11. ANALYTICS ===================== -->
 <?php if ($wikiAccess['sec-analytics'] ?? false): ?>
 <section class="wiki-section" id="sec-analytics">
     <h2>📈 Dashboard Analytics</h2>
@@ -372,7 +430,43 @@ $wikiToc = [
 </section>
 <?php endif; ?>
 
-<!-- ===================== 9. UTILISATEURS ===================== -->
+<!-- ===================== 11. CAISSES (SYSTÈME) ===================== -->
+<?php if ($wikiAccess['sec-caisses'] ?? false): ?>
+<section class="wiki-section" id="sec-caisses">
+    <h2>🏦 Caisses — traçabilité du liquide</h2>
+
+    <div class="wiki-block">
+        <p>Page du groupe <strong>Système</strong> (Admin → Système → Caisses) : elle retrace tout le liquide, du comptage au dépôt en banque.</p>
+        <ul class="wiki-list">
+            <li><strong>Solde théorique</strong> = ventes en espèces + mouvements manuels (fond de caisse, dépôts, ajustements)</li>
+            <li><strong>Comptage physique</strong> : saisis le montant compté → l'<strong>écart</strong> est historisé puis un ajustement réaligne le théorique</li>
+            <li><strong>Écarts détectés</strong> (30 derniers jours) : vue rapide des anomalies</li>
+            <li><strong>Dépôt à la banque</strong> : montant, date et n° de bordereau</li>
+            <li><strong>Fond de caisse</strong> : le montant permanent laissé en caisse</li>
+            <li><strong>Historiques</strong> : tous les mouvements et tous les comptages (compté / théorique / écart / par qui)</li>
+        </ul>
+    </div>
+</section>
+<?php endif; ?>
+
+<!-- ===================== 12. INVENTAIRE (SYSTÈME) ===================== -->
+<?php if ($wikiAccess['sec-inventaire'] ?? false): ?>
+<section class="wiki-section" id="sec-inventaire">
+    <h2>🧮 Inventaire</h2>
+
+    <div class="wiki-block">
+        <p>Page du groupe <strong>Système</strong> (Admin → Système → Inventaire) : tu comptes le stock <strong>physique</strong> et le site le compare au <strong>théorique</strong> (dernier comptage + achats − ventes). Un écart = perte, casse, offert ou erreur de saisie.</p>
+        <div class="wiki-steps">
+            <div class="wiki-step"><span class="wiki-step-n">1</span><div>Compte physiquement les produits (seules les lignes renseignées sont comptées)</div></div>
+            <div class="wiki-step"><span class="wiki-step-n">2</span><div>Enregistre → les <strong>écarts</strong> sont calculés et conservés (historique des comptages)</div></div>
+            <div class="wiki-step"><span class="wiki-step-n">3</span><div>Chaque comptage devient le <strong>nouveau point de départ</strong> du stock théorique</div></div>
+        </div>
+        <p>Le stock théorique alimente directement le <strong>Réappro</strong> (quantités à commander) : un inventaire régulier = un réappro fiable.</p>
+    </div>
+</section>
+<?php endif; ?>
+
+<!-- ===================== 13. UTILISATEURS ===================== -->
 <?php if ($wikiAccess['sec-users'] ?? false): ?>
 <section class="wiki-section" id="sec-users">
     <h2>👥 Utilisateurs & adhésions</h2>
@@ -381,12 +475,14 @@ $wikiToc = [
         <h3>Actions possibles sur un utilisateur</h3>
         <div class="wiki-table">
             <div class="wiki-table-row wiki-table-head"><span>Action</span><span>Effet</span></div>
-            <div class="wiki-table-row"><span>🔄 <strong>Changer le rôle</strong></span><span>ELEVE → ADMIN, TRESORERIE, EVENEMENTS, COMMUNICATION, CAFETERIA ou JEUX</span></div>
+            <div class="wiki-table-row"><span>🔄 <strong>Changer le rôle</strong></span><span>ELEVE → ADMIN, TRESORERIE, COMMUNICATION, CAFETERIA ou JEUX (le rôle Fondateur n'est jamais attribuable depuis le site)</span></div>
+            <div class="wiki-table-row"><span>🔑 <strong>Pages</strong></span><span>Attribue des pages individuellement, au-delà du rôle : modules complets (Comptabilité, Événements...) ou pages Système (Inventaire, Coûts, Caisses, Utilisateurs, Paramètres)</span></div>
+            <div class="wiki-table-row"><span>✏️ <strong>Renommer</strong></span><span>Prénom et nom modifiables en place (clique hors du champ ou Entrée pour enregistrer)</span></div>
             <div class="wiki-table-row"><span>🔒 <strong>Désactiver</strong></span><span>Bloque la connexion. Données conservées.</span></div>
             <div class="wiki-table-row"><span>🔑 <strong>Reset MDP</strong></span><span>Génère un mot de passe temporaire envoyé par email.</span></div>
             <div class="wiki-table-row"><span>🗑️ <strong>Supprimer</strong></span><span>Anonymise les données (RGPD). Comptabilité conservée anonyme.</span></div>
-            <div class="wiki-table-row"><span>💳 <strong>Marquer payée</strong></span><span>Définit la cotisation comme payée pour la saison.</span></div>
         </div>
+        <p>Les <strong>adhésions</strong> se gèrent dans Admin → Adhésions (créer une cotisation, « Marquer payée »).</p>
     </div>
 
     <div class="wiki-block">
@@ -396,7 +492,8 @@ $wikiToc = [
             <ul class="wiki-list">
                 <li>Tu ne peux <strong>pas</strong> supprimer ton propre compte depuis l'admin</li>
                 <li>Tu ne peux <strong>pas</strong> supprimer/rétrograder le dernier administrateur</li>
-                <li>Le <strong>2FA est obligatoire</strong> pour ADMIN et TRESORERIE</li>
+                <li>Le <strong>2FA est obligatoire</strong> pour FONDATEUR, ADMIN et TRESORERIE</li>
+                <li>Le <strong>retrait du rôle Trésorerie</strong> et les <strong>Pages</strong> des comptes Fondateur/Trésorerie sont réservés au Fondateur</li>
                 <li>Chaque action est <strong>journalisée</strong> (audit log visible dans le tableau de bord)</li>
             </ul>
         </div>
@@ -404,7 +501,7 @@ $wikiToc = [
 </section>
 <?php endif; ?>
 
-<!-- ===================== 10. EMAILS ===================== -->
+<!-- ===================== 14. EMAILS ===================== -->
 <?php if ($wikiAccess['sec-emails'] ?? false): ?>
 <section class="wiki-section" id="sec-emails">
     <h2>📧 Emails automatiques</h2>
@@ -431,7 +528,7 @@ $wikiToc = [
 </section>
 <?php endif; ?>
 
-<!-- ===================== 11. PARAMÈTRES ===================== -->
+<!-- ===================== 15. PARAMÈTRES ===================== -->
 <?php if ($wikiAccess['sec-settings'] ?? false): ?>
 <section class="wiki-section" id="sec-settings">
     <h2>⚙️ Paramètres du site</h2>
@@ -461,7 +558,7 @@ $wikiToc = [
 </section>
 <?php endif; ?>
 
-<!-- ===================== 12. CONSEILS ===================== -->
+<!-- ===================== 16. CONSEILS ===================== -->
 <?php if ($wikiAccess['sec-tips'] ?? false): ?>
 <section class="wiki-section" id="sec-tips">
     <h2>💡 Conseils pratiques</h2>
@@ -469,11 +566,13 @@ $wikiToc = [
     <div class="wiki-block">
         <h3>Routine mensuelle (trésorier)</h3>
         <div class="wiki-steps">
-            <div class="wiki-step"><span class="wiki-step-n">1</span><div>📥 <strong>Importe</strong> le rapport SumUp du mois écoulé</div></div>
-            <div class="wiki-step"><span class="wiki-step-n">2</span><div>🔗 <strong>Mappe</strong> les nouveaux libellés non reconnus (aliases)</div></div>
-            <div class="wiki-step"><span class="wiki-step-n">3</span><div>💸 <strong>Saisis</strong> les coûts de revient des nouveaux produits</div></div>
-            <div class="wiki-step"><span class="wiki-step-n">4</span><div>📦 <strong>Vérifie</strong> le réappro (quantités à racheter)</div></div>
-            <div class="wiki-step"><span class="wiki-step-n">5</span><div>📈 <strong>Analyse</strong> le dashboard Analytics (tendances, insights)</div></div>
+            <div class="wiki-step"><span class="wiki-step-n">1</span><div>📥 <strong>Importe</strong> le rapport SumUp du mois écoulé (ou laisse la synchro API faire)</div></div>
+            <div class="wiki-step"><span class="wiki-step-n">2</span><div>🔗 <strong>Mappe</strong> les nouveaux libellés non reconnus (aliases + catégories)</div></div>
+            <div class="wiki-step"><span class="wiki-step-n">3</span><div>💸 <strong>Saisis</strong> les coûts de revient des nouveaux produits (si tu as l'accès Coûts)</div></div>
+            <div class="wiki-step"><span class="wiki-step-n">4</span><div>🧮 <strong>Fais l'inventaire</strong> (stock physique) pour fiabiliser le stock théorique</div></div>
+            <div class="wiki-step"><span class="wiki-step-n">5</span><div>📦 <strong>Vérifie</strong> le réappro (quantités à commander, autonomie)</div></div>
+            <div class="wiki-step"><span class="wiki-step-n">6</span><div>🧾 <strong>Compte la caisse</strong> puis dépôts du liquide en banque (Système → Caisses)</div></div>
+            <div class="wiki-step"><span class="wiki-step-n">7</span><div>📈 <strong>Analyse</strong> le dashboard Analytics (tendances, insights)</div></div>
         </div>
     </div>
 
@@ -482,6 +581,7 @@ $wikiToc = [
         <ul class="wiki-list">
             <li>👥 Crée les comptes pour les nouveaux membres du bureau</li>
             <li>🔑 Donne le rôle ADMIN aux nouveaux (2FA obligatoire)</li>
+            <li>🎁 Attribue des <strong>Pages +</strong> si quelqu'un gère une page précise (inventaire, caisses...)</li>
             <li>💳 Crée les adhésions pour la nouvelle saison</li>
             <li>👥 Mets à jour la page Équipe (nouveaux membres, photos)</li>
             <li>📅 Crée les événements de rentrée</li>
@@ -496,7 +596,8 @@ $wikiToc = [
                 <li><strong>Page blanche / erreur 500</strong> → contacte Remond Adrien (développeur)</li>
                 <li><strong>Emails ne partent pas</strong> → vérifier Paramètres → Brevo API key + adresse d'expédition</li>
                 <li><strong>Chiffres à 0</strong> → importer un rapport SumUp (Comptabilité → Importer CSV)</li>
-                <li><strong>Marges à 100%</strong> → saisir les coûts de revient (Comptabilité → Coûts)</li>
+                <li><strong>Marges à 100%</strong> → saisir les coûts de revient (Système → Coûts de revient)</li>
+                <li><strong>Réappro peu fiable</strong> → faire l'inventaire (Système → Inventaire)</li>
                 <li><strong>QR code ne marche pas</strong> → l'élève doit se désinscrire puis se réinscrire</li>
             </ul>
         </div>
