@@ -23,7 +23,7 @@ C'est <strong>demain</strong> ! Vous êtes inscrit·e à l'événement :
 <div style="background:rgba(72,189,211,0.10);border:1px solid rgba(72,189,211,0.25);border-radius:0.6rem;padding:1rem;margin:1rem 0;">
 <p style="margin:0 0 0.5rem;font-size:1.1rem;font-weight:700;color:#48bdd3;"><?= e($eventTitle) ?></p>
 <p style="margin:0;font-size:0.95rem;color:#9fb3c8;">
-📅 <?= e(date('d/m/Y à H:i', strtotime($eventDate))) ?><br>
+📅 <?= e(formatDate($eventDate, 'd/m/Y \à H:i')) ?><br>
 <?php if (!empty($location)): ?>📍 <?= e($location) ?><?php endif; ?>
 </p>
 </div>

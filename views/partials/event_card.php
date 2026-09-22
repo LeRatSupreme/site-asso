@@ -34,10 +34,19 @@ if ($image !== '') {
 }
 
 // Formatage date court (ex: "11 SEP" + "18:00").
-$dayNum   = $dateRaw !== '' ? date('j', strtotime($dateRaw)) : '';
-$monthAbbr = $dateRaw !== '' ? strtoupper(date('M', strtotime($dateRaw))) : '';
-$timeStr  = $dateRaw !== '' ? date('H:i', strtotime($dateRaw)) : '';
-$yearStr  = $dateRaw !== '' ? date('Y', strtotime($dateRaw)) : '';
+// La date stockée est en UTC : conversion en heure de Paris avant affichage.
+$paris = $dateRaw !== '' ? utcToParis($dateRaw) : '';
+$dayNum = '';
+$monthAbbr = '';
+$timeStr = '';
+$yearStr = '';
+if (preg_match('/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2}))?/', $paris, $dm) === 1) {
+    $monthAbbrs = [1 => 'JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+    $dayNum = (string) (int) $dm[3];
+    $monthAbbr = $monthAbbrs[(int) $dm[2]] ?? $dm[2];
+    $timeStr = isset($dm[4]) ? $dm[4] . ':' . $dm[5] : '';
+    $yearStr = $dm[1];
+}
 ?>
 <article class="event-card-v2" <?= $category !== '' ? 'data-event-cat="' . e(strtolower($category)) . '"' : 'data-event-cat=""' ?>>
     <a href="<?= e(url('/events/' . $slug)) ?>" class="event-v2-link">

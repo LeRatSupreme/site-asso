@@ -23,7 +23,7 @@ Votre événement commence dans <strong>1 heure</strong> :
 <div style="background:rgba(245,158,11,0.10);border:1px solid rgba(245,158,11,0.25);border-radius:0.6rem;padding:1rem;margin:1rem 0;">
 <p style="margin:0 0 0.5rem;font-size:1.1rem;font-weight:700;color:#f59e0b;"><?= e($eventTitle) ?></p>
 <p style="margin:0;font-size:0.95rem;color:#9fb3c8;">
-📅 <?= e(date('d/m/Y à H:i', strtotime($eventDate))) ?><br>
+📅 <?= e(formatDate($eventDate, 'd/m/Y \à H:i')) ?><br>
 <?php if (!empty($location)): ?>📍 <?= e($location) ?><?php endif; ?>
 </p>
 </div>
