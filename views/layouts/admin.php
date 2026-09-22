@@ -26,6 +26,10 @@ $sections = [
         'Tableau de bord' => '/admin',
         'Wiki'        => '/admin/wiki',
     ],
+    'Comptage' => [
+        'Comptage caisse'     => '/admin/compta/caisse',
+        'Comptage inventaire' => '/admin/compta/inventaire/comptage',
+    ],
     'Contenu' => [
         'Événements'   => '/admin/events',
         'Pages'        => '/admin/pages',
@@ -46,7 +50,6 @@ $sections = [
     ],
     'Comptabilité' => [
         'Dashboard'       => '/admin/compta',
-        'Comptage caisse' => '/admin/compta/caisse',
         'Bilan annuel'    => '/admin/compta/annuel',
         'Analytics'       => '/admin/analytics',
     ],
@@ -134,12 +137,6 @@ if (in_array($user['role'] ?? null, Permissions::adminRoles(), true)) {
     if ($system !== []) {
         $sections['Système'] = $system;
     }
-}
-
-// Comptage de caisse : visible de tout le bureau (hors élèves), y compris les
-// rôles sans module Compta — dans ce cas le groupe ne montre que ce lien.
-if (!isset($sections['Comptabilité']) && Permissions::isAdminRole($viewerRole)) {
-    $sections['Comptabilité'] = ['Comptage caisse' => '/admin/compta/caisse'];
 }
 ?>
 <!DOCTYPE html>
