@@ -116,6 +116,10 @@ $roleIcons = [
                         $allExtraPages = Permissions::extraPages();
                         $modulePageKeys = ['compta', 'events', 'content', 'cafeteria', 'games'];
                         $systemPageKeys = ['inventory', 'costs', 'cash', 'users', 'settings'];
+                        $pageIcons = [
+                            'compta' => '💰', 'events' => '📅', 'content' => '📣', 'cafeteria' => '☕', 'games' => '🎮',
+                            'inventory' => '📦', 'costs' => '🧮', 'cash' => '🏦', 'users' => '👥', 'settings' => '⚙️',
+                        ];
                         $fullName = e(trim(($u['prenom'] ?? '') . ' ' . ($u['nom'] ?? '')));
                         $dialogDomId = preg_replace('#[^A-Za-z0-9_-]#', '', (string) $u['id']);
                         ?>
@@ -129,7 +133,7 @@ $roleIcons = [
                                     <div class="pages-dialog-head">
                                         <div>
                                             <p class="pages-dialog-title">🔑 Pages supplémentaires</p>
-                                            <p class="pages-dialog-sub"><?= $fullName ?></p>
+                                            <p class="pages-dialog-sub"><?= $fullName ?> · <b><span class="pages-count"><?= count($grantedPages) ?></span> sélectionnée(s)</b></p>
                                         </div>
                                         <button type="button" class="pages-dialog-close" onclick="this.closest('dialog').close()" title="Fermer">✕</button>
                                     </div>
@@ -139,7 +143,9 @@ $roleIcons = [
                                             <?php foreach ($modulePageKeys as $pageKey): ?>
                                                 <label class="pages-check">
                                                     <input type="checkbox" name="pages[]" value="<?= e($pageKey) ?>" <?= in_array($pageKey, $grantedPages, true) ? 'checked' : '' ?>>
-                                                    <span><?= e($allExtraPages[$pageKey] ?? $pageKey) ?></span>
+                                                    <span class="pages-ico"><?= $pageIcons[$pageKey] ?? '📄' ?></span>
+                                                    <span class="pages-label"><?= e($allExtraPages[$pageKey] ?? $pageKey) ?></span>
+                                                    <span class="pages-tick">✓</span>
                                                 </label>
                                             <?php endforeach; ?>
                                         </div>
@@ -148,7 +154,9 @@ $roleIcons = [
                                             <?php foreach ($systemPageKeys as $pageKey): ?>
                                                 <label class="pages-check">
                                                     <input type="checkbox" name="pages[]" value="<?= e($pageKey) ?>" <?= in_array($pageKey, $grantedPages, true) ? 'checked' : '' ?>>
-                                                    <span><?= e($allExtraPages[$pageKey] ?? $pageKey) ?></span>
+                                                    <span class="pages-ico"><?= $pageIcons[$pageKey] ?? '📄' ?></span>
+                                                    <span class="pages-label"><?= e($allExtraPages[$pageKey] ?? $pageKey) ?></span>
+                                                    <span class="pages-tick">✓</span>
                                                 </label>
                                             <?php endforeach; ?>
                                         </div>
@@ -281,7 +289,8 @@ $roleIcons = [
     border-bottom: 1px solid var(--border);
 }
 .pages-dialog-title { margin: 0; font-size: 0.95rem; font-weight: 700; }
-.pages-dialog-sub { margin: 0.1rem 0 0; font-size: 0.75rem; color: var(--muted); }
+.pages-dialog-sub { margin: 0.15rem 0 0; font-size: 0.76rem; color: var(--muted); }
+.pages-dialog-sub .pages-count { color: var(--primary); font-size: 0.82rem; }
 .pages-dialog-close {
     background: transparent; border: none; color: var(--muted);
     font-size: 1rem; cursor: pointer; line-height: 1; padding: 0.2rem 0.35rem; border-radius: 6px;
@@ -298,25 +307,38 @@ $roleIcons = [
     color: var(--muted);
     padding: 0 0.6rem; /* aligne les titres sur le texte des cases */
 }
-.pages-checks { display: grid; grid-template-columns: 1fr 1fr; gap: 0.2rem 0.7rem; }
+.pages-checks { display: grid; grid-template-columns: repeat(auto-fill, minmax(215px, 1fr)); gap: 0.45rem; }
 .pages-check {
     display: flex; align-items: center; gap: 0.55rem;
-    padding: 0.45rem 0.6rem;
-    min-height: 34px;
-    border-radius: 8px;
-    font-size: 0.8rem;
+    padding: 0.5rem 0.6rem;
+    border-radius: 10px;
+    font-size: 0.82rem;
     cursor: pointer;
-    border: 1px solid transparent;
+    border: 1px solid var(--border);
+    background: rgba(255,255,255,0.03);
+    transition: border-color 0.12s ease, background 0.12s ease;
 }
-.pages-check:hover { background: rgba(255,255,255,0.05); border-color: var(--border); }
-.pages-check:has(input:checked) { background: rgba(255,255,255,0.06); border-color: var(--border); }
+.pages-check:hover { background: rgba(255,255,255,0.06); }
+.pages-check:has(input:checked) { border-color: var(--primary); background: rgba(255,255,255,0.07); }
 .pages-check input { margin: 0; width: 15px; height: 15px; flex-shrink: 0; accent-color: var(--primary); cursor: pointer; }
+.pages-ico {
+    width: 27px; height: 27px; flex-shrink: 0;
+    display: grid; place-items: center;
+    font-size: 0.95rem;
+    background: rgba(255,255,255,0.06);
+    border-radius: 8px;
+}
+.pages-check:has(input:checked) .pages-ico { background: rgba(255,255,255,0.1); }
+.pages-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pages-tick { display: none; color: var(--primary); font-weight: 700; flex-shrink: 0; }
+.pages-check:has(input:checked) .pages-tick { display: inline; }
 
 .pages-dialog-foot {
-    display: flex; align-items: center; gap: 0.4rem;
-    padding: 0.7rem 1rem 0.9rem;
+    display: flex; align-items: center; flex-wrap: wrap; gap: 0.4rem;
+    padding: 0.75rem 1.1rem 1rem;
     border-top: 1px solid var(--border);
 }
+.pages-dialog-foot .btn { white-space: nowrap; }
 .pages-dialog-spacer { flex: 1; }
 
 /* Table utilisateurs compacte */
@@ -393,11 +415,32 @@ $roleIcons = [
     apply();
 })();
 
-// Modale « Pages + » : coche / décoche toutes les cases du dialog parent.
+// Modale « Pages + » : coche / décoche toutes les cases du dialog parent
+// et met à jour le compteur de l'en-tête.
+function pagesCountOf(dialog) {
+    var n = 0;
+    var boxes = dialog.querySelectorAll('input[name="pages[]"]');
+    for (var i = 0; i < boxes.length; i++) if (boxes[i].checked) n++;
+    return n;
+}
+
+function pagesRefreshCount(dialog) {
+    var el = dialog.querySelector('.pages-count');
+    if (el) el.textContent = pagesCountOf(dialog);
+}
+
 function pagesCheckAll(btn, checked) {
     var dialog = btn.closest('.pages-dialog');
     if (!dialog) return;
     var boxes = dialog.querySelectorAll('input[name="pages[]"]');
     for (var i = 0; i < boxes.length; i++) boxes[i].checked = checked;
+    pagesRefreshCount(dialog);
+}
+
+var pageDialogs = document.querySelectorAll('.pages-dialog');
+for (var pd = 0; pd < pageDialogs.length; pd++) {
+    pageDialogs[pd].addEventListener('change', function (e) {
+        if (e.target && e.target.name === 'pages[]') pagesRefreshCount(this);
+    });
 }
 </script>
