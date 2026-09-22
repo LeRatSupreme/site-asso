@@ -12,7 +12,21 @@ declare(strict_types=1);
  * @var array{ht:float,ttc:float,vat:float} $sums
  * @var int                       $count
  * @var int                       $qtyTotal
+ * @var list<string>              $allKeys
  */
+
+// Prévention de doublons : la liste des clés existantes est normalisée
+// côté PHP (même règle que StockPublic::normalizeKey) et injectée en JS
+// via l'attribut data-dup-keys du tableau de saisie — le JS compare la
+// saisie normalisée à cette carte et avertit sans bloquer.
+$normKeys = [];
+foreach ($allKeys as $k) {
+    $n = \App\Core\Compta\StockPublic::normalizeKey((string) $k);
+    if ($n !== '' && !isset($normKeys[$n])) {
+        $normKeys[$n] = (string) $k;
+    }
+}
+?>
 ?>
 <div class="compta-head">
     <div>
@@ -86,7 +100,7 @@ declare(strict_types=1);
             <p class="field-help">Décoche si ces prix sont inhabituels (promo, erreur, test…) pour ne pas fausser le calcul du bénéfice.</p>
         </div>
 
-        <table class="table" id="purchases-grid">
+        <table class="table" id="purchases-grid" data-dup-keys="<?= e(json_encode($normKeys)) ?>">
             <thead>
                 <tr>
                     <th>Produit</th>
@@ -98,7 +112,7 @@ declare(strict_types=1);
             </thead>
             <tbody id="purchases-lines">
                 <tr class="purchase-line">
-                    <td><input type="text" name="product_key[]" list="purchase-products" placeholder="ex: Coca 33cl" autocomplete="off" style="width:100%;"></td>
+                    <td><input type="text" name="product_key[]" list="purchase-products" placeholder="ex: Coca 33cl" autocomplete="off" style="width:100%;"><div class="dup-warning" hidden style="margin-top:4px;padding:4px 8px;border-radius:6px;background:#fff3cd;border:1px solid #ffeeba;color:#7a5b00;font-size:0.78rem;"></div></td>
                     <td><input type="number" name="quantity[]" value="1" min="1" step="1" style="width:100%;"></td>
                     <td><input type="text" name="total_amount[]" placeholder="ex: 18,60" inputmode="decimal" style="width:100%;"></td>
                     <td class="muted line-unit" hidden></td>
@@ -133,6 +147,38 @@ declare(strict_types=1);
             var totalEl = document.getElementById('purchases-total');
             if (!tbody || !addBtn) return;
 
+            // Carte des clés existantes, normalisées côté PHP
+            // (data-dup-keys) : clé normalisée -> clé réelle à préférer.
+            var normKeys = {};
+            try { normKeys = JSON.parse(document.getElementById('purchases-grid').getAttribute('data-dup-keys') || '{}'); } catch (e) { normKeys = {}; }
+
+            // Règle de normalisation dupliquée en JS (pas de PHP côté
+            // client) : identique à StockPublic::normalizeKey — minuscules,
+            // sans accents, séparateurs et espaces supprimés.
+            function normKey(v) {
+                return String(v || '')
+                    .toLowerCase()
+                    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+                    .replace(/[_\-\.()\[\]\{\},;:\/]+/g, ' ')
+                    .replace(/\s+/g, ' ')
+                    .trim()
+                    .replace(/ /g, '');
+            }
+
+            function checkDup(tr) {
+                var input = tr.querySelector('[name="product_key[]"]');
+                var warn = tr.querySelector('.dup-warning');
+                if (!input || !warn) return;
+                var existing = normKeys[normKey(input.value)];
+                if (existing && existing !== input.value) {
+                    warn.textContent = '⚠️ « ' + input.value + ' » ressemble à la clé existante « ' + existing + ' » — préfère-la (autocomplétion) pour éviter un doublon.';
+                    warn.hidden = false;
+                } else {
+                    warn.hidden = true;
+                    warn.textContent = '';
+                }
+            }
+
             function parseAmount(v) {
                 return parseFloat(String(v).replace(/\s/g, '').replace(',', '.'));
             }
@@ -160,6 +206,9 @@ declare(strict_types=1);
             }
 
             function wireRow(tr) {
+                var keyInput = tr.querySelector('[name="product_key[]"]');
+                keyInput.addEventListener('blur', function () { checkDup(tr); });
+                keyInput.addEventListener('change', function () { checkDup(tr); });
                 tr.querySelector('[name="total_amount[]"]').addEventListener('input', function () {
                     updateRow(tr); updateTotal();
                 });
@@ -176,7 +225,7 @@ declare(strict_types=1);
                 var tr = document.createElement('tr');
                 tr.className = 'purchase-line';
                 tr.innerHTML =
-                    '<td><input type="text" name="product_key[]" list="purchase-products" placeholder="ex: Coca 33cl" autocomplete="off" style="width:100%;"></td>' +
+                    '<td><input type="text" name="product_key[]" list="purchase-products" placeholder="ex: Coca 33cl" autocomplete="off" style="width:100%;"><div class="dup-warning" hidden style="margin-top:4px;padding:4px 8px;border-radius:6px;background:#fff3cd;border:1px solid #ffeeba;color:#7a5b00;font-size:0.78rem;"></div></td>' +
                     '<td><input type="number" name="quantity[]" value="1" min="1" step="1" style="width:100%;"></td>' +
                     '<td><input type="text" name="total_amount[]" placeholder="ex: 18,60" inputmode="decimal" style="width:100%;"></td>' +
                     '<td class="muted line-unit" hidden></td>' +

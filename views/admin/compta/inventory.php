@@ -8,6 +8,7 @@ declare(strict_types=1);
  * @var list<array{key:string,counted_at:?string}> $discontinuedRows
  * @var list<array<string,mixed>> $history
  * @var list<array<string,mixed>> $gaps
+ * @var list<string> $allKeys
  */
 ?>
 <div class="compta-head">
@@ -217,4 +218,34 @@ declare(strict_types=1);
         </table>
         <?php endif; ?>
     </details>
+</div>
+
+<div class="card surface glass">
+    <h2 class="card-title">🔗 Fusionner des clés produits</h2>
+    <p class="muted">Déplace toutes les données d'une clé vers une autre : ventes, achats, pertes, aliases, stocks, comptages, drapeaux.</p>
+    <form method="post" action="<?= e(url('/admin/compta/inventaire/merge')) ?>"
+          data-confirm="Fusionner ces clés ? Action irréversible.">
+        <?= csrf_field() ?>
+        <div class="field-row">
+            <div class="field">
+                <label for="merge-source">Clé source (doublon à absorber)</label>
+                <input type="text" id="merge-source" name="source" list="merge-keys"
+                       placeholder="ex: Pulco Citronnade" autocomplete="off" required>
+            </div>
+            <div class="field">
+                <label for="merge-target">Clé cible (conservée)</label>
+                <input type="text" id="merge-target" name="target" list="merge-keys"
+                       placeholder="ex: pulco" autocomplete="off" required>
+            </div>
+        </div>
+        <datalist id="merge-keys">
+            <?php foreach ($allKeys as $k): ?>
+                <option value="<?= e($k) ?>"></option>
+            <?php endforeach; ?>
+        </datalist>
+        <div class="form-actions">
+            <button type="submit" class="btn btn-danger btn-sm">Fusionner</button>
+        </div>
+        <p class="muted">Utilise la clé des ventes SumUp comme cible (ex. « pulco », pas « Pulco Citronnade »).</p>
+    </form>
 </div>

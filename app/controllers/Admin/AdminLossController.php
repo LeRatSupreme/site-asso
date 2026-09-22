@@ -9,6 +9,7 @@ use App\Core\Compta\ProductAutoSync;
 use App\Core\Compta\StockPublic;
 use App\Models\Loss;
 use App\Models\ProductCost;
+use App\Models\ProductKeyMerge;
 use App\Models\Sale;
 
 /**
@@ -53,6 +54,7 @@ final class AdminLossController extends AdminBaseController
             'byReason'      => Loss::byReasonBetween($period['from'], $period['to']),
             'value30'       => Loss::valueForDays(30),
             'products'      => Sale::distinctProducts(),
+            'allKeys'       => ProductKeyMerge::allKeys(),
         ]);
     }
 
