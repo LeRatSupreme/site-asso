@@ -7,7 +7,9 @@ namespace App\Controllers\Admin;
 use App\Core\Compta\ProductAutoSync;
 use App\Core\Permissions;
 use App\Models\Product;
+use App\Models\ProductAlias;
 use App\Models\ProductCategory;
+use App\Models\Sale;
 
 /**
  * Gestion de la cafétéria : produits et catégories.
@@ -124,10 +126,29 @@ final class AdminCafeteriaController extends AdminBaseController
     {
         $this->guardModule(Permissions::MODULE_CAFETERIA);
 
-        $id = ProductCategory::save($_POST);
+        // Renommage : le nouveau nom est propagé sur le mapping des libellés
+        // (alias) et sur les ventes déjà catégorisées, pour que tout reste
+        // synchronisé avec les catégories existantes.
+        $renamed = 0;
+        $id = (string) ($_POST['id'] ?? '');
+        $newName = trim((string) ($_POST['name'] ?? ''));
+        $existing = $id !== '' ? ProductCategory::find($id) : null;
+        if ($existing !== null) {
+            $oldName = trim((string) ($existing['name'] ?? ''));
+            if ($oldName !== '' && $newName !== '' && $oldName !== $newName) {
+                $renamed = ProductAlias::renameCategory($oldName, $newName)
+                    + Sale::renameCategory($oldName, $newName);
+            }
+        }
 
-        $this->audit('category.save', 'product_category', $id);
-        $this->setFlash('success', 'Catégorie enregistrée.');
+        $newId = ProductCategory::save($_POST);
+
+        $this->audit('category.save', 'product_category', $newId, ['renamed_refs' => $renamed]);
+        if ($renamed > 0) {
+            $this->setFlash('success', sprintf('Catégorie enregistrée — %d référence(s) (alias, ventes) renommée(s).', $renamed));
+        } else {
+            $this->setFlash('success', 'Catégorie enregistrée.');
+        }
         redirect(url('/admin/cafeteria/categories'));
     }
 

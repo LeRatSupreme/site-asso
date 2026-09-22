@@ -240,6 +240,7 @@ SumUp enregistre parfois le même produit sous des noms différents (Bueno, Buen
 - Le **mapping** associe ces variantes à un **nom canonique** unique
 - Bouton **« Auto-détecter les doublons »** → propose automatiquement un mapping
 - Vérifie → **Appliquer**
+- La **catégorie** proposée est celle des **Catégories** existantes (cafétéria) ; la modifier met à jour les ventes correspondantes, et renommer une catégorie dans **Catégories** se propage partout (alias + ventes)
 
 ### C. Coûts de revient
 **Admin → Comptabilité → Coûts de revient** :
@@ -410,27 +411,28 @@ Un événement porte le **nom exact du bouton SumUp** :
 **Admin → Comptabilité → Réappro** (ou `/admin/compta/reappro`).
 
 ### Principe
-La page calcule **combien racheter** de chaque produit, basé sur les ventes réelles :
+La page calcule **combien racheter** de chaque produit, basé sur les ventes réelles et le **stock théorique de l'inventaire** (jamais une saisie manuelle, donc jamais périmé) :
+- **Stock théorique** : dernier comptage + achats − ventes − pertes (mis à jour automatiquement par Inventaire, Achats et Pertes)
 - **Conso / jour** : ventes moyennes par jour d'ouverture (lun-ven)
 - **Conso / semaine** : × 5 jours
-- **Conso / mois** : moyenne mobile 3 mois
+- **Conso / mois** : × 21,77 jours ouvrés
 - **Besoin** : conso estimée sur la période choisie
-- **À commander** : besoin − stock actuel
+- **À commander** : besoin − stock théorique (minimum 0 ; un stock négatif majore la commande)
+- **Autonomie** : jours d'ouverture avant rupture (pastille rouge < 3 j, orange < 7 j, verte sinon)
 
 ### Comment l'utiliser
-1. Choisis la **période** à couvrir (1 semaine, 2 semaines, 1 mois, 2 mois, 3 mois)
-2. Saisis le **stock actuel** de chaque produit dans le champ
-3. Clique **« Enregistrer les stocks »**
-4. La colonne **« À commander »** et le **total** se recalculent
+1. Choisis la **période analysée** (7 j → tout) et l'**horizon à couvrir** (1 semaine, 2 semaines, 1 mois, 2 mois, 3 mois)
+2. Lis la colonne **« À commander »** et le **total** en bas (quantité + coût estimé du panier)
+3. Commande, puis enregistre la livraison dans **Achats & stock** : le stock théorique remonte automatiquement
 
 ### États
 | Badge | Signification |
 |-------|---------------|
-| **À définir** | Stock non renseigné (saisis-le) |
-| **À racheter** | Stock faible ou nul |
-| **OK** | Stock suffisant pour la période |
+| **À compter** | Jamais compté en inventaire → le besoin complet est proposé, fais un comptage (Système → Inventaire) |
+| **À racheter** | Stock faible ou nul (autonomie < 7 jours) |
+| **OK** | Stock suffisant pour l'horizon |
 
-> 💡 La cafétéria est ouverte **du lundi au vendredi** → les calculs sont basés sur les jours d'ouverture (≈ 22/mois).
+> 💡 La cafétéria est ouverte **du lundi au vendredi** → les calculs sont basés sur les jours d'ouverture (≈ 22/mois). Fais un **inventaire régulier** : le comptage recadre le stock théorique et révèle les écarts (pertes, casses).
 
 ---
 

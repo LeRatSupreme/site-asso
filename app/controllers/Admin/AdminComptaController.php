@@ -14,8 +14,8 @@ use App\Models\ImportBatch;
 use App\Models\InventoryCount;
 use App\Models\Product;
 use App\Models\ProductAlias;
+use App\Models\ProductCategory;
 use App\Models\ProductCost;
-use App\Models\ProductStock;
 use App\Models\Sale;
 use App\Models\SaleAdjustment;
 
@@ -245,6 +245,11 @@ final class AdminComptaController extends AdminBaseController
         } catch (\Throwable) {
             // La compta ne doit jamais casser à cause de la synchro carte.
         }
+
+        // ── Synchro des catégories du mapping : les lignes fraîchement
+        //       importées portent la catégorie de leur alias. Non bloquant
+        //       (la méthode avale elle-même les erreurs SQL).
+        Sale::syncAliasCategories();
 
         $unmapped = count(Sale::unmappedDescriptions());
 
@@ -793,13 +798,23 @@ final class AdminComptaController extends AdminBaseController
     {
         $user = $this->guardCompta();
 
-        // Catégories suggérées (dont « Événement ») fusionnées avec celles
-        // déjà rencontrées dans les ventes, pour la datalist d'autocomplétion.
+        // Catégories suggérées : d'abord les catégories existantes de la
+        // carte (page Catégories de la cafétéria), puis « Événement », puis
+        // les valeurs déjà rencontrées dans les alias et les ventes pour
+        // rester compatibles avec l'historique.
+        $categories = [];
+        foreach (ProductCategory::allForAdmin() as $cat) {
+            $name = trim((string) ($cat['name'] ?? ''));
+            if ($name !== '') {
+                $categories[] = $name;
+            }
+        }
         $categories = array_values(array_unique(array_merge(
-            ['Boisson', 'Nourriture', 'Spécial', 'Événement'],
+            $categories,
+            ['Événement'],
+            ProductAlias::distinctCategories(),
             Sale::distinctCategories()
         )));
-        usort($categories, 'strnatcasecmp');
 
         $this->renderAdmin('admin/compta/aliases', [
             'title'      => 'Mapping des libellés',
@@ -818,10 +833,17 @@ final class AdminComptaController extends AdminBaseController
         if (ProductAlias::save($data) === '') {
             $this->setFlash('error', 'Libellé et produit canonique requis.');
         } else {
+            // Synchronisation : la catégorie choisie est reportée sur les
+            // ventes déjà enregistrées portant ce libellé.
+            $categorized = Sale::applyAliasCategory(
+                (string) ($data['raw_description'] ?? ''),
+                isset($data['category']) ? (string) $data['category'] : null
+            );
             $this->audit('compta.alias.save', 'product_alias', null, [
-                'raw' => $data['raw_description'] ?? null,
+                'raw'           => $data['raw_description'] ?? null,
+                'sales_updated' => $categorized,
             ]);
-            $this->setFlash('success', 'Libellé rattaché au produit.');
+            $this->setFlash('success', 'Libellé rattaché au produit.' . ($categorized > 0 ? sprintf(' %d vente(s) catégorisée(s).', $categorized) : ''));
         }
 
         redirect(url('/admin/compta/aliases'));
@@ -844,6 +866,7 @@ final class AdminComptaController extends AdminBaseController
         }
 
         $updated = 0;
+        $categorized = 0;
         $n = max(count($raws), count($cats));
         for ($i = 0; $i < $n; $i++) {
             $raw = trim((string) ($raws[$i] ?? ''));
@@ -868,12 +891,18 @@ final class AdminComptaController extends AdminBaseController
                 'product_key'     => (string) $existing['product_key'],
                 'category'        => $newCat,
             ]);
+            // Synchronisation : les ventes portant ce libellé suivent la
+            // catégorie choisie (une catégorie vidée ne les modifie pas).
+            $categorized += Sale::applyAliasCategory($raw, $newCat);
             $updated++;
         }
 
         if ($updated > 0) {
-            $this->audit('compta.alias.bulk', 'product_alias', null, ['updated' => $updated]);
-            $this->setFlash('success', sprintf('%d catégorie(s) mise(s) à jour.', $updated));
+            $this->audit('compta.alias.bulk', 'product_alias', null, [
+                'updated'       => $updated,
+                'sales_updated' => $categorized,
+            ]);
+            $this->setFlash('success', sprintf('%d catégorie(s) mise(s) à jour — %d vente(s) synchronisée(s).', $updated, $categorized));
         } else {
             $this->setFlash('info', 'Aucun changement à enregistrer.');
         }
@@ -1095,65 +1124,15 @@ final class AdminComptaController extends AdminBaseController
     }
 
     /**
-     * Enregistre les stocks saisis sur la page Réappro (table product_stocks).
-     */
-    public function saveStocks(): void
-    {
-        $this->guardCompta();
-
-        // Deux listes parallèles (keys[] + values[]) pour éviter que PHP ne
-        // transforme les espaces/points des noms de produits en '_' dans les
-        // clés d'un tableau indexé.
-        $keys   = $_POST['keys'] ?? [];
-        $values = $_POST['values'] ?? [];
-        if (!is_array($keys)) {
-            $keys = [];
-        }
-        if (!is_array($values)) {
-            $values = [];
-        }
-
-        $count = 0;
-        foreach ($keys as $i => $key) {
-            $productKey = trim((string) $key);
-            if ($productKey === '' || !isset($values[$i])) {
-                continue;
-            }
-            $value = trim((string) $values[$i]);
-            if ($value === '') {
-                // Champ vide : on n'écrase pas (stock laissé inconnu).
-                continue;
-            }
-            ProductStock::set($productKey, (int) $value);
-            $count++;
-        }
-
-        $this->audit('compta.reappro.stocks', 'product_stocks', null, ['count' => $count]);
-        $this->setFlash('success', sprintf('%d stock(s) mis à jour.', $count));
-
-        // Conserve la période d'analyse et l'horizon de couverture.
-        $params = ['period' => (string) ($_POST['period'] ?? '1m')];
-        $ref = (string) ($_POST['ref'] ?? '');
-        if ($ref !== '') {
-            $params['ref'] = $ref;
-            foreach (['du', 'au'] as $bound) {
-                $v = (string) ($_POST[$bound] ?? '');
-                if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $v) === 1) {
-                    $params[$bound] = $v;
-                }
-            }
-        }
-        redirect(url('/admin/compta/reappro?' . http_build_query($params)));
-    }
-
-    /**
      * Calcule l'analyse de réapprovisionnement sur une période donnée.
      *
      * Chaque produit vendu dans la période d'analyse est listé avec sa
      * consommation moyenne (rapportée aux jours d'ouverture réels de la
      * période) par jour / semaine / mois, et la quantité à commander pour
-     * couvrir l'horizon cible. Le stock n'est connu que s'il a été saisi
-     * sur Réappro (sinon : « — »).
+     * couvrir l'horizon cible. Le stock est le THÉORIQUE de l'inventaire
+     * (dernier comptage + achats − ventes − pertes) : jamais une saisie
+     * manuelle qui se périme. Un produit jamais compté apparaît « à
+     * compter » et son besoin est calculé sans stock déduit.
      *
      * @param string|null $fromDay  Début de la période d'analyse (inclus).
      * @param string|null $toDay    Fin de la période d'analyse (inclus).
@@ -1164,16 +1143,20 @@ final class AdminComptaController extends AdminBaseController
     private function reorderData(int $targetDays, ?string $fromDay, ?string $toDay, int $openDays): array
     {
         // 100 % basé sur les ventes SumUp : chaque produit du CSV est listé,
-        // sa catégorie vient du CSV, et son stock est celui saisi sur Réappro
-        // (table product_stocks). Plus aucun mélange avec l'ancienne cafétéria.
+        // sa catégorie vient du CSV, et son stock est le théorique issu de
+        // l'inventaire (même source que la page Inventaire).
         $consumption = Sale::consumptionBetween($fromDay, $toDay);
         $openDays = max(1, $openDays);
 
-        // Stocks saisis, indexés en minuscules pour un rapprochement
-        // insensible à la casse (ex. « Red bull » == « Red Bull »).
-        $stocksInputLower = [];
-        foreach (ProductStock::allMap() as $k => $v) {
-            $stocksInputLower[strtolower(trim((string) $k))] = $v;
+        // Stock théorique + dernier comptage, indexés en minuscules pour un
+        // rapprochement insensible à la casse (ex. « Red bull » == « Red Bull »).
+        $theoreticalLower = [];
+        foreach (InventoryCount::theoreticalStocksMap() as $k => $v) {
+            $theoreticalLower[strtolower(trim((string) $k))] = (int) $v;
+        }
+        $lastCountsLower = [];
+        foreach (InventoryCount::lastCountsMap() as $k => $c) {
+            $lastCountsLower[strtolower(trim((string) $k))] = $c;
         }
 
         $rows = [];
@@ -1191,14 +1174,19 @@ final class AdminComptaController extends AdminBaseController
             $avgMonth = $avgDay * 21.77;
 
             $lookupKey = strtolower(trim($key));
-            $hasStock = array_key_exists($lookupKey, $stocksInputLower);
-            $stock    = $hasStock ? $stocksInputLower[$lookupKey] : null;
+            $hasStock = array_key_exists($lookupKey, $theoreticalLower);
+            $stock    = $hasStock ? $theoreticalLower[$lookupKey] : null;
+            $countedAt = $lastCountsLower[$lookupKey]['at'] ?? null;
 
+            // Autonomie : jours d'ouverture avant rupture (arrondie à la
+            // baisse ; un stock négatif signifie rupture déjà atteinte).
             $autonomy = ($stock !== null && $avgDay > 0)
-                ? (int) floor($stock / $avgDay)
+                ? max(0, (int) floor($stock / $avgDay))
                 : null;
 
             $need   = (int) ceil($avgDay * $targetDays);
+            // Un stock négatif (survente) majore la quantité à commander :
+            // reconstituer le niveau perdu en plus de couvrir le besoin.
             $toOrder = max(0, $need - ($stock ?? 0));
 
             // Coût unitaire actuel (lot en cours à aujourd'hui) et coût
@@ -1224,6 +1212,7 @@ final class AdminComptaController extends AdminBaseController
                 'category'   => (string) ($data['category'] ?? '—'),
                 'qty'        => $qty,
                 'stock'      => $stock,
+                'counted_at' => $countedAt,
                 'avg_day'    => $avgDay,
                 'avg_week'   => $avgWeek,
                 'avg_month'  => $avgMonth,

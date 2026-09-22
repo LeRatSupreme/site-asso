@@ -5,11 +5,13 @@ declare(strict_types=1);
 namespace App\Models;
 
 /**
- * Stocks saisis sur la page Réappro (table `product_stocks`).
+ * Stocks de référence (table `product_stocks`).
  *
- * Découple le stock du tableau des produits cafétéria : n'importe quel
- * produit (même présent uniquement dans les ventes SumUp) peut avoir un
- * stock saisi ici, clé par product_key canonique.
+ * Plus aucune saisie manuelle : la table suit le stock au fil des
+ * mouvements — un comptage d'inventaire fixe la référence
+ * (InventoryCount::record), chaque achat l'augmente (Purchase::create)
+ * et chaque perte la diminue (Loss::create). L'analyse Réappro affiche
+ * directement le stock THÉORIQUE de l'inventaire.
  */
 final class ProductStock extends Model
 {

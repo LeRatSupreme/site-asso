@@ -1021,6 +1021,8 @@ final class Sale extends Model
      * Pour chaque alias (raw_description -> product_key), on met à jour les
      * ventes dont la `description` correspond, que `product_key` soit NULL ou
      * déjà renseigné (utile quand la clé canonique d'un alias change).
+     * La catégorie de l'alias est propagée dans la foulée (une catégorie
+     * absente laisse la catégorie existante de la vente inchangée).
      *
      * @return int Nombre total de lignes affectées.
      */
@@ -1029,12 +1031,12 @@ final class Sale extends Model
         $pdo = self::pdo();
 
         try {
-            $rows = $pdo->query('SELECT raw_description, product_key FROM product_aliases')->fetchAll();
+            $rows = $pdo->query('SELECT raw_description, product_key, category FROM product_aliases')->fetchAll();
         } catch (\Throwable) {
             return 0;
         }
 
-        $stmt = $pdo->prepare('UPDATE sales SET product_key = ? WHERE description = ?');
+        $stmt = $pdo->prepare('UPDATE sales SET product_key = ?, category = COALESCE(?, category) WHERE description = ?');
 
         $count = 0;
         foreach ($rows as $a) {
@@ -1043,11 +1045,75 @@ final class Sale extends Model
             if ($raw === '' || $key === '') {
                 continue;
             }
-            $stmt->execute([$key, $raw]);
+            $cat = trim((string) ($a['category'] ?? ''));
+            $stmt->execute([$key, $cat !== '' ? $cat : null, $raw]);
             $count += (int) $stmt->rowCount();
         }
 
         return $count;
+    }
+
+    /**
+     * Applique la catégorie d'un alias à toutes les ventes portant ce libellé
+     * (synchronisation mapping -> ventes).
+     *
+     * Une catégorie vide ne modifie rien : on ne devine jamais la valeur
+     * d'origine d'une vente.
+     */
+    public static function applyAliasCategory(string $rawDescription, ?string $category): int
+    {
+        $raw = trim($rawDescription);
+        $cat = trim((string) $category);
+        if ($raw === '' || $cat === '') {
+            return 0;
+        }
+
+        $stmt = self::pdo()->prepare('UPDATE sales SET category = ? WHERE description = ?');
+        $stmt->execute([$cat, $raw]);
+
+        return (int) $stmt->rowCount();
+    }
+
+    /**
+     * Propage les catégories des alias sur toutes les ventes (un seul UPDATE).
+     *
+     * Utilisé après un import ou une synchro SumUp : les nouvelles lignes
+     * portent directement la catégorie choisie dans le mapping des libellés.
+     * Les alias sans catégorie n'écrasent jamais une catégorie existante.
+     */
+    public static function syncAliasCategories(): int
+    {
+        try {
+            $stmt = self::pdo()->prepare(
+                'UPDATE sales s
+                 JOIN product_aliases a ON a.raw_description = s.description
+                 SET s.category = a.category
+                 WHERE a.category IS NOT NULL AND a.category <> \'\''
+            );
+            $stmt->execute();
+
+            return (int) $stmt->rowCount();
+        } catch (\Throwable) {
+            return 0;
+        }
+    }
+
+    /**
+     * Renomme une catégorie sur toutes les ventes (renommage effectué dans
+     * la page Catégories de la cafétéria).
+     */
+    public static function renameCategory(string $old, string $new): int
+    {
+        $old = trim($old);
+        $new = trim($new);
+        if ($old === '' || $new === '' || $old === $new) {
+            return 0;
+        }
+
+        $stmt = self::pdo()->prepare('UPDATE sales SET category = ? WHERE category = ?');
+        $stmt->execute([$new, $old]);
+
+        return (int) $stmt->rowCount();
     }
 
     /**

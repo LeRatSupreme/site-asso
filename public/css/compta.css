@@ -170,6 +170,8 @@
 .reorder-table th, .reorder-table td { vertical-align: middle; }
 .reorder-table tfoot th { padding-top: 1rem; border-top: 2px solid var(--border); }
 .reorder-table .num { text-align: right; }
+.reorder-table td { padding: 0.8rem 0.75rem; }
+.reorder-table tbody tr:hover { background: rgba(72, 189, 211, 0.08); }
 
 /* ---- Journal des ventes ---- */
 .sales-table th, .sales-table td { padding: 0.85rem 0.9rem; font-size: 0.9rem; vertical-align: middle; }
@@ -177,29 +179,60 @@
 .sales-table .row-muted { opacity: 0.6; }
 .sales-table tfoot th { border-top: 2px solid var(--border); padding-top: 1rem; font-size: 0.92rem; }
 
-.stock-input {
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    color: var(--foreground);
-    padding: 0.5rem 0.6rem;
-    font-size: 0.98rem;
-    font-weight: 700;
-    width: 5.5rem;
+/* Stock théorique + sous-ligne « compté le … » */
+.stock-value { font-weight: 800; font-size: 1.02rem; color: #fff; }
+.stock-value.is-out { color: var(--accent-danger, #ef4444); }
+.cell-sub {
+    display: block;
+    font-size: 0.7rem;
+    font-weight: 500;
+    color: var(--muted);
+    margin-top: 0.15rem;
+    white-space: nowrap;
+}
+
+/* Pastille d'autonomie (jours d'ouverture avant rupture) */
+.auto-pill {
+    display: inline-block;
+    min-width: 3.1rem;
     text-align: center;
-    transition: border-color 0.15s, box-shadow 0.15s;
+    padding: 0.22rem 0.55rem;
+    border-radius: 999px;
+    font-size: 0.76rem;
+    font-weight: 800;
+    border: 1px solid transparent;
 }
-.stock-input:hover { border-color: rgba(72, 189, 211, 0.4); }
-.stock-input:focus {
-    outline: none;
-    border-color: var(--primary);
-    box-shadow: 0 0 0 3px rgba(72, 189, 211, 0.18);
-    background: rgba(72, 189, 211, 0.06);
+.auto-pill.auto-ok {
+    background: rgba(34, 197, 94, 0.13);
+    color: var(--accent-success, #22c55e);
+    border-color: rgba(34, 197, 94, 0.35);
 }
-.stock-input::placeholder { color: var(--muted); font-weight: 400; }
-.stock-input::-webkit-outer-spin-button,
-.stock-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-.stock-input { -moz-appearance: textfield; appearance: textfield; }
+.auto-pill.auto-warn {
+    background: rgba(245, 158, 11, 0.14);
+    color: var(--accent-warning, #f59e0b);
+    border-color: rgba(245, 158, 11, 0.4);
+}
+.auto-pill.auto-danger {
+    background: rgba(239, 68, 68, 0.15);
+    color: var(--accent-danger, #ef4444);
+    border-color: rgba(239, 68, 68, 0.4);
+}
+.auto-pill.auto-none {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--muted);
+    border-color: var(--border);
+}
+
+/* Sous-ligne coût unitaire sous le coût ligne */
+.cost-sub {
+    display: block;
+    font-size: 0.7rem;
+    font-weight: 500;
+    color: var(--muted);
+    margin-top: 0.1rem;
+    white-space: nowrap;
+}
+
 .alert-warning {
     background: rgba(245, 158, 11, 0.14);
     border: 1px solid rgba(245, 158, 11, 0.4);

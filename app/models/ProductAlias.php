@@ -105,6 +105,47 @@ final class ProductAlias extends Model
     }
 
     /**
+     * Liste les catégories distinctes utilisées par les alias.
+     *
+     * @return list<string>
+     */
+    public static function distinctCategories(): array
+    {
+        try {
+            $rows = self::pdo()
+                ->query('SELECT DISTINCT category FROM product_aliases WHERE category IS NOT NULL AND category <> \'\' ORDER BY category')
+                ->fetchAll();
+        } catch (\Throwable) {
+            return [];
+        }
+
+        $out = [];
+        foreach ($rows as $r) {
+            $out[] = (string) $r['category'];
+        }
+
+        return $out;
+    }
+
+    /**
+     * Renomme une catégorie sur tous les alias (renommage effectué dans la
+     * page Catégories de la cafétéria).
+     */
+    public static function renameCategory(string $old, string $new): int
+    {
+        $old = trim($old);
+        $new = trim($new);
+        if ($old === '' || $new === '' || $old === $new) {
+            return 0;
+        }
+
+        $stmt = self::pdo()->prepare('UPDATE product_aliases SET category = ? WHERE category = ?');
+        $stmt->execute([$new, $old]);
+
+        return (int) $stmt->rowCount();
+    }
+
+    /**
      * Ré-affecte tous les alias pointant vers une clé canonique vers une
      * autre (fusion de doublons).
      */

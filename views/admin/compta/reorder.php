@@ -3,6 +3,12 @@
 declare(strict_types=1);
 
 /**
+ * Page Réapprovisionnement — analyse en lecture seule.
+ *
+ * Le stock affiché est le THÉORIQUE issu de l'inventaire (dernier comptage
+ * + achats − ventes − pertes), la même source que la page Inventaire :
+ * il est toujours à jour, aucune saisie manuelle ici.
+ *
  * @var list<array<string,mixed>>                    $rows
  * @var array<string,array{label:string,days:int}>   $periods
  * @var string                                       $currentPeriod
@@ -27,6 +33,18 @@ function reorder_date_fr(?string $day): string {
     return $t === false ? $day : date('d/m/Y', $t);
 }
 
+function reorder_autonomy_class(?int $autonomy, bool $hasStock): string {
+    if (!$hasStock || $autonomy === null) { return 'auto-none'; }
+    if ($autonomy < 3) { return 'auto-danger'; }
+    if ($autonomy < 7) { return 'auto-warn'; }
+    return 'auto-ok';
+}
+
+// Lien « Inventaire » : même accès que la page elle-même (groupe Système
+// ou attribution individuelle) — on ne montre jamais un lien 403.
+$canInventory = \App\Core\Permissions::isSystemAdmin()
+    || \App\Core\Permissions::userHasExtraPage('inventory');
+
 // Libellés courts pour les pastilles de période.
 $refShort = [
     '7d'     => '7 j',
@@ -38,14 +56,57 @@ $refShort = [
     'all'    => 'Tout',
     'custom' => 'Perso.',
 ];
+
+// Totaux (servent aux KPI et au pied de tableau).
+$totalToOrder = 0;
+$totalCost = 0.0;
+$missingCost = 0;
+$uncounted = 0;
+foreach ($rows as $r) {
+    $totalToOrder += (int) $r['to_order'];
+    if ($r['order_cost'] !== null) {
+        $totalCost += (float) $r['order_cost'];
+    } elseif ((int) $r['to_order'] > 0) {
+        $missingCost++;
+    }
+    if (($r['state'] ?? '') === 'unknown') {
+        $uncounted++;
+    }
+}
 ?>
 <div class="compta-head">
     <div class="compta-head-row">
         <div>
             <p class="eyebrow">Comptabilité</p>
             <h1 class="page-title">Réapprovisionnement</h1>
-            <p class="muted">Consommation moyenne <strong>sur la période analysée</strong> → quantité à commander pour couvrir l'horizon choisi. Idéal pour faire les stocks chaque semaine.</p>
+            <p class="muted">Le stock est le <strong>théorique de l'inventaire</strong> (dernier comptage + achats − ventes − pertes) : il suit automatiquement chaque mouvement, aucune saisie ici. La consommation moyenne de la période donne la quantité à commander pour couvrir l'horizon choisi.</p>
         </div>
+        <?php if ($canInventory): ?>
+            <a class="btn btn-ghost btn-sm" href="<?= e(url('/admin/compta/inventaire')) ?>">🧮 Faire l'inventaire</a>
+        <?php endif; ?>
+    </div>
+</div>
+
+<div class="compta-kpis">
+    <div class="card surface glass kpi">
+        <p class="kpi-label">Produits suivis</p>
+        <p class="kpi-value"><?= count($rows) ?></p>
+        <p class="kpi-sub">vendus sur la période analysée</p>
+    </div>
+    <div class="card surface glass kpi">
+        <p class="kpi-label">À commander</p>
+        <p class="kpi-value <?= $totalToOrder > 0 ? '' : 'is-positive' ?>"><?= (int) $totalToOrder ?></p>
+        <p class="kpi-sub">unités pour couvrir <?= e($periods[$currentPeriod]['label']) ?></p>
+    </div>
+    <div class="card surface glass kpi">
+        <p class="kpi-label">Coût estimé du panier</p>
+        <p class="kpi-value"><?= e(formatPrice($totalCost)) ?></p>
+        <p class="kpi-sub"><?php if ($missingCost > 0): ?>+<?= (int) $missingCost ?> produit<?= $missingCost > 1 ? 's' : '' ?> sans coût saisi<?php else: ?>tous les coûts sont connus<?php endif ?></p>
+    </div>
+    <div class="card surface glass kpi">
+        <p class="kpi-label">Alertes stock</p>
+        <p class="kpi-value <?= $alerts > 0 ? 'is-negative' : 'is-positive' ?>"><?= (int) $alerts ?></p>
+        <p class="kpi-sub">autonomie &lt; 7 jours d'ouverture</p>
     </div>
 </div>
 
@@ -97,26 +158,32 @@ $refShort = [
         ⚠️ <strong><?= $alerts ?></strong> produit<?= $alerts > 1 ? 's ont' : ' a' ?> un stock faible (autonomie &lt; 7 jours) — à racheter en priorité.
     </div>
 <?php endif; ?>
+<?php if ($uncounted > 0): ?>
+    <div class="alert alert-info">
+        🧮 <strong><?= $uncounted ?></strong> produit<?= $uncounted > 1 ? 's jamais' : ' jamais' ?> compté<?= $uncounted > 1 ? 's' : '' ?> en inventaire : « à commander » couvre le besoin complet.<?php if ($canInventory): ?> <a href="<?= e(url('/admin/compta/inventaire')) ?>">Faire un comptage →</a><?php endif ?>
+    </div>
+<?php endif; ?>
 
-<form method="post" action="<?= e(url('/admin/compta/reappro/stocks')) ?>" id="reorder-form">
-    <?= csrf_field() ?>
-    <input type="hidden" name="period" value="<?= e($currentPeriod) ?>">
-    <input type="hidden" name="ref" value="<?= e($currentRef) ?>">
-    <input type="hidden" name="du" value="<?= e($du) ?>">
-    <input type="hidden" name="au" value="<?= e($au) ?>">
-
-    <div class="costs-toolbar">
+<div class="card surface glass table-wrap">
+    <div class="costs-toolbar" style="margin-bottom:0;border:none;background:none;padding:1rem 1.1rem 0;">
         <div class="search-box">
             <input type="text" id="reorder-search" placeholder="🔎 Rechercher un produit…" autocomplete="off">
         </div>
         <select id="reorder-cat" aria-label="Filtrer par catégorie">
             <option value="">Toutes les catégories</option>
         </select>
+        <select id="reorder-state" aria-label="Filtrer par état">
+            <option value="">Tous les états</option>
+            <option value="reorder">À racheter</option>
+            <option value="unknown">À compter</option>
+            <option value="ok">OK</option>
+        </select>
         <select id="reorder-sort" aria-label="Trier par">
             <option value="to_order">À commander ↓</option>
             <option value="name">Produit (A→Z)</option>
             <option value="name-desc">Produit (Z→A)</option>
             <option value="cat">Catégorie (A→Z)</option>
+            <option value="qty-desc">Vendus ↓</option>
             <option value="month-desc">Conso / mois ↓</option>
             <option value="need-desc">Besoin ↓</option>
             <option value="stock-asc">Stock ↑</option>
@@ -124,128 +191,134 @@ $refShort = [
             <option value="autonomy-asc">Autonomie ↑</option>
         </select>
         <span class="costs-count muted" id="reorder-count"></span>
-        <button type="submit" class="btn btn-primary btn-sm">💾 Enregistrer les stocks</button>
     </div>
 
-    <div class="card surface glass table-wrap">
-        <table class="table reorder-table">
-            <thead>
-                <tr>
-                    <th>Produit</th>
-                    <th>Catégorie</th>
-                    <th class="th-num">Vendus<br>(période)</th>
-                    <th class="th-num">Stock actuel</th>
-                    <th class="th-num">Conso moy.<br>/ jour <small>(ouv.)</small></th>
-                    <th class="th-num">Conso moy.<br>/ semaine</th>
-                    <th class="th-num">Conso moy.<br>/ mois</th>
-                    <th class="th-num">Coût<br>unit.</th>
-                    <th class="th-num">Besoin<br>(<?= e($periods[$currentPeriod]['label']) ?>)</th>
-                    <th class="th-num">À commander</th>
-                    <th class="th-num">Coût ligne</th>
-                    <th>État</th>
+    <table class="table reorder-table">
+        <thead>
+            <tr>
+                <th>Produit</th>
+                <th>Catégorie</th>
+                <th class="th-num" title="Quantité totale vendue sur la période analysée">Vendus<br>(période)</th>
+                <th class="th-num" title="Stock théorique de l'inventaire : dernier comptage + achats − ventes − pertes">Stock théorique</th>
+                <th class="th-num" title="Conso moyenne par jour d'ouverture (lun-ven)">Conso / jour<br><small>(ouv.)</small></th>
+                <th class="th-num" title="Conso / jour × 5">Conso /<br>semaine</th>
+                <th class="th-num" title="Conso / jour × 21,77 (jours ouvrés moyens)">Conso /<br>mois</th>
+                <th class="th-num" title="Jours d'ouverture avant rupture (stock ÷ conso / jour)">Autonomie</th>
+                <th class="th-num" title="Besoin estimé pour couvrir l'horizon choisi">Besoin<br>(<?= e($periods[$currentPeriod]['label']) ?>)</th>
+                <th class="th-num" title="Besoin − stock théorique (minimum 0)">À commander</th>
+                <th class="th-num" title="À commander × coût de revient du lot en cours">Coût ligne</th>
+                <th>État</th>
+            </tr>
+        </thead>
+        <tbody>
+            <?php foreach ($rows as $r):
+                $key = (string) $r['name'];
+                $hasStock = $r['stock'] !== null;
+                $stockVal = $hasStock ? (int) $r['stock'] : null;
+                $autonomy = $r['autonomy'] !== null ? (int) $r['autonomy'] : null;
+            ?>
+                <tr class="<?= !empty($r['is_alert']) ? 'row-alert' : '' ?>"
+                    data-name="<?= e(strtolower($key)) ?>"
+                    data-cat="<?= e(strtolower((string) $r['category'])) ?>"
+                    data-state="<?= e((string) $r['state']) ?>"
+                    data-hasstock="<?= $hasStock ? '1' : '0' ?>"
+                    data-stock="<?= $hasStock ? (int) $stockVal : 0 ?>"
+                    data-qty="<?= (int) $r['qty'] ?>"
+                    data-month="<?= (float) $r['avg_month'] ?>"
+                    data-need="<?= (int) $r['need'] ?>"
+                    data-toorder="<?= (int) $r['to_order'] ?>"
+                    data-unitcost="<?= $r['unit_cost'] !== null ? e((string) $r['unit_cost']) : '' ?>"
+                    data-autonomy="<?= $autonomy ?? 99999 ?>">
+                    <td><strong><?= e($key) ?></strong></td>
+                    <td><?= e((string) $r['category']) ?></td>
+                    <td class="num muted"><?= (int) $r['qty'] ?></td>
+                    <td class="num">
+                        <?php if ($hasStock): ?>
+                            <strong class="stock-value<?= $stockVal <= 0 ? ' is-out' : '' ?>"
+                                    title="<?= $stockVal < 0 ? 'Stock négatif : survente (ventes sans stock reconstitué)' : 'Stock théorique de l\'inventaire' ?>">
+                                <?= $stockVal ?>
+                            </strong>
+                            <?php if (!empty($r['counted_at'])): ?>
+                                <span class="cell-sub" title="Date du dernier comptage physique">compté le <?= e(reorder_date_fr(substr((string) $r['counted_at'], 0, 10))) ?></span>
+                            <?php endif; ?>
+                        <?php else: ?>
+                            <span class="badge badge-muted" title="Jamais compté en inventaire : fais un comptage pour affiner">À compter</span>
+                        <?php endif; ?>
+                    </td>
+                    <td class="num muted"><?= reorder_qty((float) $r['avg_day']) ?></td>
+                    <td class="num muted"><?= reorder_qty((float) $r['avg_week']) ?></td>
+                    <td class="num muted"><?= reorder_qty((float) $r['avg_month']) ?></td>
+                    <td class="num">
+                        <?php if (!$hasStock || $autonomy === null): ?>
+                            <span class="auto-pill auto-none" title="Stock inconnu">—</span>
+                        <?php elseif ($r['avg_day'] <= 0): ?>
+                            <span class="auto-pill auto-none" title="Aucune vente sur la période">∞</span>
+                        <?php else: ?>
+                            <span class="auto-pill <?= reorder_autonomy_class($autonomy, true) ?>"
+                                  title="<?= $autonomy ?> jour(s) d'ouverture avant rupture">
+                                <?= $autonomy ?> j
+                            </span>
+                        <?php endif; ?>
+                    </td>
+                    <td class="num"><?= (int) $r['need'] ?></td>
+                    <td class="num to-order-cell">
+                        <?php if ((int) $r['to_order'] > 0): ?>
+                            <strong style="color:var(--primary)" title="<?= !$hasStock ? 'Stock jamais compté : le besoin complet est proposé' : 'Besoin − stock théorique' ?>"><?= (int) $r['to_order'] ?></strong>
+                        <?php else: ?>
+                            <span class="muted">0</span>
+                        <?php endif; ?>
+                    </td>
+                    <td class="num cost-line-cell">
+                        <?php if ($r['order_cost'] !== null && (int) $r['to_order'] > 0): ?>
+                            <strong><?= e(formatPrice((float) $r['order_cost'])) ?></strong>
+                            <span class="cost-sub"><?= e(formatPrice((float) $r['unit_cost'], 3)) ?> / u</span>
+                        <?php elseif ($r['unit_cost'] === null): ?>
+                            <span class="muted" title="Coût de revient non saisi">—</span>
+                        <?php else: ?>
+                            <span class="muted">0 €</span>
+                        <?php endif; ?>
+                    </td>
+                    <td>
+                        <?php if (($r['state'] ?? '') === 'reorder'): ?>
+                            <span class="badge badge-warning">À racheter</span>
+                        <?php elseif (($r['state'] ?? '') === 'unknown'): ?>
+                            <span class="badge badge-muted">À compter</span>
+                        <?php else: ?>
+                            <span class="badge badge-success">OK</span>
+                        <?php endif; ?>
+                    </td>
                 </tr>
-            </thead>
-            <tbody>
-                <?php foreach ($rows as $r):
-                    $key = (string) $r['name'];
-                    $stockVal = ($r['stock'] !== null) ? (string) (int) $r['stock'] : '';
-                ?>
-                    <tr class="<?= !empty($r['is_alert']) ? 'row-alert' : '' ?>"
-                        data-name="<?= e(strtolower($key)) ?>"
-                        data-cat="<?= e(strtolower((string) $r['category'])) ?>"
-                        data-stock="<?= (int) ($r['stock'] ?? 0) ?>"
-                        data-month="<?= (float) $r['avg_month'] ?>"
-                        data-need="<?= (int) $r['need'] ?>"
-                        data-toorder="<?= (int) $r['to_order'] ?>"
-                        data-unitcost="<?= $r['unit_cost'] !== null ? e((string) $r['unit_cost']) : '' ?>"
-                        data-autonomy="<?= $r['autonomy'] === null ? 99999 : (int) $r['autonomy'] ?>"
-                        data-need-orig="<?= (int) $r['need'] ?>">
-                        <td><strong><?= e($key) ?></strong></td>
-                        <td><?= e((string) $r['category']) ?></td>
-                        <td class="num muted"><?= e((string) ($r['qty'] ?? 0)) ?></td>
-                        <td class="num">
-                            <input type="hidden" name="keys[]" value="<?= e($key) ?>">
-                            <input type="number" class="stock-input" name="values[]"
-                                   value="<?= e($stockVal) ?>" min="0" step="1"
-                                   placeholder="—" style="width:5.5rem" inputmode="numeric">
-                        </td>
-                        <td class="num muted"><?= reorder_qty((float) $r['avg_day']) ?></td>
-                        <td class="num muted"><?= reorder_qty((float) $r['avg_week']) ?></td>
-                        <td class="num muted"><?= reorder_qty((float) $r['avg_month']) ?></td>
-                        <td class="num muted">
-                            <?= $r['unit_cost'] !== null ? e(formatPrice((float) $r['unit_cost'], 3)) : '—' ?>
-                        </td>
-                        <td class="num"><?= e((string) $r['need']) ?></td>
-                        <td class="num to-order-cell">
-                            <?php if ((int) $r['to_order'] > 0): ?>
-                                <strong style="color:var(--primary)"><?= e((string) $r['to_order']) ?></strong>
-                            <?php else: ?>
-                                <span class="muted">0</span>
-                            <?php endif; ?>
-                        </td>
-                        <td class="num cost-line-cell">
-                            <?php if ($r['order_cost'] !== null && (int) $r['to_order'] > 0): ?>
-                                <strong><?= e(formatPrice((float) $r['order_cost'])) ?></strong>
-                            <?php elseif ($r['unit_cost'] === null): ?>
-                                <span class="muted" title="Coût de revient non saisi">—</span>
-                            <?php else: ?>
-                                <span class="muted">0 €</span>
-                            <?php endif; ?>
-                        </td>
-                        <td>
-                            <?php if (($r['state'] ?? '') === 'reorder'): ?>
-                                <span class="badge badge-warning">À racheter</span>
-                            <?php elseif (($r['state'] ?? '') === 'unknown'): ?>
-                                <span class="badge badge-muted">À définir</span>
-                            <?php else: ?>
-                                <span class="badge badge-success">OK</span>
-                            <?php endif; ?>
-                        </td>
-                    </tr>
-                <?php endforeach; ?>
-                <?php if ($rows === []): ?>
-                    <tr><td colspan="12" class="muted">Aucun produit à analyser sur cette période. Importe d'abord un rapport SumUp.</td></tr>
-                <?php endif; ?>
-            </tbody>
-            <?php if ($rows !== []): ?>
-                <?php
-                    $totalQty = 0;
-                    $totalCost = 0.0;
-                    $missingCost = 0;
-                    foreach ($rows as $r) {
-                        $totalQty += (int) $r['to_order'];
-                        if ($r['order_cost'] !== null) {
-                            $totalCost += (float) $r['order_cost'];
-                        } elseif ((int) $r['to_order'] > 0) {
-                            $missingCost++;
-                        }
-                    }
-                ?>
-                <tfoot>
-                    <tr>
-                        <th colspan="9" style="text-align:right">Total à commander (<?= e($periods[$currentPeriod]['label']) ?>) :</th>
-                        <th class="num"><strong id="reorder-total" style="color:var(--primary)"><?= (int) $totalQty ?></strong></th>
-                        <th class="num">
-                            <strong id="reorder-total-cost" style="color:var(--primary)">≈ <?= e(formatPrice($totalCost)) ?></strong>
-                            <?php if ($missingCost > 0): ?>
-                                <span class="muted" style="display:block;font-weight:400;font-size:0.72rem;" title="Produits à commander sans coût de revient saisi">
-                                    +<?= (int) $missingCost ?> sans coût
-                                </span>
-                            <?php endif; ?>
-                        </th>
-                        <th></th>
-                    </tr>
-                </tfoot>
+            <?php endforeach; ?>
+            <?php if ($rows === []): ?>
+                <tr><td colspan="12" class="muted">Aucun produit à analyser sur cette période. Importe d'abord un rapport SumUp.</td></tr>
             <?php endif; ?>
-        </table>
-    </div>
-</form>
+        </tbody>
+        <?php if ($rows !== []): ?>
+        <tfoot>
+            <tr>
+                <th colspan="9" style="text-align:right">Total à commander (<?= e($periods[$currentPeriod]['label']) ?>) :</th>
+                <th class="num"><strong id="reorder-total" style="color:var(--primary)"><?= (int) $totalToOrder ?></strong></th>
+                <th class="num">
+                    <strong id="reorder-total-cost" style="color:var(--primary)">≈ <?= e(formatPrice($totalCost)) ?></strong>
+                    <?php if ($missingCost > 0): ?>
+                        <span class="muted" style="display:block;font-weight:400;font-size:0.72rem;" title="Produits à commander sans coût de revient saisi">
+                            +<?= (int) $missingCost ?> sans coût
+                        </span>
+                    <?php endif; ?>
+                </th>
+                <th></th>
+            </tr>
+        </tfoot>
+        <?php endif; ?>
+    </table>
+</div>
 
 <p class="card-meta">
     🕒 Cafétéria ouverte du lundi au vendredi : les moyennes sont ramenées aux <strong>jours d'ouverture réels</strong> de la période analysée.
-    « Vendus » = quantité totale sur la période · Conso / jour = vendus ÷ jours d'ouverture · Conso / semaine = conso / jour × 5 · Conso / mois = conso / jour × 21,77.
-    « À commander » = besoin sur l'horizon de couverture − stock saisi (optionnel : sans saisie, à commander = besoin).
-    💶 « Coût unit. » = coût de revient du lot en cours (page Coûts) · « Coût ligne » = à commander × coût unit. · le total ≈ prix d'achat du panier (produits sans coût saisi exclus, ils sont comptés sous le total).
+    Conso / jour = vendus ÷ jours d'ouverture · Conso / semaine = conso / jour × 5 · Conso / mois = conso / jour × 21,77.
+    « À commander » = besoin sur l'horizon de couverture − <strong>stock théorique</strong> (minimum 0 ; un stock négatif majore la commande).
+    📦 Stock théorique = dernier comptage + achats − ventes − pertes (mis à jour par <strong>Inventaire</strong>, <strong>Achats</strong> et <strong>Pertes</strong>).
+    💶 « Coût ligne » = à commander × coût de revient du lot en cours · le total ≈ prix d'achat du panier (produits sans coût saisi exclus, comptés sous le total).
 </p>
 
 <script>
@@ -264,18 +337,17 @@ $refShort = [
         });
     });
 
-    var customRadio = form.querySelector('input[name="ref"][value="custom"]');
-    if (customRadio && custom) {
-        Array.prototype.forEach.call(form.querySelectorAll('input[name="ref"]'), function (radio) {
-            radio.addEventListener('change', function () {
-                custom.hidden = radio.value === 'custom' ? false : true;
-                if (radio.value === 'custom') {
-                    var du = document.getElementById('du');
-                    if (du) du.focus();
-                }
-            });
+    Array.prototype.forEach.call(form.querySelectorAll('input[name="ref"]'), function (radio) {
+        radio.addEventListener('change', function () {
+            if (custom) {
+                custom.hidden = radio.value !== 'custom' || !radio.checked;
+            }
+            if (radio.value === 'custom' && radio.checked) {
+                var du = document.getElementById('du');
+                if (du) du.focus();
+            }
         });
-    }
+    });
 })();
 </script>
 
@@ -283,6 +355,7 @@ $refShort = [
 (function () {
     var search = document.getElementById('reorder-search');
     var catSel = document.getElementById('reorder-cat');
+    var stateSel = document.getElementById('reorder-state');
     var sortSel = document.getElementById('reorder-sort');
     var countEl = document.getElementById('reorder-count');
     var tbody = document.querySelector('.reorder-table tbody');
@@ -290,6 +363,7 @@ $refShort = [
     var totalEl = document.getElementById('reorder-total');
     var totalCostEl = document.getElementById('reorder-total-cost');
     var total = rows.length;
+    if (!total) return;
 
     function norm(s) { return String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim(); }
     function num(tr, attr) { return parseFloat(tr.getAttribute(attr)) || 0; }
@@ -307,71 +381,44 @@ $refShort = [
         });
     }
 
-    function renderCostCell(tr, toOrder) {
-        var cell = tr.querySelector('.cost-line-cell');
-        if (!cell) return;
-        var unit = parseFloat(tr.getAttribute('data-unitcost'));
-        if (isNaN(unit)) {
-            cell.innerHTML = '<span class="muted" title="Coût de revient non saisi">—</span>';
-        } else if (toOrder > 0) {
-            cell.innerHTML = '<strong>' + fmtPrice(toOrder * unit) + '</strong>';
-        } else {
-            cell.innerHTML = '<span class="muted">0 €</span>';
-        }
-    }
-
     function recomputeTotal() {
         var sum = 0, cost = 0;
         rows.forEach(function (tr) {
             if (tr.style.display === 'none') return;
-            var cell = tr.querySelector('.to-order-cell strong');
-            var toOrder = cell ? (parseInt(cell.textContent.replace(/[^\d-]/g, ''), 10) || 0) : 0;
+            var toOrder = parseInt(tr.getAttribute('data-toorder'), 10) || 0;
             sum += toOrder;
             var unit = parseFloat(tr.getAttribute('data-unitcost'));
             if (!isNaN(unit)) cost += toOrder * unit;
         });
-        if (totalEl) totalEl.textContent = sum;
+        if (totalEl) totalEl.textContent = String(sum);
         if (totalCostEl) totalCostEl.textContent = '≈ ' + fmtPrice(cost);
     }
-
-    // Recalcul live : à commander = max(0, besoin − stock saisi).
-    // Entrée bloquée pour ne pas soumettre le formulaire (et donc perdre le
-    // filtre/trier en cours) ; la sauvegarde se fait via le bouton Enregistrer.
-    rows.forEach(function (tr) {
-        var input = tr.querySelector('.stock-input');
-        if (!input) return;
-        var need = parseInt(tr.getAttribute('data-need'), 10) || 0;
-        var cell = tr.querySelector('.to-order-cell');
-        input.addEventListener('keydown', function (e) {
-            if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
-        });
-        input.addEventListener('input', function () {
-            var stock = parseInt(input.value, 10);
-            stock = isNaN(stock) ? 0 : Math.max(0, stock);
-            var toOrder = Math.max(0, need - stock);
-            tr.setAttribute('data-toorder', String(toOrder));
-            if (cell) {
-                cell.innerHTML = toOrder > 0
-                    ? '<strong style="color:var(--primary)">' + toOrder + '</strong>'
-                    : '<span class="muted">0</span>';
-            }
-            renderCostCell(tr, toOrder);
-            recomputeTotal();
-        });
-    });
 
     function sortRows() {
         var sort = sortSel ? sortSel.value : 'to_order';
         rows.sort(function (a, b) {
+            var an, bn;
             switch (sort) {
                 case 'name':       return a.getAttribute('data-name').localeCompare(b.getAttribute('data-name'));
                 case 'name-desc':  return b.getAttribute('data-name').localeCompare(a.getAttribute('data-name'));
                 case 'cat':        return (a.getAttribute('data-cat') || '').localeCompare(b.getAttribute('data-cat') || '');
+                case 'qty-desc':   return num(b, 'data-qty') - num(a, 'data-qty');
                 case 'month-desc': return num(b, 'data-month') - num(a, 'data-month');
                 case 'need-desc':  return num(b, 'data-need') - num(a, 'data-need');
-                case 'stock-asc':  return num(a, 'data-stock') - num(b, 'data-stock');
-                case 'stock-desc': return num(b, 'data-stock') - num(a, 'data-stock');
-                case 'autonomy-asc': return num(a, 'data-autonomy') - num(b, 'data-autonomy');
+                case 'stock-asc':
+                    // Jamais comptés toujours en fin de liste.
+                    if (a.getAttribute('data-hasstock') !== b.getAttribute('data-hasstock')) {
+                        return a.getAttribute('data-hasstock') === '1' ? -1 : 1;
+                    }
+                    return num(a, 'data-stock') - num(b, 'data-stock');
+                case 'stock-desc':
+                    if (a.getAttribute('data-hasstock') !== b.getAttribute('data-hasstock')) {
+                        return a.getAttribute('data-hasstock') === '1' ? -1 : 1;
+                    }
+                    return num(b, 'data-stock') - num(a, 'data-stock');
+                case 'autonomy-asc':
+                    an = num(a, 'data-autonomy'); bn = num(b, 'data-autonomy');
+                    return an - bn;
                 default:           return num(b, 'data-toorder') - num(a, 'data-toorder'); // to_order
             }
         });
@@ -385,11 +432,13 @@ $refShort = [
     function apply() {
         var q = norm(search.value);
         var cat = catSel ? catSel.value : '';
+        var state = stateSel ? stateSel.value : '';
         var shown = 0;
         rows.forEach(function (tr) {
             var okSearch = q === '' || norm(tr.getAttribute('data-name')).indexOf(q) !== -1;
             var okCat = cat === '' || tr.getAttribute('data-cat') === cat;
-            var visible = okSearch && okCat;
+            var okState = state === '' || tr.getAttribute('data-state') === state;
+            var visible = okSearch && okCat && okState;
             tr.style.display = visible ? '' : 'none';
             if (visible) shown++;
         });
@@ -400,23 +449,8 @@ $refShort = [
 
     search.addEventListener('input', apply);
     if (catSel) catSel.addEventListener('change', apply);
+    if (stateSel) stateSel.addEventListener('change', apply);
     if (sortSel) sortSel.addEventListener('change', apply);
     apply();
-
-    // Conserve la position de défilement après une sauvegarde (rechargement).
-    var SS_KEY = 'reorder_scroll';
-    var form = document.getElementById('reorder-form');
-    if (form) {
-        form.addEventListener('submit', function () {
-            try { sessionStorage.setItem(SS_KEY, String(window.scrollY)); } catch (e) {}
-        });
-    }
-    try {
-        var y = parseInt(sessionStorage.getItem(SS_KEY) || '0', 10);
-        if (y > 0) {
-            window.scrollTo(0, y);
-            sessionStorage.removeItem(SS_KEY);
-        }
-    } catch (e) {}
 })();
 </script>
