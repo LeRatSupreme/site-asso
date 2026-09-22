@@ -48,6 +48,43 @@ final class ProductCategory extends Model
     }
 
     /**
+     * Crée la catégorie si absente (comparaison exacte après trim, cohérente
+     * avec renameCategory/resolve qui comparent les catégories en chaîne
+     * exacte). L'ordre est ajouté en fin de liste ; is_active = 1 car la
+     * carte publique (HomeController::buildMenu) n'affiche pas les groupes
+     * sans produits disponibles.
+     *
+     * $userId n'est pas persisté (la table n'a pas de colonne créateur) ;
+     * il est accepté pour la symétrie d'appel avec l'audit des contrôleurs.
+     *
+     * @return bool true si créée, false si elle existait déjà.
+     */
+    public static function ensure(string $name, ?string $userId = null): bool
+    {
+        $name = trim($name);
+        if ($name === '') {
+            return false;
+        }
+
+        $exists = static::pdo()->prepare('SELECT id FROM product_categories WHERE name = ? LIMIT 1');
+        $exists->execute([$name]);
+        if ($exists->fetch()) {
+            return false;
+        }
+
+        $order = (int) static::pdo()
+            ->query('SELECT COALESCE(MAX(`order`), 0) + 1 FROM product_categories')
+            ->fetchColumn();
+        $id = 'cat_' . bin2hex(random_bytes(10));
+        $stmt = static::pdo()->prepare(
+            'INSERT INTO product_categories (id, name, `order`, is_active) VALUES (?,?,?,1)'
+        );
+        $stmt->execute([$id, $name, $order]);
+
+        return true;
+    }
+
+    /**
      * Crée ou met à jour une catégorie (upsert par id).
      *
      * @param array<string,mixed> $data

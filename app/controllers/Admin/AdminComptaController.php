@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Controllers\Admin;
 
+use App\Core\Auth;
 use App\Core\Compta\AliasSuggester;
 use App\Core\Compta\CashLedger;
 use App\Core\Compta\ComptaCalc;
@@ -251,6 +252,17 @@ final class AdminComptaController extends AdminBaseController
         //       importées portent la catégorie de leur alias. Non bloquant
         //       (la méthode avale elle-même les erreurs SQL).
         Sale::syncAliasCategories();
+
+        // ── Les catégories utilisées par le mapping existent aussi dans la
+        //       carte (page Catégories de la cafétéria) : création
+        //       silencieuse si absente. Jamais bloquant pour l'import.
+        try {
+            foreach (ProductAlias::distinctCategories() as $cat) {
+                ProductCategory::ensure($cat, $user['id'] ?? null);
+            }
+        } catch (\Throwable) {
+            // La compta ne doit jamais casser à cause de la synchro carte.
+        }
 
         $unmapped = count(Sale::unmappedDescriptions());
 
@@ -840,6 +852,12 @@ final class AdminComptaController extends AdminBaseController
                 (string) ($data['raw_description'] ?? ''),
                 isset($data['category']) ? (string) $data['category'] : null
             );
+            // La catégorie choisie doit aussi exister dans la carte (page
+            // Catégories de la cafétéria) : création silencieuse si absente.
+            $cat = trim((string) ($data['category'] ?? ''));
+            if ($cat !== '') {
+                ProductCategory::ensure($cat, Auth::id());
+            }
             $this->audit('compta.alias.save', 'product_alias', null, [
                 'raw'           => $data['raw_description'] ?? null,
                 'sales_updated' => $categorized,
@@ -895,6 +913,11 @@ final class AdminComptaController extends AdminBaseController
             // Synchronisation : les ventes portant ce libellé suivent la
             // catégorie choisie (une catégorie vidée ne les modifie pas).
             $categorized += Sale::applyAliasCategory($raw, $newCat);
+            // Une catégorie non vide doit aussi exister dans la carte :
+            // création silencieuse si absente.
+            if ($newCat !== null) {
+                ProductCategory::ensure($newCat, Auth::id());
+            }
             $updated++;
         }
 

@@ -160,6 +160,8 @@ function aeic_register_routes(Router $router): void
     $router->post('/admin/cafeteria/{id}/delete', [AdminCafeteriaController::class, 'deleteProduct']);
     $router->get('/admin/cafeteria/categories', [AdminCafeteriaController::class, 'categories']);
     $router->post('/admin/cafeteria/categories/save', [AdminCafeteriaController::class, 'saveCategory']);
+    $router->post('/admin/cafeteria/categories/add-mapping', [AdminCafeteriaController::class, 'addMappingCategory']);
+    $router->post('/admin/cafeteria/categories/sync-mapping', [AdminCafeteriaController::class, 'syncMappingCategories']);
     $router->post('/admin/cafeteria/categories/{id}/delete', [AdminCafeteriaController::class, 'deleteCategory']);
     $router->post('/admin/cafeteria/sync', [AdminCafeteriaController::class, 'syncProducts']);
 
