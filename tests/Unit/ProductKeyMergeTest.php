@@ -7,6 +7,7 @@ namespace Tests\Unit;
 use App\Models\InventoryCount;
 use App\Models\Model;
 use App\Models\ProductAlias;
+use App\Models\ProductCost;
 use App\Models\ProductKeyMerge;
 use PDO;
 use PHPUnit\Framework\TestCase;
@@ -34,7 +35,7 @@ final class ProductKeyMergeTest extends TestCase
         $this->pdo = $pdo;
 
         try {
-            foreach (['sales', 'purchases', 'losses', 'product_aliases', 'inventory_counts', 'product_stocks', 'product_discontinued'] as $table) {
+            foreach (['sales', 'purchases', 'losses', 'product_aliases', 'inventory_counts', 'product_costs', 'product_stocks', 'product_discontinued'] as $table) {
                 $pdo->query('SELECT 1 FROM `' . $table . '` LIMIT 1');
             }
         } catch (\Throwable) {
@@ -83,6 +84,14 @@ final class ProductKeyMergeTest extends TestCase
             ->execute([$key, $stock]);
     }
 
+    private function addCostLot(string $key, string $validFrom): void
+    {
+        $this->pdo->prepare(
+            'INSERT INTO product_costs (id, product_key, cost_price, valid_from, created_at)
+             VALUES (?, ?, 1.5, ?, NOW())'
+        )->execute(['cost_' . bin2hex(random_bytes(6)), $key, $validFrom]);
+    }
+
     /**
      * Clés distinctes présentes dans une table, triées.
      *
@@ -113,6 +122,7 @@ final class ProductKeyMergeTest extends TestCase
         self::assertSame(1, $moved['losses']);
         self::assertSame(1, $moved['aliases']);
         self::assertSame(1, $moved['counts']);
+        self::assertSame(0, $moved['costs'], 'Aucun lot de coût : rien à déplacer.');
         self::assertSame(0, $moved['stocks'], 'Aucun stock de référence : rien à additionner.');
         self::assertSame(0, $moved['discontinued'], 'Aucun drapeau : rien à déplacer.');
 
@@ -123,6 +133,23 @@ final class ProductKeyMergeTest extends TestCase
 
         self::assertContains($target, ProductKeyMerge::allKeys());
         self::assertNotContains($source, ProductKeyMerge::allKeys(), 'La source ne doit plus exister nulle part.');
+    }
+
+    public function test_lots_de_couts_suivent_la_cible(): void
+    {
+        $source = 'Pulco Citronnade';
+        $target = 'pulco';
+
+        $this->addCostLot($source, '2026-09-01');
+
+        $moved = ProductKeyMerge::merge($source, $target, null);
+
+        self::assertSame(1, $moved['costs'], 'Le lot de coût source doit être déplacé.');
+        self::assertSame([$target], $this->tableKeys('product_costs'));
+
+        $lot = ProductCost::lotAt($target, '2026-09-15');
+        self::assertNotNull($lot, 'La cible porte le coût après fusion.');
+        self::assertSame('1.500', (string) $lot['cost_price']);
     }
 
     public function test_stocks_additionnes_et_ligne_source_supprimee(): void

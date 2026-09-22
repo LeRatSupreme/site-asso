@@ -8,10 +8,11 @@ use App\Core\Compta\StockPublic;
 
 /**
  * Fusion de clés produits (doublons) : déplace TOUTES les données d'une
- * clé source vers une clé cible conservée, dans les 7 tables portant un
+ * clé source vers une clé cible conservée, dans les 8 tables portant un
  * product_key — purchases, losses, sales, product_aliases,
- * inventory_counts (PK `id` : simple UPDATE), product_stocks et
- * product_discontinued (PK `product_key` : fusion dédiée).
+ * inventory_counts, product_costs (lots de coûts ; PK `id` : simple
+ * UPDATE), product_stocks et product_discontinued (PK `product_key` :
+ * fusion dédiée).
  *
  * Exemple : « Pulco Citronnade » (saisi par erreur dans les achats) →
  * « pulco » (clé canonique des ventes SumUp).
@@ -31,12 +32,14 @@ final class ProductKeyMerge extends Model
 
     /**
      * Tables à PK `id` (sales, purchases, losses, product_aliases,
-     * inventory_counts) : un UPDATE par table suffit — pas de conflit
-     * possible (product_aliases : PK id, UNIQUE sur raw_description).
+     * inventory_counts, product_costs) : un UPDATE par table suffit —
+     * pas de conflit possible (product_aliases : PK id, UNIQUE sur
+     * raw_description ; product_costs : plusieurs lots par produit,
+     * tous rebasculés sur la cible).
      *
      * @var list<string>
      */
-    private const SIMPLE_TABLES = ['purchases', 'losses', 'sales', 'product_aliases', 'inventory_counts'];
+    private const SIMPLE_TABLES = ['purchases', 'losses', 'sales', 'product_aliases', 'inventory_counts', 'product_costs'];
 
     /**
      * Fusionne la clé source dans la clé cible, transactionnellement :
@@ -48,7 +51,7 @@ final class ProductKeyMerge extends Model
      *
      * @return array<string,int> Nombre de lignes déplacées par table :
      *                           purchases, losses, sales, aliases, counts,
-     *                           stocks, discontinued.
+     *                           costs, stocks, discontinued.
      *
      * @throws \InvalidArgumentException Clé source vide ou identique à la cible.
      * @throws \Throwable                Erreur SQL (transaction annulée).
@@ -71,7 +74,7 @@ final class ProductKeyMerge extends Model
         try {
             $moved = [];
 
-            // 1-5. Tables à PK id : déplacement simple des lignes.
+            // 1-6. Tables à PK id : déplacement simple des lignes.
             foreach (self::SIMPLE_TABLES as $table) {
                 $stmt = $pdo->prepare(
                     'UPDATE `' . $table . '` SET product_key = ? WHERE product_key = ?'
@@ -80,7 +83,7 @@ final class ProductKeyMerge extends Model
                 $moved[] = (int) $stmt->rowCount();
             }
 
-            // 6. product_stocks (PK product_key) : fusion ADDITIVE du stock
+            // 7. product_stocks (PK product_key) : fusion ADDITIVE du stock
             //    de référence (source 5 + cible 7 → cible 12), puis
             //    suppression de la ligne source.
             $stmt = $pdo->prepare(
@@ -92,7 +95,7 @@ final class ProductKeyMerge extends Model
             $stocks = (int) $stmt->rowCount();
             $pdo->prepare('DELETE FROM product_stocks WHERE product_key = ?')->execute([$source]);
 
-            // 7. product_discontinued (PK product_key) : le drapeau « plus
+            // 8. product_discontinued (PK product_key) : le drapeau « plus
             //    en vente » suit la cible (premier auteur conservé), puis
             //    suppression de la ligne source.
             $stmt = $pdo->prepare(
@@ -120,6 +123,7 @@ final class ProductKeyMerge extends Model
             'sales'        => $moved[2],
             'aliases'      => $moved[3],
             'counts'       => $moved[4],
+            'costs'        => $moved[5],
             'stocks'       => $stocks,
             'discontinued' => $discontinued,
         ];

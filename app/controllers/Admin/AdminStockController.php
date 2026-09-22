@@ -662,6 +662,7 @@ final class AdminStockController extends AdminBaseController
             'counts'       => 'comptage(s)',
             'stocks'       => 'stock additionné',
             'discontinued' => 'drapeau « plus en vente »',
+            'costs'        => 'lots de coûts',
         ];
         $parts = [];
         foreach ($moved as $table => $n) {
