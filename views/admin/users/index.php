@@ -264,7 +264,7 @@ $roleIcons = [
     padding: 0;
     background: var(--card);
     color: var(--foreground);
-    width: min(420px, 92vw);
+    width: min(640px, 94vw);
     max-height: 82vh;
     box-shadow: 0 24px 64px rgba(0,0,0,0.45);
 }
@@ -296,18 +296,21 @@ $roleIcons = [
     text-transform: uppercase;
     letter-spacing: 0.07em;
     color: var(--muted);
+    padding: 0 0.6rem; /* aligne les titres sur le texte des cases */
 }
-.pages-checks { display: grid; grid-template-columns: 1fr 1fr; gap: 0.15rem 0.5rem; }
+.pages-checks { display: grid; grid-template-columns: 1fr 1fr; gap: 0.2rem 0.7rem; }
 .pages-check {
-    display: flex; align-items: center; gap: 0.5rem;
-    padding: 0.4rem 0.55rem;
+    display: flex; align-items: center; gap: 0.55rem;
+    padding: 0.45rem 0.6rem;
+    min-height: 34px;
     border-radius: 8px;
     font-size: 0.8rem;
     cursor: pointer;
     border: 1px solid transparent;
 }
 .pages-check:hover { background: rgba(255,255,255,0.05); border-color: var(--border); }
-.pages-check input { margin: 0; width: 15px; height: 15px; accent-color: var(--primary); cursor: pointer; }
+.pages-check:has(input:checked) { background: rgba(255,255,255,0.06); border-color: var(--border); }
+.pages-check input { margin: 0; width: 15px; height: 15px; flex-shrink: 0; accent-color: var(--primary); cursor: pointer; }
 
 .pages-dialog-foot {
     display: flex; align-items: center; gap: 0.4rem;
