@@ -51,7 +51,36 @@ final class HelpersTest extends TestCase
 
     public function test_format_date_time(): void
     {
-        self::assertSame('28/06/2026 10:30', formatDateTime('2026-06-28 10:30:00'));
+        // Saisie Paris 10:30 → stockée UTC → affichée à nouveau 10:30.
+        self::assertSame('28/06/2026 10:30', formatDateTime((string) parisToUtc('2026-06-28 10:30:00')));
+        // Entrée brute UTC : 10:30 UTC = 12:30 Paris (juin = toujours UTC+2).
+        self::assertSame('28/06/2026 12:30', formatDateTime('2026-06-28 10:30:00'));
+    }
+
+    public function test_format_date_time_convertit_utc_vers_paris_ete(): void
+    {
+        // 2026-09-22 = CEST (UTC+2, horaire d'été français) : 06:32 UTC → 08:32 Paris.
+        self::assertSame('22/09/2026 08:32', formatDateTime('2026-09-22 06:32:00'));
+        self::assertStringContainsString('08:32', formatDateTime('2026-09-22 06:32:00'));
+    }
+
+    public function test_utc_to_paris_chaine_vide_inchangee(): void
+    {
+        self::assertSame('', utcToParis(''));
+        self::assertSame('', utcToParis('   '));
+    }
+
+    public function test_paris_to_utc_chaine_vide_ou_invalide_renvoie_null(): void
+    {
+        self::assertNull(parisToUtc(''));
+        self::assertNull(parisToUtc('   '));
+        self::assertNull(parisToUtc('garbage'));
+    }
+
+    public function test_aller_retour_paris_utc(): void
+    {
+        self::assertSame('2026-09-22 06:32:00', parisToUtc(utcToParis('2026-09-22 06:32:00')));
+        self::assertSame('2026-09-22 08:32:00', utcToParis(parisToUtc('2026-09-22 08:32:00')));
     }
 
     public function test_format_price_format_euro_francais(): void
@@ -127,8 +156,14 @@ final class HelpersTest extends TestCase
 
         $res = datetime_selects_value();
 
+        // La saisie murale (Paris, minuit) est stockée en UTC :
+        // en septembre (CEST) minuit Paris = 22:00 UTC la veille.
         self::assertTrue($res['ok']);
-        self::assertSame(date('Y-m-d', mktime(0, 0, 0, 9, 21, (int) date('Y'))) . ' 00:00:00', $res['value']);
+        $year = (int) date('Y');
+        self::assertSame(
+            parisToUtc(sprintf('%04d-09-21 00:00:00', $year)),
+            $res['value']
+        );
     }
 
     public function test_datetime_selects_value_sans_jour_est_partiel(): void
@@ -169,7 +204,7 @@ final class HelpersTest extends TestCase
 
         self::assertTrue($res['ok']);
         self::assertSame(
-            date('Y-m-d', mktime(0, 0, 0, (int) $m, (int) $d, (int) $y)) . ' 00:00:00',
+            parisToUtc(sprintf('%04d-%02d-%02d 00:00:00', (int) $y, (int) $m, (int) $d)),
             $res['value']
         );
     }

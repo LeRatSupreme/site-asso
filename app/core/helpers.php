@@ -26,10 +26,48 @@ function e(mixed $value): string
     return htmlspecialchars((string) $value, ENT_QUOTES | ENT_HTML5 | ENT_SUBSTITUTE, 'UTF-8');
 }
 
+/** Convertit un datetime stocké (UTC, ex. « Y-m-d H:i:s ») en heure de Paris.
+ *  Valeur vide/invalide → retournée telle quelle. */
+function utcToParis(string $value): string
+{
+    $value = trim($value);
+    if ($value === '') {
+        return $value;
+    }
+
+    try {
+        $dt = new \DateTimeImmutable($value, new \DateTimeZone('UTC'));
+
+        return $dt->setTimezone(new \DateTimeZone('Europe/Paris'))->format('Y-m-d H:i:s');
+    } catch (\Throwable) {
+        return $value;
+    }
+}
+
+/** Interprète une saisie murale de l'utilisateur (heure de Paris) et la
+ *  convertit en UTC pour stockage. Valeur vide/invalide → null. */
+function parisToUtc(string $value): ?string
+{
+    $value = trim($value);
+    if ($value === '') {
+        return null;
+    }
+
+    try {
+        $dt = new \DateTimeImmutable($value, new \DateTimeZone('Europe/Paris'));
+
+        return $dt->setTimezone(new \DateTimeZone('UTC'))->format('Y-m-d H:i:s');
+    } catch (\Throwable) {
+        return null;
+    }
+}
+
 /**
  * Formate une date selon un motif ICU/strftime-compatible simple.
  *
  * Accepte une chaîne parsable (Y-m-d H:i:s, etc.) ou un objet DateTimeInterface.
+ * Les chaînes sont considérées stockées en UTC et converties en heure de
+ * Europe/Paris avant formatage (tz nommée : gère UTC+2 été / UTC+1 hiver).
  */
 function formatDate(string|DateTimeInterface|null $date, string $fmt = 'd/m/Y'): string
 {
@@ -38,8 +76,12 @@ function formatDate(string|DateTimeInterface|null $date, string $fmt = 'd/m/Y'):
     }
 
     if (!$date instanceof DateTimeInterface) {
+        $paris = utcToParis($date);
+        if ($paris === '') {
+            return '';
+        }
         try {
-            $date = new DateTimeImmutable($date);
+            $date = new DateTimeImmutable($paris);
         } catch (Throwable) {
             return '';
         }
@@ -737,10 +779,12 @@ function t_category(string $category): string
  *
  * @param string $prefix Préfixe des champs postés (ex. « date » génère date_d…date_i).
  * @param string $id     Identifiant HTML du bloc (utilisé par le label).
- * @param string|null $value Valeur pré-remplie, tout format parsable par
- *                           strtotime (ex. « Y-m-d H:i:s » ou « Y-m-d\TH:i »).
- *                           null, '', « 0000-00-00 00:00:00 » ou toute chaîne
- *                           non parsable ⇒ listes vides (aucune sélection).
+ * @param string|null $value Valeur pré-remplie stockée en base (UTC,
+ *                           ex. « Y-m-d H:i:s » ou « Y-m-d\TH:i »).
+ *                           Elle est convertie en heure de Paris avant
+ *                           sélection. null, '', « 0000-00-00 00:00:00 »
+ *                           ou toute chaîne non parsable ⇒ listes vides
+ *                           (aucune sélection).
  * @param string $label Libellé affiché devant les listes.
  * @param string|null $hint Précision affichée entre parenthèses après le
  *                          libellé ; null = pas de précision.
@@ -762,14 +806,17 @@ function datetime_selects_field(
     $selY = null; // '2026'
     $selH = null; // '00'…'23'
     $selI = null; // '00'…'59'
-    if ($value !== null && $value !== '') {
-        $ts = strtotime($value);
-        if ($ts !== false) {
-            $selD = date('d', $ts);
-            $selM = (int) date('n', $ts);
-            $selY = date('Y', $ts);
-            $selH = date('H', $ts);
-            $selI = date('i', $ts);
+    if ($value !== null && trim($value) !== '') {
+        // La valeur vient de la base en UTC : affichage en heure de Paris.
+        // Parsing de chaîne (pas strtotime+date) pour rester insensible à la
+        // timezone PHP par défaut.
+        $paris = utcToParis((string) $value);
+        if (preg_match('/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/', $paris, $m) === 1) {
+            $selY = $m[1];
+            $selM = (int) $m[2];
+            $selD = $m[3];
+            $selH = $m[4];
+            $selI = $m[5];
         }
     }
 
@@ -825,13 +872,18 @@ function datetime_selects_field(
 /**
  * Valeur postée par datetime_selects_field().
  *
+ * La saisie murale de l'utilisateur est interprétée en heure de Paris
+ * (tz nommée, UTC+2 été / UTC+1 hiver) et convertie en UTC pour stockage.
+ *
  * @param string $prefix Préfixe des champs (ex. « date » lit date_d…date_i).
  * @param string $until  Borne haute de la date acceptée, exprimée en relatif
  *                       strtotime (ex. « +1 day » par défaut, « +5 years »
- *                       pour autoriser les dates futures).
+ *                       pour autoriser les dates futures) ; comparée à
+ *                       l'epoch UTC de la saisie convertie.
  * @return array{ok:bool, value:?string} value null = tout vide (« maintenant »,
  *         le SQL appliquera NOW()) ; ok false = saisie partielle, hors bornes
- *         (avant 2020 ou après $until) ou invalide.
+ *         (avant 2020 ou après $until) ou invalide. Sinon value = datetime
+ *         UTC « Y-m-d H:i:s » prêt pour la base.
  */
 function datetime_selects_value(string $prefix = 'date', string $until = '+1 day'): array
 {
@@ -860,10 +912,17 @@ function datetime_selects_value(string $prefix = 'date', string $until = '+1 day
         return ['ok' => false, 'value' => null];
     }
 
-    $ts = mktime($hour, $min, 0, $month, $day, $year);
-    if ($ts === false || $ts < strtotime('2020-01-01') || $ts > strtotime($until)) {
+    // Heure murale Paris → UTC pour stockage.
+    $wall = sprintf('%04d-%02d-%02d %02d:%02d:00', $year, $month, $day, $hour, $min);
+    $utc = parisToUtc($wall);
+    if ($utc === null) {
         return ['ok' => false, 'value' => null];
     }
 
-    return ['ok' => true, 'value' => date('Y-m-d H:i:s', $ts)];
+    $ts = strtotime($utc);
+    if ($ts === false || $ts < strtotime('2020-01-01 00:00:00') || $ts > strtotime($until)) {
+        return ['ok' => false, 'value' => null];
+    }
+
+    return ['ok' => true, 'value' => $utc];
 }

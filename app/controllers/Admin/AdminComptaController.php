@@ -362,7 +362,7 @@ final class AdminComptaController extends AdminBaseController
         fputcsv($out, ['Date', 'Réf. transaction', 'Paiement', 'Description', 'Produit', 'Catégorie', 'Qté', 'Prix TTC', 'Coût', 'Bénéfice', 'Montant perso']);
         foreach ($rows as $r) {
             fputcsv($out, [
-                $r['sold_at'],
+                utcToParis((string) $r['sold_at']),
                 self::csvSafe($r['transaction_ref'] ?? null),
                 self::csvSafe($r['payment_method'] ?? null),
                 self::csvSafe($r['description'] ?? null),
