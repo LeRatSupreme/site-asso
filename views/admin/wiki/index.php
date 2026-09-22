@@ -4,6 +4,43 @@ declare(strict_types=1);
 
 /** @var array<string,mixed> $user */
 ?>
+
+<?php
+$wikiRole = (string) ($user['role'] ?? '');
+$wikiSystem = \App\Core\Permissions::isSystemAdmin();
+
+/** Chaque section n'est visible que pour les rôles qui gèrent le module
+ *  correspondant ; les sections Système suivent isSystemAdmin(). */
+$wikiAccess = [
+    'sec-start'     => true,
+    'sec-events'    => \App\Core\Permissions::allows($wikiRole, \App\Core\Permissions::MODULE_EVENTS),
+    'sec-checkin'   => \App\Core\Permissions::allows($wikiRole, \App\Core\Permissions::MODULE_EVENTS),
+    'sec-sondages'  => \App\Core\Permissions::allows($wikiRole, \App\Core\Permissions::MODULE_CONTENT),
+    'sec-cafeteria' => \App\Core\Permissions::allows($wikiRole, \App\Core\Permissions::MODULE_CAFETERIA),
+    'sec-compta'    => \App\Core\Permissions::allows($wikiRole, \App\Core\Permissions::MODULE_COMPTA),
+    'sec-reappro'   => \App\Core\Permissions::allows($wikiRole, \App\Core\Permissions::MODULE_COMPTA),
+    'sec-analytics' => \App\Core\Permissions::allows($wikiRole, \App\Core\Permissions::MODULE_COMPTA),
+    'sec-users'     => $wikiSystem,
+    'sec-emails'    => true,
+    'sec-settings'  => $wikiSystem,
+    'sec-tips'      => true,
+];
+
+$wikiToc = [
+    'sec-start'     => '🚀 Démarrage',
+    'sec-events'    => '📅 Événements',
+    'sec-checkin'   => '📱 Check-in QR',
+    'sec-sondages'  => '📊 Sondages',
+    'sec-cafeteria' => '☕ Cafétéria',
+    'sec-compta'    => '💰 Compta',
+    'sec-reappro'   => '📦 Réappro',
+    'sec-analytics' => '📈 Analytics',
+    'sec-users'     => '👥 Utilisateurs',
+    'sec-emails'    => '📧 Emails',
+    'sec-settings'  => '⚙️ Paramètres',
+    'sec-tips'      => '💡 Conseils',
+];
+?>
 <div class="wiki">
 
 <!-- ===================== HERO ===================== -->
@@ -11,6 +48,7 @@ declare(strict_types=1);
     <span class="wiki-hero-emoji">📚</span>
     <h1>Guide de l'administrateur</h1>
     <p>Tout ce qu'il faut savoir pour gérer le site AEIC au quotidien.</p>
+    <p class="wiki-hero-role" style="opacity:.75;font-size:.95em">Guide adapté à ton rôle — seules les sections qui te concernent sont affichées.</p>
 </header>
 
 <!-- ===================== RECHERCHE ===================== -->
@@ -21,23 +59,20 @@ declare(strict_types=1);
 
 <!-- ===================== SOMMAIRE ===================== -->
 <nav class="wiki-toc" aria-label="Sommaire">
-    <a href="#sec-start">🚀 Démarrage</a>
-    <a href="#sec-events">📅 Événements</a>
-    <a href="#sec-checkin">📱 Check-in QR</a>
-    <a href="#sec-sondages">📊 Sondages</a>
-    <a href="#sec-cafeteria">☕ Cafétéria</a>
-    <a href="#sec-compta">💰 Compta</a>
-    <a href="#sec-reappro">📦 Réappro</a>
-    <a href="#sec-analytics">📈 Analytics</a>
-    <a href="#sec-users">👥 Utilisateurs</a>
-    <a href="#sec-emails">📧 Emails</a>
-    <a href="#sec-settings">⚙️ Paramètres</a>
-    <a href="#sec-tips">💡 Conseils</a>
+    <?php foreach ($wikiToc as $secId => $secLabel): ?>
+        <?php if (!($wikiAccess[$secId] ?? false)) continue; ?>
+        <a href="#<?= e($secId) ?>"><?= e($secLabel) ?></a>
+    <?php endforeach; ?>
 </nav>
 
 <div class="wiki-body" id="wiki-body">
 
+<?php if (!in_array(true, $wikiAccess, true)): ?>
+<p class="muted">Aucune section ne concerne votre rôle pour le moment.</p>
+<?php endif; ?>
+
 <!-- ===================== 1. DÉMARRAGE ===================== -->
+<?php if ($wikiAccess['sec-start'] ?? false): ?>
 <section class="wiki-section" id="sec-start">
     <h2>🚀 Démarrage & connexion</h2>
 
@@ -92,8 +127,10 @@ declare(strict_types=1);
         <p>Une fois connecté → clique sur ton prénom en haut à droite → <strong>« Mes données »</strong> → <strong>« Changer mon mot de passe »</strong> → saisie l'ancien + le nouveau + confirmation → <strong>Modifier</strong>. Un email de confirmation est envoyé automatiquement.</p>
     </div>
 </section>
+<?php endif; ?>
 
 <!-- ===================== 2. ÉVÉNEMENTS ===================== -->
+<?php if ($wikiAccess['sec-events'] ?? false): ?>
 <section class="wiki-section" id="sec-events">
     <h2>📅 Créer un événement</h2>
 
@@ -141,8 +178,10 @@ declare(strict_types=1);
         <p>Bouton <strong>« Export CSV »</strong> pour télécharger la liste.</p>
     </div>
 </section>
+<?php endif; ?>
 
 <!-- ===================== 3. CHECK-IN QR ===================== -->
+<?php if ($wikiAccess['sec-checkin'] ?? false): ?>
 <section class="wiki-section" id="sec-checkin">
     <h2>📱 Check-in QR (le jour J)</h2>
 
@@ -157,8 +196,10 @@ declare(strict_types=1);
         </div>
     </div>
 </section>
+<?php endif; ?>
 
 <!-- ===================== 4. SONDAGES ===================== -->
+<?php if ($wikiAccess['sec-sondages'] ?? false): ?>
 <section class="wiki-section" id="sec-sondages">
     <h2>📊 Créer un sondage</h2>
 
@@ -174,8 +215,10 @@ declare(strict_types=1);
         <p>Les élèves votent sur <code>/sondages</code>. Une seule fois. Après le vote → <strong>résultats en direct</strong> (barres + %).</p>
     </div>
 </section>
+<?php endif; ?>
 
 <!-- ===================== 5. CAFÉTÉRIA ===================== -->
+<?php if ($wikiAccess['sec-cafeteria'] ?? false): ?>
 <section class="wiki-section" id="sec-cafeteria">
     <h2>☕ Cafétéria — Produits & carte</h2>
 
@@ -206,8 +249,10 @@ declare(strict_types=1);
         </div>
     </div>
 </section>
+<?php endif; ?>
 
 <!-- ===================== 6. COMPTABILITÉ ===================== -->
+<?php if ($wikiAccess['sec-compta'] ?? false): ?>
 <section class="wiki-section" id="sec-compta">
     <h2>💰 Comptabilité — Importer SumUp</h2>
 
@@ -261,8 +306,10 @@ declare(strict_types=1);
         <p><strong>Comment :</strong> Admin → Comptabilité → Coûts de revient → recherche le produit → saisis le coût → Enregistrer. Si le prix d'achat change → crée un nouveau lot daté.</p>
     </div>
 </section>
+<?php endif; ?>
 
 <!-- ===================== 7. RÉAPPRO ===================== -->
+<?php if ($wikiAccess['sec-reappro'] ?? false): ?>
 <section class="wiki-section" id="sec-reappro">
     <h2>📦 Réapprovisionnement</h2>
 
@@ -291,8 +338,10 @@ declare(strict_types=1);
         </div>
     </div>
 </section>
+<?php endif; ?>
 
 <!-- ===================== 8. ANALYTICS ===================== -->
+<?php if ($wikiAccess['sec-analytics'] ?? false): ?>
 <section class="wiki-section" id="sec-analytics">
     <h2>📈 Dashboard Analytics</h2>
 
@@ -321,8 +370,10 @@ declare(strict_types=1);
         </div>
     </div>
 </section>
+<?php endif; ?>
 
 <!-- ===================== 9. UTILISATEURS ===================== -->
+<?php if ($wikiAccess['sec-users'] ?? false): ?>
 <section class="wiki-section" id="sec-users">
     <h2>👥 Utilisateurs & adhésions</h2>
 
@@ -351,8 +402,10 @@ declare(strict_types=1);
         </div>
     </div>
 </section>
+<?php endif; ?>
 
 <!-- ===================== 10. EMAILS ===================== -->
+<?php if ($wikiAccess['sec-emails'] ?? false): ?>
 <section class="wiki-section" id="sec-emails">
     <h2>📧 Emails automatiques</h2>
 
@@ -376,8 +429,10 @@ declare(strict_types=1);
         <p>Si échec → vérifie la <strong>clé API Brevo</strong> et l'<strong>adresse d'expédition</strong> (doit être un domaine vérifié comme <code>contact@aremond.ovh</code>).</p>
     </div>
 </section>
+<?php endif; ?>
 
 <!-- ===================== 11. PARAMÈTRES ===================== -->
+<?php if ($wikiAccess['sec-settings'] ?? false): ?>
 <section class="wiki-section" id="sec-settings">
     <h2>⚙️ Paramètres du site</h2>
 
@@ -404,8 +459,10 @@ declare(strict_types=1);
         </div>
     </div>
 </section>
+<?php endif; ?>
 
 <!-- ===================== 12. CONSEILS ===================== -->
+<?php if ($wikiAccess['sec-tips'] ?? false): ?>
 <section class="wiki-section" id="sec-tips">
     <h2>💡 Conseils pratiques</h2>
 
@@ -445,6 +502,7 @@ declare(strict_types=1);
         </div>
     </div>
 </section>
+<?php endif; ?>
 
 </div><!-- /wiki-body -->
 
