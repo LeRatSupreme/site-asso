@@ -87,6 +87,16 @@ final class User extends Model
     }
 
     /**
+     * Met à jour le nom d'un utilisateur (colonnes users.prenom / users.nom,
+     * VARCHAR(255) chacune — voir database/schema.sql).
+     */
+    public static function updateName(string $userId, string $prenom, string $nom): void
+    {
+        $stmt = static::pdo()->prepare('UPDATE users SET prenom = ?, nom = ? WHERE id = ?');
+        $stmt->execute([$prenom, $nom, $userId]);
+    }
+
+    /**
      * Définit le pseudo joueur (pour le classement des jeux).
      * Normalise : trim, 3 à 20 caractères, alphanumériques + - _ .
      * Retourne le pseudo normalisé ou '' si invalide.

@@ -130,6 +130,59 @@ final class AdminUserController extends AdminBaseController
     }
 
     /**
+     * Modifie le nom d'un utilisateur (colonnes users.prenom / users.nom).
+     *
+     * Comme pour l'édition de rôle, les lignes Fondateur et Trésorerie ne
+     * sont modifiables que par le Fondateur (même verrou que la vue).
+     */
+    public function rename(string $id): void
+    {
+        $this->guardSystem();
+
+        $target = User::find($id);
+        if ($target === null) {
+            $this->abort(404);
+        }
+
+        // Le compte Fondateur (SUPERADMIN) n'est jamais modifiable depuis
+        // le site — uniquement directement en base (SQL).
+        if ((string) $target['role'] === Auth::ROLE_SUPERADMIN) {
+            $this->setFlash('error', 'Le compte Fondateur ne peut pas être modifié depuis le site.');
+            redirect(url('/admin/users'));
+        }
+
+        // La modification d'un trésorier existant reste réservée au Fondateur.
+        if (Auth::role() !== Auth::ROLE_SUPERADMIN && (string) $target['role'] === Auth::ROLE_TRESORERIE) {
+            $this->setFlash('error', 'La modification d\'un trésorier est réservée au Fondateur.');
+            redirect(url('/admin/users'));
+        }
+
+        $prenom = trim((string) ($_POST['prenom'] ?? ''));
+        $nom = trim((string) ($_POST['nom'] ?? ''));
+
+        if ($prenom === '' || $nom === '') {
+            $this->setFlash('error', 'Le nom ne peut pas être vide.');
+            redirect(url('/admin/users'));
+        }
+
+        // Limite du schéma : users.prenom / users.nom sont des VARCHAR(255).
+        if (mb_strlen($prenom) > 255 || mb_strlen($nom) > 255) {
+            $this->setFlash('error', 'Le nom ne peut pas dépasser 255 caractères.');
+            redirect(url('/admin/users'));
+        }
+
+        User::updateName($id, $prenom, $nom);
+
+        $this->audit('user.rename', 'user', $id, [
+            'from' => ['prenom' => (string) $target['prenom'], 'nom' => (string) $target['nom']],
+            'to'   => ['prenom' => $prenom, 'nom' => $nom],
+        ]);
+
+        $this->setFlash('success', sprintf('Nom de %s mis à jour.', e($prenom . ' ' . $nom)));
+        redirect(url('/admin/users'));
+    }
+
+    /**
      * Active ou désactive un compte.
      */
     public function toggleActive(string $id): void
