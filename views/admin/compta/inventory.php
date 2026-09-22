@@ -5,6 +5,7 @@ declare(strict_types=1);
 /**
  * @var array<string,mixed> $user
  * @var list<array{key:string,stock:?int,counted_at:?string,counted_qty:?int,gap:?int,theoretical:?int}> $rows
+ * @var list<array{key:string,counted_at:?string}> $discontinuedRows
  * @var list<array<string,mixed>> $history
  * @var list<array<string,mixed>> $gaps
  */
@@ -180,4 +181,40 @@ declare(strict_types=1);
             <?php endif; ?>
         </tbody>
     </table>
+</div>
+
+<div class="card surface glass table-wrap">
+    <details class="cost-card-lots">
+        <summary>🚫 Plus en vente (<?= count($discontinuedRows) ?>)</summary>
+        <p class="muted">Ces produits n'apparaissent plus dans les comptages ni dans le réappro. L'historique des ventes est conservé.</p>
+        <?php if ($discontinuedRows === []): ?>
+            <p class="muted">Aucun produit marqué plus en vente.</p>
+        <?php else: ?>
+        <table class="table">
+            <thead>
+                <tr><th>Produit</th><th>Compté le</th><th>Action</th></tr>
+            </thead>
+            <tbody>
+                <?php foreach ($discontinuedRows as $d): ?>
+                    <tr>
+                        <td><code><?= e($d['key']) ?></code></td>
+                        <td>
+                            <?php if ($d['counted_at'] !== null): ?>
+                                <?= e(formatDateTime($d['counted_at'])) ?>
+                            <?php else: ?>
+                                <span class="muted">—</span>
+                            <?php endif; ?>
+                        </td>
+                        <td>
+                            <form method="post" action="<?= e(url('/admin/compta/inventaire/' . rawurlencode($d['key']) . '/resume')) ?>" data-preserve-scroll>
+                                <?= csrf_field() ?>
+                                <button type="submit" class="btn btn-outline btn-sm">Remettre en vente</button>
+                            </form>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+            </tbody>
+        </table>
+        <?php endif; ?>
+    </details>
 </div>

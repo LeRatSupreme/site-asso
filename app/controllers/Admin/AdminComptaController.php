@@ -16,6 +16,7 @@ use App\Models\Product;
 use App\Models\ProductAlias;
 use App\Models\ProductCategory;
 use App\Models\ProductCost;
+use App\Models\ProductDiscontinued;
 use App\Models\Sale;
 use App\Models\SaleAdjustment;
 
@@ -1132,7 +1133,8 @@ final class AdminComptaController extends AdminBaseController
      * couvrir l'horizon cible. Le stock est le THÉORIQUE de l'inventaire
      * (dernier comptage + achats − ventes − pertes) : jamais une saisie
      * manuelle qui se périme. Un produit jamais compté apparaît « à
-     * compter » et son besoin est calculé sans stock déduit.
+     * compter » et son besoin est calculé sans stock déduit. Les produits
+     * marqués « plus en vente » sont exclus (voir ProductDiscontinued).
      *
      * @param string|null $fromDay  Début de la période d'analyse (inclus).
      * @param string|null $toDay    Fin de la période d'analyse (inclus).
@@ -1147,6 +1149,10 @@ final class AdminComptaController extends AdminBaseController
         // l'inventaire (même source que la page Inventaire).
         $consumption = Sale::consumptionBetween($fromDay, $toDay);
         $openDays = max(1, $openDays);
+
+        // Produits marqués « plus en vente » (saisonniers/discontinués) :
+        // exclus du réappro pour ne pas encombrer l'analyse des commandes.
+        $discontinued = array_flip(ProductDiscontinued::keys());
 
         // Stock théorique + dernier comptage, indexés en minuscules pour un
         // rapprochement insensible à la casse (ex. « Red bull » == « Red Bull »).
@@ -1164,7 +1170,7 @@ final class AdminComptaController extends AdminBaseController
 
         foreach ($consumption as $key => $data) {
             $key = (string) $key;
-            if ($key === '') {
+            if ($key === '' || isset($discontinued[$key])) {
                 continue;
             }
 
