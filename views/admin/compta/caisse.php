@@ -24,8 +24,7 @@ declare(strict_types=1);
     <h2 class="card-title">🧾 Comptage physique</h2>
     <p class="card-meta">
         Comptage « à l'aveugle » : le montant théorique n'est volontairement pas affiché,
-        pour un comptage honnête. En cas d'écart, la caisse est réalignée sur le compté et
-        l'écart est historisé (visible uniquement par le Fondateur dans Système → Caisses).
+        pour un comptage honnête.
     </p>
     <form method="post" action="<?= e(url('/admin/compta/caisse/comptage')) ?>" style="max-width:480px">
         <?= csrf_field() ?>
