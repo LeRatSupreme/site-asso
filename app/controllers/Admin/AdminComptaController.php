@@ -1182,7 +1182,11 @@ final class AdminComptaController extends AdminBaseController
 
         // Produits marqués « plus en vente » (saisonniers/discontinués) :
         // exclus du réappro pour ne pas encombrer l'analyse des commandes.
-        $discontinued = array_flip(ProductDiscontinued::keys());
+        // Clés normalisées : insensible à la casse/espaces, comme le lookup stock.
+        $discontinued = array_flip(array_map(
+            static fn(string $k): string => strtolower(trim($k)),
+            ProductDiscontinued::keys()
+        ));
 
         // Stock théorique + dernier comptage, indexés en minuscules pour un
         // rapprochement insensible à la casse (ex. « Red bull » == « Red Bull »).
@@ -1200,7 +1204,7 @@ final class AdminComptaController extends AdminBaseController
 
         foreach ($consumption as $key => $data) {
             $key = (string) $key;
-            if ($key === '' || isset($discontinued[$key])) {
+            if ($key === '' || isset($discontinued[strtolower(trim($key))])) {
                 continue;
             }
 
