@@ -3,10 +3,10 @@
 Site de l'**AEIC — Association Étudiante Informatique de Calais**, développé en
 **PHP 8.2+ pur + HTML/CSS vanilla**, sans framework ni Docker.
 
-Ce dépôt contient la **Phase 1 (fondations)** : structure MVC, configuration par
-environnement, connexion PDO, routeur, helpers, base Auth/CSRF, charte CSS AEIC,
-layout public (navbar 4 menus + footer), schéma SQL complet, seed, et tests
-PHPUnit. Les espaces auth / élève / admin arrivent dans les phases suivantes.
+Le site est **complet et en production** : espace public (événements, sondages,
+pages, galerie, jeux), espace élève (compte, commandes cafétéria), et espace
+admin (comptabilité & imports SumUp, stocks & inventaire, réapprovisionnement,
+budgets, cafétéria, contenus, utilisateurs & attributions de pages, wiki).
 
 > Référence : [`site_apres/ARCHITECTURE.md`](../site_apres/ARCHITECTURE.md) (cahier des charges complet).
 
@@ -16,31 +16,55 @@ PHPUnit. Les espaces auth / élève / admin arrivent dans les phases suivantes.
 
 ```
 site_final/
-├── public/                      # Racine web (DocumentRoot Apache)
-│   ├── index.php                # Front controller
+├── public/                          # Racine web (DocumentRoot Apache)
+│   ├── index.php                    # Front controller
+│   ├── .htaccess                    # Réécriture des URL vers index.php
+│   ├── manifest.json                # Manifest PWA ; + robots.txt, sw.js
+│   ├── css/                         # CSS par module : admin, compta, payments, polls
 │   └── assets/
-│       ├── css/base.css         # Charte graphique complète
-│       └── img/favicon.svg
+│       ├── css/                     # base.css (charte AEIC) + pages.css
+│       ├── img/                     # favicon, icônes, illustration Open Graph
+│       ├── js/                      # JS vanilla (front)
+│       └── uploads/                 # Médias uploadés (hors git)
 ├── app/
 │   ├── config/
-│   │   ├── config.php           # .env, constantes, gestion d'erreurs
-│   │   └── database.php         # db(): PDO (singleton) + session
-│   ├── core/
-│   │   ├── Router.php           # Routeur (GET/POST, {param}, 404/405)
-│   │   ├── Controller.php       # render(), json(), flash(), abort()
-│   │   ├── Auth.php             # Session / login / rôles
-│   │   ├── Csrf.php             # Vérification CSRF
-│   │   └── helpers.php          # e(), formatDate(), formatPrice(), url()...
-│   ├── controllers/             # Home, Event, Page
-│   └── models/                  # Model base, Event, Setting, TeamMember, Page
-├── views/                       # Layouts, partials, pages, errors
+│   │   ├── config.php               # .env, constantes, gestion d'erreurs
+│   │   ├── database.php             # db() : PDO (singleton) + session
+│   │   └── routes.php               # Toutes les routes GET/POST du site
+│   ├── core/                        # Router, Controller, Auth, Csrf, Middleware,
+│   │                                # Permissions, Validator, Mailer, Logger…
+│   │   ├── Security/                # Crypto, HtmlSanitizer, Totp/2FA, headers…
+│   │   ├── Compta/                  # Services comptabilité & SumUp (ComptaCalc,
+│   │   │                            # CashLedger, SumUpCsvParser, SumUpSalesSync…)
+│   │   └── Backup/                  # Sauvegarde / export de la base
+│   ├── controllers/                 # 15 contrôleurs publics : Home, Event, Page,
+│   │                                # Poll, Registration, Student, Auth…
+│   │   └── Admin/                   # 24 contrôleurs admin (un par module)
+│   ├── models/                      # Model (base PDO) + ~45 modèles : Event, Sale,
+│   │                                # User, Product, ProductAlias, CashCount…
+│   └── translations/                # Libellés FR (messages, contenu éditorial)
+├── views/                           # Pages publiques : home, events, polls, pages,
+│                                    # account, auth, game, galerie, student…
+│   ├── layouts/                     # Habillages : admin, public, student
+│   ├── partials/                    # Cartes event/poll/article, flash, map…
+│   ├── admin/                       # Tableaux de bord & pages par module
+│   ├── emails/                      # Templates de rappels & notifications (html+txt)
+│   └── errors/                      # Pages d'erreur (403, 404…)
 ├── database/
-│   ├── schema.sql               # Toutes les tables (§3 + §21)
-│   └── seed.sql                 # Settings, admin, équipe, pages, events
-├── tests/                       # PHPUnit (Unit/HelpersTest, Unit/RouterTest)
-├── config.env.example           # Modèle de configuration
-├── composer.json                # Autoload PSR-4 + helpers + phpunit
+│   ├── schema.sql                   # Toutes les tables
+│   ├── seed.sql                     # Settings, admin, équipe, pages, events
+│   └── migrations/                  # 38 migrations 2026_*.sql (appliquées à la main)
+├── scripts/                         # Cron / CLI : sync_sumup_sales.php (API SumUp),
+│                                    # send_event_reminders.php, backup.sh…
+├── tests/                           # PHPUnit : Unit/ + Integration/
+├── cache/                           # Cache runtime — hors git
+├── config.env.example               # Modèle de configuration
+├── composer.json                    # Autoload PSR-4 + helpers + phpunit
+├── composer.lock
+├── vendor/                          # Dépendances Composer (hors git)
 ├── phpunit.xml
+├── GUIDE_ADMIN.md                   # Guide d'utilisation de l'espace admin
+├── .gitignore
 └── README.md
 ```
 
