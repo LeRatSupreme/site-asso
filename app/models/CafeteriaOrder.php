@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Core\Compta\StockPublic;
+
 /**
  * Modèle des commandes cafétéria (table `cafeteria_orders`).
  */
@@ -55,6 +57,19 @@ final class CafeteriaOrder extends Model
                     );
                 }
 
+                // Répercute la sortie sur la référence compta (stock
+                // théorique de l'inventaire, source du badge carte publique).
+                // Jamais bloquant : la vente élève ne doit pas échouer pour
+                // un ajustement compta (clé absente, base indisponible…).
+                try {
+                    $key = StockPublic::resolveKey((string) $product['name']);
+                    if ($key !== null) {
+                        ProductStock::adjust($key, -$quantity);
+                    }
+                } catch (\Throwable) {
+                    // Ajustement impossible : on continue la commande.
+                }
+
                 $unitPrice = (float) $product['price'];
                 $total += $unitPrice * $quantity;
                 $lines[] = [
@@ -97,6 +112,10 @@ final class CafeteriaOrder extends Model
             }
             throw $e;
         }
+
+        // Le théorique vient de bouger : la carte publique doit le refléter
+        // immédiatement (sinon TTL de 5 min). Après commit uniquement.
+        StockPublic::invalidate();
 
         return $orderId;
     }

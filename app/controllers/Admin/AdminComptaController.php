@@ -9,6 +9,7 @@ use App\Core\Compta\AliasSuggester;
 use App\Core\Compta\CashLedger;
 use App\Core\Compta\ComptaCalc;
 use App\Core\Compta\ProductAutoSync;
+use App\Core\Compta\StockPublic;
 use App\Core\Compta\SumUpCsvParser;
 use App\Models\Expense;
 use App\Models\ImportBatch;
@@ -252,6 +253,9 @@ final class AdminComptaController extends AdminBaseController
         //       importées portent la catégorie de leur alias. Non bloquant
         //       (la méthode avale elle-même les erreurs SQL).
         Sale::syncAliasCategories();
+
+        // Les ventes importées déduisent le théorique : la carte publique suit.
+        StockPublic::invalidate();
 
         // ── Les catégories utilisées par le mapping existent aussi dans la
         //       carte (page Catégories de la cafétéria) : création

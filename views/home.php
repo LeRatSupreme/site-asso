@@ -93,8 +93,9 @@ $allPromoEmpty = empty($promotions);
             </div>
         <?php else: ?>
             <?php
-            // Onglets : un par catégorie + un "Tout".
-            $catTabs = [['key' => 'all', 'name' => t('home.menu.tab.all'), 'emoji' => '🍴']];
+            // Onglets : un par catégorie (le premier est actif par défaut,
+            // l'ordre vient de la colonne `order` des catégories).
+            $catTabs = [];
             foreach ($menuCategories as $cat) {
                 $catTabs[] = [
                     'key'   => (string) $cat['id'],
@@ -236,25 +237,33 @@ $allPromoEmpty = empty($promotions);
     var empty  = section.querySelector('.menu-empty-results');
     if (!tabs.length || !items.length) return;
 
+    function activate(tab) {
+        var cat = tab.getAttribute('data-cat');
+
+        tabs.forEach(function (t) {
+            var on = t === tab;
+            t.classList.toggle('is-active', on);
+            t.setAttribute('aria-selected', on ? 'true' : 'false');
+        });
+
+        var visible = 0;
+        items.forEach(function (item) {
+            var show = item.getAttribute('data-cat') === cat;
+            item.style.display = show ? '' : 'none';
+            if (show) visible++;
+        });
+
+        if (empty) empty.hidden = visible > 0;
+    }
+
     tabs.forEach(function (tab) {
         tab.addEventListener('click', function () {
-            var cat = tab.getAttribute('data-cat');
-
-            tabs.forEach(function (t) {
-                var on = t === tab;
-                t.classList.toggle('is-active', on);
-                t.setAttribute('aria-selected', on ? 'true' : 'false');
-            });
-
-            var visible = 0;
-            items.forEach(function (item) {
-                var show = cat === 'all' || item.getAttribute('data-cat') === cat;
-                item.style.display = show ? '' : 'none';
-                if (show) visible++;
-            });
-
-            if (empty) empty.hidden = visible > 0;
+            activate(tab);
         });
     });
+
+    // État initial : la première catégorie est active et filtrée dès le
+    // chargement (l'onglet « Tout » n'existe plus).
+    if (tabs.length) activate(tabs[0]);
 })();
 </script>
