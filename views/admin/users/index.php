@@ -329,7 +329,7 @@ $roleIcons = [
     border-radius: 8px;
 }
 .pages-check:has(input:checked) .pages-ico { background: rgba(255,255,255,0.1); }
-.pages-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pages-label { flex: 1; min-width: 0; } /* jamais tronqué : le texte complet reste lisible */
 .pages-tick { display: none; color: var(--primary); font-weight: 700; flex-shrink: 0; }
 .pages-check:has(input:checked) .pages-tick { display: inline; }
 
