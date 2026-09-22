@@ -109,20 +109,34 @@ if (isset($sections['Contenu']) && $sections['Contenu'] === []) {
     unset($sections['Contenu']);
 }
 
-// Groupe « Système » (Utilisateurs, Caisses, Inventaire, Coûts de revient,
-// Paramètres) : réservé au Fondateur (SUPERADMIN) et aux ADMIN explicitement
-// listés dans SYSTEM_ADMINS (voir Permissions::isSystemAdmin() et
-// AdminBaseController::guardSystem()). Les liens d'inventaire et de coûts
-// de revient y vivent : ces pages sont gardées par guardSystem().
-if (in_array($user['role'] ?? null, [Auth::ROLE_SUPERADMIN, Auth::ROLE_ADMIN], true)
-    && Permissions::isSystemAdmin()) {
-    $sections['Système'] = [
-        'Utilisateurs'     => '/admin/users',
-        'Caisses'          => '/admin/caisses',
-        'Inventaire'       => '/admin/compta/inventaire',
-        'Coûts de revient' => '/admin/compta/couts',
-        'Paramètres'       => '/admin/settings',
-    ];
+// Groupe « Système » : réservé au Fondateur et aux ADMIN listés dans
+// SYSTEM_ADMINS, plus les pages attribuées individuellement à un membre
+// du bureau (users.extra_pages, gérées depuis Utilisateurs, voir
+// AdminBaseController::guardSystemOrPage()). Utilisateurs et Paramètres
+// restent « Système » strict.
+$systemEntries = [
+    'Utilisateurs'     => ['/admin/users', null],
+    'Caisses'          => ['/admin/caisses', 'cash'],
+    'Inventaire'       => ['/admin/compta/inventaire', 'inventory'],
+    'Coûts de revient' => ['/admin/compta/couts', 'costs'],
+    'Paramètres'       => ['/admin/settings', null],
+];
+if (in_array($user['role'] ?? null, Permissions::adminRoles(), true)) {
+    $system = [];
+    foreach ($systemEntries as $label => [$path, $key]) {
+        // Utilisateurs / Paramètres ($key null) : Système strict.
+        // Pages attribuables : Système OU attribution individuelle.
+        $allowed = $key === null
+            ? Permissions::isSystemAdmin()
+            : (Permissions::isSystemAdmin() || Permissions::userHasExtraPage($key));
+
+        if ($allowed) {
+            $system[$label] = $path;
+        }
+    }
+    if ($system !== []) {
+        $sections['Système'] = $system;
+    }
 }
 
 // Comptage de caisse : visible de tout le bureau (hors élèves), y compris les

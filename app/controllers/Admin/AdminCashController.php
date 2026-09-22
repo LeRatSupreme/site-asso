@@ -11,7 +11,8 @@ use App\Models\CashCount;
 use App\Models\CashMovement;
 
 /**
- * Caisses — traçabilité du liquide (groupe « Système »).
+ * Caisses — traçabilité du liquide (groupe « Système » ou attribution
+ * individuelle, voir guardSystemOrPage()).
  *
  * Solde théorique = ventes LIQUIDE (calculées en direct depuis `sales`)
  * + mouvements manuels (fond de caisse, dépôts banque, ajustements).
@@ -22,7 +23,7 @@ final class AdminCashController extends AdminBaseController
 {
     public function index(): void
     {
-        $this->guardSystem();
+        $this->guardSystemOrPage('cash');
 
         $this->renderAdmin('admin/caisses/index', [
             'title'       => 'Caisses',
@@ -39,7 +40,7 @@ final class AdminCashController extends AdminBaseController
      */
     public function deposit(): void
     {
-        $this->guardSystem();
+        $this->guardSystemOrPage('cash');
 
         $amount = parseFrenchFloat((string) ($_POST['amount'] ?? ''));
         if ($amount <= 0) {
@@ -67,7 +68,7 @@ final class AdminCashController extends AdminBaseController
      */
     public function count(): void
     {
-        $this->guardSystem();
+        $this->guardSystemOrPage('cash');
 
         $counted = parseFrenchFloat((string) ($_POST['counted'] ?? ''));
         if ($counted < 0) {
@@ -105,7 +106,7 @@ final class AdminCashController extends AdminBaseController
      */
     public function fund(): void
     {
-        $this->guardSystem();
+        $this->guardSystemOrPage('cash');
 
         $amount = parseFrenchFloat((string) ($_POST['amount'] ?? ''));
         if ($amount <= 0) {

@@ -75,6 +75,18 @@ final class User extends Model
     }
 
     /**
+     * Définit les pages supplémentaires attribuées individuellement à un
+     * utilisateur (colonne users.extra_pages — CSV de clés, ex.
+     * « inventory,costs » ; voir Permissions::extraPages()/grantedPages()).
+     * CSV vide : la colonne repasse à NULL (aucune attribution).
+     */
+    public static function updateExtraPages(string $userId, string $csv): void
+    {
+        $stmt = static::pdo()->prepare('UPDATE users SET extra_pages = ? WHERE id = ?');
+        $stmt->execute([$csv !== '' ? $csv : null, $userId]);
+    }
+
+    /**
      * Définit le pseudo joueur (pour le classement des jeux).
      * Normalise : trim, 3 à 20 caractères, alphanumériques + - _ .
      * Retourne le pseudo normalisé ou '' si invalide.

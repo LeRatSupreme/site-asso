@@ -32,6 +32,7 @@ final class AdminUserController extends AdminBaseController
             'currentId'    => Auth::id(),
             'memberIds'    => Membership::paidUserIds(Membership::currentSeason()),
             'currentSeason'=> Membership::currentSeason(),
+            'extraPages'   => Permissions::extraPages(),
         ]);
     }
 
@@ -85,6 +86,46 @@ final class AdminUserController extends AdminBaseController
 
         $this->setFlash('success', sprintf('Rôle de %s modifié (%s → %s).',
             e($target['prenom'] . ' ' . $target['nom']), $oldRole, $newRole));
+        redirect(url('/admin/users'));
+    }
+
+    /**
+     * Enregistre les pages supplémentaires attribuées individuellement
+     * (colonne users.extra_pages) : accès à des pages du groupe « Système »
+     * (Inventaire, Coûts de revient, Caisses) au-delà du rôle — voir
+     * AdminBaseController::guardSystemOrPage() et Permissions::extraPages().
+     *
+     * Comme pour l'édition de rôle, les lignes Fondateur et Trésorerie ne
+     * sont modifiables que par le Fondateur (même verrou que la vue).
+     */
+    public function savePages(string $id): void
+    {
+        $this->guardSystem();
+
+        $target = User::find($id);
+        if ($target === null) {
+            $this->abort(404);
+        }
+
+        // Lignes verrouillées pour un ADMIN non-Fondateur (cf. vue : même
+        // règle que le select de rôle).
+        if (Auth::role() !== Auth::ROLE_SUPERADMIN
+            && in_array((string) $target['role'], [Auth::ROLE_SUPERADMIN, Auth::ROLE_TRESORERIE], true)) {
+            $this->setFlash('error', 'La modification de ces pages est réservée au Fondateur.');
+            redirect(url('/admin/users'));
+        }
+
+        $posted = $_POST['pages'] ?? [];
+        if (!is_array($posted)) {
+            $posted = [];
+        }
+        $posted = array_map('strval', $posted);
+        $valid = array_values(array_intersect($posted, array_keys(Permissions::extraPages())));
+
+        User::updateExtraPages($id, implode(',', $valid));
+
+        $this->audit('user.pages', 'user', $id, ['pages' => $valid]);
+        $this->setFlash('success', 'Pages supplémentaires enregistrées.');
         redirect(url('/admin/users'));
     }
 

@@ -25,7 +25,8 @@ use App\Models\SaleAdjustment;
  * Réservé aux rôles ADMIN et TRESORERIE (voir guardCompta()) ; la page
  * « Coûts de revient » et ses actions font exception : elles appartiennent
  * au groupe « Système » — réservées au Fondateur et aux ADMIN listés dans
- * SYSTEM_ADMINS (voir guardSystem()).
+ * SYSTEM_ADMINS, ou aux utilisateurs ayant reçu la page en attribution
+ * individuelle (voir guardSystemOrPage()).
  *
  * Flux : import CSV SumUp -> table `sales` (dédupliquée) -> mapping aliases
  * -> coûts de revient par lot daté -> calculs (CA, bénéfices, marge) ->
@@ -443,7 +444,7 @@ final class AdminComptaController extends AdminBaseController
 
     public function costs(): void
     {
-        $user = $this->guardSystem();
+        $user = $this->guardSystemOrPage('costs');
 
         // Liste des produits connus pour l'autocomplétion (anti-fautes de frappe).
         $keys = Sale::distinctProducts();
@@ -554,7 +555,7 @@ final class AdminComptaController extends AdminBaseController
 
     public function saveCost(): void
     {
-        $user = $this->guardSystem();
+        $user = $this->guardSystemOrPage('costs');
 
         $data = $_POST;
         $data['cost_price'] = parseFrenchFloat((string) ($data['cost_price'] ?? '0'));
@@ -582,7 +583,7 @@ final class AdminComptaController extends AdminBaseController
      */
     public function saveCostsBulk(): void
     {
-        $this->guardSystem();
+        $this->guardSystemOrPage('costs');
 
         $validFrom = trim((string) ($_POST['valid_from'] ?? ''));
         if ($validFrom === '') {
@@ -649,11 +650,12 @@ final class AdminComptaController extends AdminBaseController
 
     /**
      * Clôture un lot de coût. Action de la page « Coûts de revient » :
-     * groupe « Système » (Fondateur), comme costs() et updateCost().
+     * groupe « Système » ou attribution individuelle, comme costs() et
+     * updateCost().
      */
     public function closeCost(string $id): void
     {
-        $this->guardSystem();
+        $this->guardSystemOrPage('costs');
 
         ProductCost::close($id);
         $this->audit('compta.cost.close', 'product_cost', $id);
@@ -663,11 +665,12 @@ final class AdminComptaController extends AdminBaseController
 
     /**
      * Supprime un lot de coût. Action de la page « Coûts de revient » :
-     * groupe « Système » (Fondateur), comme costs() et updateCost().
+     * groupe « Système » ou attribution individuelle, comme costs() et
+     * updateCost().
      */
     public function deleteCost(string $id): void
     {
-        $this->guardSystem();
+        $this->guardSystemOrPage('costs');
 
         ProductCost::delete($id);
         $this->audit('compta.cost.delete', 'product_cost', $id);
@@ -677,7 +680,7 @@ final class AdminComptaController extends AdminBaseController
 
     public function updateCost(string $id): void
     {
-        $this->guardSystem();
+        $this->guardSystemOrPage('costs');
 
         $data = $_POST;
         $data['cost_price'] = parseFrenchFloat((string) ($data['cost_price'] ?? '0'));
@@ -704,7 +707,7 @@ final class AdminComptaController extends AdminBaseController
      */
     public function mergeProducts(): void
     {
-        $this->guardSystem();
+        $this->guardSystemOrPage('costs');
 
         $keep = trim((string) ($_POST['keep'] ?? ''));
         if ($keep === '') {

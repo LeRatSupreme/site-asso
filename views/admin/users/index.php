@@ -39,7 +39,7 @@ $roleIcons = [
 
 <div class="card surface glass table-wrap">
     <table class="table">
-        <thead><tr><th>Nom</th><th>Email</th><th>Rôle</th><th>Statut</th><th>Inscription</th><th>Actions</th></tr></thead>
+        <thead><tr><th>Nom</th><th>Email</th><th>Rôle</th><th>Pages +</th><th>Statut</th><th>Inscription</th><th>Actions</th></tr></thead>
         <tbody>
             <?php foreach ($users as $u): ?>
                 <?php $isSelf = ($u['id'] ?? '') === $currentId; ?>
@@ -83,6 +83,30 @@ $roleIcons = [
                                     <option value="<?= e($val) ?>" <?= ($u['role'] ?? '') === $val ? 'selected' : '' ?>><?= e($label) ?></option>
                                 <?php endforeach; ?>
                             </select>
+                        </form>
+                    </td>
+                    <td>
+                        <?php
+                        // Pages supplémentaires attribuées individuellement
+                        // (users.extra_pages) : mêmes verrous que le select
+                        // de rôle ci-dessus.
+                        $grantedPages = Permissions::grantedPages(isset($u['extra_pages']) ? (string) $u['extra_pages'] : null);
+                        $pagesLock = '';
+                        if ($isSelf) {
+                            $pagesLock = 'disabled title="Vous ne pouvez pas modifier vos propres pages"';
+                        } elseif (!$viewerIsFondateur && ($isFondateurRow || $isTresorierRow)) {
+                            $pagesLock = 'disabled title="Réservé au Fondateur"';
+                        }
+                        ?>
+                        <form method="post" action="<?= e(url('/admin/users/' . rawurlencode((string) $u['id']) . '/pages')) ?>" class="inline-form pages-form">
+                            <?= csrf_field() ?>
+                            <?php foreach (($extraPages ?? Permissions::extraPages()) as $pageKey => $pageLabel): ?>
+                                <label class="pages-check">
+                                    <input type="checkbox" name="pages[]" value="<?= e($pageKey) ?>" <?= in_array($pageKey, $grantedPages, true) ? 'checked' : '' ?> <?= $pagesLock ?>>
+                                    <?= e($pageLabel) ?>
+                                </label>
+                            <?php endforeach; ?>
+                            <button type="submit" class="btn btn-outline btn-sm" <?= $pagesLock ?>>Enregistrer</button>
                         </form>
                     </td>
                     <td>
@@ -156,6 +180,10 @@ $roleIcons = [
     white-space: nowrap;
     flex-shrink: 0;
 }
+.pages-form { display: flex; flex-direction: column; gap: 0.15rem; align-items: flex-start; }
+.pages-form .pages-check { display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; white-space: nowrap; cursor: pointer; }
+.pages-form .pages-check input { margin: 0; }
+.pages-form .btn { margin-top: 0.2rem; }
 @media (max-width: 600px) {
     .user-filters { flex-wrap: wrap; }
     .user-filter-search { min-width: 100%; }
