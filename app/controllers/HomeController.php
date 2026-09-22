@@ -88,6 +88,29 @@ final class HomeController extends Controller
             $byCat[$catId][] = $product;
         }
 
+        // Les produits disponibles d'abord, stock inconnu ensuite, les
+        // épuisés en fin de groupe pour mettre en avant ce qui est vendable.
+        $stockPriority = static function (array $p): int {
+            $s = $p['menu_stock'] ?? null;
+            if ($s === null) {
+                return 1;   // stock inconnu (pas de clé d'inventaire)
+            }
+
+            return $s <= 0 ? 2 : 0;   // épuisé en dernier
+        };
+
+        foreach ($byCat as $catId => $items) {
+            usort($items, static function (array $a, array $b) use ($stockPriority): int {
+                $prio = $stockPriority($a) <=> $stockPriority($b);
+                if ($prio !== 0) {
+                    return $prio;
+                }
+
+                return strcasecmp((string) ($a['name'] ?? ''), (string) ($b['name'] ?? ''));
+            });
+            $byCat[$catId] = $items;
+        }
+
         $menu = [];
         foreach ($categories as $category) {
             $catId = (string) $category['id'];
