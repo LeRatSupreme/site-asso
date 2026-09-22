@@ -222,11 +222,15 @@ final class StudentController extends Controller
 
         $ordersEnabled = Setting::getBool('orders_enabled', true);
 
+        // Disponibles d'abord dans chaque catégorie, épuisés en fin de
+        // groupe pour mettre en avant ce qui est commandable.
+        $products = self::orderAvailableFirst(Product::available());
+
         $this->render('student/cafeteria', [
             'title'         => 'Commander à la cafétéria — AEIC',
             'description'   => 'Catalogue des produits de la cafétéria AEIC.',
             'categories'    => ProductCategory::active(),
-            'products'      => Product::available(),
+            'products'      => $products,
             'cart'          => $this->cart(),
             'ordersEnabled' => $ordersEnabled,
             'sumupLink'     => sumup_enabled() ? sumup_link() : null,
@@ -368,5 +372,39 @@ final class StudentController extends Controller
         }
 
         $_SESSION['cart'] = $cart->items();
+    }
+
+    /**
+     * Réordonne la liste des produits (déjà triée par catégorie, ordre,
+     * nom) pour faire passer les produits disponibles avant les épuisés,
+     * à l'intérieur de chaque catégorie. L'ordre des catégories et l'ordre
+     * d'affichage interne (ordre produit puis nom) restent inchangés.
+     *
+     * @param list<array<string,mixed>> $products
+     * @return list<array<string,mixed>>
+     */
+    private static function orderAvailableFirst(array $products): array
+    {
+        $catRank = [];
+        $indexed = [];
+        foreach ($products as $i => $p) {
+            $cat = (string) ($p['category_name'] ?? '');
+            if (!array_key_exists($cat, $catRank)) {
+                $catRank[$cat] = count($catRank);
+            }
+            // products.stock est toujours présent : <= 0 = épuisé (en dernier).
+            $soldOut = (int) ($p['stock'] ?? 0) <= 0 ? 1 : 0;
+            $indexed[] = [$catRank[$cat], $soldOut, $i, $p];
+        }
+
+        usort($indexed, static function (array $a, array $b): int {
+            return $a[0] <=> $b[0]
+                ?: $a[1] <=> $b[1]
+                ?: $a[2] <=> $b[2];
+        });
+
+        return array_map(static function (array $row): array {
+            return $row[3];
+        }, $indexed);
     }
 }
