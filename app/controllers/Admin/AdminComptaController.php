@@ -112,7 +112,12 @@ final class AdminComptaController extends AdminBaseController
         $this->renderAdmin('admin/compta/import', [
             'title'   => 'Importer un rapport SumUp',
             'user'    => $user,
-            'batches' => ImportBatch::all(),
+            // Charge bornée : la synchro API crée un lot par passage, les
+            // 500 derniers suffisent à l'affichage (la vue regroupe à part
+            // les passages de synchro et les imports manuels).
+            'batches' => ImportBatch::recent(500),
+            // Compteur exact (indépendant de la borne ci-dessus).
+            'salesTotal' => Sale::count(),
         ]);
     }
 
