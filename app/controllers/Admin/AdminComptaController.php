@@ -786,10 +786,11 @@ final class AdminComptaController extends AdminBaseController
         $user = $this->guardCompta();
 
         $this->renderAdmin('admin/compta/aliases', [
-            'title'    => 'Mapping des libellés',
-            'user'     => $user,
-            'aliases'  => ProductAlias::all(),
-            'unmapped' => Sale::unmappedDescriptions(),
+            'title'      => 'Mapping des libellés',
+            'user'       => $user,
+            'aliases'    => ProductAlias::all(),
+            'unmapped'   => Sale::unmappedDescriptions(),
+            'categories' => Sale::distinctCategories(),
         ]);
     }
 
@@ -902,7 +903,12 @@ final class AdminComptaController extends AdminBaseController
             if ($raw === '' || $key === '') {
                 continue;
             }
-            if (ProductAlias::save(['raw_description' => $raw, 'product_key' => $key]) !== '') {
+            // Préserve la catégorie existante de l'alias (le save est un
+            // upsert : sans ce champ, la catégorie serait écrasée à NULL).
+            $prev = ProductAlias::findByRaw($raw);
+            $category = $prev !== null ? ($prev['category'] ?? null) : null;
+
+            if (ProductAlias::save(['raw_description' => $raw, 'product_key' => $key, 'category' => $category]) !== '') {
                 $applied++;
                 $details[] = $raw . ' -> ' . $key;
             }

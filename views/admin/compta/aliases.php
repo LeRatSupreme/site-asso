@@ -5,8 +5,14 @@ declare(strict_types=1);
 /**
  * @var list<array<string,mixed>> $aliases
  * @var list<array<string,mixed>> $unmapped
+ * @var list<string> $categories
  */
 ?>
+<datalist id="alias-categories">
+    <?php foreach ($categories as $cat): ?>
+        <option value="<?= e((string) $cat) ?>"></option>
+    <?php endforeach; ?>
+</datalist>
 <div class="compta-grid">
     <div class="card surface glass">
         <h2 class="card-title">File « à classer »</h2>
@@ -28,7 +34,7 @@ declare(strict_types=1);
                     <div>
                         <input type="hidden" name="raw_description" value="<?= e((string) $u['description']) ?>">
                         <input type="text" name="product_key" placeholder="ex: Bueno" required>
-                        <input type="text" name="category" placeholder="Nourriture">
+                        <input type="text" name="category" placeholder="Nourriture" list="alias-categories">
                         <button type="submit" class="btn btn-primary btn-sm">Rattacher</button>
                     </div>
                 </div>
@@ -45,7 +51,15 @@ declare(strict_types=1);
                     <tr>
                         <td><code><?= e((string) $a['raw_description']) ?></code></td>
                         <td><strong><?= e((string) $a['product_key']) ?></strong></td>
-                        <td><?= e((string) ($a['category'] ?? '—')) ?></td>
+                        <td>
+                            <form method="post" action="<?= e(url('/admin/compta/aliases/save')) ?>" class="alias-cat-form" data-preserve-scroll>
+                                <?= csrf_field() ?>
+                                <input type="hidden" name="raw_description" value="<?= e((string) $a['raw_description']) ?>">
+                                <input type="hidden" name="product_key" value="<?= e((string) $a['product_key']) ?>">
+                                <input type="text" name="category" value="<?= e((string) ($a['category'] ?? '')) ?>" placeholder="ex: Nourriture" list="alias-categories" style="width:130px">
+                                <button type="submit" class="btn btn-outline btn-sm">Enregistrer</button>
+                            </form>
+                        </td>
                         <td>
                             <form method="post" action="<?= e(url('/admin/compta/aliases/' . rawurlencode((string) $a['id']) . '/delete')) ?>" data-confirm="Supprimer cet alias ?" data-preserve-scroll>
                                 <?= csrf_field() ?>
