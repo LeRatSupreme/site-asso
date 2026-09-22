@@ -21,6 +21,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../vendor/autoload.php';
 require_once __DIR__ . '/../app/config/database.php';
 
+use App\Core\Compta\StockPublic;
 use App\Core\Compta\SumUpApiClient;
 use App\Core\Compta\SumUpSalesSync;
 use App\Models\ProductAlias;
@@ -60,6 +61,9 @@ try {
     // des libellés (silencieux en cas d'échec SQL, jamais bloquant).
     if (!$dryRun && $stats['inserted'] > 0) {
         Sale::syncAliasCategories();
+
+        // Les ventes insérées déduisent le théorique : la carte publique suit.
+        StockPublic::invalidate();
     }
 
     echo '[' . $logTs . '] '

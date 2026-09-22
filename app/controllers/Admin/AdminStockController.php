@@ -7,6 +7,7 @@ namespace App\Controllers\Admin;
 use App\Core\Auth;
 use App\Core\Compta\ComptaCalc;
 use App\Core\Compta\ProductAutoSync;
+use App\Core\Compta\StockPublic;
 use App\Models\InventoryCount;
 use App\Models\ProductCost;
 use App\Models\ProductDiscontinued;
@@ -149,6 +150,9 @@ final class AdminStockController extends AdminBaseController
         } catch (\Throwable) {
             // Le stock ne doit jamais casser à cause de la synchro carte.
         }
+
+        // Les achats font bouger le théorique : la carte publique suit.
+        StockPublic::invalidate();
 
         $flash = sprintf(
             '%d achat%s enregistré%s pour %d produit%s — stock mis à jour.',
@@ -293,6 +297,8 @@ final class AdminStockController extends AdminBaseController
         // la création de l'achat.
         ProductStock::adjust($productKey, -$quantity);
 
+        StockPublic::invalidate();
+
         $this->audit('compta.purchase.delete', 'purchase', $id, [
             'product_key'    => $productKey,
             'quantity'       => $quantity,
@@ -434,6 +440,9 @@ final class AdminStockController extends AdminBaseController
             // L'inventaire ne doit jamais casser à cause de la synchro carte.
         }
 
+        // Le comptage réaligne le théorique : la carte publique suit.
+        StockPublic::invalidate();
+
         $flash = sprintf('%d produit(s) compté(s) — %d écart(s) détecté(s).', $done, $gaps);
         if ($sync['created'] !== []) {
             $flash .= ' Carte mise à jour automatiquement : ' . implode(', ', $sync['created']) . '.';
@@ -541,6 +550,9 @@ final class AdminStockController extends AdminBaseController
             ProductAutoSync::sync();
         } catch (\Throwable) {
         }
+
+        // Le comptage réaligne le théorique : la carte publique suit.
+        StockPublic::invalidate();
 
         $this->setFlash($gaps > 0 ? 'warning' : 'success', sprintf('%d produit(s) compté(s) — %d écart(s) détecté(s).', $done, $gaps));
         redirect(url('/admin/compta/inventaire/comptage'));

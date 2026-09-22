@@ -6,6 +6,7 @@ namespace App\Controllers\Admin;
 
 use App\Core\Compta\ComptaCalc;
 use App\Core\Compta\ProductAutoSync;
+use App\Core\Compta\StockPublic;
 use App\Models\Loss;
 use App\Models\ProductCost;
 use App\Models\Sale;
@@ -81,6 +82,9 @@ final class AdminLossController extends AdminBaseController
             'note'        => $note,
             'created_by'  => $user['id'] ?? null,
         ]);
+
+        // La perte déduit le théorique : la carte publique suit.
+        StockPublic::invalidate();
 
         $this->audit('compta.loss.create', 'loss', $id, [
             'product_key' => $productKey,

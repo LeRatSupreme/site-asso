@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Core\Compta;
 
 use App\Models\InventoryCount;
+use App\Models\ProductAlias;
 
 /**
  * Stock affiché sur la carte publique de la cafétéria (page d'accueil).
@@ -17,6 +18,11 @@ use App\Models\InventoryCount;
  * « Bueno », « Coca », « Red Bull »…) ne correspondent pas toujours aux
  * noms affichés sur la carte (« Kinder Bueno », « Coca-Cola »…) :
  * un appariement tolérant est appliqué (voir stockForMenuProduct()).
+ *
+ * Le calcul est mis en cache fichier (5 min) et le cache est invalidé
+ * événementiellement après chaque mouvement de stock (voir invalidate()) :
+ * la carte reflète ainsi les commandes, achats, pertes et imports presque
+ * immédiatement, le TTL ne servant que de filet de sécurité.
  */
 final class StockPublic
 {
@@ -38,10 +44,10 @@ final class StockPublic
      * Performance : le calcul du stock théorique exécute une requête par
      * produit déjà compté (comptage + achats + ventes + pertes), ce qui est
      * inenvisageable à chaque affichage de la page d'accueil publique. Le
-     * résultat est donc mis en cache fichier pendant 5 minutes (TTL) ;
-     * en contrepartie, le stock affiché peut avoir jusqu'à 5 minutes de
-     * retard sur l'inventaire — c'est un choix assumé, sans invalidation
-     * événementielle.
+     * résultat est donc mis en cache fichier pendant 5 minutes (TTL) et le
+     * cache est invalidé après chaque mouvement de stock (voir invalidate()) :
+     * le stock affiché suit ainsi les mouvements presque en temps réel, le
+     * TTL ne couvrant que les mouvements oubliés.
      *
      * Aucune erreur n'est fatale : si le cache ou la base échouent, on
      * renvoie une carte (éventuellement vide) et la page s'affiche.
@@ -65,6 +71,53 @@ final class StockPublic
     }
 
     /**
+     * Invalide le cache du stock carte (à appeler après tout mouvement
+     * de stock : comptage, achat, perte, import SumUp, commande élève).
+     */
+    public static function invalidate(): void
+    {
+        @unlink(self::cacheFile());
+    }
+
+    /**
+     * Clé d'inventaire appariée à un nom de produit de la carte, ou null
+     * si aucune clé ne correspond.
+     *
+     * Mêmes règles que stockForMenuProduct() (normalisation, inclusion
+     * symétrique ≥ 4 caractères, correspondance la plus longue), complétées
+     * par un repli sur les alias de ventes (matchKeyViaAlias()).
+     *
+     * La clé retournée est la clé BRUTE d'inventaire (telle que stockée
+     * dans inventory_counts / product_stocks) afin que les ajustements de
+     * référence (ProductStock::adjust) touchent la bonne ligne ; à défaut
+     * de clé brute retrouvée, la clé normalisée est retournée.
+     */
+    public static function resolveKey(string $productName): ?string
+    {
+        $nameKey = self::normalizeKey($productName);
+        if ($nameKey === '') {
+            return null;
+        }
+
+        $map = self::menuStockMap();
+
+        $key = self::matchKey($nameKey, $map) ?? self::matchKeyViaAlias($nameKey, $map);
+        if ($key === null) {
+            return null;
+        }
+
+        // La carte publique est indexée par clés normalisées, la référence
+        // compta par clés brutes : on restitue la clé brute correspondante.
+        foreach (array_keys(InventoryCount::lastCountsMap()) as $rawKey) {
+            if (self::normalizeKey((string) $rawKey) === $key) {
+                return (string) $rawKey;
+            }
+        }
+
+        return $key;
+    }
+
+    /**
      * Quantité de stock à afficher pour un produit de la carte, ou null si
      * elle est inconnue (le produit s'affiche alors sans badge ni nombre,
      * SANS repli sur products.stock, volontairement ignoré ici).
@@ -76,7 +129,8 @@ final class StockPublic
      *     faire au moins 4 caractères normalisés afin d'éviter les faux
      *     positifs (« eau » ⊂ « eaubulle », « bn » ⊂ « bnvani »…) ; en cas
      *     de plusieurs candidats, on retient la correspondance la plus
-     *     longue (« coca cherry » plutôt que « coca »).
+     *     longue (« coca cherry » plutôt que « coca ») ;
+     *  3. sinon repli par alias de ventes (matchKeyViaAlias()).
      *
      * @param array<string,int> $stockMap Carte renvoyée par menuStockMap().
      */
@@ -87,9 +141,28 @@ final class StockPublic
             return null;
         }
 
+        $key = self::matchKey($nameKey, $stockMap) ?? self::matchKeyViaAlias($nameKey, $stockMap);
+
+        // Jamais de quantité négative affichée (survente/pertes non journalisées).
+        return $key === null ? null : max(0, $stockMap[$key]);
+    }
+
+    /**
+     * Cœur de l'appariement sur une carte à clés normalisées : match exact,
+     * sinon inclusion symétrique avec une aiguille d'au moins 4 caractères,
+     * correspondance la plus longue. Retourne la clé de la carte, ou null.
+     *
+     * @param array<string,int> $stockMap
+     */
+    private static function matchKey(string $nameKey, array $stockMap): ?string
+    {
+        if ($nameKey === '' || $stockMap === []) {
+            return null;
+        }
+
         // 1) Match exact.
         if (isset($stockMap[$nameKey])) {
-            return max(0, $stockMap[$nameKey]);
+            return $nameKey;
         }
 
         // 2) Inclusion symétrique, aiguille >= 4 caractères, match le plus long.
@@ -97,18 +170,53 @@ final class StockPublic
         $bestLen = 0;
         foreach ($stockMap as $key => $qty) {
             if (strlen($key) >= 4 && str_contains($nameKey, $key) && strlen($key) > $bestLen) {
-                $best = $qty;
+                $best = $key;
                 $bestLen = strlen($key);
                 continue;
             }
             if (strlen($nameKey) >= 4 && str_contains($key, $nameKey) && strlen($nameKey) > $bestLen) {
-                $best = $qty;
+                $best = $key;
                 $bestLen = strlen($nameKey);
             }
         }
 
-        // Jamais de quantité négative affichée (survente/pertes non journalisées).
-        return $best === null ? null : max(0, $best);
+        return $best;
+    }
+
+    /**
+     * Repli par alias de ventes : un libellé SumUp mappé (table
+     * product_aliases : raw_description → product_key) peut relier le nom
+     * de la carte à une clé comptée (ex. « Café » relié à « Café glacé »).
+     * Égalité stricte des clés normalisées du nom et du libellé brut
+     * (pas d'inclusion : les alias sont nombreux, on évite les faux
+     * positifs), et la clé cible doit exister dans la carte.
+     *
+     * Silencieux sans base : product_aliases indisponible → aucun repli
+     * (jamais de fatal sur la page d'accueil publique ni en tests).
+     *
+     * @param array<string,int> $stockMap
+     */
+    private static function matchKeyViaAlias(string $nameKey, array $stockMap): ?string
+    {
+        try {
+            $aliases = ProductAlias::all();
+        } catch (\Throwable) {
+            return null;
+        }
+
+        foreach ($aliases as $alias) {
+            $rawKey = self::normalizeKey((string) ($alias['raw_description'] ?? ''));
+            if ($rawKey === '' || $rawKey !== $nameKey) {
+                continue;
+            }
+
+            $targetKey = self::normalizeKey((string) ($alias['product_key'] ?? ''));
+            if ($targetKey !== '' && array_key_exists($targetKey, $stockMap)) {
+                return $targetKey;
+            }
+        }
+
+        return null;
     }
 
     /**
