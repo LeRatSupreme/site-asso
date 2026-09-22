@@ -307,12 +307,15 @@ $roleIcons = [
     color: var(--muted);
     padding: 0 0.6rem; /* aligne les titres sur le texte des cases */
 }
-.pages-checks { display: grid; grid-template-columns: repeat(auto-fill, minmax(215px, 1fr)); gap: 0.45rem; }
+.pages-checks { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 0.45rem; }
 .pages-check {
-    display: flex; align-items: center; gap: 0.55rem;
-    padding: 0.5rem 0.6rem;
+    position: relative;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 0.35rem;
+    padding: 0.6rem 0.4rem 0.5rem;
     border-radius: 10px;
-    font-size: 0.82rem;
+    font-size: 0.78rem;
+    text-align: center;
     cursor: pointer;
     border: 1px solid var(--border);
     background: rgba(255,255,255,0.03);
@@ -320,18 +323,25 @@ $roleIcons = [
 }
 .pages-check:hover { background: rgba(255,255,255,0.06); }
 .pages-check:has(input:checked) { border-color: var(--primary); background: rgba(255,255,255,0.07); }
-.pages-check input { margin: 0; width: 15px; height: 15px; flex-shrink: 0; accent-color: var(--primary); cursor: pointer; }
+.pages-check:has(input:focus-visible) { outline: 2px solid var(--primary); outline-offset: 1px; }
+.pages-check input { position: absolute; opacity: 0; pointer-events: none; margin: 0; width: 15px; height: 15px; accent-color: var(--primary); }
 .pages-ico {
-    width: 27px; height: 27px; flex-shrink: 0;
+    width: 30px; height: 30px;
     display: grid; place-items: center;
-    font-size: 0.95rem;
+    font-size: 1.05rem;
     background: rgba(255,255,255,0.06);
-    border-radius: 8px;
+    border-radius: 9px;
 }
 .pages-check:has(input:checked) .pages-ico { background: rgba(255,255,255,0.1); }
-.pages-label { flex: 1; min-width: 0; } /* jamais tronqué : le texte complet reste lisible */
-.pages-tick { display: none; color: var(--primary); font-weight: 700; flex-shrink: 0; }
-.pages-check:has(input:checked) .pages-tick { display: inline; }
+.pages-label { line-height: 1.25; } /* centré par le text-align du parent, jamais tronqué */
+.pages-tick {
+    position: absolute; top: 5px; right: 7px;
+    display: none;
+    width: 16px; height: 16px;
+    font-size: 0.62rem; font-weight: 700; line-height: 16px; text-align: center;
+    color: #fff; background: var(--primary); border-radius: 999px;
+}
+.pages-check:has(input:checked) .pages-tick { display: block; }
 
 .pages-dialog-foot {
     display: flex; align-items: center; flex-wrap: wrap; gap: 0.4rem;
