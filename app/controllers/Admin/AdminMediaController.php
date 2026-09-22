@@ -136,13 +136,31 @@ final class AdminMediaController extends AdminBaseController
         $this->guardModule(Permissions::MODULE_CONTENT);
 
         $media = Media::find($id);
-        if ($media !== null) {
-            $path = AEIC_PUBLIC . '/assets/' . (string) $media['url'];
-            if (is_file($path)) {
-                @unlink($path);
-            }
+        if ($media === null) {
+            $this->setFlash('error', 'Média introuvable.');
+            redirect(url('/admin/media'));
         }
-        Media::delete($id);
+
+        // Un média référencé par un produit (products.image) ne doit pas
+        // disparaître : le visuel du produit serait cassé.
+        $usedBy = Media::usedByCount($id);
+        if ($usedBy > 0) {
+            $this->setFlash('error', sprintf('Ce média est utilisé par %d produit(s).', $usedBy));
+            redirect(url('/admin/media'));
+        }
+
+        // La ligne d'abord (source de vérité) ; le fichier ensuite, un échec
+        // d'effacement disque ne doit pas bloquer la suppression.
+        if (Media::deleteRow($id) < 1) {
+            $this->setFlash('error', 'Média introuvable.');
+            redirect(url('/admin/media'));
+        }
+
+        $path = AEIC_PUBLIC . '/assets/' . (string) $media['url'];
+        if (is_file($path)) {
+            @unlink($path);
+        }
+
         $this->audit('media.delete', 'media', $id);
         $this->setFlash('success', 'Média supprimé.');
         redirect(url('/admin/media'));
