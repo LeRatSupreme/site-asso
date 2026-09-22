@@ -252,8 +252,9 @@ function aeic_register_routes(Router $router): void
     $router->post('/admin/compta/aliases/{id}/delete', [AdminComptaController::class, 'deleteAlias']);
     $router->get('/admin/compta/aliases/auto', [AdminComptaController::class, 'aliasesAuto']);
     $router->post('/admin/compta/aliases/apply', [AdminComptaController::class, 'aliasesApply']);
+    // Réappro : analyse en lecture seule — le stock affiché est le théorique
+    // issu de l'inventaire (mis à jour via /admin/compta/inventaire).
     $router->get('/admin/compta/reappro', [AdminComptaController::class, 'reorder']);
-    $router->post('/admin/compta/reappro/stocks', [AdminComptaController::class, 'saveStocks']);
 
     // Suivi avancé : dépenses, budgets, achats, inventaire, pertes, événements, rapport annuel.
     $router->get('/admin/compta/depenses', [AdminExpenseController::class, 'index']);

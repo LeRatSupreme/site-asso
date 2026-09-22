@@ -16,7 +16,7 @@ declare(strict_types=1);
 <div class="compta-grid">
     <div class="card surface glass">
         <h2 class="card-title">File « à classer »</h2>
-        <p class="muted">Libellés CSV rencontrés non encore rattachés à un produit canonique. Rattachez-les une fois pour toutes : ils seront résolus automatiquement aux prochains imports.</p>
+        <p class="muted">Libellés CSV rencontrés non encore rattachés à un produit canonique. Rattachez-les une fois pour toutes : ils seront résolus automatiquement aux prochains imports. Les catégories proposées sont celles de la page Catégories (cafétéria).</p>
         <p class="admin-actions">
             <a class="btn btn-primary" href="<?= e(url('/admin/compta/aliases/auto')) ?>">Auto-détecter les doublons</a>
         </p>
@@ -34,7 +34,7 @@ declare(strict_types=1);
                     <div>
                         <input type="hidden" name="raw_description" value="<?= e((string) $u['description']) ?>">
                         <input type="text" name="product_key" placeholder="ex: Bueno" required>
-                        <input type="text" name="category" placeholder="Nourriture" list="alias-categories">
+                        <input type="text" name="category" placeholder="ex: <?= e($categories[0] ?? 'Catégorie') ?>" list="alias-categories">
                         <button type="submit" class="btn btn-primary btn-sm">Rattacher</button>
                     </div>
                 </div>
@@ -49,7 +49,7 @@ declare(strict_types=1);
         </form>
         <p class="admin-actions">
             <button type="submit" class="btn btn-primary btn-sm" form="alias-bulk-form">💾 Enregistrer les catégories</button>
-            <span class="muted">Modifie plusieurs catégories puis enregistre tout d'un coup.</span>
+            <span class="muted">Modifie plusieurs catégories puis enregistre tout d'un coup — les ventes correspondantes sont mises à jour.</span>
         </p>
         <table class="table">
             <thead><tr><th>Libellé CSV</th><th>Produit canonique</th><th>Catégorie</th><th></th></tr></thead>
@@ -60,7 +60,7 @@ declare(strict_types=1);
                         <td><strong><?= e((string) $a['product_key']) ?></strong></td>
                         <td>
                             <input type="hidden" name="bulk_raw[]" value="<?= e((string) $a['raw_description']) ?>" form="alias-bulk-form">
-                            <input type="text" name="bulk_cat[]" value="<?= e((string) ($a['category'] ?? '')) ?>" placeholder="ex: Nourriture" list="alias-categories" style="width:130px" form="alias-bulk-form">
+                            <input type="text" name="bulk_cat[]" value="<?= e((string) ($a['category'] ?? '')) ?>" placeholder="ex: <?= e($categories[0] ?? 'Catégorie') ?>" list="alias-categories" style="width:130px" form="alias-bulk-form">
                         </td>
                         <td>
                             <form method="post" action="<?= e(url('/admin/compta/aliases/' . rawurlencode((string) $a['id']) . '/delete')) ?>" data-confirm="Supprimer cet alias ?" data-preserve-scroll>

@@ -24,6 +24,7 @@ require_once __DIR__ . '/../app/config/database.php';
 use App\Core\Compta\SumUpApiClient;
 use App\Core\Compta\SumUpSalesSync;
 use App\Models\ProductAlias;
+use App\Models\Sale;
 
 $logTs = date('Y-m-d\TH:i:sP');
 
@@ -54,6 +55,12 @@ try {
     $sync = new SumUpSalesSync($client, $resolver);
 
     $stats = $sync->sync($since, $limit, $dryRun);
+
+    // Nouvelles lignes insérées : on y reporte les catégories du mapping
+    // des libellés (silencieux en cas d'échec SQL, jamais bloquant).
+    if (!$dryRun && $stats['inserted'] > 0) {
+        Sale::syncAliasCategories();
+    }
 
     echo '[' . $logTs . '] '
         . ($dryRun ? 'DRY-RUN ' : '')

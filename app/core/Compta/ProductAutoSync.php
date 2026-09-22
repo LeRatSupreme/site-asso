@@ -376,8 +376,9 @@ final class ProductAutoSync
 
     /**
      * Stock théorique connu d'un libellé : dernier comptage (via la carte
-     * des stocks théoriques), sinon stock saisi en Réappro, sinon 0 —
-     * toujours borné à >= 0.
+     * des stocks théoriques), sinon stock de référence (product_stocks,
+     * alimenté par les comptages/achats/pertes), sinon 0 — toujours borné
+     * à >= 0.
      *
      * @param array<string,int> $theoretical Carte product_key → stock théorique.
      */
