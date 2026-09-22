@@ -17,31 +17,66 @@ declare(strict_types=1);
     </div>
 </div>
 
+<?php $gapTotal = count($gaps); $gapShown = min(6, $gapTotal); ?>
 <?php if ($gaps !== []): ?>
-<section class="card surface glass table-wrap">
-    <h2 class="card-title">⚠️ Écarts détectés (30 derniers jours)</h2>
-    <table class="table">
-        <thead>
-            <tr><th>Produit</th><th>Écart</th><th>Date</th></tr>
-        </thead>
-        <tbody>
-            <?php foreach ($gaps as $g): $gap = (int) $g['gap']; ?>
-                <tr>
-                    <td><strong><?= e((string) $g['product_key']) ?></strong></td>
-                    <td>
-                        <?php if ($gap < 0): ?>
-                            <span class="badge badge-danger"><?= $gap ?></span>
-                            <span class="muted">perte</span>
-                        <?php else: ?>
-                            <span class="badge badge-warning">+<?= $gap ?></span>
-                            <span class="muted">stock trouvé en plus</span>
-                        <?php endif; ?>
-                    </td>
-                    <td><?= e(formatDateTime((string) $g['counted_at'])) ?></td>
-                </tr>
-            <?php endforeach; ?>
-        </tbody>
-    </table>
+<section class="card surface glass">
+    <style>
+        .ecarts-head { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap; }
+        .ecarts-count { font-size: 0.75rem; color: var(--muted, #8892a6); font-weight: 600; }
+        .table-ecarts td { padding: 0.35rem 0.55rem; font-size: 0.85rem; }
+        .table-ecarts th { font-size: 0.72rem; }
+        .ecarts-scroll.ecarts-open { max-height: 320px; overflow-y: auto; }
+    </style>
+    <div class="ecarts-head">
+        <h2 class="card-title">⚠️ Écarts détectés (30 derniers jours) <span class="ecarts-count">(<?= $gapTotal ?>)</span></h2>
+        <?php if ($gapTotal > $gapShown): ?>
+            <button type="button" class="btn btn-ghost btn-sm" id="ecarts-toggle"
+                    onclick="(function (b) { var m = document.getElementById('ecarts-more'); var s = document.getElementById('ecarts-scroll'); var open = m.hidden; m.hidden = !open; s.classList.toggle('ecarts-open', open); b.textContent = open ? 'Réduire' : 'Voir tout (<?= $gapTotal ?>)'; })(this)">Voir tout (<?= $gapTotal ?>)</button>
+        <?php endif; ?>
+    </div>
+    <div class="table-wrap ecarts-scroll" id="ecarts-scroll">
+        <table class="table table-ecarts">
+            <thead>
+                <tr><th>Produit</th><th>Écart</th><th>Date</th></tr>
+            </thead>
+            <tbody>
+                <?php foreach (array_slice($gaps, 0, $gapShown) as $g): $gap = (int) $g['gap']; ?>
+                    <tr>
+                        <td><strong><?= e((string) $g['product_key']) ?></strong></td>
+                        <td>
+                            <?php if ($gap < 0): ?>
+                                <span class="badge badge-danger"><?= $gap ?></span>
+                                <span class="muted">perte</span>
+                            <?php else: ?>
+                                <span class="badge badge-warning">+<?= $gap ?></span>
+                                <span class="muted">stock trouvé en plus</span>
+                            <?php endif; ?>
+                        </td>
+                        <td><?= e(formatDateTime((string) $g['counted_at'])) ?></td>
+                    </tr>
+                <?php endforeach; ?>
+            </tbody>
+            <?php if ($gapTotal > $gapShown): ?>
+            <tbody id="ecarts-more" hidden>
+                <?php foreach (array_slice($gaps, $gapShown) as $g): $gap = (int) $g['gap']; ?>
+                    <tr>
+                        <td><strong><?= e((string) $g['product_key']) ?></strong></td>
+                        <td>
+                            <?php if ($gap < 0): ?>
+                                <span class="badge badge-danger"><?= $gap ?></span>
+                                <span class="muted">perte</span>
+                            <?php else: ?>
+                                <span class="badge badge-warning">+<?= $gap ?></span>
+                                <span class="muted">stock trouvé en plus</span>
+                            <?php endif; ?>
+                        </td>
+                        <td><?= e(formatDateTime((string) $g['counted_at'])) ?></td>
+                    </tr>
+                <?php endforeach; ?>
+            </tbody>
+            <?php endif; ?>
+        </table>
+    </div>
 </section>
 <?php endif; ?>
 

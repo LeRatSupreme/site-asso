@@ -2,19 +2,60 @@
 
 declare(strict_types=1);
 
+use App\Models\ImportBatch;
+
 /**
- * @var array<string,mixed>      $user
- * @var list<array<string,mixed>> $batches
+ * @var array<string,mixed>       $user
+ * @var list<array<string,mixed>> $batches    Derniers lots chargés (500 max) : imports manuels + passages de synchro API.
+ * @var int                       $salesTotal Nombre total de ventes en base.
  */
 
-// Historique trié du plus récent au plus ancien + statistiques rapides.
+// Historique trié du plus récent au plus ancien. La synchro API SumUp crée
+// un lot à chaque passage (toutes les minutes) : on la sépare des imports
+// CSV manuels pour ne pas noyer l'historique (cf. bloc « Synchro API SumUp »).
 usort($batches, static function (array $a, array $b): int {
     return strcmp((string) ($b['imported_at'] ?? ''), (string) ($a['imported_at'] ?? ''));
 });
-$totalInserted = 0;
+
+$manualBatches = [];
+$syncBatches   = [];
 foreach ($batches as $b) {
-    $totalInserted += (int) ($b['rows_inserted'] ?? 0);
+    if (ImportBatch::isSyncRow($b)) {
+        $syncBatches[] = $b;
+    } else {
+        $manualBatches[] = $b;
+    }
 }
+$manualCount   = count($manualBatches);
+$manualBatches = array_slice($manualBatches, 0, 50); // les 50 plus récents suffisent à l'affichage
+
+// Regroupement des passages de synchro par jour (date de imported_at) :
+// une ligne résumée par jour, dépliable pour le détail des passages.
+$syncDays = [];
+foreach ($syncBatches as $b) {
+    $at  = (string) ($b['imported_at'] ?? '');
+    $day = $at !== '' ? substr($at, 0, 10) : '—';
+    if (!isset($syncDays[$day])) {
+        $syncDays[$day] = ['day' => $day, 'count' => 0, 'inserted' => 0, 'last' => '', 'rows' => []];
+    }
+    $syncDays[$day]['count']++;
+    $syncDays[$day]['inserted'] += (int) ($b['rows_inserted'] ?? 0);
+    $syncDays[$day]['rows'][] = $b;
+    if ($at !== '' && $at > $syncDays[$day]['last']) {
+        $syncDays[$day]['last'] = $at;
+    }
+}
+
+// Passages de synchro des dernières 24 h (compteur du titre de bloc).
+$syncLast24h = 0;
+$cutoff24h   = date('Y-m-d H:i:s', strtotime('-24 hours'));
+foreach ($syncBatches as $b) {
+    if ((string) ($b['imported_at'] ?? '') >= $cutoff24h) {
+        $syncLast24h++;
+    }
+}
+
+// Dernière activité tous lots confondus (manuel ou synchro).
 $lastImport = $batches[0]['imported_at'] ?? null;
 ?>
 <div class="compta-head">
@@ -27,13 +68,13 @@ $lastImport = $batches[0]['imported_at'] ?? null;
 
 <div class="compta-kpis">
     <div class="card surface glass kpi">
-        <p class="kpi-label">Imports</p>
-        <p class="kpi-value"><?= count($batches) ?></p>
+        <p class="kpi-label">Imports CSV</p>
+        <p class="kpi-value"><?= $manualCount ?></p>
         <p class="kpi-sub">rapports traités</p>
     </div>
     <div class="card surface glass kpi">
         <p class="kpi-label">Lignes insérées</p>
-        <p class="kpi-value"><?= number_format($totalInserted, 0, ',', ' ') ?></p>
+        <p class="kpi-value"><?= number_format($salesTotal, 0, ',', ' ') ?></p>
         <p class="kpi-sub">ventes en base</p>
     </div>
     <div class="card surface glass kpi">
@@ -91,7 +132,7 @@ $lastImport = $batches[0]['imported_at'] ?? null;
             </tr>
         </thead>
         <tbody>
-            <?php foreach ($batches as $b): ?>
+            <?php foreach ($manualBatches as $b): ?>
                 <tr>
                     <td><?= e(formatDateTime($b['imported_at'] ?? null)) ?></td>
                     <td><strong><?= e((string) ($b['filename'] ?? '—')) ?></strong></td>
@@ -102,12 +143,56 @@ $lastImport = $batches[0]['imported_at'] ?? null;
                     <td><?= e((string) ($b['imported_by'] ?? '—')) ?></td>
                 </tr>
             <?php endforeach; ?>
-            <?php if ($batches === []): ?>
-                <tr><td colspan="7" class="muted">Aucun import pour le moment — dépose ton premier rapport ci-dessus.</td></tr>
+            <?php if ($manualBatches === []): ?>
+                <tr><td colspan="7" class="muted">Aucun import manuel.</td></tr>
             <?php endif; ?>
         </tbody>
     </table>
 </div>
+
+<?php if ($syncDays !== []): ?>
+<section class="card surface glass">
+    <h2 class="card-title">
+        Synchro API SumUp — <?= count($syncDays) ?> jour<?= count($syncDays) > 1 ? 's' : '' ?>
+        · <?= count($syncBatches) ?> synchronisation<?= count($syncBatches) > 1 ? 's' : '' ?>
+        (<?= $syncLast24h ?> sur les dernières 24 h)
+    </h2>
+    <p class="muted" style="font-size:0.85rem">Les passages de synchro (toutes les minutes) sont regroupés par jour.</p>
+
+    <?php foreach ($syncDays as $d): ?>
+        <details class="cost-card-lots">
+            <summary>
+                📅 <?= e(formatDate($d['day'])) ?> — <?= (int) $d['count'] ?> synchronisation<?= (int) $d['count'] > 1 ? 's' : '' ?>
+                · <?= (int) $d['inserted'] ?> vente<?= (int) $d['inserted'] > 1 ? 's' : '' ?> importée<?= (int) $d['inserted'] > 1 ? 's' : '' ?>
+                · dernière à <?= e($d['last'] !== '' ? substr($d['last'], 11, 5) : '—') ?>
+            </summary>
+            <div class="table-wrap">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Heure</th>
+                            <th class="th-num">Lignes</th>
+                            <th class="th-num">Insérées</th>
+                            <th class="th-num">Ignorées</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($d['rows'] as $b): ?>
+                            <?php $at = (string) ($b['imported_at'] ?? ''); ?>
+                            <tr>
+                                <td><?= e($at !== '' ? substr($at, 11, 8) : '—') ?></td>
+                                <td class="num"><?= e((string) ($b['rows_total'] ?? '—')) ?></td>
+                                <td class="num"><span class="badge badge-success">+<?= (int) ($b['rows_inserted'] ?? 0) ?></span></td>
+                                <td class="num"><span class="badge badge-muted"><?= (int) ($b['rows_skipped'] ?? 0) ?> ignorées</span></td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        </details>
+    <?php endforeach; ?>
+</section>
+<?php endif; ?>
 
 <script>
 (function () {

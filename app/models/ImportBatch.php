@@ -133,4 +133,47 @@ final class ImportBatch extends Model
             return [];
         }
     }
+
+    /**
+     * Derniers lots, du plus récent au plus ancien.
+     *
+     * Borné : la synchro API SumUp crée un lot par passage (toutes les
+     * minutes), l'historique complet n'est plus nécessaire à l'affichage.
+     *
+     * @return list<array<string,mixed>>
+     */
+    public static function recent(int $limit = 500): array
+    {
+        $limit = (int) $limit;
+        if ($limit < 1) {
+            $limit = 500;
+        }
+
+        try {
+            $stmt = self::pdo()->prepare(
+                'SELECT * FROM import_batches ORDER BY imported_at DESC, id DESC LIMIT ' . $limit
+            );
+            $stmt->execute();
+
+            /** @var list<array<string,mixed>> $r */
+            return $stmt->fetchAll();
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    /**
+     * Le lot provient-il de la synchro automatique de l'API SumUp
+     * (SumUpSalesSync) plutôt que d'un import CSV manuel ?
+     *
+     * Ces lots — un par passage de la tâche cron — sont regroupés à part
+     * dans l'affichage de l'historique pour ne pas le noyer.
+     *
+     * @param array<string,mixed> $batch
+     */
+    public static function isSyncRow(array $batch): bool
+    {
+        return (string) ($batch['imported_by'] ?? '') === 'sumup_sync'
+            || (string) ($batch['filename'] ?? '') === 'synchro-api-sumup.json';
+    }
 }
