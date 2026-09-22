@@ -788,12 +788,20 @@ final class AdminComptaController extends AdminBaseController
     {
         $user = $this->guardCompta();
 
+        // Catégories suggérées (dont « Événement ») fusionnées avec celles
+        // déjà rencontrées dans les ventes, pour la datalist d'autocomplétion.
+        $categories = array_values(array_unique(array_merge(
+            ['Boisson', 'Nourriture', 'Spécial', 'Événement'],
+            Sale::distinctCategories()
+        )));
+        usort($categories, 'strnatcasecmp');
+
         $this->renderAdmin('admin/compta/aliases', [
             'title'      => 'Mapping des libellés',
             'user'       => $user,
             'aliases'    => ProductAlias::all(),
             'unmapped'   => Sale::unmappedDescriptions(),
-            'categories' => Sale::distinctCategories(),
+            'categories' => $categories,
         ]);
     }
 
@@ -809,6 +817,60 @@ final class AdminComptaController extends AdminBaseController
                 'raw' => $data['raw_description'] ?? null,
             ]);
             $this->setFlash('success', 'Libellé rattaché au produit.');
+        }
+
+        redirect(url('/admin/compta/aliases'));
+    }
+
+    /**
+     * Enregistrement en grille des catégories (bouton unique du tableau
+     * « Alias existants ») : met à jour la catégorie de chaque alias
+     * existant, sans toucher au produit canonique ni créer d'alias.
+     */
+    public function aliasesBulk(): void
+    {
+        $this->guardCompta();
+
+        $raws = $_POST['bulk_raw'] ?? [];
+        $cats = $_POST['bulk_cat'] ?? [];
+        if (!is_array($raws) || !is_array($cats)) {
+            $this->setFlash('error', 'Données invalides.');
+            redirect(url('/admin/compta/aliases'));
+        }
+
+        $updated = 0;
+        $n = max(count($raws), count($cats));
+        for ($i = 0; $i < $n; $i++) {
+            $raw = trim((string) ($raws[$i] ?? ''));
+            if ($raw === '') {
+                continue;
+            }
+
+            // Seuls les alias existants sont modifiés (jamais de création ici).
+            $existing = ProductAlias::findByRaw($raw);
+            if ($existing === null) {
+                continue;
+            }
+
+            $newCat = trim((string) ($cats[$i] ?? ''));
+            $newCat = $newCat !== '' ? $newCat : null;
+            if (($existing['category'] ?? null) === $newCat) {
+                continue;
+            }
+
+            ProductAlias::save([
+                'raw_description' => $raw,
+                'product_key'     => (string) $existing['product_key'],
+                'category'        => $newCat,
+            ]);
+            $updated++;
+        }
+
+        if ($updated > 0) {
+            $this->audit('compta.alias.bulk', 'product_alias', null, ['updated' => $updated]);
+            $this->setFlash('success', sprintf('%d catégorie(s) mise(s) à jour.', $updated));
+        } else {
+            $this->setFlash('info', 'Aucun changement à enregistrer.');
         }
 
         redirect(url('/admin/compta/aliases'));

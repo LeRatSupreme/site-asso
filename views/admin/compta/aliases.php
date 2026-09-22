@@ -44,6 +44,13 @@ declare(strict_types=1);
 
     <div class="card surface glass table-wrap">
         <h2 class="card-title">Alias existants</h2>
+        <form id="alias-bulk-form" method="post" action="<?= e(url('/admin/compta/aliases/bulk')) ?>" data-preserve-scroll>
+            <?= csrf_field() ?>
+        </form>
+        <p class="admin-actions">
+            <button type="submit" class="btn btn-primary btn-sm" form="alias-bulk-form">💾 Enregistrer les catégories</button>
+            <span class="muted">Modifie plusieurs catégories puis enregistre tout d'un coup.</span>
+        </p>
         <table class="table">
             <thead><tr><th>Libellé CSV</th><th>Produit canonique</th><th>Catégorie</th><th></th></tr></thead>
             <tbody>
@@ -52,13 +59,8 @@ declare(strict_types=1);
                         <td><code><?= e((string) $a['raw_description']) ?></code></td>
                         <td><strong><?= e((string) $a['product_key']) ?></strong></td>
                         <td>
-                            <form method="post" action="<?= e(url('/admin/compta/aliases/save')) ?>" class="alias-cat-form" data-preserve-scroll>
-                                <?= csrf_field() ?>
-                                <input type="hidden" name="raw_description" value="<?= e((string) $a['raw_description']) ?>">
-                                <input type="hidden" name="product_key" value="<?= e((string) $a['product_key']) ?>">
-                                <input type="text" name="category" value="<?= e((string) ($a['category'] ?? '')) ?>" placeholder="ex: Nourriture" list="alias-categories" style="width:130px">
-                                <button type="submit" class="btn btn-outline btn-sm">Enregistrer</button>
-                            </form>
+                            <input type="hidden" name="bulk_raw[]" value="<?= e((string) $a['raw_description']) ?>" form="alias-bulk-form">
+                            <input type="text" name="bulk_cat[]" value="<?= e((string) ($a['category'] ?? '')) ?>" placeholder="ex: Nourriture" list="alias-categories" style="width:130px" form="alias-bulk-form">
                         </td>
                         <td>
                             <form method="post" action="<?= e(url('/admin/compta/aliases/' . rawurlencode((string) $a['id']) . '/delete')) ?>" data-confirm="Supprimer cet alias ?" data-preserve-scroll>
@@ -73,5 +75,8 @@ declare(strict_types=1);
                 <?php endif; ?>
             </tbody>
         </table>
+        <p class="admin-actions">
+            <button type="submit" class="btn btn-primary btn-sm" form="alias-bulk-form">💾 Enregistrer les catégories</button>
+        </p>
     </div>
 </div>

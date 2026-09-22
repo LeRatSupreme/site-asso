@@ -165,6 +165,7 @@ function aeic_register_routes(Router $router): void
 
     $router->get('/admin/users', [AdminUserController::class, 'index']);
     $router->post('/admin/users/{id}/role', [AdminUserController::class, 'changeRole']);
+    $router->post('/admin/users/{id}/name', [AdminUserController::class, 'rename']);
     $router->post('/admin/users/{id}/pages', [AdminUserController::class, 'savePages']);
     $router->post('/admin/users/{id}/toggle-active', [AdminUserController::class, 'toggleActive']);
     $router->post('/admin/users/{id}/reset-password', [AdminUserController::class, 'resetPassword']);
@@ -247,6 +248,7 @@ function aeic_register_routes(Router $router): void
     $router->post('/admin/compta/couts/{id}/delete', [AdminComptaController::class, 'deleteCost']);
     $router->get('/admin/compta/aliases', [AdminComptaController::class, 'aliases']);
     $router->post('/admin/compta/aliases/save', [AdminComptaController::class, 'saveAlias']);
+    $router->post('/admin/compta/aliases/bulk', [AdminComptaController::class, 'aliasesBulk']);
     $router->post('/admin/compta/aliases/{id}/delete', [AdminComptaController::class, 'deleteAlias']);
     $router->get('/admin/compta/aliases/auto', [AdminComptaController::class, 'aliasesAuto']);
     $router->post('/admin/compta/aliases/apply', [AdminComptaController::class, 'aliasesApply']);

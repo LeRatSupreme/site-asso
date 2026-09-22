@@ -46,35 +46,51 @@ $roleIcons = [
                 <?php
                 $roleKey = strtolower((string)($u['role'] ?? ''));
                 $isActive = !empty($u['is_active']);
+
+                // Rôles sensibles :
+                //  - FONDATEUR : jamais attribuable ni modifiable depuis le site ;
+                //  - TRÉSORERIE : visible et attribuable par un ADMIN,
+                //    mais sa modification reste réservée au Fondateur.
+                // Verrous partagés par les cellules Nom / Rôle / Pages +
+                // (calculés ici, en tête de ligne).
+                $viewerRole = Auth::role();
+                $viewerIsFondateur = $viewerRole === Auth::ROLE_SUPERADMIN;
+                $isFondateurRow = ($u['role'] ?? '') === Auth::ROLE_SUPERADMIN;
+                $isTresorierRow = ($u['role'] ?? '') === Auth::ROLE_TRESORERIE;
+
+                $selectLock = '';
+                if ($isSelf) {
+                    $selectLock = 'disabled title="Vous ne pouvez pas modifier votre propre rôle"';
+                } elseif (!$viewerIsFondateur && ($isFondateurRow || $isTresorierRow)) {
+                    $selectLock = 'disabled title="Réservé au Fondateur"';
+                }
                 ?>
                 <tr<?= $isSelf ? ' class="row-self"' : '' ?>
                     data-name="<?= e(strtolower(trim(($u['prenom'] ?? '') . ' ' . ($u['nom'] ?? '') . ' ' . ($u['email'] ?? '')))) ?>"
                     data-role="<?= e($roleKey) ?>"
                     data-status="<?= $isActive ? 'active' : 'inactive' ?>">
                     <td>
-                        <strong><?= e(trim(($u['prenom'] ?? '') . ' ' . ($u['nom'] ?? ''))) ?></strong>
+                        <?php if ($selectLock === '' && !$isFondateurRow): ?>
+                            <!-- Édition inline du nom (users.prenom + users.nom) :
+                                 mêmes verrous que le select de rôle. -->
+                            <form method="post" action="<?= e(url('/admin/users/' . rawurlencode((string) $u['id']) . '/name')) ?>" class="inline-form name-form">
+                                <?= csrf_field() ?>
+                                <input type="text" name="prenom" value="<?= e((string) ($u['prenom'] ?? '')) ?>" required maxlength="255"
+                                       class="name-edit" style="width:110px" autocomplete="off"
+                                       title="Prénom — modifier puis cliquer ailleurs (ou Entrée) pour enregistrer"
+                                       onchange="this.form.submit()">
+                                <input type="text" name="nom" value="<?= e((string) ($u['nom'] ?? '')) ?>" required maxlength="255"
+                                       class="name-edit" style="width:110px" autocomplete="off"
+                                       title="Nom — modifier puis cliquer ailleurs (ou Entrée) pour enregistrer"
+                                       onchange="this.form.submit()">
+                            </form>
+                        <?php else: ?>
+                            <strong><?= e(trim(($u['prenom'] ?? '') . ' ' . ($u['nom'] ?? ''))) ?></strong>
+                        <?php endif; ?>
                         <?= $isSelf ? '<span class="badge badge-info">vous</span>' : '' ?>
                     </td>
                     <td><?= e($u['email'] ?? '') ?></td>
                     <td>
-                        <?php
-                        // Rôles sensibles :
-                        //  - FONDATEUR : jamais attribuable depuis le site ;
-                        //  - TRÉSORERIE : visible et attribuable par un ADMIN,
-                        //    mais le retrait reste réservé au Fondateur
-                        //    (la ligne d'un trésorier reste verrouillée ici).
-                        $viewerRole = Auth::role();
-                        $viewerIsFondateur = $viewerRole === Auth::ROLE_SUPERADMIN;
-                        $isFondateurRow = ($u['role'] ?? '') === Auth::ROLE_SUPERADMIN;
-                        $isTresorierRow = ($u['role'] ?? '') === Auth::ROLE_TRESORERIE;
-
-                        $selectLock = '';
-                        if ($isSelf) {
-                            $selectLock = 'disabled title="Vous ne pouvez pas modifier votre propre rôle"';
-                        } elseif (!$viewerIsFondateur && ($isFondateurRow || $isTresorierRow)) {
-                            $selectLock = 'disabled title="Réservé au Fondateur"';
-                        }
-                        ?>
                         <form method="post" action="<?= e(url('/admin/users/' . rawurlencode((string) $u['id']) . '/role')) ?>" class="inline-form">
                             <?= csrf_field() ?>
                             <select name="role" onchange="this.form.submit()" <?= $selectLock ?>>
@@ -184,6 +200,16 @@ $roleIcons = [
 .pages-form .pages-check { display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; white-space: nowrap; cursor: pointer; }
 .pages-form .pages-check input { margin: 0; }
 .pages-form .btn { margin-top: 0.2rem; }
+.name-form { display: flex; flex-direction: column; gap: 0.15rem; align-items: flex-start; }
+.name-edit {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--foreground);
+    padding: 0.3rem 0.5rem;
+    font-size: 0.82rem;
+}
+.name-edit:focus { outline: none; border-color: var(--primary); }
 @media (max-width: 600px) {
     .user-filters { flex-wrap: wrap; }
     .user-filter-search { min-width: 100%; }
