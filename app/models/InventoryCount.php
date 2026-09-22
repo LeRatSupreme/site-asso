@@ -10,6 +10,10 @@ namespace App\Models;
  * Stock théorique = dernier comptage + achats − ventes − pertes depuis la
  * date du comptage. L'écart (gap = compté − théorique) révèle pertes,
  * casses, offerts ou erreurs de saisie non encore journalisées.
+ *
+ * Un achat ou une perte établit une base 0 : le stock théorique existe
+ * même sans comptage préalable (0 + Σ achats − Σ ventes − Σ pertes
+ * depuis l'origine).
  */
 final class InventoryCount extends Model
 {
@@ -97,10 +101,13 @@ final class InventoryCount extends Model
     }
 
     /**
-     * Stock théorique actuel d'un produit (null si jamais compté).
+     * Stock théorique actuel d'un produit (null si aucune donnée).
      *
      * Théorique = quantité du dernier comptage + achats − ventes − pertes
-     * depuis la date de ce comptage.
+     * depuis la date de ce comptage. Un achat ou une perte établit une
+     * base 0 : le stock théorique existe même sans comptage préalable
+     * (0 + mouvements depuis l'origine). Null uniquement si le produit
+     * n'a ni comptage, ni achat, ni perte.
      */
     public static function theoreticalStock(string $productKey): ?int
     {
@@ -119,14 +126,23 @@ final class InventoryCount extends Model
         }
 
         if ($last === false) {
-            return null;
+            // Jamais compté : base 0 posée par un achat ou une perte.
+            return self::hasMovement($productKey)
+                ? self::theoreticalFromLast($productKey, null, 0)
+                : null;
         }
 
         return self::theoreticalFromLast($productKey, (string) $last['counted_at'], (int) $last['counted_qty']);
     }
 
     /**
-     * Stocks théoriques actuels de tous les produits déjà comptés.
+     * Stocks théoriques actuels.
+     *
+     * Couvre les produits déjà comptés (dernier comptage + mouvements
+     * depuis cette date) ET les produits jamais comptés mais établis par
+     * un achat ou une perte : un achat ou une perte établit une base 0 —
+     * le stock théorique existe même sans comptage préalable (0 + Σ
+     * achats − Σ ventes − Σ pertes depuis l'origine).
      *
      * @return array<string,int> Clé = product_key, valeur = stock théorique.
      */
@@ -135,6 +151,12 @@ final class InventoryCount extends Model
         $map = [];
         foreach (self::lastCountsMap() as $productKey => $last) {
             $map[$productKey] = self::theoreticalFromLast($productKey, $last['at'], $last['qty']);
+        }
+
+        // Clés présentes en achats/pertes sans aucun comptage : base 0,
+        // théorique = 0 + mouvements depuis l'origine.
+        foreach (self::movedWithoutCount(array_flip(array_keys($map))) as $productKey) {
+            $map[$productKey] = self::theoreticalFromLast($productKey, null, 0);
         }
 
         return $map;
@@ -185,22 +207,80 @@ final class InventoryCount extends Model
     }
 
     /**
-     * Calcule le stock théorique depuis un dernier comptage connu :
-     * quantité comptée + achats − ventes − pertes depuis la date du
-     * comptage.
+     * Calcule le stock théorique depuis un point de référence connu :
+     * quantité de référence + achats − ventes − pertes depuis cette
+     * référence.
      *
      * Les ventes (DATETIME) sont comparées à l'heure exacte du comptage :
      * une vente antérieure au comptage est déjà reflétée dans la quantité
      * comptée. Les achats et pertes (colonnes DATE) sont comparés au jour
      * du comptage.
+     *
+     * Date de référence null = produit jamais compté mais établi par un
+     * achat ou une perte : la quantité de référence vaut 0 et tous les
+     * mouvements comptent depuis l'origine (bornes 1970, jamais atteintes
+     * par les données réelles — donc tout l'historique est pris).
      */
-    private static function theoreticalFromLast(string $productKey, string $at, int $qty): int
+    private static function theoreticalFromLast(string $productKey, ?string $at, int $qty): int
     {
-        $day = substr($at, 0, 10);
+        $day = $at !== null ? substr($at, 0, 10) : '1970-01-01';
+        $moment = $at ?? '1970-01-01 00:00:00';
 
         return $qty
             + Purchase::qtySince($productKey, $day)
-            - Sale::soldQtySince($productKey, $at)
+            - Sale::soldQtySince($productKey, $moment)
             - Loss::qtySince($productKey, $day);
+    }
+
+    /**
+     * Clés présentes en achats ou pertes sans aucun comptage : leur base 0
+     * est établie par le mouvement, le stock théorique doit exister.
+     *
+     * @param array<string,int> $countedKeys Clés déjà comptées (flip).
+     *
+     * @return list<string>
+     */
+    private static function movedWithoutCount(array $countedKeys): array
+    {
+        try {
+            /** @var list<array-key,mixed> $rows */
+            $rows = self::pdo()
+                ->query(
+                    'SELECT DISTINCT product_key FROM purchases
+                     UNION
+                     SELECT DISTINCT product_key FROM losses'
+                )
+                ->fetchAll(\PDO::FETCH_COLUMN);
+        } catch (\Throwable) {
+            return [];
+        }
+
+        $out = [];
+        foreach ($rows as $k) {
+            $key = (string) $k;
+            if ($key !== '' && !isset($countedKeys[$key])) {
+                $out[] = $key;
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * Le produit a-t-il au moins un achat ou une perte (base 0 posée) ?
+     */
+    private static function hasMovement(string $productKey): bool
+    {
+        try {
+            $stmt = self::pdo()->prepare(
+                'SELECT EXISTS(SELECT 1 FROM purchases WHERE product_key = ?)
+                     OR EXISTS(SELECT 1 FROM losses WHERE product_key = ?)'
+            );
+            $stmt->execute([$productKey, $productKey]);
+
+            return (bool) $stmt->fetchColumn();
+        } catch (\Throwable) {
+            return false;
+        }
     }
 }
