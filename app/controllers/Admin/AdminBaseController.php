@@ -55,6 +55,30 @@ abstract class AdminBaseController extends Controller
     }
 
     /**
+     * Garde d'une page du groupe Système avec attribution individuelle :
+     * Fondateur/ADMIN système = tout accès ; tout autre rôle du bureau =
+     * uniquement si la page lui a été attribuée (users.extra_pages, géré
+     * depuis Utilisateurs). Les élèves restent exclus.
+     *
+     * @return array<string,mixed>
+     */
+    protected function guardSystemOrPage(string $pageKey): array
+    {
+        Middleware::requireRole(Permissions::adminRoles());
+
+        if (Permissions::isSystemAdmin()) {
+            return Auth::user();
+        }
+
+        // Attribution individuelle (users.extra_pages) : au-delà du rôle.
+        if (Permissions::userHasExtraPage($pageKey)) {
+            return Auth::user();
+        }
+
+        Middleware::forbidden();
+    }
+
+    /**
      * Garde-fou par module : ADMIN + rôles autorisés pour ce module.
      *
      * @return array<string,mixed>

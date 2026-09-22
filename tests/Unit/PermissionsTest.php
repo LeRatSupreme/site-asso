@@ -124,4 +124,27 @@ final class PermissionsTest extends TestCase
         self::assertFalse(Permissions::isSystemAdmin(''));
         self::assertFalse(Permissions::isSystemAdmin(null));
     }
+
+    public function test_granted_pages_null_ou_vide(): void
+    {
+        self::assertSame([], Permissions::grantedPages(null));
+        self::assertSame([], Permissions::grantedPages(''));
+        self::assertSame([], Permissions::grantedPages(' , , '));
+    }
+
+    public function test_granted_pages_cles_connues(): void
+    {
+        self::assertSame(['inventory', 'costs'], Permissions::grantedPages('inventory,costs'));
+        self::assertSame(['cash'], Permissions::grantedPages('cash'));
+    }
+
+    public function test_granted_pages_trim_et_cle_inconnue_ignoree(): void
+    {
+        self::assertSame(['inventory', 'cash'], Permissions::grantedPages(' inventory , bogus , cash '));
+    }
+
+    public function test_granted_pages_doublons_dedupliques(): void
+    {
+        self::assertSame(['inventory', 'cash'], Permissions::grantedPages('inventory,inventory,cash,inventory'));
+    }
 }

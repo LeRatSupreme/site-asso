@@ -165,6 +165,7 @@ function aeic_register_routes(Router $router): void
 
     $router->get('/admin/users', [AdminUserController::class, 'index']);
     $router->post('/admin/users/{id}/role', [AdminUserController::class, 'changeRole']);
+    $router->post('/admin/users/{id}/pages', [AdminUserController::class, 'savePages']);
     $router->post('/admin/users/{id}/toggle-active', [AdminUserController::class, 'toggleActive']);
     $router->post('/admin/users/{id}/reset-password', [AdminUserController::class, 'resetPassword']);
     $router->post('/admin/users/{id}/delete', [AdminUserController::class, 'delete']);

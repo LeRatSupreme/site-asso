@@ -20,8 +20,9 @@ use App\Models\Sale;
  *
  * Inventaire : comptage physique comparé au théorique (dernier comptage +
  * achats − ventes) pour détecter pertes et casses. Fait partie du groupe
- * « Système » : réservé au Fondateur et aux ADMIN listés dans SYSTEM_ADMINS
- * (voir guardSystem()), la trésorerie n'y accède pas.
+ * « Système » : réservé au Fondateur et aux ADMIN listés dans SYSTEM_ADMINS,
+ * ou aux utilisateurs ayant reçu la page en attribution individuelle
+ * (voir guardSystemOrPage()) ; la trésorerie n'y accède pas sinon.
  */
 final class AdminStockController extends AdminBaseController
 {
@@ -309,12 +310,12 @@ final class AdminStockController extends AdminBaseController
     }
 
     // -----------------------------------------------------------------
-    //  Inventaire (groupe « Système », voir guardSystem())
+    //  Inventaire (groupe « Système » ou attribution individuelle)
     // -----------------------------------------------------------------
 
     public function inventory(): void
     {
-        $user = $this->guardSystem();
+        $user = $this->guardSystemOrPage('inventory');
 
         $lastCounts = InventoryCount::lastCountsMap();
         $theoretical = InventoryCount::theoreticalStocksMap();
@@ -360,7 +361,7 @@ final class AdminStockController extends AdminBaseController
 
     public function saveCount(): void
     {
-        $user = $this->guardSystem();
+        $user = $this->guardSystemOrPage('inventory');
 
         $counts = $_POST['count'] ?? [];
         if (!is_array($counts)) {

@@ -184,10 +184,11 @@ final class AdminGuardTest extends TestCase
         $_SESSION['user_id'] = 'tres1';
         $_SESSION['user_role'] = Auth::ROLE_TRESORERIE;
 
-        // Inventaire et coûts de revient sont passés dans le groupe « Système »
-        // (guardSystem) : TRESORERIE est refusé à la fois par le rôle
-        // (requireRole = SUPERADMIN + ADMIN) et par isSystemAdmin().
-        self::assertSame(Middleware::FORBIDDEN, Middleware::resolve([Auth::ROLE_SUPERADMIN, Auth::ROLE_ADMIN]));
+        // Inventaire : requireRole(adminRoles()) puis attribution
+        // individuelle en base (users.extra_pages) — la décision fine
+        // n'est pas testable via Middleware::resolve ; sans attribution,
+        // guardSystemOrPage finit en 403.
+        self::assertSame(Middleware::OK, Middleware::resolve(Permissions::adminRoles()));
 
         // Achats, pertes, réappro restent dans le module compta : OK.
         $compta = Permissions::rolesForModule(Permissions::MODULE_COMPTA);

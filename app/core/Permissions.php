@@ -12,7 +12,8 @@ namespace App\Core;
  * /admin/* protégée par AdminBaseController::guardModule().
  *
  * Logique pure (sans DB) : testable unitairement et réutilisable par les
- * contrôleurs, les layouts et les vues.
+ * contrôleurs, les layouts et les vues. Seule exception : les pages
+ * attribuées individuellement (users.extra_pages), lues via userHasExtraPage().
  */
 final class Permissions
 {
@@ -180,5 +181,67 @@ final class Permissions
         }
 
         return in_array(mb_strtolower(trim($email)), $allowed, true);
+    }
+
+    /**
+     * Pages attribuables individuellement (au-delà du rôle), via la page
+     * Utilisateurs. Clé => libellé affiché.
+     *
+     * @return array<string,string>
+     */
+    public static function extraPages(): array
+    {
+        return [
+            'inventory' => 'Inventaire',
+            'costs'     => 'Coûts de revient',
+            'cash'      => 'Caisses',
+        ];
+    }
+
+    /**
+     * Parse un CSV de clés (colonne users.extra_pages) et ne garde que
+     * les clés connues.
+     *
+     * @return list<string>
+     */
+    public static function grantedPages(?string $csv): array
+    {
+        $keys = [];
+        foreach (explode(',', (string) $csv) as $k) {
+            $k = trim($k);
+            if ($k !== '' && array_key_exists($k, self::extraPages())) {
+                $keys[] = $k;
+            }
+        }
+
+        return array_values(array_unique($keys));
+    }
+
+    /**
+     * L'utilisateur courant possède-t-il cette page attribuée ?
+     * (users.extra_pages — cache statique, une seule lecture par requête ;
+     * Auth::user() recharge déjà l'utilisateur à chaque requête.)
+     */
+    public static function userHasExtraPage(string $key): bool
+    {
+        static $loaded = false;
+        static $granted = [];
+
+        if (!$loaded) {
+            $loaded = true;
+            $uid = Auth::id();
+            if ($uid !== null && $uid !== '') {
+                try {
+                    $stmt = db()->prepare('SELECT extra_pages FROM users WHERE id = ?');
+                    $stmt->execute([$uid]);
+                    $row = $stmt->fetch();
+                    $granted = self::grantedPages($row !== false ? ($row['extra_pages'] ?? null) : null);
+                } catch (\Throwable) {
+                    $granted = [];
+                }
+            }
+        }
+
+        return in_array($key, $granted, true);
     }
 }
