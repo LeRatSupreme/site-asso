@@ -589,6 +589,17 @@ CREATE TABLE IF NOT EXISTS product_stocks (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- -------------------------------------------------------------------
+--  Produits marqués « plus en vente » (saisonniers ou discontinués) :
+--  exclus du comptage à l'aveugle, de la page Inventaire et du réappro
+--  (migration 2026_product_discontinued.sql)
+-- -------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS product_discontinued (
+    product_key VARCHAR(255) NOT NULL PRIMARY KEY,
+    updated_by  VARCHAR(255) NULL,
+    updated_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -------------------------------------------------------------------
 --  Jeux : scores (Wordle FR/EN + classement)
 --  (migration 2026_games.sql)
 -- -------------------------------------------------------------------

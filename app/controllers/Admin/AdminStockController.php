@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace App\Controllers\Admin;
 
+use App\Core\Auth;
 use App\Core\Compta\ComptaCalc;
 use App\Core\Compta\ProductAutoSync;
 use App\Models\InventoryCount;
 use App\Models\ProductCost;
+use App\Models\ProductDiscontinued;
 use App\Models\ProductStock;
 use App\Models\Purchase;
 use App\Models\Sale;
@@ -321,9 +323,24 @@ final class AdminStockController extends AdminBaseController
         $theoretical = InventoryCount::theoreticalStocksMap();
         $stockMap = ProductStock::allMap();
 
+        // Produits marqués « plus en vente » (saisonniers, discontinués) :
+        // hors grille principale, listés à part pour pouvoir les rétablir.
+        $hidden = array_flip(ProductDiscontinued::keys());
+
         $rows = [];
+        $discontinuedRows = [];
         foreach (Sale::distinctProducts() as $key) {
+            $key = (string) $key;
             $last = $lastCounts[$key] ?? null;
+
+            if (isset($hidden[$key])) {
+                $discontinuedRows[] = [
+                    'key'        => $key,
+                    'counted_at' => $last !== null ? $last['at'] : null,
+                ];
+                continue;
+            }
+
             $rows[] = [
                 'key'         => $key,
                 'stock'       => $stockMap[$key] ?? null,
@@ -350,12 +367,15 @@ final class AdminStockController extends AdminBaseController
             return strcmp((string) $a['key'], (string) $b['key']);
         });
 
+        usort($discontinuedRows, static fn(array $a, array $b): int => strcasecmp($a['key'], $b['key']));
+
         $this->renderAdmin('admin/compta/inventory', [
-            'title'   => 'Inventaire',
-            'user'    => $user,
-            'rows'    => $rows,
-            'history' => InventoryCount::history(50),
-            'gaps'    => InventoryCount::recentGaps(30),
+            'title'            => 'Inventaire',
+            'user'             => $user,
+            'rows'             => $rows,
+            'discontinuedRows' => $discontinuedRows,
+            'history'          => InventoryCount::history(50),
+            'gaps'             => InventoryCount::recentGaps(30),
         ]);
     }
 
@@ -431,15 +451,23 @@ final class AdminStockController extends AdminBaseController
      * le bureau (hors élèves). Les stocks théoriques ne sont volontairement
      * pas affichés (un comptage honnête ne doit pas pouvoir s'ajuster sur
      * l'attendu) ; les écarts sont calculés à l'enregistrement.
+     *
+     * Les produits marqués « plus en vente » (saisonniers, discontinués)
+     * sont exclus de la liste — rétablissables depuis la page Inventaire.
      */
     public function blindCount(): void
     {
         $user = $this->guardAdminArea();
 
         // Uniquement les clés produits : ni stock, ni écart, ni date de
-        // dernier comptage (aucune fuite du théorique).
+        // dernier comptage (aucune fuite du théorique). Les produits
+        // « plus en vente » sont retirés (array_flip + isset : O(1)/clé).
+        $hidden = array_flip(ProductDiscontinued::keys());
         $rows = [];
         foreach (Sale::distinctProducts() as $key) {
+            if (isset($hidden[(string) $key])) {
+                continue;
+            }
             $rows[] = ['key' => (string) $key];
         }
         usort($rows, static fn(array $a, array $b): int => strcasecmp($a['key'], $b['key']));
@@ -455,6 +483,9 @@ final class AdminStockController extends AdminBaseController
      * Enregistre le comptage à l'aveugle : même mécanique que le comptage
      * de la page Inventaire complète (théorique calculé côté serveur,
      * écarts historisés, stocks réalignés, synchro carte non bloquante).
+     *
+     * Robustesse : une clé marquée « plus en vente » (ex. postée depuis un
+     * onglet resté ouvert) est ignorée silencieusement.
      */
     public function saveBlindCount(): void
     {
@@ -465,12 +496,13 @@ final class AdminStockController extends AdminBaseController
             $counts = [];
         }
 
+        $hidden = array_flip(ProductDiscontinued::keys());
         $done = 0;
         $gaps = 0;
 
         foreach ($counts as $key => $value) {
             $productKey = trim((string) $key);
-            if ($productKey === '' || trim((string) $value) === '') {
+            if ($productKey === '' || isset($hidden[$productKey]) || trim((string) $value) === '') {
                 continue;
             }
 
@@ -512,5 +544,51 @@ final class AdminStockController extends AdminBaseController
 
         $this->setFlash($gaps > 0 ? 'warning' : 'success', sprintf('%d produit(s) compté(s) — %d écart(s) détecté(s).', $done, $gaps));
         redirect(url('/admin/compta/inventaire/comptage'));
+    }
+
+    /**
+     * Marque un produit « plus en vente » (saisonnier ou discontinué) :
+     * il disparaît du comptage à l'aveugle, de la page Inventaire et du
+     * réappro. Actionnable depuis la page Comptage (tout le bureau) ;
+     * l'historique des ventes reste inchangé.
+     */
+    public function discontinue(string $key): void
+    {
+        $this->guardAdminArea();
+
+        $productKey = trim($key);
+        if ($productKey === '') {
+            $this->setFlash('error', 'Produit manquant.');
+            redirect(url('/admin/compta/inventaire/comptage'));
+        }
+
+        ProductDiscontinued::mark($productKey, Auth::id());
+
+        $this->audit('inventory.discontinue', 'product', $productKey, ['key' => $productKey]);
+
+        $this->setFlash('success', "Produit marqué plus en vente — il n'apparaîtra plus dans les comptages.");
+        redirect(url('/admin/compta/inventaire/comptage'));
+    }
+
+    /**
+     * Remet un produit en vente (retire le drapeau « plus en vente ») :
+     * il réapparaît dans les comptages et dans le réappro.
+     */
+    public function resume(string $key): void
+    {
+        $this->guardSystemOrPage('inventory');
+
+        $productKey = trim($key);
+        if ($productKey === '') {
+            $this->setFlash('error', 'Produit manquant.');
+            redirect(url('/admin/compta/inventaire'));
+        }
+
+        ProductDiscontinued::resume($productKey);
+
+        $this->audit('inventory.resume', 'product', $productKey, ['key' => $productKey]);
+
+        $this->setFlash('success', 'Produit remis en vente.');
+        redirect(url('/admin/compta/inventaire'));
     }
 }
