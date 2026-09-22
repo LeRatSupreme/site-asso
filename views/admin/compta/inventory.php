@@ -104,7 +104,7 @@ declare(strict_types=1);
                                 <?= e(formatDateTime($r['counted_at'])) ?>
                                 <span class="muted">(<?= (int) $r['counted_qty'] ?>)</span>
                             <?php else: ?>
-                                <span class="muted">—</span>
+                                <span class="muted">Jamais compté</span>
                             <?php endif; ?>
                         </td>
                         <td class="num">

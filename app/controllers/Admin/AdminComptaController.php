@@ -1157,11 +1157,14 @@ final class AdminComptaController extends AdminBaseController
      * Chaque produit vendu dans la période d'analyse est listé avec sa
      * consommation moyenne (rapportée aux jours d'ouverture réels de la
      * période) par jour / semaine / mois, et la quantité à commander pour
-     * couvrir l'horizon cible. Le stock est le THÉORIQUE de l'inventaire
-     * (dernier comptage + achats − ventes − pertes) : jamais une saisie
-     * manuelle qui se périme. Un produit jamais compté apparaît « à
-     * compter » et son besoin est calculé sans stock déduit. Les produits
-     * marqués « plus en vente » sont exclus (voir ProductDiscontinued).
+      * couvrir l'horizon cible. Le stock est le THÉORIQUE de l'inventaire
+      * (dernier comptage + achats − ventes − pertes) : jamais une saisie
+      * manuelle qui se périme. Un achat ou une perte établit une base 0 :
+      * le théorique existe même sans comptage préalable ; seuls les
+      * produits sans aucune donnée (ni comptage, ni achat, ni perte)
+      * apparaissent « à compter », besoin calculé sans stock déduit. Les
+      * produits marqués « plus en vente » sont exclus (voir
+      * ProductDiscontinued).
      *
      * @param string|null $fromDay  Début de la période d'analyse (inclus).
      * @param string|null $toDay    Fin de la période d'analyse (inclus).

@@ -333,9 +333,18 @@ final class AdminStockController extends AdminBaseController
         // hors grille principale, listés à part pour pouvoir les rétablir.
         $hidden = array_flip(ProductDiscontinued::keys());
 
+        // Grille = produits vendus (SumUp) + produits établis par un achat
+        // ou une perte sans comptage : un achat ou une perte établit une
+        // base 0, le stock théorique existe donc aussi pour ces clés
+        // (jamais comptées → « Jamais compté » dans la grille).
+        $keys = array_values(array_unique(array_merge(
+            Sale::distinctProducts(),
+            array_keys($theoretical)
+        )));
+
         $rows = [];
         $discontinuedRows = [];
-        foreach (Sale::distinctProducts() as $key) {
+        foreach ($keys as $key) {
             $key = (string) $key;
             $last = $lastCounts[$key] ?? null;
 
