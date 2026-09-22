@@ -20,7 +20,7 @@ final class AdminMembershipController extends AdminBaseController
      */
     public function index(): void
     {
-        $this->guardSystem();
+        $this->guardSystemOrPage('users');
 
         Membership::expireOld();
 
@@ -52,7 +52,7 @@ final class AdminMembershipController extends AdminBaseController
      */
     public function markPaid(string $id): void
     {
-        $this->guardSystem();
+        $this->guardSystemOrPage('users');
 
         $membership = Membership::find($id);
         if ($membership === null) {
@@ -84,7 +84,7 @@ final class AdminMembershipController extends AdminBaseController
      */
     public function createForMember(string $userId): void
     {
-        $this->guardSystem();
+        $this->guardSystemOrPage('users');
 
         $target = User::find($userId);
         if ($target === null) {

@@ -24,7 +24,7 @@ final class AdminUserController extends AdminBaseController
 {
     public function index(): void
     {
-        $this->guardSystem();
+        $this->guardSystemOrPage('users');
 
         $this->renderAdmin('admin/users/index', [
             'title'        => 'Utilisateurs',
@@ -41,7 +41,7 @@ final class AdminUserController extends AdminBaseController
      */
     public function changeRole(string $id): void
     {
-        $this->guardSystem();
+        $this->guardSystemOrPage('users');
 
         $target = User::find($id);
         if ($target === null) {
@@ -100,7 +100,7 @@ final class AdminUserController extends AdminBaseController
      */
     public function savePages(string $id): void
     {
-        $this->guardSystem();
+        $this->guardSystemOrPage('users');
 
         $target = User::find($id);
         if ($target === null) {
@@ -137,7 +137,7 @@ final class AdminUserController extends AdminBaseController
      */
     public function rename(string $id): void
     {
-        $this->guardSystem();
+        $this->guardSystemOrPage('users');
 
         $target = User::find($id);
         if ($target === null) {
@@ -187,7 +187,7 @@ final class AdminUserController extends AdminBaseController
      */
     public function toggleActive(string $id): void
     {
-        $this->guardSystem();
+        $this->guardSystemOrPage('users');
 
         $target = User::find($id);
         if ($target === null) {
@@ -222,7 +222,7 @@ final class AdminUserController extends AdminBaseController
      */
     public function resetPassword(string $id): void
     {
-        $this->guardSystem();
+        $this->guardSystemOrPage('users');
 
         $target = User::find($id);
         if ($target === null) {
@@ -301,7 +301,7 @@ final class AdminUserController extends AdminBaseController
      */
     public function delete(string $id): void
     {
-        $this->guardSystem();
+        $this->guardSystemOrPage('users');
 
         $target = User::find($id);
         if ($target === null) {

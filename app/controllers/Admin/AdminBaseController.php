@@ -79,12 +79,21 @@ abstract class AdminBaseController extends Controller
     }
 
     /**
-     * Garde-fou par module : ADMIN + rôles autorisés pour ce module.
+     * Garde-fou par module : rôle dédié OU attribution individuelle via
+     * Users → Pages + (users.extra_pages — mêmes clés que les modules,
+     * voir Permissions::extraPages()).
      *
      * @return array<string,mixed>
      */
     protected function guardModule(string $module): array
     {
+        if (Permissions::userHasExtraPage($module)) {
+            // Attribution individuelle : tout rôle du bureau, élèves exclus.
+            Middleware::requireRole(Permissions::adminRoles());
+
+            return Auth::user();
+        }
+
         Middleware::requireRole(Permissions::rolesForModule($module));
 
         return Auth::user();

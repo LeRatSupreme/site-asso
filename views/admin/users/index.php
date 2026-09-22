@@ -38,8 +38,8 @@ $roleIcons = [
 </div>
 
 <div class="card surface glass table-wrap">
-    <table class="table">
-        <thead><tr><th>Nom</th><th>Email</th><th>Rôle</th><th>Pages +</th><th>Statut</th><th>Inscription</th><th>Actions</th></tr></thead>
+    <table class="table table-users">
+        <thead><tr><th>Nom</th><th>Email</th><th>Rôle</th><th>Pages</th><th>Statut</th><th>Inscription</th><th>Actions</th></tr></thead>
         <tbody>
             <?php foreach ($users as $u): ?>
                 <?php $isSelf = ($u['id'] ?? '') === $currentId; ?>
@@ -76,11 +76,11 @@ $roleIcons = [
                             <form method="post" action="<?= e(url('/admin/users/' . rawurlencode((string) $u['id']) . '/name')) ?>" class="inline-form name-form">
                                 <?= csrf_field() ?>
                                 <input type="text" name="prenom" value="<?= e((string) ($u['prenom'] ?? '')) ?>" required maxlength="255"
-                                       class="name-edit" style="width:110px" autocomplete="off"
+                                       class="name-edit name-prenom" autocomplete="off"
                                        title="Prénom — modifier puis cliquer ailleurs (ou Entrée) pour enregistrer"
                                        onchange="this.form.submit()">
                                 <input type="text" name="nom" value="<?= e((string) ($u['nom'] ?? '')) ?>" required maxlength="255"
-                                       class="name-edit" style="width:110px" autocomplete="off"
+                                       class="name-edit name-nom" autocomplete="off"
                                        title="Nom — modifier puis cliquer ailleurs (ou Entrée) pour enregistrer"
                                        onchange="this.form.submit()">
                             </form>
@@ -93,7 +93,7 @@ $roleIcons = [
                     <td>
                         <form method="post" action="<?= e(url('/admin/users/' . rawurlencode((string) $u['id']) . '/role')) ?>" class="inline-form">
                             <?= csrf_field() ?>
-                            <select name="role" onchange="this.form.submit()" <?= $selectLock ?>>
+                            <select name="role" onchange="this.form.submit()" class="role-select" <?= $selectLock ?>>
                                 <?php foreach ($roleLabels as $val => $label): ?>
                                     <?php if ($val === Auth::ROLE_SUPERADMIN && !$isFondateurRow) continue; ?>
                                     <option value="<?= e($val) ?>" <?= ($u['role'] ?? '') === $val ? 'selected' : '' ?>><?= e($label) ?></option>
@@ -113,16 +113,42 @@ $roleIcons = [
                         } elseif (!$viewerIsFondateur && ($isFondateurRow || $isTresorierRow)) {
                             $pagesLock = 'disabled title="Réservé au Fondateur"';
                         }
+                        $allExtraPages = Permissions::extraPages();
+                        $modulePageKeys = ['compta', 'events', 'content', 'cafeteria', 'games'];
+                        $systemPageKeys = ['inventory', 'costs', 'cash', 'users', 'settings'];
                         ?>
                         <form method="post" action="<?= e(url('/admin/users/' . rawurlencode((string) $u['id']) . '/pages')) ?>" class="inline-form pages-form">
                             <?= csrf_field() ?>
-                            <?php foreach (($extraPages ?? Permissions::extraPages()) as $pageKey => $pageLabel): ?>
-                                <label class="pages-check">
-                                    <input type="checkbox" name="pages[]" value="<?= e($pageKey) ?>" <?= in_array($pageKey, $grantedPages, true) ? 'checked' : '' ?> <?= $pagesLock ?>>
-                                    <?= e($pageLabel) ?>
-                                </label>
-                            <?php endforeach; ?>
-                            <button type="submit" class="btn btn-outline btn-sm" <?= $pagesLock ?>>Enregistrer</button>
+                            <details class="pages-details">
+                                <summary class="pages-chip" title="Pages supplémentaires">🔑 Pages <b>(<?= count($grantedPages) ?>)</b></summary>
+                                <div class="pages-panel">
+                                    <p class="pages-group-title">Modules</p>
+                                    <div class="pages-checks">
+                                        <?php foreach ($modulePageKeys as $pageKey): ?>
+                                            <label class="pages-check">
+                                                <input type="checkbox" name="pages[]" value="<?= e($pageKey) ?>" <?= in_array($pageKey, $grantedPages, true) ? 'checked' : '' ?> <?= $pagesLock ?>>
+                                                <?= e($allExtraPages[$pageKey] ?? $pageKey) ?>
+                                            </label>
+                                        <?php endforeach; ?>
+                                    </div>
+                                    <p class="pages-group-title">Système</p>
+                                    <div class="pages-checks">
+                                        <?php foreach ($systemPageKeys as $pageKey): ?>
+                                            <label class="pages-check">
+                                                <input type="checkbox" name="pages[]" value="<?= e($pageKey) ?>" <?= in_array($pageKey, $grantedPages, true) ? 'checked' : '' ?> <?= $pagesLock ?>>
+                                                <?= e($allExtraPages[$pageKey] ?? $pageKey) ?>
+                                            </label>
+                                        <?php endforeach; ?>
+                                    </div>
+                                    <p class="pages-panel-actions">
+                                        <?php if ($pagesLock === ''): ?>
+                                            <button type="button" class="btn btn-ghost btn-sm" onclick="pagesCheckAll(this, true)">Tout</button>
+                                            <button type="button" class="btn btn-ghost btn-sm" onclick="pagesCheckAll(this, false)">Aucun</button>
+                                        <?php endif; ?>
+                                        <button type="submit" class="btn btn-primary btn-sm" <?= $pagesLock ?>>Enregistrer</button>
+                                    </p>
+                                </div>
+                            </details>
                         </form>
                     </td>
                     <td>
@@ -136,20 +162,20 @@ $roleIcons = [
                     <td class="row-actions">
                         <form method="post" action="<?= e(url('/admin/users/' . rawurlencode((string) $u['id']) . '/toggle-active')) ?>" class="inline-form">
                             <?= csrf_field() ?>
-                            <button type="submit" class="btn btn-outline btn-sm" <?= $isSelf ? 'disabled title="Vous ne pouvez pas vous désactiver"' : '' ?>>
-                                <?= $isActive ? 'Désactiver' : 'Activer' ?>
+                            <button type="submit" class="btn btn-outline btn-sm icon-btn" <?= $isSelf ? 'disabled title="Vous ne pouvez pas vous désactiver"' : 'title="' . ($isActive ? 'Désactiver ce compte' : 'Réactiver ce compte') . '"' ?>>
+                                <?= $isActive ? '⏸' : '▶' ?>
                             </button>
                         </form>
                         <form method="post" action="<?= e(url('/admin/users/' . rawurlencode((string) $u['id']) . '/reset-password')) ?>" class="inline-form"
                               data-confirm="Réinitialiser le mot de passe de <?= e(trim(($u['prenom'] ?? '') . ' ' . ($u['nom'] ?? ''))) ?> ? Un mot de passe temporaire sera envoyé par email.">
                             <?= csrf_field() ?>
-                            <button type="submit" class="btn btn-outline btn-sm">Reset MDP</button>
+                            <button type="submit" class="btn btn-outline btn-sm icon-btn" title="Renvoyer un mot de passe temporaire par email">🔑</button>
                         </form>
                         <form method="post" action="<?= e(url('/admin/users/' . rawurlencode((string) $u['id']) . '/delete')) ?>" class="inline-form"
                               data-confirm="Supprimer définitivement le compte de <?= e(trim(($u['prenom'] ?? '') . ' ' . ($u['nom'] ?? ''))) ?> ? Action irréversible." data-preserve-scroll>
                             <?= csrf_field() ?>
-                            <button type="submit" class="btn btn-danger btn-sm" <?= $isSelf ? 'disabled title="Vous ne pouvez pas supprimer votre propre compte ici"' : '' ?>>
-                                Supprimer
+                            <button type="submit" class="btn btn-danger btn-sm icon-btn" <?= $isSelf ? 'disabled title="Vous ne pouvez pas supprimer votre propre compte ici"' : 'title="Supprimer définitivement"' ?>>
+                                🗑
                             </button>
                         </form>
                     </td>
@@ -196,20 +222,92 @@ $roleIcons = [
     white-space: nowrap;
     flex-shrink: 0;
 }
-.pages-form { display: flex; flex-direction: column; gap: 0.15rem; align-items: flex-start; }
-.pages-form .pages-check { display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; white-space: nowrap; cursor: pointer; }
-.pages-form .pages-check input { margin: 0; }
-.pages-form .btn { margin-top: 0.2rem; }
-.name-form { display: flex; flex-direction: column; gap: 0.15rem; align-items: flex-start; }
-.name-edit {
-    background: rgba(255,255,255,0.05);
+.pages-form { display: flex; }
+.pages-details { position: relative; display: inline-block; }
+.pages-details > summary { list-style: none; cursor: pointer; }
+.pages-details > summary::-webkit-details-marker { display: none; }
+.pages-panel {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    z-index: 40;
+    background: var(--card);
     border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 0.5rem 0.8rem 0.7rem;
+    min-width: 220px;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+}
+.pages-group-title {
+    margin: 0.4rem 0 0.15rem;
+    font-size: 0.68rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+}
+.pages-group-title:first-child { margin-top: 0.1rem; }
+.pages-form .pages-check { display: flex; align-items: center; gap: 0.35rem; white-space: nowrap; cursor: pointer; }
+.pages-form .pages-check input { margin: 0; }
+.pages-panel-actions { display: flex; align-items: center; gap: 0.4rem; margin: 0.55rem 0 0; }
+
+/* Table utilisateurs compacte */
+.table-users td { padding: 0.4rem 0.55rem; font-size: 0.85rem; vertical-align: middle; }
+.table-users th { font-size: 0.72rem; }
+.row-actions { white-space: nowrap; }
+.row-actions .inline-form { display: inline-flex; margin: 0; }
+
+/* Champs « fantômes » : ressemblent à du texte, s'éclairent au survol/focus */
+.name-form { display: flex; gap: 0.2rem; align-items: baseline; }
+.name-edit, .role-select {
+    background: transparent;
+    border: 1px solid transparent;
     border-radius: 6px;
     color: var(--foreground);
-    padding: 0.3rem 0.5rem;
-    font-size: 0.82rem;
+    padding: 0.15rem 0.35rem;
+    font-size: 0.85rem;
 }
-.name-edit:focus { outline: none; border-color: var(--primary); }
+.name-edit:hover, .role-select:hover { border-color: var(--border); background: rgba(255,255,255,0.04); }
+.name-edit:focus, .role-select:focus {
+    outline: none;
+    border-color: var(--primary);
+    background: rgba(255,255,255,0.05);
+}
+.name-prenom { width: 9ch; min-width: 7ch; }
+.name-nom { width: 12ch; min-width: 8ch; }
+.role-select { cursor: pointer; max-width: 11ch; }
+
+/* Pastille Pages */
+.pages-chip {
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 0.15rem 0.55rem;
+    font-size: 0.75rem;
+    color: var(--foreground);
+    background: rgba(255,255,255,0.04);
+    list-style: none;
+}
+.pages-chip::-webkit-details-marker { display: none; }
+.pages-chip:hover { border-color: var(--primary); }
+.pages-chip b { color: var(--primary); }
+
+/* Panneau : 2 colonnes de cases pour rester bas */
+.pages-checks { display: grid; grid-template-columns: 1fr 1fr; gap: 0.1rem 0.9rem; }
+.pages-form .pages-check { font-size: 0.76rem; }
+
+/* Actions en icônes */
+.icon-btn { padding: 0.2rem 0.45rem; font-size: 0.95rem; line-height: 1; }
+
+@media (max-width: 700px) {
+    .table-users th:nth-child(6), .table-users td:nth-child(6) { display: none; } /* Inscription */
+}
 @media (max-width: 600px) {
     .user-filters { flex-wrap: wrap; }
     .user-filter-search { min-width: 100%; }
@@ -251,4 +349,14 @@ $roleIcons = [
     statusFilter.addEventListener('change', apply);
     apply();
 })();
+
+// Panneau « Pages + » : coche / décoche toutes les cases du panel parent.
+function pagesCheckAll(btn, checked) {
+    var panel = btn.closest('.pages-panel');
+    if (!panel) return;
+    var boxes = panel.querySelectorAll('input[name="pages[]"]');
+    for (var i = 0; i < boxes.length; i++) {
+        if (!boxes[i].disabled) boxes[i].checked = checked;
+    }
+}
 </script>

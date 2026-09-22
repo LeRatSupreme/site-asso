@@ -116,10 +116,19 @@ final class Permissions
     }
 
     /**
-     * Indique si un rôle a accès à un module.
+     * Indique si un rôle a accès à un module — ou si l'utilisateur COURANT
+     * s'est vu attribuer ce module individuellement (users.extra_pages,
+     * « Pages + » de la page Utilisateurs ; mêmes clés que les modules).
+     * Les clés extra pages de type module (compta, events…) sont donc
+     * prises en compte ici, en plus du rôle.
      */
     public static function allows(?string $role, string $module): bool
     {
+        // Attribution individuelle : au-delà du rôle (users.extra_pages).
+        if (self::userHasExtraPage($module)) {
+            return true;
+        }
+
         return in_array($module, self::modulesFor($role), true);
     }
 
@@ -187,14 +196,27 @@ final class Permissions
      * Pages attribuables individuellement (au-delà du rôle), via la page
      * Utilisateurs. Clé => libellé affiché.
      *
+     * Deux familles :
+     *  - les modules complets (mêmes clés que les constantes MODULE_*) ;
+     *  - les pages protégées du groupe « Système ».
+     *
      * @return array<string,string>
      */
     public static function extraPages(): array
     {
         return [
-            'inventory' => 'Inventaire',
-            'costs'     => 'Coûts de revient',
-            'cash'      => 'Caisses',
+            // Modules complets (même clé que MODULE_*)
+            'compta'     => 'Comptabilité',
+            'events'     => 'Événements',
+            'content'    => 'Contenu',
+            'cafeteria'  => 'Cafétéria',
+            'games'      => 'Jeux',
+            // Pages protégées du groupe Système
+            'inventory'  => 'Inventaire',
+            'costs'      => 'Coûts de revient',
+            'cash'       => 'Caisses',
+            'users'      => 'Utilisateurs',
+            'settings'   => 'Paramètres',
         ];
     }
 
