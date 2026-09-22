@@ -421,4 +421,96 @@ final class AdminStockController extends AdminBaseController
         $this->setFlash('success', $flash);
         redirect(url('/admin/compta/inventaire'));
     }
+
+    // -----------------------------------------------------------------
+    //  Comptage inventaire « à l'aveugle » (tout le bureau, hors élèves)
+    // -----------------------------------------------------------------
+
+    /**
+     * Comptage inventaire « à l'aveugle » — saisie seule, ouverte à tout
+     * le bureau (hors élèves). Les stocks théoriques ne sont volontairement
+     * pas affichés (un comptage honnête ne doit pas pouvoir s'ajuster sur
+     * l'attendu) ; les écarts sont calculés à l'enregistrement.
+     */
+    public function blindCount(): void
+    {
+        $user = $this->guardAdminArea();
+
+        // Uniquement les clés produits : ni stock, ni écart, ni date de
+        // dernier comptage (aucune fuite du théorique).
+        $rows = [];
+        foreach (Sale::distinctProducts() as $key) {
+            $rows[] = ['key' => (string) $key];
+        }
+        usort($rows, static fn(array $a, array $b): int => strcasecmp($a['key'], $b['key']));
+
+        $this->renderAdmin('admin/compta/blind_count', [
+            'title' => 'Comptage inventaire',
+            'user'  => $user,
+            'rows'  => $rows,
+        ]);
+    }
+
+    /**
+     * Enregistre le comptage à l'aveugle : même mécanique que le comptage
+     * de la page Inventaire complète (théorique calculé côté serveur,
+     * écarts historisés, stocks réalignés, synchro carte non bloquante).
+     */
+    public function saveBlindCount(): void
+    {
+        $user = $this->guardAdminArea();
+
+        $counts = $_POST['count'] ?? [];
+        if (!is_array($counts)) {
+            $counts = [];
+        }
+
+        $done = 0;
+        $gaps = 0;
+
+        foreach ($counts as $key => $value) {
+            $productKey = trim((string) $key);
+            if ($productKey === '' || trim((string) $value) === '') {
+                continue;
+            }
+
+            $counted = (int) $value;
+            if ($counted < 0) {
+                continue;
+            }
+
+            // L'écart est calculé côté serveur AVANT le record : chaque
+            // comptage devient la nouvelle référence du stock théorique.
+            $theoretical = InventoryCount::theoreticalStock($productKey);
+            $gap = $counted - ($theoretical ?? 0);
+
+            InventoryCount::record($productKey, $counted, null, $user['id'] ?? null);
+
+            $done++;
+            if ($gap !== 0) {
+                $gaps++;
+            }
+        }
+
+        if ($done === 0) {
+            $this->setFlash('error', 'Aucun comptage saisi.');
+            redirect(url('/admin/compta/inventaire/comptage'));
+        }
+
+        $this->audit('compta.inventory.count', 'inventory_count', null, [
+            'products' => $done,
+            'gaps'     => $gaps,
+            'source'   => 'comptage',
+        ]);
+
+        // Synchro carte non bloquante (nouveaux produits comptés), comme
+        // sur la page Inventaire complète.
+        try {
+            ProductAutoSync::sync();
+        } catch (\Throwable) {
+        }
+
+        $this->setFlash($gaps > 0 ? 'warning' : 'success', sprintf('%d produit(s) compté(s) — %d écart(s) détecté(s).', $done, $gaps));
+        redirect(url('/admin/compta/inventaire/comptage'));
+    }
 }

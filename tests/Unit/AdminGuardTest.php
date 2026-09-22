@@ -215,4 +215,19 @@ final class AdminGuardTest extends TestCase
 
         self::assertSame(Middleware::FORBIDDEN, Middleware::resolve(Permissions::adminRoles()));
     }
+
+    public function test_comptage_inventaire_ouvert_tout_le_bureau_sauf_eleve(): void
+    {
+        foreach (Permissions::adminRoles() as $role) {
+            $_SESSION['user_id'] = 'u_' . strtolower((string) $role);
+            $_SESSION['user_role'] = $role;
+
+            self::assertSame(Middleware::OK, Middleware::resolve(Permissions::adminRoles()), $role);
+        }
+
+        $_SESSION['user_id'] = 'eleve1';
+        $_SESSION['user_role'] = Auth::ROLE_ELEVE;
+
+        self::assertSame(Middleware::FORBIDDEN, Middleware::resolve(Permissions::adminRoles()));
+    }
 }

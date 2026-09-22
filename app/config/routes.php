@@ -268,6 +268,11 @@ function aeic_register_routes(Router $router): void
     $router->get('/admin/compta/inventaire', [AdminStockController::class, 'inventory']);
     $router->post('/admin/compta/inventaire/save', [AdminStockController::class, 'saveCount']);
 
+    // Comptage inventaire « à l'aveugle » : saisie seule, tout le bureau
+    // hors élèves (l'écart n'est révélé qu'à l'enregistrement).
+    $router->get('/admin/compta/inventaire/comptage', [AdminStockController::class, 'blindCount']);
+    $router->post('/admin/compta/inventaire/comptage/save', [AdminStockController::class, 'saveBlindCount']);
+
     // Comptage de caisse : saisie seule, tout le bureau hors élèves
     // (historique et écarts réservés à Système → Caisses, Fondateur).
     $router->get('/admin/compta/caisse', [AdminComptaController::class, 'caisse']);
