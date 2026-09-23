@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 /**
  * @var array<string,mixed> $user
- * @var list<array{key:string,stock:?int,counted_at:?string,counted_qty:?int,gap:?int,theoretical:?int}> $rows
+ * @var list<array{key:string,stock:?int,counted_at:?string,counted_qty:?int,gap:?int,theoretical:?int,paused:bool}> $rows
  * @var list<array{key:string,counted_at:?string}> $discontinuedRows
  * @var list<array<string,mixed>> $history
  * @var list<array<string,mixed>> $gaps
@@ -85,6 +85,9 @@ declare(strict_types=1);
 
 <section class="card surface glass table-wrap">
     <h2 class="card-title">Comptage</h2>
+    <style>
+        .row-paused td { opacity: 0.45; }
+    </style>
     <form method="post" action="<?= e(url('/admin/compta/inventaire/save')) ?>">
         <?= csrf_field() ?>
         <table class="table">
@@ -99,10 +102,11 @@ declare(strict_types=1);
                 </tr>
             </thead>
             <tbody>
-                <?php foreach ($rows as $r): $disId = 'dis-' . substr(md5((string) $r['key']), 0, 10); ?>
-                    <tr>
+                <?php foreach ($rows as $r): $disId = 'dis-' . substr(md5((string) $r['key']), 0, 10); $paused = !empty($r['paused']); ?>
+                    <tr<?= $paused ? ' class="row-paused"' : '' ?>>
                         <td>
                             <strong><?= e($r['key']) ?></strong>
+                            <?php if ($paused): ?><span class="badge badge-warning">⏸ En pause</span><?php endif; ?>
                             <button type="button" class="btn btn-ghost btn-sm merge-row-btn"
                                     data-key="<?= e($r['key']) ?>"
                                     title="Fusionner ce produit avec un autre (doublon) : pré-remplit la clé source">🔗</button>
@@ -123,8 +127,12 @@ declare(strict_types=1);
                             <?php endif; ?>
                         </td>
                         <td>
-                            <input type="number" name="count[<?= e($r['key']) ?>]"
-                                   min="0" step="1" placeholder="—" style="width:90px" inputmode="numeric">
+                            <?php if ($paused): ?>
+                                <span class="muted">—</span>
+                            <?php else: ?>
+                                <input type="number" name="count[<?= e($r['key']) ?>]"
+                                       min="0" step="1" placeholder="—" style="width:90px" inputmode="numeric">
+                            <?php endif; ?>
                         </td>
                         <td>
                             <?php if ($r['gap'] === null): ?>
@@ -138,8 +146,13 @@ declare(strict_types=1);
                             <?php endif; ?>
                         </td>
                         <td>
-                            <button type="submit" class="btn btn-ghost btn-sm" form="<?= $disId ?>"
-                                    title="Plus en vente pour l'instant (ex. saisonnier : Redbull Summer hors été) : sort des comptages et du réappro — rien n'est supprimé, rétablissement en bas de page">🚫</button>
+                            <?php if ($paused): ?>
+                                <button type="button" class="btn btn-ghost btn-sm" disabled
+                                        title="Produit en pause (« plus en vente pour l'instant ») : rétablissement en un clic en bas de page">⏸</button>
+                            <?php else: ?>
+                                <button type="submit" class="btn btn-ghost btn-sm" form="<?= $disId ?>"
+                                        title="Plus en vente pour l'instant (ex. saisonnier : Redbull Summer hors été) : passe en pause, grisée sans saisie — rien n'est supprimé, rétablissement en bas de page">🚫</button>
+                            <?php endif; ?>
                         </td>
                     </tr>
                 <?php endforeach; ?>
@@ -148,18 +161,21 @@ declare(strict_types=1);
                 <?php endif; ?>
             </tbody>
         </table>
-        <p class="muted">Seules les lignes renseignées sont comptées. Chaque comptage devient le nouveau point de départ du stock théorique.</p>
+        <p class="muted">Seules les lignes renseignées sont comptées. Chaque comptage devient le nouveau point de départ du stock théorique.
+        Les produits « ⏸ En pause » (plus en vente pour l'instant) restent affichés en gris, sans saisie — rétablissement en bas de page.</p>
         <div class="form-actions">
             <button type="submit" class="btn btn-primary">Enregistrer le comptage</button>
             <button type="button" class="btn btn-ghost" onclick="if (confirm('Effacer les quantités saisies ?')) this.form.reset();">Annuler</button>
         </div>
     </form>
 
-    <?php foreach ($rows as $r): $disId = 'dis-' . substr(md5((string) $r['key']), 0, 10); ?>
+    <?php foreach ($rows as $r): ?>
+        <?php if (!empty($r['paused'])) { continue; } // déjà en pause : rien à marquer ?>
+        <?php $disId = 'dis-' . substr(md5((string) $r['key']), 0, 10); ?>
         <!-- 🚫 plus en vente : formulaires hors du form principal (non imbriqués) -->
         <form id="<?= $disId ?>" method="post"
               action="<?= e(url('/admin/compta/inventaire/' . rawurlencode((string) $r['key']) . '/discontinue')) ?>"
-              data-confirm="Marquer « <?= e((string) $r['key']) ?> » plus en vente pour l'instant ? Rien n'est supprimé : il sort juste des comptages et du réappro, rétablissement en un clic en bas de page."
+              data-confirm="Marquer « <?= e((string) $r['key']) ?> » plus en vente pour l'instant ? Rien n'est supprimé : il passe en pause (grisé, sans saisie), sort des comptages et du réappro, rétablissement en un clic en bas de page."
               data-confirm-button="🚫 Plus en vente">
             <input type="hidden" name="back" value="inventaire">
             <?= csrf_field() ?>
@@ -209,7 +225,7 @@ declare(strict_types=1);
 <div class="card surface glass table-wrap">
     <details class="cost-card-lots">
         <summary>🚫 Plus en vente pour l'instant (<?= count($discontinuedRows) ?>)</summary>
-        <p class="muted">Marquage <strong>temporaire</strong> (ex. Redbull Summer hors été) : ces produits sortent des comptages et du réappro, mais <strong>rien n'est supprimé</strong> — ventes, stock et comptages conservés. « Remettre en vente » les réaffiche aussitôt.</p>
+        <p class="muted">Marquage <strong>temporaire</strong> (ex. Redbull Summer hors été) : ces produits restent affichés en gris dans la grille ci-dessus, sans saisie, et sortent du comptage à l'aveugle et du réappro — <strong>rien n'est supprimé</strong> (ventes, stock et comptages conservés). « Remettre en vente » les réactive aussitôt.</p>
         <?php if ($discontinuedRows === []): ?>
             <p class="muted">Aucun produit marqué plus en vente pour l'instant.</p>
         <?php else: ?>

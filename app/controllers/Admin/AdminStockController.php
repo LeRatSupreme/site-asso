@@ -332,8 +332,9 @@ final class AdminStockController extends AdminBaseController
         $theoretical = InventoryCount::theoreticalStocksMap();
         $stockMap = ProductStock::allMap();
 
-        // Produits marqués « plus en vente » (saisonniers, discontinués) :
-        // hors grille principale, listés à part pour pouvoir les rétablir.
+        // Produits « plus en vente pour l'instant » (pause saisonnière) :
+        // affichés EN GRIS dans la grille (sans saisie) et listés à part
+        // en bas de page pour le rétablissement.
         $hidden = array_flip(ProductDiscontinued::keys());
 
         // Grille = produits vendus (SumUp) + produits établis par un achat
@@ -350,14 +351,7 @@ final class AdminStockController extends AdminBaseController
         foreach ($keys as $key) {
             $key = (string) $key;
             $last = $lastCounts[$key] ?? null;
-
-            if (isset($hidden[$key])) {
-                $discontinuedRows[] = [
-                    'key'        => $key,
-                    'counted_at' => $last !== null ? $last['at'] : null,
-                ];
-                continue;
-            }
+            $paused = isset($hidden[$key]);
 
             $rows[] = [
                 'key'         => $key,
@@ -366,7 +360,15 @@ final class AdminStockController extends AdminBaseController
                 'counted_qty' => $last !== null ? $last['qty'] : null,
                 'gap'         => $last !== null ? $last['gap'] : null,
                 'theoretical' => $theoretical[$key] ?? null,
+                'paused'      => $paused,
             ];
+
+            if ($paused) {
+                $discontinuedRows[] = [
+                    'key'        => $key,
+                    'counted_at' => $last !== null ? $last['at'] : null,
+                ];
+            }
         }
 
         // Produits déjà comptés en premier (du plus récemment compté au plus
@@ -480,25 +482,37 @@ final class AdminStockController extends AdminBaseController
      * pas affichés (un comptage honnête ne doit pas pouvoir s'ajuster sur
      * l'attendu) ; les écarts sont calculés à l'enregistrement.
      *
-     * Les produits marqués « plus en vente » (saisonniers, discontinués)
-     * sont exclus de la liste — rétablissables depuis la page Inventaire.
+     * Les produits « plus en vente pour l'instant » (pause saisonnière)
+     * restent affichés en fin de liste, grisés et sans saisie : un produit
+     * « disparu » serait pris pour un oubli. Le rétablissement reste dans
+     * la page Inventaire (groupe Système).
      */
     public function blindCount(): void
     {
         $user = $this->guardAdminArea();
 
         // Uniquement les clés produits : ni stock, ni écart, ni date de
-        // dernier comptage (aucune fuite du théorique). Les produits
-        // « plus en vente » sont retirés (array_flip + isset : O(1)/clé).
-        $hidden = array_flip(ProductDiscontinued::keys());
-        $rows = [];
+        // dernier comptage (aucune fuite du théorique). Les produits en
+        // pause sont gardés (flag paused) mais sans champ de saisie — la
+        // sauvegarde les ignore toujours côté serveur (saveBlindCount).
+        $pausedKeys = array_flip(ProductDiscontinued::keys());
+        $active = [];
+        $paused = [];
         foreach (Sale::distinctProducts() as $key) {
-            if (isset($hidden[(string) $key])) {
+            $k = (string) $key;
+            if ($k === '') {
                 continue;
             }
-            $rows[] = ['key' => (string) $key];
+            if (isset($pausedKeys[$k])) {
+                $paused[] = ['key' => $k, 'paused' => true];
+            } else {
+                $active[] = ['key' => $k, 'paused' => false];
+            }
         }
-        usort($rows, static fn(array $a, array $b): int => strcasecmp($a['key'], $b['key']));
+        $byName = static fn(array $a, array $b): int => strcasecmp($a['key'], $b['key']);
+        usort($active, $byName);
+        usort($paused, $byName);
+        $rows = array_merge($active, $paused);
 
         $this->renderAdmin('admin/compta/blind_count', [
             'title' => 'Comptage inventaire',
