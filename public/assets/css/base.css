@@ -1069,7 +1069,7 @@ ul, ol { list-style: none; }
     background: var(--card);
 }
 .team-avatar img { width: 100%; height: 100%; object-fit: cover; }
-.team-initial { width: 100%; height: 100%; display: grid; place-items: center; color: #fff; font-weight: 900; font-size: 2rem; }
+.team-initial { width: 100%; height: 100%; display: grid; place-items: center; color: var(--foreground); font-weight: 900; font-size: 2rem; background: var(--input-bg); }
 .team-role { color: var(--primary); font-weight: 700; }
 .team-pole { margin: 0.25rem 0; }
 .team-bio { color: var(--muted); font-size: 0.9rem; }
