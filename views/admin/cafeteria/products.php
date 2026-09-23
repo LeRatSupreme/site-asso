@@ -25,7 +25,7 @@ declare(strict_types=1);
             <th>Description</th>
             <th>Catégorie</th>
             <th>Prix</th>
-            <th>Stock</th>
+            <th title="Stock théorique : dernier comptage + achats − ventes − pertes (suit les ventes en temps réel)">Stock (théorique)</th>
             <th>Statut</th>
             <th>Actions</th>
         </tr></thead>
@@ -55,7 +55,12 @@ declare(strict_types=1);
                     </td>
                     <td><?= e($p['category_name'] ?? '—') ?></td>
                     <td><strong><?= e(formatPrice($p['price'] ?? 0)) ?></strong></td>
-                    <td><?= e((string) ($p['stock'] ?? 0)) ?></td>
+                    <?php $theo = $p['theoretical_stock'] ?? null; ?>
+                    <?php if ($theo !== null): ?>
+                        <td><strong><?= e((string) max(0, (int) $theo)) ?></strong></td>
+                    <?php else: ?>
+                        <td class="muted" title="Produit non suivi en inventaire — stock de la fiche (statique)"><?= e((string) ($p['stock'] ?? 0)) ?></td>
+                    <?php endif; ?>
                     <td>
                         <?php if (!empty($p['is_available']) && !empty($p['is_active'])): ?>
                             <span class="badge badge-success">Dispo</span>
