@@ -607,6 +607,42 @@ final class Sale extends Model
     }
 
     /**
+     * Nombre de transactions distinctes (transaction_ref) sur une plage
+     * de jours (bornes incluses), ou sur tout l'historique si null.
+     *
+     * @param string|null $fromDay Jour de début « YYYY-MM-DD » (inclus), ou null.
+     * @param string|null $toDay   Jour de fin « YYYY-MM-DD » (inclus), ou null.
+     */
+    public static function transactionsBetween(?string $fromDay, ?string $toDay): int
+    {
+        $where = [];
+        $args = [];
+        if ($fromDay !== null && $fromDay !== '') {
+            $where[] = 'sold_at >= ?';
+            $args[] = $fromDay . ' 00:00:00';
+        }
+        if ($toDay !== null && $toDay !== '') {
+            $where[] = 'sold_at <= ?';
+            $args[] = $toDay . ' 23:59:59';
+        }
+        $whereSql = $where === [] ? '' : 'WHERE ' . implode(' AND ', $where);
+
+        $sql = 'SELECT COUNT(DISTINCT transaction_ref) AS tx
+                FROM sales
+                ' . $whereSql;
+
+        try {
+            $stmt = self::pdo()->prepare($sql);
+            $stmt->execute($args);
+            $row = $stmt->fetch();
+
+            return (int) ($row['tx'] ?? 0);
+        } catch (\Throwable) {
+            return 0;
+        }
+    }
+
+    /**
      * Journal filtrable des ventes.
      *
      * @return list<array<string,mixed>>

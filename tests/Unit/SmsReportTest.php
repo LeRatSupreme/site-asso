@@ -69,4 +69,36 @@ final class SmsReportTest extends TestCase
         self::assertFalse(SmsReport::timeWindowMatches('20:00', '19:59'));
         self::assertFalse(SmsReport::timeWindowMatches('pas une heure', '20:00'));
     }
+
+    public function test_evolution_label_compare_au_jour_precedent(): void
+    {
+        self::assertSame("\u{2796}", SmsReport::evolutionLabel(10.0, 0.0));      // hier = 0 : pas de comparaison
+        self::assertSame("\u{1F4C8} +50 % vs hier", SmsReport::evolutionLabel(15.0, 10.0));
+        self::assertSame("\u{1F4C9} -25 % vs hier", SmsReport::evolutionLabel(7.5, 10.0));
+        self::assertSame("\u{2796} 0 % vs hier", SmsReport::evolutionLabel(10.0, 10.0));
+    }
+
+    public function test_top_line_formate_une_ligne_de_classement(): void
+    {
+        $line = SmsReport::topLine(2, ['label' => 'Croissant', 'qty' => 12, 'ca' => 10.8]);
+
+        self::assertSame('2. Croissant x12 (' . number_format(10.8, 2, ',', ' ') . ' €)', $line);
+    }
+
+    public function test_variable_groups_couvre_toutes_les_variables(): void
+    {
+        $vars = [];
+        foreach (SmsReport::variableGroups() as $group) {
+            foreach ($group as $v) {
+                $vars[] = '{' . $v['var'] . '}';
+            }
+        }
+
+        // Toutes les variables documentées existent comme clés de varsFor.
+        self::assertContains('{ca}', $vars);
+        self::assertContains('{top3}', $vars);
+        self::assertContains('{evolution}', $vars);
+        self::assertContains('{panier}', $vars);
+        self::assertContains('{semaine_ca}', $vars);
+    }
 }

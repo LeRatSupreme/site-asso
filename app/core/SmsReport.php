@@ -184,33 +184,151 @@ final class SmsReport
     }
 
     /**
+     * Liste des variables disponibles dans le modèle de message,
+     * groupées par famille (pour l'aide de la page admin).
+     *
+     * @return array<string, list<array{var:string, desc:string}>>
+     */
+    public static function variableGroups(): array
+    {
+        return [
+            'Jour' => [
+                ['var' => 'date',     'desc' => 'Date du rapport (23/09/2026)'],
+                ['var' => 'jour',     'desc' => 'Jour de la semaine (Mardi)'],
+                ['var' => 'ca',       'desc' => 'Chiffre d\'affaires du jour'],
+                ['var' => 'benefice', 'desc' => 'Bénéfice du jour'],
+                ['var' => 'marge',    'desc' => 'Marge du jour en %'],
+                ['var' => 'qty',      'desc' => 'Articles vendus dans la journée'],
+                ['var' => 'ventes',   'desc' => 'Nombre de transactions'],
+                ['var' => 'panier',   'desc' => 'Panier moyen'],
+                ['var' => 'carte',    'desc' => 'CA encaissé par carte'],
+                ['var' => 'espece',   'desc' => 'CA encaissé en espèces'],
+            ],
+            'Top produits' => [
+                ['var' => 'top',   'desc' => 'Top 3 produits (bloc multi-lignes)'],
+                ['var' => 'top1',  'desc' => '1er produit du jour'],
+                ['var' => 'top2',  'desc' => '2e produit du jour'],
+                ['var' => 'top3',  'desc' => '3e produit du jour'],
+            ],
+            'Semaine & mois' => [
+                ['var' => 'semaine_ca',       'desc' => 'CA depuis lundi'],
+                ['var' => 'semaine_benefice', 'desc' => 'Bénéfice depuis lundi'],
+                ['var' => 'semaine_qty',      'desc' => 'Articles vendus depuis lundi'],
+                ['var' => 'mois',             'desc' => 'Mois en cours (Septembre)'],
+                ['var' => 'mois_ca',          'desc' => 'CA du mois en cours'],
+                ['var' => 'mois_benefice',    'desc' => 'Bénéfice du mois en cours'],
+                ['var' => 'mois_qty',         'desc' => 'Articles vendus ce mois'],
+            ],
+            'Comparaison hier' => [
+                ['var' => 'hier_ca',       'desc' => 'CA d\'hier'],
+                ['var' => 'hier_benefice', 'desc' => 'Bénéfice d\'hier'],
+                ['var' => 'evolution',     'desc' => 'Évolution du CA vs hier (📈 📉 ➖)'],
+            ],
+        ];
+    }
+
+    /**
+     * Étiquette d'évolution du CA vs hier (fonction pure, testable).
+     */
+    public static function evolutionLabel(float $today, float $yesterday): string
+    {
+        if ($yesterday <= 0.0) {
+            return "\u{2796}";   // pas de comparaison possible
+        }
+        $pct = round(($today - $yesterday) / $yesterday * 100);
+        $sign = $pct > 0 ? '+' : '';
+        $arrow = $pct > 0 ? "\u{1F4C8}" : ($pct < 0 ? "\u{1F4C9}" : "\u{2796}");
+
+        return $arrow . ' ' . $sign . number_format($pct, 0, ',', ' ') . ' % vs hier';
+    }
+
+    /**
+     * Construit la ligne d'un produit du top (fonction pure, testable).
+     */
+    public static function topLine(int $rank, array $product): string
+    {
+        $label = (string) ($product['label'] ?? '?');
+        $qty = (int) ($product['qty'] ?? 0);
+        $ca = formatPrice((float) ($product['ca'] ?? 0));
+
+        return $rank . '. ' . $label . ' x' . $qty . ' (' . $ca . ')';
+    }
+
+    /**
+     * Collecte les données du jour et construit la carte des variables
+     * {placeholder} => valeur.
+     *
+     * @return array<string,string>
+     */
+    public static function varsFor(?string $day = null): array
+    {
+        $day = $day ?: date('Y-m-d');
+        $ts = strtotime($day);
+        $yesterday = date('Y-m-d', $ts - 86400);
+        $monday = date('Y-m-d', strtotime('monday this week', $ts));
+
+        $agg = Sale::aggregatesBetween($day, $day);
+        $top = Sale::topProductsBetween($day, $day, 3);
+        $split = Sale::paymentSplitBetween($day, $day);
+        $tx = Sale::transactionsBetween($day, $day);
+
+        $weekAgg = Sale::aggregatesBetween($monday, $day);
+        $monthAgg = Sale::monthAggregates((int) date('Y', $ts), (int) date('n', $ts));
+        $yAgg = Sale::aggregatesBetween($yesterday, $yesterday);
+
+        $topLines = [];
+        foreach ($top as $i => $p) {
+            $topLines[] = self::topLine($i + 1, $p);
+        }
+        while (count($topLines) < 3) {
+            $topLines[] = ($n = count($topLines) + 1) . '. —';
+        }
+
+        $marge = $agg['ca'] > 0 ? round($agg['profit'] / $agg['ca'] * 100) : 0;
+        $panier = $tx > 0 ? $agg['ca'] / $tx : 0.0;
+
+        $dayNames = [1 => 'Lundi', 2 => 'Mardi', 3 => 'Mercredi', 4 => 'Jeudi', 5 => 'Vendredi', 6 => 'Samedi', 7 => 'Dimanche'];
+        $monthNames = [1 => 'Janvier', 2 => 'Février', 3 => 'Mars', 4 => 'Avril', 5 => 'Mai', 6 => 'Juin', 7 => 'Juillet', 8 => 'Août', 9 => 'Septembre', 10 => 'Octobre', 11 => 'Novembre', 12 => 'Décembre'];
+
+        return [
+            '{date}'     => date('d/m/Y', $ts),
+            '{jour}'     => $dayNames[(int) date('N', $ts)] ?? '',
+            '{ca}'       => formatPrice($agg['ca']),
+            '{benefice}' => formatPrice($agg['profit']),
+            '{marge}'    => $marge . ' %',
+            '{qty}'      => (string) $agg['qty'],
+            '{ventes}'   => (string) $tx,
+            '{panier}'   => formatPrice($panier),
+            '{carte}'    => formatPrice($split['CARTE'] ?? 0.0),
+            '{espece}'   => formatPrice($split['LIQUIDE'] ?? 0.0),
+            '{top}'      => $topLines === [] ? '(aucune vente)' : implode("\n", $topLines),
+            '{top1}'     => $topLines[0],
+            '{top2}'     => $topLines[1],
+            '{top3}'     => $topLines[2],
+            '{semaine_ca}'       => formatPrice($weekAgg['ca']),
+            '{semaine_benefice}' => formatPrice($weekAgg['profit']),
+            '{semaine_qty}'      => (string) $weekAgg['qty'],
+            '{mois}'             => $monthNames[(int) date('n', $ts)] ?? '',
+            '{mois_ca}'          => formatPrice($monthAgg['ca']),
+            '{mois_benefice}'    => formatPrice($monthAgg['profit']),
+            '{mois_qty}'         => (string) $monthAgg['qty'],
+            '{hier_ca}'          => formatPrice($yAgg['ca']),
+            '{hier_benefice}'    => formatPrice($yAgg['profit']),
+            '{evolution}'        => self::evolutionLabel($agg['ca'], $yAgg['ca']),
+        ];
+    }
+
+    /**
      * Collecte les données du jour et construit le message complet.
      *
-     * @return array{message:string, ca:float, profit:float, qty:int, top:list<array<string,mixed>>}
+     * @return array{message:string, vars:array<string,string>, ca:float, profit:float, qty:int, top:list<array<string,mixed>>}
      */
     public static function buildMessage(?string $day = null): array
     {
         $day = $day ?: date('Y-m-d');
 
+        $vars = self::varsFor($day);
         $agg = Sale::aggregatesBetween($day, $day);
-        $top = Sale::topProductsBetween($day, $day, 3);
-
-        $topLines = '';
-        foreach ($top as $i => $p) {
-            $n = $i + 1;
-            $label = (string) ($p['label'] ?? '?');
-            $qty = (int) ($p['qty'] ?? 0);
-            $ca = formatPrice((float) ($p['ca'] ?? 0));
-            $topLines .= $n . '. ' . $label . ' x' . $qty . ' (' . $ca . ")\n";
-        }
-
-        $vars = [
-            '{date}'     => date('d/m/Y', strtotime($day)),
-            '{ca}'       => formatPrice($agg['ca']),
-            '{benefice}' => formatPrice($agg['profit']),
-            '{qty}'      => (string) $agg['qty'],
-            '{top}'      => $topLines !== '' ? trim($topLines) : '(aucune vente)',
-        ];
 
         $template = Setting::get('sms_report_template', '');
         if (trim($template) === '') {
@@ -219,10 +337,11 @@ final class SmsReport
 
         return [
             'message' => self::renderTemplate($template, $vars),
+            'vars'    => $vars,
             'ca'      => $agg['ca'],
             'profit'  => $agg['profit'],
             'qty'     => $agg['qty'],
-            'top'     => $top,
+            'top'     => Sale::topProductsBetween($day, $day, 3),
         ];
     }
 
