@@ -155,6 +155,7 @@ declare(strict_types=1);
             <div class="about-vision-body">
                 <span class="eyebrow"><?= e(t('about.vision.title')) ?></span>
                 <p class="about-vision-text"><?= e(t('about.vision.desc')) ?></p>
+                <span class="about-vision-author">— <?= e(t('about.vision.author')) ?></span>
             </div>
         </div>
     </div>
@@ -620,6 +621,15 @@ declare(strict_types=1);
     font-style: italic;
     margin: 0.9rem 0 0;
     max-width: 52rem;
+}
+.about-vision-author {
+    display: block;
+    margin-top: 1.1rem;
+    font-style: normal;
+    font-weight: 700;
+    font-size: 0.95rem;
+    color: var(--primary);
+    letter-spacing: 0.02em;
 }
 
 /* ============ Espaces — lignes horizontales ============ */
