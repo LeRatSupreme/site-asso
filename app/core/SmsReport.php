@@ -233,6 +233,7 @@ final class SmsReport
                 ['var' => 'categories', 'desc' => 'Répartition du CA par catégorie (barres)'],
                 ['var' => 'cat_top',    'desc' => 'Première catégorie du jour'],
                 ['var' => 'graphique',  'desc' => 'Lien vers le graphique image du jour'],
+                ['var' => 'graphique_semaine', 'desc' => 'Lien vers le graphique image de la semaine'],
             ],
         ];
     }
@@ -332,6 +333,7 @@ final class SmsReport
             '{cat_top}'          => $catTop,
             '{caisse}'           => formatPrice(CashLedger::balance()),
             '{graphique}'        => APP_URL . '/sms-chart/' . self::chartToken() . '.svg',
+            '{graphique_semaine}' => APP_URL . '/sms-chart/' . self::chartToken() . '.svg?p=week',
         ];
     }
 

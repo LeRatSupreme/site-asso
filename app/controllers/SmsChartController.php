@@ -31,7 +31,16 @@ final class SmsChartController
         }
 
         $today = date('Y-m-d');
-        echo self::buildSvg(Sale::byCategoryBetween($today, $today), date('d/m/Y'));
+
+        if (($_GET['p'] ?? '') === 'week') {
+            $from = date('Y-m-d', strtotime('monday this week'));
+            $label = 'Semaine du ' . date('d/m', strtotime($from)) . ' au ' . date('d/m');
+        } else {
+            $from = $today;
+            $label = date('d/m/Y');
+        }
+
+        echo self::buildSvg(Sale::byCategoryBetween($from, $today), $label);
     }
 
     /**
