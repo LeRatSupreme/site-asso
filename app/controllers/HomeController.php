@@ -23,7 +23,7 @@ final class HomeController extends Controller
         $siteName = Setting::get('site_name', 'AEIC');
         $logoUrl = is_absolute_url(Setting::get('og_image', ''))
             ? Setting::get('og_image', '')
-            : APP_URL . asset('img/favicon.svg');
+            : asset('img/favicon.svg');
 
         $orgLd = json_encode([
             '@context' => 'https://schema.org',

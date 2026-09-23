@@ -32,7 +32,7 @@ $ogImage      = !empty($ogImage)
     ? (is_absolute_url($ogImage) ? $ogImage : APP_URL . '/' . ltrim($ogImage, '/'))
     : (!empty(Setting::get('og_image'))
         ? (is_absolute_url(Setting::get('og_image')) ? Setting::get('og_image') : APP_URL . '/' . ltrim(Setting::get('og_image'), '/'))
-        : APP_URL . asset('img/og-default.svg'));
+        : asset('img/og-default.svg'));
 $twitterHandle = Setting::get('twitter_handle', '');
 ?>
 <!DOCTYPE html>
