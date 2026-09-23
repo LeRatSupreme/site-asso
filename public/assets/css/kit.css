@@ -72,7 +72,15 @@
 }
 
 /* ----------------------------- Chips flottantes ----------------------------- */
+/* Couche répartie sur toute la hauteur de la page (dans #contenu). */
+#contenu { position: relative; }
 .ae-chips { position: absolute; inset: 0; pointer-events: none; z-index: 0; }
+.ae-chips-page {
+    z-index: -1; /* passe derrière les sections : les icônes glance entre les cartes */
+    opacity: 0.55;
+}
+/* Le héros laisse voir la couche globale au lieu de la masquer. */
+.page-hero { background: transparent; }
 .ae-chip {
     position: absolute;
     display: grid;
@@ -89,24 +97,31 @@
     box-shadow: 0 14px 34px rgba(0, 0, 0, 0.3);
     animation: ae-float 7s ease-in-out infinite;
 }
-.ae-chip-1 { top: 16%; right: 10%; }
-.ae-chip-2 { top: 58%; right: 20%; animation-delay: 1.6s; }
-.ae-chip-3 { bottom: 14%; right: 6%; animation-delay: 3s; }
-.ae-chip-4 { top: 12%; right: 27%; width: 42px; height: 42px; font-size: 1.05rem; border-radius: 12px; animation-delay: 2.2s; }
-.ae-chip-5 { bottom: 18%; right: 30%; width: 64px; height: 64px; font-size: 1.8rem; border-radius: 20px; animation-delay: 0.8s; }
-.ae-chip-6 { top: 44%; right: 3%; width: 46px; height: 46px; font-size: 1.2rem; border-radius: 14px; animation-delay: 4.1s; }
+/* Tailles et rythmes variés (profondeur) */
+.ae-chip-4 { width: 42px; height: 42px; font-size: 1.05rem; border-radius: 12px; animation-delay: 2.2s; }
+.ae-chip-5 { width: 64px; height: 64px; font-size: 1.8rem; border-radius: 20px; animation-delay: 0.8s; }
+.ae-chip-6 { width: 46px; height: 46px; font-size: 1.2rem; border-radius: 14px; animation-delay: 4.1s; }
+.ae-chip-7 { width: 46px; height: 46px; font-size: 1.2rem; border-radius: 14px; animation-delay: 2.8s; }
+.ae-chip-8 { width: 60px; height: 60px; font-size: 1.7rem; border-radius: 18px; animation-delay: 5s; }
+
+/* Répartition sur toute la page : côtés alternés, espacement régulier. */
+.ae-chips-page .ae-chip-1 { top: 5%;  left: 4%; }
+.ae-chips-page .ae-chip-2 { top: 13%; right: 5%; }
+.ae-chips-page .ae-chip-3 { top: 27%; left: 7%; }
+.ae-chips-page .ae-chip-4 { top: 38%; right: 4%; }
+.ae-chips-page .ae-chip-5 { top: 53%; left: 3%; }
+.ae-chips-page .ae-chip-6 { top: 64%; right: 7%; }
+.ae-chips-page .ae-chip-7 { top: 78%; left: 6%; }
+.ae-chips-page .ae-chip-8 { top: 90%; right: 4%; }
+[data-theme="light"] .ae-chip {
+    background: rgba(255, 255, 255, 0.65);
+    border-color: rgba(15, 23, 42, 0.1);
+    box-shadow: 0 14px 30px rgba(15, 23, 42, 0.12);
+}
 @keyframes ae-float {
     0%, 100% { transform: translateY(0) rotate(-3deg); }
     50%      { transform: translateY(-14px) rotate(3deg); }
 }
-
-/* Variante : chips côté gauche (quand le hero accueille une carte à droite) */
-.ae-chips-left .ae-chip-1 { right: auto; left: 7%; top: 16%; }
-.ae-chips-left .ae-chip-2 { right: auto; left: 3%; top: 58%; }
-.ae-chips-left .ae-chip-3 { right: auto; left: 34%; top: auto; bottom: 12%; }
-.ae-chips-left .ae-chip-4 { right: auto; left: 22%; top: 8%; }
-.ae-chips-left .ae-chip-5 { right: auto; left: 27%; top: auto; bottom: 22%; }
-.ae-chips-left .ae-chip-6 { right: auto; left: 42%; top: 72%; }
 
 /* ----------------------------- Hero en grille (texte + carte) ----------------------------- */
 .ae-hero-grid {
