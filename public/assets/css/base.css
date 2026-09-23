@@ -687,6 +687,28 @@ ul, ol { list-style: none; }
     text-align: center;
 }
 
+/* Petits écrans : menu plus compact pour ne pas recouvrir toute la page */
+@media (max-width: 480px) {
+    .mobile-nav {
+        width: min(78%, 300px);
+        padding: 3.75rem 0.9rem 1.25rem;
+    }
+    .mobile-nav-links a {
+        padding: 0.6rem 0.4rem;
+        font-size: 0.9rem;
+    }
+    .mobile-nav-section { padding: 0.6rem 0.4rem; }
+    .mobile-nav-account { gap: 0.35rem !important; }
+    .mobile-nav-account .btn { min-width: 80px; padding: 0.4rem 0.5rem !important; }
+}
+
+/* Téléphones en paysage : réduit l'empilement vertical */
+@media (max-height: 480px) {
+    .mobile-nav { padding-top: 3.5rem; }
+    .mobile-nav-links a { padding: 0.45rem 0.4rem; }
+    .mobile-nav-section { padding: 0.45rem 0.4rem; }
+}
+
 /* Overlay */
 .mobile-nav-overlay {
     position: fixed;
