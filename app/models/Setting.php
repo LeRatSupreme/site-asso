@@ -84,14 +84,16 @@ final class Setting extends Model
     }
 
     /**
-     * Met à jour la valeur d'un setting et invalide le cache.
+     * Met à jour la valeur d'un setting (créé s'il n'existe pas encore)
+     * et invalide le cache.
      */
     public static function set(string $key, string $value): void
     {
         $stmt = static::pdo()->prepare(
-            'UPDATE settings SET value = ? WHERE `key` = ?'
+            'INSERT INTO settings (id, `key`, value) VALUES (?, ?, ?)
+             ON DUPLICATE KEY UPDATE value = VALUES(value)'
         );
-        $stmt->execute([$value, $key]);
+        $stmt->execute(['set_' . substr(sha1($key), 0, 20), $key, $value]);
 
         self::clearCache();
     }

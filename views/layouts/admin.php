@@ -122,6 +122,7 @@ $systemEntries = [
     'Caisses'          => ['/admin/caisses', 'cash'],
     'Inventaire'       => ['/admin/compta/inventaire', 'inventory'],
     'Coûts de revient' => ['/admin/compta/couts', 'costs'],
+    'Notifications'    => ['/admin/notifications', 'notifications'],
     'Paramètres'       => ['/admin/settings', 'settings'],
 ];
 if (in_array($user['role'] ?? null, Permissions::adminRoles(), true)) {

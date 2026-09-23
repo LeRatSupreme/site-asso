@@ -16,6 +16,7 @@ use App\Controllers\Admin\AdminGameController;
 use App\Controllers\Admin\AdminLossController;
 use App\Controllers\Admin\AdminMembershipController;
 use App\Controllers\Admin\AdminMediaController;
+use App\Controllers\Admin\AdminNotificationController;
 use App\Controllers\Admin\AdminPageController;
 use App\Controllers\Admin\AdminPollController;
 use App\Controllers\Admin\AdminPromotionController;
@@ -234,6 +235,13 @@ function aeic_register_routes(Router $router): void
     $router->get('/admin/wiki', [AdminController::class, 'wiki']);
     $router->post('/admin/settings/save', [AdminSettingController::class, 'save']);
     $router->post('/admin/settings/test-email', [AdminSettingController::class, 'testEmail']);
+
+    // Notifications SMS — rapport quotidien Free Mobile (groupe Système).
+    $router->get('/admin/notifications', [AdminNotificationController::class, 'index']);
+    $router->post('/admin/notifications/save', [AdminNotificationController::class, 'save']);
+    $router->post('/admin/notifications/recipient', [AdminNotificationController::class, 'addRecipient']);
+    $router->post('/admin/notifications/recipient/{index}/delete', [AdminNotificationController::class, 'deleteRecipient']);
+    $router->post('/admin/notifications/test', [AdminNotificationController::class, 'test']);
 
     // Comptabilité & gestion des achats (rôle ADMIN ou TRESORERIE).
     $router->get('/admin/compta', [AdminComptaController::class, 'dashboard']);

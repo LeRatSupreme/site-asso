@@ -216,6 +216,7 @@ final class Permissions
             'costs'      => 'Coûts de revient',
             'cash'       => 'Caisses',
             'users'      => 'Utilisateurs',
+            'notifications' => 'Notifications SMS',
             'settings'   => 'Paramètres',
         ];
     }
