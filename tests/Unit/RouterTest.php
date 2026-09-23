@@ -78,6 +78,31 @@ final class RouterTest extends TestCase
         self::assertSame(200, $match['status']);
         self::assertSame(['slug' => 'lan'], $match['params']);
     }
+
+    public function test_match_decode_les_parametres_url_encodes(): void
+    {
+        // Les clés produits contiennent espaces/accents (ex. « Chips BBQ »),
+        // passés %20 dans l'URL : le paramètre extrait doit être décodé.
+        $router = new Router();
+        $router->post('/admin/compta/inventaire/{key}/discontinue', [FakeController::class, 'show']);
+
+        $match = $router->match('POST', '/admin/compta/inventaire/Chips%20BBQ/discontinue');
+
+        self::assertSame(200, $match['status']);
+        self::assertSame(['key' => 'Chips BBQ'], $match['params']);
+    }
+
+    public function test_match_decode_conserve_le_plus_litteral(): void
+    {
+        // Dans un chemin, « + » est littéral (seul %20 représente l'espace).
+        $router = new Router();
+        $router->get('/tag/{name}', [FakeController::class, 'show']);
+
+        $match = $router->match('GET', '/tag/rouge%20et%20bleu%2Bvert');
+
+        self::assertSame(200, $match['status']);
+        self::assertSame(['name' => 'rouge et bleu+vert'], $match['params']);
+    }
 }
 
 /**

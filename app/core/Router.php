@@ -96,7 +96,9 @@ final class Router
 
                 $params = [];
                 foreach ($route['params'] as $name => $_) {
-                    $params[$name] = $matches[$name];
+                    // Les paramètres d'URL arrivent encodés (ex. « Chips%20BBQ ») :
+                    // on restitue la valeur réelle (rawurldecode laisse « + » intact).
+                    $params[$name] = rawurldecode((string) $matches[$name]);
                 }
 
                 return ['status' => 200, 'handler' => $route['handler'], 'params' => $params];
