@@ -75,6 +75,7 @@ $twitterHandle = Setting::get('twitter_handle', '');
     <meta name="apple-mobile-web-app-title" content="AEIC">
     <link rel="stylesheet" href="<?= e(assetVersioned('css/base.css')) ?>">
     <link rel="stylesheet" href="<?= e(assetVersioned('css/pages.css')) ?>">
+    <link rel="stylesheet" href="<?= e(assetVersioned('css/kit.css')) ?>">
     <link rel="stylesheet" href="<?= e(rootAssetVersioned('/css/payments.css')) ?>">
     <?php if (str_starts_with($currentPath ?? '', '/sondages')): ?>
         <link rel="stylesheet" href="<?= e(rootAssetVersioned('/css/polls.css')) ?>">
@@ -516,6 +517,7 @@ $twitterHandle = Setting::get('twitter_handle', '');
         })();
     </script>
     <script src="<?= e(rootAssetVersioned('/assets/js/confirm.js')) ?>"></script>
+    <script src="<?= e(assetVersioned('js/kit.js')) ?>"></script>
 
     <!-- Bandelette cookies -->
     <div class="cookie-banner" id="cookie-banner" hidden>

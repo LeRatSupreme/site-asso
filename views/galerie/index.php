@@ -12,10 +12,19 @@ $groups = $groups ?? [];
 ?>
 
 <header class="page-hero">
-    <div class="halo halo-teal" aria-hidden="true"></div>
+    <div class="ae-aurora" aria-hidden="true"></div>
+    <div class="ae-dots dot-grid" aria-hidden="true"></div>
+    <div class="ae-chips" aria-hidden="true">
+        <span class="ae-chip ae-chip-1">📷</span>
+        <span class="ae-chip ae-chip-2">🖼️</span>
+        <span class="ae-chip ae-chip-3">✨</span>
+    </div>
     <div class="container">
-        <span class="eyebrow"><?= e(t('gallery.eyebrow')) ?></span>
-        <h1 class="page-title"><?= e(t('gallery.title')) ?></h1>
+        <span class="ae-pill">
+            <span class="ae-pill-dot" aria-hidden="true"></span>
+            <?= e(t('gallery.eyebrow')) ?>
+        </span>
+        <h1 class="page-title ae-title-grad"><?= e(t('gallery.title')) ?></h1>
         <p class="page-lead"><?= e(t('gallery.lead')) ?></p>
     </div>
 </header>
@@ -28,7 +37,7 @@ $groups = $groups ?? [];
             </div>
         <?php else: ?>
             <?php foreach ($groups as $group): ?>
-                <div class="gallery-group">
+                <div class="gallery-group ae-reveal">
                     <div class="gallery-group-head">
                         <?php if ($group['event_slug'] !== ''): ?>
                             <a class="gallery-group-title" href="<?= e(url('/events/' . rawurlencode($group['event_slug']))) ?>">
@@ -76,6 +85,47 @@ $groups = $groups ?? [];
     <img src="" alt="" id="lightbox-img">
     <p class="lightbox-caption" id="lightbox-caption"></p>
 </div>
+
+<style>
+/* ============ Galerie — spécifique ============ */
+.gallery-group-head {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem 1rem;
+    padding-bottom: 0.9rem;
+    border-bottom: 1px solid var(--border);
+    position: relative;
+}
+.gallery-group-head::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    bottom: -1px;
+    width: 180px;
+    height: 2px;
+    background: linear-gradient(90deg, #8b7ae0, rgba(58, 155, 184, 0));
+}
+.gallery-group-title { font-size: 1.4rem; letter-spacing: -0.02em; }
+.gallery-group-date {
+    padding: 0.25rem 0.8rem;
+    border-radius: 999px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--primary);
+    background: rgba(72, 189, 211, 0.1);
+    border: 1px solid rgba(72, 189, 211, 0.25);
+}
+.gallery-item {
+    border-radius: 16px;
+    transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+}
+.gallery-item:hover {
+    transform: translateY(-4px);
+    border-color: rgba(72, 189, 211, 0.4);
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35), 0 0 26px rgba(58, 155, 184, 0.12);
+}
+</style>
 
 <script>
     (function () {

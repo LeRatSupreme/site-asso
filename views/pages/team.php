@@ -10,10 +10,19 @@ declare(strict_types=1);
  */
 ?>
 <header class="page-hero">
-    <div class="halo halo-teal" aria-hidden="true"></div>
+    <div class="ae-aurora" aria-hidden="true"></div>
+    <div class="ae-dots dot-grid" aria-hidden="true"></div>
+    <div class="ae-chips" aria-hidden="true">
+        <span class="ae-chip ae-chip-1">👥</span>
+        <span class="ae-chip ae-chip-2">🎓</span>
+        <span class="ae-chip ae-chip-3">⭐</span>
+    </div>
     <div class="container">
-        <span class="eyebrow"><?= e(t('team.eyebrow')) ?></span>
-        <h1 class="page-title"><?= e(t('team.title')) ?></h1>
+        <span class="ae-pill">
+            <span class="ae-pill-dot" aria-hidden="true"></span>
+            <?= e(t('team.eyebrow')) ?>
+        </span>
+        <h1 class="page-title ae-title-grad"><?= e(t('team.title')) ?></h1>
         <p class="page-lead"><?= e(t('team.lead')) ?></p>
     </div>
 </header>
@@ -26,11 +35,11 @@ declare(strict_types=1);
             </div>
         <?php else: ?>
             <?php if (!empty($highlighted)): ?>
-                <div class="section-head">
+                <div class="section-head ae-reveal">
                     <span class="eyebrow"><?= e(t('team.board.eyebrow')) ?></span>
                     <h2 class="section-title"><?= e(t('team.board.title')) ?></h2>
                 </div>
-                <div class="grid team-grid team-grid-featured">
+                <div class="grid team-grid team-grid-featured ae-reveal">
                     <?php foreach ($highlighted as $member): ?>
                         <?php require AEIC_VIEWS . '/partials/_team_card.php'; ?>
                     <?php endforeach; ?>
@@ -38,11 +47,11 @@ declare(strict_types=1);
             <?php endif; ?>
 
             <?php if (!empty($members)): ?>
-                <div class="section-head team-section-others">
+                <div class="section-head team-section-others ae-reveal">
                     <span class="eyebrow"><?= e(t('team.all.eyebrow')) ?></span>
                     <h2 class="section-title"><?= e(t('team.all.title')) ?></h2>
                 </div>
-                <div class="grid team-grid">
+                <div class="grid team-grid ae-reveal">
                     <?php foreach ($members as $member): ?>
                         <?php require AEIC_VIEWS . '/partials/_team_card.php'; ?>
                     <?php endforeach; ?>
@@ -51,3 +60,35 @@ declare(strict_types=1);
         <?php endif; ?>
     </div>
 </section>
+
+<style>
+/* ============ Équipe — spécifique ============ */
+
+/* Avatars cerclés d'un anneau dégradé (comme les médailles des valeurs) */
+.team-grid .team-avatar {
+    width: 104px;
+    height: 104px;
+    padding: 4px;
+    background: linear-gradient(135deg, #8b7ae0, #3a9bb8);
+    box-shadow: 0 14px 32px rgba(58, 155, 184, 0.3);
+    transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.3s ease;
+}
+.team-grid .team-card:hover .team-avatar {
+    transform: translateY(-4px) scale(1.05);
+    box-shadow: 0 20px 44px rgba(58, 155, 184, 0.4), 0 0 30px rgba(139, 122, 224, 0.2);
+}
+.team-grid .team-card {
+    border-radius: 20px;
+    text-align: center;
+    align-items: center;
+}
+.team-grid .team-role {
+    font-size: 0.95rem;
+}
+.team-grid .team-card .card-title {
+    text-transform: none;
+    letter-spacing: -0.01em;
+    font-size: 1.15rem;
+}
+.team-section-others { margin-top: 3.5rem; }
+</style>

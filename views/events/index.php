@@ -65,15 +65,82 @@ function catIcon(string $cat): string {
 }
 ?>
 <header class="page-hero">
-    <div class="halo halo-teal" aria-hidden="true"></div>
+    <div class="ae-aurora" aria-hidden="true"></div>
+    <div class="ae-dots dot-grid" aria-hidden="true"></div>
+    <div class="ae-chips" aria-hidden="true">
+        <span class="ae-chip ae-chip-1">🎉</span>
+        <span class="ae-chip ae-chip-2">💻</span>
+        <span class="ae-chip ae-chip-3">🍻</span>
+    </div>
     <div class="container">
-        <span class="eyebrow"><?= e(t('events.eyebrow')) ?></span>
-        <h1 class="page-title"><?= e(t('events.title')) ?></h1>
+        <span class="ae-pill">
+            <span class="ae-pill-dot" aria-hidden="true"></span>
+            <?= e(t('events.eyebrow')) ?>
+        </span>
+        <h1 class="page-title ae-title-grad"><?= e(t('events.title')) ?></h1>
         <p class="page-lead">
             <?= e(tt('events.lead', ['{a}' => max($countUpcoming, 0), '{b}' => max($countPast, 0)])) ?>
         </p>
     </div>
 </header>
+
+<style>
+/* ============ Événements — spécifique ============ */
+
+/* En-têtes de catégorie : tuile dégradée + filet dégradé */
+.event-cat-header {
+    display: flex;
+    align-items: center;
+    gap: 0.9rem;
+    padding-bottom: 0.9rem;
+    border-bottom: 1px solid var(--border);
+    position: relative;
+}
+.event-cat-header::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    bottom: -1px;
+    width: 180px;
+    height: 2px;
+    background: linear-gradient(90deg, #8b7ae0, rgba(58, 155, 184, 0));
+}
+.event-cat-icon {
+    display: grid;
+    place-items: center;
+    width: 46px;
+    height: 46px;
+    border-radius: 14px;
+    font-size: 1.4rem;
+    line-height: 1;
+    background: linear-gradient(135deg, rgba(74, 61, 143, 0.75), rgba(58, 155, 184, 0.6));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 10px 22px rgba(0, 0, 0, 0.28);
+    flex-shrink: 0;
+}
+.event-cat-title {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin: 0;
+    letter-spacing: -0.02em;
+}
+.event-cat-count {
+    padding: 0.15rem 0.65rem;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 800;
+    color: var(--primary);
+    background: rgba(72, 189, 211, 0.12);
+    border: 1px solid rgba(72, 189, 211, 0.28);
+}
+.event-cat-past .event-cat-icon {
+    background: linear-gradient(135deg, rgba(74, 61, 143, 0.35), rgba(58, 155, 184, 0.25));
+    box-shadow: none;
+    filter: saturate(0.7);
+    opacity: 0.85;
+}
+.event-cat-section + .event-cat-section { margin-top: 3rem; }
+</style>
 
 <section class="section">
     <div class="container">
@@ -84,7 +151,7 @@ function catIcon(string $cat): string {
         <?php else: ?>
 
             <?php foreach ($grouped as $catName => $events): ?>
-                <div class="event-cat-section">
+                <div class="event-cat-section ae-reveal">
                     <div class="event-cat-header">
                         <h2 class="event-cat-title">
                             <span class="event-cat-icon"><?= catIcon($catName) ?></span>
@@ -101,7 +168,7 @@ function catIcon(string $cat): string {
             <?php endforeach; ?>
 
             <?php if (!empty($uncategorized)): ?>
-                <div class="event-cat-section">
+                <div class="event-cat-section ae-reveal">
                     <div class="event-cat-header">
                         <h2 class="event-cat-title">
                             <span class="event-cat-icon">📅</span>
@@ -124,12 +191,12 @@ function catIcon(string $cat): string {
 <?php if (!empty($past)): ?>
 <section class="section section-alt">
     <div class="container">
-        <div class="section-head">
+        <div class="section-head ae-reveal">
             <h2 class="section-title"><?= e(t('events.archives')) ?></h2>
         </div>
 
         <?php foreach ($groupedPast as $catName => $events): ?>
-            <div class="event-cat-section event-cat-past">
+            <div class="event-cat-section event-cat-past ae-reveal">
                     <div class="event-cat-header">
                         <h3 class="event-cat-title">
                             <span class="event-cat-icon"><?= catIcon($catName) ?></span>
