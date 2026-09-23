@@ -407,6 +407,11 @@ final class SmsReport
             $lines[] = '- ' . $a['name'] . ' : ' . $a['autonomy'] . ' j (' . $stockTxt . ')';
         }
 
+        $hidden = $count - count($alerts);
+        if ($hidden > 0) {
+            $lines[] = '(+ ' . $hidden . ' autres — voir Réappro)';
+        }
+
         return ['block' => implode("\n", $lines), 'count' => $count];
     }
 
