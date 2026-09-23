@@ -5,12 +5,13 @@ declare(strict_types=1);
 namespace App\Models;
 
 /**
- * Produits marqués « plus en vente » (table `product_discontinued`).
+ * Produits marqués « plus en vente pour l'instant » (table `product_discontinued`).
  *
- * Produits saisonniers ou discontinués (ex. Redbull Winter) : exclus du
- * comptage à l'aveugle, de la page Inventaire et du réapprovisionnement
- * afin de ne plus encombrer les saisies. L'historique des ventes reste
- * inchangé.
+ * Pause de vente TEMPORAIRE pour produits saisonniers (ex. Redbull Summer
+ * hors été) : exclus du comptage à l'aveugle, de la page Inventaire et du
+ * réapprovisionnement afin de ne plus encombrer les saisies. Aucune
+ * suppression : ventes, stocks, comptages et coûts restent intacts, et
+ * resume() rétablit le produit à l'identique en un clic.
  */
 final class ProductDiscontinued extends Model
 {

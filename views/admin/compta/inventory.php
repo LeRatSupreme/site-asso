@@ -139,7 +139,7 @@ declare(strict_types=1);
                         </td>
                         <td>
                             <button type="submit" class="btn btn-ghost btn-sm" form="<?= $disId ?>"
-                                    title="Marquer « plus en vente » : disparaît des comptages, de l'inventaire et du réappro (rétablissable en bas de page)">🚫</button>
+                                    title="Plus en vente pour l'instant (ex. saisonnier : Redbull Summer hors été) : sort des comptages et du réappro — rien n'est supprimé, rétablissement en bas de page">🚫</button>
                         </td>
                     </tr>
                 <?php endforeach; ?>
@@ -159,7 +159,7 @@ declare(strict_types=1);
         <!-- 🚫 plus en vente : formulaires hors du form principal (non imbriqués) -->
         <form id="<?= $disId ?>" method="post"
               action="<?= e(url('/admin/compta/inventaire/' . rawurlencode((string) $r['key']) . '/discontinue')) ?>"
-              data-confirm="Marquer « <?= e((string) $r['key']) ?> » plus en vente ? Il disparaîtra des comptages, de l'inventaire et du réappro (rétablissable en bas de page).">
+              data-confirm="Marquer « <?= e((string) $r['key']) ?> » plus en vente pour l'instant ? Rien n'est supprimé : il sort juste des comptages et du réappro, rétablissement en un clic en bas de page.">
             <input type="hidden" name="back" value="inventaire">
             <?= csrf_field() ?>
         </form>
@@ -207,10 +207,10 @@ declare(strict_types=1);
 
 <div class="card surface glass table-wrap">
     <details class="cost-card-lots">
-        <summary>🚫 Plus en vente (<?= count($discontinuedRows) ?>)</summary>
-        <p class="muted">Ces produits n'apparaissent plus dans les comptages ni dans le réappro. L'historique des ventes est conservé.</p>
+        <summary>🚫 Plus en vente pour l'instant (<?= count($discontinuedRows) ?>)</summary>
+        <p class="muted">Marquage <strong>temporaire</strong> (ex. Redbull Summer hors été) : ces produits sortent des comptages et du réappro, mais <strong>rien n'est supprimé</strong> — ventes, stock et comptages conservés. « Remettre en vente » les réaffiche aussitôt.</p>
         <?php if ($discontinuedRows === []): ?>
-            <p class="muted">Aucun produit marqué plus en vente.</p>
+            <p class="muted">Aucun produit marqué plus en vente pour l'instant.</p>
         <?php else: ?>
         <table class="table">
             <thead>
