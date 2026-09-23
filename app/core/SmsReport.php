@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Core;
 
+use App\Core\Compta\CashLedger;
 use App\Models\Sale;
 use App\Models\SmsSchedule;
 use App\Models\Setting;
@@ -206,6 +207,7 @@ final class SmsReport
                 ['var' => 'panier',   'desc' => 'Panier moyen'],
                 ['var' => 'carte',    'desc' => 'CA encaissé par carte'],
                 ['var' => 'espece',   'desc' => 'CA encaissé en espèces'],
+                ['var' => 'caisse',   'desc' => 'Montant actuel dans la caisse (liquide)'],
             ],
             'Top produits' => [
                 ['var' => 'top',   'desc' => 'Top 3 produits (bloc multi-lignes)'],
@@ -230,6 +232,7 @@ final class SmsReport
             'Catégories' => [
                 ['var' => 'categories', 'desc' => 'Répartition du CA par catégorie (barres)'],
                 ['var' => 'cat_top',    'desc' => 'Première catégorie du jour'],
+                ['var' => 'graphique',  'desc' => 'Lien vers le graphique image du jour'],
             ],
         ];
     }
@@ -327,7 +330,24 @@ final class SmsReport
             '{evolution}'        => self::evolutionLabel($agg['ca'], $yAgg['ca']),
             '{categories}'       => self::categoryBlock($catRows),
             '{cat_top}'          => $catTop,
+            '{caisse}'           => formatPrice(CashLedger::balance()),
+            '{graphique}'        => APP_URL . '/sms-chart/' . self::chartToken() . '.svg',
         ];
+    }
+
+    /**
+     * Jeton secret protégeant l'URL du graphique (généré au premier
+     * appel, stocké dans les settings).
+     */
+    public static function chartToken(): string
+    {
+        $token = Setting::get('sms_chart_token', '');
+        if (trim($token) === '') {
+            $token = bin2hex(random_bytes(16));
+            Setting::set('sms_chart_token', $token);
+        }
+
+        return $token;
     }
 
     /**

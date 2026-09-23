@@ -37,6 +37,7 @@ use App\Controllers\PageController;
 use App\Controllers\PollController;
 use App\Controllers\RegistrationController;
 use App\Controllers\SeoController;
+use App\Controllers\SmsChartController;
 use App\Controllers\StudentController;
 use App\Controllers\TwoFactorController;
 use App\Core\Router;
@@ -84,6 +85,9 @@ function aeic_register_routes(Router $router): void
     // SEO.
     $router->get('/sitemap.xml', [SeoController::class, 'sitemap']);
     $router->get('/search', [SeoController::class, 'search']);
+
+    // Graphique image du jour pour les SMS (protégé par jeton secret).
+    $router->get('/sms-chart/{token}', [SmsChartController::class, 'show']);
 
     // Notifications in-app (API, Auth requise).
     $router->get('/api/notifications', [NotificationController::class, 'index']);
