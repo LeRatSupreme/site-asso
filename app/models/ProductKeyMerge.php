@@ -86,13 +86,23 @@ final class ProductKeyMerge extends Model
             // 7. product_stocks (PK product_key) : fusion ADDITIVE du stock
             //    de référence (source 5 + cible 7 → cible 12), puis
             //    suppression de la ligne source.
-            $stmt = $pdo->prepare(
-                'INSERT INTO product_stocks (product_key, stock)
-                 SELECT ?, stock FROM product_stocks WHERE product_key = ?
-                 ON DUPLICATE KEY UPDATE stock = stock + VALUES(stock), updated_at = NOW()'
-            );
-            $stmt->execute([$target, $source]);
-            $stocks = (int) $stmt->rowCount();
+            //    Lecture en deux temps : un INSERT ... SELECT depuis la
+            //    table product_stocks elle-même rend « stock » ambigu
+            //    dans ON DUPLICATE KEY UPDATE (erreur 1052 MySQL) — on
+            //    lit donc le stock source, puis un INSERT ... VALUES sans
+            //    SELECT l'ajoute à la cible.
+            $stmt = $pdo->prepare('SELECT stock FROM product_stocks WHERE product_key = ?');
+            $stmt->execute([$source]);
+            $sourceStock = $stmt->fetchColumn();
+            $stocks = 0;
+            if ($sourceStock !== false) {
+                $stmt = $pdo->prepare(
+                    'INSERT INTO product_stocks (product_key, stock) VALUES (?, ?)
+                     ON DUPLICATE KEY UPDATE stock = stock + VALUES(stock), updated_at = NOW()'
+                );
+                $stmt->execute([$target, (int) $sourceStock]);
+                $stocks = 1;
+            }
             $pdo->prepare('DELETE FROM product_stocks WHERE product_key = ?')->execute([$source]);
 
             // 8. product_discontinued (PK product_key) : le drapeau « plus
