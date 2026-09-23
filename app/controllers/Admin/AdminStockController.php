@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Controllers\Admin;
 
 use App\Core\Auth;
+use App\Core\Compta\AliasSuggester;
 use App\Core\Compta\ComptaCalc;
 use App\Core\Compta\ProductAutoSync;
 use App\Core\Compta\StockPublic;
@@ -386,6 +387,11 @@ final class AdminStockController extends AdminBaseController
 
         usort($discontinuedRows, static fn(array $a, array $b): int => strcasecmp($a['key'], $b['key']));
 
+        // Statistiques par clé + doublons probables (même clé normalisée) :
+        // alimentent la carte « Fusionner des clés produits » (recherche,
+        // aperçu des données déplacées, suggestions pré-remplies).
+        $keyStats = ProductKeyMerge::keyStats();
+
         $this->renderAdmin('admin/compta/inventory', [
             'title'            => 'Inventaire',
             'user'             => $user,
@@ -393,7 +399,8 @@ final class AdminStockController extends AdminBaseController
             'discontinuedRows' => $discontinuedRows,
             'history'          => InventoryCount::history(50),
             'gaps'             => InventoryCount::recentGaps(30),
-            'allKeys'          => ProductKeyMerge::allKeys(),
+            'keyStats'         => $keyStats,
+            'mergeDupes'       => AliasSuggester::groupDuplicates(array_keys($keyStats)),
         ]);
     }
 
