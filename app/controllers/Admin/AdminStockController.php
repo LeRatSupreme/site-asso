@@ -578,10 +578,11 @@ final class AdminStockController extends AdminBaseController
     }
 
     /**
-     * Marque un produit « plus en vente » (saisonnier ou discontinué) :
-     * il disparaît du comptage à l'aveugle, de la page Inventaire et du
-     * réappro. Actionnable depuis la page Comptage (tout le bureau) ;
-     * l'historique des ventes reste inchangé.
+     * Marque un produit « plus en vente pour l'instant » — pause de vente
+     * TEMPORAIRE (ex. Redbull Summer hors été) : il sort du comptage à
+     * l'aveugle, de la page Inventaire et du réappro, mais RIEN n'est
+     * supprimé (ventes, stock, comptages et coûts conservés). Réversible
+     * en un clic via resume() — section « Plus en vente » de l'Inventaire.
      */
     public function discontinue(string $key): void
     {
@@ -603,13 +604,16 @@ final class AdminStockController extends AdminBaseController
 
         // Synchro : le drapeau est relu par l'inventaire, le comptage à
         // l'aveugle, le réappro et les alertes SMS — rien d'autre à faire.
-        $this->setFlash('success', "Produit marqué plus en vente — il n'apparaîtra plus dans les comptages, l'inventaire ni le réappro.");
+        // Aucune donnée n'est supprimée : le rétablissement (resume) est
+        // immédiat et sans perte.
+        $this->setFlash('success', "Produit marqué « plus en vente pour l'instant » — rien n'est supprimé : il sort des comptages, de l'inventaire et du réappro (rétablissement en un clic depuis la page Inventaire).");
         redirect(url($back));
     }
 
     /**
-     * Remet un produit en vente (retire le drapeau « plus en vente ») :
-     * il réapparaît dans les comptages et dans le réappro.
+     * Remet un produit en vente (retire le drapeau « plus en vente pour
+     * l'instant ») : il réapparaît aussitôt dans les comptages et dans le
+     * réappro, avec son stock théorique et son historique intacts.
      */
     public function resume(string $key): void
     {
@@ -625,7 +629,7 @@ final class AdminStockController extends AdminBaseController
 
         $this->audit('inventory.resume', 'product', $productKey, ['key' => $productKey]);
 
-        $this->setFlash('success', 'Produit remis en vente.');
+        $this->setFlash('success', "Produit remis en vente — il réapparaît dans les comptages et le réappro, sans aucune perte de données.");
         redirect(url('/admin/compta/inventaire'));
     }
 

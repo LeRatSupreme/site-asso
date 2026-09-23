@@ -33,7 +33,9 @@ declare(strict_types=1);
     <p class="card-meta">
         Comptage « à l'aveugle » : les quantités théoriques ne sont volontairement pas affichées,
         pour un comptage honnête. Laisse vide les produits non comptés.
-        Les produits marqués plus en vente disparaissent de cette liste — rétablissables depuis la page Inventaire (groupe Système).
+        Le bouton 🚫 marque un produit <strong>« plus en vente pour l'instant »</strong> (pause
+        temporaire, ex. Redbull Summer hors été) : il sort de la liste mais <strong>rien n'est
+        supprimé</strong> — rétablissement en un clic depuis la page Inventaire (groupe Système).
     </p>
     <?php if ($rows === []): ?>
         <p class="muted">Aucun produit enregistré pour le moment.</p>
@@ -50,10 +52,10 @@ declare(strict_types=1);
                 <td><input type="number" name="count[<?= e($r['key']) ?>]" min="0" step="1" placeholder="—" inputmode="numeric" style="width:90px" form="blind-count-form"></td>
                 <td>
                     <form method="post" action="<?= e(url('/admin/compta/inventaire/comptage/' . rawurlencode($r['key']) . '/discontinue')) ?>"
-                          data-confirm="Marquer « <?= e($r['key']) ?> » plus en vente ? Il disparaîtra des comptages (rétablissable dans Inventaire)."
+                          data-confirm="Marquer « <?= e($r['key']) ?> » plus en vente pour l'instant ? Rien n'est supprimé : il sort juste des comptages et restera rétablissable en un clic (page Inventaire)."
                           data-preserve-scroll>
                         <?= csrf_field() ?>
-                        <button type="submit" class="btn btn-outline btn-sm icon-btn" title="Plus en vente (masque ce produit des comptages)">🚫</button>
+                        <button type="submit" class="btn btn-outline btn-sm icon-btn" title="Plus en vente pour l'instant (saisonnier…) : masque des comptages, rien n'est supprimé">🚫</button>
                     </form>
                 </td>
             </tr>
