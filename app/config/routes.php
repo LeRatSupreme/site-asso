@@ -288,6 +288,7 @@ function aeic_register_routes(Router $router): void
     $router->post('/admin/compta/inventaire/merge', [AdminStockController::class, 'mergeKeys']);
     // Remettre en vente un produit marqué « plus en vente » (groupe Système).
     $router->post('/admin/compta/inventaire/{key}/resume', [AdminStockController::class, 'resume']);
+    $router->post('/admin/compta/inventaire/{key}/discontinue', [AdminStockController::class, 'discontinue']);
 
     // Comptage inventaire « à l'aveugle » : saisie seule, tout le bureau
     // hors élèves (l'écart n'est révélé qu'à l'enregistrement).

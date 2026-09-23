@@ -588,17 +588,23 @@ final class AdminStockController extends AdminBaseController
         $this->guardAdminArea();
 
         $productKey = trim($key);
+        $back = ($_POST['back'] ?? '') === 'inventaire'
+            ? '/admin/compta/inventaire'
+            : '/admin/compta/inventaire/comptage';
+
         if ($productKey === '') {
             $this->setFlash('error', 'Produit manquant.');
-            redirect(url('/admin/compta/inventaire/comptage'));
+            redirect(url($back));
         }
 
         ProductDiscontinued::mark($productKey, Auth::id());
 
         $this->audit('inventory.discontinue', 'product', $productKey, ['key' => $productKey]);
 
-        $this->setFlash('success', "Produit marqué plus en vente — il n'apparaîtra plus dans les comptages.");
-        redirect(url('/admin/compta/inventaire/comptage'));
+        // Synchro : le drapeau est relu par l'inventaire, le comptage à
+        // l'aveugle, le réappro et les alertes SMS — rien d'autre à faire.
+        $this->setFlash('success', "Produit marqué plus en vente — il n'apparaîtra plus dans les comptages, l'inventaire ni le réappro.");
+        redirect(url($back));
     }
 
     /**

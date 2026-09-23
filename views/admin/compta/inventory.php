@@ -95,10 +95,11 @@ declare(strict_types=1);
                     <th class="th-num">Stock théorique</th>
                     <th>Saisie physique</th>
                     <th>Dernier écart</th>
+                    <th></th>
                 </tr>
             </thead>
             <tbody>
-                <?php foreach ($rows as $r): ?>
+                <?php foreach ($rows as $r): $disId = 'dis-' . substr(md5((string) $r['key']), 0, 10); ?>
                     <tr>
                         <td>
                             <strong><?= e($r['key']) ?></strong>
@@ -136,10 +137,14 @@ declare(strict_types=1);
                                 <span class="badge badge-warning">+<?= (int) $r['gap'] ?></span>
                             <?php endif; ?>
                         </td>
+                        <td>
+                            <button type="submit" class="btn btn-ghost btn-sm" form="<?= $disId ?>"
+                                    title="Marquer « plus en vente » : disparaît des comptages, de l'inventaire et du réappro (rétablissable en bas de page)">🚫</button>
+                        </td>
                     </tr>
                 <?php endforeach; ?>
                 <?php if ($rows === []): ?>
-                    <tr><td colspan="5" class="muted">Aucun produit à compter. Importe d'abord un rapport SumUp.</td></tr>
+                    <tr><td colspan="6" class="muted">Aucun produit à compter. Importe d'abord un rapport SumUp.</td></tr>
                 <?php endif; ?>
             </tbody>
         </table>
@@ -149,6 +154,16 @@ declare(strict_types=1);
             <button type="button" class="btn btn-ghost" onclick="if (confirm('Effacer les quantités saisies ?')) this.form.reset();">Annuler</button>
         </div>
     </form>
+
+    <?php foreach ($rows as $r): $disId = 'dis-' . substr(md5((string) $r['key']), 0, 10); ?>
+        <!-- 🚫 plus en vente : formulaires hors du form principal (non imbriqués) -->
+        <form id="<?= $disId ?>" method="post"
+              action="<?= e(url('/admin/compta/inventaire/' . rawurlencode((string) $r['key']) . '/discontinue')) ?>"
+              data-confirm="Marquer « <?= e((string) $r['key']) ?> » plus en vente ? Il disparaîtra des comptages, de l'inventaire et du réappro (rétablissable en bas de page).">
+            <input type="hidden" name="back" value="inventaire">
+            <?= csrf_field() ?>
+        </form>
+    <?php endforeach; ?>
 </section>
 
 <div class="card surface glass table-wrap">
