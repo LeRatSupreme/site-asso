@@ -19,6 +19,7 @@ final class AdminAnalyticsController extends AdminBaseController
      * Périodes rapides disponibles (clé => libellé).
      */
     private const PERIODS = [
+        '1d'   => '1 jour',
         '7d'   => '7 derniers jours',
         '30d'  => '30 derniers jours',
         '90d'  => '3 derniers mois',
@@ -150,6 +151,7 @@ final class AdminAnalyticsController extends AdminBaseController
         }
 
         return match ($period) {
+            '1d'   => [$today, $today],
             '7d'   => [date('Y-m-d', strtotime('-6 days')), $today],
             '30d'  => [date('Y-m-d', strtotime('-29 days')), $today],
             '90d'  => [date('Y-m-d', strtotime('-89 days')), $today],

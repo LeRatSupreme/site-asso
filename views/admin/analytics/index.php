@@ -313,6 +313,27 @@ $iconSvg = static function (string $name): string {
             syncCustom();
         });
     });
+
+    // Saisie manuelle d'une date → bascule immédiate sur « Personnalisé »,
+    // avec application automatique dès que les deux bornes sont remplies.
+    var customInputs = [
+        customBox.querySelector('input[name="from"]'),
+        customBox.querySelector('input[name="to"]')
+    ];
+    Array.prototype.forEach.call(customInputs, function (input) {
+        if (!input) return;
+        input.addEventListener('change', function () {
+            var customPill = document.querySelector('.af-pill[data-period="custom"]');
+            document.querySelectorAll('.af-pill').forEach(function (p) { p.classList.remove('is-active'); });
+            if (customPill) customPill.classList.add('is-active');
+            periodHidden.value = 'custom';
+            syncCustom();
+            var from = customInputs[0], to = customInputs[1];
+            if (from && to && from.value && to.value) {
+                document.getElementById('analytics-filters').submit();
+            }
+        });
+    });
     syncCustom();
 
     // ---------- Chart.js defaults ----------
