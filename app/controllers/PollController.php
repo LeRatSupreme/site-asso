@@ -23,8 +23,8 @@ final class PollController extends Controller
         $polls = Poll::published();
 
         $this->render('polls/index', [
-            'title'       => 'Sondages — AEIC',
-            'description' => 'Donnez votre avis : les sondages de l\'AEIC ouverts aux membres.',
+            'title'       => 'Sondages — AEIC, association étudiante Calais',
+            'description' => 'Les sondages des étudiants du BUT Informatique de Calais, organisés par l\'AEIC.',
             'polls'       => $polls,
             'count'       => count($polls),
         ]);

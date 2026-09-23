@@ -24,8 +24,8 @@ final class EventController extends Controller
         $past = Event::past(12);
 
         $this->render('events/index', [
-            'title'         => 'Événements — AEIC',
-            'description'   => 'Agenda des prochains rendez-vous de l\'AEIC : soirées, LAN, conférences.',
+            'title'         => 'Événements étudiants — AEIC Calais',
+            'description'   => 'Nuit de l\'Info, afterworks, barbecues et soirées : les événements de l\'AEIC, association étudiante du BUT Informatique de l\'IUT de Calais.',
             'upcoming'      => $upcoming,
             'past'          => $past,
             'countUpcoming' => count($upcoming),
@@ -67,7 +67,9 @@ final class EventController extends Controller
 
         $this->render('events/show', [
             'title'              => ($event['title'] ?? 'Événement') . ' — AEIC',
-            'description'        => $event['excerpt'] ?? '',
+            'description'        => trim((string) ($event['excerpt'] ?? '')) !== ''
+                ? (string) $event['excerpt']
+                : 'Événement de l\'AEIC, association étudiante du BUT Informatique de l\'IUT de Calais.',
             'ogType'             => 'article',
             'ogImage'            => $event['image'] ?? '',
             'event'              => $event,

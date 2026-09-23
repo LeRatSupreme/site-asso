@@ -39,7 +39,7 @@ final class GameController extends Controller
 
         $this->render('game/index', [
             'title'       => '🎮 Zone jeux — AEIC',
-            'description' => 'Joue au Wordle AEIC (FR/EN, 3 difficultés), résous l\'énigme du jour et grimpe dans le classement.',
+            'description' => 'Jeux et détente pour les étudiants de l\'AEIC, association du BUT Informatique de Calais : Wordle FR/EN, énigme du jour et classement.',
             'user'        => $user,
             'stats'       => $stats,
             'leaderboard' => $leaderboard,
@@ -103,7 +103,7 @@ final class GameController extends Controller
 
         $this->render('game/wordle', [
             'title'          => '🎮 Wordle AEIC — FR / EN',
-            'description'    => 'Le Wordle de l\'AEIC : 3 niveaux de difficulté, un mot du jour commun et un mode libre illimité.',
+            'description'    => 'Le Wordle de l\'AEIC, association étudiante du BUT Informatique de Calais : 3 niveaux de difficulté, un mot du jour commun et un mode libre illimité.',
             'user'           => $user,
             'isLoggedIn'     => Auth::check(),
             'submitUrl'      => url('/jeux/wordle/submit'),
@@ -251,7 +251,7 @@ final class GameController extends Controller
 
         $this->render('game/leaderboard', [
             'title'       => '🏆 Classement Wordle — AEIC',
-            'description' => 'Classement des joueurs de Wordle AEIC par série de victoires en cours (mot quotidien 5 lettres).',
+            'description' => 'Classement des joueurs de Wordle de l\'AEIC, association du BUT Informatique de Calais, par série de victoires en cours (mot quotidien 5 lettres).',
             'mode'        => 'global',
             'rows'        => $rows,
             'currentId'   => $currentId,
@@ -270,7 +270,7 @@ final class GameController extends Controller
 
         $this->render('game/enigma', [
             'title'       => '🧩 Énigme du jour — AEIC',
-            'description' => 'Une nouvelle énigme chaque jour, identique pour tous les joueurs. Saurez-vous la résoudre ?',
+            'description' => 'Une nouvelle énigme chaque jour, proposée par l\'AEIC, association du BUT Informatique de Calais, identique pour tous les joueurs. Saurez-vous la résoudre ?',
             'enigma'      => $enigma,
             'lang'        => $lang,
             'submitUrl'   => url('/jeux/enigme/check'),
