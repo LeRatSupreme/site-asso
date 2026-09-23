@@ -147,4 +147,24 @@ final class SmsReportTest extends TestCase
         self::assertFalse(SmsReport::scheduleDue(['last_sent_day' => $today] + $base, $now, $today), 'déjà envoyé');
         self::assertTrue(SmsReport::scheduleDue($base, $now, '2026-09-24'), 'envoyé hier mais dû aujourd\'hui');
     }
+
+    public function test_build_svg_genere_un_svg_sain(): void
+    {
+        $svg = \App\Controllers\SmsChartController::buildSvg(
+            [['category' => 'Boissons <test>', 'ca' => 20.0]],
+            '26/09/2026'
+        );
+
+        self::assertStringContainsString('<svg', $svg);
+        self::assertStringContainsString('Boissons &lt;test&gt;', $svg);
+        self::assertStringContainsString('26/09/2026', $svg);
+        self::assertStringContainsString('</svg>', $svg);
+    }
+
+    public function test_build_svg_sans_vente_affiche_un_message(): void
+    {
+        $svg = \App\Controllers\SmsChartController::buildSvg([], '26/09/2026');
+
+        self::assertStringContainsString('Aucune vente', $svg);
+    }
 }
