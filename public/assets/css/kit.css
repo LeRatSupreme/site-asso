@@ -1,0 +1,284 @@
+/* =====================================================================
+   AEIC — kit.css
+   Kit de design commun (refonte 2026) — dérivé de la page « L'association ».
+   Composants réutilisables : hero aurora, pill, titre dégradé, chips,
+   panneaux à bordure dégradée, médailles, bandeau stats, CTA, reveal.
+   ===================================================================== */
+
+/* ----------------------------- Hero aurora ----------------------------- */
+.ae-aurora {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background:
+        radial-gradient(52% 62% at 82% 12%, rgba(58, 155, 184, 0.20), transparent 70%),
+        radial-gradient(46% 58% at 8% 88%, rgba(74, 61, 143, 0.22), transparent 70%),
+        radial-gradient(38% 46% at 50% 0%, rgba(139, 122, 224, 0.10), transparent 70%);
+    animation: ae-aurora 12s ease-in-out infinite alternate;
+}
+@keyframes ae-aurora {
+    from { opacity: 0.75; transform: scale(1); }
+    to   { opacity: 1; transform: scale(1.06); }
+}
+.ae-dots {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    -webkit-mask-image: radial-gradient(60% 70% at 78% 30%, #000 0%, transparent 100%);
+    mask-image: radial-gradient(60% 70% at 78% 30%, #000 0%, transparent 100%);
+}
+
+/* ----------------------------- Pill ----------------------------- */
+.ae-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55rem;
+    padding: 0.45rem 1rem;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-weight: 800;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--primary);
+    background: rgba(72, 189, 211, 0.08);
+    border: 1px solid rgba(72, 189, 211, 0.3);
+    margin-bottom: 1.4rem;
+}
+.ae-pill-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--primary);
+    animation: ae-pulse 2.2s ease-in-out infinite;
+    flex-shrink: 0;
+}
+@keyframes ae-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(72, 189, 211, 0.5); }
+    50%      { box-shadow: 0 0 0 6px rgba(72, 189, 211, 0); }
+}
+
+/* ----------------------------- Titre dégradé ----------------------------- */
+.ae-title-grad {
+    background: linear-gradient(105deg, #fff 30%, #7fd0e4 62%, #b3a1ea 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+}
+[data-theme="light"] .ae-title-grad {
+    background: linear-gradient(105deg, #1e293b 30%, #2d7a94 62%, #4a3d8f 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+}
+
+/* ----------------------------- Chips flottantes ----------------------------- */
+.ae-chips { position: absolute; inset: 0; pointer-events: none; z-index: 0; }
+.ae-chip {
+    position: absolute;
+    display: grid;
+    place-items: center;
+    width: 52px;
+    height: 52px;
+    border-radius: 16px;
+    font-size: 1.45rem;
+    line-height: 1;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+    box-shadow: 0 14px 34px rgba(0, 0, 0, 0.3);
+    animation: ae-float 7s ease-in-out infinite;
+}
+.ae-chip-1 { top: 16%; right: 10%; }
+.ae-chip-2 { top: 58%; right: 20%; animation-delay: 1.6s; }
+.ae-chip-3 { bottom: 14%; right: 6%; animation-delay: 3s; }
+@keyframes ae-float {
+    0%, 100% { transform: translateY(0) rotate(-3deg); }
+    50%      { transform: translateY(-14px) rotate(3deg); }
+}
+
+/* ----------------------------- Panneau à bordure dégradée ----------------------------- */
+.ae-panel {
+    position: relative;
+    border-radius: 24px;
+    background:
+        radial-gradient(90% 150% at 100% 0%, rgba(58, 155, 184, 0.12), transparent 55%),
+        radial-gradient(80% 150% at 0% 100%, rgba(74, 61, 143, 0.16), transparent 55%),
+        rgba(255, 255, 255, 0.03);
+}
+.ae-panel::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(135deg, rgba(74, 61, 143, 0.7), rgba(58, 155, 184, 0.6) 50%, rgba(255, 255, 255, 0.06));
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    mask-composite: exclude;
+    pointer-events: none;
+}
+.ae-panel > * { position: relative; z-index: 1; }
+
+/* ----------------------------- Médailles dégradées ----------------------------- */
+.ae-medal {
+    width: 88px;
+    height: 88px;
+    display: grid;
+    place-items: center;
+    border-radius: 26px;
+    font-size: 2.6rem;
+    line-height: 1;
+    background: linear-gradient(135deg, #4a3d8f, #3a9bb8);
+    box-shadow: 0 16px 38px rgba(58, 155, 184, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+    flex-shrink: 0;
+}
+.ae-medal-sm { width: 68px; height: 68px; border-radius: 20px; font-size: 2rem; }
+
+/* ----------------------------- Filigrane monospace ----------------------------- */
+.ae-code {
+    font-family: ui-monospace, 'SF Mono', Consolas, monospace;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.10);
+    letter-spacing: 0.04em;
+    user-select: none;
+}
+[data-theme="light"] .ae-code { color: rgba(15, 23, 42, 0.10); }
+
+/* ----------------------------- Bandeau + coquille stats ----------------------------- */
+.ae-band {
+    position: relative;
+    background:
+        radial-gradient(55% 130% at 88% 0%, rgba(58, 155, 184, 0.16), transparent 60%),
+        radial-gradient(50% 130% at 5% 100%, rgba(74, 61, 143, 0.22), transparent 60%),
+        linear-gradient(180deg, #0c1a33 0%, #081226 100%);
+    border-top: 1px solid rgba(72, 189, 211, 0.14);
+    border-bottom: 1px solid rgba(72, 189, 211, 0.14);
+}
+.ae-band .section-title { color: #fff; }
+.ae-band .eyebrow { color: #7fd0e4; }
+.ae-shell {
+    max-width: 1020px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    border-radius: 24px;
+    background: rgba(255, 255, 255, 0.035);
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+    overflow: hidden;
+}
+.ae-shell-a { grid-template-columns: repeat(2, 1fr); }
+.ae-stat {
+    position: relative;
+    text-align: center;
+    padding: 2.5rem 1.25rem 2.25rem;
+}
+.ae-stat + .ae-stat { border-left: 1px solid rgba(255, 255, 255, 0.07); }
+.ae-stat::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 56%;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, rgba(72, 189, 211, 0.8), transparent);
+}
+.ae-stat:hover { background: rgba(72, 189, 211, 0.05); }
+.ae-stat-ico { display: block; font-size: 1.5rem; margin-bottom: 0.8rem; }
+.ae-stat-num {
+    display: block;
+    font-size: clamp(2.5rem, 5vw, 3.3rem);
+    font-weight: 900;
+    line-height: 1;
+    letter-spacing: -0.04em;
+    background: linear-gradient(135deg, #8b7ae0, #3a9bb8 60%, #7fd0e4);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+.ae-stat-label {
+    display: block;
+    margin-top: 0.7rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #a8bdd4;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+}
+@media (max-width: 640px) {
+    .ae-stat { padding: 1.9rem 1rem 1.75rem; }
+}
+
+/* ----------------------------- CTA panneau dégradé ----------------------------- */
+.ae-cta-panel {
+    position: relative;
+    overflow: hidden;
+    border-radius: 28px;
+    padding: 4rem 2rem;
+    text-align: center;
+    background: linear-gradient(120deg, #43386f 0%, #2c6f88 100%);
+    box-shadow: 0 30px 70px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+.ae-cta-dots {
+    position: absolute;
+    inset: 0;
+    background-image: radial-gradient(circle, rgba(255, 255, 255, 0.14) 1px, transparent 1px);
+    background-size: 24px 24px;
+    -webkit-mask-image: radial-gradient(70% 90% at 50% 0%, #000 0%, transparent 100%);
+    mask-image: radial-gradient(70% 90% at 50% 0%, #000 0%, transparent 100%);
+    pointer-events: none;
+}
+.ae-cta-halo {
+    position: absolute;
+    width: 380px;
+    height: 380px;
+    border-radius: 50%;
+    pointer-events: none;
+}
+.ae-cta-halo-1 { top: -180px; right: -120px; background: radial-gradient(circle, rgba(127, 208, 228, 0.35), transparent 65%); }
+.ae-cta-halo-2 { bottom: -200px; left: -140px; background: radial-gradient(circle, rgba(179, 161, 234, 0.3), transparent 65%); }
+.ae-cta-inner {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.75rem;
+}
+.ae-cta-panel .section-title { color: #fff; }
+.ae-cta-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.75rem; }
+.ae-btn-light { background: #fff; color: #1e293b; }
+.ae-btn-light:hover { background: #e8eef5; color: #1e293b; }
+.ae-btn-glass { background: rgba(255, 255, 255, 0.12); border: 1px solid rgba(255, 255, 255, 0.45); color: #fff; }
+.ae-btn-glass:hover { background: rgba(255, 255, 255, 0.2); color: #fff; border-color: #fff; }
+@media (max-width: 640px) {
+    .ae-cta-panel { padding: 3rem 1.5rem; }
+}
+
+/* ----------------------------- Reveal au scroll (visible sans JS) ----------------------------- */
+.ae-reveal-pending { opacity: 0; transform: translateY(20px); }
+.ae-reveal-pending.ae-reveal-in {
+    opacity: 1; transform: translateY(0);
+    transition: opacity 0.6s ease, transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* ----------------------------- Responsive ----------------------------- */
+@media (max-width: 1080px) {
+    .ae-chip-3 { display: none; }
+}
+@media (max-width: 640px) {
+    .ae-chip { width: 44px; height: 44px; font-size: 1.2rem; border-radius: 13px; }
+    .ae-chip-2 { display: none; }
+}
+
+/* ----------------------------- Motion réduit ----------------------------- */
+@media (prefers-reduced-motion: reduce) {
+    .ae-aurora,
+    .ae-pill-dot,
+    .ae-chip { animation: none; }
+}

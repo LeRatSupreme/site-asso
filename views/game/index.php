@@ -18,10 +18,19 @@ use App\Core\Auth;
 $userPseudo = ($user !== null && !empty($user['pseudo'])) ? (string) $user['pseudo'] : null;
 ?>
 <header class="page-hero">
-    <div class="halo halo-teal" aria-hidden="true"></div>
+    <div class="ae-aurora" aria-hidden="true"></div>
+    <div class="ae-dots dot-grid" aria-hidden="true"></div>
+    <div class="ae-chips" aria-hidden="true">
+        <span class="ae-chip ae-chip-1">🎮</span>
+        <span class="ae-chip ae-chip-2">🏆</span>
+        <span class="ae-chip ae-chip-3">🔤</span>
+    </div>
     <div class="container">
-        <span class="eyebrow">🎮 Zone jeux</span>
-        <h1 class="page-title">Zone jeux</h1>
+        <span class="ae-pill">
+            <span class="ae-pill-dot" aria-hidden="true"></span>
+            🎮 Zone jeux
+        </span>
+        <h1 class="page-title ae-title-grad">Zone jeux</h1>
         <p class="page-lead">Un mot par jour, une série à construire, un classement à gravir. Connecte-toi pour sauvegarder tes scores&nbsp;!</p>
     </div>
 </header>
@@ -30,33 +39,35 @@ $userPseudo = ($user !== null && !empty($user['pseudo'])) ? (string) $user['pseu
     <div class="container">
 
         <?php if ($user === null): ?>
-            <div class="surface card panel-brand" style="margin-bottom:1.5rem; align-items:flex-start;">
+            <div class="surface card ae-panel gm-notice" style="margin-bottom:1.75rem; align-items:flex-start;">
                 <p style="margin:0;">🔒 Tu joues en <strong>mode démo</strong>. <a href="<?= e(url('/login?callbackUrl=' . rawurlencode('/jeux'))) ?>">Connecte-toi</a> pour sauvegarder tes parties, suivre ta série de victoires et apparaître dans le classement.</p>
             </div>
         <?php endif; ?>
 
         <?php if ($user !== null && $stats !== null): ?>
-            <h2 class="section-title" style="font-size:1.3rem; margin-bottom:1rem;">Tes statistiques</h2>
-            <div class="grid grid-4" style="margin-bottom:2rem;">
+            <h2 class="section-title gm-h2 ae-reveal">Tes statistiques</h2>
+            <div class="grid grid-2 gm-stats" style="margin-bottom:2.5rem;">
                 <?php foreach (['fr' => '🇫🇷 FR', 'en' => '🇬🇧 EN'] as $code => $label):
                     $s = $stats[$code]; ?>
-                    <div class="surface card card-hover">
+                    <div class="surface card ae-panel ae-reveal">
                         <span class="badge badge-gradient"><?= $label ?></span>
-                        <div class="stat-card">
-                            <span class="stat-value"><?= (int) $s['played'] ?></span>
-                            <span class="stat-label">Parties</span>
-                        </div>
-                        <div class="stat-card">
-                            <span class="stat-value"><?= (int) $s['won'] ?></span>
-                            <span class="stat-label">Victoires</span>
-                        </div>
-                        <div class="stat-card">
-                            <span class="stat-value">🔥 <?= (int) $s['currentStreak'] ?></span>
-                            <span class="stat-label">Série en cours</span>
-                        </div>
-                        <div class="stat-card">
-                            <span class="stat-value">🏆 <?= (int) $s['maxStreak'] ?></span>
-                            <span class="stat-label">Record</span>
+                        <div class="gm-stats-grid">
+                            <div class="stat-card">
+                                <span class="stat-value gm-stat"><?= (int) $s['played'] ?></span>
+                                <span class="stat-label">Parties</span>
+                            </div>
+                            <div class="stat-card">
+                                <span class="stat-value gm-stat"><?= (int) $s['won'] ?></span>
+                                <span class="stat-label">Victoires</span>
+                            </div>
+                            <div class="stat-card">
+                                <span class="stat-value gm-stat">🔥 <?= (int) $s['currentStreak'] ?></span>
+                                <span class="stat-label">Série en cours</span>
+                            </div>
+                            <div class="stat-card">
+                                <span class="stat-value gm-stat">🏆 <?= (int) $s['maxStreak'] ?></span>
+                                <span class="stat-label">Record</span>
+                            </div>
                         </div>
                     </div>
                 <?php endforeach; ?>
@@ -65,9 +76,9 @@ $userPseudo = ($user !== null && !empty($user['pseudo'])) ? (string) $user['pseu
 
         <?php if ($user !== null && $userPseudo === null): ?>
             <!-- Demande de pseudo -->
-            <div class="surface card panel-brand" id="pseudo-prompt" style="margin-bottom:1.5rem; align-items:flex-start;">
+            <div class="surface card ae-panel" id="pseudo-prompt" style="margin-bottom:1.75rem; align-items:flex-start;">
                 <div style="display:flex; gap:0.75rem; align-items:flex-start; width:100%;">
-                    <span style="font-size:1.5rem;">🎮</span>
+                    <span class="ae-medal ae-medal-sm" aria-hidden="true">🎮</span>
                     <div style="flex:1;">
                         <p style="margin:0 0 0.5rem; font-weight:700;">Choisis ton pseudo de joueur</p>
                         <p style="margin:0 0 0.75rem; color:var(--muted); font-size:0.9rem;">Ton pseudo apparaîtra dans le classement ci-dessous. 3 à 20 caractères (lettres, chiffres, espaces, - _ .).</p>
@@ -81,14 +92,14 @@ $userPseudo = ($user !== null && !empty($user['pseudo'])) ? (string) $user['pseu
             </div>
         <?php elseif ($user !== null && $userPseudo !== null): ?>
             <!-- Pseudo existant + bouton modifier -->
-            <div class="surface card" id="pseudo-display" style="margin-bottom:1.5rem; flex-direction:row; align-items:center; gap:0.75rem; flex-wrap:wrap;">
-                <span style="font-size:1.3rem;">🎮</span>
+            <div class="surface card ae-panel" id="pseudo-display" style="margin-bottom:1.75rem; flex-direction:row; align-items:center; gap:0.75rem; flex-wrap:wrap;">
+                <span aria-hidden="true" style="font-size:1.3rem;">🎮</span>
                 <span style="color:var(--muted);">Ton pseudo&nbsp;:</span>
                 <strong id="pseudo-current" style="color:var(--primary);"><?= e($userPseudo) ?></strong>
                 <button type="button" class="btn btn-outline btn-sm" id="pseudo-edit-btn" style="margin-left:auto;">✏️ Modifier</button>
             </div>
             <!-- Formulaire de modification (caché par défaut) -->
-            <div class="surface card" id="pseudo-edit" style="display:none; margin-bottom:1.5rem; flex-direction:column; gap:0.5rem; align-items:stretch;">
+            <div class="surface card" id="pseudo-edit" style="display:none; margin-bottom:1.75rem; flex-direction:column; gap:0.5rem; align-items:stretch;">
                 <div class="pseudo-edit-row">
                     <input type="text" id="pseudo-input" class="pseudo-input" maxlength="20" autocomplete="off" value="<?= e($userPseudo) ?>" />
                     <button type="button" class="btn btn-primary btn-sm" id="pseudo-save">Enregistrer</button>
@@ -99,14 +110,14 @@ $userPseudo = ($user !== null && !empty($user['pseudo'])) ? (string) $user['pseu
         <?php endif; ?>
 
         <!-- ===================== CLASSEMENT (tout le monde) ===================== -->
-        <h2 class="section-title" style="font-size:1.3rem; margin-bottom:1rem;">🏆 Classement</h2>
+        <h2 class="section-title gm-h2 ae-reveal">🏆 Classement</h2>
         <?php if ($leaderboard === []): ?>
-            <div class="surface card" style="text-align:center; padding:2rem; color:var(--muted); margin-bottom:2rem;">
+            <div class="surface card" style="text-align:center; padding:2rem; color:var(--muted); margin-bottom:2.5rem;">
                 <p style="margin:0 0 0.5rem;">🗂️ Aucune partie enregistrée pour le moment.</p>
                 <p style="margin:0;"><a class="btn btn-primary btn-sm" href="<?= e(url('/jeux/wordle?mode=daily')) ?>">Jouer au Wordle quotidien →</a></p>
             </div>
         <?php else: ?>
-            <div class="table-wrap surface" style="padding:0.5rem 0.5rem 0; margin-bottom:2rem; overflow-x:auto;">
+            <div class="table-wrap surface ae-panel ae-reveal" style="padding:0.5rem 0.5rem 0; margin-bottom:2.5rem; overflow-x:auto;">
                 <table class="lb-table">
                     <thead>
                         <tr>
@@ -146,32 +157,137 @@ $userPseudo = ($user !== null && !empty($user['pseudo'])) ? (string) $user['pseu
         <?php endif; ?>
 
         <!-- ===================== JEUX DISPONIBLES (en bas) ===================== -->
-        <h2 class="section-title" style="font-size:1.3rem; margin-bottom:1rem;">Jeux disponibles</h2>
-        <div class="grid grid-3">
-            <a class="surface card card-hover" href="<?= e(url('/jeux/wordle')) ?>" style="text-decoration:none; color:inherit;">
-                <span class="badge badge-secondary">3 difficultés</span>
-                <h3 class="card-title">🔤 Wordle</h3>
-                <p class="card-excerpt">Devine le mot en 6 essais. 3 niveaux (5, 6 ou 7 lettres), mode quotidien commun ou libre illimité, en français ou en anglais&nbsp;!</p>
-                <span class="btn btn-primary btn-sm" style="align-self:flex-start;">Jouer →</span>
+        <h2 class="section-title gm-h2 ae-reveal">Jeux disponibles</h2>
+        <div class="gm-tickets">
+            <a class="gm-ticket ae-reveal" href="<?= e(url('/jeux/wordle')) ?>">
+                <span class="gm-stub" aria-hidden="true">🔤</span>
+                <span class="gm-body">
+                    <span class="gm-meta"><span class="badge badge-secondary">3 difficultés</span></span>
+                    <span class="gm-title">Wordle</span>
+                    <span class="gm-desc">Devine le mot en 6 essais. 3 niveaux (5, 6 ou 7 lettres), mode quotidien commun ou libre illimité, en français ou en anglais&nbsp;!</span>
+                    <span class="gm-cta">Jouer →</span>
+                </span>
             </a>
 
-            <a class="surface card card-hover" href="<?= e(url('/jeux/enigme')) ?>" style="text-decoration:none; color:inherit;">
-                <span class="badge badge-secondary">Quotidien</span>
-                <h3 class="card-title">🧩 Énigme du jour</h3>
-                <p class="card-excerpt">Une devinette par jour, identique pour tous les joueurs. Saurez-vous la résoudre&nbsp;? Change chaque jour à minuit&nbsp;!</p>
-                <span class="btn btn-primary btn-sm" style="align-self:flex-start;">Réfléchir →</span>
+            <a class="gm-ticket gm-ticket-violet ae-reveal" href="<?= e(url('/jeux/enigme')) ?>">
+                <span class="gm-stub" aria-hidden="true">🧩</span>
+                <span class="gm-body">
+                    <span class="gm-meta"><span class="badge badge-secondary">Quotidien</span></span>
+                    <span class="gm-title">Énigme du jour</span>
+                    <span class="gm-desc">Une devinette par jour, identique pour tous les joueurs. Saurez-vous la résoudre&nbsp;? Change chaque jour à minuit&nbsp;!</span>
+                    <span class="gm-cta">Réfléchir →</span>
+                </span>
             </a>
 
-            <div class="surface card" style="opacity:0.6;">
-                <span class="badge badge-muted">Bientôt</span>
-                <h3 class="card-title">🧠 Memory</h3>
-                <p class="card-excerpt">Le memory cafétéria reviendra bientôt dans la zone jeux.</p>
+            <div class="gm-ticket gm-ticket-muted ae-reveal">
+                <span class="gm-stub" aria-hidden="true">🧠</span>
+                <span class="gm-body">
+                    <span class="gm-meta"><span class="badge badge-muted">Bientôt</span></span>
+                    <span class="gm-title">Memory</span>
+                    <span class="gm-desc">Le memory cafétéria reviendra bientôt dans la zone jeux.</span>
+                </span>
             </div>
         </div>
     </div>
 </section>
 
 <style>
+/* ============ Jeux — spécifique ============ */
+.gm-h2 {
+    font-size: 1.35rem;
+    margin: 0 0 1.1rem;
+    letter-spacing: -0.02em;
+}
+
+/* Statistiques joueur : chiffres en dégradé */
+.gm-stats .gm-stat {
+    font-size: 1.9rem;
+    background: linear-gradient(135deg, #8b7ae0, #3a9bb8 60%, #7fd0e4);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+.gm-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1rem;
+}
+@media (max-width: 640px) {
+    .gm-stats-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* Jeux en cartes « tickets » (même modèle que la page association) */
+.gm-tickets {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.1rem;
+}
+.gm-ticket {
+    display: flex;
+    align-items: stretch;
+    border-radius: 18px;
+    border: 1px solid var(--border);
+    background: rgba(255, 255, 255, 0.03);
+    overflow: hidden;
+    text-decoration: none;
+    color: inherit;
+    transition: transform 0.22s ease, border-color 0.22s ease, box-shadow 0.22s ease;
+}
+.gm-ticket:hover {
+    transform: translateY(-4px);
+    border-color: rgba(72, 189, 211, 0.35);
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35), 0 0 26px rgba(58, 155, 184, 0.15);
+}
+.gm-stub {
+    flex: 0 0 76px;
+    display: grid;
+    place-items: center;
+    font-size: 2rem;
+    line-height: 1;
+    background: linear-gradient(160deg, rgba(58, 155, 184, 0.38), rgba(58, 155, 184, 0.1));
+    border-right: 2px dashed rgba(255, 255, 255, 0.14);
+    transition: font-size 0.25s ease;
+}
+[data-theme="light"] .gm-stub { border-right-color: rgba(15, 23, 42, 0.14); }
+.gm-ticket:hover .gm-stub { font-size: 2.4rem; }
+.gm-ticket-violet .gm-stub { background: linear-gradient(160deg, rgba(139, 122, 224, 0.38), rgba(139, 122, 224, 0.1)); }
+.gm-ticket-muted { opacity: 0.65; }
+.gm-ticket-muted .gm-stub { background: rgba(255, 255, 255, 0.04); }
+.gm-ticket-muted:hover { transform: none; box-shadow: none; border-color: var(--border); }
+.gm-ticket-muted:hover .gm-stub { font-size: 2rem; }
+.gm-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 1.15rem 1.25rem;
+    min-width: 0;
+}
+.gm-title {
+    font-size: 1.1rem;
+    font-weight: 900;
+    text-transform: none;
+    letter-spacing: -0.01em;
+    color: var(--foreground);
+    line-height: 1.2;
+}
+.gm-ticket:hover .gm-title { color: var(--primary); }
+.gm-desc {
+    font-size: 0.87rem;
+    color: var(--muted);
+    line-height: 1.6;
+}
+.gm-cta {
+    margin-top: auto;
+    padding-top: 0.35rem;
+    font-size: 0.88rem;
+    font-weight: 800;
+    color: var(--primary);
+}
+@media (max-width: 980px) {
+    .gm-tickets { grid-template-columns: 1fr; }
+}
+
+/* Classement : retouches */
 .lb-table { width:100%; border-collapse:collapse; }
 .lb-table th, .lb-table td { padding:0.7rem 0.6rem; text-align:left; border-bottom:1px solid var(--border); }
 .lb-table th { color:var(--muted); text-transform:uppercase; letter-spacing:0.08em; font-size:0.72rem; font-weight:800; }
@@ -199,6 +315,7 @@ $userPseudo = ($user !== null && !empty($user['pseudo'])) ? (string) $user['pseu
 }
 .pseudo-input:focus { outline:none; border-color:var(--primary); }
 .pseudo-msg { margin:0.5rem 0 0; font-size:0.85rem; min-height:1.1rem; }
+.gm-notice .ae-medal-sm { width:52px; height:52px; font-size:1.5rem; border-radius:16px; }
 </style>
 
 <script>

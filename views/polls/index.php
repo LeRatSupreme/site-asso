@@ -12,10 +12,19 @@ use App\Models\Poll;
  */
 ?>
 <header class="page-hero">
-    <div class="halo halo-teal" aria-hidden="true"></div>
+    <div class="ae-aurora" aria-hidden="true"></div>
+    <div class="ae-dots dot-grid" aria-hidden="true"></div>
+    <div class="ae-chips" aria-hidden="true">
+        <span class="ae-chip ae-chip-1">📊</span>
+        <span class="ae-chip ae-chip-2">🗳️</span>
+        <span class="ae-chip ae-chip-3">✅</span>
+    </div>
     <div class="container">
-        <span class="eyebrow"><?= e(t('polls.eyebrow')) ?></span>
-        <h1 class="page-title"><?= e(t('polls.title')) ?></h1>
+        <span class="ae-pill">
+            <span class="ae-pill-dot" aria-hidden="true"></span>
+            <?= e(t('polls.eyebrow')) ?>
+        </span>
+        <h1 class="page-title ae-title-grad"><?= e(t('polls.title')) ?></h1>
         <p class="page-lead">
             <?= e(tt('polls.lead', ['{n}' => $count])) ?>
         </p>
@@ -29,7 +38,7 @@ use App\Models\Poll;
                 <p><?= e(t('polls.empty')) ?></p>
             </div>
         <?php else: ?>
-            <div class="grid grid-3">
+            <div class="grid grid-3 ae-reveal">
                 <?php foreach ($polls as $poll): ?>
                     <?php
                     $cardPoll = $poll;

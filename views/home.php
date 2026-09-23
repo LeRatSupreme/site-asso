@@ -18,14 +18,17 @@ $allMenuEmpty = empty($menuCategories);
 $allPromoEmpty = empty($promotions);
 ?>
 <section class="hero">
-    <div class="halo halo-teal" aria-hidden="true"></div>
-    <div class="halo halo-violet" aria-hidden="true"></div>
+    <div class="ae-aurora" aria-hidden="true"></div>
+    <div class="ae-dots dot-grid" aria-hidden="true"></div>
     <div class="container hero-grid">
         <div class="hero-content">
-            <span class="eyebrow"><?= e(t('home.eyebrow')) ?></span>
-            <h1 class="hero-title">
+            <span class="ae-pill">
+                <span class="ae-pill-dot" aria-hidden="true"></span>
+                <?= e(t('home.eyebrow')) ?>
+            </span>
+            <h1 class="hero-title ae-title-grad">
                 <?= e(t('home.title.line1')) ?>
-                <span class="accent"><?= e(t('home.title.line2')) ?></span>
+                <?= e(t('home.title.line2')) ?>
             </h1>
             <p class="hero-lead">
                 <?= e(tc($description ?: t('home.description'))) ?>
@@ -36,21 +39,21 @@ $allPromoEmpty = empty($promotions);
             </div>
         </div>
 
-        <aside class="hero-stats surface glass" aria-label="<?= e(t('home.stats.aria')) ?>">
+        <aside class="hero-stats surface glass hm-stats" aria-label="<?= e(t('home.stats.aria')) ?>">
             <div class="stat">
-                <span class="stat-value">100 %</span>
+                <span class="stat-value ae-stat-num" data-target="100" data-suffix=" %">100 %</span>
                 <span class="stat-label"><?= e(t('home.stat.student')) ?></span>
             </div>
             <div class="stat">
-                <span class="stat-value"><?= e((string) max($usersCount, 0)) ?></span>
+                <span class="stat-value ae-stat-num" data-target="<?= e((string) max($usersCount, 0)) ?>"><?= e((string) max($usersCount, 0)) ?></span>
                 <span class="stat-label"><?= e(t('home.stat.members')) ?></span>
             </div>
             <div class="stat">
-                <span class="stat-value"><?= e((string) max($eventsCount, 0)) ?></span>
+                <span class="stat-value ae-stat-num" data-target="<?= e((string) max($eventsCount, 0)) ?>"><?= e((string) max($eventsCount, 0)) ?></span>
                 <span class="stat-label"><?= e(t('home.stat.events')) ?></span>
             </div>
             <div class="stat">
-                <span class="stat-value">0 %</span>
+                <span class="stat-value ae-stat-num" data-target="0">0 %</span>
                 <span class="stat-label"><?= e(t('home.stat.easy')) ?></span>
             </div>
         </aside>
@@ -59,7 +62,7 @@ $allPromoEmpty = empty($promotions);
 
 <section class="section">
     <div class="container">
-        <div class="section-head">
+        <div class="section-head ae-reveal">
             <span class="eyebrow"><?= e(t('home.upcoming.eyebrow')) ?></span>
             <h2 class="section-title"><?= e(t('home.upcoming.title')) ?></h2>
         </div>
@@ -81,7 +84,7 @@ $allPromoEmpty = empty($promotions);
 
 <section class="section section-alt" id="promos">
     <div class="container">
-        <div class="section-head">
+        <div class="section-head ae-reveal">
             <span class="eyebrow"><?= e(t('home.promos.eyebrow')) ?></span>
             <h2 class="section-title"><?= e(t('home.promos.title')) ?></h2>
         </div>
@@ -101,7 +104,7 @@ $allPromoEmpty = empty($promotions);
                         ? formatPrice($promo['old_price'])
                         : '';
                     ?>
-                    <article class="promo-card surface glass fade-in">
+                    <article class="promo-card surface glass ae-reveal">
                         <?php if ($badge !== ''): ?>
                             <span class="promo-badge"><?= e($badge) ?></span>
                         <?php endif; ?>
@@ -124,7 +127,7 @@ $allPromoEmpty = empty($promotions);
 
 <section class="section" id="menu">
     <div class="container">
-        <div class="section-head">
+        <div class="section-head ae-reveal">
             <span class="eyebrow"><?= e(t('home.menu.eyebrow')) ?></span>
             <h2 class="section-title"><?= e(t('home.menu.title')) ?></h2>
             <p class="muted"><?= e(t('home.menu.subtitle')) ?></p>
@@ -206,26 +209,134 @@ $allPromoEmpty = empty($promotions);
 
 <section class="section section-alt">
     <div class="container">
-        <div class="section-head">
+        <div class="section-head ae-reveal">
             <span class="eyebrow"><?= e(t('home.features.eyebrow')) ?></span>
             <h2 class="section-title"><?= e(t('home.features.title')) ?></h2>
         </div>
         <div class="grid grid-3">
-            <article class="card surface glass card-hover">
-                <h3 class="card-title"><?= e(t('home.feature.events.title')) ?></h3>
-                <p><?= e(t('home.feature.events.desc')) ?></p>
+            <article class="hm-feature ae-panel ae-reveal">
+                <span class="ae-medal ae-medal-sm" aria-hidden="true">📅</span>
+                <div class="hm-feature-body">
+                    <h3 class="card-title"><?= e(t('home.feature.events.title')) ?></h3>
+                    <p><?= e(t('home.feature.events.desc')) ?></p>
+                </div>
             </article>
-            <article class="card surface glass card-hover">
-                <h3 class="card-title"><?= e(t('home.feature.cafeteria.title')) ?></h3>
-                <p><?= e(t('home.feature.cafeteria.desc')) ?></p>
+            <article class="hm-feature ae-panel ae-reveal">
+                <span class="ae-medal ae-medal-sm" aria-hidden="true">☕</span>
+                <div class="hm-feature-body">
+                    <h3 class="card-title"><?= e(t('home.feature.cafeteria.title')) ?></h3>
+                    <p><?= e(t('home.feature.cafeteria.desc')) ?></p>
+                </div>
             </article>
-            <article class="card surface glass card-hover">
-                <h3 class="card-title"><?= e(t('home.feature.community.title')) ?></h3>
-                <p><?= e(t('home.feature.community.desc')) ?></p>
+            <article class="hm-feature ae-panel ae-reveal">
+                <span class="ae-medal ae-medal-sm" aria-hidden="true">🤝</span>
+                <div class="hm-feature-body">
+                    <h3 class="card-title"><?= e(t('home.feature.community.title')) ?></h3>
+                    <p><?= e(t('home.feature.community.desc')) ?></p>
+                </div>
             </article>
         </div>
     </div>
 </section>
+
+<!-- ===================== CTA ===================== -->
+<section class="section hm-cta">
+    <div class="container">
+        <div class="ae-cta-panel ae-reveal">
+            <div class="ae-cta-dots" aria-hidden="true"></div>
+            <span class="ae-cta-halo ae-cta-halo-1" aria-hidden="true"></span>
+            <span class="ae-cta-halo ae-cta-halo-2" aria-hidden="true"></span>
+            <div class="ae-cta-inner">
+                <h2 class="section-title"><?= e(t('about.cta.title')) ?></h2>
+                <div class="ae-cta-actions">
+                    <a class="btn btn-lg ae-btn-light" href="<?= e(url('/register')) ?>"><?= e(t('home.cta.join')) ?></a>
+                    <a class="btn btn-lg ae-btn-glass" href="<?= e(url('/events')) ?>"><?= e(t('home.cta.events')) ?></a>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<style>
+/* ============ Accueil — spécifique ============ */
+
+/* Hero : carte stats façon « carte étudiant » */
+.hm-stats {
+    padding: 2rem 1.9rem;
+    border-radius: 24px;
+    transform: rotate(1.2deg);
+    transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.35s ease;
+}
+.hm-stats:hover {
+    transform: rotate(0deg) translateY(-4px);
+    box-shadow: 0 30px 70px rgba(0, 0, 0, 0.45), 0 0 40px rgba(58, 155, 184, 0.14);
+}
+.hm-stats .stat-value {
+    font-size: 2.1rem;
+    background: linear-gradient(135deg, #8b7ae0, #3a9bb8 60%, #7fd0e4);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+.hm-stats .stat:nth-child(even) { border-left: 1px solid var(--border); padding-left: 1.25rem; }
+.hm-stats .stat:nth-child(n+3) { border-top: 1px solid var(--border); padding-top: 1.1rem; }
+
+/* Cartes « atouts » avec médaille */
+.hm-feature {
+    display: flex;
+    align-items: flex-start;
+    gap: 1.25rem;
+    padding: 1.75rem 1.6rem;
+    height: 100%;
+    box-sizing: border-box;
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+.hm-feature:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 18px 44px rgba(0, 0, 0, 0.35);
+}
+.hm-feature-body { min-width: 0; }
+.hm-feature .card-title {
+    color: var(--primary);
+    font-size: 1.05rem;
+    text-transform: none;
+    letter-spacing: -0.01em;
+    margin-bottom: 0.45rem;
+}
+.hm-feature p {
+    color: var(--muted);
+    font-size: 0.92rem;
+    line-height: 1.65;
+    margin: 0;
+}
+
+/* Onglets menu : état actif dégradé */
+#menu .menu-tab {
+    border-radius: 999px;
+    padding: 0.55rem 1.1rem;
+    font-weight: 700;
+    transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+#menu .menu-tab:hover { border-color: rgba(72, 189, 211, 0.4); color: var(--foreground); }
+#menu .menu-tab.is-active {
+    background: linear-gradient(120deg, rgba(74, 61, 143, 0.5), rgba(58, 155, 184, 0.4));
+    border-color: rgba(72, 189, 211, 0.5);
+    color: #fff;
+}
+[data-theme="light"] #menu .menu-tab.is-active {
+    background: linear-gradient(120deg, rgba(74, 61, 143, 0.85), rgba(45, 122, 148, 0.8));
+}
+
+/* CTA : resserre l'espace au-dessus du panneau */
+.hm-cta { padding-top: 1rem; }
+
+@media (max-width: 980px) {
+    .hm-stats { transform: none; }
+}
+@media (max-width: 640px) {
+    .hm-feature { flex-direction: column; padding: 1.6rem 1.4rem; gap: 1rem; }
+}
+</style>
 
 <script>
 (function () {
