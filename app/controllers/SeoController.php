@@ -42,6 +42,7 @@ final class SeoController extends Controller
             '/presentation' => '0.8',
             '/team'         => '0.7',
             '/sondages'     => '0.8',
+            '/galerie'      => '0.6',
             '/legal'        => '0.4',
             '/privacy'      => '0.4',
             '/cgu'          => '0.4',
@@ -49,6 +50,7 @@ final class SeoController extends Controller
         foreach ($static as $p => $priority) {
             $urls[] = ['loc' => $base . $p, 'priority' => $priority];
         }
+        $staticPaths = array_map(static fn (string $p): string => ltrim($p, '/'), array_keys($static));
 
         // Événements publiés.
         foreach (Event::published() as $ev) {
@@ -76,7 +78,14 @@ final class SeoController extends Controller
             $pages = Page::all();
             foreach ($pages as $pg) {
                 if (!empty($pg['is_published']) && !empty($pg['slug'])) {
-                    $urls[] = ['loc' => $base . '/p/' . rawurlencode((string) $pg['slug']), 'priority' => '0.5'];
+                    $slug = (string) $pg['slug'];
+                    // Les pages CMS qui doublonnent une page statique
+                    // (/p/presentation vs /presentation) sont exclues du
+                    // sitemap pour éviter le contenu dupliqué.
+                    if (in_array($slug, $staticPaths, true)) {
+                        continue;
+                    }
+                    $urls[] = ['loc' => $base . '/p/' . rawurlencode($slug), 'priority' => '0.5'];
                 }
             }
         } catch (\Throwable) {
