@@ -99,11 +99,11 @@ $selectedDays = array_map('intval', explode(',', $days));
             </div>
 
             <div class="sms-editor-vars">
-                <?php foreach ($varGroups as $groupName => $vars): ?>
+                <?php foreach ($varGroups as $groupName => $groupVars): ?>
                     <div class="sms-var-group">
                         <p class="sms-var-group-title"><?= e($groupName) ?></p>
                         <div class="sms-var-list">
-                            <?php foreach ($vars as $v): ?>
+                            <?php foreach ($groupVars as $v): ?>
                                 <button type="button" class="sms-var-chip" data-var="<?= e($v['var']) ?>"
                                         title="<?= e($v['desc']) ?>">
                                     <code>{<?= e($v['var']) ?>}</code>
