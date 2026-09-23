@@ -8,24 +8,32 @@ use App\Core\SmsReport;
 use App\Models\Sale;
 
 /**
- * Graphique image (SVG) du jour pour les SMS : répartition du CA par
- * catégorie. L'URL est protégée par un jeton secret (setting
- * `sms_chart_token`) : sans le bon jeton, 404.
+ * Graphique image du jour / de la semaine pour les SMS : répartition du
+ * CA par catégorie en donut (style Analytics). PNG par défaut (rendu GD),
+ * SVG conservé pour compatibilité. L'URL est protégée par un jeton secret
+ * (setting `sms_chart_token`) : sans le bon jeton, 404.
  */
 final class SmsChartController
 {
+    private const FONT = '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf';
+    private const FONT_BOLD = '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf';
+
     public function show(string $token): void
     {
-        header('Content-Type: image/svg+xml; charset=utf-8');
-        header('Cache-Control: no-store');
-
         // Le routeur capture le segment complet : retire l'extension éventuelle.
+        $format = 'png';
         if (str_ends_with($token, '.svg')) {
+            $format = 'svg';
+            $token = substr($token, 0, -4);
+        } elseif (str_ends_with($token, '.png')) {
             $token = substr($token, 0, -4);
         }
 
+        header('Cache-Control: no-store');
+
         if (!hash_equals(SmsReport::chartToken(), $token)) {
             http_response_code(404);
+            header('Content-Type: text/plain; charset=utf-8');
             echo 'Not found';
             return;
         }
@@ -40,7 +48,16 @@ final class SmsChartController
             $label = date('d/m/Y');
         }
 
-        echo self::buildSvg(Sale::byCategoryBetween($from, $today), $label);
+        $rows = Sale::byCategoryBetween($from, $today);
+
+        if ($format === 'svg') {
+            header('Content-Type: image/svg+xml; charset=utf-8');
+            echo self::buildSvg($rows, $label);
+            return;
+        }
+
+        header('Content-Type: image/png');
+        self::renderPng($rows, $label);
     }
 
     /**
@@ -152,5 +169,146 @@ final class SmsChartController
             . '</svg>';
 
         return $svg;
+    }
+
+    /**
+     * Rend le même donut en PNG via GD (envoi direct en sortie).
+     *
+     * @param list<array<string,mixed>> $rows Lignes de Sale::byCategoryBetween()
+     */
+    public static function renderPng(array $rows, string $date): void
+    {
+        $W = 640;
+        $H = 600;
+        $s = 2;   // supersampling x2 puis réduction (anti-aliasing)
+
+        $rows = array_slice($rows, 0, 6);
+        $colors = ['#48bdd3', '#6150aa', '#f59e0b', '#22c55e', '#ef4444', '#6db4ff'];
+        $bg = '#0a1b33';
+
+        $hex = static function (string $c): array {
+            return [(int) hexdec(substr($c, 1, 2)), (int) hexdec(substr($c, 3, 2)), (int) hexdec(substr($c, 5, 2))];
+        };
+
+        $im = imagecreatetruecolor($W * $s, $H * $s);
+        $alloc = static function (string $c) use ($im, $hex): int {
+            [$r, $g, $b] = $hex($c);
+            return imagecolorallocate($im, $r, $g, $b);
+        };
+        $cBg = $alloc($bg);
+        $cTitle = $alloc('#eaf2fb');
+        $cSub = $alloc('#9fb3c8');
+        $cMuted = $alloc('#5f7d9e');
+        $cLegend = $alloc('#dfe9f5');
+        $cVal = $alloc('#9fb3c8');
+
+        // Fond arrondi (rayon 24).
+        $r = 24 * $s;
+        imagefilledrectangle($im, 0, $r, $W * $s, $H * $s - $r, $cBg);
+        imagefilledrectangle($im, $r, 0, $W * $s - $r, $H * $s, $cBg);
+        imagefilledarc($im, $r, $r, 2 * $r, 2 * $r, 180, 270, $cBg, IMG_ARC_FILLED);
+        imagefilledarc($im, $W * $s - $r, $r, 2 * $r, 2 * $r, 270, 360, $cBg, IMG_ARC_FILLED);
+        imagefilledarc($im, $W * $s - $r, $H * $s - $r, 2 * $r, 2 * $r, 0, 90, $cBg, IMG_ARC_FILLED);
+        imagefilledarc($im, $r, $H * $s - $r, 2 * $r, 2 * $r, 90, 180, $cBg, IMG_ARC_FILLED);
+
+        // Texte : helper centré verticalement via imagettfbbox.
+        $font = is_file(self::FONT) ? self::FONT : null;
+        $fontBold = is_file(self::FONT_BOLD) ? self::FONT_BOLD : $font;
+        $text = static function (
+            string $txt,
+            float $x,
+            float $y,
+            int $size,
+            int $color,
+            bool $bold = false,
+            int $align = 0   // 0 = gauche, 1 = centre, 2 = droite (sur $x)
+        ) use ($im, $s, $font, $fontBold): void {
+            if ($font === null) {
+                return;
+            }
+            $box = imagettfbbox($size * $s, 0, $bold ? $fontBold : $font, $txt);
+            $w = abs($box[4] - $box[0]);
+            $xx = match ($align) { 1 => $x * $s - $w / 2, 2 => $x * $s - $w, default => $x * $s };
+            imagettftext($im, $size * $s, 0, (int) $xx, (int) ($y * $s), $color, $bold ? $fontBold : $font, $txt);
+        };
+
+        $text('Répartition par catégorie', 28, 46, 22, $cTitle, true);
+        $text('CA · ' . $date, 612, 46, 16, $cSub, false, 2);
+
+        $total = 0.0;
+        foreach ($rows as $row) {
+            $total += (float) ($row['ca'] ?? 0);
+        }
+
+        $cx = 320;
+        $cy = 240;
+        $radius = 165;
+        $hole = (int) round($radius * 0.64);
+
+        if ($rows !== [] && $total > 0.0) {
+            $angleStart = -90.0;
+            foreach ($rows as $i => $row) {
+                $ca = (float) ($row['ca'] ?? 0);
+                $angle = ($total > 0 ? $ca / $total : 0.0) * 360.0;
+                $angleEnd = $angleStart + $angle;
+                $color = $alloc($colors[$i % count($colors)]);
+
+                if ($angle >= 359.995) {
+                    imagefilledellipse($im, $cx * $s, $cy * $s, 2 * $radius * $s, 2 * $radius * $s, $color);
+                } else {
+                    imagefilledarc(
+                        $im,
+                        (int) ($cx * $s),
+                        (int) ($cy * $s),
+                        (int) (2 * $radius * $s),
+                        (int) (2 * $radius * $s),
+                        (int) round($angleStart),
+                        (int) round($angleEnd),
+                        $color,
+                        IMG_ARC_PIE
+                    );
+                }
+                $angleStart = $angleEnd;
+            }
+
+            // Trou du donut + total au centre.
+            imagefilledellipse($im, $cx * $s, $cy * $s, 2 * $hole * $s, 2 * $hole * $s, $cBg);
+            $text('Total', $cx, $cy - 6, 15, $cSub, false, 1);
+            $text(formatPrice($total), $cx, $cy + 22, 20, $cTitle, true, 1);
+        } else {
+            $text('Aucune vente', $cx, $cy + 6, 20, $cSub, false, 1);
+        }
+
+        // Légende : 2 colonnes × 3 lignes.
+        $ly = 448;
+        $col = 0;
+        foreach ($rows as $i => $row) {
+            $label = mb_substr(trim((string) ($row['category'] ?? '?')), 0, 14);
+            $ca = (float) ($row['ca'] ?? 0);
+            $pct = $total > 0 ? (int) round($ca / $total * 100) : 0;
+            $color = $alloc($colors[$i % count($colors)]);
+            $bx = $col === 0 ? 48 : 348;
+            $ve = $bx + 252;
+
+            imagefilledrectangle($im, $bx * $s, $ly * $s, ($bx + 18) * $s, ($ly + 18) * $s, $color);
+            $text($label, $bx + 30, $ly + 15, 15, $cLegend, true);
+            $text(formatPrice($ca) . ' · ' . $pct . ' %', $ve, $ly + 15, 14, $cVal, false, 2);
+
+            if ($col === 1) {
+                $col = 0;
+                $ly += 42;
+            } else {
+                $col = 1;
+            }
+        }
+
+        $text('AEIC — asso.aremond.ovh', 28, $H - 14, 12, $cMuted);
+
+        // Réduction x2 (anti-aliasing) puis sortie.
+        $out = imagecreatetruecolor($W, $H);
+        imagecopyresampled($out, $im, 0, 0, 0, 0, $W, $H, $W * $s, $H * $s);
+        imagedestroy($im);
+        imagepng($out, null, 6);
+        imagedestroy($out);
     }
 }

@@ -332,8 +332,8 @@ final class SmsReport
             '{categories}'       => self::categoryBlock($catRows),
             '{cat_top}'          => $catTop,
             '{caisse}'           => formatPrice(CashLedger::balance()),
-            '{graphique}'        => APP_URL . '/sms-chart/' . self::chartToken() . '.svg',
-            '{graphique_semaine}' => APP_URL . '/sms-chart/' . self::chartToken() . '.svg?p=week',
+            '{graphique}'        => APP_URL . '/sms-chart/' . self::chartToken() . '.png',
+            '{graphique_semaine}' => APP_URL . '/sms-chart/' . self::chartToken() . '.png?p=week',
         ];
     }
 
