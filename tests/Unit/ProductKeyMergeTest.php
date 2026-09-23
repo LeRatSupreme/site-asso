@@ -211,6 +211,24 @@ final class ProductKeyMergeTest extends TestCase
         self::assertSame(['pulco' => 8], $map, 'La cible porte le théorique combiné (6 + 2), la source a disparu.');
     }
 
+    public function test_keyStats_compte_les_lignes_par_cle(): void
+    {
+        $this->addPurchase('Madel Coquille', 50, '2026-09-02');
+        $this->addStock('Madel Coquille', 50);
+        $this->addLoss('Madeleine', 1, '2026-09-04');
+
+        $stats = ProductKeyMerge::keyStats();
+
+        self::assertSame(1, $stats['Madel Coquille']['purchases']);
+        self::assertSame(50, $stats['Madel Coquille']['stock']);
+        self::assertSame(0, $stats['Madel Coquille']['sales']);
+        self::assertFalse($stats['Madel Coquille']['discontinued']);
+
+        self::assertSame(1, $stats['Madeleine']['losses']);
+        self::assertSame(0, $stats['Madeleine']['purchases']);
+        self::assertNull($stats['Madeleine']['stock'], 'Aucune ligne product_stocks : stock null.');
+    }
+
     public function test_theoretical_base_zero_sur_achat_sans_comptage(): void
     {
         // Clé jamais comptée : l'achat pose une base 0, le théorique existe.

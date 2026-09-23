@@ -8,7 +8,8 @@ declare(strict_types=1);
  * @var list<array{key:string,counted_at:?string}> $discontinuedRows
  * @var list<array<string,mixed>> $history
  * @var list<array<string,mixed>> $gaps
- * @var list<string> $allKeys
+ * @var array<string, array{sales:int, purchases:int, losses:int, counts:int, costs:int, aliases:int, stock:?int, discontinued:bool}> $keyStats
+ * @var list<list<string>> $mergeDupes
  */
 ?>
 <div class="compta-head">
@@ -228,48 +229,252 @@ declare(strict_types=1);
 <div class="card surface glass" id="merge-card">
     <h2 class="card-title">🔗 Fusionner des clés produits</h2>
     <p class="muted">Même produit sous deux noms (ex. « Madeleine » dans les ventes SumUp et « Madel Coquille » dans les achats) ? Déplace toutes les données d'une clé vers l'autre : ventes, achats, pertes, aliases, stocks, comptages, drapeaux. Le bouton 🔗 à côté de chaque produit ci-dessus pré-remplit la clé source.</p>
+
+    <style>
+        .merge-dupes { margin: 0 0 14px; }
+        .merge-dupes-title { font-size: 0.85rem; font-weight: 700; margin: 0 0 4px; }
+        .merge-dupe-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 6px 0; border-top: 1px solid var(--border, #e5e7eb); font-size: 0.87rem; }
+        .merge-dupe-names { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+        .merge-dupe-keep { color: var(--primary); }
+        .merge-dupe-arrow { color: var(--muted, #8892a6); }
+        .merge-fields { display: grid; grid-template-columns: 1fr auto 1fr; gap: 8px; align-items: start; }
+        @media (max-width: 540px) { .merge-fields { grid-template-columns: 1fr; } .merge-swap { justify-self: center; } }
+        .merge-swap { margin-top: 24px; }
+        .merge-stats { font-size: 0.78rem; color: var(--muted, #8892a6); margin-top: 4px; min-height: 1em; }
+        .merge-stats:empty { margin: 0; }
+        .merge-sales-tag { color: var(--accent-success, #22c55e); font-weight: 700; }
+        .merge-preview { font-size: 0.87rem; background: rgba(72, 189, 211, 0.10); border: 1px solid var(--border, #e5e7eb); border-radius: 8px; padding: 8px 12px; margin: 10px 0 0; }
+        .merge-preview.is-warn { background: rgba(234, 88, 12, 0.10); }
+        .merge-preview div + div { margin-top: 4px; }
+    </style>
+
+    <?php
+    // Suggestion par groupe de doublons : la clé à conserver est celle des
+    // ventes SumUp si le groupe en contient une (les prochains imports y
+    // pointeront via l'alias créé), sinon la première par ordre alphabétique.
+    $dupeRows = [];
+    foreach ($mergeDupes as $members) {
+        $keep = $members[0];
+        foreach ($members as $m) {
+            if (($keyStats[$m]['sales'] ?? 0) > 0) {
+                $keep = $m;
+                break;
+            }
+        }
+        $drop = $members[0] === $keep ? ($members[1] ?? $members[0]) : $members[0];
+        if ($drop === $keep) {
+            continue;
+        }
+        $dupeRows[] = ['keep' => $keep, 'drop' => $drop, 'members' => $members];
+    }
+    ?>
+    <?php if ($dupeRows !== []): ?>
+    <div class="merge-dupes">
+        <p class="merge-dupes-title">🔎 Doublons probables (même nom à l'orthographe près) — en vert, la clé suggérée comme cible :</p>
+        <?php foreach ($dupeRows as $d): ?>
+            <div class="merge-dupe-row">
+                <span class="merge-dupe-names">
+                    <span><?= e($d['drop']) ?></span>
+                    <span class="merge-dupe-arrow">→</span>
+                    <strong class="merge-dupe-keep"><?= e($d['keep']) ?></strong>
+                </span>
+                <button type="button" class="btn btn-outline btn-sm merge-dupe-fill"
+                        data-drop="<?= e($d['drop']) ?>" data-keep="<?= e($d['keep']) ?>">Remplir</button>
+            </div>
+        <?php endforeach; ?>
+    </div>
+    <?php endif; ?>
+
     <form method="post" action="<?= e(url('/admin/compta/inventaire/merge')) ?>"
-          data-confirm="Fusionner ces clés ? Action irréversible.">
+          data-confirm="Fusionner ces clés ? Action irréversible." id="merge-form">
         <?= csrf_field() ?>
-        <div class="field-row">
+        <div class="merge-fields">
             <div class="field">
                 <label for="merge-source">Clé source (doublon à absorber)</label>
-                <input type="text" id="merge-source" name="source" list="merge-keys"
-                       placeholder="ex: Pulco Citronnade" autocomplete="off" required>
+                <div class="combobox">
+                    <input type="text" id="merge-source" name="source" class="combobox-input"
+                           placeholder="Rechercher une clé…" autocomplete="off" role="combobox"
+                           aria-autocomplete="list" aria-expanded="false" aria-controls="merge-source-list" required>
+                    <ul class="combobox-list" id="merge-source-list" role="listbox" hidden></ul>
+                </div>
+                <div class="merge-stats" id="merge-source-stats"></div>
             </div>
+            <button type="button" class="btn btn-ghost btn-sm merge-swap" id="merge-swap"
+                    title="Inverser source et cible" aria-label="Inverser source et cible">⇄</button>
             <div class="field">
                 <label for="merge-target">Clé cible (conservée)</label>
-                <input type="text" id="merge-target" name="target" list="merge-keys"
-                       placeholder="ex: pulco" autocomplete="off" required>
+                <div class="combobox">
+                    <input type="text" id="merge-target" name="target" class="combobox-input"
+                           placeholder="Rechercher une clé…" autocomplete="off" role="combobox"
+                           aria-autocomplete="list" aria-expanded="false" aria-controls="merge-target-list" required>
+                    <ul class="combobox-list" id="merge-target-list" role="listbox" hidden></ul>
+                </div>
+                <div class="merge-stats" id="merge-target-stats"></div>
             </div>
         </div>
-        <datalist id="merge-keys">
-            <?php foreach ($allKeys as $k): ?>
-                <option value="<?= e($k) ?>"></option>
-            <?php endforeach; ?>
-        </datalist>
+        <div class="merge-preview" id="merge-preview" hidden></div>
         <div class="form-actions">
             <button type="submit" class="btn btn-danger btn-sm">Fusionner</button>
         </div>
-        <p class="muted">Utilise la clé des ventes SumUp comme cible (ex. « pulco », pas « Pulco Citronnade »).</p>
+        <p class="muted">Astuce : garde la clé des ventes SumUp comme cible (ex. « pulco », pas « Pulco Citronnade ») — les futurs rapports SumUp s'y rattacheront directement.</p>
     </form>
 </div>
 
+<script type="application/json" id="merge-stats"><?= json_encode($keyStats, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP) ?></script>
+
 <script>
-/* Bouton 🔗 d'une ligne : pré-remplit la clé source, défile vers la carte et cible le champ cible. */
+/* Fusion de clés : combobox recherchables + stats par clé + aperçu de la
+   fusion avant validation. Le bouton 🔗 d'une ligne et « Remplir » des
+   doublons probables passent par window.AEICMerge. */
 (function () {
+    var statsEl = document.getElementById('merge-stats');
+    var STATS = {};
+    try { STATS = JSON.parse(statsEl ? statsEl.textContent : '{}') || {}; } catch (e) { STATS = {}; }
+    var KEYS = Object.keys(STATS);
+
+    var srcInput = document.getElementById('merge-source');
+    var tgtInput = document.getElementById('merge-target');
+    var srcList = document.getElementById('merge-source-list');
+    var tgtList = document.getElementById('merge-target-list');
+    var srcStats = document.getElementById('merge-source-stats');
+    var tgtStats = document.getElementById('merge-target-stats');
+    var preview = document.getElementById('merge-preview');
+    if (!srcInput || !tgtInput) return;
+
+    function norm(s) { return String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim(); }
+    function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+    function highlight(text, q) {
+        if (!q) return esc(text);
+        var i = norm(text).indexOf(norm(q));
+        if (i === -1) return esc(text);
+        return esc(text.substring(0, i)) + '<mark>' + esc(text.substring(i, i + q.length)) + '</mark>' + esc(text.substring(i + q.length));
+    }
+    function plural(n, word) { return n + ' ' + word + (n > 1 ? 's' : ''); }
+
+    function statHtml(key) {
+        var s = STATS[key];
+        if (!s) return key === '' ? '' : '<span class="badge badge-warning">clé inconnue — vérifie l\'orthographe</span>';
+        var parts = [];
+        if (s.sales > 0) parts.push(plural(s.sales, 'vente'));
+        if (s.purchases > 0) parts.push(plural(s.purchases, 'achat'));
+        if (s.losses > 0) parts.push(plural(s.losses, 'perte'));
+        if (s.counts > 0) parts.push(plural(s.counts, 'comptage'));
+        if (s.costs > 0) parts.push(plural(s.costs, 'lot de coût'));
+        if (s.aliases > 0) parts.push(plural(s.aliases, 'alias'));
+        if (s.stock !== null && s.stock !== undefined) parts.push('stock ' + s.stock);
+        if (s.discontinued) parts.push('plus en vente');
+        var html = esc(parts.length > 0 ? parts.join(' · ') : 'aucune donnée');
+        if (s.sales > 0) html += ' <strong class="merge-sales-tag">= clé des ventes SumUp</strong>';
+        return html;
+    }
+
+    function refresh() {
+        if (srcStats) srcStats.innerHTML = statHtml(srcInput.value.trim());
+        if (tgtStats) tgtStats.innerHTML = statHtml(tgtInput.value.trim());
+        if (!preview) return;
+        var s = srcInput.value.trim();
+        var t = tgtInput.value.trim();
+        if (s === '' || t === '') { preview.hidden = true; preview.innerHTML = ''; return; }
+        preview.hidden = false;
+        if (s === t || norm(s) === norm(t)) {
+            preview.className = 'merge-preview is-warn';
+            preview.textContent = '⚠️ Source et cible sont identiques : rien à fusionner.';
+            return;
+        }
+        var ss = STATS[s];
+        var ts = STATS[t];
+        var lines = [];
+        if (!ss) {
+            lines.push('⚠️ « ' + s + ' » est inconnue : vérifie l\'orthographe.');
+        } else {
+            var moved = [];
+            if (ss.sales > 0) moved.push(plural(ss.sales, 'vente'));
+            if (ss.purchases > 0) moved.push(plural(ss.purchases, 'achat'));
+            if (ss.losses > 0) moved.push(plural(ss.losses, 'perte'));
+            if (ss.counts > 0) moved.push(plural(ss.counts, 'comptage'));
+            if (ss.costs > 0) moved.push(plural(ss.costs, 'lot de coût'));
+            if (ss.aliases > 0) moved.push(plural(ss.aliases, 'alias'));
+            if (ss.stock !== null && ss.stock !== undefined && ss.stock !== 0) moved.push('stock ' + ss.stock);
+            lines.push(moved.length > 0
+                ? 'Déplacera « ' + s + ' » → « ' + t + ' » : ' + moved.join(', ') + '.'
+                : '« ' + s + ' » n\'a aucune donnée : la clé sera simplement vidée.');
+        }
+        if (!ts) {
+            lines.push('⚠️ « ' + t + ' » est inconnue : elle sera créée par la fusion.');
+        } else if (ss && ts && ss.stock !== null && ss.stock !== undefined && ts.stock !== null && ts.stock !== undefined) {
+            lines.push('Stock fusionné : ' + ss.stock + ' + ' + ts.stock + ' = ' + (ss.stock + ts.stock) + '.');
+        }
+        if (ss && ss.sales > 0 && (!ts || ts.sales === 0)) {
+            lines.push('💡 « ' + s + ' » est la clé des ventes SumUp : garde-la en cible (bouton ⇄ pour inverser).');
+        }
+        preview.className = 'merge-preview';
+        var html = '';
+        lines.forEach(function (p) { html += '<div>' + esc(p) + '</div>'; });
+        preview.innerHTML = html;
+    }
+
+    function buildList(input, list) {
+        var q = norm(input.value);
+        var matches = KEYS.filter(function (k) { return q === '' || norm(k).indexOf(q) !== -1; });
+        if (matches.length > 100) matches = matches.slice(0, 100);
+        var html = '';
+        matches.forEach(function (k) {
+            html += '<li class="combobox-option" role="option" data-value="' + esc(k) + '">' + highlight(k, q) + '</li>';
+        });
+        list.innerHTML = html === '' ? '<li class="combobox-empty">Aucune clé.</li>' : html;
+        Array.prototype.forEach.call(list.querySelectorAll('.combobox-option'), function (li) {
+            li.addEventListener('mousedown', function (e) {
+                e.preventDefault();
+                input.value = li.getAttribute('data-value');
+                list.hidden = true;
+                input.setAttribute('aria-expanded', 'false');
+                refresh();
+            });
+        });
+    }
+
+    function wireCombo(input, list) {
+        input.addEventListener('focus', function () { list.hidden = false; buildList(input, list); input.setAttribute('aria-expanded', 'true'); });
+        input.addEventListener('input', function () { list.hidden = false; buildList(input, list); input.setAttribute('aria-expanded', 'true'); refresh(); });
+        input.addEventListener('blur', function () { setTimeout(function () { list.hidden = true; input.setAttribute('aria-expanded', 'false'); }, 150); });
+    }
+
+    function setKey(input, key) { input.value = key; refresh(); }
+
+    window.AEICMerge = {
+        setSource: function (k) { setKey(srcInput, k); },
+        setTarget: function (k) { setKey(tgtInput, k); },
+        focusTarget: function () { tgtInput.focus({ preventScroll: true }); }
+    };
+
+    var swap = document.getElementById('merge-swap');
+    if (swap) swap.addEventListener('click', function () {
+        var v = srcInput.value;
+        srcInput.value = tgtInput.value;
+        tgtInput.value = v;
+        refresh();
+    });
+
     Array.prototype.forEach.call(document.querySelectorAll('.merge-row-btn'), function (b) {
         b.addEventListener('click', function () {
-            var src = document.getElementById('merge-source');
-            var tgt = document.getElementById('merge-target');
+            window.AEICMerge.setSource(b.getAttribute('data-key'));
             var card = document.getElementById('merge-card');
-            if (!src || !tgt) return;
-            src.value = b.getAttribute('data-key');
-            if (card && card.scrollIntoView) {
-                card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            }
-            tgt.focus({ preventScroll: true });
+            if (card && card.scrollIntoView) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            window.AEICMerge.focusTarget();
         });
     });
+
+    Array.prototype.forEach.call(document.querySelectorAll('.merge-dupe-fill'), function (b) {
+        b.addEventListener('click', function () {
+            window.AEICMerge.setSource(b.getAttribute('data-drop'));
+            window.AEICMerge.setTarget(b.getAttribute('data-keep'));
+            var form = document.getElementById('merge-form');
+            if (form && form.scrollIntoView) form.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        });
+    });
+
+    wireCombo(srcInput, srcList);
+    wireCombo(tgtInput, tgtList);
+    refresh();
 })();
 </script>

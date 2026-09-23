@@ -181,4 +181,75 @@ final class ProductKeyMerge extends Model
 
         return $out;
     }
+
+    /**
+     * Statistiques par clé produit (nombre de lignes par table) : sert à
+     * la prévisualisation de la fusion dans la vue Inventaire — l'utilisateur
+     * voit ce que déplacerait chaque fusion AVANT de la valider.
+     *
+     * Clé absente du résultat = clé inconnue de toutes les tables.
+     *
+     * @return array<string, array{sales:int, purchases:int, losses:int, counts:int, costs:int, aliases:int, stock:?int, discontinued:bool}>
+     */
+    public static function keyStats(): array
+    {
+        $queries = [
+            'sales'     => 'SELECT product_key, COUNT(*) FROM sales GROUP BY product_key',
+            'purchases' => 'SELECT product_key, COUNT(*) FROM purchases GROUP BY product_key',
+            'losses'    => 'SELECT product_key, COUNT(*) FROM losses GROUP BY product_key',
+            'counts'    => 'SELECT product_key, COUNT(*) FROM inventory_counts GROUP BY product_key',
+            'costs'     => 'SELECT product_key, COUNT(*) FROM product_costs GROUP BY product_key',
+            'aliases'   => 'SELECT product_key, COUNT(*) FROM product_aliases GROUP BY product_key',
+        ];
+
+        $stats = [];
+        try {
+            foreach ($queries as $field => $sql) {
+                /** @var list<list<string|int>> $rows */
+                $rows = self::pdo()->query($sql)->fetchAll(\PDO::FETCH_NUM);
+                foreach ($rows as $row) {
+                    $key = trim((string) $row[0]);
+                    if ($key === '') {
+                        continue;
+                    }
+                    $stats[$key] ??= self::emptyStat();
+                    $stats[$key][$field] = (int) $row[1];
+                }
+            }
+        } catch (\Throwable) {
+            // Silencieux : la carte de fusion doit s'afficher même sans base.
+        }
+
+        foreach (ProductStock::allMap() as $key => $stock) {
+            $stats[$key] ??= self::emptyStat();
+            $stats[$key]['stock'] = $stock;
+        }
+        foreach (ProductDiscontinued::keys() as $key) {
+            $stats[$key] ??= self::emptyStat();
+            $stats[$key]['discontinued'] = true;
+        }
+
+        ksort($stats, SORT_STRING);
+
+        return $stats;
+    }
+
+    /**
+     * Compteurs à zéro pour une clé nouvellement rencontrée.
+     *
+     * @return array{sales:int, purchases:int, losses:int, counts:int, costs:int, aliases:int, stock:?int, discontinued:bool}
+     */
+    private static function emptyStat(): array
+    {
+        return [
+            'sales'        => 0,
+            'purchases'    => 0,
+            'losses'       => 0,
+            'counts'       => 0,
+            'costs'        => 0,
+            'aliases'      => 0,
+            'stock'        => null,
+            'discontinued' => false,
+        ];
+    }
 }
