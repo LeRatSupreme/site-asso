@@ -231,6 +231,7 @@ final class SmsReport
             ],
             'Catégories' => [
                 ['var' => 'categories', 'desc' => 'Répartition du CA par catégorie (barres)'],
+                ['var' => 'categories_semaine', 'desc' => 'Répartition par catégorie de la semaine (barres)'],
                 ['var' => 'cat_top',    'desc' => 'Première catégorie du jour'],
                 ['var' => 'graphique',  'desc' => 'Lien vers le graphique image du jour'],
                 ['var' => 'graphique_semaine', 'desc' => 'Lien vers le graphique image de la semaine'],
@@ -330,6 +331,7 @@ final class SmsReport
             '{hier_benefice}'    => formatPrice($yAgg['profit']),
             '{evolution}'        => self::evolutionLabel($agg['ca'], $yAgg['ca']),
             '{categories}'       => self::categoryBlock($catRows),
+            '{categories_semaine}' => self::categoryBlock(Sale::byCategoryBetween($monday, $day)),
             '{cat_top}'          => $catTop,
             '{caisse}'           => formatPrice(CashLedger::balance()),
             '{graphique}'        => APP_URL . '/sms-chart/' . self::chartToken() . '.png',
