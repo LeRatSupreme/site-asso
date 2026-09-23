@@ -27,7 +27,7 @@ $photo    = (string) ($member['photo'] ?? '');
                  alt="<?= e($fullName) ?>"
                  loading="lazy" width="96" height="96">
         <?php else: ?>
-            <span class="team-initial aeic-gradient" aria-hidden="true">
+            <span class="team-initial" aria-hidden="true">
                 <?= e(initial($fullName)) ?>
             </span>
         <?php endif; ?>
