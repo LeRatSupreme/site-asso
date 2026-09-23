@@ -20,6 +20,13 @@ $allPromoEmpty = empty($promotions);
 <section class="hero">
     <div class="ae-aurora" aria-hidden="true"></div>
     <div class="ae-dots dot-grid" aria-hidden="true"></div>
+    <div class="ae-chips ae-chips-left" data-parallax="14" aria-hidden="true">
+        <span class="ae-chip ae-chip-1">🎓</span>
+        <span class="ae-chip ae-chip-2">☕</span>
+        <span class="ae-chip ae-chip-3">🤝</span>
+        <span class="ae-chip ae-chip-4">📅</span>
+        <span class="ae-chip ae-chip-5">✨</span>
+    </div>
     <div class="container hero-grid">
         <div class="hero-content">
             <span class="ae-pill">
@@ -39,7 +46,7 @@ $allPromoEmpty = empty($promotions);
             </div>
         </div>
 
-        <aside class="hero-stats surface glass hm-stats" aria-label="<?= e(t('home.stats.aria')) ?>">
+        <aside class="hero-stats surface glass hm-stats" data-tilt data-tilt-base="rotate(1.2deg)" aria-label="<?= e(t('home.stats.aria')) ?>">
             <div class="stat">
                 <span class="stat-value ae-stat-num" data-target="100" data-suffix=" %">100 %</span>
                 <span class="stat-label"><?= e(t('home.stat.student')) ?></span>

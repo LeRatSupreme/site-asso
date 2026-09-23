@@ -12,18 +12,52 @@ declare(strict_types=1);
 <header class="page-hero">
     <div class="ae-aurora" aria-hidden="true"></div>
     <div class="ae-dots dot-grid" aria-hidden="true"></div>
-    <div class="ae-chips" aria-hidden="true">
+    <div class="ae-chips ae-chips-left" data-parallax="14" aria-hidden="true">
         <span class="ae-chip ae-chip-1">👥</span>
         <span class="ae-chip ae-chip-2">🎓</span>
         <span class="ae-chip ae-chip-3">⭐</span>
+        <span class="ae-chip ae-chip-4">💬</span>
+        <span class="ae-chip ae-chip-5">🚀</span>
     </div>
     <div class="container">
-        <span class="ae-pill">
-            <span class="ae-pill-dot" aria-hidden="true"></span>
-            <?= e(t('team.eyebrow')) ?>
-        </span>
-        <h1 class="page-title ae-title-grad"><?= e(t('team.title')) ?></h1>
-        <p class="page-lead"><?= e(t('team.lead')) ?></p>
+        <div class="ae-hero-grid">
+            <div>
+                <span class="ae-pill">
+                    <span class="ae-pill-dot" aria-hidden="true"></span>
+                    <?= e(t('team.eyebrow')) ?>
+                </span>
+                <h1 class="page-title ae-title-grad"><?= e(t('team.title')) ?></h1>
+                <p class="page-lead"><?= e(t('team.lead')) ?></p>
+            </div>
+
+            <!-- Badge de l'équipe décoratif et interactif -->
+            <?php $teamTotal = count($highlighted) + count($members); ?>
+            <div class="ae-idcard" data-tilt data-tilt-base="rotate(1.4deg)" aria-hidden="true">
+                <div class="ae-idcard-band">
+                    <span class="ae-idcard-logo">AE</span>
+                    <span class="ae-idcard-id">
+                        <span class="ae-idcard-label">BADGE / TEAM</span>
+                        <span class="ae-idcard-name">AEIC</span>
+                    </span>
+                    <span class="ae-idcard-badge"><?= e((string) $teamTotal) ?></span>
+                </div>
+                <div class="ae-idcard-body">
+                    <div class="ae-idcard-row">
+                        <span class="ae-idcard-ico">⭐</span>
+                        <span><?= e(t('team.board.title')) ?></span>
+                    </div>
+                    <div class="ae-idcard-row">
+                        <span class="ae-idcard-ico">👥</span>
+                        <span><?= e(t('team.all.title')) ?></span>
+                    </div>
+                    <div class="ae-idcard-row">
+                        <span class="ae-idcard-ico">🎓</span>
+                        <span><?= e(t('home.stat.student')) ?></span>
+                    </div>
+                </div>
+                <div class="ae-idcard-code">|||&#124; || |||| &#124;&#124; |||&#124; ||||| &#124; ||</div>
+            </div>
+        </div>
     </div>
 </header>
 

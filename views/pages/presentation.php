@@ -14,10 +14,12 @@ declare(strict_types=1);
 <header class="page-hero about-hero">
     <div class="about-aurora" aria-hidden="true"></div>
     <div class="about-hero-dots dot-grid" aria-hidden="true"></div>
-    <div class="about-hero-chips" aria-hidden="true">
-        <span class="about-chip about-chip-1">💻</span>
-        <span class="about-chip about-chip-2">☕</span>
-        <span class="about-chip about-chip-3">🎮</span>
+    <div class="about-hero-chips ae-chips" data-parallax="14" aria-hidden="true">
+        <span class="about-chip about-chip-1 ae-chip">💻</span>
+        <span class="about-chip about-chip-2 ae-chip">☕</span>
+        <span class="about-chip about-chip-3 ae-chip">🎮</span>
+        <span class="about-chip about-chip-4 ae-chip">🎯</span>
+        <span class="about-chip about-chip-5 ae-chip">✨</span>
     </div>
     <div class="container">
         <div class="about-hero-grid">
@@ -34,31 +36,31 @@ declare(strict_types=1);
                 </div>
             </div>
 
-            <!-- Carte « étudiant » décorative -->
-            <div class="about-idcard" aria-hidden="true">
-                <div class="about-idcard-band">
-                    <span class="about-idcard-logo">AE</span>
-                    <span class="about-idcard-id">
-                        <span class="about-idcard-label">CARTE / STUDENT</span>
-                        <span class="about-idcard-name">AEIC</span>
+            <!-- Carte « étudiant » décorative et interactive -->
+            <div class="ae-idcard" data-tilt data-tilt-base="rotate(1.6deg)" aria-hidden="true">
+                <div class="ae-idcard-band">
+                    <span class="ae-idcard-logo">AE</span>
+                    <span class="ae-idcard-id">
+                        <span class="ae-idcard-label">CARTE / STUDENT</span>
+                        <span class="ae-idcard-name">AEIC</span>
                     </span>
-                    <span class="about-idcard-badge">100 %</span>
+                    <span class="ae-idcard-badge">100 %</span>
                 </div>
-                <div class="about-idcard-body">
-                    <div class="about-idcard-row">
-                        <span class="about-idcard-ico">🎓</span>
+                <div class="ae-idcard-body">
+                    <div class="ae-idcard-row">
+                        <span class="ae-idcard-ico">🎓</span>
                         <span><?= e(t('home.stat.student')) ?></span>
                     </div>
-                    <div class="about-idcard-row">
-                        <span class="about-idcard-ico">☕</span>
+                    <div class="ae-idcard-row">
+                        <span class="ae-idcard-ico">☕</span>
                         <span><?= e(t('home.feature.cafeteria.title')) ?></span>
                     </div>
-                    <div class="about-idcard-row">
-                        <span class="about-idcard-ico">🤝</span>
+                    <div class="ae-idcard-row">
+                        <span class="ae-idcard-ico">🤝</span>
                         <span><?= e(t('about.value.proximity')) ?></span>
                     </div>
                 </div>
-                <div class="about-idcard-code">|||| || &#124;&#124; ||| &#124; |||| &#124;&#124; ||||| &#124; ||</div>
+                <div class="ae-idcard-code">|||| || &#124;&#124; ||| &#124; |||| &#124;&#124; ||||| &#124; ||</div>
             </div>
         </div>
     </div>
@@ -381,105 +383,12 @@ declare(strict_types=1);
 .about-chip-1 { top: 14%; left: 42%; }
 .about-chip-2 { top: 72%; left: 36%; animation-delay: 1.6s; }
 .about-chip-3 { top: 40%; left: 50%; animation-delay: 3s; }
+.about-chip-4 { top: 8%; left: 20%; width: 42px; height: 42px; font-size: 1.05rem; border-radius: 12px; animation-delay: 2.2s; }
+.about-chip-5 { bottom: 10%; left: 24%; width: 60px; height: 60px; font-size: 1.7rem; border-radius: 18px; animation-delay: 4.1s; }
 @keyframes about-float {
     0%, 100% { transform: translateY(0) rotate(-3deg); }
     50%      { transform: translateY(-14px) rotate(3deg); }
 }
-
-/* Carte étudiant */
-.about-idcard {
-    position: relative;
-    z-index: 1;
-    justify-self: end;
-    width: min(380px, 100%);
-    border-radius: 24px;
-    overflow: hidden;
-    background: rgba(255, 255, 255, 0.045);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    -webkit-backdrop-filter: blur(14px);
-    backdrop-filter: blur(14px);
-    box-shadow: 0 30px 70px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.12);
-    transform: rotate(1.6deg);
-    transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.35s ease;
-}
-.about-idcard:hover {
-    transform: rotate(0deg) translateY(-6px);
-    box-shadow: 0 40px 90px rgba(0, 0, 0, 0.5), 0 0 40px rgba(58, 155, 184, 0.16);
-}
-.about-idcard-band {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    padding: 1.4rem 1.5rem;
-    background: linear-gradient(120deg, #4a3d8f, #3a9bb8);
-}
-.about-idcard-logo {
-    display: grid;
-    place-items: center;
-    width: 54px;
-    height: 54px;
-    border-radius: 16px;
-    background: rgba(255, 255, 255, 0.16);
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    color: #fff;
-    font-weight: 900;
-    font-size: 1rem;
-    letter-spacing: -0.03em;
-    flex-shrink: 0;
-}
-.about-idcard-id { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
-.about-idcard-label {
-    font-size: 0.58rem;
-    font-weight: 800;
-    letter-spacing: 0.28em;
-    color: rgba(255, 255, 255, 0.75);
-    text-transform: uppercase;
-}
-.about-idcard-name { font-size: 1.5rem; font-weight: 900; color: #fff; letter-spacing: -0.03em; line-height: 1; }
-.about-idcard-badge {
-    margin-left: auto;
-    padding: 0.35rem 0.7rem;
-    border-radius: 999px;
-    background: rgba(255, 255, 255, 0.18);
-    border: 1px solid rgba(255, 255, 255, 0.35);
-    color: #fff;
-    font-size: 0.75rem;
-    font-weight: 900;
-    flex-shrink: 0;
-}
-.about-idcard-body { padding: 1.35rem 1.5rem; display: flex; flex-direction: column; gap: 0.9rem; }
-.about-idcard-row {
-    display: flex;
-    align-items: center;
-    gap: 0.8rem;
-    font-size: 0.92rem;
-    font-weight: 600;
-    color: var(--foreground);
-}
-.about-idcard-ico {
-    display: grid;
-    place-items: center;
-    width: 34px;
-    height: 34px;
-    border-radius: 10px;
-    background: rgba(72, 189, 211, 0.12);
-    border: 1px solid rgba(72, 189, 211, 0.22);
-    font-size: 1rem;
-    flex-shrink: 0;
-}
-.about-idcard-code {
-    padding: 0.85rem 1.5rem 1.15rem;
-    font-family: ui-monospace, 'SF Mono', Consolas, monospace;
-    font-size: 1.15rem;
-    letter-spacing: 0.35em;
-    color: rgba(255, 255, 255, 0.14);
-    user-select: none;
-    white-space: nowrap;
-    overflow: hidden;
-}
-[data-theme="light"] .about-idcard { background: rgba(255, 255, 255, 0.75); border-color: rgba(0, 0, 0, 0.08); box-shadow: 0 24px 60px rgba(15, 23, 42, 0.14); }
-[data-theme="light"] .about-idcard-code { color: rgba(15, 23, 42, 0.16); }
-[data-theme="light"] .about-idcard-ico { background: rgba(45, 122, 148, 0.08); border-color: rgba(45, 122, 148, 0.2); }
 
 /* ============ Médaillon dégradé (mission / contact) ============ */
 .about-medal {
@@ -947,11 +856,10 @@ declare(strict_types=1);
 
 /* ============ Responsive ============ */
 @media (max-width: 1080px) {
-    .about-chip-3 { display: none; }
+    .about-chip-3, .about-chip-5 { display: none; }
 }
 @media (max-width: 980px) {
     .about-hero-grid { grid-template-columns: 1fr; gap: 2.75rem; }
-    .about-idcard { justify-self: center; transform: rotate(0deg); }
     .about-chip-1 { left: auto; right: 6%; }
     .about-chip-2 { left: 4%; }
     .about-values-grid { grid-template-columns: 1fr; gap: 3rem; }
@@ -970,7 +878,7 @@ declare(strict_types=1);
 @media (max-width: 640px) {
     .about-hero { padding: 4rem 0 3.5rem; }
     .about-chip { width: 44px; height: 44px; font-size: 1.2rem; border-radius: 13px; }
-    .about-chip-3 { display: none; }
+    .about-chip-3, .about-chip-4, .about-chip-5 { display: none; }
     .about-mission { grid-template-columns: 1fr; text-align: center; padding: 2.25rem 1.5rem; gap: 1.5rem; }
     .about-mission .about-medal { margin: 0 auto; }
     .about-mission-code { display: none; }
