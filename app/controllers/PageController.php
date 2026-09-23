@@ -20,8 +20,8 @@ final class PageController extends Controller
         $page = Page::findBySlug('presentation');
 
         $this->render('pages/presentation', [
-            'title'       => 'L\'association — AEIC',
-            'description' => 'Qui sommes-nous ? Mission, valeurs et chiffres clés de l\'AEIC.',
+            'title'       => 'L\'association AEIC — Association étudiante à Calais',
+            'description' => 'Découvrez l\'AEIC : association étudiante du département Informatique (BUT Info) de l\'IUT de Calais, sa mission, ses valeurs et ses espaces.',
             'page'        => $page,
             'usersCount'  => User::countActive(),
             'eventsCount' => Event::count(),
@@ -44,8 +44,8 @@ final class PageController extends Controller
         ));
 
         $this->render('pages/team', [
-            'title'       => 'L\'équipe — AEIC',
-            'description' => 'Le bureau de l\'AEIC : les étudiants qui font vivre l\'association.',
+            'title'       => 'L\'équipe — AEIC, association étudiante informatique Calais',
+            'description' => 'Le bureau de l\'AEIC, association étudiante du BUT Informatique de Calais : président, trésorier, secrétaire et pôles de l\'association.',
             'highlighted' => $highlighted,
             'members'     => $others,
         ]);

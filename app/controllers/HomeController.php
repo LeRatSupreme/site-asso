@@ -26,23 +26,57 @@ final class HomeController extends Controller
             : APP_URL . asset('img/favicon.svg');
 
         $orgLd = json_encode([
-            '@context'    => 'https://schema.org',
-            '@type'       => 'Organization',
-            'name'        => $siteName,
-            'url'         => APP_URL,
-            'logo'        => $logoUrl,
-            'description' => Setting::get('site_description'),
-            'email'       => Setting::get('contact_email', ''),
-            'address'     => [
-                '@type'           => 'PostalAddress',
-                'addressLocality' => 'Calais',
-                'addressCountry'  => 'FR',
+            '@context' => 'https://schema.org',
+            '@graph'   => [
+                [
+                    '@type'       => 'Organization',
+                    'name'        => $siteName,
+                    'url'         => APP_URL,
+                    'logo'        => $logoUrl,
+                    'description' => Setting::get('site_description'),
+                    'email'       => Setting::get('contact_email', ''),
+                    'address'     => [
+                        '@type'           => 'PostalAddress',
+                        'addressLocality' => 'Calais',
+                        'addressCountry'  => 'FR',
+                    ],
+                    'alternateName' => [
+                        'Association des Étudiants Informatique de Calais',
+                        'Association Étudiante Informatique de Calais',
+                        'Association étudiante Calais',
+                        'BDE Informatique Calais',
+                        'BUT Informatique Calais',
+                    ],
+                    'slogan'      => 'La vie étudiante du BUT Informatique de Calais',
+                    'keywords'    => 'AEIC, association étudiante Calais, BUT informatique, BUT informatique Calais, IUT de Calais, informatique Calais, association Calais, vie étudiante, BDE',
+                    'areaServed'  => [
+                        '@type' => 'City',
+                        'name'  => 'Calais',
+                    ],
+                    'sameAs'      => [
+                        'https://www.facebook.com/IUTinfoCalais/',
+                    ],
+                ],
+                [
+                    '@type'      => 'WebSite',
+                    'name'       => $siteName . ' — Association Étudiante Informatique de Calais',
+                    'url'        => APP_URL,
+                    'inLanguage' => 'fr-FR',
+                    'potentialAction' => [
+                        '@type'       => 'SearchAction',
+                        'target'      => [
+                            '@type'       => 'EntryPoint',
+                            'urlTemplate' => APP_URL . '/search?q={search_term_string}',
+                        ],
+                        'query-input' => 'required name=search_term_string',
+                    ],
+                ],
             ],
         ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
         $this->render('home', [
-            'title'           => $siteName,
-            'description'     => Setting::get('site_description'),
+            'title'           => 'AEIC — Association Étudiante Informatique de Calais',
+            'description'     => 'L\'AEIC est l\'association étudiante du BUT Informatique de l\'IUT de Calais : événements, cafétéria, jeux, vie associative et entraide entre étudiants à Calais.',
             'jsonLd'          => $orgLd,
             'siteName'        => $siteName,
             'upcoming'        => Event::featured(3),
@@ -196,8 +230,8 @@ final class HomeController extends Controller
         }
 
         $this->render('galerie/index', [
-            'title'       => 'Galerie — AEIC',
-            'description' => 'Photos des événements et activités de l\'AEIC.',
+            'title'       => 'Galerie photos — AEIC, association étudiante Calais',
+            'description' => 'Photos des événements et de la vie étudiante de l\'AEIC, l\'association du BUT Informatique de l\'IUT de Calais.',
             'groups'      => $groups,
         ]);
     }

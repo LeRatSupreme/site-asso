@@ -27,7 +27,7 @@ $currentFlag = lang_flag($lang);
 
 // SEO : titres et descriptions par défaut + Open Graph.
 $pageTitle    = $title ?? $siteName;
-$pageDesc     = $description ?? $siteDesc;
+$pageDesc     = (isset($description) && trim((string) $description) !== '') ? $description : $siteDesc;
 $ogImage      = !empty($ogImage)
     ? (is_absolute_url($ogImage) ? $ogImage : APP_URL . '/' . ltrim($ogImage, '/'))
     : (!empty(Setting::get('og_image'))
@@ -43,7 +43,11 @@ $twitterHandle = Setting::get('twitter_handle', '');
     <meta name="theme-color" content="#08172d">
     <title><?= e($pageTitle) ?></title>
     <meta name="description" content="<?= e($pageDesc) ?>">
+    <meta name="keywords" content="<?= e(Setting::get('seo_keywords', 'AEIC, association étudiante Calais, BUT informatique, BUT informatique Calais, informatique Calais, association Calais, IUT de Calais, BDE info, vie étudiante Calais, asso Calais')) ?>">
     <link rel="canonical" href="<?= e($canonical) ?>">
+    <?php if (trim((string) Setting::get('google_site_verification', '')) !== ''): ?>
+        <meta name="google-site-verification" content="<?= e(Setting::get('google_site_verification', '')) ?>">
+    <?php endif; ?>
 
     <!-- Open Graph -->
     <meta property="og:type" content="<?= e($ogType ?? 'website') ?>">
