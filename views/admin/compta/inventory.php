@@ -99,7 +99,12 @@ declare(strict_types=1);
             <tbody>
                 <?php foreach ($rows as $r): ?>
                     <tr>
-                        <td><strong><?= e($r['key']) ?></strong></td>
+                        <td>
+                            <strong><?= e($r['key']) ?></strong>
+                            <button type="button" class="btn btn-ghost btn-sm merge-row-btn"
+                                    data-key="<?= e($r['key']) ?>"
+                                    title="Fusionner ce produit avec un autre (doublon) : pré-remplit la clé source">🔗</button>
+                        </td>
                         <td>
                             <?php if ($r['counted_at'] !== null): ?>
                                 <?= e(formatDateTime($r['counted_at'])) ?>
@@ -220,9 +225,9 @@ declare(strict_types=1);
     </details>
 </div>
 
-<div class="card surface glass">
+<div class="card surface glass" id="merge-card">
     <h2 class="card-title">🔗 Fusionner des clés produits</h2>
-    <p class="muted">Déplace toutes les données d'une clé vers une autre : ventes, achats, pertes, aliases, stocks, comptages, drapeaux.</p>
+    <p class="muted">Même produit sous deux noms (ex. « Madeleine » dans les ventes SumUp et « Madel Coquille » dans les achats) ? Déplace toutes les données d'une clé vers l'autre : ventes, achats, pertes, aliases, stocks, comptages, drapeaux. Le bouton 🔗 à côté de chaque produit ci-dessus pré-remplit la clé source.</p>
     <form method="post" action="<?= e(url('/admin/compta/inventaire/merge')) ?>"
           data-confirm="Fusionner ces clés ? Action irréversible.">
         <?= csrf_field() ?>
@@ -249,3 +254,22 @@ declare(strict_types=1);
         <p class="muted">Utilise la clé des ventes SumUp comme cible (ex. « pulco », pas « Pulco Citronnade »).</p>
     </form>
 </div>
+
+<script>
+/* Bouton 🔗 d'une ligne : pré-remplit la clé source, défile vers la carte et cible le champ cible. */
+(function () {
+    Array.prototype.forEach.call(document.querySelectorAll('.merge-row-btn'), function (b) {
+        b.addEventListener('click', function () {
+            var src = document.getElementById('merge-source');
+            var tgt = document.getElementById('merge-target');
+            var card = document.getElementById('merge-card');
+            if (!src || !tgt) return;
+            src.value = b.getAttribute('data-key');
+            if (card && card.scrollIntoView) {
+                card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+            tgt.focus({ preventScroll: true });
+        });
+    });
+})();
+</script>
