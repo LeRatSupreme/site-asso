@@ -151,13 +151,14 @@ final class SmsReportTest extends TestCase
     public function test_build_svg_genere_un_svg_sain(): void
     {
         $svg = \App\Controllers\SmsChartController::buildSvg(
-            [['category' => 'Boissons <test>', 'ca' => 20.0]],
+            [['category' => 'Boi <x>', 'ca' => 20.0]],
             '26/09/2026'
         );
 
         self::assertStringContainsString('<svg', $svg);
-        self::assertStringContainsString('Boissons &lt;test&gt;', $svg);
+        self::assertStringContainsString('Boi &lt;x&gt;', $svg);
         self::assertStringContainsString('26/09/2026', $svg);
+        self::assertStringContainsString('Total', $svg);
         self::assertStringContainsString('</svg>', $svg);
     }
 
