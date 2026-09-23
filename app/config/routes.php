@@ -205,6 +205,7 @@ function aeic_register_routes(Router $router): void
     $router->get('/admin/media', [AdminMediaController::class, 'index']);
     $router->post('/admin/media/upload', [AdminMediaController::class, 'upload']);
     $router->post('/admin/media/{id}/delete', [AdminMediaController::class, 'delete']);
+    $router->post('/admin/media/{id}/delete-cascade', [AdminMediaController::class, 'deleteCascade']);
     $router->post('/admin/media/{id}/update', [AdminMediaController::class, 'update']);
 
     // Jeux (Wordle + Énigme + classement/pseudos).
