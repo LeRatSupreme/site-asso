@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 /**
  * @var list<array<string,mixed>> $medias
+ * @var array<string, list<array{id:string,name:string,image:string}>> $usage
  */
 ?>
 <section class="card surface glass media-upload-card">
@@ -40,6 +41,9 @@ declare(strict_types=1);
             // Identifiant DOM sûr (les ids médias sont med_hex, mais restons
             // robustes — même assainissement que les dialogs « Pages + »).
             $domId = preg_replace('#[^A-Za-z0-9_-]#', '', $id);
+            // Produits utilisant ce média : bloque la suppression simple,
+            // liste affichée dans la modale « Pourquoi ? » + cascade.
+            $used = $usage[$id] ?? [];
         ?>
             <figure class="media-card surface glass">
                 <div class="media-thumb">
@@ -50,6 +54,12 @@ declare(strict_types=1);
                     <div class="media-meta">
                         <?php if ($size !== null): ?><span class="badge badge-muted"><?= (int) $size ?> Ko</span><?php endif; ?>
                         <?php if (!empty($m['alt'])): ?><span class="badge badge-info" title="Texte alternatif">📝 <?= e((string) $m['alt']) ?></span><?php endif; ?>
+                        <?php if ($used !== []): ?>
+                            <button type="button" class="badge badge-warning media-usage-badge" title="Voir les produits qui utilisent ce média"
+                                    onclick="document.getElementById('media-usage-dialog-<?= e($domId) ?>').showModal()">
+                                🔗 Utilisé par <?= count($used) ?> produit(s)
+                            </button>
+                        <?php endif; ?>
                     </div>
                     <code class="media-url" id="media-url-<?= e($domId) ?>"><?= e($fullUrl) ?></code>
                     <div class="media-actions">
@@ -82,11 +92,49 @@ declare(strict_types=1);
                                 </div>
                             </dialog>
                         </form>
-                        <form method="post" action="<?= e(url('/admin/media/' . rawurlencode($id) . '/delete')) ?>" class="inline-form media-delete-form"
-                              data-confirm="Supprimer définitivement « <?= e($name) ?> » ? Action irréversible." data-preserve-scroll>
-                            <?= csrf_field() ?>
-                            <button type="submit" class="media-icon-btn is-danger" title="Supprimer">🗑️</button>
-                        </form>
+                        <?php if ($used !== []): ?>
+                            <!-- Média utilisé : la corbeille ouvre la modale
+                                 « Pourquoi ? » qui liste les produits et propose
+                                 la suppression en cascade (détachement). -->
+                            <form method="post" action="<?= e(url('/admin/media/' . rawurlencode($id) . '/delete-cascade')) ?>" class="inline-form media-delete-form" data-preserve-scroll>
+                                <?= csrf_field() ?>
+                                <button type="button" class="media-icon-btn is-danger" title="Suppression bloquée — voir pourquoi"
+                                        onclick="document.getElementById('media-usage-dialog-<?= e($domId) ?>').showModal()">🗑️</button>
+                                <dialog id="media-usage-dialog-<?= e($domId) ?>" class="media-dialog">
+                                    <div class="media-dialog-head">
+                                        <div>
+                                            <p class="media-dialog-title">🔗 Média utilisé par <?= count($used) ?> produit(s)</p>
+                                            <p class="media-dialog-sub"><?= e($name) ?></p>
+                                        </div>
+                                        <button type="button" class="media-dialog-close" onclick="this.closest('dialog').close()" title="Fermer">✕</button>
+                                    </div>
+                                    <div class="media-dialog-body">
+                                        <p class="media-usage-intro">Suppression simple impossible : ce média est l'image des produits suivants.</p>
+                                        <ul class="media-usage-list">
+                                            <?php foreach ($used as $p): ?>
+                                                <li>📦 <?= e($p['name']) ?></li>
+                                            <?php endforeach; ?>
+                                        </ul>
+                                        <p class="media-usage-note">
+                                            <strong>Supprimer et détacher (cascade)</strong> retire l'image de ces produits
+                                            (toutes leurs autres données sont conservées) puis supprime le média.
+                                            Vous pourrez réaffecter une image aux produits à tout moment.
+                                        </p>
+                                    </div>
+                                    <div class="media-dialog-foot">
+                                        <button type="button" class="btn btn-ghost btn-sm" onclick="this.closest('dialog').close()">Annuler</button>
+                                        <span class="media-dialog-spacer"></span>
+                                        <button type="submit" class="btn btn-danger btn-sm">🗑️ Supprimer et détacher</button>
+                                    </div>
+                                </dialog>
+                            </form>
+                        <?php else: ?>
+                            <form method="post" action="<?= e(url('/admin/media/' . rawurlencode($id) . '/delete')) ?>" class="inline-form media-delete-form"
+                                  data-confirm="Supprimer définitivement « <?= e($name) ?> » ? Action irréversible." data-preserve-scroll>
+                                <?= csrf_field() ?>
+                                <button type="submit" class="media-icon-btn is-danger" title="Supprimer">🗑️</button>
+                            </form>
+                        <?php endif; ?>
                     </div>
                 </figcaption>
             </figure>

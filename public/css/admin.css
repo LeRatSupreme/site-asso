@@ -525,6 +525,40 @@
 .media-dialog-foot .btn { white-space: nowrap; }
 .media-dialog-spacer { flex: 1; }
 
+/* Modale « média utilisé » : pourquoi la suppression est bloquée + cascade */
+.media-usage-badge {
+    cursor: pointer;
+    border-style: solid;
+    font-weight: 700;
+}
+.media-usage-badge:hover { filter: brightness(1.2); }
+.media-usage-intro { margin: 0 0 0.5rem; font-size: 0.8rem; color: var(--foreground); }
+.media-usage-list {
+    margin: 0 0 0.6rem;
+    padding: 0.5rem 0.5rem 0.5rem 1.4rem;
+    list-style: disc;
+    background: rgba(0, 0, 0, 0.22);
+    border: 1px solid var(--border);
+    border-radius: 0.5rem;
+    font-size: 0.8rem;
+    color: var(--foreground);
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+}
+.media-usage-note {
+    margin: 0;
+    font-size: 0.74rem;
+    color: var(--muted);
+    line-height: 1.45;
+}
+.media-dialog .btn-danger {
+    background: rgba(239, 68, 68, 0.18);
+    border: 1px solid rgba(239, 68, 68, 0.55);
+    color: #f87171;
+}
+.media-dialog .btn-danger:hover { background: rgba(239, 68, 68, 0.3); }
+
 /* ---- POS --------------------------------------------------------------- */
 
 .pos-grid {

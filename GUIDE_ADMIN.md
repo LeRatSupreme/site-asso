@@ -561,6 +561,17 @@ En haut de la page :
 - Clique **« Copier l'URL »** → l'URL est dans le presse-papier
 - Colle cette URL dans le champ **Image** d'un événement, produit, ou membre d'équipe
 
+### Supprimer un média
+- Si le média n'est utilisé par rien : la corbeille demande une confirmation puis supprime.
+- Si le média est **utilisé par des produits** : la corbeille ouvre une modale
+  **« Média utilisé par N produit(s) »** qui liste les produits concernés
+  (badge 🔗 visible sur la carte). Deux choix :
+  - **Annuler** — rien n'est supprimé ;
+  - **Supprimer et détacher (cascade)** — l'image est retirée des produits
+    (toutes leurs autres données sont conservées) puis le média est supprimé.
+    Tu pourras réaffecter une image aux produits à tout moment. Les métadonnées
+    du média restent tracées dans le journal d'audit.
+
 ### Format acceptés
 JPG, PNG, GIF, WebP, SVG — **5 Mo max**
 

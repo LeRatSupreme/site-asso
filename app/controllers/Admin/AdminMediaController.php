@@ -47,6 +47,8 @@ final class AdminMediaController extends AdminBaseController
         $this->renderAdmin('admin/media/index', [
             'title'  => 'Médias',
             'medias' => Media::recent(),
+            // media_id => produits utilisant l'image (badges + modale « pourquoi »).
+            'usage'  => Media::usageMap(),
         ]);
     }
 
@@ -142,10 +144,23 @@ final class AdminMediaController extends AdminBaseController
         }
 
         // Un média référencé par un produit (products.image) ne doit pas
-        // disparaître : le visuel du produit serait cassé.
-        $usedBy = Media::usedByCount($id);
-        if ($usedBy > 0) {
-            $this->setFlash('error', sprintf('Ce média est utilisé par %d produit(s).', $usedBy));
+        // disparaître silencieusement : on explique POURQUOI (quels produits)
+        // et on renvoie vers la suppression en cascade si besoin.
+        $usedBy = Media::usedBy($id);
+        if ($usedBy !== []) {
+            $names = implode(', ', array_map(
+                static fn (array $p): string => '« ' . $p['name'] . ' »',
+                array_slice($usedBy, 0, 5)
+            ));
+            $this->setFlash(
+                'error',
+                sprintf(
+                    'Suppression impossible : ce média est utilisé par %d produit(s) — %s%s Utilisez « Supprimer et détacher » pour une suppression en cascade.',
+                    count($usedBy),
+                    $names,
+                    count($usedBy) > 5 ? '…' : ''
+                )
+            );
             redirect(url('/admin/media'));
         }
 
@@ -163,6 +178,53 @@ final class AdminMediaController extends AdminBaseController
 
         $this->audit('media.delete', 'media', $id);
         $this->setFlash('success', 'Média supprimé.');
+        redirect(url('/admin/media'));
+    }
+
+    /**
+     * Suppression en cascade : détache d'abord les produits (image remise à
+     * NULL — aucune autre donnée produit n'est perdue, l'image peut être
+     * réaffectée plus tard), puis supprime le média. Les métadonnées du média
+     * sont conservées dans le journal d'audit pour pouvoir le recréer à
+     * l'identique si besoin.
+     */
+    public function deleteCascade(string $id): void
+    {
+        $this->guardModule(Permissions::MODULE_CONTENT);
+
+        $media = Media::find($id);
+        if ($media === null) {
+            $this->setFlash('error', 'Média introuvable.');
+            redirect(url('/admin/media'));
+        }
+
+        $detached = Media::detachProducts($id);
+
+        if (Media::deleteRow($id) < 1) {
+            $this->setFlash('error', 'Média introuvable.');
+            redirect(url('/admin/media'));
+        }
+
+        $path = AEIC_PUBLIC . '/assets/' . (string) $media['url'];
+        if (is_file($path)) {
+            @unlink($path);
+        }
+
+        $this->audit('media.delete_cascade', 'media', $id, [
+            'name'      => (string) ($media['name'] ?? ''),
+            'url'       => (string) ($media['url'] ?? ''),
+            'alt'       => (string) ($media['alt'] ?? ''),
+            'mime_type' => (string) ($media['mime_type'] ?? ''),
+            'size'      => (int) ($media['size'] ?? 0),
+            'detached'  => $detached,
+        ]);
+        $this->setFlash(
+            'success',
+            sprintf(
+                'Média supprimé — %d produit(s) détaché(s) (données conservées, image à réaffecter).',
+                $detached
+            )
+        );
         redirect(url('/admin/media'));
     }
 
