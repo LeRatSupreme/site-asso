@@ -43,7 +43,7 @@ $twitterHandle = Setting::get('twitter_handle', '');
     <meta name="theme-color" content="#08172d">
     <title><?= e($pageTitle) ?></title>
     <meta name="description" content="<?= e($pageDesc) ?>">
-    <meta name="keywords" content="<?= e(Setting::get('seo_keywords', 'AEIC, association étudiante Calais, BUT informatique, BUT informatique Calais, informatique Calais, association Calais, IUT de Calais, BDE info, vie étudiante Calais, asso Calais')) ?>">
+    <meta name="keywords" content="<?= e(Setting::get('seo_keywords', 'AEIC, association étudiante Calais, BUT informatique, BUT informatique Calais, informatique Calais, association Calais, IUT de Calais, IUT Calais, rentrée IUT Calais, ULCO, ULCO IUT, IUT ULCO, ULCO informatique, Université du Littoral Côte d\'Opale, Côte d\'Opale, informatique association, IUT association, BDE info, BDE informatique Calais, vie étudiante Calais, campus Calais, cafétéria IUT Calais, Adrien Remond, Nuit de l\'Info, asso Calais, étudiants informatique Calais')) ?>">
     <link rel="canonical" href="<?= e($canonical) ?>">
     <?php if (trim((string) Setting::get('google_site_verification', '')) !== ''): ?>
         <meta name="google-site-verification" content="<?= e(Setting::get('google_site_verification', '')) ?>">
@@ -250,6 +250,7 @@ $twitterHandle = Setting::get('twitter_handle', '');
                     <div>
                         <p class="footer-name"><?= e($siteName) ?></p>
                         <p class="footer-sub"><?= e(t('footer.association')) ?></p>
+                        <p class="footer-loc">BUT Informatique · IUT de Calais · ULCO — Université du Littoral Côte d'Opale · Côte d'Opale</p>
                     </div>
                 </div>
 
@@ -271,10 +272,11 @@ $twitterHandle = Setting::get('twitter_handle', '');
                 <span class="footer-partners">
                     <span class="footer-partners-label">🎓 Notre IUT</span>
                     <a href="https://www.facebook.com/IUTinfoCalais/" target="_blank" rel="noopener" class="footer-partner-link">IUT Informatique Calais</a>
+                    <a href="https://www.univ-littoral.fr/" target="_blank" rel="noopener" class="footer-partner-link">ULCO</a>
                 </span>
                 <span class="footer-tag">🎓 <?= e(t('footer.tag')) ?></span>
                 <span class="footer-copy">© <?= e($currentYear) ?> <?= e($siteName) ?> · <?= e(t('footer.copy')) ?></span>
-                <span class="footer-credit">💻 Développé par <strong>Remond Adrien</strong></span>
+                <span class="footer-credit">💻 Développé par <strong><a href="https://aremond.ovh/" target="_blank" rel="noopener" class="footer-credit-link">Adrien Remond</a></strong></span>
             </div>
         </div>
     </footer>
