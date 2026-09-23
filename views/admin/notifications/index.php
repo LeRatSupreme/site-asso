@@ -87,8 +87,8 @@ $selectedDays = array_map('intval', explode(',', $days));
 
         <div class="sms-editor">
             <div class="sms-editor-input">
-                <textarea id="sms_report_template" name="sms_report_template" rows="9" maxlength="999"
-                          style="font-family:monospace;"><?= e($template) ?></textarea>
+                <textarea id="sms_report_template" name="sms_report_template" rows="14" maxlength="999"
+                          class="sms-template-area"><?= e($template) ?></textarea>
                 <div class="sms-editor-foot">
                     <button type="button" class="btn btn-ghost btn-sm" id="sms-template-reset">↺ Modèle par défaut</button>
                     <span class="sms-count" id="sms-char-count">0 / 999</span>
