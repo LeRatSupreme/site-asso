@@ -28,6 +28,8 @@ final class AdminNotificationController extends AdminBaseController
             'recipients' => SmsReport::recipients(),
             'lastSent'   => Setting::get('sms_report_last_sent', ''),
             'preview'    => $report['message'],
+            'vars'       => $report['vars'],
+            'varGroups'  => SmsReport::variableGroups(),
             'ca'         => $report['ca'],
             'profit'     => $report['profit'],
         ]);
