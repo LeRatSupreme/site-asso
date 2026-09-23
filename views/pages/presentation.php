@@ -14,13 +14,6 @@ declare(strict_types=1);
 <header class="page-hero about-hero">
     <div class="about-aurora" aria-hidden="true"></div>
     <div class="about-hero-dots dot-grid" aria-hidden="true"></div>
-    <div class="about-hero-chips ae-chips" data-parallax="14" aria-hidden="true">
-        <span class="about-chip about-chip-1 ae-chip">💻</span>
-        <span class="about-chip about-chip-2 ae-chip">☕</span>
-        <span class="about-chip about-chip-3 ae-chip">🎮</span>
-        <span class="about-chip about-chip-4 ae-chip">🎯</span>
-        <span class="about-chip about-chip-5 ae-chip">✨</span>
-    </div>
     <div class="container">
         <div class="about-hero-grid">
             <div class="about-hero-copy">
@@ -361,34 +354,6 @@ declare(strict_types=1);
     background-clip: text;
 }
 .about-hero-actions { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 2rem; }
-
-/* Chips flottantes */
-.about-hero-chips { position: absolute; inset: 0; pointer-events: none; z-index: 0; }
-.about-chip {
-    position: absolute;
-    display: grid;
-    place-items: center;
-    width: 52px;
-    height: 52px;
-    border-radius: 16px;
-    font-size: 1.45rem;
-    line-height: 1;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    -webkit-backdrop-filter: blur(10px);
-    backdrop-filter: blur(10px);
-    box-shadow: 0 14px 34px rgba(0, 0, 0, 0.3);
-    animation: about-float 7s ease-in-out infinite;
-}
-.about-chip-1 { top: 14%; left: 42%; }
-.about-chip-2 { top: 72%; left: 36%; animation-delay: 1.6s; }
-.about-chip-3 { top: 40%; left: 50%; animation-delay: 3s; }
-.about-chip-4 { top: 8%; left: 20%; width: 42px; height: 42px; font-size: 1.05rem; border-radius: 12px; animation-delay: 2.2s; }
-.about-chip-5 { bottom: 10%; left: 24%; width: 60px; height: 60px; font-size: 1.7rem; border-radius: 18px; animation-delay: 4.1s; }
-@keyframes about-float {
-    0%, 100% { transform: translateY(0) rotate(-3deg); }
-    50%      { transform: translateY(-14px) rotate(3deg); }
-}
 
 /* ============ Médaillon dégradé (mission / contact) ============ */
 .about-medal {
@@ -855,13 +820,8 @@ declare(strict_types=1);
 .about-btn-glass:hover { background: rgba(255, 255, 255, 0.2); color: #fff; border-color: #fff; }
 
 /* ============ Responsive ============ */
-@media (max-width: 1080px) {
-    .about-chip-3, .about-chip-5 { display: none; }
-}
 @media (max-width: 980px) {
     .about-hero-grid { grid-template-columns: 1fr; gap: 2.75rem; }
-    .about-chip-1 { left: auto; right: 6%; }
-    .about-chip-2 { left: 4%; }
     .about-values-grid { grid-template-columns: 1fr; gap: 3rem; }
     .about-values-grid::before { display: none; }
     .about-vision { grid-template-columns: 1fr; gap: 1.25rem; padding: 2.5rem 1.75rem; }
@@ -877,8 +837,6 @@ declare(strict_types=1);
 }
 @media (max-width: 640px) {
     .about-hero { padding: 4rem 0 3.5rem; }
-    .about-chip { width: 44px; height: 44px; font-size: 1.2rem; border-radius: 13px; }
-    .about-chip-3, .about-chip-4, .about-chip-5 { display: none; }
     .about-mission { grid-template-columns: 1fr; text-align: center; padding: 2.25rem 1.5rem; gap: 1.5rem; }
     .about-mission .about-medal { margin: 0 auto; }
     .about-mission-code { display: none; }
@@ -896,8 +854,7 @@ declare(strict_types=1);
 /* ============ Motion réduit ============ */
 @media (prefers-reduced-motion: reduce) {
     .about-aurora,
-    .about-pill-dot,
-    .about-chip { animation: none; }
+    .about-pill-dot { animation: none; }
 }
 </style>
 

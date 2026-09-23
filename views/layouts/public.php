@@ -223,6 +223,17 @@ $twitterHandle = Setting::get('twitter_handle', '');
     </header>
 
     <main id="contenu">
+        <!-- Icônes flottantes : couche décorative répartie sur toute la page -->
+        <div class="ae-chips ae-chips-page" data-parallax="18" aria-hidden="true">
+            <span class="ae-chip ae-chip-1">💻</span>
+            <span class="ae-chip ae-chip-2">☕</span>
+            <span class="ae-chip ae-chip-3">🎮</span>
+            <span class="ae-chip ae-chip-4">🎉</span>
+            <span class="ae-chip ae-chip-5">📅</span>
+            <span class="ae-chip ae-chip-6">🎓</span>
+            <span class="ae-chip ae-chip-7">✨</span>
+            <span class="ae-chip ae-chip-8">🤝</span>
+        </div>
         <?php require AEIC_VIEWS . '/partials/flash_messages.php'; ?>
         <?= $content ?>
     </main>
