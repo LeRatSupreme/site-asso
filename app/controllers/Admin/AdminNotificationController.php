@@ -4,12 +4,15 @@ declare(strict_types=1);
 
 namespace App\Controllers\Admin;
 
+use App\Core\FreeMobileSms;
 use App\Core\SmsReport;
+use App\Models\SmsSchedule;
 use App\Models\Setting;
 
 /**
- * Page « Notifications » (groupe Système) : rapport quotidien par SMS
- * via l'API Free Mobile — CA du jour, bénéfice et top produits.
+ * Page « Notifications » (groupe Système) : messages programmés par SMS
+ * via l'API Free Mobile — CA du jour, bénéfice, top produits, catégories…
+ * Chaque message a ses propres jours, heure et modèle.
  */
 final class AdminNotificationController extends AdminBaseController
 {
@@ -17,51 +20,106 @@ final class AdminNotificationController extends AdminBaseController
     {
         $this->guardSystemOrPage('notifications');
 
-        $report = SmsReport::buildMessage();
+        // Migration douce : si la table est vide mais qu'une config unique
+        // existe (ancienne version), on la convertit en premier message.
+        if (SmsSchedule::all() === [] && Setting::get('sms_report_enabled', '') !== '') {
+            SmsSchedule::create([
+                'label'      => 'Rapport quotidien',
+                'is_enabled' => Setting::getBool('sms_report_enabled', false),
+                'days'       => Setting::get('sms_report_days', SmsReport::DEFAULT_DAYS),
+                'send_time'  => Setting::get('sms_report_time', SmsReport::DEFAULT_TIME),
+                'template'   => Setting::get('sms_report_template', ''),
+            ]);
+        }
+
+        $vars = SmsReport::varsFor();
+        $schedules = [];
+        foreach (SmsSchedule::all() as $s) {
+            $template = trim((string) ($s['template'] ?? ''));
+            $schedules[] = $s + [
+                'time_hm' => substr((string) ($s['send_time'] ?? '20:00'), 0, 5),
+                'preview' => SmsReport::renderTemplate(
+                    $template !== '' ? $template : SmsReport::DEFAULT_TEMPLATE,
+                    $vars
+                ),
+            ];
+        }
 
         $this->renderAdmin('admin/notifications/index', [
             'title'      => 'Notifications SMS',
-            'enabled'    => Setting::getBool('sms_report_enabled', false),
-            'days'       => Setting::get('sms_report_days', SmsReport::DEFAULT_DAYS),
-            'time'       => Setting::get('sms_report_time', SmsReport::DEFAULT_TIME),
-            'template'   => Setting::get('sms_report_template', SmsReport::DEFAULT_TEMPLATE),
+            'schedules'  => $schedules,
             'recipients' => SmsReport::recipients(),
-            'lastSent'   => Setting::get('sms_report_last_sent', ''),
-            'preview'    => $report['message'],
-            'vars'       => $report['vars'],
+            'vars'       => $vars,
             'varGroups'  => SmsReport::variableGroups(),
-            'ca'         => $report['ca'],
-            'profit'     => $report['profit'],
         ]);
     }
 
     /**
-     * Enregistre la planification et le modèle du message.
+     * Crée un nouveau message (valeurs par défaut) et rouvre la page.
      */
-    public function save(): void
+    public function create(): void
     {
         $this->guardSystemOrPage('notifications');
 
-        $enabled = isset($_POST['sms_report_enabled']) ? '1' : '0';
-        $days = SmsReport::normalizeDays((array) ($_POST['sms_report_days'] ?? []));
+        $label = trim((string) ($_POST['label'] ?? ''));
+        if ($label === '') {
+            $label = 'Message ' . (count(SmsSchedule::all()) + 1);
+        }
 
-        $time = trim((string) ($_POST['sms_report_time'] ?? ''));
+        SmsSchedule::create(['label' => $label]);
+        $this->audit('sms_report.create', 'sms_reports', null, ['label' => $label]);
+        $this->setFlash('success', 'Message créé — configure-le puis active-le.');
+        redirect(url('/admin/notifications'));
+    }
+
+    /**
+     * Enregistre un message (libellé, activation, jours, heure, modèle).
+     */
+    public function save(string $id): void
+    {
+        $this->guardSystemOrPage('notifications');
+
+        $schedule = SmsSchedule::find($id);
+        if ($schedule === null) {
+            $this->setFlash('error', 'Message introuvable.');
+            redirect(url('/admin/notifications'));
+        }
+
+        $days = SmsReport::normalizeDays((array) ($_POST['days'] ?? []));
+
+        $time = trim((string) ($_POST['send_time'] ?? ''));
         if (!preg_match('/^\d{1,2}:\d{2}$/', $time)) {
             $time = SmsReport::DEFAULT_TIME;
         }
 
-        $template = trim((string) ($_POST['sms_report_template'] ?? ''));
+        $template = trim((string) ($_POST['template'] ?? ''));
         if ($template === SmsReport::DEFAULT_TEMPLATE) {
             $template = '';   // modèle par défaut : on ne duplique pas en base
         }
 
-        Setting::set('sms_report_enabled', $enabled);
-        Setting::set('sms_report_days', $days);
-        Setting::set('sms_report_time', $time);
-        Setting::set('sms_report_template', $template);
+        SmsSchedule::updateRow($id, [
+            'label'      => (string) ($_POST['label'] ?? ''),
+            'is_enabled' => isset($_POST['is_enabled']),
+            'days'       => $days,
+            'send_time'  => $time,
+            'template'   => $template,
+        ]);
 
-        $this->audit('sms_report.update', 'settings', null, ['enabled' => $enabled, 'days' => $days, 'time' => $time]);
-        $this->setFlash('success', 'Planification du rapport SMS enregistrée.');
+        $this->audit('sms_report.update', 'sms_reports', $id, ['days' => $days, 'time' => $time]);
+        $this->setFlash('success', 'Message enregistré.');
+        redirect(url('/admin/notifications'));
+    }
+
+    /**
+     * Supprime un message programmé.
+     */
+    public function delete(string $id): void
+    {
+        $this->guardSystemOrPage('notifications');
+
+        SmsSchedule::delete($id);
+        $this->audit('sms_report.delete', 'sms_reports', $id);
+        $this->setFlash('success', 'Message supprimé.');
         redirect(url('/admin/notifications'));
     }
 
@@ -93,7 +151,7 @@ final class AdminNotificationController extends AdminBaseController
         SmsReport::saveRecipients($recipients);
 
         // SMS de confirmation immédiat pour valider la configuration.
-        $res = \App\Core\FreeMobileSms::send($user, $pass, 'AEIC : cette ligne est bien enregistrée pour recevoir le rapport quotidien.');
+        $res = FreeMobileSms::send($user, $pass, 'AEIC : cette ligne est bien enregistrée pour recevoir les rapports.');
         $this->audit('sms_report.recipient.add', 'settings', $user, ['ok' => $res['ok']]);
 
         if ($res['ok']) {
@@ -128,26 +186,31 @@ final class AdminNotificationController extends AdminBaseController
     }
 
     /**
-     * Envoie immédiatement un rapport de test (données réelles du jour).
+     * Envoie immédiatement un message de test (données réelles du jour).
      */
-    public function test(): void
+    public function test(string $id): void
     {
         $this->guardSystemOrPage('notifications');
+
+        $schedule = SmsSchedule::find($id);
+        if ($schedule === null) {
+            $this->setFlash('error', 'Message introuvable.');
+            redirect(url('/admin/notifications'));
+        }
 
         if (SmsReport::recipients() === []) {
             $this->setFlash('error', 'Ajoutez d\'abord un destinataire.');
             redirect(url('/admin/notifications'));
         }
 
-        $message = SmsReport::buildMessage()['message'];
+        $message = SmsReport::buildFor($schedule);
         $results = SmsReport::sendToAll($message);
-
-        $this->audit('sms_report.test', 'settings', null, $results);
+        $this->audit('sms_report.test', 'sms_reports', $id, $results);
 
         $ok = count(array_filter($results, static fn (array $r): bool => $r['ok']));
         $total = count($results);
         if ($ok === $total) {
-            $this->setFlash('success', "Rapport de test envoyé à $total destinataire(s).");
+            $this->setFlash('success', "Message de test envoyé à $total destinataire(s).");
         } elseif ($ok === 0) {
             $first = $results[0]['error'] ?? ('erreur ' . ($results[0]['status'] ?? '?'));
             $this->setFlash('error', 'Échec de l\'envoi : ' . $first);

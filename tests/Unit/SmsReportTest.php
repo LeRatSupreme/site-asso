@@ -100,5 +100,51 @@ final class SmsReportTest extends TestCase
         self::assertContains('{evolution}', $vars);
         self::assertContains('{panier}', $vars);
         self::assertContains('{semaine_ca}', $vars);
+        self::assertContains('{categories}', $vars);
+    }
+
+    public function test_category_block_dessine_des_barres_proportionnelles(): void
+    {
+        $rows = [
+            ['category' => 'Boissons', 'ca' => 20.0],
+            ['category' => 'Snacks',   'ca' => 10.0],
+        ];
+
+        $block = SmsReport::categoryBlock($rows, 4);
+        $lines = explode("\n", $block);
+
+        self::assertCount(2, $lines);
+        self::assertStringContainsString('Boissons', $lines[0]);
+        self::assertStringContainsString('67 %', $lines[0]);
+        self::assertStringContainsString('33 %', $lines[1]);
+        // La barre du n°1 est plus longue que celle du n°2.
+        $bars1 = substr_count($lines[0], '▇');
+        $bars2 = substr_count($lines[1], '▇');
+        self::assertGreaterThan($bars2, $bars1);
+    }
+
+    public function test_category_block_vide_renvoie_un_message(): void
+    {
+        self::assertSame('(aucune vente)', SmsReport::categoryBlock([]));
+    }
+
+    public function test_schedule_due_verifie_activation_jour_heure_et_doublon(): void
+    {
+        $now = new \DateTimeImmutable('2026-09-25 17:35:00', new \DateTimeZone('Europe/Paris')); // vendredi
+        $today = '2026-09-25';
+
+        $base = [
+            'is_enabled'    => 1,
+            'days'          => '5',
+            'send_time'     => '17:30:00',
+            'last_sent_day' => null,
+        ];
+
+        self::assertTrue(SmsReport::scheduleDue($base, $now, $today));
+        self::assertFalse(SmsReport::scheduleDue(['is_enabled' => 0] + $base, $now, $today), 'désactivé');
+        self::assertFalse(SmsReport::scheduleDue(['days' => '1'] + $base, $now, $today), 'mauvais jour');
+        self::assertFalse(SmsReport::scheduleDue(['send_time' => '08:00:00'] + $base, $now, $today), 'hors fenêtre');
+        self::assertFalse(SmsReport::scheduleDue(['last_sent_day' => $today] + $base, $now, $today), 'déjà envoyé');
+        self::assertTrue(SmsReport::scheduleDue($base, $now, '2026-09-24'), 'envoyé hier mais dû aujourd\'hui');
     }
 }

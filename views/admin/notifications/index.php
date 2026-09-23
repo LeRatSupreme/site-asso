@@ -3,19 +3,12 @@
 declare(strict_types=1);
 
 /**
- * Page « Notifications SMS » — rapport quotidien Free Mobile.
+ * Page « Notifications SMS » — messages programmés Free Mobile.
  *
- * @var bool $enabled
- * @var string $days      CSV ISO-8601 « 1,2,3,4,5 »
- * @var string $time      « 20:00 »
- * @var string $template
+ * @var list<array<string,mixed>> $schedules   Lignes sms_reports + time_hm + preview
  * @var list<array{label:string, user:string, pass:string}> $recipients
- * @var string $lastSent
- * @var string $preview
- * @var array<string,string> $vars        Variables réelles du jour
+ * @var array<string,string> $vars             Variables réelles du jour
  * @var array<string, list<array{var:string, desc:string}>> $varGroups
- * @var float $ca
- * @var float $profit
  */
 
 use App\Core\SmsReport;
@@ -24,114 +17,147 @@ $dayLabels = [
     1 => 'Lundi', 2 => 'Mardi', 3 => 'Mercredi',
     4 => 'Jeudi', 5 => 'Vendredi', 6 => 'Samedi', 7 => 'Dimanche',
 ];
-$selectedDays = array_map('intval', explode(',', $days));
 ?>
 <div class="compta-head">
     <div class="compta-head-row">
         <div>
             <p class="eyebrow">Système</p>
             <h1 class="page-title">Notifications SMS</h1>
-            <p class="muted">Rapport quotidien envoyé par SMS via l'API Free Mobile : CA, bénéfice, top produits et plus.</p>
+            <p class="muted">Crée autant de messages programmés que tu veux : CA, bénéfice, top produits, catégories… envoyés par SMS via l'API Free Mobile.</p>
         </div>
-        <span class="badge <?= $enabled ? 'badge-success' : 'badge-muted' ?>">
-            <?= $enabled ? '✅ Activé' : '⛔ Désactivé' ?>
-        </span>
     </div>
 </div>
 
-<!-- ===================== Planification ===================== -->
-<form method="post" action="<?= e(url('/admin/notifications/save')) ?>">
-    <?= csrf_field() ?>
+<!-- ===================== Messages programmés ===================== -->
+<section class="card surface glass">
+    <div class="compta-head-row">
+        <h2 class="card-title">📨 Messages programmés (<?= count($schedules) ?>)</h2>
+        <form method="post" action="<?= e(url('/admin/notifications/create')) ?>">
+            <?= csrf_field() ?>
+            <button type="submit" class="btn btn-primary">➕ Nouveau message</button>
+        </form>
+    </div>
 
-    <section class="card surface glass" id="sms-planif">
-        <h2 class="card-title">🗓️ Planification</h2>
+    <?php if ($schedules === []): ?>
+        <p class="muted">Aucun message pour l'instant — clique sur « ➕ Nouveau message » pour commencer.</p>
+    <?php endif; ?>
 
-        <div class="sms-planif-row">
-            <div class="sms-planif-enabled">
+    <?php foreach ($schedules as $s):
+        $id = (string) $s['id'];
+        $enabled = (int) ($s['is_enabled'] ?? 0) === 1;
+        $selectedDays = array_map('intval', explode(',', (string) ($s['days'] ?? '1,2,3,4,5')));
+        $timeHm = (string) ($s['time_hm'] ?? '20:00');
+        $label = (string) ($s['label'] ?? '');
+        $lastDay = (string) ($s['last_sent_day'] ?? '');
+    ?>
+    <div class="sms-card<?= $enabled ? ' is-on' : '' ?>" data-card>
+        <!-- Actions (hors du formulaire principal : forms non imbriqués) -->
+        <div class="sms-card-actions">
+            <?php if ($lastDay !== ''): ?>
+                <span class="muted" style="font-size:0.78rem;">Dernier envoi : <?= e(date('d/m/Y', strtotime($lastDay))) ?></span>
+            <?php endif; ?>
+            <form method="post" action="<?= e(url('/admin/notifications/' . $id . '/test')) ?>">
+                <?= csrf_field() ?>
+                <button type="submit" class="btn btn-outline btn-sm" title="Envoyer maintenant un test avec les données du jour">📤 Test</button>
+            </form>
+            <form method="post" action="<?= e(url('/admin/notifications/' . $id . '/delete')) ?>"
+                  data-confirm="Supprimer ce message programmé ?">
+                <?= csrf_field() ?>
+                <button type="submit" class="btn btn-danger btn-sm">🗑</button>
+            </form>
+        </div>
+
+        <form method="post" action="<?= e(url('/admin/notifications/' . $id . '/save')) ?>">
+            <?= csrf_field() ?>
+
+            <div class="sms-card-head">
+                <input type="text" name="label" value="<?= e($label) ?>" maxlength="80"
+                       class="sms-card-title-input" placeholder="Nom du message">
                 <label class="toggle-switch">
-                    <input type="checkbox" name="sms_report_enabled" value="1" <?= $enabled ? 'checked' : '' ?>>
+                    <input type="checkbox" name="is_enabled" value="1" <?= $enabled ? 'checked' : '' ?>>
                     <span class="toggle-slider"></span>
                     <span class="toggle-label <?= $enabled ? 'is-on' : '' ?>"><?= $enabled ? '✅ Activé' : '⛔ Désactivé' ?></span>
                 </label>
             </div>
 
-            <div class="field sms-planif-time">
-                <label for="sms_report_time">⏰ Heure d'envoi</label>
-                <input type="time" id="sms_report_time" name="sms_report_time" value="<?= e($time) ?>" required>
-            </div>
-        </div>
-
-        <div class="field">
-            <label>📅 Jours d'envoi
-                <span class="sms-quick-days">
-                    <button type="button" class="btn btn-ghost btn-sm" data-days-preset="1,2,3,4,5">Lun-Ven</button>
-                    <button type="button" class="btn btn-ghost btn-sm" data-days-preset="6,7">Week-end</button>
-                    <button type="button" class="btn btn-ghost btn-sm" data-days-preset="1,2,3,4,5,6,7">Tous</button>
-                    <button type="button" class="btn btn-ghost btn-sm" data-days-preset="">Aucun</button>
-                </span>
-            </label>
-            <div class="sms-days" id="sms-days">
-                <?php foreach ($dayLabels as $n => $label): ?>
-                    <label class="sms-day-chip<?= in_array($n, $selectedDays, true) ? ' is-on' : '' ?>">
-                        <input type="checkbox" name="sms_report_days[]" value="<?= $n ?>"
-                               <?= in_array($n, $selectedDays, true) ? 'checked' : '' ?>>
-                        <span><?= e($label) ?></span>
+            <div class="sms-planif-row">
+                <div class="field" style="flex:1;min-width:260px;">
+                    <label>📅 Jours d'envoi
+                        <span class="sms-quick-days">
+                            <button type="button" class="btn btn-ghost btn-sm" data-days-preset="1,2,3,4,5">Lun-Ven</button>
+                            <button type="button" class="btn btn-ghost btn-sm" data-days-preset="6,7">Week-end</button>
+                            <button type="button" class="btn btn-ghost btn-sm" data-days-preset="1,2,3,4,5,6,7">Tous</button>
+                            <button type="button" class="btn btn-ghost btn-sm" data-days-preset="">Aucun</button>
+                        </span>
                     </label>
-                <?php endforeach; ?>
-            </div>
-        </div>
-
-        <hr>
-
-        <h2 class="card-title">✉️ Modèle du message</h2>
-
-        <div class="sms-editor">
-            <div class="sms-editor-input">
-                <textarea id="sms_report_template" name="sms_report_template" rows="14" maxlength="999"
-                          class="sms-template-area"><?= e($template) ?></textarea>
-                <div class="sms-editor-foot">
-                    <button type="button" class="btn btn-ghost btn-sm" id="sms-template-reset">↺ Modèle par défaut</button>
-                    <span class="sms-count" id="sms-char-count">0 / 999</span>
-                </div>
-                <p class="muted" style="font-size:0.82rem;">
-                    💡 Clique sur une variable pour l'insérer dans le message. Laisse vide pour revenir au modèle par défaut.
-                </p>
-            </div>
-
-            <div class="sms-editor-vars">
-                <?php foreach ($varGroups as $groupName => $groupVars): ?>
-                    <div class="sms-var-group">
-                        <p class="sms-var-group-title"><?= e($groupName) ?></p>
-                        <div class="sms-var-list">
-                            <?php foreach ($groupVars as $v): ?>
-                                <button type="button" class="sms-var-chip" data-var="<?= e($v['var']) ?>"
-                                        title="<?= e($v['desc']) ?>">
-                                    <code>{<?= e($v['var']) ?>}</code>
-                                </button>
-                            <?php endforeach; ?>
-                        </div>
+                    <div class="sms-days">
+                        <?php foreach ($dayLabels as $n => $dayLabel): ?>
+                            <label class="sms-day-chip<?= in_array($n, $selectedDays, true) ? ' is-on' : '' ?>">
+                                <input type="checkbox" name="days[]" value="<?= $n ?>"
+                                       <?= in_array($n, $selectedDays, true) ? 'checked' : '' ?>>
+                                <span><?= e($dayLabel) ?></span>
+                            </label>
+                        <?php endforeach; ?>
                     </div>
+                </div>
+
+                <div class="field sms-planif-time">
+                    <label>⏰ Heure</label>
+                    <input type="time" name="send_time" value="<?= e($timeHm) ?>" required>
+                </div>
+            </div>
+
+            <div class="field">
+                <label>✉️ Modèle du message <span class="muted" style="font-weight:400;">— clique sur une variable dans le panneau ci-dessus pour l'insérer</span></label>
+                <textarea name="template" rows="9" maxlength="999" class="sms-template-area js-tpl"><?= e(trim((string) ($s['template'] ?? '')) !== '' ? (string) $s['template'] : SmsReport::DEFAULT_TEMPLATE) ?></textarea>
+                <div class="sms-editor-foot">
+                    <button type="button" class="btn btn-ghost btn-sm js-reset">↺ Modèle par défaut</button>
+                    <span class="sms-count js-count">0 / 999</span>
+                </div>
+            </div>
+
+            <div class="field">
+                <label>👀 Aperçu live (données réelles du jour)</label>
+                <pre class="sms-preview surface glass js-preview"><?= e((string) ($s['preview'] ?? '')) ?></pre>
+            </div>
+
+            <div class="settings-save-bar">
+                <button type="submit" class="btn btn-primary">💾 Enregistrer ce message</button>
+            </div>
+        </form>
+    </div>
+    <hr>
+    <?php endforeach; ?>
+</section>
+
+<!-- ===================== Variables ===================== -->
+<section class="card surface glass">
+    <h2 class="card-title">🧩 Variables disponibles</h2>
+    <p class="muted" style="font-size:0.82rem;">
+        Clique sur une variable pour l'insérer dans le modèle du message que tu es en train de modifier.
+        L'aperçu de chaque message se met à jour en temps réel avec les données réelles du jour.
+    </p>
+    <?php foreach ($varGroups as $groupName => $groupVars): ?>
+        <div class="sms-var-group">
+            <p class="sms-var-group-title"><?= e($groupName) ?></p>
+            <div class="sms-var-list">
+                <?php foreach ($groupVars as $v): ?>
+                    <button type="button" class="sms-var-chip" data-var="<?= e($v['var']) ?>"
+                            title="<?= e($v['desc']) ?>">
+                        <code>{<?= e($v['var']) ?>}</code>
+                    </button>
                 <?php endforeach; ?>
             </div>
         </div>
-
-        <div class="field">
-            <label>👀 Aperçu live (données réelles du jour)</label>
-            <pre class="sms-preview surface glass" id="sms-preview"><?= e($preview) ?></pre>
-        </div>
-
-        <div class="settings-save-bar">
-            <button type="submit" class="btn btn-primary btn-lg">💾 Enregistrer la planification</button>
-        </div>
-    </section>
-</form>
+    <?php endforeach; ?>
+</section>
 
 <!-- ===================== Destinataires ===================== -->
 <section class="card surface glass">
     <h2 class="card-title">📱 Destinataires (lignes Free Mobile)</h2>
     <p class="muted" style="font-size:0.85rem;">
         Pour chaque ligne : active l'option « Notifications par SMS » dans l'espace abonné Free Mobile,
-        puis note l'identifiant (8 chiffres) et la clé générée. Le SMS n'arrive que sur la ligne concernée.
+        puis note l'identifiant (8 chiffres) et la clé générée. Tous les messages partent vers toutes les lignes.
     </p>
 
     <?php if ($recipients === []): ?>
@@ -181,89 +207,93 @@ $selectedDays = array_map('intval', explode(',', $days));
     </form>
 </section>
 
-<!-- ===================== Test & envoi ===================== -->
-<section class="card surface glass">
-    <h2 class="card-title">🧪 Test</h2>
-    <div style="display:flex;gap:1rem;flex-wrap:wrap;align-items:center;">
-        <p class="muted" style="margin:0;font-size:0.85rem;">
-            Dernier envoi automatique : <strong><?= $lastSent !== '' ? e(date('d/m/Y', strtotime($lastSent))) : 'jamais' ?></strong>.
-        </p>
-        <form method="post" action="<?= e(url('/admin/notifications/test')) ?>">
-            <?= csrf_field() ?>
-            <button type="submit" class="btn btn-outline">📤 Envoyer un rapport de test maintenant</button>
-        </form>
-    </div>
-</section>
-
 <script>
 window.AEIC_SMS_VARS = <?= json_encode($vars, JSON_UNESCAPED_UNICODE) ?>;
 window.AEIC_SMS_DEFAULT_TEMPLATE = <?= json_encode(SmsReport::DEFAULT_TEMPLATE, JSON_UNESCAPED_UNICODE) ?>;
 </script>
 <script>
 (function () {
-    var textarea = document.getElementById('sms_report_template');
-    var preview = document.getElementById('sms-preview');
-    var counter = document.getElementById('sms-char-count');
-    var MAX = 999;
     var vars = window.AEIC_SMS_VARS || {};
     var defaultTemplate = window.AEIC_SMS_DEFAULT_TEMPLATE || '';
-    if (!textarea || !preview) return;
+    var MAX = 999;
 
-    function render() {
-        var tpl = textarea.value;
-        var msg = tpl;
+    function renderCard(card) {
+        var tpl = card.querySelector('.js-tpl');
+        var preview = card.querySelector('.js-preview');
+        var counter = card.querySelector('.js-count');
+        if (!tpl || !preview) return;
+
+        var msg = tpl.value;
         Object.keys(vars).forEach(function (k) {
             msg = msg.split(k).join(vars[k]);
         });
         preview.textContent = msg.trim();
 
-        var len = Array.from(tpl).length;
-        counter.textContent = len + ' / ' + MAX;
-        counter.classList.toggle('is-warn', len > 800 && len <= MAX);
-        counter.classList.toggle('is-over', len > MAX);
+        if (counter) {
+            var len = Array.from(tpl.value).length;
+            counter.textContent = len + ' / ' + MAX;
+            counter.classList.toggle('is-warn', len > 800 && len <= MAX);
+            counter.classList.toggle('is-over', len > MAX);
+        }
     }
 
-    function insertVar(name) {
-        var tag = '{' + name + '}';
-        var start = textarea.selectionStart || 0;
-        var end = textarea.selectionEnd || 0;
-        var value = textarea.value;
-        textarea.value = value.slice(0, start) + tag + value.slice(end);
-        var pos = start + tag.length;
-        textarea.focus();
-        textarea.setSelectionRange(pos, pos);
-        render();
-    }
-
-    document.querySelectorAll('.sms-var-chip').forEach(function (chip) {
-        chip.addEventListener('click', function () { insertVar(chip.getAttribute('data-var')); });
-    });
-
-    document.querySelectorAll('[data-days-preset]').forEach(function (btn) {
-        btn.addEventListener('click', function () {
-            var preset = (btn.getAttribute('data-days-preset') || '').split(',').filter(Boolean);
-            document.querySelectorAll('#sms-days input[type="checkbox"]').forEach(function (cb) {
-                cb.checked = preset.indexOf(cb.value) !== -1;
+    // Chaque carte : aperçu live + compteur + reset + puces jours.
+    document.querySelectorAll('[data-card]').forEach(function (card) {
+        var tpl = card.querySelector('.js-tpl');
+        if (tpl) {
+            tpl.addEventListener('input', function () { renderCard(card); });
+            tpl.addEventListener('focus', function () { window.__smsLastTpl = tpl; });
+        }
+        var reset = card.querySelector('.js-reset');
+        if (reset) {
+            reset.addEventListener('click', function () {
+                tpl.value = defaultTemplate;
+                renderCard(card);
+            });
+        }
+        card.querySelectorAll('[data-days-preset]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var preset = (btn.getAttribute('data-days-preset') || '').split(',').filter(Boolean);
+                card.querySelectorAll('.sms-day-chip input[type="checkbox"]').forEach(function (cb) {
+                    cb.checked = preset.indexOf(cb.value) !== -1;
+                    cb.closest('.sms-day-chip').classList.toggle('is-on', cb.checked);
+                });
+            });
+        });
+        card.querySelectorAll('.sms-day-chip input[type="checkbox"]').forEach(function (cb) {
+            cb.addEventListener('change', function () {
                 cb.closest('.sms-day-chip').classList.toggle('is-on', cb.checked);
             });
         });
+        renderCard(card);
     });
 
-    document.querySelectorAll('#sms-days input[type="checkbox"]').forEach(function (cb) {
+    // Variables : insertion dans le dernier modèle modifié.
+    document.querySelectorAll('.sms-var-chip').forEach(function (chip) {
+        chip.addEventListener('click', function () {
+            var tpl = window.__smsLastTpl || document.querySelector('.js-tpl');
+            if (!tpl) return;
+            var tag = '{' + chip.getAttribute('data-var') + '}';
+            var start = tpl.selectionStart || 0;
+            var end = tpl.selectionEnd || 0;
+            tpl.value = tpl.value.slice(0, start) + tag + tpl.value.slice(end);
+            var pos = start + tag.length;
+            tpl.focus();
+            tpl.setSelectionRange(pos, pos);
+            var card = tpl.closest('[data-card]');
+            if (card) renderCard(card);
+        });
+    });
+
+    // Toggle du label Activé/Désactivé.
+    document.querySelectorAll('.toggle-switch input[type="checkbox"]').forEach(function (cb) {
         cb.addEventListener('change', function () {
-            cb.closest('.sms-day-chip').classList.toggle('is-on', cb.checked);
+            var label = this.parentElement.querySelector('.toggle-label');
+            if (label) {
+                label.textContent = this.checked ? '✅ Activé' : '⛔ Désactivé';
+                label.classList.toggle('is-on', this.checked);
+            }
         });
     });
-
-    var reset = document.getElementById('sms-template-reset');
-    if (reset) {
-        reset.addEventListener('click', function () {
-            textarea.value = defaultTemplate;
-            render();
-        });
-    }
-
-    textarea.addEventListener('input', render);
-    render();
 })();
 </script>
