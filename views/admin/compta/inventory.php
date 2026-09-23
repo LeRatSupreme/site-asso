@@ -159,7 +159,8 @@ declare(strict_types=1);
         <!-- 🚫 plus en vente : formulaires hors du form principal (non imbriqués) -->
         <form id="<?= $disId ?>" method="post"
               action="<?= e(url('/admin/compta/inventaire/' . rawurlencode((string) $r['key']) . '/discontinue')) ?>"
-              data-confirm="Marquer « <?= e((string) $r['key']) ?> » plus en vente pour l'instant ? Rien n'est supprimé : il sort juste des comptages et du réappro, rétablissement en un clic en bas de page.">
+              data-confirm="Marquer « <?= e((string) $r['key']) ?> » plus en vente pour l'instant ? Rien n'est supprimé : il sort juste des comptages et du réappro, rétablissement en un clic en bas de page."
+              data-confirm-button="🚫 Plus en vente">
             <input type="hidden" name="back" value="inventaire">
             <?= csrf_field() ?>
         </form>
@@ -301,7 +302,7 @@ declare(strict_types=1);
     <?php endif; ?>
 
     <form method="post" action="<?= e(url('/admin/compta/inventaire/merge')) ?>"
-          data-confirm="Fusionner ces clés ? Action irréversible." id="merge-form">
+          data-confirm="Fusionner ces clés ? Action irréversible." data-confirm-button="🔗 Fusionner" id="merge-form">
         <?= csrf_field() ?>
         <div class="merge-fields">
             <div class="field">
