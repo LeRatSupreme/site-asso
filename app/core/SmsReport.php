@@ -5,16 +5,19 @@ declare(strict_types=1);
 namespace App\Core;
 
 use App\Models\Sale;
+use App\Models\SmsSchedule;
 use App\Models\Setting;
 
 /**
- * Rapport quotidien par SMS (API Free Mobile) : CA du jour, bénéfice et
- * top produits, envoyé aux destinataires enregistrés les jours choisis
- * à l'heure choisie (par défaut lundi-vendredi à 20h00).
+ * Rapports SMS (API Free Mobile) : plusieurs messages programmés, chacun
+ * avec ses jours, son heure et son modèle (CA du jour, bénéfice, top
+ * produits, répartition par catégorie, comparaisons…), envoyés aux
+ * destinataires enregistrés.
  *
  * Les destinataires sont stockés dans le setting `sms_recipients` sous
  * forme de JSON : [{"label":"Adrien","user":"12345678","pass":"abcd"}].
- * La planification est pilotée par le cron scripts/send_sms_report.php.
+ * Les messages vivent dans la table `sms_reports` et l'envoi est piloté
+ * par le cron scripts/send_sms_report.php.
  */
 final class SmsReport
 {
@@ -224,6 +227,10 @@ final class SmsReport
                 ['var' => 'hier_benefice', 'desc' => 'Bénéfice d\'hier'],
                 ['var' => 'evolution',     'desc' => 'Évolution du CA vs hier (📈 📉 ➖)'],
             ],
+            'Catégories' => [
+                ['var' => 'categories', 'desc' => 'Répartition du CA par catégorie (barres)'],
+                ['var' => 'cat_top',    'desc' => 'Première catégorie du jour'],
+            ],
         ];
     }
 
@@ -284,6 +291,9 @@ final class SmsReport
             $topLines[] = ($n = count($topLines) + 1) . '. —';
         }
 
+        $catRows = Sale::byCategoryBetween($day, $day);
+        $catTop = $catRows !== [] ? (string) ($catRows[0]['category'] ?? '') : '—';
+
         $marge = $agg['ca'] > 0 ? round($agg['profit'] / $agg['ca'] * 100) : 0;
         $panier = $tx > 0 ? $agg['ca'] / $tx : 0.0;
 
@@ -315,77 +325,107 @@ final class SmsReport
             '{hier_ca}'          => formatPrice($yAgg['ca']),
             '{hier_benefice}'    => formatPrice($yAgg['profit']),
             '{evolution}'        => self::evolutionLabel($agg['ca'], $yAgg['ca']),
+            '{categories}'       => self::categoryBlock($catRows),
+            '{cat_top}'          => $catTop,
         ];
     }
 
     /**
-     * Collecte les données du jour et construit le message complet.
+     * Bloc texte « graphique » : répartition du CA par catégorie avec
+     * barres, trié par CA décroissant (fonction pure, testable).
      *
-     * @return array{message:string, vars:array<string,string>, ca:float, profit:float, qty:int, top:list<array<string,mixed>>}
+     * @param list<array<string,mixed>> $rows Lignes de Sale::byCategoryBetween()
      */
-    public static function buildMessage(?string $day = null): array
+    public static function categoryBlock(array $rows, int $topN = 4): string
     {
-        $day = $day ?: date('Y-m-d');
-
-        $vars = self::varsFor($day);
-        $agg = Sale::aggregatesBetween($day, $day);
-
-        $template = Setting::get('sms_report_template', '');
-        if (trim($template) === '') {
-            $template = self::DEFAULT_TEMPLATE;
+        $rows = array_slice($rows, 0, max(1, $topN));
+        if ($rows === []) {
+            return '(aucune vente)';
         }
 
-        return [
-            'message' => self::renderTemplate($template, $vars),
-            'vars'    => $vars,
-            'ca'      => $agg['ca'],
-            'profit'  => $agg['profit'],
-            'qty'     => $agg['qty'],
-            'top'     => Sale::topProductsBetween($day, $day, 3),
-        ];
+        $max = 0.0;
+        $total = 0.0;
+        foreach ($rows as $r) {
+            $ca = (float) ($r['ca'] ?? 0);
+            $max = max($max, $ca);
+            $total += $ca;
+        }
+
+        $lines = [];
+        foreach ($rows as $r) {
+            $ca = (float) ($r['ca'] ?? 0);
+            $bars = $max > 0 ? max(1, (int) round($ca / $max * 10)) : 1;
+            $pct = $total > 0 ? (int) round($ca / $total * 100) : 0;
+            $lines[] = sprintf(
+                '%s %s %s (%d %%)',
+                (string) ($r['category'] ?? '?'),
+                str_repeat('▇', $bars),
+                formatPrice($ca),
+                $pct
+            );
+        }
+
+        return implode("\n", $lines);
     }
 
     /**
-     * Le rapport doit-il partir maintenant ? (activé + bon jour + fenêtre
-     * horaire + pas déjà envoyé aujourd'hui).
+     * Un message programmé doit-il partir maintenant ? (fonction pure,
+     * testable : activation + jour + fenêtre horaire + pas déjà envoyé).
+     *
+     * @param array<string,mixed> $schedule Ligne de sms_reports
      */
-    public static function shouldRun(\DateTimeImmutable $now): bool
+    public static function scheduleDue(array $schedule, \DateTimeImmutable $now, string $today): bool
     {
-        if (!Setting::getBool('sms_report_enabled', false)) {
+        if ((int) ($schedule['is_enabled'] ?? 0) !== 1) {
             return false;
         }
 
-        if (self::recipients() === []) {
+        if (!self::dayMatches((string) ($schedule['days'] ?? ''), (int) $now->format('N'))) {
             return false;
         }
 
-        $days = Setting::get('sms_report_days', self::DEFAULT_DAYS);
-        if (!self::dayMatches($days, (int) $now->format('N'))) {
-            return false;
-        }
-
-        $time = Setting::get('sms_report_time', self::DEFAULT_TIME);
+        $time = substr((string) ($schedule['send_time'] ?? ''), 0, 5);
         if (!self::timeWindowMatches($time, $now->format('H:i'))) {
             return false;
         }
 
-        return !self::hasSent($now->format('Y-m-d'));
+        return (string) ($schedule['last_sent_day'] ?? '') !== $today;
     }
 
     /**
-     * Le rapport du jour a-t-il déjà été envoyé ?
+     * Messages programmés qui doivent partir maintenant.
+     *
+     * @return list<array<string,mixed>>
      */
-    public static function hasSent(string $day): bool
+    public static function dueSchedules(\DateTimeImmutable $now): array
     {
-        return Setting::get('sms_report_last_sent', '') === $day;
+        $today = $now->format('Y-m-d');
+
+        return array_values(array_filter(
+            SmsSchedule::enabled(),
+            static fn (array $s): bool => self::scheduleDue($s, $now, $today)
+        ));
     }
 
     /**
-     * Marque le rapport du jour comme envoyé (garde anti-doublon).
+     * Message rendu pour un message programmé donné.
      */
-    public static function markSent(string $day): void
+    public static function buildFor(array $schedule, ?string $day = null): string
     {
-        Setting::set('sms_report_last_sent', $day);
+        $template = trim((string) ($schedule['template'] ?? ''));
+        if ($template === '') {
+            $template = self::DEFAULT_TEMPLATE;
+        }
+
+        return self::renderTemplate($template, self::varsFor($day));
+    }
+
+    /**
+     * Marque un message comme envoyé pour le jour donné.
+     */
+    public static function markScheduleSent(string $id, string $day): void
+    {
+        SmsSchedule::setLastSent($id, $day);
     }
 
     /**

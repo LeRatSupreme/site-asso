@@ -905,3 +905,45 @@
 @media (max-width: 900px) {
     .sms-editor { grid-template-columns: 1fr; }
 }
+
+/* Cartes « messages programmés » */
+.sms-card {
+    position: relative;
+    border: 1px solid var(--border, rgba(255,255,255,0.12));
+    border-radius: 16px;
+    padding: 1.15rem 1.25rem 0.5rem;
+    margin: 1.1rem 0;
+    background: rgba(255, 255, 255, 0.02);
+}
+.sms-card.is-on {
+    border-color: rgba(72, 189, 211, 0.4);
+    box-shadow: 0 0 0 1px rgba(72, 189, 211, 0.15);
+}
+.sms-card-actions {
+    position: absolute;
+    top: 0.85rem;
+    right: 1rem;
+    display: flex;
+    gap: 0.4rem;
+    align-items: center;
+}
+.sms-card-head {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 1rem;
+    padding-right: 7.5rem;
+}
+.sms-card-title-input {
+    flex: 1;
+    min-width: 180px;
+    font-size: 1.05rem;
+    font-weight: 700;
+    border: none;
+    border-bottom: 1px dashed var(--border, rgba(255,255,255,0.2));
+    background: transparent;
+    padding: 0.25rem 0.1rem;
+    color: inherit;
+}
+.sms-card-title-input:focus { outline: none; border-bottom-color: var(--primary, #48bdd3); }
