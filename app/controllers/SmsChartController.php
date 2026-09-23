@@ -206,10 +206,10 @@ final class SmsChartController
         $r = 24 * $s;
         imagefilledrectangle($im, 0, $r, $W * $s, $H * $s - $r, $cBg);
         imagefilledrectangle($im, $r, 0, $W * $s - $r, $H * $s, $cBg);
-        imagefilledarc($im, $r, $r, 2 * $r, 2 * $r, 180, 270, $cBg, IMG_ARC_FILLED);
-        imagefilledarc($im, $W * $s - $r, $r, 2 * $r, 2 * $r, 270, 360, $cBg, IMG_ARC_FILLED);
-        imagefilledarc($im, $W * $s - $r, $H * $s - $r, 2 * $r, 2 * $r, 0, 90, $cBg, IMG_ARC_FILLED);
-        imagefilledarc($im, $r, $H * $s - $r, 2 * $r, 2 * $r, 90, 180, $cBg, IMG_ARC_FILLED);
+        imagefilledarc($im, $r, $r, 2 * $r, 2 * $r, 180, 270, $cBg, \IMG_ARC_FILLED);
+        imagefilledarc($im, $W * $s - $r, $r, 2 * $r, 2 * $r, 270, 360, $cBg, \IMG_ARC_FILLED);
+        imagefilledarc($im, $W * $s - $r, $H * $s - $r, 2 * $r, 2 * $r, 0, 90, $cBg, \IMG_ARC_FILLED);
+        imagefilledarc($im, $r, $H * $s - $r, 2 * $r, 2 * $r, 90, 180, $cBg, \IMG_ARC_FILLED);
 
         // Texte : helper centré verticalement via imagettfbbox.
         $font = is_file(self::FONT) ? self::FONT : null;
@@ -265,7 +265,7 @@ final class SmsChartController
                         (int) round($angleStart),
                         (int) round($angleEnd),
                         $color,
-                        IMG_ARC_PIE
+                        \IMG_ARC_PIE
                     );
                 }
                 $angleStart = $angleEnd;
