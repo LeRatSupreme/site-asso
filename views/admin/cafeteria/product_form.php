@@ -29,6 +29,11 @@ declare(strict_types=1);
         <div class="field">
             <label for="stock">Stock</label>
             <input type="number" id="stock" name="stock" value="<?= e((string) ($product['stock'] ?? 0)) ?>">
+            <span class="muted" style="font-size:0.78rem;display:block;margin-top:0.25rem;">
+                <?= isset($theoretical) && $theoretical !== null
+                    ? 'Prérempli avec le stock théorique (comptage + achats − ventes − pertes) — saisir le stock physique pour réaligner.'
+                    : 'Saisie = déclaration du stock physique (devient la référence d\'inventaire).' ?>
+            </span>
         </div>
         <div class="field">
             <label for="category_id">Catégorie</label>

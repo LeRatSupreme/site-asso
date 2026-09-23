@@ -27,9 +27,22 @@ final class AdminCafeteriaController extends AdminBaseController
     {
         $this->guardModule(Permissions::MODULE_CAFETERIA);
 
+        // Colonne Stock = stock THÉORIQUE (dernier comptage + achats
+        // − ventes − pertes) : il suit les ventes en temps réel, comme
+        // la carte publique. `products.stock` n'est qu'un repli pour
+        // les produits non suivis en inventaire.
+        $stockMap = StockPublic::menuStockMap();
+        $products = Product::allForAdmin();
+        foreach ($products as $i => $p) {
+            $products[$i]['theoretical_stock'] = StockPublic::stockForMenuProduct(
+                (string) ($p['name'] ?? ''),
+                $stockMap
+            );
+        }
+
         $this->renderAdmin('admin/cafeteria/products', [
             'title'    => 'Produits',
-            'products' => Product::allForAdmin(),
+            'products' => $products,
         ]);
     }
 
@@ -45,11 +58,39 @@ final class AdminCafeteriaController extends AdminBaseController
             }
         }
 
+        // Le formulaire s'ouvre sur le stock THÉORIQUE (dynamique) :
+        // la saisie reste une déclaration de stock physique.
+        $theoretical = self::theoreticalStockFor((string) ($product['name'] ?? ''));
+        if ($theoretical !== null) {
+            $product['stock'] = $theoretical;
+        }
+
         $this->renderAdmin('admin/cafeteria/product_form', [
             'title'       => isset($product['id']) ? 'Modifier le produit' : 'Nouveau produit',
             'product'     => $product,
             'categories'  => ProductCategory::allForAdmin(),
+            'theoretical' => $theoretical,
         ]);
+    }
+
+    /**
+     * Stock théorique (dynamique) d'un nom de produit de la carte, ou
+     * null si le produit n'est suivi en inventaire. Jamais fatale : la
+     * page produits doit s'afficher même si la compta est indisponible.
+     */
+    private static function theoreticalStockFor(string $name): ?int
+    {
+        if (trim($name) === '') {
+            return null;
+        }
+
+        try {
+            $key = StockPublic::resolveKey($name);
+
+            return $key !== null ? InventoryCount::theoreticalStock($key) : null;
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     /**
@@ -72,6 +113,12 @@ final class AdminCafeteriaController extends AdminBaseController
         $existing = $isNew ? null : Product::find((string) $data['id']);
         $oldStock = $existing !== null ? (int) ($existing['stock'] ?? 0) : null;
 
+        // Référence de comparaison = stock THÉORIQUE (celui prérempli
+        // dans le formulaire) : products.stock est souvent en retard
+        // sur les ventes, comparer à lui créerait un comptage fictif à
+        // chaque sauvegarde (changement de prix, description…).
+        $reference = self::theoreticalStockFor((string) ($data['name'] ?? '')) ?? $oldStock;
+
         $id = Product::save($data);
 
         $this->audit($isNew ? 'product.create' : 'product.update', 'product', $id);
@@ -81,14 +128,14 @@ final class AdminCafeteriaController extends AdminBaseController
         // comptage). Mêmes conventions que AdminStockController::saveCount :
         // record() sans try/catch, audit, puis invalidation du cache carte.
         $newStock = (int) ($data['stock'] ?? 0);
-        if ($oldStock === null || $newStock !== $oldStock) {
+        if ($oldStock === null || $newStock !== $reference) {
             $stockKey = StockPublic::resolveKey((string) ($data['name'] ?? ''));
             if ($stockKey !== null) {
                 InventoryCount::record($stockKey, max(0, $newStock), null, Auth::id());
 
                 $this->audit('inventory.stock_sync', 'product', $id, [
                     'name' => (string) ($data['name'] ?? ''),
-                    'old'  => $oldStock,
+                    'old'  => $reference,
                     'new'  => $newStock,
                 ]);
             }
