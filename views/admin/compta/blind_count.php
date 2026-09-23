@@ -53,6 +53,7 @@ declare(strict_types=1);
                 <td>
                     <form method="post" action="<?= e(url('/admin/compta/inventaire/comptage/' . rawurlencode($r['key']) . '/discontinue')) ?>"
                           data-confirm="Marquer « <?= e($r['key']) ?> » plus en vente pour l'instant ? Rien n'est supprimé : il sort juste des comptages et restera rétablissable en un clic (page Inventaire)."
+                          data-confirm-button="🚫 Plus en vente"
                           data-preserve-scroll>
                         <?= csrf_field() ?>
                         <button type="submit" class="btn btn-outline btn-sm icon-btn" title="Plus en vente pour l'instant (saisonnier…) : masque des comptages, rien n'est supprimé">🚫</button>

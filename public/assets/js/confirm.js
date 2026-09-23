@@ -2,6 +2,9 @@
  * AEIC — Modal de confirmation réutilisable.
  * Usage : mettre data-confirm="Message de confirmation" sur un <form> ou <button>.
  * Le modal s'affiche au lieu du confirm() natif du navigateur.
+ * Libellé du bouton de confirmation : data-confirm-button="…" sur l'élément
+ * (ex. « 🚫 Plus en vente ») ; sinon « 🗑️ Supprimer » si le message parle de
+ * suppression, sinon « Confirmer » (style non destructif).
  */
 (function () {
     if (document.getElementById('confirm-modal')) return;
@@ -17,7 +20,7 @@
             '<p class="confirm-text" id="confirm-text"></p>' +
             '<div class="confirm-buttons">' +
                 '<button type="button" class="btn btn-outline" id="confirm-cancel">Annuler</button>' +
-                '<button type="button" class="btn btn-danger" id="confirm-yes">🗑️ Supprimer</button>' +
+                '<button type="button" class="btn btn-primary" id="confirm-yes">Confirmer</button>' +
             '</div>' +
         '</div>';
     document.body.appendChild(overlay);
@@ -28,10 +31,26 @@
     var pendingForm = null;
     var pendingHref = null;
 
-    function open(message, form, href) {
+    function open(message, form, href, confirmLabel) {
         textEl.textContent = message;
         pendingForm = form || null;
         pendingHref = href || null;
+        // Libellé : surcharge explicite (data-confirm-button), sinon
+        // « 🗑️ Supprimer » si le message parle de suppression, sinon
+        // « Confirmer » — style rouge réservé aux actions destructives.
+        var label = confirmLabel;
+        var danger = true;
+        if (!label) {
+            if (/supprim/i.test(message)) {
+                label = '🗑️ Supprimer';
+            } else {
+                label = 'Confirmer';
+                danger = false;
+            }
+        }
+        yesBtn.textContent = label;
+        yesBtn.classList.toggle('btn-danger', danger);
+        yesBtn.classList.toggle('btn-primary', !danger);
         overlay.hidden = false;
     }
     function close() {
@@ -63,7 +82,7 @@
         var msg = form.getAttribute('data-confirm');
         if (!msg) return;
         e.preventDefault();
-        open(msg, form, null);
+        open(msg, form, null, form.getAttribute('data-confirm-button'));
     });
 
     // Intercepte les liens avec data-confirm.
@@ -71,7 +90,7 @@
         var link = e.target.closest('a[data-confirm]');
         if (!link) return;
         e.preventDefault();
-        open(link.getAttribute('data-confirm'), null, link.href);
+        open(link.getAttribute('data-confirm'), null, link.href, link.getAttribute('data-confirm-button'));
     });
 })();
 
