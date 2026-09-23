@@ -91,18 +91,18 @@ declare(strict_types=1);
 <style>
 /* ============ Équipe — spécifique ============ */
 
-/* Avatars cerclés d'un anneau dégradé (comme les médailles des valeurs) */
+/* Avatars cerclés d'un anneau neutre */
 .team-grid .team-avatar {
     width: 104px;
     height: 104px;
     padding: 4px;
-    background: linear-gradient(135deg, #8b7ae0, #3a9bb8);
-    box-shadow: 0 14px 32px rgba(58, 155, 184, 0.3);
+    background: var(--border-strong);
+    box-shadow: 0 14px 32px rgba(0, 0, 0, 0.25);
     transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.3s ease;
 }
 .team-grid .team-card:hover .team-avatar {
     transform: translateY(-4px) scale(1.05);
-    box-shadow: 0 20px 44px rgba(58, 155, 184, 0.4), 0 0 30px rgba(139, 122, 224, 0.2);
+    box-shadow: 0 20px 44px rgba(0, 0, 0, 0.35);
 }
 .team-grid .team-card {
     border-radius: 20px;
