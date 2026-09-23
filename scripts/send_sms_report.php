@@ -9,10 +9,9 @@ declare(strict_types=1);
  * avec le CA du jour, le bénéfice et le top 3 produits, les jours choisis
  * à l'heure choisie (par défaut lundi-vendredi à 20h00).
  *
- * Cron : tous les jours toutes les 10 minutes entre 19h et 21h (le script
- * filtre lui-même les jours et l'heure — la planification se gère dans
- * l'admin) :
- *   0-59/10 19-21 * * * /usr/bin/php /home/ubuntu/AEIC/scripts/send_sms_report.php >> /home/ubuntu/AEIC/cache/sms_report.log 2>&1
+ * Cron : toutes les minutes (le script sort immédiatement hors de la
+ * fenêtre d'envoi — la planification se gère dans l'admin) :
+ *   0-59 * * * * /usr/bin/php /home/ubuntu/AEIC/scripts/send_sms_report.php >> /home/ubuntu/AEIC/cache/sms_report.log 2>&1
  *
  * Garde anti-doublon : un seul envoi par jour (setting sms_report_last_sent).
  */
@@ -22,7 +21,9 @@ require_once __DIR__ . '/../app/config/database.php';
 
 use App\Core\SmsReport;
 
-$now = new \DateTimeImmutable('now');
+// Heure française explicite : le serveur peut être en UTC, la fenêtre
+// horaire du rapport doit toujours suivre le fuseau de Paris.
+$now = new \DateTimeImmutable('now', new \DateTimeZone('Europe/Paris'));
 $day = $now->format('Y-m-d');
 
 if (!SmsReport::shouldRun($now)) {
