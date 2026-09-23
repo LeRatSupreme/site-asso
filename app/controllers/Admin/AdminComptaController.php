@@ -1069,6 +1069,7 @@ final class AdminComptaController extends AdminBaseController
 
         // ── Période d'ANALYSE (sur quoi calculer les moyennes) ──────────
         $refOptions = [
+            '1d'     => '1 jour',
             '7d'     => '7 derniers jours',
             '30d'    => '30 derniers jours',
             '3m'     => '3 derniers mois',
@@ -1093,6 +1094,7 @@ final class AdminComptaController extends AdminBaseController
         $auOk = preg_match('/^\d{4}-\d{2}-\d{2}$/', $au) === 1;
 
         switch ($ref) {
+            case '1d':  $fromDay = $today; break;
             case '7d':  $fromDay = date('Y-m-d', strtotime('-6 days')); break;
             case '30d': $fromDay = date('Y-m-d', strtotime('-29 days')); break;
             case '3m':  $fromDay = date('Y-m-d', strtotime('-3 months')); break;

@@ -20,6 +20,7 @@ final class ComptaCalc
      * @var array<string,string>
      */
     public const PERIOD_OPTIONS = [
+        '1d'     => '1 jour',
         '7d'     => '7 derniers jours',
         '30d'    => '30 derniers jours',
         '3m'     => '3 derniers mois',
@@ -61,6 +62,10 @@ final class ComptaCalc
         $toDay = null;
 
         switch ($preset) {
+            case '1d':
+                $fromDay = date('Y-m-d');
+                $toDay = date('Y-m-d');
+                break;
             case '7d':
                 $fromDay = date('Y-m-d', strtotime('-6 days'));
                 $toDay = date('Y-m-d');

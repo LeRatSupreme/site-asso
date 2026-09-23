@@ -47,6 +47,7 @@ $canInventory = \App\Core\Permissions::isSystemAdmin()
 
 // Libellés courts pour les pastilles de période.
 $refShort = [
+    '1d'     => '1 j',
     '7d'     => '7 j',
     '30d'    => '30 j',
     '3m'     => '3 mois',
@@ -345,6 +346,23 @@ foreach ($rows as $r) {
             if (radio.value === 'custom' && radio.checked) {
                 var du = document.getElementById('du');
                 if (du) du.focus();
+            }
+        });
+    });
+
+    // Saisie manuelle d'une date → bascule immédiate sur « Perso. »,
+    // avec application automatique dès que les deux bornes sont remplies.
+    Array.prototype.forEach.call(['du', 'au'], function (id) {
+        var el = document.getElementById(id);
+        if (!el) return;
+        el.addEventListener('change', function () {
+            var radio = form.querySelector('input[name="ref"][value="custom"]');
+            if (radio) radio.checked = true;
+            if (custom) custom.hidden = false;
+            var du = document.getElementById('du');
+            var au = document.getElementById('au');
+            if (du && au && du.value && au.value) {
+                form.submit();
             }
         });
     });

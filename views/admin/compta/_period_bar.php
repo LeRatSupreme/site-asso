@@ -70,6 +70,26 @@ unset($keep['period'], $keep['from'], $keep['to']);
         if (from) from.focus();
     });
 
+    // Saisie manuelle d'une date → bascule immédiate sur « Personnalisé »,
+    // avec application automatique dès que les deux bornes sont remplies.
+    var dateInputs = [
+        custom.querySelector('input[name="from"]'),
+        custom.querySelector('input[name="to"]')
+    ];
+    Array.prototype.forEach.call(dateInputs, function (input) {
+        if (!input) return;
+        input.addEventListener('change', function () {
+            var pills = document.querySelectorAll('#period-filters .period-pill');
+            Array.prototype.forEach.call(pills, function (p) { p.classList.remove('is-active'); });
+            toggle.classList.add('is-active');
+            custom.hidden = false;
+            var from = dateInputs[0], to = dateInputs[1];
+            if (from && to && from.value && to.value) {
+                custom.submit();
+            }
+        });
+    });
+
     custom.addEventListener('submit', function () {
         toggle.classList.add('is-active');
     });
