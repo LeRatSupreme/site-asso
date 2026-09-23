@@ -48,7 +48,7 @@ if ($voters > 0) {
 }
 ?>
 <a class="poll-card-link" href="<?= e(url('/sondages/' . $slug)) ?>">
-    <article class="poll-card-v2 <?= $isClosed ? 'is-closed' : 'is-open' ?>">
+    <article class="poll-card-v2 <?= $isClosed ? 'is-closed' : 'is-open' ?>" data-tilt data-tilt-max="5">
         <div class="poll-card-v2-strip"></div>
 
         <div class="poll-card-v2-body">

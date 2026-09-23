@@ -20,18 +20,69 @@ $userPseudo = ($user !== null && !empty($user['pseudo'])) ? (string) $user['pseu
 <header class="page-hero">
     <div class="ae-aurora" aria-hidden="true"></div>
     <div class="ae-dots dot-grid" aria-hidden="true"></div>
-    <div class="ae-chips" aria-hidden="true">
+    <div class="ae-chips ae-chips-left" data-parallax="14" aria-hidden="true">
         <span class="ae-chip ae-chip-1">🎮</span>
         <span class="ae-chip ae-chip-2">🏆</span>
         <span class="ae-chip ae-chip-3">🔤</span>
+        <span class="ae-chip ae-chip-4">🧩</span>
+        <span class="ae-chip ae-chip-5">🔥</span>
     </div>
     <div class="container">
-        <span class="ae-pill">
-            <span class="ae-pill-dot" aria-hidden="true"></span>
-            🎮 Zone jeux
-        </span>
-        <h1 class="page-title ae-title-grad">Zone jeux</h1>
-        <p class="page-lead">Un mot par jour, une série à construire, un classement à gravir. Connecte-toi pour sauvegarder tes scores&nbsp;!</p>
+        <div class="ae-hero-grid">
+            <div>
+                <span class="ae-pill">
+                    <span class="ae-pill-dot" aria-hidden="true"></span>
+                    🎮 Zone jeux
+                </span>
+                <h1 class="page-title ae-title-grad">Zone jeux</h1>
+                <p class="page-lead">Un mot par jour, une série à construire, un classement à gravir. Connecte-toi pour sauvegarder tes scores&nbsp;!</p>
+            </div>
+
+            <!-- Carte joueur décorative et interactive -->
+            <?php
+            $frStats = ($user !== null && is_array($stats) && isset($stats['fr'])) ? $stats['fr'] : null;
+            ?>
+            <div class="ae-idcard" data-tilt data-tilt-base="rotate(-1.6deg)" aria-hidden="true">
+                <div class="ae-idcard-band">
+                    <span class="ae-idcard-logo">🎮</span>
+                    <span class="ae-idcard-id">
+                        <span class="ae-idcard-label">CARTE / PLAYER</span>
+                        <span class="ae-idcard-name"><?= $userPseudo !== null ? e($userPseudo) : 'AEIC' ?></span>
+                    </span>
+                    <span class="ae-idcard-badge"><?= $frStats !== null ? '🔥 ' . (int) $frStats['currentStreak'] : 'DEMO' ?></span>
+                </div>
+                <div class="ae-idcard-body">
+                    <?php if ($frStats !== null): ?>
+                        <div class="ae-idcard-row">
+                            <span class="ae-idcard-ico">🎯</span>
+                            <span><?= (int) $frStats['played'] ?> parties jouées</span>
+                        </div>
+                        <div class="ae-idcard-row">
+                            <span class="ae-idcard-ico">🏆</span>
+                            <span><?= (int) $frStats['won'] ?> victoires · record 🔥 <?= (int) $frStats['maxStreak'] ?></span>
+                        </div>
+                        <div class="ae-idcard-row">
+                            <span class="ae-idcard-ico">🔤</span>
+                            <span>Wordle FR · EN</span>
+                        </div>
+                    <?php else: ?>
+                        <div class="ae-idcard-row">
+                            <span class="ae-idcard-ico">🎯</span>
+                            <span>Mode démo</span>
+                        </div>
+                        <div class="ae-idcard-row">
+                            <span class="ae-idcard-ico">🔒</span>
+                            <span>Connexion pour sauvegarder</span>
+                        </div>
+                        <div class="ae-idcard-row">
+                            <span class="ae-idcard-ico">🏆</span>
+                            <span>Classement ouvert à tous</span>
+                        </div>
+                    <?php endif; ?>
+                </div>
+                <div class="ae-idcard-code">||&#124; ||||| &#124; |||&#124; |||| &#124;&#124;| ||| &#124;</div>
+            </div>
+        </div>
     </div>
 </header>
 

@@ -67,20 +67,53 @@ function catIcon(string $cat): string {
 <header class="page-hero">
     <div class="ae-aurora" aria-hidden="true"></div>
     <div class="ae-dots dot-grid" aria-hidden="true"></div>
-    <div class="ae-chips" aria-hidden="true">
+    <div class="ae-chips ae-chips-left" data-parallax="14" aria-hidden="true">
         <span class="ae-chip ae-chip-1">🎉</span>
         <span class="ae-chip ae-chip-2">💻</span>
         <span class="ae-chip ae-chip-3">🍻</span>
+        <span class="ae-chip ae-chip-4">🥩</span>
+        <span class="ae-chip ae-chip-5">🎳</span>
     </div>
     <div class="container">
-        <span class="ae-pill">
-            <span class="ae-pill-dot" aria-hidden="true"></span>
-            <?= e(t('events.eyebrow')) ?>
-        </span>
-        <h1 class="page-title ae-title-grad"><?= e(t('events.title')) ?></h1>
-        <p class="page-lead">
-            <?= e(tt('events.lead', ['{a}' => max($countUpcoming, 0), '{b}' => max($countPast, 0)])) ?>
-        </p>
+        <div class="ae-hero-grid">
+            <div class="ev-hero-copy">
+                <span class="ae-pill">
+                    <span class="ae-pill-dot" aria-hidden="true"></span>
+                    <?= e(t('events.eyebrow')) ?>
+                </span>
+                <h1 class="page-title ae-title-grad"><?= e(t('events.title')) ?></h1>
+                <p class="page-lead">
+                    <?= e(tt('events.lead', ['{a}' => max($countUpcoming, 0), '{b}' => max($countPast, 0)])) ?>
+                </p>
+            </div>
+
+            <!-- PASS événements décoratif et interactif -->
+            <div class="ae-idcard" data-tilt data-tilt-base="rotate(-1.4deg)" aria-hidden="true">
+                <div class="ae-idcard-band">
+                    <span class="ae-idcard-logo">🎟</span>
+                    <span class="ae-idcard-id">
+                        <span class="ae-idcard-label">PASS / EVENTS</span>
+                        <span class="ae-idcard-name">AEIC</span>
+                    </span>
+                    <span class="ae-idcard-badge"><?= e((string) max($countUpcoming, 0)) ?></span>
+                </div>
+                <div class="ae-idcard-body">
+                    <div class="ae-idcard-row">
+                        <span class="ae-idcard-ico">🎉</span>
+                        <span><?= e(t_category('soirée')) ?></span>
+                    </div>
+                    <div class="ae-idcard-row">
+                        <span class="ae-idcard-ico">💻</span>
+                        <span><?= e(t_category('nuit de l\'info')) ?></span>
+                    </div>
+                    <div class="ae-idcard-row">
+                        <span class="ae-idcard-ico">🍻</span>
+                        <span><?= e(t_category('afterwork')) ?></span>
+                    </div>
+                </div>
+                <div class="ae-idcard-code">|||| ||| &#124; || |||| &#124;&#124;| &#124; |||| |||&#124;</div>
+            </div>
+        </div>
     </div>
 </header>
 
