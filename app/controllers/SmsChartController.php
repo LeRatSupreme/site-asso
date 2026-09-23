@@ -19,6 +19,11 @@ final class SmsChartController
         header('Content-Type: image/svg+xml; charset=utf-8');
         header('Cache-Control: no-store');
 
+        // Le routeur capture le segment complet : retire l'extension éventuelle.
+        if (str_ends_with($token, '.svg')) {
+            $token = substr($token, 0, -4);
+        }
+
         if (!hash_equals(SmsReport::chartToken(), $token)) {
             http_response_code(404);
             echo 'Not found';
