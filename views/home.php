@@ -79,7 +79,50 @@ $allPromoEmpty = empty($promotions);
     </div>
 </section>
 
-<section class="section section-alt" id="menu">
+<section class="section section-alt" id="promos">
+    <div class="container">
+        <div class="section-head">
+            <span class="eyebrow"><?= e(t('home.promos.eyebrow')) ?></span>
+            <h2 class="section-title"><?= e(t('home.promos.title')) ?></h2>
+        </div>
+
+        <?php if ($allPromoEmpty): ?>
+            <div class="promo-empty surface glass">
+                <span class="promo-empty-icon" aria-hidden="true">🎯</span>
+                <p><?= e(t('home.promos.empty')) ?></p>
+            </div>
+        <?php else: ?>
+            <div class="grid grid-3 promo-grid">
+                <?php foreach ($promotions as $promo): ?>
+                    <?php
+                    $badge   = trim((string) ($promo['badge'] ?? ''));
+                    $newPrice = formatPrice($promo['new_price'] ?? 0);
+                    $oldPrice = ($promo['old_price'] ?? '') !== '' && $promo['old_price'] !== null
+                        ? formatPrice($promo['old_price'])
+                        : '';
+                    ?>
+                    <article class="promo-card surface glass fade-in">
+                        <?php if ($badge !== ''): ?>
+                            <span class="promo-badge"><?= e($badge) ?></span>
+                        <?php endif; ?>
+                        <h3 class="promo-title"><?= e($promo['title'] ?? '') ?></h3>
+                        <?php if (!empty($promo['description'])): ?>
+                            <p class="promo-desc"><?= e($promo['description']) ?></p>
+                        <?php endif; ?>
+                        <div class="promo-prices">
+                            <?php if ($oldPrice !== ''): ?>
+                                <span class="promo-old"><?= e($oldPrice) ?></span>
+                            <?php endif; ?>
+                            <span class="promo-new"><?= e($newPrice) ?></span>
+                        </div>
+                    </article>
+                <?php endforeach; ?>
+            </div>
+        <?php endif; ?>
+    </div>
+</section>
+
+<section class="section" id="menu">
     <div class="container">
         <div class="section-head">
             <span class="eyebrow"><?= e(t('home.menu.eyebrow')) ?></span>
@@ -157,49 +200,6 @@ $allPromoEmpty = empty($promotions);
             </div>
 
             <p class="menu-empty-results muted" hidden><?= e(t('home.menu.empty')) ?></p>
-        <?php endif; ?>
-    </div>
-</section>
-
-<section class="section" id="promos">
-    <div class="container">
-        <div class="section-head">
-            <span class="eyebrow"><?= e(t('home.promos.eyebrow')) ?></span>
-            <h2 class="section-title"><?= e(t('home.promos.title')) ?></h2>
-        </div>
-
-        <?php if ($allPromoEmpty): ?>
-            <div class="promo-empty surface glass">
-                <span class="promo-empty-icon" aria-hidden="true">🎯</span>
-                <p><?= e(t('home.promos.empty')) ?></p>
-            </div>
-        <?php else: ?>
-            <div class="grid grid-3 promo-grid">
-                <?php foreach ($promotions as $promo): ?>
-                    <?php
-                    $badge   = trim((string) ($promo['badge'] ?? ''));
-                    $newPrice = formatPrice($promo['new_price'] ?? 0);
-                    $oldPrice = ($promo['old_price'] ?? '') !== '' && $promo['old_price'] !== null
-                        ? formatPrice($promo['old_price'])
-                        : '';
-                    ?>
-                    <article class="promo-card surface glass fade-in">
-                        <?php if ($badge !== ''): ?>
-                            <span class="promo-badge"><?= e($badge) ?></span>
-                        <?php endif; ?>
-                        <h3 class="promo-title"><?= e($promo['title'] ?? '') ?></h3>
-                        <?php if (!empty($promo['description'])): ?>
-                            <p class="promo-desc"><?= e($promo['description']) ?></p>
-                        <?php endif; ?>
-                        <div class="promo-prices">
-                            <?php if ($oldPrice !== ''): ?>
-                                <span class="promo-old"><?= e($oldPrice) ?></span>
-                            <?php endif; ?>
-                            <span class="promo-new"><?= e($newPrice) ?></span>
-                        </div>
-                    </article>
-                <?php endforeach; ?>
-            </div>
         <?php endif; ?>
     </div>
 </section>
