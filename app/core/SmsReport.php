@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace App\Core;
 
 use App\Core\Compta\CashLedger;
+use App\Core\Compta\ComptaCalc;
+use App\Models\InventoryCount;
+use App\Models\ProductDiscontinued;
 use App\Models\Sale;
 use App\Models\SmsSchedule;
 use App\Models\Setting;
@@ -236,6 +239,9 @@ final class SmsReport
                 ['var' => 'graphique',  'desc' => 'Lien vers le graphique image du jour'],
                 ['var' => 'graphique_semaine', 'desc' => 'Lien vers le graphique image de la semaine'],
             ],
+            'Stock' => [
+                ['var' => 'stock_alerte', 'desc' => 'Produits dont l\'autonomie est < 5 jours (liste)'],
+            ],
         ];
     }
 
@@ -336,7 +342,72 @@ final class SmsReport
             '{caisse}'           => formatPrice(CashLedger::balance()),
             '{graphique}'        => APP_URL . '/sms-chart/' . self::chartToken() . '.png',
             '{graphique_semaine}' => APP_URL . '/sms-chart/' . self::chartToken() . '.png?p=week',
+            '{stock_alerte}'     => self::stockAlerts()['block'],
         ];
+    }
+
+    /**
+     * Bloc « stocks critiques » : produits dont l'autonomie (jours avant
+     * rupture, calcul identique à la page Réappro sur les 30 derniers
+     * jours) est inférieure à $minDays. Triés par urgence, $maxLines max.
+     *
+     * @return array{block:string, count:int}
+     */
+    public static function stockAlerts(int $minDays = 5, int $maxLines = 8): array
+    {
+        $from = date('Y-m-d', strtotime('-29 days'));
+        $to = date('Y-m-d');
+        $openDays = max(1, ComptaCalc::openDaysBetween($from, $to));
+
+        $consumption = Sale::consumptionBetween($from, $to);
+
+        $discontinued = array_flip(array_map(
+            static fn (string $k): string => strtolower(trim($k)),
+            ProductDiscontinued::keys()
+        ));
+
+        $theoretical = [];
+        foreach (InventoryCount::theoreticalStocksMap() as $k => $v) {
+            $theoretical[strtolower(trim((string) $k))] = (int) $v;
+        }
+
+        $alerts = [];
+        foreach ($consumption as $key => $data) {
+            $key = (string) $key;
+            if ($key === '' || isset($discontinued[strtolower(trim($key))])) {
+                continue;
+            }
+
+            $qty = (int) ($data['qty'] ?? 0);
+            $avgDay = $qty / $openDays;
+
+            $lookup = strtolower(trim($key));
+            if (!array_key_exists($lookup, $theoretical)) {
+                continue;   // jamais compté : pas d'autonomie calculable
+            }
+            $stock = $theoretical[$lookup];
+
+            $autonomy = $avgDay > 0 ? max(0, (int) floor($stock / $avgDay)) : null;
+            if ($autonomy !== null && $autonomy < $minDays) {
+                $alerts[] = ['name' => $key, 'stock' => $stock, 'autonomy' => $autonomy];
+            }
+        }
+
+        usort($alerts, static fn (array $a, array $b): int => $a['autonomy'] <=> $b['autonomy']);
+        $count = count($alerts);
+        $alerts = array_slice($alerts, 0, $maxLines);
+
+        if ($alerts === []) {
+            return ['block' => '(aucun)', 'count' => 0];
+        }
+
+        $lines = [];
+        foreach ($alerts as $a) {
+            $stockTxt = $a['stock'] <= 0 ? 'RUPTURE' : 'stock ' . $a['stock'];
+            $lines[] = '- ' . $a['name'] . ' : ' . $a['autonomy'] . ' j (' . $stockTxt . ')';
+        }
+
+        return ['block' => implode("\n", $lines), 'count' => $count];
     }
 
     /**
