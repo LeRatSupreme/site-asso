@@ -91,12 +91,11 @@ declare(strict_types=1);
 <style>
 /* ============ Équipe — spécifique ============ */
 
-/* Avatars cerclés d'un anneau neutre */
+/* Avatars plein rond */
 .team-grid .team-avatar {
     width: 104px;
     height: 104px;
-    padding: 4px;
-    background: var(--border-strong);
+    padding: 0;
     box-shadow: 0 14px 32px rgba(0, 0, 0, 0.25);
     transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.3s ease;
 }
