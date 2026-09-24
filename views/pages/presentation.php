@@ -109,14 +109,6 @@ declare(strict_types=1);
             <p class="lead"><?= e(t('about.events.intro')) ?></p>
         </div>
         <div class="about-events">
-            <article class="about-event about-event-1 about-event-featured about-reveal">
-                <div class="about-event-body">
-                    <h3><?= e(t('about.events.nuitinfo.title')) ?></h3>
-                    <p><?= e(t('about.events.nuitinfo.desc')) ?></p>
-                </div>
-                <span class="about-event-tag" aria-hidden="true">#code</span>
-                <pre class="about-event-code" aria-hidden="true"><span class="code-cursor"></span></pre>
-            </article>
             <article class="about-event about-event-2 about-reveal">
                 <div class="about-event-body">
                     <h3><?= e(t('about.events.afterworks.title')) ?></h3>
@@ -129,16 +121,17 @@ declare(strict_types=1);
                     <pre class="about-event-code-flow js-type-code" aria-hidden="true" data-lines="$ bbq start --grille|> grillades, grandes_tables, bonne_humeur|// on vient pour le repas, on reste pour l ambiance"><span class="code-cursor"></span></pre>
                 </div>
             </article>
-            <article class="about-event about-event-4 about-reveal">
+            <article class="about-event about-event-1 about-reveal">
                 <div class="about-event-body">
-                    <h3><?= e(t('about.events.bowling.title')) ?></h3>
-                    <pre class="about-event-code-flow js-type-code" aria-hidden="true" data-lines="$ bowling play --equipes|> strikes, fous_rires, revanches|// se defier entre amis et changer d air"><span class="code-cursor"></span></pre>
+                    <h3><?= e(t('about.events.nuitinfo.title')) ?></h3>
+                    <p><?= e(t('about.events.nuitinfo.desc')) ?></p>
+                    <pre class="about-event-code-flow js-type-code" aria-hidden="true" data-lines="$ git clone nuit-de-linfo|> coder, innover, relever_des_defis --en-equipe|// jusqu au petit matin, cafe compris"><span class="code-cursor"></span></pre>
                 </div>
             </article>
-            <article class="about-event about-event-5 about-reveal">
+            <article class="about-event about-event-4 about-reveal">
                 <div class="about-event-body">
-                    <h3><?= e(t('about.events.bar.title')) ?></h3>
-                    <pre class="about-event-code-flow js-type-code" aria-hidden="true" data-lines="$ bar sortie --fin-de-journee|> ambiance: detendue --prise-de-tete 0|// on termine la journee ensemble autour d un verre"><span class="code-cursor"></span></pre>
+                    <h3><?= e(t('about.events.bowling_bar.title')) ?></h3>
+                    <pre class="about-event-code-flow js-type-code" aria-hidden="true" data-lines="$ bowling play --equipes|> strikes, fous_rires, revanches|$ bar sortie --fin-de-journee|> ambiance: detendue --prise-de-tete 0"><span class="code-cursor"></span></pre>
                 </div>
             </article>
             <article class="about-event about-event-more about-reveal">
@@ -484,28 +477,6 @@ declare(strict_types=1);
 .about-event-2 { --c: #8b7ae0; --cg: rgba(139, 122, 224, 0.16); --stub: linear-gradient(160deg, rgba(139, 122, 224, 0.38), rgba(139, 122, 224, 0.1)); }
 .about-event-3 { --c: #d4941a; --cg: rgba(212, 148, 26, 0.16); --stub: linear-gradient(160deg, rgba(212, 148, 26, 0.38), rgba(212, 148, 26, 0.1)); }
 .about-event-4 { --c: #d4568c; --cg: rgba(212, 86, 140, 0.16); --stub: linear-gradient(160deg, rgba(212, 86, 140, 0.38), rgba(212, 86, 140, 0.1)); }
-.about-event-5 { --c: #2d9a5f; --cg: rgba(45, 154, 95, 0.16); --stub: linear-gradient(160deg, rgba(45, 154, 95, 0.38), rgba(45, 154, 95, 0.1)); }
-.about-event-featured { grid-column: 1 / -1; }
-.about-event-featured .about-event-stub { flex-basis: 116px; font-size: 3.2rem; }
-.about-event-featured .about-event-body { padding: 1.5rem 1.6rem; }
-.about-event-featured h3 { font-size: 1.2rem; }
-.about-event-featured p { font-size: 0.95rem; max-width: 70ch; }
-@media (min-width: 1151px) {
-    .about-event-featured .about-event-body { padding-right: min(46%, 26rem); }
-}
-.about-event-tag {
-    position: absolute;
-    top: 0.9rem;
-    right: 1rem;
-    padding: 0.2rem 0.65rem;
-    border-radius: 999px;
-    font-family: ui-monospace, 'SF Mono', Consolas, monospace;
-    font-size: 0.7rem;
-    font-weight: 700;
-    color: var(--c, #3a9bb8);
-    background: rgba(58, 155, 184, 0.1);
-    border: 1px solid rgba(58, 155, 184, 0.35);
-}
 .about-event-more {
     grid-column: 1 / -1;
     border-style: dashed;
@@ -587,39 +558,7 @@ declare(strict_types=1);
 .about-btn-glass { background: rgba(255, 255, 255, 0.12); border: 1px solid rgba(255, 255, 255, 0.45); color: #fff; }
 .about-btn-glass:hover { background: rgba(255, 255, 255, 0.2); color: #fff; border-color: #fff; }
 
-/* ============ Décor code (carte Nuit de l'Info) ============ */
-.about-event-code {
-    position: absolute;
-    right: 1.4rem;
-    bottom: 1rem;
-    margin: 0;
-    max-width: min(44%, 420px);
-    font-family: ui-monospace, 'SF Mono', Consolas, monospace;
-    font-size: 0.72rem;
-    line-height: 1.55;
-    text-align: left;
-    white-space: pre-wrap;
-    color: rgba(255, 255, 255, 0.4);
-    pointer-events: none;
-    user-select: none;
-}
-.about-event-code .code-cursor {
-    display: inline-block;
-    width: 7px;
-    height: 0.95em;
-    margin-left: 2px;
-    vertical-align: -0.15em;
-    background: var(--primary, #48bdd3);
-    animation: about-code-blink 1.05s steps(2, start) infinite;
-}
-.about-event-code .l-cmd { color: rgba(127, 208, 228, 0.85); }
-.about-event-code .l-code { color: rgba(179, 161, 234, 0.8); }
-.about-event-code .l-rem { color: rgba(255, 255, 255, 0.3); font-style: italic; }
-[data-theme="light"] .about-event-code { color: rgba(15, 23, 42, 0.4); }
-[data-theme="light"] .about-event-code .l-cmd { color: #0e7490; }
-[data-theme="light"] .about-event-code .l-code { color: #6150aa; }
-[data-theme="light"] .about-event-code .l-rem { color: rgba(15, 23, 42, 0.35); }
-@keyframes about-code-blink { 50% { opacity: 0; } }
+/* ============ Décor code (cartes événements) ============ */
 .about-event-code-flow {
     margin: 0.35rem 0 0;
     min-height: 3.4rem;
@@ -653,19 +592,13 @@ declare(strict_types=1);
     .about-vision { padding: 2.25rem 1.5rem; }
     .about-space { flex-direction: column; padding: 1.75rem 1.5rem; gap: 1.1rem; }
     .about-event-stub { flex-basis: 64px; font-size: 1.8rem; }
-    .about-event-featured .about-event-stub { flex-basis: 72px; font-size: 2.4rem; }
-    .about-event-tag { display: none; }
     .about-cta-panel { padding: 3rem 1.5rem; }
-}
-@media (max-width: 1150px) {
-    .about-event-code { display: none; }
 }
 
 /* ============ Motion réduit ============ */
 @media (prefers-reduced-motion: reduce) {
     .about-aurora,
     .about-pill-dot { animation: none; }
-    .about-event-code { display: none; }
 }
 </style>
 
@@ -705,63 +638,5 @@ declare(strict_types=1);
     Array.prototype.forEach.call(reveals, function (el) {
         revealObserver.observe(el);
     });
-})();
-
-// Machine à écrire « Nuit de l'Info » dans la carte mise en avant.
-(function () {
-    'use strict';
-
-    var box = document.querySelector('.about-event-code');
-    if (!box) return;
-
-    var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if (reduced) { box.style.display = 'none'; return; }
-
-    var cursor = box.querySelector('.code-cursor');
-    if (!cursor) return;
-
-    var lines = [
-        { cls: 'l-cmd',  text: '$ npm install cafe@24h --save' },
-        { cls: 'l-code', text: 'while (nuit) { coder(); innover(); }' },
-        { cls: 'l-cmd',  text: '$ git commit -m "une equipe, un projet"' },
-        { cls: 'l-rem',  text: '// defis releves avant le petit matin : 42' }
-    ];
-
-    function typeLine(span, text, done) {
-        var i = 0;
-        var timer = setInterval(function () {
-            span.textContent += text.charAt(i);
-            i += 1;
-            if (i >= text.length) {
-                clearInterval(timer);
-                setTimeout(done, 380);
-            }
-        }, 34);
-    }
-
-    function clearLines() {
-        var spans = box.querySelectorAll('.l-cmd, .l-code, .l-rem');
-        Array.prototype.forEach.call(spans, function (s) {
-            s.parentNode.removeChild(s);
-        });
-    }
-
-    function play(index) {
-        if (index >= lines.length) {
-            setTimeout(function () {
-                clearLines();
-                play(0);
-            }, 3400);
-            return;
-        }
-        var span = document.createElement('span');
-        span.className = lines[index].cls;
-        box.insertBefore(span, cursor);
-        typeLine(span, lines[index].text + '\n', function () {
-            play(index + 1);
-        });
-    }
-
-    setTimeout(function () { play(0); }, 600);
 })();
 </script>
