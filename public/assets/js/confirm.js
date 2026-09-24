@@ -3,7 +3,7 @@
  * Usage : mettre data-confirm="Message de confirmation" sur un <form> ou <button>.
  * Le modal s'affiche au lieu du confirm() natif du navigateur.
  * Libellé du bouton de confirmation : data-confirm-button="…" sur l'élément
- * (ex. « 🚫 Plus en vente ») ; sinon « 🗑️ Supprimer » si le message parle de
+ * (ex. « Plus en vente ») ; sinon « Supprimer » si le message parle de
  * suppression, sinon « Confirmer » (style non destructif).
  */
 (function () {
@@ -16,7 +16,6 @@
     overlay.hidden = true;
     overlay.innerHTML = 
         '<div class="confirm-box">' +
-            '<div class="confirm-icon">⚠️</div>' +
             '<p class="confirm-text" id="confirm-text"></p>' +
             '<div class="confirm-buttons">' +
                 '<button type="button" class="btn btn-outline" id="confirm-cancel">Annuler</button>' +
@@ -36,13 +35,13 @@
         pendingForm = form || null;
         pendingHref = href || null;
         // Libellé : surcharge explicite (data-confirm-button), sinon
-        // « 🗑️ Supprimer » si le message parle de suppression, sinon
+        // « Supprimer » si le message parle de suppression, sinon
         // « Confirmer » — style rouge réservé aux actions destructives.
         var label = confirmLabel;
         var danger = true;
         if (!label) {
             if (/supprim/i.test(message)) {
-                label = '🗑️ Supprimer';
+                label = 'Supprimer';
             } else {
                 label = 'Confirmer';
                 danger = false;

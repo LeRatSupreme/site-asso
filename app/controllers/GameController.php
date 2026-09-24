@@ -38,7 +38,7 @@ final class GameController extends Controller
         $leaderboard = GameScore::getGlobalLeaderboard(200);
 
         $this->render('game/index', [
-            'title'       => '🎮 Zone jeux — AEIC',
+            'title'       => 'Zone jeux — AEIC',
             'description' => 'Jeux et détente pour les étudiants de l\'AEIC, association du BUT Informatique de Calais : Wordle FR/EN, énigme du jour et classement.',
             'user'        => $user,
             'stats'       => $stats,
@@ -102,7 +102,7 @@ final class GameController extends Controller
         $user = Auth::check() ? Auth::user() : null;
 
         $this->render('game/wordle', [
-            'title'          => '🎮 Wordle AEIC — FR / EN',
+            'title'          => 'Wordle AEIC — FR / EN',
             'description'    => 'Le Wordle de l\'AEIC, association étudiante du BUT Informatique de Calais : 3 niveaux de difficulté, un mot du jour commun et un mode libre illimité.',
             'user'           => $user,
             'isLoggedIn'     => Auth::check(),
@@ -250,7 +250,7 @@ final class GameController extends Controller
         $currentId = Auth::check() ? (string) Auth::id() : null;
 
         $this->render('game/leaderboard', [
-            'title'       => '🏆 Classement Wordle — AEIC',
+            'title'       => 'Classement Wordle — AEIC',
             'description' => 'Classement des joueurs de Wordle de l\'AEIC, association du BUT Informatique de Calais, par série de victoires en cours (mot quotidien 5 lettres).',
             'mode'        => 'global',
             'rows'        => $rows,
@@ -269,7 +269,7 @@ final class GameController extends Controller
         $lang = (string) ($_SESSION['lang'] ?? 'fr');
 
         $this->render('game/enigma', [
-            'title'       => '🧩 Énigme du jour — AEIC',
+            'title'       => 'Énigme du jour — AEIC',
             'description' => 'Une nouvelle énigme chaque jour, proposée par l\'AEIC, association du BUT Informatique de Calais, identique pour tous les joueurs. Saurez-vous la résoudre ?',
             'enigma'      => $enigma,
             'lang'        => $lang,

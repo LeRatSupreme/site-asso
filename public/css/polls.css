@@ -292,7 +292,6 @@
     align-items: center;
     gap: .4rem;
 }
-.poll-trophy { font-size: 1.1rem; }
 .poll-your-vote {
     font-size: .75rem;
     font-weight: 600;
@@ -341,14 +340,11 @@
     text-align: center;
     padding: 2.5rem 1rem;
 }
-.poll-empty-icon { font-size: 2.5rem; display: block; margin-bottom: .5rem; }
-
 /* ---- Non connecté ---- */
 .poll-login-prompt {
     text-align: center;
     padding: 2.5rem 1.75rem;
 }
-.poll-login-icon { font-size: 3rem; display: block; margin-bottom: .75rem; }
 .poll-login-prompt .card-title { margin-bottom: .5rem; }
 .poll-login-prompt .hero-actions { margin-top: 1.25rem; }
 

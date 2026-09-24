@@ -44,7 +44,7 @@ declare(strict_types=1);
                     <span class="check-box"></span>
                 </label>
                 <label for="ack-mail" class="register-mail-content">
-                    <span class="register-mail-title">📧 <?= e(t('auth.register.email.title')) ?></span>
+                    <span class="register-mail-title"><?= e(t('auth.register.email.title')) ?></span>
                     <span class="register-mail-desc"><?= e(t('auth.register.email.desc')) ?></span>
                 </label>
             </div>
@@ -55,7 +55,7 @@ declare(strict_types=1);
                     <span class="check-box"></span>
                 </label>
                 <label for="consent" class="register-mail-content">
-                    <span class="register-mail-title">📋 <?= e(t('auth.register.consent.title')) ?></span>
+                    <span class="register-mail-title"><?= e(t('auth.register.consent.title')) ?></span>
                     <span class="register-mail-desc">
                         <?php
                         $cguUrl = e(url('/cgu'));

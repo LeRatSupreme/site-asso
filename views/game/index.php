@@ -25,7 +25,7 @@ $userPseudo = ($user !== null && !empty($user['pseudo'])) ? (string) $user['pseu
             <div>
                 <span class="ae-pill">
                     <span class="ae-pill-dot" aria-hidden="true"></span>
-                    🎮 Zone jeux
+                    Zone jeux
                 </span>
                 <h1 class="page-title ae-title-grad">Zone jeux</h1>
                 <p class="page-lead">Un mot par jour, une série à construire, un classement à gravir. Connecte-toi pour sauvegarder tes scores&nbsp;!</p>
@@ -37,38 +37,32 @@ $userPseudo = ($user !== null && !empty($user['pseudo'])) ? (string) $user['pseu
             ?>
             <div class="ae-idcard" data-tilt data-tilt-base="rotate(-1.6deg)" aria-hidden="true">
                 <div class="ae-idcard-band">
-                    <span class="ae-idcard-logo">🎮</span>
+                    <span class="ae-idcard-logo">AE</span>
                     <span class="ae-idcard-id">
                         <span class="ae-idcard-label">CARTE / PLAYER</span>
                         <span class="ae-idcard-name"><?= $userPseudo !== null ? e($userPseudo) : 'AEIC' ?></span>
                     </span>
-                    <span class="ae-idcard-badge"><?= $frStats !== null ? '🔥 ' . (int) $frStats['currentStreak'] : 'DEMO' ?></span>
+                    <span class="ae-idcard-badge"><?= $frStats !== null ? (int) $frStats['currentStreak'] : 'DEMO' ?></span>
                 </div>
                 <div class="ae-idcard-body">
                     <?php if ($frStats !== null): ?>
                         <div class="ae-idcard-row">
-                            <span class="ae-idcard-ico">🎯</span>
                             <span><?= (int) $frStats['played'] ?> parties jouées</span>
                         </div>
                         <div class="ae-idcard-row">
-                            <span class="ae-idcard-ico">🏆</span>
-                            <span><?= (int) $frStats['won'] ?> victoires · record 🔥 <?= (int) $frStats['maxStreak'] ?></span>
+                            <span><?= (int) $frStats['won'] ?> victoires · record <?= (int) $frStats['maxStreak'] ?></span>
                         </div>
                         <div class="ae-idcard-row">
-                            <span class="ae-idcard-ico">🔤</span>
                             <span>Wordle FR · EN</span>
                         </div>
                     <?php else: ?>
                         <div class="ae-idcard-row">
-                            <span class="ae-idcard-ico">🎯</span>
                             <span>Mode démo</span>
                         </div>
                         <div class="ae-idcard-row">
-                            <span class="ae-idcard-ico">🔒</span>
                             <span>Connexion pour sauvegarder</span>
                         </div>
                         <div class="ae-idcard-row">
-                            <span class="ae-idcard-ico">🏆</span>
                             <span>Classement ouvert à tous</span>
                         </div>
                     <?php endif; ?>
@@ -84,14 +78,14 @@ $userPseudo = ($user !== null && !empty($user['pseudo'])) ? (string) $user['pseu
 
         <?php if ($user === null): ?>
             <div class="surface card ae-panel gm-notice" style="margin-bottom:1.75rem; align-items:flex-start;">
-                <p style="margin:0;">🔒 Tu joues en <strong>mode démo</strong>. <a href="<?= e(url('/login?callbackUrl=' . rawurlencode('/jeux'))) ?>">Connecte-toi</a> pour sauvegarder tes parties, suivre ta série de victoires et apparaître dans le classement.</p>
+                <p style="margin:0;">Tu joues en <strong>mode démo</strong>. <a href="<?= e(url('/login?callbackUrl=' . rawurlencode('/jeux'))) ?>">Connecte-toi</a> pour sauvegarder tes parties, suivre ta série de victoires et apparaître dans le classement.</p>
             </div>
         <?php endif; ?>
 
         <?php if ($user !== null && $stats !== null): ?>
             <h2 class="section-title gm-h2 ae-reveal">Tes statistiques</h2>
             <div class="grid grid-2 gm-stats" style="margin-bottom:2.5rem;">
-                <?php foreach (['fr' => '🇫🇷 FR', 'en' => '🇬🇧 EN'] as $code => $label):
+                <?php foreach (['fr' => 'FR', 'en' => 'EN'] as $code => $label):
                     $s = $stats[$code]; ?>
                     <div class="surface card ae-panel ae-reveal">
                         <span class="badge badge-gradient"><?= $label ?></span>
@@ -105,11 +99,11 @@ $userPseudo = ($user !== null && !empty($user['pseudo'])) ? (string) $user['pseu
                                 <span class="stat-label">Victoires</span>
                             </div>
                             <div class="stat-card">
-                                <span class="stat-value gm-stat">🔥 <?= (int) $s['currentStreak'] ?></span>
+                                <span class="stat-value gm-stat"><?= (int) $s['currentStreak'] ?></span>
                                 <span class="stat-label">Série en cours</span>
                             </div>
                             <div class="stat-card">
-                                <span class="stat-value gm-stat">🏆 <?= (int) $s['maxStreak'] ?></span>
+                                <span class="stat-value gm-stat"><?= (int) $s['maxStreak'] ?></span>
                                 <span class="stat-label">Record</span>
                             </div>
                         </div>
@@ -122,7 +116,6 @@ $userPseudo = ($user !== null && !empty($user['pseudo'])) ? (string) $user['pseu
             <!-- Demande de pseudo -->
             <div class="surface card ae-panel" id="pseudo-prompt" style="margin-bottom:1.75rem; align-items:flex-start;">
                 <div style="display:flex; gap:0.75rem; align-items:flex-start; width:100%;">
-                    <span class="ae-medal ae-medal-sm" aria-hidden="true">🎮</span>
                     <div style="flex:1;">
                         <p style="margin:0 0 0.5rem; font-weight:700;">Choisis ton pseudo de joueur</p>
                         <p style="margin:0 0 0.75rem; color:var(--muted); font-size:0.9rem;">Ton pseudo apparaîtra dans le classement ci-dessous. 3 à 20 caractères (lettres, chiffres, espaces, - _ .).</p>
@@ -137,10 +130,9 @@ $userPseudo = ($user !== null && !empty($user['pseudo'])) ? (string) $user['pseu
         <?php elseif ($user !== null && $userPseudo !== null): ?>
             <!-- Pseudo existant + bouton modifier -->
             <div class="surface card ae-panel" id="pseudo-display" style="margin-bottom:1.75rem; flex-direction:row; align-items:center; gap:0.75rem; flex-wrap:wrap;">
-                <span aria-hidden="true" style="font-size:1.3rem;">🎮</span>
                 <span style="color:var(--muted);">Ton pseudo&nbsp;:</span>
                 <strong id="pseudo-current" style="color:var(--primary);"><?= e($userPseudo) ?></strong>
-                <button type="button" class="btn btn-outline btn-sm" id="pseudo-edit-btn" style="margin-left:auto;">✏️ Modifier</button>
+                <button type="button" class="btn btn-outline btn-sm" id="pseudo-edit-btn" style="margin-left:auto;">Modifier</button>
             </div>
             <!-- Formulaire de modification (caché par défaut) -->
             <div class="surface card" id="pseudo-edit" style="display:none; margin-bottom:1.75rem; flex-direction:column; gap:0.5rem; align-items:stretch;">
@@ -154,10 +146,10 @@ $userPseudo = ($user !== null && !empty($user['pseudo'])) ? (string) $user['pseu
         <?php endif; ?>
 
         <!-- ===================== CLASSEMENT (tout le monde) ===================== -->
-        <h2 class="section-title gm-h2 ae-reveal">🏆 Classement</h2>
+        <h2 class="section-title gm-h2 ae-reveal">Classement</h2>
         <?php if ($leaderboard === []): ?>
             <div class="surface card" style="text-align:center; padding:2rem; color:var(--muted); margin-bottom:2.5rem;">
-                <p style="margin:0 0 0.5rem;">🗂️ Aucune partie enregistrée pour le moment.</p>
+                <p style="margin:0 0 0.5rem;">Aucune partie enregistrée pour le moment.</p>
                 <p style="margin:0;"><a class="btn btn-primary btn-sm" href="<?= e(url('/jeux/wordle?mode=daily')) ?>">Jouer au Wordle quotidien →</a></p>
             </div>
         <?php else: ?>
@@ -167,8 +159,8 @@ $userPseudo = ($user !== null && !empty($user['pseudo'])) ? (string) $user['pseu
                         <tr>
                             <th class="num" style="width:3rem;">#</th>
                             <th>Joueur</th>
-                            <th class="num">Série 🔥</th>
-                            <th class="num">Record 🏆</th>
+                            <th class="num">Série</th>
+                            <th class="num">Record</th>
                             <th class="num">Parties</th>
                         </tr>
                     </thead>
@@ -204,7 +196,7 @@ $userPseudo = ($user !== null && !empty($user['pseudo'])) ? (string) $user['pseu
         <h2 class="section-title gm-h2 ae-reveal">Jeux disponibles</h2>
         <div class="gm-tickets">
             <a class="gm-ticket ae-reveal" href="<?= e(url('/jeux/wordle')) ?>">
-                <span class="gm-stub" aria-hidden="true">🔤</span>
+                <span class="gm-stub" aria-hidden="true">W</span>
                 <span class="gm-body">
                     <span class="gm-meta"><span class="badge badge-secondary">3 difficultés</span></span>
                     <span class="gm-title">Wordle</span>
@@ -214,7 +206,7 @@ $userPseudo = ($user !== null && !empty($user['pseudo'])) ? (string) $user['pseu
             </a>
 
             <a class="gm-ticket gm-ticket-violet ae-reveal" href="<?= e(url('/jeux/enigme')) ?>">
-                <span class="gm-stub" aria-hidden="true">🧩</span>
+                <span class="gm-stub" aria-hidden="true">E</span>
                 <span class="gm-body">
                     <span class="gm-meta"><span class="badge badge-secondary">Quotidien</span></span>
                     <span class="gm-title">Énigme du jour</span>
@@ -224,7 +216,7 @@ $userPseudo = ($user !== null && !empty($user['pseudo'])) ? (string) $user['pseu
             </a>
 
             <div class="gm-ticket gm-ticket-muted ae-reveal">
-                <span class="gm-stub" aria-hidden="true">🧠</span>
+                <span class="gm-stub" aria-hidden="true">M</span>
                 <span class="gm-body">
                     <span class="gm-meta"><span class="badge badge-muted">Bientôt</span></span>
                     <span class="gm-title">Memory</span>
@@ -359,7 +351,6 @@ $userPseudo = ($user !== null && !empty($user['pseudo'])) ? (string) $user['pseu
 }
 .pseudo-input:focus { outline:none; border-color:var(--primary); }
 .pseudo-msg { margin:0.5rem 0 0; font-size:0.85rem; min-height:1.1rem; }
-.gm-notice .ae-medal-sm { width:52px; height:52px; font-size:1.5rem; border-radius:16px; }
 </style>
 
 <script>
@@ -429,7 +420,7 @@ $userPseudo = ($user !== null && !empty($user['pseudo'])) ? (string) $user['pseu
             btn.disabled = false;
             btn.textContent = 'Enregistrer';
             if (data.success) {
-                msg.textContent = '✅ Pseudo enregistré : ' + data.pseudo;
+                msg.textContent = 'Pseudo enregistré : ' + data.pseudo;
                 msg.style.color = 'var(--primary)';
                 // Recharge la page pour mettre à jour le classement.
                 setTimeout(function() { window.location.reload(); }, 800);

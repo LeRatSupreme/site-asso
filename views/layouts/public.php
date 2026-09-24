@@ -23,7 +23,6 @@ $user         = Auth::check() ? Auth::user() : null;
 $lang         = current_lang();
 
 $langs       = available_langs();
-$currentFlag = lang_flag($lang);
 
 // SEO : titres et descriptions par défaut + Open Graph.
 $pageTitle    = $title ?? $siteName;
@@ -125,7 +124,6 @@ $twitterHandle = Setting::get('twitter_handle', '');
                     <button type="button" class="lang-current" id="lang-current"
                             aria-haspopup="true" aria-expanded="false" aria-controls="lang-menu"
                             title="<?= e(t('nav.lang.change')) ?>">
-                        <span class="lang-flag" aria-hidden="true"><?= $currentFlag ?></span>
                         <span class="lang-name"><?= e(strtoupper($lang)) ?></span>
                         <span class="lang-caret" aria-hidden="true">▾</span>
                     </button>
@@ -135,7 +133,6 @@ $twitterHandle = Setting::get('twitter_handle', '');
                                 <a role="menuitemradio" aria-checked="<?= $code === $lang ? 'true' : 'false' ?>"
                                    class="lang-menu-item<?= $code === $lang ? ' is-active' : '' ?>"
                                    href="<?= e(url('/set-lang?lang=' . $code . '&redirect=' . rawurlencode($currentPath))) ?>">
-                                    <span class="lang-flag" aria-hidden="true"><?= lang_flag($code) ?></span>
                                     <span class="lang-name"><?= e(t('lang.' . $code)) ?></span>
                                 </a>
                             </li>
@@ -145,8 +142,8 @@ $twitterHandle = Setting::get('twitter_handle', '');
 
                 <button type="button" class="nav-theme-btn" id="theme-toggle"
                         aria-label="<?= e(t('nav.theme.toggle')) ?>" title="<?= e(t('nav.theme.light.dark')) ?>">
-                    <span class="theme-icon-dark" aria-hidden="true">☀️</span>
-                    <span class="theme-icon-light" aria-hidden="true">🌙</span>
+                    <span class="theme-icon-dark" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg></span>
+                    <span class="theme-icon-light" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></span>
                 </button>
 
                 <?php if ($user !== null): ?>
@@ -155,7 +152,7 @@ $twitterHandle = Setting::get('twitter_handle', '');
                                 class="nav-bell-btn"
                                 id="notif-toggle"
                                 aria-label="<?= e(t('nav.notifications')) ?>">
-                            <span aria-hidden="true">🔔</span>
+                            <span aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></span>
                             <span class="nav-bell-badge" id="notif-badge" hidden>0</span>
                         </button>
                         <div class="nav-bell-dropdown" id="notif-dropdown" hidden>
@@ -191,24 +188,24 @@ $twitterHandle = Setting::get('twitter_handle', '');
         <div class="mobile-nav-overlay" id="mobile-nav-overlay"></div>
         <nav id="mobile-nav" class="mobile-nav" aria-label="<?= e(t('nav.main.aria')) ?>">
             <div class="mobile-nav-links">
-                <a href="<?= e(url('/')) ?>">🏠 <?= e(t('nav.home')) ?></a>
-                <a href="<?= e(url('/events')) ?>">📅 <?= e(t('nav.events')) ?></a>
-                <a href="<?= e(url('/presentation')) ?>">🏫 <?= e(t('nav.about')) ?></a>
-                <a href="<?= e(url('/team')) ?>">👥 <?= e(t('nav.team')) ?></a>
-                <a href="<?= e(url('/sondages')) ?>">📊 <?= e(t('nav.polls')) ?></a>
-                <a href="<?= e(url('/galerie')) ?>">📷 <?= e(t('nav.gallery')) ?></a>
-                <a href="<?= e(url('/jeux')) ?>">🎮 <?= e(t('nav.games')) ?></a>
+                <a href="<?= e(url('/')) ?>"><?= e(t('nav.home')) ?></a>
+                <a href="<?= e(url('/events')) ?>"><?= e(t('nav.events')) ?></a>
+                <a href="<?= e(url('/presentation')) ?>"><?= e(t('nav.about')) ?></a>
+                <a href="<?= e(url('/team')) ?>"><?= e(t('nav.team')) ?></a>
+                <a href="<?= e(url('/sondages')) ?>"><?= e(t('nav.polls')) ?></a>
+                <a href="<?= e(url('/galerie')) ?>"><?= e(t('nav.gallery')) ?></a>
+                <a href="<?= e(url('/jeux')) ?>"><?= e(t('nav.games')) ?></a>
             </div>
 
             <div class="mobile-nav-section">
                 <select id="lang-select-mobile" class="mobile-lang-select" onchange="window.location.href=this.value">
                     <?php foreach ($langs as $code): ?>
                         <option value="<?= e(url('/set-lang?lang=' . $code . '&redirect=' . rawurlencode($currentPath))) ?>" <?= $code === $lang ? 'selected' : '' ?>>
-                            <?= e(lang_flag($code) . ' ' . strtoupper($code)) ?>
+                            <?= e(strtoupper($code)) ?>
                         </option>
                     <?php endforeach; ?>
                 </select>
-                <button type="button" class="btn btn-ghost btn-sm mobile-theme-btn" id="theme-toggle-mobile">🌙</button>
+                <button type="button" class="btn btn-ghost btn-sm mobile-theme-btn" id="theme-toggle-mobile">Thème</button>
             </div>
 
             <div class="mobile-nav-section mobile-nav-account">
@@ -227,17 +224,6 @@ $twitterHandle = Setting::get('twitter_handle', '');
     </header>
 
     <main id="contenu">
-        <!-- Icônes flottantes : couche décorative répartie sur toute la page -->
-        <div class="ae-chips ae-chips-page" data-parallax="18" aria-hidden="true">
-            <span class="ae-chip ae-chip-1">💻</span>
-            <span class="ae-chip ae-chip-2">☕</span>
-            <span class="ae-chip ae-chip-3">🎮</span>
-            <span class="ae-chip ae-chip-4">🎉</span>
-            <span class="ae-chip ae-chip-5">📅</span>
-            <span class="ae-chip ae-chip-6">🎓</span>
-            <span class="ae-chip ae-chip-7">✨</span>
-            <span class="ae-chip ae-chip-8">🤝</span>
-        </div>
         <?php require AEIC_VIEWS . '/partials/flash_messages.php'; ?>
         <?= $content ?>
     </main>
@@ -255,29 +241,29 @@ $twitterHandle = Setting::get('twitter_handle', '');
                 </div>
 
                 <nav class="footer-links" aria-label="<?= e(t('footer.aria')) ?>">
-                    <a href="<?= e(url('/')) ?>">🏠 <?= e(t('nav.home')) ?></a>
-                    <a href="<?= e(url('/events')) ?>">📅 <?= e(t('nav.events')) ?></a>
-                    <a href="<?= e(url('/presentation')) ?>">🏫 <?= e(t('nav.about')) ?></a>
-                    <a href="<?= e(url('/team')) ?>">👥 <?= e(t('nav.team')) ?></a>
-                    <a href="<?= e(url('/sondages')) ?>">📊 <?= e(t('nav.polls')) ?></a>
-                    <a href="<?= e(url('/galerie')) ?>">📷 <?= e(t('nav.gallery')) ?></a>
-                    <a href="<?= e(url('/jeux')) ?>">🎮 <?= e(t('nav.games')) ?></a>
-                    <a href="<?= e(url('/legal')) ?>">⚖️ <?= e(t('footer.legal')) ?></a>
-                    <a href="<?= e(url('/privacy')) ?>">🔒 <?= e(t('footer.privacy')) ?></a>
-                    <a href="<?= e(url('/cgu')) ?>">📋 <?= e(t('footer.cgu')) ?></a>
+                    <a href="<?= e(url('/')) ?>"><?= e(t('nav.home')) ?></a>
+                    <a href="<?= e(url('/events')) ?>"><?= e(t('nav.events')) ?></a>
+                    <a href="<?= e(url('/presentation')) ?>"><?= e(t('nav.about')) ?></a>
+                    <a href="<?= e(url('/team')) ?>"><?= e(t('nav.team')) ?></a>
+                    <a href="<?= e(url('/sondages')) ?>"><?= e(t('nav.polls')) ?></a>
+                    <a href="<?= e(url('/galerie')) ?>"><?= e(t('nav.gallery')) ?></a>
+                    <a href="<?= e(url('/jeux')) ?>"><?= e(t('nav.games')) ?></a>
+                    <a href="<?= e(url('/legal')) ?>"><?= e(t('footer.legal')) ?></a>
+                    <a href="<?= e(url('/privacy')) ?>"><?= e(t('footer.privacy')) ?></a>
+                    <a href="<?= e(url('/cgu')) ?>"><?= e(t('footer.cgu')) ?></a>
                 </nav>
             </div>
 
-            <div class="footer-bottom">
-                <span class="footer-partners">
-                    <span class="footer-partners-label">🎓 Notre IUT</span>
-                    <a href="https://www.facebook.com/IUTinfoCalais/" target="_blank" rel="noopener" class="footer-partner-link">IUT Informatique Calais</a>
-                    <a href="https://www.univ-littoral.fr/" target="_blank" rel="noopener" class="footer-partner-link">ULCO</a>
-                </span>
-                <span class="footer-tag">🎓 <?= e(t('footer.tag')) ?></span>
-                <span class="footer-copy">© <?= e($currentYear) ?> <?= e($siteName) ?> · <?= e(t('footer.copy')) ?></span>
-                <span class="footer-credit">💻 Développé par <strong><a href="https://aremond.ovh/" target="_blank" rel="noopener" class="footer-credit-link">Adrien Remond</a></strong></span>
-            </div>
+                <div class="footer-bottom">
+                    <span class="footer-partners">
+                        <span class="footer-partners-label">Notre IUT</span>
+                        <a href="https://www.facebook.com/IUTinfoCalais/" target="_blank" rel="noopener" class="footer-partner-link">IUT Informatique Calais</a>
+                        <a href="https://www.univ-littoral.fr/" target="_blank" rel="noopener" class="footer-partner-link">ULCO</a>
+                    </span>
+                    <span class="footer-tag"><?= e(t('footer.tag')) ?></span>
+                    <span class="footer-copy">© <?= e($currentYear) ?> <?= e($siteName) ?> · <?= e(t('footer.copy')) ?></span>
+                    <span class="footer-credit">Développé par <strong><a href="https://aremond.ovh/" target="_blank" rel="noopener" class="footer-credit-link">Adrien Remond</a></strong></span>
+                </div>
         </div>
     </footer>
 
@@ -540,7 +526,7 @@ $twitterHandle = Setting::get('twitter_handle', '');
     <div class="cookie-banner" id="cookie-banner" hidden>
         <div class="cookie-banner-inner">
             <span class="cookie-text">
-                🍪 Ce site utilise un <strong>cookie de session strictement nécessaire</strong> (connexion). Aucune publicité, aucun tracking.
+                Ce site utilise un <strong>cookie de session strictement nécessaire</strong> (connexion). Aucune publicité, aucun tracking.
                 <a href="<?= e(url('/privacy')) ?>">En savoir plus →</a>
             </span>
             <button type="button" class="btn btn-primary btn-sm" id="cookie-ok">OK</button>

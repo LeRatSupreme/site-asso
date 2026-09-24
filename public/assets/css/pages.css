@@ -288,10 +288,6 @@
     font-weight: 800;
     color: var(--foreground);
 }
-.event-cat-icon {
-    font-size: 1.4rem;
-    line-height: 1;
-}
 .event-cat-count {
     font-size: 0.8rem;
     font-weight: 700;

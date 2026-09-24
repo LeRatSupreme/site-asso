@@ -91,7 +91,6 @@ $allPromoEmpty = empty($promotions);
 
         <?php if ($allPromoEmpty): ?>
             <div class="promo-empty surface glass">
-                <span class="promo-empty-icon" aria-hidden="true">🎯</span>
                 <p><?= e(t('home.promos.empty')) ?></p>
             </div>
         <?php else: ?>
@@ -146,7 +145,6 @@ $allPromoEmpty = empty($promotions);
                 $catTabs[] = [
                     'key'   => (string) $cat['id'],
                     'name'  => tc((string) $cat['name']),
-                    'emoji' => product_emoji((string) $cat['name']),
                 ];
             }
             ?>
@@ -157,7 +155,7 @@ $allPromoEmpty = empty($promotions);
                             data-cat="<?= e($tab['key']) ?>"
                             role="tab"
                             aria-selected="<?= $i === 0 ? 'true' : 'false' ?>">
-                        <span aria-hidden="true"><?= e($tab['emoji']) ?></span> <?= e($tab['name']) ?>
+                        <?= e($tab['name']) ?>
                     </button>
                 <?php endforeach; ?>
             </div>
@@ -167,7 +165,6 @@ $allPromoEmpty = empty($promotions);
                     <?php foreach ($cat['products'] as $product): ?>
                     <?php
                     $name  = tc((string) ($product['name'] ?? ''));
-                    $emoji = product_emoji((string) ($product['name'] ?? ''));
                     $img   = trim((string) ($product['image'] ?? ''));
                     $imgUrl = $img !== '' ? (is_absolute_url($img) ? $img : asset(ltrim($img, '/'))) : '';
                     // Stock issu de l'inventaire compta (cache 5 min) apparié au nom ;
@@ -183,10 +180,7 @@ $allPromoEmpty = empty($promotions);
                                 <span class="menu-item-cat"><?= e(tc($catName)) ?></span>
                             <?php endif; ?>
                             <?php if ($imgUrl !== ''): ?>
-                                <img src="<?= e($imgUrl) ?>" alt="" class="menu-item-img" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='';">
-                                <span class="menu-item-emoji" aria-hidden="true" style="display:none;"><?= e($emoji) ?></span>
-                            <?php else: ?>
-                                <span class="menu-item-emoji" aria-hidden="true"><?= e($emoji) ?></span>
+                                <img src="<?= e($imgUrl) ?>" alt="" class="menu-item-img" loading="lazy" onerror="this.style.display='none';">
                             <?php endif; ?>
                             <span class="menu-item-name"><?= e($name) ?></span>
                             <span class="menu-item-price"><?= e(formatPrice($product['price'] ?? 0)) ?></span>
@@ -215,21 +209,18 @@ $allPromoEmpty = empty($promotions);
         </div>
         <div class="grid grid-3">
             <article class="hm-feature ae-panel ae-reveal">
-                <span class="ae-medal ae-medal-sm" aria-hidden="true">📅</span>
                 <div class="hm-feature-body">
                     <h3 class="card-title"><?= e(t('home.feature.events.title')) ?></h3>
                     <p><?= e(t('home.feature.events.desc')) ?></p>
                 </div>
             </article>
             <article class="hm-feature ae-panel ae-reveal">
-                <span class="ae-medal ae-medal-sm" aria-hidden="true">☕</span>
                 <div class="hm-feature-body">
                     <h3 class="card-title"><?= e(t('home.feature.cafeteria.title')) ?></h3>
                     <p><?= e(t('home.feature.cafeteria.desc')) ?></p>
                 </div>
             </article>
             <article class="hm-feature ae-panel ae-reveal">
-                <span class="ae-medal ae-medal-sm" aria-hidden="true">🤝</span>
                 <div class="hm-feature-body">
                     <h3 class="card-title"><?= e(t('home.feature.community.title')) ?></h3>
                     <p><?= e(t('home.feature.community.desc')) ?></p>

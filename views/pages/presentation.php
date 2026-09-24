@@ -41,15 +41,12 @@ declare(strict_types=1);
                 </div>
                 <div class="ae-idcard-body">
                     <div class="ae-idcard-row">
-                        <span class="ae-idcard-ico">🎓</span>
                         <span><?= e(t('home.stat.student')) ?></span>
                     </div>
                     <div class="ae-idcard-row">
-                        <span class="ae-idcard-ico">☕</span>
                         <span><?= e(t('home.feature.cafeteria.title')) ?></span>
                     </div>
                     <div class="ae-idcard-row">
-                        <span class="ae-idcard-ico">🤝</span>
                         <span><?= e(t('about.value.proximity')) ?></span>
                     </div>
                 </div>
@@ -64,7 +61,6 @@ declare(strict_types=1);
     <div class="container">
         <div class="about-mission about-reveal">
             <span class="about-mission-code" aria-hidden="true">&lt;mission /&gt;</span>
-            <span class="about-medal" aria-hidden="true">🎯</span>
             <div class="about-mission-body">
                 <h2 class="section-title about-accent-title"><?= e(t('about.mission')) ?></h2>
                 <p class="about-mission-text"><?= e(t('about.mission.desc')) ?></p>
@@ -83,7 +79,6 @@ declare(strict_types=1);
         <div class="about-values-grid">
             <article class="about-value about-reveal">
                 <div class="about-value-top">
-                    <span class="about-value-medal" aria-hidden="true"><span>🤝</span></span>
                     <span class="about-value-num">01</span>
                 </div>
                 <div class="about-value-body">
@@ -93,7 +88,6 @@ declare(strict_types=1);
             </article>
             <article class="about-value about-reveal">
                 <div class="about-value-top">
-                    <span class="about-value-medal" aria-hidden="true"><span>🔥</span></span>
                     <span class="about-value-num">02</span>
                 </div>
                 <div class="about-value-body">
@@ -103,7 +97,6 @@ declare(strict_types=1);
             </article>
             <article class="about-value about-reveal">
                 <div class="about-value-top">
-                    <span class="about-value-medal" aria-hidden="true"><span>♻️</span></span>
                     <span class="about-value-num">03</span>
                 </div>
                 <div class="about-value-body">
@@ -124,22 +117,18 @@ declare(strict_types=1);
         </div>
         <div class="about-stats-shell about-reveal">
             <div class="about-stat">
-                <span class="about-stat-ico" aria-hidden="true">👥</span>
                 <span class="about-stat-num" data-target="<?= e((string) max($usersCount, 0)) ?>"><?= e((string) max($usersCount, 0)) ?></span>
                 <span class="about-stat-label"><?= e(t('home.stat.members')) ?></span>
             </div>
             <div class="about-stat">
-                <span class="about-stat-ico" aria-hidden="true">📅</span>
                 <span class="about-stat-num" data-target="<?= e((string) max($eventsCount, 0)) ?>"><?= e((string) max($eventsCount, 0)) ?></span>
                 <span class="about-stat-label"><?= e(t('home.stat.events')) ?></span>
             </div>
             <div class="about-stat">
-                <span class="about-stat-ico" aria-hidden="true">🎓</span>
                 <span class="about-stat-num" data-target="100" data-suffix=" %">100 %</span>
                 <span class="about-stat-label"><?= e(t('home.stat.student')) ?></span>
             </div>
             <div class="about-stat">
-                <span class="about-stat-ico" aria-hidden="true">🧘</span>
                 <span class="about-stat-num" data-target="0">0</span>
                 <span class="about-stat-label"><?= e(t('home.stat.easy')) ?></span>
             </div>
@@ -151,7 +140,7 @@ declare(strict_types=1);
 <section class="section">
     <div class="container">
         <div class="about-vision about-reveal">
-            <span class="about-vision-mark" aria-hidden="true">❝</span>
+            <span class="about-vision-mark" aria-hidden="true">«</span>
             <div class="about-vision-body">
                 <span class="eyebrow"><?= e(t('about.vision.title')) ?></span>
                 <p class="about-vision-text"><?= e(t('about.vision.desc')) ?></p>
@@ -171,11 +160,9 @@ declare(strict_types=1);
         </div>
         <div class="about-spaces">
             <article class="about-space about-reveal">
-                <span class="about-space-tile" aria-hidden="true">📚</span>
                 <h3 class="about-space-text"><?= e(t('about.spaces.free')) ?></h3>
             </article>
             <article class="about-space about-reveal">
-                <span class="about-space-tile" aria-hidden="true">☕</span>
                 <h3 class="about-space-text"><?= e(t('about.spaces.local')) ?></h3>
             </article>
         </div>
@@ -192,7 +179,6 @@ declare(strict_types=1);
         </div>
         <div class="about-events">
             <article class="about-event about-event-1 about-event-featured about-reveal">
-                <span class="about-event-stub" aria-hidden="true">💻</span>
                 <div class="about-event-body">
                     <h3><?= e(t('about.events.nuitinfo.title')) ?></h3>
                     <p><?= e(t('about.events.nuitinfo.desc')) ?></p>
@@ -200,35 +186,30 @@ declare(strict_types=1);
                 <span class="about-event-tag" aria-hidden="true">#code</span>
             </article>
             <article class="about-event about-event-2 about-reveal">
-                <span class="about-event-stub" aria-hidden="true">🍻</span>
                 <div class="about-event-body">
                     <h3><?= e(t('about.events.afterworks.title')) ?></h3>
                     <p><?= e(t('about.events.afterworks.desc')) ?></p>
                 </div>
             </article>
             <article class="about-event about-event-3 about-reveal">
-                <span class="about-event-stub" aria-hidden="true">🥩</span>
                 <div class="about-event-body">
                     <h3><?= e(t('about.events.bbq.title')) ?></h3>
                     <p><?= e(t('about.events.bbq.desc')) ?></p>
                 </div>
             </article>
             <article class="about-event about-event-4 about-reveal">
-                <span class="about-event-stub" aria-hidden="true">🎳</span>
                 <div class="about-event-body">
                     <h3><?= e(t('about.events.bowling.title')) ?></h3>
                     <p><?= e(t('about.events.bowling.desc')) ?></p>
                 </div>
             </article>
             <article class="about-event about-event-5 about-reveal">
-                <span class="about-event-stub" aria-hidden="true">🥃</span>
                 <div class="about-event-body">
                     <h3><?= e(t('about.events.bar.title')) ?></h3>
                     <p><?= e(t('about.events.bar.desc')) ?></p>
                 </div>
             </article>
             <article class="about-event about-event-more about-reveal">
-                <span class="about-event-stub" aria-hidden="true">✨</span>
                 <div class="about-event-body">
                     <h3><?= e(t('about.events.closing')) ?></h3>
                 </div>
@@ -241,13 +222,12 @@ declare(strict_types=1);
 <section class="section section-alt">
     <div class="container">
         <div class="about-contact about-reveal">
-            <span class="about-medal about-medal-sm" aria-hidden="true">📧</span>
             <div class="about-contact-body">
                 <h2 class="section-title about-contact-title"><?= e(t('about.contact.title')) ?></h2>
                 <p class="lead about-contact-text"><?= e(t('about.contact.label')) ?> — <?= e(t('about.contact.address')) ?></p>
             </div>
             <div class="about-contact-actions">
-                <a class="btn btn-primary" href="#ou-nous-trouver">📍 <?= e(t('map.title')) ?></a>
+                <a class="btn btn-primary" href="#ou-nous-trouver"><?= e(t('map.title')) ?></a>
             </div>
         </div>
     </div>

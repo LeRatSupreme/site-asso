@@ -49,7 +49,7 @@ $gmapsLink = 'https://www.google.com/maps/search/?api=1&query=' . rawurlencode($
             </div>
 
             <div class="map-frame" id="mapFrame">
-                <button type="button" class="map-expand" id="mapExpand" aria-label="<?= e(t('map.expand')) ?>" title="<?= e(t('map.expand')) ?>" data-expand="<?= e(t('map.expand')) ?>" data-shrink="<?= e(t('map.shrink')) ?>">⛶</button>
+                <button type="button" class="map-expand" id="mapExpand" aria-label="<?= e(t('map.expand')) ?>" title="<?= e(t('map.expand')) ?>" data-expand="<?= e(t('map.expand')) ?>" data-shrink="<?= e(t('map.shrink')) ?>"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></button>
                 <iframe
                     title="<?= e(t('map.iframe.title')) ?>"
                     src="<?= e($embedSrc) ?>"
@@ -66,9 +66,12 @@ $gmapsLink = 'https://www.google.com/maps/search/?api=1&query=' . rawurlencode($
     var btn = document.getElementById('mapExpand');
     if (!frame || !btn) return;
 
+    var ICON_EXPAND = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>';
+    var ICON_SHRINK = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7"/></svg>';
+
     function setOpen(open) {
         frame.classList.toggle('is-fullscreen', open);
-        btn.textContent = open ? '✕' : '⛶';
+        btn.innerHTML = open ? ICON_SHRINK : ICON_EXPAND;
         var label = open ? btn.getAttribute('data-shrink') : btn.getAttribute('data-expand');
         btn.setAttribute('aria-label', label);
         btn.title = label;
