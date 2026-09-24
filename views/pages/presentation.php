@@ -119,21 +119,25 @@ declare(strict_types=1);
             </article>
             <article class="about-event about-event-2 about-reveal">
                 <div class="about-event-body">
+                    <h3><?= e(t('about.events.afterworks.title')) ?></h3>
                     <pre class="about-event-code-flow js-type-code" aria-hidden="true" data-lines="$ afterwork start --18h00|> verre, detente, nouvelles_rencontres|// la pression redescend apres les cours"><span class="code-cursor"></span></pre>
                 </div>
             </article>
             <article class="about-event about-event-3 about-reveal">
                 <div class="about-event-body">
+                    <h3><?= e(t('about.events.bbq.title')) ?></h3>
                     <pre class="about-event-code-flow js-type-code" aria-hidden="true" data-lines="$ bbq start --grille|> grillades, grandes_tables, bonne_humeur|// on vient pour le repas, on reste pour l ambiance"><span class="code-cursor"></span></pre>
                 </div>
             </article>
             <article class="about-event about-event-4 about-reveal">
                 <div class="about-event-body">
+                    <h3><?= e(t('about.events.bowling.title')) ?></h3>
                     <pre class="about-event-code-flow js-type-code" aria-hidden="true" data-lines="$ bowling play --equipes|> strikes, fous_rires, revanches|// se defier entre amis et changer d air"><span class="code-cursor"></span></pre>
                 </div>
             </article>
             <article class="about-event about-event-5 about-reveal">
                 <div class="about-event-body">
+                    <h3><?= e(t('about.events.bar.title')) ?></h3>
                     <pre class="about-event-code-flow js-type-code" aria-hidden="true" data-lines="$ bar sortie --fin-de-journee|> ambiance: detendue --prise-de-tete 0|// on termine la journee ensemble autour d un verre"><span class="code-cursor"></span></pre>
                 </div>
             </article>
@@ -486,6 +490,9 @@ declare(strict_types=1);
 .about-event-featured .about-event-body { padding: 1.5rem 1.6rem; }
 .about-event-featured h3 { font-size: 1.2rem; }
 .about-event-featured p { font-size: 0.95rem; max-width: 70ch; }
+@media (min-width: 1151px) {
+    .about-event-featured .about-event-body { padding-right: min(46%, 26rem); }
+}
 .about-event-tag {
     position: absolute;
     top: 0.9rem;
@@ -614,17 +621,17 @@ declare(strict_types=1);
 [data-theme="light"] .about-event-code .l-rem { color: rgba(15, 23, 42, 0.35); }
 @keyframes about-code-blink { 50% { opacity: 0; } }
 .about-event-code-flow {
-    margin: 0;
+    margin: 0.35rem 0 0;
     min-height: 3.4rem;
     font-family: ui-monospace, 'SF Mono', Consolas, monospace;
     font-size: 0.7rem;
     line-height: 1.6;
     white-space: pre-wrap;
-    color: rgba(255, 255, 255, 0.38);
+    color: rgba(255, 255, 255, 0.55);
     pointer-events: none;
     user-select: none;
 }
-[data-theme="light"] .about-event-code-flow { color: rgba(15, 23, 42, 0.4); }
+[data-theme="light"] .about-event-code-flow { color: rgba(15, 23, 42, 0.55); }
 
 /* ============ Responsive ============ */
 @media (max-width: 980px) {
