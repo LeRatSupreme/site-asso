@@ -119,26 +119,22 @@ declare(strict_types=1);
             </article>
             <article class="about-event about-event-2 about-reveal">
                 <div class="about-event-body">
-                    <h3><?= e(t('about.events.afterworks.title')) ?></h3>
-                    <p><?= e(t('about.events.afterworks.desc')) ?></p>
+                    <pre class="about-event-code-flow js-type-code" aria-hidden="true" data-lines="$ afterwork start --18h00|> verre, detente, nouvelles_rencontres|// la pression redescend apres les cours"><span class="code-cursor"></span></pre>
                 </div>
             </article>
             <article class="about-event about-event-3 about-reveal">
                 <div class="about-event-body">
-                    <h3><?= e(t('about.events.bbq.title')) ?></h3>
-                    <p><?= e(t('about.events.bbq.desc')) ?></p>
+                    <pre class="about-event-code-flow js-type-code" aria-hidden="true" data-lines="$ bbq start --grille|> grillades, grandes_tables, bonne_humeur|// on vient pour le repas, on reste pour l ambiance"><span class="code-cursor"></span></pre>
                 </div>
             </article>
             <article class="about-event about-event-4 about-reveal">
                 <div class="about-event-body">
-                    <h3><?= e(t('about.events.bowling.title')) ?></h3>
-                    <p><?= e(t('about.events.bowling.desc')) ?></p>
+                    <pre class="about-event-code-flow js-type-code" aria-hidden="true" data-lines="$ bowling play --equipes|> strikes, fous_rires, revanches|// se defier entre amis et changer d air"><span class="code-cursor"></span></pre>
                 </div>
             </article>
             <article class="about-event about-event-5 about-reveal">
                 <div class="about-event-body">
-                    <h3><?= e(t('about.events.bar.title')) ?></h3>
-                    <p><?= e(t('about.events.bar.desc')) ?></p>
+                    <pre class="about-event-code-flow js-type-code" aria-hidden="true" data-lines="$ bar sortie --fin-de-journee|> ambiance: detendue --prise-de-tete 0|// on termine la journee ensemble autour d un verre"><span class="code-cursor"></span></pre>
                 </div>
             </article>
             <article class="about-event about-event-more about-reveal">
@@ -617,6 +613,18 @@ declare(strict_types=1);
 [data-theme="light"] .about-event-code .l-code { color: #6150aa; }
 [data-theme="light"] .about-event-code .l-rem { color: rgba(15, 23, 42, 0.35); }
 @keyframes about-code-blink { 50% { opacity: 0; } }
+.about-event-code-flow {
+    margin: 0;
+    min-height: 3.4rem;
+    font-family: ui-monospace, 'SF Mono', Consolas, monospace;
+    font-size: 0.7rem;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    color: rgba(255, 255, 255, 0.38);
+    pointer-events: none;
+    user-select: none;
+}
+[data-theme="light"] .about-event-code-flow { color: rgba(15, 23, 42, 0.4); }
 
 /* ============ Responsive ============ */
 @media (max-width: 980px) {
