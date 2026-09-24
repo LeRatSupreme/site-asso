@@ -19,7 +19,6 @@ declare(strict_types=1);
 ?>
 <style>
     .icon-btn { padding: 0.2rem 0.45rem; font-size: 0.95rem; line-height: 1; }
-    .row-paused td { opacity: 0.25; filter: grayscale(1); }
 </style>
 <div class="compta-head">
     <div>
@@ -35,9 +34,8 @@ declare(strict_types=1);
         Comptage « à l'aveugle » : les quantités théoriques ne sont volontairement pas affichées,
         pour un comptage honnête. Laisse vide les produits non comptés.
         Le bouton 🚫 met un produit <strong>« en pause »</strong> (« plus en vente pour l'instant »,
-        ex. Redbull Summer hors été) : rien n'est supprimé, le produit reste listé
-        <strong>en gris, sans saisie</strong> — rétablissement en un clic depuis la page
-        Inventaire (groupe Système).
+        ex. Redbull Summer hors été) : rien n'est supprimé, le produit sort de cette liste
+        — rétablissement en un clic depuis la page Inventaire (groupe Système).
     </p>
     <?php if ($rows === []): ?>
         <p class="muted">Aucun produit enregistré pour le moment.</p>
@@ -49,22 +47,13 @@ declare(strict_types=1);
         <thead><tr><th>Produit</th><th>Quantité comptée</th><th></th></tr></thead>
         <tbody>
         <?php foreach ($rows as $r): ?>
-            <?php if (!empty($r['paused'])): ?>
-            <tr class="row-paused">
-                <td><code><?= e($r['key']) ?></code> <span class="badge badge-warning">⏸ En pause</span></td>
-                <td>—</td>
-                <td>
-                    <button type="button" class="btn btn-outline btn-sm icon-btn" disabled
-                            title="Produit en pause (« plus en vente pour l'instant ») : rétablissable depuis la page Inventaire (groupe Système)">🚫</button>
-                </td>
-            </tr>
-            <?php else: ?>
+            <?php if (!empty($r['paused'])): continue; endif; ?>
             <tr>
                 <td><code><?= e($r['key']) ?></code></td>
                 <td><input type="number" name="count[<?= e($r['key']) ?>]" min="0" step="1" placeholder="—" inputmode="numeric" style="width:90px" form="blind-count-form"></td>
                 <td>
                     <form method="post" action="<?= e(url('/admin/compta/inventaire/comptage/' . rawurlencode($r['key']) . '/discontinue')) ?>"
-                          data-confirm="Marquer « <?= e($r['key']) ?> » plus en vente pour l'instant ? Rien n'est supprimé : il passe en pause (grisé, sans saisie) et restera rétablissable en un clic (page Inventaire)."
+                          data-confirm="Marquer « <?= e($r['key']) ?> » plus en vente pour l'instant ? Rien n'est supprimé : il passe en pause, sort de cette liste et restera rétablissable en un clic (page Inventaire)."
                           data-confirm-button="🚫 Plus en vente"
                           data-preserve-scroll>
                         <?= csrf_field() ?>
@@ -72,7 +61,6 @@ declare(strict_types=1);
                     </form>
                 </td>
             </tr>
-            <?php endif; ?>
         <?php endforeach; ?>
         </tbody>
     </table>

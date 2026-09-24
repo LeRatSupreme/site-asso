@@ -333,8 +333,8 @@ final class AdminStockController extends AdminBaseController
         $stockMap = ProductStock::allMap();
 
         // Produits « plus en vente pour l'instant » (pause saisonnière) :
-        // affichés EN GRIS dans la grille (sans saisie) et listés à part
-        // en bas de page pour le rétablissement.
+        // exclus de la grille de comptage et listés à part en bas de page
+        // pour le rétablissement en un clic.
         $hidden = array_flip(ProductDiscontinued::keys());
 
         // Grille = produits vendus (SumUp) + produits établis par un achat
@@ -353,6 +353,19 @@ final class AdminStockController extends AdminBaseController
             $last = $lastCounts[$key] ?? null;
             $paused = isset($hidden[$key]);
 
+            if ($paused) {
+                // Hors grille : fiches de la section « Plus en vente pour
+                // l'instant » (dernier comptage, théorique, écart, rétablissement).
+                $discontinuedRows[] = [
+                    'key'         => $key,
+                    'counted_at'  => $last !== null ? $last['at'] : null,
+                    'counted_qty' => $last !== null ? $last['qty'] : null,
+                    'gap'         => $last !== null ? $last['gap'] : null,
+                    'theoretical' => $theoretical[$key] ?? null,
+                ];
+                continue;
+            }
+
             $rows[] = [
                 'key'         => $key,
                 'stock'       => $stockMap[$key] ?? null,
@@ -360,15 +373,7 @@ final class AdminStockController extends AdminBaseController
                 'counted_qty' => $last !== null ? $last['qty'] : null,
                 'gap'         => $last !== null ? $last['gap'] : null,
                 'theoretical' => $theoretical[$key] ?? null,
-                'paused'      => $paused,
             ];
-
-            if ($paused) {
-                $discontinuedRows[] = [
-                    'key'        => $key,
-                    'counted_at' => $last !== null ? $last['at'] : null,
-                ];
-            }
         }
 
         // Produits déjà comptés en premier (du plus récemment compté au plus
@@ -620,7 +625,7 @@ final class AdminStockController extends AdminBaseController
         // l'aveugle, le réappro et les alertes SMS — rien d'autre à faire.
         // Aucune donnée n'est supprimée : le rétablissement (resume) est
         // immédiat et sans perte.
-        $this->setFlash('success', "Produit mis en pause (« plus en vente pour l'instant ») — rien n'est supprimé : il reste affiché en gris dans l'inventaire, sans saisie, et sort du comptage à l'aveugle et du réappro (rétablissement en un clic en bas de cette page).");
+        $this->setFlash('success', "Produit mis en pause (« plus en vente pour l'instant ») — rien n'est supprimé : il sort de la grille de comptage, du comptage à l'aveugle et du réappro, et reste listé en bas de cette page (rétablissement en un clic).");
         redirect(url($back));
     }
 
