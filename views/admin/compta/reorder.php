@@ -112,6 +112,10 @@ foreach ($rows as $r) {
 </div>
 
 <form method="get" class="reappro-bar" id="reappro-filters">
+    <input type="hidden" name="q" id="f-q">
+    <input type="hidden" name="cat" id="f-cat">
+    <input type="hidden" name="etat" id="f-etat">
+    <input type="hidden" name="tri" id="f-tri">
     <div class="reappro-field">
         <span class="field-label">📅 Période analysée</span>
         <div class="chip-row" role="radiogroup" aria-label="Période analysée">
@@ -166,6 +170,15 @@ foreach ($rows as $r) {
 <?php endif; ?>
 
 <div class="card surface glass table-wrap">
+    <style>
+.reorder-table mark { background: rgba(72,189,211,0.32); color: inherit; border-radius: 3px; padding: 0 1px; }
+.reorder-reset {
+    border: 1px solid var(--border-strong); background: var(--card); color: var(--muted);
+    border-radius: 8px; width: 32px; height: 36px; cursor: pointer; font-size: 0.9rem; line-height: 1;
+    flex-shrink: 0;
+}
+.reorder-reset:hover { color: var(--foreground); border-color: var(--primary); }
+</style>
     <div class="costs-toolbar" style="margin-bottom:0;border:none;background:none;padding:1rem 1.1rem 0;">
         <div class="search-box">
             <input type="text" id="reorder-search" placeholder="🔎 Rechercher un produit…" autocomplete="off">
@@ -191,6 +204,7 @@ foreach ($rows as $r) {
             <option value="stock-desc">Stock ↓</option>
             <option value="autonomy-asc">Autonomie ↑</option>
         </select>
+        <button type="button" id="reorder-reset" class="reorder-reset" hidden title="Réinitialiser les filtres">✕</button>
         <span class="costs-count muted" id="reorder-count"></span>
     </div>
 
@@ -371,21 +385,46 @@ foreach ($rows as $r) {
 
 <script>
 (function () {
-    var search = document.getElementById('reorder-search');
-    var catSel = document.getElementById('reorder-cat');
+    var search   = document.getElementById('reorder-search');
+    var catSel   = document.getElementById('reorder-cat');
     var stateSel = document.getElementById('reorder-state');
-    var sortSel = document.getElementById('reorder-sort');
-    var countEl = document.getElementById('reorder-count');
-    var tbody = document.querySelector('.reorder-table tbody');
-    var rows = Array.prototype.slice.call(document.querySelectorAll('.reorder-table tbody tr[data-name]'));
-    var totalEl = document.getElementById('reorder-total');
+    var sortSel  = document.getElementById('reorder-sort');
+    var countEl  = document.getElementById('reorder-count');
+    var resetBtn = document.getElementById('reorder-reset');
+    var tbody    = document.querySelector('.reorder-table tbody');
+    var rows     = Array.prototype.slice.call(document.querySelectorAll('.reorder-table tbody tr[data-name]'));
+    var totalEl  = document.getElementById('reorder-total');
     var totalCostEl = document.getElementById('reorder-total-cost');
     var total = rows.length;
-    if (!total) return;
+    if (!total || !search) return;
+
+    // Libellés d'origine (casse réelle) pour la surbrillance.
+    rows.forEach(function (tr) {
+        var strong = tr.querySelector('td strong');
+        tr._nameRaw = strong ? strong.textContent : '';
+    });
+
+    // Ligne « aucun résultat ».
+    var emptyRow = document.createElement('tr');
+    emptyRow.className = 'reorder-empty';
+    emptyRow.hidden = true;
+    emptyRow.innerHTML = '<td colspan="12" class="muted" style="text-align:center;padding:2.25rem 1rem">Aucun produit ne correspond à ces filtres.</td>';
+    if (tbody) tbody.appendChild(emptyRow);
 
     function norm(s) { return String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim(); }
     function num(tr, attr) { return parseFloat(tr.getAttribute(attr)) || 0; }
     function fmtPrice(v) { return v.toFixed(2).replace('.', ',') + ' €'; }
+    function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+    function getParam(name) {
+        var m = new RegExp('[?&]' + name + '=([^&#]*)').exec(window.location.search);
+        return m ? decodeURIComponent(m[1].replace(/\+/g, ' ')) : '';
+    }
+
+    // Restaure les filtres depuis l'URL (?q=&cat=&etat=&tri=).
+    if (search.value === '') search.value = getParam('q');
+    if (catSel && getParam('cat')) { catSel.value = getParam('cat'); if (catSel.value !== getParam('cat')) catSel.value = ''; }
+    if (stateSel && getParam('etat')) stateSel.value = getParam('etat');
+    if (sortSel && getParam('tri')) sortSel.value = getParam('tri');
 
     // Remplit le filtre catégorie avec les catégories présentes.
     if (catSel) {
@@ -424,7 +463,6 @@ foreach ($rows as $r) {
                 case 'month-desc': return num(b, 'data-month') - num(a, 'data-month');
                 case 'need-desc':  return num(b, 'data-need') - num(a, 'data-need');
                 case 'stock-asc':
-                    // Jamais comptés toujours en fin de liste.
                     if (a.getAttribute('data-hasstock') !== b.getAttribute('data-hasstock')) {
                         return a.getAttribute('data-hasstock') === '1' ? -1 : 1;
                     }
@@ -437,7 +475,7 @@ foreach ($rows as $r) {
                 case 'autonomy-asc':
                     an = num(a, 'data-autonomy'); bn = num(b, 'data-autonomy');
                     return an - bn;
-                default:           return num(b, 'data-toorder') - num(a, 'data-toorder'); // to_order
+                default:           return num(b, 'data-toorder') - num(a, 'data-toorder');
             }
         });
         if (tbody) {
@@ -447,28 +485,81 @@ foreach ($rows as $r) {
         }
     }
 
+    // Surligne dans le nom les mots recherchés (recherche insensible à la casse).
+    function highlight(tr, tokens) {
+        var strong = tr.querySelector('td strong');
+        if (!strong) return;
+        var raw = tr._nameRaw;
+        if (!tokens.length) { strong.textContent = raw; return; }
+        var lower = raw.toLowerCase();
+        var html = '', i = 0;
+        while (i < raw.length) {
+            var hit = -1, hitLen = 0;
+            tokens.forEach(function (t) {
+                if (t.length < 2) return;
+                var pos = lower.indexOf(t, i);
+                if (pos !== -1 && (hit === -1 || pos < hit)) { hit = pos; hitLen = t.length; }
+            });
+            if (hit === -1) { html += esc(raw.slice(i)); break; }
+            html += esc(raw.slice(i, hit)) + '<mark>' + esc(raw.substr(hit, hitLen)) + '</mark>';
+            i = hit + hitLen;
+        }
+        strong.innerHTML = html;
+    }
+
     function apply() {
         var q = norm(search.value);
         var cat = catSel ? catSel.value : '';
         var state = stateSel ? stateSel.value : '';
+        var tokens = q ? q.split(/\s+/) : [];
         var shown = 0;
         rows.forEach(function (tr) {
-            var okSearch = q === '' || norm(tr.getAttribute('data-name')).indexOf(q) !== -1;
+            var hay = norm(tr.getAttribute('data-name') + ' ' + (tr.getAttribute('data-cat') || ''));
+            var okSearch = !tokens.length || tokens.every(function (t) { return hay.indexOf(t) !== -1; });
             var okCat = cat === '' || tr.getAttribute('data-cat') === cat;
             var okState = state === '' || tr.getAttribute('data-state') === state;
             var visible = okSearch && okCat && okState;
             tr.style.display = visible ? '' : 'none';
-            if (visible) shown++;
+            if (visible) { shown++; highlight(tr, tokens); }
+            else { var strong = tr.querySelector('td strong'); if (strong) strong.textContent = tr._nameRaw; }
         });
-        countEl.textContent = shown + ' / ' + total + ' produit' + (total > 1 ? 's' : '');
+        if (emptyRow) emptyRow.hidden = shown > 0;
+        if (countEl) countEl.textContent = shown + ' / ' + total + ' produit' + (total > 1 ? 's' : '');
+        if (resetBtn) resetBtn.hidden = (search.value.trim() === '' && cat === '' && state === '');
         sortRows();
         recomputeTotal();
+
+        // Synchronise l'URL (filtres partageables / rechargements).
+        if (window.URLSearchParams && window.history && window.history.replaceState) {
+            var sp = new URLSearchParams(window.location.search);
+            [['q', search.value.trim()], ['cat', cat], ['etat', state], ['tri', (sortSel && sortSel.value !== 'to_order') ? sortSel.value : '']]
+                .forEach(function (p) { if (p[1]) { sp.set(p[0], p[1]); } else { sp.delete(p[0]); } });
+            var qs = sp.toString();
+            window.history.replaceState(null, '', window.location.pathname + (qs ? '?' + qs : ''));
+        }
+
+        // Miroirs cachés dans le formulaire de période (GET) : les filtres
+        // survivent au changement de période.
+        [['f-q', search.value.trim()], ['f-cat', cat], ['f-etat', state], ['f-tri', sortSel ? sortSel.value : '']]
+            .forEach(function (p) { var el = document.getElementById(p[0]); if (el) el.value = p[1]; });
     }
 
-    search.addEventListener('input', apply);
+    var debounce = null;
+    search.addEventListener('input', function () {
+        if (debounce) clearTimeout(debounce);
+        debounce = setTimeout(apply, 120);
+    });
     if (catSel) catSel.addEventListener('change', apply);
     if (stateSel) stateSel.addEventListener('change', apply);
     if (sortSel) sortSel.addEventListener('change', apply);
+    if (resetBtn) resetBtn.addEventListener('click', function () {
+        search.value = '';
+        if (catSel) catSel.value = '';
+        if (stateSel) stateSel.value = '';
+        if (sortSel) sortSel.value = 'to_order';
+        apply();
+        search.focus();
+    });
     apply();
 })();
 </script>
