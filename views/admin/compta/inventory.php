@@ -86,7 +86,7 @@ declare(strict_types=1);
 <section class="card surface glass table-wrap">
     <h2 class="card-title">Comptage</h2>
     <style>
-        .row-paused td { opacity: 0.45; }
+        .row-paused td { opacity: 0.25; filter: grayscale(1); }
     </style>
     <form method="post" action="<?= e(url('/admin/compta/inventaire/save')) ?>">
         <?= csrf_field() ?>
@@ -176,7 +176,8 @@ declare(strict_types=1);
         <form id="<?= $disId ?>" method="post"
               action="<?= e(url('/admin/compta/inventaire/' . rawurlencode((string) $r['key']) . '/discontinue')) ?>"
               data-confirm="Marquer « <?= e((string) $r['key']) ?> » plus en vente pour l'instant ? Rien n'est supprimé : il passe en pause (grisé, sans saisie), sort des comptages et du réappro, rétablissement en un clic en bas de page."
-              data-confirm-button="🚫 Plus en vente">
+              data-confirm-button="🚫 Plus en vente"
+              data-preserve-scroll>
             <input type="hidden" name="back" value="inventaire">
             <?= csrf_field() ?>
         </form>
@@ -184,18 +185,19 @@ declare(strict_types=1);
 </section>
 
 <div class="card surface glass table-wrap">
-    <h2 class="card-title">Historique des comptages</h2>
-    <table class="table">
-        <thead>
-            <tr>
-                <th>Date</th>
-                <th>Produit</th>
-                <th class="th-num">Compté</th>
-                <th class="th-num">Théorique</th>
-                <th>Écart</th>
-                <th>Note</th>
-            </tr>
-        </thead>
+    <details class="cost-card-lots">
+        <summary>🕘 Historique des comptages <span class="muted">(<?= count($history) ?> dernières lignes)</span></summary>
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Produit</th>
+                    <th class="th-num">Compté</th>
+                    <th class="th-num">Théorique</th>
+                    <th>Écart</th>
+                    <th>Note</th>
+                </tr>
+            </thead>
         <tbody>
             <?php foreach ($history as $h): $gap = (int) $h['gap']; ?>
                 <tr>
@@ -219,7 +221,8 @@ declare(strict_types=1);
                 <tr><td colspan="6" class="muted">Aucun comptage enregistré.</td></tr>
             <?php endif; ?>
         </tbody>
-    </table>
+        </table>
+    </details>
 </div>
 
 <div class="card surface glass table-wrap">
