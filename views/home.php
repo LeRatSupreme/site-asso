@@ -52,10 +52,6 @@ $allPromoEmpty = empty($promotions);
                 <span class="stat-value ae-stat-num" data-target="<?= e((string) max($eventsCount, 0)) ?>"><?= e((string) max($eventsCount, 0)) ?></span>
                 <span class="stat-label"><?= e(t('home.stat.events')) ?></span>
             </div>
-            <div class="stat">
-                <span class="stat-value ae-stat-num" data-target="0">0 %</span>
-                <span class="stat-label"><?= e(t('home.stat.easy')) ?></span>
-            </div>
         </aside>
     </div>
 </section>

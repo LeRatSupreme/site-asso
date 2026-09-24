@@ -433,6 +433,7 @@ ul, ol { list-style: none; }
     grid-template-columns: 1fr 1fr;
     gap: 1.25rem;
 }
+.hero-stats .stat:last-child:nth-child(odd) { grid-column: 1 / -1; }
 .stat, .stat-card { display: flex; flex-direction: column; gap: 0.25rem; }
 .stat-card { padding: 1.25rem; }
 .stat-value {
