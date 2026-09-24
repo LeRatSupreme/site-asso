@@ -115,6 +115,7 @@ declare(strict_types=1);
                     <p><?= e(t('about.events.nuitinfo.desc')) ?></p>
                 </div>
                 <span class="about-event-tag" aria-hidden="true">#code</span>
+                <pre class="about-event-code" aria-hidden="true"><span class="code-cursor"></span></pre>
             </article>
             <article class="about-event about-event-2 about-reveal">
                 <div class="about-event-body">
@@ -580,6 +581,40 @@ declare(strict_types=1);
 .about-btn-glass { background: rgba(255, 255, 255, 0.12); border: 1px solid rgba(255, 255, 255, 0.45); color: #fff; }
 .about-btn-glass:hover { background: rgba(255, 255, 255, 0.2); color: #fff; border-color: #fff; }
 
+/* ============ Décor code (carte Nuit de l'Info) ============ */
+.about-event-code {
+    position: absolute;
+    right: 1.4rem;
+    bottom: 1rem;
+    margin: 0;
+    max-width: min(44%, 420px);
+    font-family: ui-monospace, 'SF Mono', Consolas, monospace;
+    font-size: 0.72rem;
+    line-height: 1.55;
+    text-align: left;
+    white-space: pre-wrap;
+    color: rgba(255, 255, 255, 0.4);
+    pointer-events: none;
+    user-select: none;
+}
+.about-event-code .code-cursor {
+    display: inline-block;
+    width: 7px;
+    height: 0.95em;
+    margin-left: 2px;
+    vertical-align: -0.15em;
+    background: var(--primary, #48bdd3);
+    animation: about-code-blink 1.05s steps(2, start) infinite;
+}
+.about-event-code .l-cmd { color: rgba(127, 208, 228, 0.85); }
+.about-event-code .l-code { color: rgba(179, 161, 234, 0.8); }
+.about-event-code .l-rem { color: rgba(255, 255, 255, 0.3); font-style: italic; }
+[data-theme="light"] .about-event-code { color: rgba(15, 23, 42, 0.4); }
+[data-theme="light"] .about-event-code .l-cmd { color: #0e7490; }
+[data-theme="light"] .about-event-code .l-code { color: #6150aa; }
+[data-theme="light"] .about-event-code .l-rem { color: rgba(15, 23, 42, 0.35); }
+@keyframes about-code-blink { 50% { opacity: 0; } }
+
 /* ============ Responsive ============ */
 @media (max-width: 980px) {
     .about-hero-grid { grid-template-columns: 1fr; gap: 2.75rem; }
@@ -604,11 +639,15 @@ declare(strict_types=1);
     .about-event-tag { display: none; }
     .about-cta-panel { padding: 3rem 1.5rem; }
 }
+@media (max-width: 1150px) {
+    .about-event-code { display: none; }
+}
 
 /* ============ Motion réduit ============ */
 @media (prefers-reduced-motion: reduce) {
     .about-aurora,
     .about-pill-dot { animation: none; }
+    .about-event-code { display: none; }
 }
 </style>
 
@@ -648,5 +687,63 @@ declare(strict_types=1);
     Array.prototype.forEach.call(reveals, function (el) {
         revealObserver.observe(el);
     });
+})();
+
+// Machine à écrire « Nuit de l'Info » dans la carte mise en avant.
+(function () {
+    'use strict';
+
+    var box = document.querySelector('.about-event-code');
+    if (!box) return;
+
+    var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduced) { box.style.display = 'none'; return; }
+
+    var cursor = box.querySelector('.code-cursor');
+    if (!cursor) return;
+
+    var lines = [
+        { cls: 'l-cmd',  text: '$ npm install cafe@24h --save' },
+        { cls: 'l-code', text: 'while (nuit) { coder(); innover(); }' },
+        { cls: 'l-cmd',  text: '$ git commit -m "une equipe, un projet"' },
+        { cls: 'l-rem',  text: '// defis releves avant le petit matin : 42' }
+    ];
+
+    function typeLine(span, text, done) {
+        var i = 0;
+        var timer = setInterval(function () {
+            span.textContent += text.charAt(i);
+            i += 1;
+            if (i >= text.length) {
+                clearInterval(timer);
+                setTimeout(done, 380);
+            }
+        }, 34);
+    }
+
+    function clearLines() {
+        var spans = box.querySelectorAll('.l-cmd, .l-code, .l-rem');
+        Array.prototype.forEach.call(spans, function (s) {
+            s.parentNode.removeChild(s);
+        });
+    }
+
+    function play(index) {
+        if (index >= lines.length) {
+            setTimeout(function () {
+                clearLines();
+                play(0);
+            }, 3400);
+            return;
+        }
+        var span = document.createElement('span');
+        span.className = lines[index].cls;
+        box.insertBefore(span, cursor);
+        typeLine(span, lines[index].text + '\n', function () {
+            play(index + 1);
+        });
+    }
+
+    setTimeout(function () { play(0); }, 600);
 })();
 </script>
