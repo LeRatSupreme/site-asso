@@ -97,6 +97,7 @@ $twitterHandle = Setting::get('twitter_handle', '');
     </script>
 </head>
 <body>
+    <div class="starfield" id="starfield" aria-hidden="true"></div>
     <a class="skip-link" href="#contenu"><?= e(t('nav.skip')) ?></a>
 
     <header class="site-header">
@@ -580,5 +581,6 @@ $twitterHandle = Setting::get('twitter_handle', '');
 
     <!-- PWA : enregistrement du service worker -->
     <script>if ('serviceWorker' in navigator) { window.addEventListener('load', function () { navigator.serviceWorker.register('/sw.js'); }); }</script>
+    <script src="<?= e(assetVersioned('js/stars.js')) ?>" defer></script>
 </body>
 </html>
