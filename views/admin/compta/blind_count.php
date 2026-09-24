@@ -19,7 +19,7 @@ declare(strict_types=1);
 ?>
 <style>
     .icon-btn { padding: 0.2rem 0.45rem; font-size: 0.95rem; line-height: 1; }
-    .row-paused td { opacity: 0.45; }
+    .row-paused td { opacity: 0.25; filter: grayscale(1); }
 </style>
 <div class="compta-head">
     <div>

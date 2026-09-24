@@ -620,7 +620,7 @@ final class AdminStockController extends AdminBaseController
         // l'aveugle, le réappro et les alertes SMS — rien d'autre à faire.
         // Aucune donnée n'est supprimée : le rétablissement (resume) est
         // immédiat et sans perte.
-        $this->setFlash('success', "Produit marqué « plus en vente pour l'instant » — rien n'est supprimé : il sort des comptages, de l'inventaire et du réappro (rétablissement en un clic depuis la page Inventaire).");
+        $this->setFlash('success', "Produit mis en pause (« plus en vente pour l'instant ») — rien n'est supprimé : il reste affiché en gris dans l'inventaire, sans saisie, et sort du comptage à l'aveugle et du réappro (rétablissement en un clic en bas de cette page).");
         redirect(url($back));
     }
 
