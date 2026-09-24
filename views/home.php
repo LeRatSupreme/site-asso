@@ -39,19 +39,8 @@ $allPromoEmpty = empty($promotions);
             </div>
         </div>
 
-        <aside class="hero-stats surface glass hm-stats" data-tilt data-tilt-base="rotate(1.2deg)" aria-label="<?= e(t('home.stats.aria')) ?>">
-            <div class="stat">
-                <span class="stat-value ae-stat-num" data-target="100" data-suffix=" %">100 %</span>
-                <span class="stat-label"><?= e(t('home.stat.student')) ?></span>
-            </div>
-            <div class="stat">
-                <span class="stat-value ae-stat-num" data-target="<?= e((string) max($usersCount, 0)) ?>"><?= e((string) max($usersCount, 0)) ?></span>
-                <span class="stat-label"><?= e(t('home.stat.members')) ?></span>
-            </div>
-            <div class="stat">
-                <span class="stat-value ae-stat-num" data-target="<?= e((string) max($eventsCount, 0)) ?>"><?= e((string) max($eventsCount, 0)) ?></span>
-                <span class="stat-label"><?= e(t('home.stat.events')) ?></span>
-            </div>
+        <aside class="hero-stats surface glass hm-stats" data-tilt data-tilt-base="rotate(1.2deg)" aria-hidden="true">
+            <div class="hero-code"><span class="code-cursor"></span></div>
         </aside>
     </div>
 </section>
@@ -363,5 +352,73 @@ $allPromoEmpty = empty($promotions);
     // État initial : la première catégorie est active et filtrée dès le
     // chargement (l'onglet « Tout » n'existe plus).
     if (tabs.length) activate(tabs[0]);
+})();
+
+// Terminal code animé dans le hero.
+(function () {
+    'use strict';
+
+    var box = document.querySelector('.hero-code');
+    if (!box) return;
+
+    var cursor = box.querySelector('.code-cursor');
+    if (!cursor) return;
+
+    var lines = [
+        { cls: 'l-cmd',  text: '$ whoami' },
+        { cls: 'l-code', text: 'etudiant@iut-info --but=calais' },
+        { cls: 'l-cmd',  text: '$ aeic join --bonne-humeur' },
+        { cls: 'l-code', text: '> evenements: nuit-info, bbq, bowling, bar' },
+        { cls: 'l-rem',  text: '// cafe.charge() => 100%' }
+    ];
+
+    function renderInstant() {
+        lines.forEach(function (line) {
+            var span = document.createElement('span');
+            span.className = line.cls;
+            span.textContent = line.text + '\n';
+            box.insertBefore(span, cursor);
+        });
+    }
+
+    var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduced) { renderInstant(); return; }
+
+    function typeLine(span, text, done) {
+        var i = 0;
+        var timer = setInterval(function () {
+            span.textContent += text.charAt(i);
+            i += 1;
+            if (i >= text.length) {
+                clearInterval(timer);
+                setTimeout(done, 320);
+            }
+        }, 36);
+    }
+
+    function clearLines() {
+        var spans = box.querySelectorAll('.l-cmd, .l-code, .l-rem');
+        Array.prototype.forEach.call(spans, function (s) {
+            s.parentNode.removeChild(s);
+        });
+    }
+
+    function play(index) {
+        if (index >= lines.length) {
+            setTimeout(function () {
+                clearLines();
+                play(0);
+            }, 3600);
+            return;
+        }
+        var span = document.createElement('span');
+        span.className = lines[index].cls;
+        box.insertBefore(span, cursor);
+        typeLine(span, lines[index].text + '\n', function () {
+            play(index + 1);
+        });
+    }
+
+    setTimeout(function () { play(0); }, 500);
 })();
 </script>

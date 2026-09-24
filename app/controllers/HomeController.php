@@ -84,8 +84,6 @@ final class HomeController extends Controller
             'jsonLd'          => $orgLd,
             'siteName'        => $siteName,
             'upcoming'        => Event::featured(3),
-            'eventsCount'     => Event::count(),
-            'usersCount'      => User::countActive(),
             'menuCategories'  => $this->buildMenu(),
             'promotions'      => Promotion::active(),
             'maintenanceMode' => Setting::getBool('maintenance_mode', false),

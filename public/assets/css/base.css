@@ -433,7 +433,36 @@ ul, ol { list-style: none; }
     grid-template-columns: 1fr 1fr;
     gap: 1.25rem;
 }
-.hero-stats .stat:last-child:nth-child(odd) { grid-column: 1 / -1; }
+/* Terminal code du hero (page d'accueil) */
+.hero-code {
+    grid-column: 1 / -1;
+    font-family: ui-monospace, 'SF Mono', Consolas, monospace;
+    font-size: 0.78rem;
+    line-height: 1.65;
+    white-space: pre-wrap;
+    text-align: left;
+    color: rgba(255, 255, 255, 0.45);
+    min-height: 9rem;
+    pointer-events: none;
+    user-select: none;
+}
+[data-theme="light"] .hero-code { color: rgba(15, 23, 42, 0.45); }
+.code-cursor {
+    display: inline-block;
+    width: 7px;
+    height: 0.95em;
+    margin-left: 2px;
+    vertical-align: -0.15em;
+    background: var(--primary, #48bdd3);
+    animation: code-blink 1.05s steps(2, start) infinite;
+}
+@keyframes code-blink { 50% { opacity: 0; } }
+.l-cmd { color: rgba(127, 208, 228, 0.85); }
+.l-code { color: rgba(179, 161, 234, 0.8); }
+.l-rem { color: rgba(255, 255, 255, 0.3); font-style: italic; }
+[data-theme="light"] .l-cmd { color: #0e7490; }
+[data-theme="light"] .l-code { color: #6150aa; }
+[data-theme="light"] .l-rem { color: rgba(15, 23, 42, 0.35); }
 .stat, .stat-card { display: flex; flex-direction: column; gap: 0.25rem; }
 .stat-card { padding: 1.25rem; }
 .stat-value {
