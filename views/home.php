@@ -40,7 +40,7 @@ $allPromoEmpty = empty($promotions);
         </div>
 
         <aside class="hero-stats surface glass hm-stats" data-tilt data-tilt-base="rotate(1.2deg)" aria-hidden="true">
-            <div class="hero-code"><span class="code-cursor"></span></div>
+            <div class="hero-code js-type-code" aria-hidden="true" data-lines="$ whoami|etudiant@iut-info --but=calais|$ aeic join --bonne-humeur|> evenements: nuit-info, bbq, bowling, bar|// cafe.charge() => 100%"><span class="code-cursor"></span></div>
         </aside>
     </div>
 </section>
@@ -197,18 +197,21 @@ $allPromoEmpty = empty($promotions);
                 <div class="hm-feature-body">
                     <h3 class="card-title"><?= e(t('home.feature.events.title')) ?></h3>
                     <p><?= e(t('home.feature.events.desc')) ?></p>
+                    <pre class="hm-feature-code js-type-code" aria-hidden="true" data-lines="$ aeic agenda --a-venir|> soirees, lan, conferences|// un agenda pense pour les etudiants en info"><span class="code-cursor"></span></pre>
                 </div>
             </article>
             <article class="hm-feature ae-panel ae-reveal">
                 <div class="hm-feature-body">
                     <h3 class="card-title"><?= e(t('home.feature.cafeteria.title')) ?></h3>
                     <p><?= e(t('home.feature.cafeteria.desc')) ?></p>
+                    <pre class="hm-feature-code js-type-code" aria-hidden="true" data-lines="$ cafeteria commander &quot;cafe&quot;|> prix: etudiant --solde ok|// pret a recuperer entre deux cours"><span class="code-cursor"></span></pre>
                 </div>
             </article>
             <article class="hm-feature ae-panel ae-reveal">
                 <div class="hm-feature-body">
                     <h3 class="card-title"><?= e(t('home.feature.community.title')) ?></h3>
                     <p><?= e(t('home.feature.community.desc')) ?></p>
+                    <pre class="hm-feature-code js-type-code" aria-hidden="true" data-lines="$ git clone entraide|> projets, coups de main, campus|// un reseau qui fait avancer"><span class="code-cursor"></span></pre>
                 </div>
             </article>
         </div>
@@ -285,6 +288,17 @@ $allPromoEmpty = empty($promotions);
     line-height: 1.65;
     margin: 0;
 }
+.hm-feature-code {
+    margin: 0.9rem 0 0;
+    font-family: ui-monospace, 'SF Mono', Consolas, monospace;
+    font-size: 0.7rem;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    color: rgba(255, 255, 255, 0.38);
+    pointer-events: none;
+    user-select: none;
+}
+[data-theme="light"] .hm-feature-code { color: rgba(15, 23, 42, 0.4); }
 
 /* Onglets menu : état actif dégradé */
 #menu .menu-tab {
@@ -354,71 +368,89 @@ $allPromoEmpty = empty($promotions);
     if (tabs.length) activate(tabs[0]);
 })();
 
-// Terminal code animé dans le hero.
+// Terminaux code animés (hero + cartes « Pourquoi l'AEIC »).
 (function () {
     'use strict';
 
-    var box = document.querySelector('.hero-code');
-    if (!box) return;
-
-    var cursor = box.querySelector('.code-cursor');
-    if (!cursor) return;
-
-    var lines = [
-        { cls: 'l-cmd',  text: '$ whoami' },
-        { cls: 'l-code', text: 'etudiant@iut-info --but=calais' },
-        { cls: 'l-cmd',  text: '$ aeic join --bonne-humeur' },
-        { cls: 'l-code', text: '> evenements: nuit-info, bbq, bowling, bar' },
-        { cls: 'l-rem',  text: '// cafe.charge() => 100%' }
-    ];
-
-    function renderInstant() {
-        lines.forEach(function (line) {
-            var span = document.createElement('span');
-            span.className = line.cls;
-            span.textContent = line.text + '\n';
-            box.insertBefore(span, cursor);
-        });
-    }
+    var panels = document.querySelectorAll('.js-type-code');
+    if (!panels.length) return;
 
     var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if (reduced) { renderInstant(); return; }
 
-    function typeLine(span, text, done) {
-        var i = 0;
-        var timer = setInterval(function () {
-            span.textContent += text.charAt(i);
-            i += 1;
-            if (i >= text.length) {
-                clearInterval(timer);
-                setTimeout(done, 320);
-            }
-        }, 36);
+    function classesFor(text) {
+        if (text.charAt(0) === '>') return 'l-code';
+        if (text.slice(0, 2) === '//') return 'l-rem';
+        return 'l-cmd';
     }
 
-    function clearLines() {
-        var spans = box.querySelectorAll('.l-cmd, .l-code, .l-rem');
-        Array.prototype.forEach.call(spans, function (s) {
-            s.parentNode.removeChild(s);
+    function linesFor(box) {
+        var raw = (box.getAttribute('data-lines') || '').split('|');
+        var lines = [];
+        raw.forEach(function (t) {
+            var text = t.trim();
+            if (text) lines.push({ cls: classesFor(text), text: text });
         });
+        return lines;
     }
 
-    function play(index) {
-        if (index >= lines.length) {
-            setTimeout(function () {
-                clearLines();
-                play(0);
-            }, 3600);
-            return;
+    function start(box, delay) {
+        var cursor = box.querySelector('.code-cursor');
+        if (!cursor) return;
+
+        var lines = linesFor(box);
+        if (!lines.length) return;
+
+        function renderInstant() {
+            lines.forEach(function (line) {
+                var span = document.createElement('span');
+                span.className = line.cls;
+                span.textContent = line.text + '\n';
+                box.insertBefore(span, cursor);
+            });
         }
-        var span = document.createElement('span');
-        span.className = lines[index].cls;
-        box.insertBefore(span, cursor);
-        typeLine(span, lines[index].text + '\n', function () {
-            play(index + 1);
-        });
+
+        if (reduced) { renderInstant(); return; }
+
+        function typeLine(span, text, done) {
+            var i = 0;
+            var timer = setInterval(function () {
+                span.textContent += text.charAt(i);
+                i += 1;
+                if (i >= text.length) {
+                    clearInterval(timer);
+                    setTimeout(done, 320);
+                }
+            }, 36);
+        }
+
+        function clearLines() {
+            var spans = box.querySelectorAll('.l-cmd, .l-code, .l-rem');
+            Array.prototype.forEach.call(spans, function (s) {
+                s.parentNode.removeChild(s);
+            });
+        }
+
+        function play(index) {
+            if (index >= lines.length) {
+                setTimeout(function () {
+                    clearLines();
+                    play(0);
+                }, 3600);
+                return;
+            }
+            var span = document.createElement('span');
+            span.className = lines[index].cls;
+            box.insertBefore(span, cursor);
+            typeLine(span, lines[index].text + '\n', function () {
+                play(index + 1);
+            });
+        }
+
+        setTimeout(function () { play(0); }, delay);
     }
 
-    setTimeout(function () { play(0); }, 500);
+    Array.prototype.forEach.call(panels, function (box, i) {
+        start(box, 500 + i * 900);
+    });
 })();
 </script>
