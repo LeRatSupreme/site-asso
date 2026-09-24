@@ -5,6 +5,7 @@
    - compteurs animés (.ae-stat-num[data-target])
    - tilt 3D au survol ([data-tilt], optionnels data-tilt-max / data-tilt-base)
    - parallaxe des icônes flottantes (.ae-chips[data-parallax] .ae-chip)
+   - terminaux code animés (.js-type-code[data-lines])
    Inoffensif si aucun élément correspondant n'est présent sur la page,
    et désactivé en motion réduit / écrans tactiles.
    ===================================================================== */
@@ -160,6 +161,92 @@
             });
         });
     }
+
+    /* ---------- Terminaux code animés ---------- */
+    function initCodeTerminals() {
+        var panels = document.querySelectorAll('.js-type-code');
+        if (!panels.length) {
+            return;
+        }
+
+        function classesFor(text) {
+            if (text.charAt(0) === '>') return 'l-code';
+            if (text.slice(0, 2) === '//') return 'l-rem';
+            return 'l-cmd';
+        }
+
+        function linesFor(box) {
+            var raw = (box.getAttribute('data-lines') || '').split('|');
+            var lines = [];
+            raw.forEach(function (t) {
+                var text = t.trim();
+                if (text) lines.push({ cls: classesFor(text), text: text });
+            });
+            return lines;
+        }
+
+        function start(box, delay) {
+            var cursor = box.querySelector('.code-cursor');
+            if (!cursor) return;
+
+            var lines = linesFor(box);
+            if (!lines.length) return;
+
+            function renderInstant() {
+                lines.forEach(function (line) {
+                    var span = document.createElement('span');
+                    span.className = line.cls;
+                    span.textContent = line.text + '\n';
+                    box.insertBefore(span, cursor);
+                });
+            }
+
+            if (reduced) { renderInstant(); return; }
+
+            function typeLine(span, text, done) {
+                var i = 0;
+                var timer = setInterval(function () {
+                    span.textContent += text.charAt(i);
+                    i += 1;
+                    if (i >= text.length) {
+                        clearInterval(timer);
+                        setTimeout(done, 320);
+                    }
+                }, 36);
+            }
+
+            function clearLines() {
+                var spans = box.querySelectorAll('.l-cmd, .l-code, .l-rem');
+                Array.prototype.forEach.call(spans, function (s) {
+                    s.parentNode.removeChild(s);
+                });
+            }
+
+            function play(index) {
+                if (index >= lines.length) {
+                    setTimeout(function () {
+                        clearLines();
+                        play(0);
+                    }, 3600);
+                    return;
+                }
+                var span = document.createElement('span');
+                span.className = lines[index].cls;
+                box.insertBefore(span, cursor);
+                typeLine(span, lines[index].text + '\n', function () {
+                    play(index + 1);
+                });
+            }
+
+            setTimeout(function () { play(0); }, delay);
+        }
+
+        Array.prototype.forEach.call(panels, function (box, i) {
+            start(box, 500 + i * 900);
+        });
+    }
+
+    initCodeTerminals();
 
     if (!reduced && finePointer) {
         initTilt();
