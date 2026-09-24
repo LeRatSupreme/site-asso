@@ -91,10 +91,10 @@ declare(strict_types=1);
         </div>
         <div class="about-spaces">
             <article class="about-space about-reveal">
-                <h3 class="about-space-text"><?= e(t('about.spaces.free')) ?></h3>
+                <pre class="about-space-code js-type-code" aria-hidden="true" data-lines="$ open --acces-libre|> travail_en_groupe, detente, discussions|// ouvert pendant nos horaires d ouverture"><span class="code-cursor"></span></pre>
             </article>
             <article class="about-space about-reveal">
-                <h3 class="about-space-text"><?= e(t('about.spaces.local')) ?></h3>
+                <pre class="about-space-code js-type-code" aria-hidden="true" data-lines="$ cd local-aeic &amp;&amp; ls|> cafeteria --prix-etudiant, jeux_de_societe, entraide|// des membres prets a donner un coup de main"><span class="code-cursor"></span></pre>
             </article>
         </div>
     </div>
@@ -419,15 +419,18 @@ declare(strict_types=1);
     transition: transform 0.3s ease;
 }
 .about-space:hover .about-space-tile { transform: scale(1.08) rotate(-4deg); }
-.about-space-text {
-    font-size: 0.98rem;
-    font-weight: 600;
-    text-transform: none;
-    letter-spacing: 0;
-    line-height: 1.7;
-    color: var(--foreground);
+.about-space-code {
     margin: 0;
+    min-height: 3.6rem;
+    font-family: ui-monospace, 'SF Mono', Consolas, monospace;
+    font-size: 0.72rem;
+    line-height: 1.65;
+    white-space: pre-wrap;
+    color: rgba(255, 255, 255, 0.38);
+    pointer-events: none;
+    user-select: none;
 }
+[data-theme="light"] .about-space-code { color: rgba(15, 23, 42, 0.4); }
 
 /* ============ Événements — tickets ============ */
 .about-events {
