@@ -156,6 +156,7 @@ if (in_array($user['role'] ?? null, Permissions::adminRoles(), true)) {
     <?php endif; ?>
 </head>
 <body class="admin-body">
+    <div class="starfield" id="starfield" aria-hidden="true"></div>
     <a class="skip-link" href="#contenu">Aller au contenu</a>
 
     <div class="admin-shell">
@@ -242,5 +243,6 @@ if (in_array($user['role'] ?? null, Permissions::adminRoles(), true)) {
         })();
     </script>
     <script src="<?= e(rootAssetVersioned('/assets/js/confirm.js')) ?>"></script>
+    <script src="<?= e(rootAssetVersioned('/assets/js/stars.js')) ?>" defer></script>
 </body>
 </html>

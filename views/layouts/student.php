@@ -45,6 +45,7 @@ $nav = [
     <link rel="stylesheet" href="<?= e(rootAssetVersioned('/css/payments.css')) ?>">
 </head>
 <body>
+    <div class="starfield" id="starfield" aria-hidden="true"></div>
     <a class="skip-link" href="#contenu"><?= e(t('nav.skip')) ?></a>
 
     <header class="site-header">
@@ -111,5 +112,6 @@ $nav = [
             <p class="footer-copy">© <?= e($currentYear) ?> <?= e($siteName) ?> · <?= e(t('footer.copy')) ?></p>
         </div>
     </footer>
+    <script src="<?= e(assetVersioned('js/stars.js')) ?>" defer></script>
 </body>
 </html>

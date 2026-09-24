@@ -1107,6 +1107,63 @@ ul, ol { list-style: none; }
 .animation-delay-200 { animation-delay: 200ms; }
 .animation-delay-300 { animation-delay: 300ms; }
 
+/* ----------------------------- Étoiles flottantes ----------------------------- */
+.starfield {
+    position: fixed;
+    inset: 0;
+    z-index: 5;
+    overflow: hidden;
+    pointer-events: none;
+}
+.star {
+    position: absolute;
+    width: var(--size, 3px);
+    height: var(--size, 3px);
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 0 6px 1px rgba(255, 255, 255, 0.5);
+    opacity: var(--opacity, 0.4);
+    animation:
+        star-float var(--dur, 9s) ease-in-out var(--delay, 0s) infinite alternate,
+        star-twinkle calc(var(--dur, 9s) / 3) ease-in-out var(--delay, 0s) infinite;
+}
+.star-spark {
+    width: auto;
+    height: auto;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+}
+.star-spark::before {
+    content: '✦';
+    position: absolute;
+    left: 0;
+    top: 0;
+    font-size: var(--size, 10px);
+    line-height: 1;
+    color: #ffd166;
+    text-shadow: 0 0 8px rgba(255, 209, 102, 0.7);
+}
+[data-theme="light"] .star {
+    background: #6150aa;
+    box-shadow: 0 0 6px 1px rgba(97, 80, 170, 0.35);
+}
+[data-theme="light"] .star-spark::before {
+    color: #c99700;
+    text-shadow: 0 0 6px rgba(201, 151, 0, 0.4);
+}
+@keyframes star-float {
+    from { transform: translate3d(0, 0, 0); }
+    to { transform: translate3d(var(--drift, 14px), -28px, 0); }
+}
+@keyframes star-twinkle {
+    0%, 100% { opacity: calc(var(--opacity, 0.4) * 0.3); }
+    50% { opacity: var(--opacity, 0.4); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .starfield { display: none; }
+}
+
 /* ----------------------------- Reduced motion ----------------------------- */
 @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
