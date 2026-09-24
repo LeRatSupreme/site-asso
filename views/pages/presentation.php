@@ -6,8 +6,6 @@ declare(strict_types=1);
  * Page « L'association » (/presentation).
  *
  * @var array<string,mixed>|null $page
- * @var int $usersCount
- * @var int $eventsCount
  */
 ?>
 <!-- ===================== HERO ===================== -->
@@ -64,73 +62,6 @@ declare(strict_types=1);
             <div class="about-mission-body">
                 <h2 class="section-title about-accent-title"><?= e(t('about.mission')) ?></h2>
                 <p class="about-mission-text"><?= e(t('about.mission.desc')) ?></p>
-            </div>
-        </div>
-    </div>
-</section>
-
-<!-- ===================== VALEURS ===================== -->
-<section class="section section-alt">
-    <div class="container">
-        <div class="section-head about-reveal">
-            <span class="eyebrow"><?= e(t('about.values.eyebrow')) ?></span>
-            <h2 class="section-title"><?= e(t('about.values.title')) ?></h2>
-        </div>
-        <div class="about-values-grid">
-            <article class="about-value about-reveal">
-                <div class="about-value-top">
-                    <span class="about-value-num">01</span>
-                </div>
-                <div class="about-value-body">
-                    <h3><?= e(t('about.value.proximity')) ?></h3>
-                    <p><?= e(t('about.value.proximity.desc')) ?></p>
-                </div>
-            </article>
-            <article class="about-value about-reveal">
-                <div class="about-value-top">
-                    <span class="about-value-num">02</span>
-                </div>
-                <div class="about-value-body">
-                    <h3><?= e(t('about.value.passion')) ?></h3>
-                    <p><?= e(t('about.value.passion.desc')) ?></p>
-                </div>
-            </article>
-            <article class="about-value about-reveal">
-                <div class="about-value-top">
-                    <span class="about-value-num">03</span>
-                </div>
-                <div class="about-value-body">
-                    <h3><?= e(t('about.value.sharing')) ?></h3>
-                    <p><?= e(t('about.value.sharing.desc')) ?></p>
-                </div>
-            </article>
-        </div>
-    </div>
-</section>
-
-<!-- ===================== CHIFFRES ===================== -->
-<section class="section about-stats-band">
-    <div class="container">
-        <div class="section-head about-reveal">
-            <span class="eyebrow about-eyebrow-light"><?= e(t('home.stats.aria')) ?></span>
-            <h2 class="section-title about-title-light"><?= e(t('about.stats.title')) ?></h2>
-        </div>
-        <div class="about-stats-shell about-reveal">
-            <div class="about-stat">
-                <span class="about-stat-num" data-target="<?= e((string) max($usersCount, 0)) ?>"><?= e((string) max($usersCount, 0)) ?></span>
-                <span class="about-stat-label"><?= e(t('home.stat.members')) ?></span>
-            </div>
-            <div class="about-stat">
-                <span class="about-stat-num" data-target="<?= e((string) max($eventsCount, 0)) ?>"><?= e((string) max($eventsCount, 0)) ?></span>
-                <span class="about-stat-label"><?= e(t('home.stat.events')) ?></span>
-            </div>
-            <div class="about-stat">
-                <span class="about-stat-num" data-target="100" data-suffix=" %">100 %</span>
-                <span class="about-stat-label"><?= e(t('home.stat.student')) ?></span>
-            </div>
-            <div class="about-stat">
-                <span class="about-stat-num" data-target="0">0</span>
-                <span class="about-stat-label"><?= e(t('home.stat.easy')) ?></span>
             </div>
         </div>
     </div>
@@ -401,166 +332,6 @@ declare(strict_types=1);
     max-width: 70ch;
 }
 
-/* ============ Valeurs — chemin connecté ============ */
-.about-values-grid {
-    position: relative;
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 1.5rem;
-}
-.about-values-grid::before {
-    content: '';
-    position: absolute;
-    top: 44px;
-    left: 16%;
-    right: 16%;
-    border-top: 2px dashed rgba(72, 189, 211, 0.28);
-    z-index: 0;
-}
-.about-value {
-    position: relative;
-    z-index: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-}
-.about-value-top { position: relative; margin-bottom: -34px; }
-.about-value-medal {
-    display: grid;
-    place-items: center;
-    width: 88px;
-    height: 88px;
-    border-radius: 50%;
-    padding: 4px;
-    background: linear-gradient(135deg, #8b7ae0, #3a9bb8);
-    box-shadow: 0 14px 32px rgba(58, 155, 184, 0.3);
-    transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.3s ease;
-}
-.about-value-medal > span {
-    display: grid;
-    place-items: center;
-    width: 100%;
-    height: 100%;
-    border-radius: 50%;
-    background: var(--card);
-    font-size: 2rem;
-    line-height: 1;
-}
-.about-value:hover .about-value-medal {
-    transform: translateY(-4px) scale(1.05);
-    box-shadow: 0 20px 44px rgba(58, 155, 184, 0.4), 0 0 30px rgba(139, 122, 224, 0.2);
-}
-.about-value-num {
-    position: absolute;
-    right: -6px;
-    bottom: -2px;
-    display: grid;
-    place-items: center;
-    width: 30px;
-    height: 30px;
-    border-radius: 50%;
-    background: linear-gradient(135deg, #4a3d8f, #3a9bb8);
-    color: #fff;
-    font-size: 0.68rem;
-    font-weight: 900;
-    letter-spacing: 0.02em;
-    box-shadow: 0 6px 14px rgba(0, 0, 0, 0.35);
-}
-.about-value-body {
-    width: 100%;
-    padding: 2.4rem 1.6rem 1.9rem;
-    text-align: center;
-    border-radius: 20px;
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid var(--border);
-    flex: 1;
-    transition: transform 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease, background 0.25s ease;
-}
-.about-value:hover .about-value-body {
-    transform: translateY(-4px);
-    border-color: rgba(72, 189, 211, 0.35);
-    background: rgba(72, 189, 211, 0.04);
-    box-shadow: 0 18px 44px rgba(0, 0, 0, 0.35);
-}
-.about-value h3 {
-    font-size: 1.15rem;
-    font-weight: 800;
-    color: var(--primary);
-    margin: 0 0 0.6rem;
-    text-transform: none;
-    letter-spacing: -0.02em;
-}
-.about-value p {
-    font-size: 0.92rem;
-    color: var(--muted);
-    margin: 0;
-    line-height: 1.65;
-}
-
-/* ============ Chiffres — bandeau coquille ============ */
-.about-stats-band {
-    position: relative;
-    background:
-        radial-gradient(55% 130% at 88% 0%, rgba(58, 155, 184, 0.16), transparent 60%),
-        radial-gradient(50% 130% at 5% 100%, rgba(74, 61, 143, 0.22), transparent 60%),
-        linear-gradient(180deg, #0c1a33 0%, #081226 100%);
-    border-top: 1px solid rgba(72, 189, 211, 0.14);
-    border-bottom: 1px solid rgba(72, 189, 211, 0.14);
-}
-.about-eyebrow-light { color: #7fd0e4; }
-.about-title-light { color: #fff; }
-.about-stats-shell {
-    max-width: 1020px;
-    margin: 0 auto;
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    border-radius: 24px;
-    background: rgba(255, 255, 255, 0.035);
-    border: 1px solid rgba(255, 255, 255, 0.09);
-    -webkit-backdrop-filter: blur(8px);
-    backdrop-filter: blur(8px);
-    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
-    overflow: hidden;
-}
-.about-stat {
-    position: relative;
-    text-align: center;
-    padding: 2.5rem 1.25rem 2.25rem;
-}
-.about-stat + .about-stat { border-left: 1px solid rgba(255, 255, 255, 0.07); }
-.about-stat::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 56%;
-    height: 2px;
-    background: linear-gradient(90deg, transparent, rgba(72, 189, 211, 0.8), transparent);
-}
-.about-stat:hover { background: rgba(72, 189, 211, 0.05); }
-.about-stat-ico { display: block; font-size: 1.5rem; margin-bottom: 0.8rem; }
-.about-stat-num {
-    display: block;
-    font-size: clamp(2.5rem, 5vw, 3.3rem);
-    font-weight: 900;
-    line-height: 1;
-    letter-spacing: -0.04em;
-    background: linear-gradient(135deg, #8b7ae0, #3a9bb8 60%, #7fd0e4);
-    -webkit-background-clip: text;
-    background-clip: text;
-    -webkit-text-fill-color: transparent;
-}
-.about-stat-label {
-    display: block;
-    margin-top: 0.7rem;
-    font-size: 0.75rem;
-    font-weight: 700;
-    color: #a8bdd4;
-    text-transform: uppercase;
-    letter-spacing: 0.18em;
-}
-
 /* ============ Vision — citation asymétrique ============ */
 .about-vision {
     position: relative;
@@ -812,13 +583,8 @@ declare(strict_types=1);
 /* ============ Responsive ============ */
 @media (max-width: 980px) {
     .about-hero-grid { grid-template-columns: 1fr; gap: 2.75rem; }
-    .about-values-grid { grid-template-columns: 1fr; gap: 3rem; }
-    .about-values-grid::before { display: none; }
     .about-vision { grid-template-columns: 1fr; gap: 1.25rem; padding: 2.5rem 1.75rem; }
     .about-vision-mark { font-size: 5rem; transform: none; line-height: 1; }
-    .about-stats-shell { grid-template-columns: repeat(2, 1fr); }
-    .about-stat:nth-child(3) { border-left: none; }
-    .about-stat:nth-child(n+3) { border-top: 1px solid rgba(255, 255, 255, 0.07); }
     .about-spaces { grid-template-columns: 1fr; }
     .about-events { grid-template-columns: 1fr; }
     .about-contact { flex-direction: column; text-align: center; padding: 2rem 1.5rem; gap: 1.25rem; }
@@ -831,8 +597,6 @@ declare(strict_types=1);
     .about-mission .about-medal { margin: 0 auto; }
     .about-mission-code { display: none; }
     .about-medal { width: 76px; height: 76px; font-size: 2.2rem; border-radius: 22px; }
-    .about-stats-shell { grid-template-columns: 1fr 1fr; border-radius: 18px; }
-    .about-stat { padding: 1.9rem 1rem 1.75rem; }
     .about-vision { padding: 2.25rem 1.5rem; }
     .about-space { flex-direction: column; padding: 1.75rem 1.5rem; gap: 1.1rem; }
     .about-event-stub { flex-basis: 64px; font-size: 1.8rem; }
@@ -883,42 +647,6 @@ declare(strict_types=1);
 
     Array.prototype.forEach.call(reveals, function (el) {
         revealObserver.observe(el);
-    });
-
-    function animateCounter(el) {
-        var target = parseInt(el.getAttribute('data-target'), 10) || 0;
-        var suffix = el.getAttribute('data-suffix') || '';
-        var duration = 1300;
-        var start = null;
-
-        function step(ts) {
-            if (start === null) {
-                start = ts;
-            }
-            var p = Math.min((ts - start) / duration, 1);
-            var eased = 1 - Math.pow(1 - p, 3);
-            el.textContent = String(Math.round(eased * target)) + suffix;
-            if (p < 1) {
-                window.requestAnimationFrame(step);
-            }
-        }
-
-        window.requestAnimationFrame(step);
-    }
-
-    var nums = document.querySelectorAll('.about-stat-num[data-target]');
-    var numObserver = new IntersectionObserver(function (entries) {
-        entries.forEach(function (entry) {
-            if (!entry.isIntersecting) {
-                return;
-            }
-            animateCounter(entry.target);
-            numObserver.unobserve(entry.target);
-        });
-    }, { threshold: 0.4 });
-
-    Array.prototype.forEach.call(nums, function (el) {
-        numObserver.observe(el);
     });
 })();
 </script>
