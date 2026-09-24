@@ -195,22 +195,16 @@ $allPromoEmpty = empty($promotions);
         <div class="grid grid-3">
             <article class="hm-feature ae-panel ae-reveal">
                 <div class="hm-feature-body">
-                    <h3 class="card-title"><?= e(t('home.feature.events.title')) ?></h3>
-                    <p><?= e(t('home.feature.events.desc')) ?></p>
                     <pre class="hm-feature-code js-type-code" aria-hidden="true" data-lines="$ aeic agenda --a-venir|> soirees, lan, conferences|// un agenda pense pour les etudiants en info"><span class="code-cursor"></span></pre>
                 </div>
             </article>
             <article class="hm-feature ae-panel ae-reveal">
                 <div class="hm-feature-body">
-                    <h3 class="card-title"><?= e(t('home.feature.cafeteria.title')) ?></h3>
-                    <p><?= e(t('home.feature.cafeteria.desc')) ?></p>
                     <pre class="hm-feature-code js-type-code" aria-hidden="true" data-lines="$ cafeteria commander &quot;cafe&quot;|> prix: etudiant --solde ok|// pret a recuperer entre deux cours"><span class="code-cursor"></span></pre>
                 </div>
             </article>
             <article class="hm-feature ae-panel ae-reveal">
                 <div class="hm-feature-body">
-                    <h3 class="card-title"><?= e(t('home.feature.community.title')) ?></h3>
-                    <p><?= e(t('home.feature.community.desc')) ?></p>
                     <pre class="hm-feature-code js-type-code" aria-hidden="true" data-lines="$ git clone entraide|> projets, coups de main, campus|// un reseau qui fait avancer"><span class="code-cursor"></span></pre>
                 </div>
             </article>
@@ -289,7 +283,7 @@ $allPromoEmpty = empty($promotions);
     margin: 0;
 }
 .hm-feature-code {
-    margin: 0.9rem 0 0;
+    margin: 0;
     font-family: ui-monospace, 'SF Mono', Consolas, monospace;
     font-size: 0.7rem;
     line-height: 1.6;
