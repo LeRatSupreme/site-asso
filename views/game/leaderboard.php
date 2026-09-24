@@ -60,8 +60,8 @@ function wordleInitials(string $prenom, string $nom): string
 <header class="page-hero">
     <div class="halo halo-teal" aria-hidden="true"></div>
     <div class="container">
-        <span class="eyebrow">🎮 Zone jeux</span>
-        <h1 class="page-title">🏆 Classement Wordle</h1>
+        <span class="eyebrow">Zone jeux</span>
+        <h1 class="page-title">Classement Wordle</h1>
         <p class="page-lead">Tous les joueurs classés par série de victoires en cours au mot quotidien (5 lettres). La série grandit chaque jour consécutif gagné&nbsp;!</p>
     </div>
 </header>
@@ -71,7 +71,7 @@ function wordleInitials(string $prenom, string $nom): string
 
         <?php if ($rows === []): ?>
             <div class="surface lb-empty">
-                <p style="font-size:1.1rem; margin-bottom:0.5rem;">🗂️ Aucune partie enregistrée pour le moment.</p>
+                <p style="font-size:1.1rem; margin-bottom:0.5rem;">Aucune partie enregistrée pour le moment.</p>
                 <p><a class="btn btn-primary btn-sm" href="<?= e(url('/jeux/wordle')) ?>">Jouer au Wordle →</a></p>
             </div>
         <?php else: ?>
@@ -81,8 +81,8 @@ function wordleInitials(string $prenom, string $nom): string
                         <tr>
                             <th class="num" style="width:3.5rem;">#</th>
                             <th>Joueur</th>
-                            <th class="num">Série en cours 🔥</th>
-                            <th class="num lb-hide-sm">Record 🏆</th>
+                            <th class="num">Série en cours</th>
+                            <th class="num lb-hide-sm">Record</th>
                             <th class="num lb-hide-sm">Parties</th>
                         </tr>
                     </thead>
@@ -114,7 +114,7 @@ function wordleInitials(string $prenom, string $nom): string
         <?php endif; ?>
 
         <div class="section-more">
-            <a class="btn btn-primary" href="<?= e(url('/jeux/wordle')) ?>">🎮 Jouer au Wordle</a>
+            <a class="btn btn-primary" href="<?= e(url('/jeux/wordle')) ?>">Jouer au Wordle</a>
             <a class="btn btn-outline" href="<?= e(url('/jeux')) ?>">← Retour à la zone jeux</a>
         </div>
     </div>

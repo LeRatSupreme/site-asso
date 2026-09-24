@@ -21,7 +21,7 @@ $category   = (string) ($event['category'] ?? '');
 // Badge: prix ou gratuit ou À la une.
 $badgeHtml = '';
 if ($isFeatured) {
-    $badgeHtml = '<span class="badge badge-gradient">⭐ ' . e(t('common.featured')) . '</span>';
+    $badgeHtml = '<span class="badge badge-gradient">' . e(t('common.featured')) . '</span>';
 } elseif ($price === null || (float) $price <= 0) {
     $badgeHtml = '<span class="badge badge-success">' . e(t('event.free')) . '</span>';
 } else {
@@ -83,10 +83,10 @@ if (preg_match('/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2}))?/', $paris, $dm
 
             <div class="event-v2-meta">
                 <?php if ($timeStr !== ''): ?>
-                    <span class="event-v2-time">🕐 <?= e($timeStr) ?></span>
+                    <span class="event-v2-time"><?= e($timeStr) ?></span>
                 <?php endif; ?>
                 <?php if ($location !== ''): ?>
-                    <span class="event-v2-loc">📍 <?= e($location) ?></span>
+                    <span class="event-v2-loc"><?= e($location) ?></span>
                 <?php endif; ?>
             </div>
         </div>

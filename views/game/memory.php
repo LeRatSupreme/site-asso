@@ -9,7 +9,7 @@ declare(strict_types=1);
 <header class="page-hero">
     <div class="halo halo-teal" aria-hidden="true"></div>
     <div class="container">
-        <span class="eyebrow">🎮 Zone jeux</span>
+        <span class="eyebrow">Zone jeux</span>
         <h1 class="page-title">Memory Cafétéria</h1>
         <p class="page-lead">Retrouve les paires de produits le plus vite possible !</p>
     </div>
@@ -44,7 +44,7 @@ declare(strict_types=1);
                     <option value="6x4" selected>Moyen (6×4)</option>
                     <option value="6x6">Difficile (6×6)</option>
                 </select>
-                <button class="btn btn-primary btn-sm" id="g-new">🔄 Nouvelle partie</button>
+                <button class="btn btn-primary btn-sm" id="g-new">Nouvelle partie</button>
             </div>
         </div>
 
@@ -54,10 +54,9 @@ declare(strict_types=1);
         <!-- Win overlay -->
         <div class="game-win" id="g-win" hidden>
             <div class="game-win-card">
-                <span class="game-win-emoji">🎉</span>
                 <h2>Bravo !</h2>
                 <p id="g-win-text"></p>
-                <button class="btn btn-primary" id="g-win-replay">🔄 Rejouer</button>
+                <button class="btn btn-primary" id="g-win-replay">Rejouer</button>
             </div>
         </div>
     </div>
@@ -128,7 +127,6 @@ declare(strict_types=1);
     box-shadow: 0 20px 60px rgba(0,0,0,0.5);
     animation: pop 0.4s cubic-bezier(0.34,1.56,0.64,1);
 }
-.game-win-emoji { font-size: 3.5rem; display: block; margin-bottom: 0.5rem; }
 .game-win-card h2 { font-size: 1.8rem; font-weight: 900; color: var(--primary); margin: 0 0 0.5rem; }
 .game-win-card p { font-size: 1rem; color: var(--muted); margin: 0 0 1.25rem; }
 @keyframes fadeIn { from { opacity: 0; } }
@@ -257,7 +255,7 @@ declare(strict_types=1);
         var prev = localStorage.getItem(bestKey());
         var isBest = !prev || sec < parseInt(prev, 10);
         if (isBest) { localStorage.setItem(bestKey(), String(sec)); }
-        winText.textContent = 'Tu as trouvé les ' + total + ' paires en ' + moves + ' coups et ' + fmtTime(sec) + ' !' + (isBest ? ' 🏆 Nouveau record !' : '');
+        winText.textContent = 'Tu as trouvé les ' + total + ' paires en ' + moves + ' coups et ' + fmtTime(sec) + ' !' + (isBest ? ' Nouveau record !' : '');
         winEl.hidden = false;
     }
 

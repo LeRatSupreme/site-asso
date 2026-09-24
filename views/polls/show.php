@@ -118,7 +118,6 @@ foreach ($results as $r) {
 
                     <?php if ($results === []): ?>
                         <div class="poll-empty">
-                            <span class="poll-empty-icon">🗳️</span>
                             <p class="muted"><?= e(t('poll.no_votes')) ?></p>
                         </div>
                     <?php else: ?>
@@ -131,7 +130,6 @@ foreach ($results as $r) {
                                 <div class="poll-result-row <?= $isMine ? 'is-mine' : '' ?>">
                                     <div class="poll-result-head">
                                         <span class="poll-result-label">
-                                            <?php if ($isWinner): ?><span class="poll-trophy">🏆</span><?php endif; ?>
                                             <?= e($row['label'] ?? '') ?>
                                             <?php if ($isMine): ?><span class="poll-your-vote"><?= e(t('poll.your_vote')) ?></span><?php endif; ?>
                                         </span>
@@ -151,7 +149,6 @@ foreach ($results as $r) {
             <?php else: ?>
                 <!-- ============ NON CONNECTÉ ============ -->
                 <div class="card surface glass poll-login-prompt">
-                    <span class="poll-login-icon">🗳️</span>
                     <h2 class="card-title"><?= e(t('poll.login.title')) ?></h2>
                     <p class="card-excerpt"><?= e(t('poll.login.desc')) ?></p>
                     <div class="hero-actions" style="justify-content:center;">

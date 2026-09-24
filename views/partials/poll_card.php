@@ -69,14 +69,14 @@ if ($voters > 0) {
 
             <?php if ($voters > 0 && $leaderLabel !== ''): ?>
                 <div class="poll-card-v2-leader">
-                    <span class="poll-card-v2-leader-label">🏆 <?= e($leaderLabel) ?></span>
+                    <span class="poll-card-v2-leader-label"><?= e($leaderLabel) ?></span>
                     <span class="poll-card-v2-leader-pct"><?= e((string) $leaderPct) ?>%</span>
                 </div>
             <?php endif; ?>
 
             <div class="poll-card-v2-foot">
                 <span class="poll-card-v2-stats">
-                    <span class="poll-stat">🗳️ <?= e((string) $voters) ?></span>
+                    <span class="poll-stat"><?= e((string) $voters) ?></span>
                     <span class="poll-stat"><?= e(tt('poll.card.options', ['{n}' => $optCount])) ?></span>
                 </span>
                 <span class="poll-card-v2-cta">

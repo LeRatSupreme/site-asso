@@ -11,7 +11,7 @@ declare(strict_types=1);
     <div class="halo halo-teal" aria-hidden="true"></div>
     <div class="container">
         <a class="btn btn-outline" href="<?= e(url('/jeux')) ?>" style="margin-bottom:0.75rem;text-decoration:none;">← Retour aux jeux</a>
-        <span class="eyebrow">🧩 Défi du jour</span>
+        <span class="eyebrow">Défi du jour</span>
         <h1 class="page-title">Énigme quotidienne</h1>
         <p class="page-lead">Une devinette par jour, identique pour tous. Elle change à minuit (heure de Paris).</p>
     </div>
@@ -31,12 +31,12 @@ declare(strict_types=1);
 
             <!-- Carte de l'énigme -->
             <div class="enigma-card">
-                <div class="enigma-badge">📅 Énigme du <?= e(date('d/m/Y')) ?></div>
+                <div class="enigma-badge">Énigme du <?= e(date('d/m/Y')) ?></div>
                 <p class="enigma-question"><?= e($question) ?></p>
 
                 <?php if ($hint !== null && $hint !== ''): ?>
                     <details class="enigma-hint">
-                        <summary>💡 Indice</summary>
+                        <summary>Indice</summary>
                         <p><?= e($hint) ?></p>
                     </details>
                 <?php endif; ?>
@@ -169,11 +169,11 @@ declare(strict_types=1);
             btn.textContent = 'Valider';
             result.style.display = 'block';
             if (data.correct) {
-                result.textContent = '🎉 Bravo ! Bonne réponse !';
+                result.textContent = 'Bravo ! Bonne réponse !';
                 result.style.color = 'var(--primary)';
                 btn.disabled = true;
             } else {
-                result.textContent = '❌ Ce n\'est pas la bonne réponse. Réessaie !';
+                result.textContent = 'Ce n\'est pas la bonne réponse. Réessaie !';
                 result.style.color = 'var(--accent-danger)';
             }
         })

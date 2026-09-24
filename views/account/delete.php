@@ -21,7 +21,6 @@ declare(strict_types=1);
     <div class="container narrow">
 
         <div class="card surface glass delete-confirm-card">
-            <div class="delete-warn-icon">⚠️</div>
             <h2 class="delete-confirm-title"><?= e(t('account.delete.warning')) ?></h2>
 
             <p class="delete-confirm-text">
@@ -30,19 +29,15 @@ declare(strict_types=1);
 
             <div class="delete-impact">
                 <div class="delete-impact-item">
-                    <span class="delete-impact-icon ❌">❌</span>
                     <span><?= e(t('account.delete.impact.profile')) ?></span>
                 </div>
                 <div class="delete-impact-item">
-                    <span class="delete-impact-icon">❌</span>
                     <span><?= e(t('account.delete.impact.registrations')) ?></span>
                 </div>
                 <div class="delete-impact-item">
-                    <span class="delete-impact-icon">❌</span>
                     <span><?= e(t('account.delete.impact.consents')) ?></span>
                 </div>
                 <div class="delete-impact-item">
-                    <span class="delete-impact-icon">✅</span>
                     <span><?= e(t('account.delete.impact.accounting')) ?></span>
                 </div>
             </div>
@@ -84,10 +79,6 @@ declare(strict_types=1);
     padding: 2.5rem 2rem;
     text-align: center;
     border-left: 4px solid rgba(239, 68, 68, 0.6);
-}
-.delete-warn-icon {
-    font-size: 3rem;
-    margin-bottom: 0.5rem;
 }
 .delete-confirm-title {
     font-size: 1.3rem;

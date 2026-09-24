@@ -36,15 +36,12 @@ declare(strict_types=1);
                 </div>
                 <div class="ae-idcard-body">
                     <div class="ae-idcard-row">
-                        <span class="ae-idcard-ico">⭐</span>
                         <span><?= e(t('team.board.title')) ?></span>
                     </div>
                     <div class="ae-idcard-row">
-                        <span class="ae-idcard-ico">👥</span>
                         <span><?= e(t('team.all.title')) ?></span>
                     </div>
                     <div class="ae-idcard-row">
-                        <span class="ae-idcard-ico">🎓</span>
                         <span><?= e(t('home.stat.student')) ?></span>
                     </div>
                 </div>

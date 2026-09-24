@@ -13,7 +13,7 @@ declare(strict_types=1);
     <div class="halo halo-teal" aria-hidden="true"></div>
     <div class="container">
         <a class="btn btn-outline" href="<?= e(url('/jeux')) ?>" style="margin-bottom:0.75rem;text-decoration:none;">← Retour aux jeux</a>
-        <span class="eyebrow">🔤 Jeu de lettres</span>
+        <span class="eyebrow">Jeu de lettres</span>
         <h1 class="page-title">Wordle</h1>
         <p class="page-lead">3 difficultés · 2 langues · mode quotidien ou libre.</p>
     </div>
@@ -27,23 +27,23 @@ declare(strict_types=1);
             <div class="settings-row">
                 <span class="settings-label">Langue</span>
                 <div class="settings-pills">
-                    <button type="button" class="pill" id="lang-fr" data-lang="fr">🇫🇷 FR</button>
-                    <button type="button" class="pill" id="lang-en" data-lang="en">🇬🇧 EN</button>
+                    <button type="button" class="pill" id="lang-fr" data-lang="fr">FR</button>
+                    <button type="button" class="pill" id="lang-en" data-lang="en">EN</button>
                 </div>
             </div>
             <div class="settings-row">
                 <span class="settings-label">Mode</span>
                 <div class="settings-pills">
-                    <button type="button" class="pill" id="mode-daily" data-mode="daily">📅 Quotidien</button>
-                    <button type="button" class="pill" id="mode-free" data-mode="free">🎲 Libre</button>
+                    <button type="button" class="pill" id="mode-daily" data-mode="daily">Quotidien</button>
+                    <button type="button" class="pill" id="mode-free" data-mode="free">Libre</button>
                 </div>
             </div>
             <div class="settings-row">
                 <span class="settings-label">Niveau</span>
                 <div class="settings-pills">
-                    <button type="button" class="pill" id="diff-facile" data-diff="facile">🙂 Facile · 5</button>
-                    <button type="button" class="pill" id="diff-moyen" data-diff="moyen">😐 Moyen · 6</button>
-                    <button type="button" class="pill" id="diff-difficile" data-diff="difficile">😖 Difficile · 7</button>
+                    <button type="button" class="pill" id="diff-facile" data-diff="facile">Facile · 5</button>
+                    <button type="button" class="pill" id="diff-moyen" data-diff="moyen">Moyen · 6</button>
+                    <button type="button" class="pill" id="diff-difficile" data-diff="difficile">Difficile · 7</button>
                 </div>
             </div>
         </div>
@@ -70,9 +70,9 @@ declare(strict_types=1);
 
         <!-- Actions fin -->
         <div id="end-actions" style="display:none;text-align:center;margin-top:1.5rem;gap:0.5rem;justify-content:center;flex-wrap:wrap;">
-            <button type="button" class="btn btn-primary btn-sm" id="btn-replay">🔄 Rejouer</button>
-            <button type="button" class="btn btn-outline btn-sm" id="btn-share">📋 Partager</button>
-            <a class="btn btn-outline btn-sm" href="<?= e($leaderboardUrl) ?>">🏆 Classement</a>
+            <button type="button" class="btn btn-primary btn-sm" id="btn-replay">Rejouer</button>
+            <button type="button" class="btn btn-outline btn-sm" id="btn-share">Partager</button>
+            <a class="btn btn-outline btn-sm" href="<?= e($leaderboardUrl) ?>">Classement</a>
         </div>
     </div>
 </section>
@@ -377,7 +377,7 @@ declare(strict_types=1);
 
         if (allGreen) {
             over = true;
-            showMessage('🎉 Bravo ! Trouvé en ' + (row + 1) + ' essai(s) !', 'win');
+            showMessage('Bravo ! Trouvé en ' + (row + 1) + ' essai(s) !', 'win');
             showEnd(true, row + 1);
             return;
         }
@@ -387,7 +387,7 @@ declare(strict_types=1);
 
         if (row >= MAX_ROWS) {
             over = true;
-            showMessage('💀 Le mot était : ' + answer, 'lose');
+            showMessage('Le mot était : ' + answer, 'lose');
             showEnd(false, MAX_ROWS);
         }
     }
@@ -444,7 +444,7 @@ declare(strict_types=1);
                 text += line + '\n';
             }
             navigator.clipboard.writeText(text).then(function() {
-                showMessage('📋 Résultat copié !', 'win');
+                showMessage('Résultat copié !', 'win');
             });
         };
     }

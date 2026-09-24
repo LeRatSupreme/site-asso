@@ -23,7 +23,6 @@ declare(strict_types=1);
         <!-- ====== Mot de passe ====== -->
         <div class="card surface glass rgpd-card">
             <div class="rgpd-card-head">
-                <span class="rgpd-icon">🔐</span>
                 <div>
                     <h2 class="card-title"><?= e(t('account.password.title')) ?></h2>
                     <p class="rgpd-sub"><?= e(t('account.password.sub')) ?></p>
@@ -51,7 +50,6 @@ declare(strict_types=1);
         <!-- ====== Export ====== -->
         <div class="card surface glass rgpd-card">
             <div class="rgpd-card-head">
-                <span class="rgpd-icon">📦</span>
                 <div>
                     <h2 class="card-title"><?= e(t('account.export.title')) ?></h2>
                     <p class="rgpd-sub"><?= e(t('account.export.sub')) ?></p>
@@ -64,7 +62,6 @@ declare(strict_types=1);
         <!-- ====== Suppression ====== -->
         <div class="card surface glass rgpd-card rgpd-card-danger">
             <div class="rgpd-card-head">
-                <span class="rgpd-icon rgpd-icon-danger">🗑️</span>
                 <div>
                     <h2 class="card-title"><?= e(t('account.delete.title')) ?></h2>
                     <p class="rgpd-sub"><?= e(t('account.delete.sub')) ?></p>

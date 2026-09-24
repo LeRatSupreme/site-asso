@@ -83,9 +83,9 @@ $priceLabel = ($price === null || (float) $price <= 0)
                 <span class="eyebrow"><?= e(t('event.details')) ?></span>
                 <h2 class="card-title"><?= e($title) ?></h2>
                 <p class="card-meta">
-                    📅 <?= e(formatDateTime($dateRaw)) ?>
+                    <?= e(formatDateTime($dateRaw)) ?>
                     <?php if ($endDateRaw !== ''): ?> → <?= e(formatDateTime($endDateRaw)) ?><?php endif; ?>
-                    <?php if ($location !== ''): ?> · 📍 <?= e($location) ?><?php endif; ?>
+                    <?php if ($location !== ''): ?> · <?= e($location) ?><?php endif; ?>
                 </p>
                 <?php if ($excerpt !== ''): ?>
                     <p class="card-excerpt"><?= e($excerpt) ?></p>
@@ -144,7 +144,7 @@ $priceLabel = ($price === null || (float) $price <= 0)
                 <div class="event-map card surface glass">
                     <span class="eyebrow"><?= e(t('event.location')) ?></span>
                     <h2 class="card-title"><?= e(t('event.where')) ?></h2>
-                    <?php if ($location !== ''): ?><p class="card-meta">📍 <?= e($location) ?></p><?php endif; ?>
+                    <?php if ($location !== ''): ?><p class="card-meta"><?= e($location) ?></p><?php endif; ?>
                     <div class="map-frame">
                         <iframe title="<?= e(tt('event.map.aria', ['{title}' => $title])) ?>" src="<?= e($mapEmbed) ?>" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
                     </div>

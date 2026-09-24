@@ -11,21 +11,6 @@ declare(strict_types=1);
  * @var int $countPast
  */
 
-// Icônes par catégorie (fallback générique).
-$catIcons = [
-    'soirée'        => '🎉',
-    'afterwork'     => '🍻',
-    'barbecue'      => '🥩',
-    'tournoi / lan' => '🎮',
-    'tournoi'       => '🎮',
-    'conférence'    => '🎤',
-    'sortie'        => '🚌',
-    'atelier'       => '🔧',
-    'nuit de l\'info' => '💻',
-    'nuit de l\'info' => '💻',
-    'autre'         => '📅',
-];
-
 // Groupe les événements à venir par catégorie.
 $grouped = [];
 $uncategorized = [];
@@ -51,18 +36,6 @@ foreach ($past as $e) {
     }
 }
 ksort($groupedPast);
-
-/** Renvoie l'icône d'une catégorie. */
-function catIcon(string $cat): string {
-    global $catIcons;
-    $key = strtolower(trim($cat));
-    foreach ($catIcons as $k => $v) {
-        if (str_contains($key, $k) || str_contains($k, $key)) {
-            return $v;
-        }
-    }
-    return '📅';
-}
 ?>
 <header class="page-hero">
     <div class="ae-aurora" aria-hidden="true"></div>
@@ -83,7 +56,7 @@ function catIcon(string $cat): string {
             <!-- PASS événements décoratif et interactif -->
             <div class="ae-idcard" data-tilt data-tilt-base="rotate(-1.4deg)" aria-hidden="true">
                 <div class="ae-idcard-band">
-                    <span class="ae-idcard-logo">🎟</span>
+                    <span class="ae-idcard-logo">AE</span>
                     <span class="ae-idcard-id">
                         <span class="ae-idcard-label">PASS / EVENTS</span>
                         <span class="ae-idcard-name">AEIC</span>
@@ -92,15 +65,12 @@ function catIcon(string $cat): string {
                 </div>
                 <div class="ae-idcard-body">
                     <div class="ae-idcard-row">
-                        <span class="ae-idcard-ico">🎉</span>
                         <span><?= e(t_category('soirée')) ?></span>
                     </div>
                     <div class="ae-idcard-row">
-                        <span class="ae-idcard-ico">💻</span>
                         <span><?= e(t_category('nuit de l\'info')) ?></span>
                     </div>
                     <div class="ae-idcard-row">
-                        <span class="ae-idcard-ico">🍻</span>
                         <span><?= e(t_category('afterwork')) ?></span>
                     </div>
                 </div>
@@ -131,18 +101,6 @@ function catIcon(string $cat): string {
     height: 2px;
     background: linear-gradient(90deg, #8b7ae0, rgba(58, 155, 184, 0));
 }
-.event-cat-icon {
-    display: grid;
-    place-items: center;
-    width: 46px;
-    height: 46px;
-    border-radius: 14px;
-    font-size: 1.4rem;
-    line-height: 1;
-    background: linear-gradient(135deg, rgba(74, 61, 143, 0.75), rgba(58, 155, 184, 0.6));
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 10px 22px rgba(0, 0, 0, 0.28);
-    flex-shrink: 0;
-}
 .event-cat-title {
     display: flex;
     align-items: center;
@@ -159,12 +117,6 @@ function catIcon(string $cat): string {
     background: rgba(72, 189, 211, 0.12);
     border: 1px solid rgba(72, 189, 211, 0.28);
 }
-.event-cat-past .event-cat-icon {
-    background: linear-gradient(135deg, rgba(74, 61, 143, 0.35), rgba(58, 155, 184, 0.25));
-    box-shadow: none;
-    filter: saturate(0.7);
-    opacity: 0.85;
-}
 .event-cat-section + .event-cat-section { margin-top: 3rem; }
 </style>
 
@@ -180,7 +132,6 @@ function catIcon(string $cat): string {
                 <div class="event-cat-section ae-reveal">
                     <div class="event-cat-header">
                         <h2 class="event-cat-title">
-                            <span class="event-cat-icon"><?= catIcon($catName) ?></span>
                             <?= e(t_category($catName)) ?>
                             <span class="event-cat-count"><?= count($events) ?></span>
                         </h2>
@@ -197,7 +148,6 @@ function catIcon(string $cat): string {
                 <div class="event-cat-section ae-reveal">
                     <div class="event-cat-header">
                         <h2 class="event-cat-title">
-                            <span class="event-cat-icon">📅</span>
                             <?= e(t('events.others')) ?>
                             <span class="event-cat-count"><?= count($uncategorized) ?></span>
                         </h2>
@@ -225,7 +175,6 @@ function catIcon(string $cat): string {
             <div class="event-cat-section event-cat-past ae-reveal">
                     <div class="event-cat-header">
                         <h3 class="event-cat-title">
-                            <span class="event-cat-icon"><?= catIcon($catName) ?></span>
                             <?= e(t_category($catName)) ?>
                         <span class="event-cat-count"><?= count($events) ?></span>
                     </h3>

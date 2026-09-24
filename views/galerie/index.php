@@ -42,7 +42,7 @@ $groups = $groups ?? [];
                             <h2 class="gallery-group-title"><?= e($group['event_title']) ?></h2>
                         <?php endif; ?>
                         <?php if ($group['event_date'] !== ''): ?>
-                            <span class="gallery-group-date">📅 <?= e(formatDate($group['event_date'])) ?></span>
+                            <span class="gallery-group-date"><?= e(formatDate($group['event_date'])) ?></span>
                         <?php endif; ?>
                     </div>
 
