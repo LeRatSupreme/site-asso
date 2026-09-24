@@ -690,7 +690,7 @@ ul, ol { list-style: none; }
 /* Petits écrans : menu plus compact pour ne pas recouvrir toute la page */
 @media (max-width: 480px) {
     .mobile-nav {
-        width: min(78%, 300px);
+        width: min(62%, 240px);
         padding: 3.75rem 0.9rem 1.25rem;
     }
     .mobile-nav-links a {

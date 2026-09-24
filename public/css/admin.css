@@ -635,7 +635,7 @@
         z-index: 60;
         left: 0;
         top: 0;
-        width: 280px;
+        width: min(280px, 62vw);
         height: 100vh;
         transform: translateX(-100%);
         transition: transform 0.25s ease;
