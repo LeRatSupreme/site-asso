@@ -1071,6 +1071,7 @@ final class AdminComptaController extends AdminBaseController
         $refOptions = [
             '1d'     => '1 jour',
             '7d'     => '7 derniers jours',
+            '14d'    => '14 derniers jours',
             '30d'    => '30 derniers jours',
             '3m'     => '3 derniers mois',
             '6m'     => '6 derniers mois',
@@ -1079,9 +1080,9 @@ final class AdminComptaController extends AdminBaseController
             'all'    => 'Tout',
             'custom' => 'Personnalisé',
         ];
-        $ref = (string) ($_GET['ref'] ?? '3m');
+        $ref = (string) ($_GET['ref'] ?? '14d');
         if (!array_key_exists($ref, $refOptions)) {
-            $ref = '3m';
+            $ref = '14d';
         }
 
         $today = date('Y-m-d');
@@ -1096,6 +1097,7 @@ final class AdminComptaController extends AdminBaseController
         switch ($ref) {
             case '1d':  $fromDay = $today; break;
             case '7d':  $fromDay = date('Y-m-d', strtotime('-6 days')); break;
+            case '14d': $fromDay = date('Y-m-d', strtotime('-13 days')); break;
             case '30d': $fromDay = date('Y-m-d', strtotime('-29 days')); break;
             case '3m':  $fromDay = date('Y-m-d', strtotime('-3 months')); break;
             case '6m':  $fromDay = date('Y-m-d', strtotime('-6 months')); break;
