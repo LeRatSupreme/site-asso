@@ -235,6 +235,7 @@ declare(strict_types=1);
     var snake = [], dir = { x: 1, y: 0 }, nextDir = null;
     var prevSnake = [], lastTick = 0;   // interpolation fluide entre deux ticks
     var foods = [], golden = null, obstacles = [];
+    var fx = [], chompUntil = 0;        // éclaboussures, anneaux, mâchonnement
     var score = 0, timer = null, running = false, paused = false, tickMs = 145;
     var pops = [];                 // textes flottants « +2 »
 
@@ -330,6 +331,7 @@ declare(strict_types=1);
         prevSnake = snake.map(function (s) { return { x: s.x, y: s.y }; });
         lastTick = performance.now();
         score = 0; paused = false; pops = [];
+        fx = []; chompUntil = 0;
         golden = null; foods = [];
         tickMs = BASE_SPEED[settings.speed] || 145;
         obstacles = settings.mode === 'obstacles' ? [] : [];
@@ -406,6 +408,23 @@ declare(strict_types=1);
             until: performance.now() + 750,
             gold: points >= GOLD_VALUE
         });
+
+        // Animations de « dégustation » : anneau, éclaboussures, mâchonnement.
+        var cx = at.x * CELL + CELL / 2, cy = at.y * CELL + CELL / 2;
+        var col = points >= GOLD_VALUE ? '#f5c518' : '#7fd0e4';
+        var now = performance.now();
+        fx.push({ kind: 'ring', x: cx, y: cy, born: now, color: col });
+        for (var k = 0; k < 8; k++) {
+            var ang = Math.random() * Math.PI * 2;
+            var sp = CELL * (0.9 + Math.random() * 1.5);
+            fx.push({
+                kind: 'p', x: cx, y: cy,
+                vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp,
+                r: 1.5 + Math.random() * 2,
+                born: now, color: col
+            });
+        }
+        chompUntil = now + 170;
     }
 
     function speedUp() {
@@ -445,6 +464,7 @@ declare(strict_types=1);
         for (var i = 0; i < foods.length; i++) { drawFood(foods[i], now); }
         drawGolden(now);
         drawSnake(now);
+        drawFx(now);
         drawPops(now);
     }
 
@@ -563,34 +583,90 @@ declare(strict_types=1);
             ctx.stroke();
         }
 
-        // Tête : cercle plus large + yeux orientés + langue.
+        // Tête animée : mâchonnement, langue fourchue, clignement, regard.
         var h = pts[0];
+
+        // Fruit le plus proche : excite la langue et attire le regard.
+        var target = null, bestD = 1e9;
+        foods.forEach(function (f) {
+            var d = Math.abs(f.x - snake[0].x) + Math.abs(f.y - snake[0].y);
+            if (d < bestD) { bestD = d; target = f; }
+        });
+        if (golden) {
+            var gd = Math.abs(golden.x - snake[0].x) + Math.abs(golden.y - snake[0].y);
+            if (gd < bestD) { bestD = gd; target = golden; }
+        }
+        var excited = target !== null && bestD <= 3 && running && !paused;
+
+        // Mâchonnement : la tête se resserre brièvement après avoir mangé.
+        var headR = CELL * 0.46;
+        var chompT = (now - (chompUntil - 170)) / 170;
+        if (chompT >= 0 && chompT <= 1) { headR *= 1 - 0.16 * Math.sin(chompT * Math.PI); }
+
         ctx.fillStyle = '#8fe0f0';
         ctx.beginPath();
-        ctx.arc(h.x, h.y, CELL * 0.46, 0, Math.PI * 2);
+        ctx.arc(h.x, h.y, headR, 0, Math.PI * 2);
         ctx.fill();
 
-        // Langue.
-        var tongue = CELL * 0.42;
-        ctx.strokeStyle = '#e2555c';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(h.x + dir.x * CELL * 0.4, h.y + dir.y * CELL * 0.4);
-        ctx.lineTo(h.x + dir.x * (CELL * 0.4 + tongue), h.y + dir.y * (CELL * 0.4 + tongue));
-        ctx.stroke();
+        // Langue fourchue : sortie continue près d'un fruit, sinon tressaillement périodique.
+        var flick = 0;
+        if (excited) {
+            flick = 0.75 + 0.25 * Math.sin(now / 90);
+        } else {
+            var cyc = now % 2600;
+            if (cyc < 420) { flick = Math.sin((cyc / 420) * Math.PI); }
+        }
+        if (flick > 0.05) {
+            var len = CELL * (0.26 + 0.36 * flick);
+            var bx = h.x + dir.x * CELL * 0.34, by = h.y + dir.y * CELL * 0.34;
+            var tx = bx + dir.x * len, ty = by + dir.y * len;
+            var fork = len * 0.4;
+            var mx = -dir.y, my = dir.x;
+            ctx.strokeStyle = '#e2555c';
+            ctx.lineWidth = 2;
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            ctx.moveTo(bx, by);
+            ctx.lineTo(tx, ty);
+            ctx.moveTo(tx, ty);
+            ctx.lineTo(tx + dir.x * fork + mx * fork, ty + dir.y * fork + my * fork);
+            ctx.moveTo(tx, ty);
+            ctx.lineTo(tx + dir.x * fork - mx * fork, ty + dir.y * fork - my * fork);
+            ctx.stroke();
+        }
 
-        // Yeux.
+        // Yeux : clignement périodique + pupilles orientées vers le fruit proche.
         var px = -dir.y, py = dir.x; // perpendiculaire
+        var blink = (now % 3800) < 150;
+        var lookX = 0, lookY = 0;
+        if (target) {
+            var ldx = target.x - snake[0].x, ldy = target.y - snake[0].y;
+            var ll = Math.max(1, Math.abs(ldx) + Math.abs(ldy));
+            lookX = ldx / ll; lookY = ldy / ll;
+        }
         for (var side = -1; side <= 1; side += 2) {
             var ex = h.x + dir.x * CELL * 0.14 + px * side * CELL * 0.2;
             var ey = h.y + dir.y * CELL * 0.14 + py * side * CELL * 0.2;
+            if (blink) {
+                ctx.strokeStyle = '#0a1628';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(ex - px * CELL * 0.1, ey - py * CELL * 0.1);
+                ctx.lineTo(ex + px * CELL * 0.1, ey + py * CELL * 0.1);
+                ctx.stroke();
+                continue;
+            }
             ctx.fillStyle = '#ffffff';
             ctx.beginPath();
             ctx.arc(ex, ey, CELL * 0.13, 0, Math.PI * 2);
             ctx.fill();
             ctx.fillStyle = '#0a1628';
             ctx.beginPath();
-            ctx.arc(ex + dir.x * CELL * 0.05, ey + dir.y * CELL * 0.05, CELL * 0.06, 0, Math.PI * 2);
+            ctx.arc(
+                ex + dir.x * CELL * 0.05 + lookX * CELL * 0.045,
+                ey + dir.y * CELL * 0.05 + lookY * CELL * 0.045,
+                CELL * 0.06, 0, Math.PI * 2
+            );
             ctx.fill();
         }
     }
@@ -609,6 +685,33 @@ declare(strict_types=1);
             ctx.fillText(p.text, p.x, p.y - age * CELL * 0.9);
         }
         ctx.restore();
+    }
+
+    // Anneau + éclaboussures générés à chaque fruit mangé.
+    function drawFx(now) {
+        for (var i = fx.length - 1; i >= 0; i--) {
+            var p = fx[i];
+            var life = p.kind === 'ring' ? 420 : 560;
+            var age = (now - p.born) / life;
+            if (age >= 1) { fx.splice(i, 1); continue; }
+            ctx.save();
+            if (p.kind === 'ring') {
+                ctx.globalAlpha = (1 - age) * 0.8;
+                ctx.strokeStyle = p.color;
+                ctx.lineWidth = 2.5;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, CELL * (0.3 + 0.9 * age), 0, Math.PI * 2);
+                ctx.stroke();
+            } else {
+                var ease = 1 - Math.pow(1 - age, 2);
+                ctx.globalAlpha = 1 - age;
+                ctx.fillStyle = p.color;
+                ctx.beginPath();
+                ctx.arc(p.x + p.vx * ease, p.y + p.vy * ease, p.r * (1 - age * 0.5), 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.restore();
+        }
     }
 
     function rr(x, y, w, h, r) {
