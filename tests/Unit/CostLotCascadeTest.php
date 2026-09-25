@@ -140,7 +140,7 @@ final class CostLotCascadeTest extends TestCase
 
         // Le lot lié est parti, pas l'autre.
         self::assertSame(1, $lotsDeleted);
-        self::assertNull(Model::find($lotB), 'Le lot lié à l\'achat supprimé doit partir.');
+        self::assertNull(ProductCost::find($lotB), 'Le lot lié à l\'achat supprimé doit partir.');
         self::assertNull(Purchase::find($idB));
 
         // Le lot antérieur est réouvert (valid_to = NULL).
@@ -204,7 +204,7 @@ final class CostLotCascadeTest extends TestCase
         self::assertCount(1, $lots);
         self::assertSame($lotA, (string) $lots[0]['id']);
         self::assertNull($lots[0]['valid_to'], 'Le lot antérieur doit être réouvert.');
-        self::assertSame('1.0', (string) (float) $lots[0]['cost_price']);
+        self::assertSame(1.0, (float) $lots[0]['cost_price']);
     }
 
     /**
@@ -221,7 +221,7 @@ final class CostLotCascadeTest extends TestCase
 
         $lots = ProductCost::forProduct('Fanta');
         self::assertCount(2, $lots);
-        self::assertSame('3.0', (string) (float) $lots[0]['cost_price']);
+        self::assertSame(3.0, (float) $lots[0]['cost_price']);
         self::assertNull($lots[0]['valid_to'], 'Le lot en cours reste en cours.');
         self::assertSame('2026-09-09', substr((string) $lots[1]['valid_to'], 0, 10), 'Le lot antérieur garde sa clôture d\'origine.');
     }
