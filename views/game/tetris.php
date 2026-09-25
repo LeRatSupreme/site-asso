@@ -425,21 +425,53 @@ declare(strict_types=1);
 
     function lerp(a, b, t) { return a + (b - a) * t; }
 
-    // Bloc en relief : base arrondie, biseau clair en haut, ombre en bas.
-    function drawBlock(c2, x, y, size, color, alpha) {
+    // Bloc brillant : dégradé vertical, reflet spéculaire, éclat et liseré interne.
+    // alpha : opacité (blocs posés atténués) · glow : halo lumineux (pièce qui tombe).
+    function drawBlock(c2, x, y, size, color, alpha, glow) {
         c2.save();
         if (alpha !== undefined) { c2.globalAlpha = alpha; }
-        var p = size * 0.08;
-        c2.fillStyle = shade(color, -0.35);
-        rr(c2, x + 1, y + 1, size - 2, size - 2, size * 0.14);
-        c2.fillStyle = color;
-        rr(c2, x + 1, y + 1, size - 2 - p * 0.4, size - 2 - p * 0.4, size * 0.14);
-        c2.fillStyle = shade(color, 0.35);
-        rr(c2, x + p + 1, y + p + 1, size - 2 - p * 2.4, size * 0.22, size * 0.08);
+
+        var inset = size * 0.07;
+        var r = size * 0.22;
+        var bw = size - inset * 2;
+
+        // Corps : dégradé vertical clair → foncé.
+        if (glow) {
+            c2.shadowColor = color;
+            c2.shadowBlur = size * 0.32;
+        }
+        var grad = c2.createLinearGradient(x, y, x, y + size);
+        grad.addColorStop(0, shade(color, 0.45));
+        grad.addColorStop(0.45, color);
+        grad.addColorStop(1, shade(color, -0.38));
+        c2.fillStyle = grad;
+        roundPath(c2, x + inset, y + inset, bw, bw, r);
+        c2.fill();
+        c2.shadowBlur = 0;
+
+        // Reflet spéculaire (moitié haute).
+        var hi = c2.createLinearGradient(x, y, x, y + size * 0.55);
+        hi.addColorStop(0, 'rgba(255,255,255,0.45)');
+        hi.addColorStop(1, 'rgba(255,255,255,0)');
+        c2.fillStyle = hi;
+        roundPath(c2, x + inset + size * 0.09, y + inset + size * 0.07, bw - size * 0.18, size * 0.4, r * 0.7);
+        c2.fill();
+
+        // Petit éclat en haut à gauche.
+        c2.fillStyle = 'rgba(255,255,255,0.5)';
+        roundPath(c2, x + size * 0.2, y + size * 0.17, size * 0.17, size * 0.1, size * 0.05);
+        c2.fill();
+
+        // Liseré interne sombre.
+        c2.strokeStyle = 'rgba(0,0,0,0.35)';
+        c2.lineWidth = 1.2;
+        roundPath(c2, x + inset, y + inset, bw, bw, r);
+        c2.stroke();
+
         c2.restore();
     }
 
-    function rr(c2, x, y, w, h, r) {
+    function roundPath(c2, x, y, w, h, r) {
         c2.beginPath();
         c2.moveTo(x + r, y);
         c2.arcTo(x + w, y, x + w, y + h, r);
@@ -447,7 +479,6 @@ declare(strict_types=1);
         c2.arcTo(x, y + h, x, y, r);
         c2.arcTo(x, y, x + w, y, r);
         c2.closePath();
-        c2.fill();
     }
 
     function draw() {
@@ -480,31 +511,32 @@ declare(strict_types=1);
             var gy = 0;
             while (!collides(cur, 0, gy + 1)) { gy++; }
             ctx.save();
-            ctx.setLineDash([5, 4]);
-            ctx.strokeStyle = 'rgba(255,255,255,0.30)';
-            ctx.lineWidth = 1.5;
             for (var yy = 0; yy < cur.m.length; yy++) {
                 for (var xx = 0; xx < cur.m[yy].length; xx++) {
                     if (cur.m[yy][xx] && cur.y + yy + gy >= 0) {
-                        ctx.strokeRect((cur.x + xx) * CELL + 3, (cur.y + yy + gy) * CELL + 3, CELL - 6, CELL - 6);
+                        var gx = (cur.x + xx) * CELL, gyy = (cur.y + yy + gy) * CELL;
+                        ctx.globalAlpha = 0.10;
+                        ctx.fillStyle = cur.c;
+                        roundPath(ctx, gx + 3, gyy + 3, CELL - 6, CELL - 6, CELL * 0.22);
+                        ctx.fill();
+                        ctx.globalAlpha = 1;
+                        ctx.setLineDash([5, 4]);
+                        ctx.strokeStyle = 'rgba(255,255,255,0.30)';
+                        ctx.lineWidth = 1.5;
+                        ctx.strokeRect(gx + 3, gyy + 3, CELL - 6, CELL - 6);
+                        ctx.setLineDash([]);
                     }
                 }
             }
             ctx.restore();
         }
 
-        // Pièce qui tombe : pleine luminosité + contour lumineux → toujours lisible.
+        // Pièce qui tombe : pleine luminosité + halo coloré → toujours lisible.
         if (cur) {
             for (var y2 = 0; y2 < cur.m.length; y2++) {
                 for (var x2 = 0; x2 < cur.m[y2].length; x2++) {
                     if (cur.m[y2][x2] && cur.y + y2 >= 0) {
-                        var px = (cur.x + x2) * CELL, py = (cur.y + y2) * CELL;
-                        drawBlock(ctx, px, py, CELL, cur.c);
-                        ctx.save();
-                        ctx.strokeStyle = 'rgba(255,255,255,0.55)';
-                        ctx.lineWidth = 1.5;
-                        ctx.strokeRect(px + 1.5, py + 1.5, CELL - 3, CELL - 3);
-                        ctx.restore();
+                        drawBlock(ctx, (cur.x + x2) * CELL, (cur.y + y2) * CELL, CELL, cur.c, undefined, true);
                     }
                 }
             }

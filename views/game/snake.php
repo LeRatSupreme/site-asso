@@ -233,6 +233,7 @@ declare(strict_types=1);
     // ================== ÉTAT ==================
     var settings = loadSettings();
     var snake = [], dir = { x: 1, y: 0 }, nextDir = null;
+    var prevSnake = [], lastTick = 0;   // interpolation fluide entre deux ticks
     var foods = [], golden = null, obstacles = [];
     var score = 0, timer = null, running = false, paused = false, tickMs = 145;
     var pops = [];                 // textes flottants « +2 »
@@ -326,6 +327,8 @@ declare(strict_types=1);
         clearInterval(timer);
         snake = [{ x: 10, y: 12 }, { x: 9, y: 12 }, { x: 8, y: 12 }];
         dir = { x: 1, y: 0 }; nextDir = null;
+        prevSnake = snake.map(function (s) { return { x: s.x, y: s.y }; });
+        lastTick = performance.now();
         score = 0; paused = false; pops = [];
         golden = null; foods = [];
         tickMs = BASE_SPEED[settings.speed] || 145;
@@ -347,6 +350,8 @@ declare(strict_types=1);
 
     function tick() {
         if (!running || paused) return;
+        // Position avant le déplacement : sert de point de départ à l'interpolation.
+        prevSnake = snake.map(function (s) { return { x: s.x, y: s.y }; });
         if (nextDir && (nextDir.x !== -dir.x || nextDir.y !== -dir.y)) {
             dir = nextDir; nextDir = null;
         }
@@ -386,6 +391,7 @@ declare(strict_types=1);
         // Fruit doré expiré ?
         if (golden && performance.now() > golden.until) { golden = null; }
 
+        lastTick = performance.now();
         lenEl.textContent = snake.length;
         draw();
     }
@@ -438,8 +444,15 @@ declare(strict_types=1);
         drawObstacles();
         for (var i = 0; i < foods.length; i++) { drawFood(foods[i], now); }
         drawGolden(now);
-        drawSnake();
+        drawSnake(now);
         drawPops(now);
+    }
+
+    // Boucle de rendu continue : le serpent glisse entre les ticks logiques,
+    // les fruits pulsent et les textes flottants s'animent à 60 fps.
+    function renderLoop() {
+        draw();
+        requestAnimationFrame(renderLoop);
     }
 
     function drawObstacles() {
@@ -507,14 +520,30 @@ declare(strict_types=1);
         return 'rgb(' + r + ',' + g + ',' + b + ')';
     }
 
-    function drawSnake() {
+    // Positions interpolées (en pixels) entre le tick précédent et le tick courant :
+    // chaque segment glisse d'une case vers l'avant → mouvement fluide et continu.
+    function interpPoints(now) {
+        var raw = Math.min(1, (now - lastTick) / tickMs);
+        var t = raw * raw * (3 - 2 * raw); // smoothstep : départs/arrivées doux
+        return snake.map(function (s, i) {
+            var prev = prevSnake[i] || prevSnake[prevSnake.length - 1] || s;
+            var dx = s.x - prev.x, dy = s.y - prev.y;
+            // Téléportation (portail / croissance) : pas d'interpolation.
+            if (Math.abs(dx) > 1 || Math.abs(dy) > 1) {
+                return { x: s.x * CELL + CELL / 2, y: s.y * CELL + CELL / 2 };
+            }
+            return {
+                x: (prev.x + dx * t) * CELL + CELL / 2,
+                y: (prev.y + dy * t) * CELL + CELL / 2
+            };
+        });
+    }
+
+    function drawSnake(now) {
         var n = snake.length;
         if (n === 0) return;
 
-        // Centres des cases.
-        var pts = snake.map(function (s) {
-            return { x: s.x * CELL + CELL / 2, y: s.y * CELL + CELL / 2 };
-        });
+        var pts = interpPoints(now || performance.now());
 
         // Corps : segments du bout de la queue vers la tête, largeur décroissante
         // et dégradé de couleur → la queue est clairement visible.
@@ -712,7 +741,9 @@ declare(strict_types=1);
     reflectSettings();
     showBest();
     snake = [{ x: 10, y: 12 }, { x: 9, y: 12 }, { x: 8, y: 12 }];
+    prevSnake = snake.map(function (s) { return { x: s.x, y: s.y }; });
+    lastTick = performance.now();
     foods = [makeFood()];
-    draw();
+    renderLoop();
 })();
 </script>
