@@ -215,14 +215,35 @@ $userPseudo = ($user !== null && !empty($user['pseudo'])) ? (string) $user['pseu
                 </span>
             </a>
 
-            <div class="gm-ticket gm-ticket-muted ae-reveal">
+            <a class="gm-ticket ae-reveal" href="<?= e(url('/jeux/memory')) ?>">
                 <span class="gm-stub" aria-hidden="true">M</span>
                 <span class="gm-body">
-                    <span class="gm-meta"><span class="badge badge-muted">Bientôt</span></span>
+                    <span class="gm-meta"><span class="badge badge-secondary">3 tailles</span></span>
                     <span class="gm-title">Memory</span>
-                    <span class="gm-desc">Le memory cafétéria reviendra bientôt dans la zone jeux.</span>
+                    <span class="gm-desc">Le memory cafétéria&nbsp;: retrouve toutes les paires de produits le plus vite possible. 3 tailles de grille, du 4×4 au 6×6&nbsp;!</span>
+                    <span class="gm-cta">Jouer →</span>
                 </span>
-            </div>
+            </a>
+
+            <a class="gm-ticket gm-ticket-violet ae-reveal" href="<?= e(url('/jeux/snake')) ?>">
+                <span class="gm-stub" aria-hidden="true">S</span>
+                <span class="gm-body">
+                    <span class="gm-meta"><span class="badge badge-secondary">3 vitesses</span></span>
+                    <span class="gm-title">Snake</span>
+                    <span class="gm-desc">Le classique intemporel&nbsp;: mange un max de fruits sans te mordre ni percuter les murs. Clavier ou tactile, 3 vitesses&nbsp;!</span>
+                    <span class="gm-cta">Jouer →</span>
+                </span>
+            </a>
+
+            <a class="gm-ticket ae-reveal" href="<?= e(url('/jeux/tetris')) ?>">
+                <span class="gm-stub" aria-hidden="true">T</span>
+                <span class="gm-body">
+                    <span class="gm-meta"><span class="badge badge-secondary">Marathon</span></span>
+                    <span class="gm-title">Tetris</span>
+                    <span class="gm-desc">Empile les pièces et complète les lignes&nbsp;! Niveaux progressifs, pièce suivante, réserve et chute rapide. Jusqu'où irez-vous&nbsp;?</span>
+                    <span class="gm-cta">Jouer →</span>
+                </span>
+            </a>
         </div>
     </div>
 </section>

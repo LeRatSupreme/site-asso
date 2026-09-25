@@ -258,6 +258,139 @@ final class GameController extends Controller
         ]);
     }
 
+    // ===================== MEMORY =====================
+
+    /**
+     * Page du Memory cafétéria : 3 tailles de grille, record local + serveur.
+     */
+    public function memory(): void
+    {
+        $user = Auth::check() ? Auth::user() : null;
+
+        $this->render('game/memory', [
+            'title'       => 'Memory Cafétéria — AEIC',
+            'description' => 'Le memory de la cafétéria de l\'AEIC : retrouve toutes les paires de produits le plus vite possible. 3 tailles de grille, records sauvegardés.',
+            'user'        => $user,
+            'isLoggedIn'  => Auth::check(),
+            'submitUrl'   => url('/jeux/score'),
+            'csrfToken'   => csrf_token(),
+        ]);
+    }
+
+    // ===================== SNAKE =====================
+
+    /**
+     * Page du Snake : clavier ou tactile, 3 vitesses, record local + serveur.
+     */
+    public function snake(): void
+    {
+        $user = Auth::check() ? Auth::user() : null;
+
+        $this->render('game/snake', [
+            'title'       => 'Snake — AEIC',
+            'description' => 'Le classique Snake version AEIC : mange un maximum de fruits sans te mordre ni percuter les murs. 3 vitesses, jouable au clavier et au tactile.',
+            'user'        => $user,
+            'isLoggedIn'  => Auth::check(),
+            'submitUrl'   => url('/jeux/score'),
+            'csrfToken'   => csrf_token(),
+        ]);
+    }
+
+    // ===================== TETRIS =====================
+
+    /**
+     * Page du Tetris : marathon avec niveaux, next, hold, score local + serveur.
+     */
+    public function tetris(): void
+    {
+        $user = Auth::check() ? Auth::user() : null;
+
+        $this->render('game/tetris', [
+            'title'       => 'Tetris — AEIC',
+            'description' => 'Un Tetris marathon version AEIC : empile les pièces, complète les lignes et va le plus loin possible. Niveaux progressifs, next et hold, tactile inclus.',
+            'user'        => $user,
+            'isLoggedIn'  => Auth::check(),
+            'submitUrl'   => url('/jeux/score'),
+            'csrfToken'   => csrf_token(),
+        ]);
+    }
+
+    // ===================== SCORES ARCADE =====================
+
+    /**
+     * Enregistre le meilleur score du jour d'un jeu d'arcade
+     * (CSRF + auth requis).
+     *
+     * Body JSON ou form : { game, mode, score, moves?, lines? }.
+     * Le score est borné côté serveur et seul le meilleur de la journée est conservé.
+     */
+    public function submitScore(): void
+    {
+        if (!Auth::check()) {
+            $this->json(['success' => false, 'error' => 'auth_required'], 401);
+        }
+
+        $raw = file_get_contents('php://input');
+        $data = [];
+        if (is_string($raw) && $raw !== '') {
+            $decoded = json_decode($raw, true);
+            if (is_array($decoded)) {
+                $data = $decoded;
+            }
+        }
+        $data = array_merge($_POST, $data);
+
+        $token = (string) ($data['_csrf'] ?? '');
+        if ($token === '') {
+            $headerToken = '';
+            foreach (['HTTP_X_CSRF_TOKEN', 'HTTP_X_CSRFTOKEN'] as $key) {
+                if (!empty($_SERVER[$key])) {
+                    $headerToken = (string) $_SERVER[$key];
+                    break;
+                }
+            }
+            $token = $headerToken;
+        }
+        if (!hash_equals(csrf_token(), $token)) {
+            $this->json(['success' => false, 'error' => 'csrf'], 419);
+        }
+
+        $game = strtolower(trim((string) ($data['game'] ?? '')));
+        $mode = strtolower(trim((string) ($data['mode'] ?? 'normal')));
+        $score = isset($data['score']) ? (int) $data['score'] : -1;
+
+        // Liste blanche : jeu → modes autorisés.
+        $allowed = [
+            'memory' => ['4x4', '6x4', '6x6'],
+            'snake'  => ['lent', 'normal', 'rapide'],
+            'tetris' => ['marathon'],
+        ];
+
+        if (!isset($allowed[$game]) || !in_array($mode, $allowed[$game], true)) {
+            $this->json(['success' => false, 'error' => 'invalid_game'], 400);
+        }
+        if ($score < 0 || $score > 1_000_000) {
+            $this->json(['success' => false, 'error' => 'invalid_score'], 422);
+        }
+
+        $meta = [];
+        if (isset($data['moves'])) {
+            $meta['moves'] = (int) $data['moves'];
+        }
+        if (isset($data['lines'])) {
+            $meta['lines'] = (int) $data['lines'];
+        }
+
+        $isRecord = GameScore::saveArcadeResult((string) Auth::id(), $game, $mode, $score, $meta !== [] ? $meta : null);
+
+        $this->json([
+            'success'  => true,
+            'game'     => $game,
+            'mode'     => $mode,
+            'isRecord' => $isRecord,
+        ]);
+    }
+
     // ===================== ÉNIGME QUOTIDIENNE =====================
 
     /**
