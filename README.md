@@ -285,7 +285,7 @@ et 5 jeux jouables sur mobile comme au clavier.
   Seul le mode quotidien est enregistré (1 partie/jour, série de victoires).
 - **Énigme du jour** (`/jeux/enigme`) : une devinette par jour (table `daily_enigmas`,
   éditable en admin), vérification AJAX de la réponse.
-- **Memory cafétéria** (`/jeux/memory`) : 5 tailles de grille (4×3 → 8×6, choix
+- **Memory cafétéria** (`/jeux/memory`) : 7 tailles de grille (4×3 → 10×8, choix
   mémorisé), record de temps local par taille, produits de la cafétéria en emojis.
 - **Snake** (`/jeux/snake`) : 3 terrains (🧱 Murs / 🌀 Portail / 🚧 Obstacles),
   3 vitesses, 1 à 3 fruits simultanés, fruits dorés à durée limitée, rendu fluide

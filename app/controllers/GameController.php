@@ -368,7 +368,7 @@ final class GameController extends Controller
             }
         }
         $allowed = [
-            'memory' => ['4x3', '4x4', '6x4', '6x6', '8x6'],
+            'memory' => ['4x3', '4x4', '6x4', '6x6', '8x6', '8x8', '10x8'],
             'snake'  => $snakeModes,
             'tetris' => ['marathon'],
         ];

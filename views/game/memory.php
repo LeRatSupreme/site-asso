@@ -24,6 +24,20 @@ declare(strict_types=1);
 <section class="section">
     <div class="container game-zone">
 
+        <!-- Taille de grille : ligne dédiée au-dessus du plateau -->
+        <div class="memory-sizes">
+            <span class="memory-sizes-label">Taille</span>
+            <div class="memory-pills" id="g-diffs" role="group" aria-label="Taille de la grille">
+                <button type="button" class="memory-pill" data-size="4x3">4×3</button>
+                <button type="button" class="memory-pill" data-size="4x4">4×4</button>
+                <button type="button" class="memory-pill" data-size="6x4">6×4</button>
+                <button type="button" class="memory-pill" data-size="6x6">6×6</button>
+                <button type="button" class="memory-pill" data-size="8x6">8×6</button>
+                <button type="button" class="memory-pill" data-size="8x8">8×8</button>
+                <button type="button" class="memory-pill" data-size="10x8">10×8</button>
+            </div>
+        </div>
+
         <!-- Barre de jeu -->
         <div class="game-bar">
             <div class="game-stats">
@@ -45,13 +59,6 @@ declare(strict_types=1);
                 </div>
             </div>
             <div class="game-controls">
-                <div class="memory-pills" id="g-diffs" role="group" aria-label="Taille de la grille">
-                    <button type="button" class="memory-pill" data-size="4x3">4×3</button>
-                    <button type="button" class="memory-pill" data-size="4x4">4×4</button>
-                    <button type="button" class="memory-pill" data-size="6x4">6×4</button>
-                    <button type="button" class="memory-pill" data-size="6x6">6×6</button>
-                    <button type="button" class="memory-pill" data-size="8x6">8×6</button>
-                </div>
                 <button class="btn btn-primary btn-sm" id="g-new">Nouvelle partie</button>
             </div>
         </div>
@@ -71,7 +78,22 @@ declare(strict_types=1);
 </section>
 
 <style>
-.game-zone { max-width: 720px; }
+.game-zone { max-width: 900px; }
+
+/* Ligne dédiée au choix de la taille */
+.memory-sizes {
+    display: flex; align-items: center; gap: 0.7rem; flex-wrap: wrap;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--border-strong);
+    border-radius: 0.75rem;
+    padding: 0.7rem 1rem;
+    margin-bottom: 1.25rem;
+}
+.memory-sizes-label {
+    font-size: 0.72rem; font-weight: 800; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.06em;
+}
+.memory-pills { display: flex; gap: 0.4rem; flex-wrap: wrap; }
 
 .game-bar {
     display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
@@ -86,7 +108,6 @@ declare(strict_types=1);
 .game-stat-value { display: block; font-size: 1.2rem; font-weight: 800; color: var(--primary); }
 .game-controls { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
 
-/* Pills de taille de grille (même style que snake / tetris) */
 .memory-pills { display: flex; gap: 0.4rem; flex-wrap: wrap; }
 .memory-pill {
     padding: 0.35rem 0.7rem;
@@ -120,7 +141,8 @@ declare(strict_types=1);
 
 .g-face {
     position: absolute; inset: 0; border-radius: 12px;
-    display: grid; place-items: center; font-size: 2rem;
+    display: grid; place-items: center;
+    font-size: inherit;
     backface-visibility: hidden; -webkit-backface-visibility: hidden;
 }
 .g-front {
@@ -159,8 +181,8 @@ declare(strict_types=1);
 
 <script>
 (function () {
-    var PRODUCTS = ['🥤','🍫','⚡','💧','🍟','🍬','🧃','🍵','🥪','☕','🍕','🍩','🍦','🍔','🥨','🧋','💻','🧩','🍎','🍪','🧀','🥐','🍇','🔥'];
-    var SIZES = ['4x3', '4x4', '6x4', '6x6', '8x6'];
+    var PRODUCTS = ['🥤','🍫','⚡','💧','🍟','🍬','🧃','🍵','🥪','☕','🍕','🍩','🍦','🍔','🥨','🧋','💻','🧩','🍎','🍪','🧀','🥐','🍇','🔥','🍋','🌶️','🥗','🌮','🧁','🍯','🥛','🍹','🎯','🎸','🎮','🎧','📚','✏️','🧠','🏆'];
+    var SIZES = ['4x3', '4x4', '6x4', '6x6', '8x6', '8x8', '10x8'];
     var SUBMIT_URL = <?= json_encode($submitUrl) ?>;
     var CSRF_TOKEN = <?= json_encode($csrfToken) ?>;
     var IS_LOGGED_IN = <?= json_encode((bool) $isLoggedIn) ?>;
@@ -333,12 +355,14 @@ declare(strict_types=1);
     // Responsive card size.
     function adjustSize() {
         var c = cols();
-        var maxWidth = Math.min(720, window.innerWidth - 48);
+        var maxWidth = Math.min(860, window.innerWidth - 48);
         var gap = 8;
         var size = Math.floor((maxWidth - gap * (c - 1)) / c);
         cards.forEach(function (card) {
             card.style.width = size + 'px';
             card.style.height = size + 'px';
+            // L'emoji suit la taille de la carte (grilles 8×8 / 10×8).
+            card.style.fontSize = Math.floor(size * 0.52) + 'px';
         });
         board.style.gridTemplateColumns = 'repeat(' + c + ', ' + size + 'px)';
     }
