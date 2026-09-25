@@ -130,6 +130,46 @@ final class Sale extends Model
     }
 
     /**
+     * Répartition des ventes par libellé de paiement brut SumUp
+     * (payment_raw) et par classement (CARTE/LIQUIDE).
+     *
+     * Diagnostic de classification : un libellé inattendu classé CARTE
+     * par défaut porterait des frais estimés à tort.
+     *
+     * @return list<array{payment_raw:string, payment_method:string, n:int, total:float}>
+     */
+    public static function paymentRawBreakdown(): array
+    {
+        try {
+            $stmt = self::pdo()->query(
+                'SELECT payment_raw, payment_method,
+                        COUNT(*) AS n,
+                        ROUND(SUM(price_ttc), 2) AS total
+                 FROM sales
+                 GROUP BY payment_raw, payment_method
+                 ORDER BY total DESC'
+            );
+
+            /** @var list<array<string,mixed>> $rows */
+            $rows = $stmt->fetchAll();
+        } catch (\Throwable) {
+            return [];
+        }
+
+        $out = [];
+        foreach ($rows as $r) {
+            $out[] = [
+                'payment_raw'    => (string) ($r['payment_raw'] ?? ''),
+                'payment_method' => (string) ($r['payment_method'] ?? ''),
+                'n'              => (int) ($r['n'] ?? 0),
+                'total'          => (float) ($r['total'] ?? 0),
+            ];
+        }
+
+        return $out;
+    }
+
+    /**
      * Estimation des commissions SumUp sur les ventes CARTE.
      *
      * Le taux est appliqué et arrondi ligne par ligne (comme SumUp
