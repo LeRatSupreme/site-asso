@@ -46,11 +46,11 @@ declare(strict_types=1);
             </div>
             <div class="game-controls">
                 <div class="memory-pills" id="g-diffs" role="group" aria-label="Taille de la grille">
-                    <button type="button" class="memory-pill" data-size="4x3">🌱 4×3</button>
-                    <button type="button" class="memory-pill" data-size="4x4">🙂 4×4</button>
-                    <button type="button" class="memory-pill" data-size="6x4">😎 6×4</button>
-                    <button type="button" class="memory-pill" data-size="6x6">🔥 6×6</button>
-                    <button type="button" class="memory-pill" data-size="8x6">💀 8×6</button>
+                    <button type="button" class="memory-pill" data-size="4x3">4×3</button>
+                    <button type="button" class="memory-pill" data-size="4x4">4×4</button>
+                    <button type="button" class="memory-pill" data-size="6x4">6×4</button>
+                    <button type="button" class="memory-pill" data-size="6x6">6×6</button>
+                    <button type="button" class="memory-pill" data-size="8x6">8×6</button>
                 </div>
                 <button class="btn btn-primary btn-sm" id="g-new">Nouvelle partie</button>
             </div>

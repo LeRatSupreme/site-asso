@@ -275,6 +275,35 @@ sélection des **variantes obligatoires**, désinscription possible. Doublon imp
 
 ---
 
+## 🎮 Zone jeux
+
+Menu des jeux (`/jeux`) : statistiques personnelles, pseudo de joueur (classement),
+et 5 jeux jouables sur mobile comme au clavier.
+
+- **Wordle** (`/jeux/wordle`) : FR/EN, 3 difficultés (5, 6 ou 7 lettres),
+  mode **quotidien** (même mot pour tous, change à minuit) ou **libre** illimité.
+  Seul le mode quotidien est enregistré (1 partie/jour, série de victoires).
+- **Énigme du jour** (`/jeux/enigme`) : une devinette par jour (table `daily_enigmas`,
+  éditable en admin), vérification AJAX de la réponse.
+- **Memory cafétéria** (`/jeux/memory`) : 5 tailles de grille (4×3 → 8×6, choix
+  mémorisé), record de temps local par taille, produits de la cafétéria en emojis.
+- **Snake** (`/jeux/snake`) : 3 terrains (🧱 Murs / 🌀 Portail / 🚧 Obstacles),
+  3 vitesses, 1 à 3 fruits simultanés, fruits dorés à durée limitée, rendu fluide
+  (interpolation), jouable au clavier, au swipe ou au pad tactile.
+- **Tetris** (`/jeux/tetris`) : marathon, 7 pièces avec wall kicks, next, hold,
+  fantôme d'atterrissage, niveaux progressifs, records locaux + serveur.
+
+**Scores** (table `game_scores`) :
+- Wordle : une ligne par jour/mode (`daily_fr`, `daily_en`), séries calculées à la
+  volée (`GameScore`) ;
+- Memory / Snake / Tetris : **meilleur score du jour** par jeu et mode via upsert
+  (`GameScore::saveArcadeResult`, endpoint `POST /jeux/score` : auth + CSRF +
+  liste blanche jeu/mode, score borné côté serveur) ;
+- Classement global (`/jeux/leaderboard`) et gestion des joueurs en admin
+  (`/admin/jeux`).
+
+---
+
 ## 🛠️ Espace admin (Phase 5)
 
 Routes protégées par le rôle **ADMIN** (`/admin/*`) — layout dédié, `noindex` :
