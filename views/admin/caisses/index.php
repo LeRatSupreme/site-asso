@@ -10,6 +10,9 @@ use App\Models\CashMovement;
  * @var float $balance    Solde théorique actuel.
  * @var float $salesTotal Total des ventes en liquide.
  * @var float $cardTotal  Total des ventes par carte (hors caisse).
+ * @var float $cardFee    Frais SumUp estimés sur les ventes carte.
+ * @var float $cardNet    Net estimé des ventes carte après frais.
+ * @var string $feeRate   Taux de commission formaté (ex. « 1,75 »).
  * @var list<array<string,mixed>> $movements Mouvements manuels récents.
  * @var list<array<string,mixed>> $counts    Comptages récents.
  * @var list<array<string,mixed>> $ecarts    Comptages avec écart (30 j).
@@ -28,6 +31,7 @@ $typeLabels = [
         <span class="stat-label">Caisse théorique</span>
         <span class="card-meta">dont <?= e(formatPrice($salesTotal)) ?> de ventes en liquide</span>
         <span class="card-meta">+ <?= e(formatPrice($cardTotal)) ?> de ventes par carte (hors caisse)</span>
+        <span class="card-meta">frais SumUp estimés ≈ −<?= e(formatPrice($cardFee)) ?> (<?= e($feeRate) ?> %) · net ≈ <?= e(formatPrice($cardNet)) ?></span>
     </div>
     <div class="stat-card surface glass">
         <span class="stat-value <?= $ecarts !== [] ? 'is-negative' : 'is-positive' ?>"><?= e((string) count($ecarts)) ?></span>

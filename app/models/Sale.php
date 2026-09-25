@@ -130,6 +130,43 @@ final class Sale extends Model
     }
 
     /**
+     * Estimation des commissions SumUp sur les ventes CARTE.
+     *
+     * Le taux est appliqué et arrondi ligne par ligne (comme SumUp
+     * prélève un frais par paiement), puis les frais sont sommés.
+     *
+     * @param float      $ratePercent Taux en % (ex. 1.75).
+     * @param string|null $fromDay    Jour de début « YYYY-MM-DD » (inclus), ou null.
+     * @param string|null $toDay      Jour de fin « YYYY-MM-DD » (inclus), ou null.
+     */
+    public static function sumCardFeeEstimate(float $ratePercent, ?string $fromDay = null, ?string $toDay = null): float
+    {
+        $where = ['payment_method = ?', 'price_ttc > 0'];
+        $args = [$ratePercent];
+        if ($fromDay !== null && $fromDay !== '') {
+            $where[] = 'sold_at >= ?';
+            $args[] = $fromDay . ' 00:00:00';
+        }
+        if ($toDay !== null && $toDay !== '') {
+            $where[] = 'sold_at <= ?';
+            $args[] = $toDay . ' 23:59:59';
+        }
+
+        try {
+            $stmt = self::pdo()->prepare(
+                'SELECT COALESCE(SUM(ROUND(price_ttc * ? / 100, 2)), 0)
+                 FROM sales
+                 WHERE ' . implode(' AND ', $where)
+            );
+            $stmt->execute($args);
+
+            return (float) ($stmt->fetchColumn() ?: 0);
+        } catch (\Throwable) {
+            return 0.0;
+        }
+    }
+
+    /**
      * Références de transaction déjà présentes en base, parmi celles fournies.
      *
      * Utilisé par la synchro automatique SumUp : une transaction dont la

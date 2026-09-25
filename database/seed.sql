@@ -44,7 +44,8 @@ INSERT INTO settings (id, `key`, value, type, label, `group`) VALUES
     ('set_smtp_user',            'smtp_user',            '',                                                           'text',    'Utilisateur SMTP', 'email'),
     ('set_smtp_pass',            'smtp_pass',            '',                                                           'text',    'Mot de passe SMTP', 'email'),
     ('set_sumup_enabled',        'sumup_enabled',        '0',                                                          'boolean', 'Paiements par lien SumUp activés', 'sumup'),
-    ('set_sumup_default_link',   'sumup_default_link',   '',                                                           'text',    'Lien de paiement SumUp par défaut', 'sumup')
+    ('set_sumup_default_link',   'sumup_default_link',   '',                                                           'text',    'Lien de paiement SumUp par défaut', 'sumup'),
+    ('set_sumup_fee_rate',       'sumup_fee_rate',       '1.75',                                                       'text',    'Taux de commission SumUp (% — estimation des frais carte)', 'sumup')
 ON DUPLICATE KEY UPDATE value = VALUES(value);
 
 -- -------------------------------------------------------------------

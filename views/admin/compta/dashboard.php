@@ -8,6 +8,9 @@ declare(strict_types=1);
  * @var array<string,string> $periodOptions
  * @var array{ca:float,profit:float,qty:int,ca_products:float} $agg
  * @var array<string,float> $split
+ * @var float $cardFee  Frais SumUp estimés sur les ventes carte de la période.
+ * @var float $cardNet  Net estimé des ventes carte après frais.
+ * @var string $feeRate Taux de commission formaté (ex. « 1,75 »).
  * @var list<array<string,mixed>> $top
  * @var list<array<string,mixed>> $byCategory
  * @var int $reorderAlerts
@@ -160,6 +163,12 @@ if ($reorderAlerts > 0) {
         <div class="split-bar" title="Carte vs Liquide">
             <div class="split-bar-card" style="width:<?= e((string) $cardPct) ?>%"></div>
         </div>
+        <?php if (($split['CARTE'] ?? 0) > 0): ?>
+            <p class="muted">
+                Frais SumUp estimés ≈ <strong>−<?= e(formatPrice($cardFee)) ?></strong>
+                (<?= e($feeRate) ?> %) · net carte ≈ <strong><?= e(formatPrice($cardNet)) ?></strong>
+            </p>
+        <?php endif; ?>
         <p class="muted">TVA collectée sur la période : <strong><?= e(formatPrice($vatTotal)) ?></strong></p>
     </div>
 
