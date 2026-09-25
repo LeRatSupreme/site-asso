@@ -148,6 +148,12 @@ ob_start();
 register_shutdown_function(static function (): void {
     $body = (string) ob_get_clean();
     $headers = headers_list();
+    // Le SAPI CLI n'enregistre pas les header() (headers_list() est vide sous
+    // Linux) : le Location posé par redirect() en APP_TESTING est recapté ici.
+    $location = $GLOBALS['AEIC_TEST_LOCATION'] ?? '';
+    if ($location !== '' && !in_array('Location: ' . $location, $headers, true)) {
+        $headers[] = 'Location: ' . $location;
+    }
     $payload = [
         'code'      => http_response_code(),
         'headers'   => $headers,

@@ -149,9 +149,12 @@ function parseFrenchFloat(string $s): float
  *
  * En mode test (APP_TESTING), on dépile la pile d'exécution en levant une
  * exception dédiée plutôt qu'en appelant exit() : cela permet au harness
- * d'intégration (tests/Integration/runner.php) de capturer l'en-tête
- * `Location` via headers_list() tout en interrompant le contrôleur comme
- * le ferait un exit() en production.
+ * d'intégration (tests/Integration/runner.php) d'interrompre le contrôleur
+ * comme le ferait un exit() en production.
+ *
+ * L'URL est aussi exposée via $GLOBALS['AEIC_TEST_LOCATION'] : le SAPI CLI
+ * n'enregistre PAS les header() (headers_list() renvoie [] sous Linux), le
+ * runner doit donc recapturer le `Location` depuis cette variable globale.
  */
 function redirect(string $url): void
 {
@@ -160,6 +163,7 @@ function redirect(string $url): void
     }
 
     if (defined('APP_TESTING') && APP_TESTING) {
+        $GLOBALS['AEIC_TEST_LOCATION'] = $url;
         throw new RedirectSignal();
     }
 
