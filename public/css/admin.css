@@ -947,3 +947,73 @@
     color: inherit;
 }
 .sms-card-title-input:focus { outline: none; border-bottom-color: var(--primary, #48bdd3); }
+
+/* ---- Mobile : lisibilité téléphone ------------------------------------- */
+
+/* Fond sombre derrière la sidebar ouverte (voir layout admin). */
+.admin-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 55;
+    background: rgba(4, 10, 20, 0.55);
+}
+.admin-backdrop[hidden] { display: none; }
+@media (min-width: 961px) {
+    .admin-backdrop { display: none !important; }
+}
+
+@media (max-width: 700px) {
+    /* Topbar collante : titre + bouton menu toujours accessibles. */
+    .admin-topbar {
+        position: sticky;
+        top: 0;
+        z-index: 30;
+        background: var(--admin-bg);
+        padding: 0.65rem 0;
+        margin-bottom: 1rem;
+    }
+    .admin-title { font-size: 1.25rem; }
+
+    /* Tableaux : défilement horizontal lisible au lieu de colonnes écrasées. */
+    .table-wrap {
+        margin: 0 -1rem;
+        padding: 0 1rem;
+        -webkit-overflow-scrolling: touch;
+    }
+    .table-wrap .table { min-width: 520px; }
+    .table th { white-space: nowrap; font-size: 0.78rem; }
+    .table th,
+    .table td { padding: 0.45rem 0.55rem; font-size: 0.88rem; }
+
+    /* Formulaires : champs pleine largeur, boutons avec cible tactile. */
+    .field input[type="text"],
+    .field input[type="search"],
+    .field input[type="date"],
+    .field input[type="number"],
+    .field input[type="email"],
+    .field input[type="password"],
+    .field select,
+    .field textarea {
+        width: 100%;
+    }
+    form button[type="submit"],
+    form input[type="submit"] {
+        min-height: 44px;
+    }
+
+    /* Cartes et KPI plus compacts. */
+    .kpi { padding: 1rem; }
+    .kpi-value { font-size: 1.5rem; }
+    .stat-cards { gap: 0.75rem; }
+    .stat-card { padding: 0.8rem 0.9rem; }
+    .stat-value { font-size: 1.15rem; }
+
+    /* Barre de période : pastilles défilantes au lieu de retours à la ligne. */
+    .period-pills {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        padding-bottom: 0.25rem;
+    }
+    .period-pill { white-space: nowrap; }
+}

@@ -160,6 +160,7 @@ if (in_array($user['role'] ?? null, Permissions::adminRoles(), true)) {
     <a class="skip-link" href="#contenu">Aller au contenu</a>
 
     <div class="admin-shell">
+        <div class="admin-backdrop" id="admin-backdrop" hidden></div>
         <aside class="admin-sidebar">
             <a class="brand" href="<?= e(url('/admin')) ?>">
                 <span class="brand-logo" aria-hidden="true">AE</span>
@@ -228,18 +229,39 @@ if (in_array($user['role'] ?? null, Permissions::adminRoles(), true)) {
         (function () {
             var btn = document.querySelector('.admin-toggle');
             var side = document.querySelector('.admin-sidebar');
-            if (!btn || !side) return;
-            btn.addEventListener('click', function () {
-                var open = side.classList.toggle('is-open');
-                btn.setAttribute('aria-expanded', open ? 'true' : 'false');
-            });
+            var backdrop = document.getElementById('admin-backdrop');
+
+            function setOpen(open) {
+                if (!side) return;
+                side.classList.toggle('is-open', open);
+                if (btn) btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+                if (backdrop) backdrop.hidden = !open;
+            }
+
+            if (btn && side) {
+                btn.addEventListener('click', function () {
+                    setOpen(!side.classList.contains('is-open'));
+                });
+                if (backdrop) {
+                    backdrop.addEventListener('click', function () { setOpen(false); });
+                }
+                document.addEventListener('keydown', function (e) {
+                    if (e.key === 'Escape') { setOpen(false); }
+                });
+                // Ferme le menu au tap sur un lien (mobile).
+                side.addEventListener('click', function (e) {
+                    if (e.target.closest('a')) { setOpen(false); }
+                });
+            }
 
             // Sauvegarde et restaure la position du scroll de la sidebar.
-            var SS_KEY = 'aeic_admin_sidebar_scroll';
-            try { side.scrollTop = parseInt(sessionStorage.getItem(SS_KEY) || '0', 10) || 0; } catch (e) {}
-            window.addEventListener('beforeunload', function () {
-                try { sessionStorage.setItem(SS_KEY, String(side.scrollTop)); } catch (e) {}
-            });
+            if (side) {
+                var SS_KEY = 'aeic_admin_sidebar_scroll';
+                try { side.scrollTop = parseInt(sessionStorage.getItem(SS_KEY) || '0', 10) || 0; } catch (e) {}
+                window.addEventListener('beforeunload', function () {
+                    try { sessionStorage.setItem(SS_KEY, String(side.scrollTop)); } catch (e) {}
+                });
+            }
         })();
     </script>
     <script src="<?= e(rootAssetVersioned('/assets/js/confirm.js')) ?>"></script>
