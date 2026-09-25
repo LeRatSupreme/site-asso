@@ -17,7 +17,6 @@ declare(strict_types=1);
 <header class="page-hero">
     <div class="halo halo-teal" aria-hidden="true"></div>
     <div class="container">
-        <a class="btn btn-outline" href="<?= e(url('/jeux')) ?>" style="margin-bottom:0.75rem;text-decoration:none;">← Retour aux jeux</a>
         <span class="eyebrow">Jeu d'arcade</span>
         <h1 class="page-title">Snake</h1>
         <p class="page-lead">Mange un maximum de fruits sans te mordre&nbsp;! Murs, portails ou obstacles&nbsp;: à toi de choisir ton terrain.</p>
@@ -26,6 +25,8 @@ declare(strict_types=1);
 
 <section class="section">
     <div class="container game-zone">
+
+        <a class="btn btn-outline btn-sm" style="display:inline-block;margin-bottom:1.25rem;text-decoration:none;" href="<?= e(url('/jeux')) ?>">← Retour aux jeux</a>
 
         <!-- Réglages façon Google Snake -->
         <div class="snake-settings">

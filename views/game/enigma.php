@@ -10,7 +10,6 @@ declare(strict_types=1);
 <header class="page-hero">
     <div class="halo halo-teal" aria-hidden="true"></div>
     <div class="container">
-        <a class="btn btn-outline" href="<?= e(url('/jeux')) ?>" style="margin-bottom:0.75rem;text-decoration:none;">← Retour aux jeux</a>
         <span class="eyebrow">Défi du jour</span>
         <h1 class="page-title">Énigme quotidienne</h1>
         <p class="page-lead">Une devinette par jour, identique pour tous. Elle change à minuit (heure de Paris).</p>
@@ -19,6 +18,8 @@ declare(strict_types=1);
 
 <section class="section">
     <div class="container" style="max-width:640px;">
+
+        <a class="btn btn-outline btn-sm" style="display:inline-block;margin-bottom:1.25rem;text-decoration:none;" href="<?= e(url('/jeux')) ?>">← Retour aux jeux</a>
 
         <?php if ($enigma === null): ?>
             <p style="text-align:center;color:var(--muted);">Aucune énigme n'est disponible pour le moment. Revenez demain !</p>
