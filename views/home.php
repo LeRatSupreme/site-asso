@@ -45,6 +45,21 @@ $allPromoEmpty = empty($promotions);
     </div>
 </section>
 
+<!-- ===================== COORDONNÉES ===================== -->
+<section class="section section-alt">
+    <div class="container">
+        <div class="about-contact ae-reveal">
+            <div class="about-contact-body">
+                <h2 class="section-title about-contact-title"><?= e(t('about.contact.title')) ?></h2>
+                <p class="lead about-contact-text"><?= e(t('about.contact.label')) ?> — <?= e(t('about.contact.address')) ?></p>
+            </div>
+            <div class="about-contact-actions">
+                <a class="btn btn-primary" href="<?= e(url('/presentation')) ?>#ou-nous-trouver"><?= e(t('map.title')) ?></a>
+            </div>
+        </div>
+    </div>
+</section>
+
 <section class="section">
     <div class="container">
         <div class="section-head ae-reveal">
@@ -225,21 +240,6 @@ $allPromoEmpty = empty($promotions);
                     <a class="btn btn-lg ae-btn-light" href="<?= e(url('/register')) ?>"><?= e(t('home.cta.join')) ?></a>
                     <a class="btn btn-lg ae-btn-glass" href="<?= e(url('/events')) ?>"><?= e(t('home.cta.events')) ?></a>
                 </div>
-            </div>
-        </div>
-    </div>
-</section>
-
-<!-- ===================== COORDONNÉES ===================== -->
-<section class="section section-alt">
-    <div class="container">
-        <div class="about-contact ae-reveal">
-            <div class="about-contact-body">
-                <h2 class="section-title about-contact-title"><?= e(t('about.contact.title')) ?></h2>
-                <p class="lead about-contact-text"><?= e(t('about.contact.label')) ?> — <?= e(t('about.contact.address')) ?></p>
-            </div>
-            <div class="about-contact-actions">
-                <a class="btn btn-primary" href="<?= e(url('/presentation')) ?>#ou-nous-trouver"><?= e(t('map.title')) ?></a>
             </div>
         </div>
     </div>
