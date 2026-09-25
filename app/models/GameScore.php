@@ -50,6 +50,63 @@ final class GameScore extends Model
     }
 
     /**
+     * Enregistre (ou améliore) le meilleur score du jour d'un jeu d'arcade
+     * (memory, snake, tetris).
+     *
+     * La contrainte UNIQUE (user_id, game, mode, played_at) garantit une seule
+     * ligne par jour : on ne conserve que le meilleur score de la journée.
+     *
+     * @param array{moves?:int,lines?:int}|null $meta détails optionnels
+     * @return bool vrai si un nouveau record personnel du jour a été établi
+     */
+    public static function saveArcadeResult(string $userId, string $game, string $mode, int $score, ?array $meta = null): bool
+    {
+        $score = max(0, min(1_000_000, $score));
+        $attempts = null;
+        if ($meta !== null) {
+            if (isset($meta['moves']) && $meta['moves'] >= 0) {
+                $attempts = (int) min(10_000, (int) $meta['moves']);
+            } elseif (isset($meta['lines']) && $meta['lines'] >= 0) {
+                $attempts = (int) min(10_000, (int) $meta['lines']);
+            }
+        }
+
+        try {
+            $sql = 'INSERT INTO game_scores
+                        (id, user_id, game, mode, score, won, attempts, played_at)
+                    VALUES
+                        (:id, :uid, :game, :mode, :score, 1, :att, :day)
+                    ON DUPLICATE KEY UPDATE
+                        score = GREATEST(score, VALUES(score)),
+                        attempts = VALUES(attempts),
+                        won = 1';
+
+            $stmt = static::pdo()->prepare($sql);
+            $stmt->execute([
+                'id'    => 'gs_' . bin2hex(random_bytes(10)),
+                'uid'   => $userId,
+                'game'  => $game,
+                'mode'  => $mode,
+                'score' => $score,
+                'att'   => $attempts,
+                'day'   => date('Y-m-d'),
+            ]);
+
+            // rowCount() vaut 2 quand la ligne existante a été mise à jour par
+            // l'upsert MySQL ; on rejoue une lecture simple pour fiabiliser.
+            $check = static::pdo()->prepare(
+                'SELECT score FROM game_scores WHERE user_id = ? AND game = ? AND mode = ? AND played_at = ?'
+            );
+            $check->execute([$userId, $game, $mode, date('Y-m-d')]);
+            $row = $check->fetch();
+
+            return $row !== false && (int) $row['score'] <= $score;
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    /**
      * Indique si l'utilisateur a déjà joué aujourd'hui pour ce mode.
      */
     public static function hasPlayedToday(string $userId, string $mode): bool

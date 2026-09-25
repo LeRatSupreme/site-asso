@@ -72,7 +72,8 @@ function aeic_register_routes(Router $router): void
     $router->get('/sondages/{slug}', [PollController::class, 'show']);
     $router->post('/sondages/{slug}/vote', [PollController::class, 'vote']);
 
-    // Zone jeux (Wordle FR/EN, 3 difficultés, 2 modes + énigme quotidienne + classement).
+    // Zone jeux (Wordle FR/EN, 3 difficultés, 2 modes + énigme quotidienne + classement
+    // + Memory cafétéria, Snake et Tetris).
     $router->get('/jeux', [GameController::class, 'index']);
     $router->post('/jeux/set-pseudo', [GameController::class, 'setPseudo']);
     $router->get('/jeux/wordle', [GameController::class, 'wordle']);
@@ -81,6 +82,10 @@ function aeic_register_routes(Router $router): void
     $router->get('/jeux/enigme', [GameController::class, 'enigma']);
     $router->post('/jeux/enigme/check', [GameController::class, 'checkEnigma']);
     $router->get('/jeux/leaderboard', [GameController::class, 'leaderboard']);
+    $router->get('/jeux/memory', [GameController::class, 'memory']);
+    $router->get('/jeux/snake', [GameController::class, 'snake']);
+    $router->get('/jeux/tetris', [GameController::class, 'tetris']);
+    $router->post('/jeux/score', [GameController::class, 'submitScore']);
 
     // SEO.
     $router->get('/sitemap.xml', [SeoController::class, 'sitemap']);

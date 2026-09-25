@@ -4,12 +4,18 @@ declare(strict_types=1);
 
 /**
  * Page de jeu — Memory cafétéria AEIC.
+ *
+ * @var array<string,mixed>|null $user
+ * @var bool $isLoggedIn
+ * @var string $submitUrl
+ * @var string $csrfToken
  */
 ?>
 <header class="page-hero">
     <div class="halo halo-teal" aria-hidden="true"></div>
     <div class="container">
-        <span class="eyebrow">Zone jeux</span>
+        <a class="btn btn-outline" href="<?= e(url('/jeux')) ?>" style="margin-bottom:0.75rem;text-decoration:none;">← Retour aux jeux</a>
+        <span class="eyebrow">Jeu de mémoire</span>
         <h1 class="page-title">Memory Cafétéria</h1>
         <p class="page-lead">Retrouve les paires de produits le plus vite possible !</p>
     </div>
@@ -135,7 +141,11 @@ declare(strict_types=1);
 
 <script>
 (function () {
-    var PRODUCTS = ['🥤','🍫','⚡','💧','🍟','🍬','🧃','🍵','🥪','☕','🍕','🍩','🍦','🍔','🐍','🎮','💻','🧩'];
+    var PRODUCTS = ['🥤','🍫','⚡','💧','🍟','🍬','🧃','🍵','🥪','☕','🍕','🍩','🍦','🍔','🥨','🧋','💻','🧩'];
+    var SUBMIT_URL = <?= json_encode($submitUrl) ?>;
+    var CSRF_TOKEN = <?= json_encode($csrfToken) ?>;
+    var IS_LOGGED_IN = <?= json_encode((bool) $isLoggedIn) ?>;
+
     var board = document.getElementById('g-board');
     var movesEl = document.getElementById('g-moves');
     var pairsEl = document.getElementById('g-pairs');
@@ -257,6 +267,26 @@ declare(strict_types=1);
         if (isBest) { localStorage.setItem(bestKey(), String(sec)); }
         winText.textContent = 'Tu as trouvé les ' + total + ' paires en ' + moves + ' coups et ' + fmtTime(sec) + ' !' + (isBest ? ' Nouveau record !' : '');
         winEl.hidden = false;
+        submitScore(sec);
+    }
+
+    // Score serveur : points (plus c'est haut, mieux c'est), basé sur le temps,
+    // les coups et la taille de la grille. Uniquement si connecté.
+    function submitScore(sec) {
+        if (!IS_LOGGED_IN) return;
+        var points = Math.max(50, total * 1000 - moves * 25 - sec * 10);
+        fetch(SUBMIT_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': CSRF_TOKEN },
+            credentials: 'same-origin',
+            body: JSON.stringify({
+                game: 'memory',
+                mode: diffEl.value,
+                score: points,
+                moves: moves,
+                _csrf: CSRF_TOKEN
+            })
+        }).catch(function () { /* silencieux : le score local reste fiable */ });
     }
 
     newBtn.addEventListener('click', newGame);
