@@ -44,6 +44,14 @@ final class CashLedger
     }
 
     /**
+     * Total des ventes par carte (hors caisse : jamais encaissées en liquide).
+     */
+    public static function cardSalesTotal(): float
+    {
+        return round(Sale::sumByPaymentMethod('CARTE'), 2);
+    }
+
+    /**
      * Enregistre un dépôt à la banque (sortie de liquide).
      *
      * @return string Id du mouvement créé.

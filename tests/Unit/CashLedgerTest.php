@@ -123,6 +123,19 @@ final class CashLedgerTest extends TestCase
         self::assertNotSame(112.5, CashLedger::balance());
     }
 
+    public function test_total_des_ventes_carte_hors_caisse(): void
+    {
+        if (!$this->requireDatabase()) {
+            return;
+        }
+
+        $this->seedSales();
+
+        self::assertSame(100.0, CashLedger::cardSalesTotal());
+        // La carte n'entre jamais dans le solde de la caisse (liquide seul).
+        self::assertSame(12.5, CashLedger::balance());
+    }
+
     public function test_comptage_avec_ecart_realigne_et_historise(): void
     {
         if (!$this->requireDatabase()) {
