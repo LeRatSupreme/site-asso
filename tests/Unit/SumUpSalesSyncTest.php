@@ -330,6 +330,47 @@ final class SumUpSalesSyncTest extends TestCase
         self::assertSame(1, Sale::count(), 'Aucun doublon CSV/synchro.');
     }
 
+    public function test_sync_ignore_les_remboursements_et_paiements_echoues(): void
+    {
+        if (!$this->requireDatabase()) {
+            return;
+        }
+
+        $refund = [
+            'amount'           => 1.8,
+            'currency'         => 'EUR',
+            'id'               => 'refund-1111',
+            'payment_type'     => 'POS',
+            'status'           => 'SUCCESSFUL',
+            'timestamp'        => '2026-09-21T10:20:00.000Z',
+            'transaction_code' => 'TAAA6RFD001',
+            'transaction_id'   => 'refund-1111',
+            'type'             => 'REFUND',
+            'local_time'       => '2026-09-21T12:20:00.714+02:00',
+        ];
+        $failed = [
+            'amount'           => 1.8,
+            'currency'         => 'EUR',
+            'id'               => 'failed-2222',
+            'payment_type'     => 'POS',
+            'status'           => 'FAILED',
+            'timestamp'        => '2026-09-21T10:25:00.000Z',
+            'transaction_code' => 'TAAA6FAI001',
+            'transaction_id'   => 'failed-2222',
+            'type'             => 'PAYMENT',
+            'local_time'       => '2026-09-21T12:25:00.714+02:00',
+        ];
+
+        $sync = new SumUpSalesSync($this->makeSyncClient([$refund, $failed, self::TX_MONSTER]));
+
+        $stats = $sync->sync(new \DateTimeImmutable('-24 hours'));
+
+        self::assertSame(3, $stats['fetched']);
+        self::assertSame(1, $stats['sales'], 'Seul le PAYMENT SUCCESSFUL est candidat (remboursement et échec ignorés).');
+        self::assertSame(1, $stats['inserted']);
+        self::assertSame(1, Sale::count(), 'Un remboursement ne doit jamais créer de ligne de vente.');
+    }
+
     public function test_sync_dry_run_n_ecrit_rien(): void
     {
         if (!$this->requireDatabase()) {
