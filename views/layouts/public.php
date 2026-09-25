@@ -244,7 +244,6 @@ $mapsUrl = 'https://www.google.com/maps/search/?api=1&query='
                         <p class="footer-loc">BUT Informatique · IUT de Calais · ULCO — Université du Littoral Côte d'Opale · Côte d'Opale</p>
                         <p class="footer-loc">
                             19 Rue Louis David, 62100 Calais ·
-                            <a href="tel:+33767572412">07 67 57 24 12</a> ·
                             <a href="<?= e($mapsUrl) ?>" target="_blank" rel="noopener">Google Maps</a>
                         </p>
                     </div>

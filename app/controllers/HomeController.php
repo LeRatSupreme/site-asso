@@ -43,7 +43,6 @@ final class HomeController extends Controller
                         'addressRegion'   => 'Hauts-de-France',
                         'addressCountry'  => 'FR',
                     ],
-                    'telephone'   => '+33 7 67 57 24 12',
                     'alternateName' => [
                         'Association des Étudiants Informatique de Calais',
                         'Association Étudiante Informatique de Calais',
