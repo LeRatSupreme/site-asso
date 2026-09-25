@@ -77,16 +77,16 @@ declare(strict_types=1);
         </div>
 
         <!-- Contrôles tactiles -->
-        <div class="tetris-pad" id="t-pad" aria-hidden="true">
+        <div class="tetris-pad" id="t-pad" aria-label="Contrôles tactiles">
             <div class="tetris-pad-row">
-                <button type="button" data-act="left" class="tetris-pad-btn">◀</button>
-                <button type="button" data-act="rotate" class="tetris-pad-btn">⟳</button>
-                <button type="button" data-act="right" class="tetris-pad-btn">▶</button>
+                <button type="button" data-act="left" class="tetris-pad-btn" aria-label="Déplacer à gauche">◀</button>
+                <button type="button" data-act="rotate" class="tetris-pad-btn tetris-pad-btn-rot" aria-label="Tourner">⟳</button>
+                <button type="button" data-act="right" class="tetris-pad-btn" aria-label="Déplacer à droite">▶</button>
             </div>
             <div class="tetris-pad-row">
-                <button type="button" data-act="down" class="tetris-pad-btn">▼</button>
-                <button type="button" data-act="drop" class="tetris-pad-btn">⤓</button>
-                <button type="button" data-act="hold" class="tetris-pad-btn">⇄</button>
+                <button type="button" data-act="down" class="tetris-pad-btn" aria-label="Descendre">▼</button>
+                <button type="button" data-act="drop" class="tetris-pad-btn" aria-label="Chute instantanée">⤓</button>
+                <button type="button" data-act="hold" class="tetris-pad-btn tetris-pad-btn-hold" aria-label="Mettre en réserve">⇄</button>
             </div>
         </div>
 
@@ -111,7 +111,7 @@ declare(strict_types=1);
 .game-controls { display: flex; gap: 0.5rem; align-items: center; }
 
 .tetris-layout { display: flex; gap: 1.25rem; justify-content: center; align-items: flex-start; }
-.tetris-wrap { position: relative; }
+.tetris-wrap { position: relative; margin: 0 auto; }
 #t-canvas {
     display: block; width: min(360px, 88vw); height: auto; border-radius: 14px;
     border: 2px solid var(--border);
@@ -138,22 +138,32 @@ declare(strict_types=1);
 .tetris-mini-label { display: block; font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); font-weight: 800; margin-bottom: 0.35rem; }
 .tetris-mini canvas { display: block; margin: 0 auto; width: 84px; height: 84px; }
 
-.tetris-pad { display: none; margin: 1.25rem auto 0; width: max-content; }
-.tetris-pad-row { display: flex; gap: 0.5rem; justify-content: center; margin-bottom: 0.5rem; }
+.tetris-pad { display: none; margin: 1rem auto 0; width: max-content; user-select: none; -webkit-user-select: none; }
+.tetris-pad.is-touch { display: block; }
+.tetris-pad-row { display: flex; gap: 0.6rem; justify-content: center; margin-bottom: 0.6rem; }
 .tetris-pad-btn {
-    width: 58px; height: 52px; border-radius: 14px; font-size: 1.1rem;
+    width: 66px; height: 58px; border-radius: 14px; font-size: 1.25rem; font-weight: 800;
     border: 1px solid var(--border-strong); background: rgba(255,255,255,0.05);
     color: var(--foreground); cursor: pointer;
+    touch-action: none; -webkit-tap-highlight-color: transparent;
 }
 .tetris-pad-btn:active { background: var(--primary); color: #0a1628; }
+.tetris-pad-btn-rot { background: rgba(72, 189, 211, 0.16); border-color: rgba(72, 189, 211, 0.5); }
+.tetris-pad-btn-hold { background: rgba(245, 197, 24, 0.12); border-color: rgba(245, 197, 24, 0.45); }
 @media (pointer: coarse) { .tetris-pad { display: block; } }
 
 .tetris-help { text-align: center; color: var(--muted); font-size: 0.85rem; margin-top: 1.25rem; }
 
-@media (max-width: 520px) {
-    .tetris-side { gap: 0.6rem; }
-    .tetris-mini { padding: 0.4rem; }
-    .tetris-mini canvas { width: 56px; height: 56px; }
+/* Mobile : plateau centré, panneau Suivante/Réserve en ligne sous le plateau. */
+@media (max-width: 560px) {
+    .tetris-layout { flex-direction: column; align-items: center; gap: 0.75rem; }
+    .tetris-wrap { order: 1; }
+    .tetris-side { order: 2; flex-direction: row; justify-content: center; gap: 0.6rem; }
+    /* Hauteur bornée pour garder stats + plateau + pad dans l'écran. */
+    #t-canvas { width: min(330px, 86vw, 40vh); }
+    .tetris-mini { padding: 0.4rem 0.6rem; }
+    .tetris-mini canvas { width: 60px; height: 60px; }
+    .tetris-overlay-card p { font-size: 0.8rem; }
 }
 </style>
 
@@ -638,54 +648,85 @@ declare(strict_types=1);
         }
     });
 
-    // ================== PAD TACTILE ==================
-    var repeatInt = null;
+    // ================== TACTILE ==================
+    var isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+    if (isTouchDevice) {
+        pad.classList.add('is-touch');
+        overlayText.innerHTML = 'Glisse : déplacer · Tap : tourner · Balaye vers le bas : tomber<br>' +
+            '⇄ ou glisse vers le haut : réserve · ▼ maintenu : descente rapide';
+    }
+
+    function canAct() { return running && !paused && !flashRows && cur; }
+
     function padAct(act) {
         switch (act) {
             case 'left': move(-1); break;
             case 'right': move(1); break;
             case 'down': softDrop(); break;
             case 'drop': hardDrop(); break;
-            case 'rotate': if (running && !paused && !flashRows) { tryRotate(1); draw(); } break;
+            case 'rotate': if (canAct()) { tryRotate(1); draw(); } break;
             case 'hold': hold(); break;
         }
     }
-    pad.addEventListener('click', function (e) {
-        var btn = e.target.closest('.tetris-pad-btn');
-        if (btn) { padAct(btn.dataset.act); }
-    });
-    pad.addEventListener('touchstart', function (e) {
-        var btn = e.target.closest('.tetris-pad-btn');
-        if (!btn) return;
-        var act = btn.dataset.act;
-        if (act === 'left' || act === 'right' || act === 'down') {
-            clearInterval(repeatInt);
-            repeatInt = setInterval(function () { padAct(act); }, 110);
-        }
-    }, { passive: true });
-    ['touchend', 'touchcancel'].forEach(function (ev) {
-        pad.addEventListener(ev, function () { clearInterval(repeatInt); }, { passive: true });
+
+    // — Pad : pointerdown direct (pas de click synthétisé, zéro latence/double feu).
+    var repeatTimer = null;
+    function stopRepeat() {
+        if (repeatTimer) { clearInterval(repeatTimer); repeatTimer = null; }
+    }
+    Array.prototype.forEach.call(pad.querySelectorAll('.tetris-pad-btn'), function (btn) {
+        btn.addEventListener('pointerdown', function (e) {
+            e.preventDefault();
+            padAct(btn.dataset.act);
+            var act = btn.dataset.act;
+            if (act === 'left' || act === 'right' || act === 'down') {
+                stopRepeat();
+                repeatTimer = setInterval(function () { padAct(act); }, 110);
+            }
+        });
+        ['pointerup', 'pointercancel', 'pointerleave'].forEach(function (ev) {
+            btn.addEventListener(ev, stopRepeat);
+        });
+        btn.addEventListener('contextmenu', function (e) { e.preventDefault(); });
     });
 
-    // ================== SWIPE ==================
-    var touchStart = null;
-    canvas.addEventListener('touchstart', function (e) {
-        touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-    }, { passive: true });
-    canvas.addEventListener('touchmove', function (e) { e.preventDefault(); }, { passive: false });
-    canvas.addEventListener('touchend', function (e) {
-        if (!touchStart) return;
-        var dx = e.changedTouches[0].clientX - touchStart.x;
-        var dy = e.changedTouches[0].clientY - touchStart.y;
-        if (Math.abs(dx) < 24 && Math.abs(dy) < 24) {
-            if (running && !paused && !flashRows) { tryRotate(1); draw(); } // tap = rotation
-        } else if (Math.abs(dx) > Math.abs(dy)) {
-            move(dx > 0 ? 1 : -1);
-        } else if (dy > 40) {
-            hardDrop();
-        }
-        touchStart = null;
+    // — Gestes directs sur le plateau :
+    //    tap = tourner · glisser horizontal = déplacer · glisser bas = descendre
+    //    (geste vif et long = chute instantanée) · glisser haut = réserve.
+    var G = { active: false, startX: 0, startY: 0, lastX: 0, lastY: 0, t: 0, moved: false };
+    canvas.addEventListener('pointerdown', function (e) {
+        if (e.pointerType === 'mouse') return;
+        G.active = true; G.moved = false;
+        G.startX = G.lastX = e.clientX;
+        G.startY = G.lastY = e.clientY;
+        G.t = Date.now();
     });
+    canvas.addEventListener('pointermove', function (e) {
+        if (!G.active) return;
+        var dx = e.clientX - G.lastX, dy = e.clientY - G.lastY;
+        G.lastX = e.clientX; G.lastY = e.clientY;
+        // Pas de déplacement ≈ 0,8 case : suit le doigt case par case.
+        var stepX = Math.max(16, canvas.clientWidth / COLS * 0.8);
+        if (dx > 0) { while (dx >= stepX) { move(1); dx -= stepX; G.moved = true; } }
+        else if (dx < 0) { while (-dx >= stepX) { move(-1); dx += stepX; G.moved = true; } }
+        var stepY = 24;
+        if (dy > 0) { while (dy >= stepY) { softDrop(); dy -= stepY; G.moved = true; } }
+    });
+    canvas.addEventListener('pointerup', function (e) {
+        if (!G.active) return;
+        G.active = false;
+        var dx = e.clientX - G.startX, dy = e.clientY - G.startY;
+        var dt = Date.now() - G.t;
+        if (!G.moved && Math.abs(dx) < 14 && Math.abs(dy) < 14 && dt < 400) {
+            if (canAct()) { tryRotate(1); draw(); } // tap = rotation
+        } else if (dy < -44) {
+            hold(); // glisser vers le haut = réserve
+        } else if (dy > 90 && dt < 280) {
+            hardDrop(); // coup sec vers le bas = chute instantanée
+        }
+    });
+    canvas.addEventListener('pointercancel', function () { G.active = false; });
+    canvas.addEventListener('contextmenu', function (e) { e.preventDefault(); });
 
     // ================== DÉMARRAGE ==================
     overlayBtn.addEventListener('click', function () {
