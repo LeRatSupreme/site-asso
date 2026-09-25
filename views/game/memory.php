@@ -45,11 +45,13 @@ declare(strict_types=1);
                 </div>
             </div>
             <div class="game-controls">
-                <select id="g-difficulty">
-                    <option value="4x4">Facile (4×4)</option>
-                    <option value="6x4" selected>Moyen (6×4)</option>
-                    <option value="6x6">Difficile (6×6)</option>
-                </select>
+                <div class="memory-pills" id="g-diffs" role="group" aria-label="Taille de la grille">
+                    <button type="button" class="memory-pill" data-size="4x3">🌱 4×3</button>
+                    <button type="button" class="memory-pill" data-size="4x4">🙂 4×4</button>
+                    <button type="button" class="memory-pill" data-size="6x4">😎 6×4</button>
+                    <button type="button" class="memory-pill" data-size="6x6">🔥 6×6</button>
+                    <button type="button" class="memory-pill" data-size="8x6">💀 8×6</button>
+                </div>
                 <button class="btn btn-primary btn-sm" id="g-new">Nouvelle partie</button>
             </div>
         </div>
@@ -82,11 +84,27 @@ declare(strict_types=1);
 }
 .game-stat-label { display: block; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); font-weight: 700; }
 .game-stat-value { display: block; font-size: 1.2rem; font-weight: 800; color: var(--primary); }
-.game-controls { display: flex; gap: 0.5rem; align-items: center; }
-.game-controls select {
-    background: rgba(255,255,255,0.05); border: 1px solid var(--border);
-    border-radius: 8px; color: var(--foreground); padding: 0.42rem 0.6rem; font-size: 0.85rem;
+.game-controls { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+
+/* Pills de taille de grille (même style que snake / tetris) */
+.memory-pills { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+.memory-pill {
+    padding: 0.35rem 0.7rem;
+    border-radius: 999px;
+    cursor: pointer;
+    border: 2px solid var(--border-strong);
+    background: rgba(255,255,255,0.02);
+    color: var(--muted);
+    font-weight: 700;
+    font-size: 0.78rem;
+    transition: all 0.15s;
 }
+.memory-pill.active {
+    background: var(--primary);
+    color: #0a1628;
+    border-color: var(--primary);
+}
+.memory-pill:hover:not(.active) { border-color: var(--primary); color: var(--foreground); }
 
 .game-board {
     display: grid; gap: 0.5rem; perspective: 800px;
@@ -141,7 +159,8 @@ declare(strict_types=1);
 
 <script>
 (function () {
-    var PRODUCTS = ['🥤','🍫','⚡','💧','🍟','🍬','🧃','🍵','🥪','☕','🍕','🍩','🍦','🍔','🥨','🧋','💻','🧩'];
+    var PRODUCTS = ['🥤','🍫','⚡','💧','🍟','🍬','🧃','🍵','🥪','☕','🍕','🍩','🍦','🍔','🥨','🧋','💻','🧩','🍎','🍪','🧀','🥐','🍇','🔥'];
+    var SIZES = ['4x3', '4x4', '6x4', '6x6', '8x6'];
     var SUBMIT_URL = <?= json_encode($submitUrl) ?>;
     var CSRF_TOKEN = <?= json_encode($csrfToken) ?>;
     var IS_LOGGED_IN = <?= json_encode((bool) $isLoggedIn) ?>;
@@ -151,7 +170,7 @@ declare(strict_types=1);
     var pairsEl = document.getElementById('g-pairs');
     var timeEl = document.getElementById('g-time');
     var bestEl = document.getElementById('g-best');
-    var diffEl = document.getElementById('g-difficulty');
+    var diffsEl = document.getElementById('g-diffs');
     var newBtn = document.getElementById('g-new');
     var winEl = document.getElementById('g-win');
     var winText = document.getElementById('g-win-text');
@@ -160,15 +179,26 @@ declare(strict_types=1);
     var cards = [], flipped = [], matched = 0, total = 0, moves = 0, lock = false;
     var startTime = 0, timerInt = null;
 
-    function cols() {
-        var v = diffEl.value;
-        return v === '4x4' ? 4 : v === '6x6' ? 6 : 6;
+    // Taille choisie, mémorisée localement (défaut : 6×4).
+    var currentSize = '6x4';
+    try {
+        var savedSize = localStorage.getItem('aeic_memory_size');
+        if (SIZES.indexOf(savedSize) >= 0) { currentSize = savedSize; }
+    } catch (e) { /* valeur par défaut */ }
+
+    function reflectPills() {
+        diffsEl.querySelectorAll('.memory-pill').forEach(function (b) {
+            b.classList.toggle('active', b.dataset.size === currentSize);
+        });
     }
-    function rows() {
-        var v = diffEl.value;
-        return v === '4x4' ? 4 : v === '6x6' ? 6 : 4;
+
+    function sizeDims() {
+        var p = currentSize.split('x');
+        return { c: parseInt(p[0], 10), r: parseInt(p[1], 10) };
     }
-    function bestKey() { return 'aeic_memory_best_' + diffEl.value; }
+    function cols() { return sizeDims().c; }
+    function rows() { return sizeDims().r; }
+    function bestKey() { return 'aeic_memory_best_' + currentSize; }
 
     function shuffle(a) {
         for (var i = a.length - 1; i > 0; i--) {
@@ -281,7 +311,7 @@ declare(strict_types=1);
             credentials: 'same-origin',
             body: JSON.stringify({
                 game: 'memory',
-                mode: diffEl.value,
+                mode: currentSize,
                 score: points,
                 moves: moves,
                 _csrf: CSRF_TOKEN
@@ -291,7 +321,14 @@ declare(strict_types=1);
 
     newBtn.addEventListener('click', newGame);
     winReplay.addEventListener('click', newGame);
-    diffEl.addEventListener('change', newGame);
+    diffsEl.addEventListener('click', function (e) {
+        var pill = e.target.closest('.memory-pill');
+        if (!pill || pill.dataset.size === currentSize) return;
+        currentSize = pill.dataset.size;
+        try { localStorage.setItem('aeic_memory_size', currentSize); } catch (err) { /* ignore */ }
+        reflectPills();
+        newGame();
+    });
 
     // Responsive card size.
     function adjustSize() {
@@ -306,6 +343,7 @@ declare(strict_types=1);
         board.style.gridTemplateColumns = 'repeat(' + c + ', ' + size + 'px)';
     }
 
+    reflectPills();
     newGame();
     setTimeout(adjustSize, 50);
     window.addEventListener('resize', adjustSize);

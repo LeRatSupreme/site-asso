@@ -360,9 +360,16 @@ final class GameController extends Controller
         $score = isset($data['score']) ? (int) $data['score'] : -1;
 
         // Liste blanche : jeu → modes autorisés.
+        // Snake : terrain-vitesse (ex. murs-normal) ; Memory : taille de grille.
+        $snakeModes = [];
+        foreach (['murs', 'portail', 'obstacles'] as $terrain) {
+            foreach (['lent', 'normal', 'rapide'] as $vitesse) {
+                $snakeModes[] = $terrain . '-' . $vitesse;
+            }
+        }
         $allowed = [
-            'memory' => ['4x4', '6x4', '6x6'],
-            'snake'  => ['lent', 'normal', 'rapide'],
+            'memory' => ['4x3', '4x4', '6x4', '6x6', '8x6'],
+            'snake'  => $snakeModes,
             'tetris' => ['marathon'],
         ];
 
