@@ -179,11 +179,12 @@ declare(strict_types=1);
     canvas.width = W * dpr;
     canvas.height = H * dpr;
     ctx.scale(dpr, dpr);
-    [nextCv, holdCv].forEach(function (c) {
-        c.width = 100 * dpr;
-        c.height = 100 * dpr;
-        c.getContext('2d').scale(dpr, dpr);
-        c._size = 100;
+    [nextCv, holdCv].forEach(function (cv) {
+        cv.width = 100 * dpr;
+        cv.height = 100 * dpr;
+        var c2 = cv.getContext('2d');
+        c2.scale(dpr, dpr);
+        c2._size = 100;   // taille logique portée par le contexte (reçue par drawMini)
     });
 
     var scoreEl = document.getElementById('t-score');
@@ -576,7 +577,7 @@ declare(strict_types=1);
     }
 
     function drawMini(c2, type) {
-        var size = c2._size;
+        var size = c2._size || 100;
         c2.clearRect(0, 0, size, size);
         if (!type) return;
         var def = PIECES[type];
