@@ -37,9 +37,13 @@ final class HomeController extends Controller
                     'email'       => Setting::get('contact_email', ''),
                     'address'     => [
                         '@type'           => 'PostalAddress',
+                        'streetAddress'   => '19 Rue Louis David',
+                        'postalCode'      => '62100',
                         'addressLocality' => 'Calais',
+                        'addressRegion'   => 'Hauts-de-France',
                         'addressCountry'  => 'FR',
                     ],
+                    'telephone'   => '+33 7 67 57 24 12',
                     'alternateName' => [
                         'Association des Étudiants Informatique de Calais',
                         'Association Étudiante Informatique de Calais',
@@ -59,6 +63,10 @@ final class HomeController extends Controller
                     ],
                     'sameAs'      => [
                         'https://www.facebook.com/IUTinfoCalais/',
+                        // Fiche Google Business Profile (recherche Maps stable ;
+                        // à remplacer par le lien g.page/CID si partagé depuis la fiche).
+                        'https://www.google.com/maps/search/?api=1&query='
+                            . rawurlencode('AEIC - Association des Etudiants Informatique de Calais 19 Rue Louis David 62100 Calais'),
                     ],
                 ],
                 [

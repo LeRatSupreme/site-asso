@@ -33,6 +33,10 @@ $ogImage      = !empty($ogImage)
         ? (is_absolute_url(Setting::get('og_image')) ? Setting::get('og_image') : APP_URL . '/' . ltrim(Setting::get('og_image'), '/'))
         : asset('img/og-default.svg'));
 $twitterHandle = Setting::get('twitter_handle', '');
+
+// Fiche Google Business Profile : lien Maps stable (NAP cohérent avec la fiche).
+$mapsUrl = 'https://www.google.com/maps/search/?api=1&query='
+    . rawurlencode('AEIC - Association des Etudiants Informatique de Calais 19 Rue Louis David 62100 Calais');
 ?>
 <!DOCTYPE html>
 <html lang="<?= e($lang) ?>">
@@ -238,6 +242,11 @@ $twitterHandle = Setting::get('twitter_handle', '');
                         <p class="footer-name"><?= e($siteName) ?></p>
                         <p class="footer-sub"><?= e(t('footer.association')) ?></p>
                         <p class="footer-loc">BUT Informatique · IUT de Calais · ULCO — Université du Littoral Côte d'Opale · Côte d'Opale</p>
+                        <p class="footer-loc">
+                            19 Rue Louis David, 62100 Calais ·
+                            <a href="tel:+33767572412">07 67 57 24 12</a> ·
+                            <a href="<?= e($mapsUrl) ?>" target="_blank" rel="noopener">Google Maps</a>
+                        </p>
                     </div>
                 </div>
 
