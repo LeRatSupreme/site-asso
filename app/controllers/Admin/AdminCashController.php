@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Controllers\Admin;
 
 use App\Core\Auth;
+use App\Core\Compta\CardFees;
 use App\Core\Compta\CashLedger;
 use App\Models\AuditLog;
 use App\Models\CashCount;
@@ -30,6 +31,9 @@ final class AdminCashController extends AdminBaseController
             'balance'     => CashLedger::balance(),
             'salesTotal'  => CashLedger::salesTotal(),
             'cardTotal'   => CashLedger::cardSalesTotal(),
+            'cardFee'     => CardFees::estimatedTotal(),
+            'cardNet'     => CardFees::estimatedNet(),
+            'feeRate'     => CardFees::formattedRate(),
             'movements'   => CashMovement::recent(50),
             'counts'      => CashCount::recent(50),
             'ecarts'      => CashCount::recentEcarts(30),

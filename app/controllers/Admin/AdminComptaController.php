@@ -6,6 +6,7 @@ namespace App\Controllers\Admin;
 
 use App\Core\Auth;
 use App\Core\Compta\AliasSuggester;
+use App\Core\Compta\CardFees;
 use App\Core\Compta\CashLedger;
 use App\Core\Compta\ComptaCalc;
 use App\Core\Compta\ProductAutoSync;
@@ -53,6 +54,8 @@ final class AdminComptaController extends AdminBaseController
         $split = Sale::paymentSplitBetween($period['from'], $period['to']);
         $top = Sale::topProductsBetween($period['from'], $period['to']);
         $byCategory = Sale::byCategoryBetween($period['from'], $period['to']);
+        $cardFee = CardFees::estimatedTotal($period['from'], $period['to']);
+        $cardNet = round((float) ($split['CARTE'] ?? 0) - $cardFee, 2);
 
         // Alerte stock faible : analyse des 30 derniers jours.
         // (L'horizon de couverture n'influence pas les alertes, seul
@@ -89,6 +92,9 @@ final class AdminComptaController extends AdminBaseController
             'periodOptions'=> ComptaCalc::PERIOD_OPTIONS,
             'agg'          => $agg,
             'split'        => $split,
+            'cardFee'      => $cardFee,
+            'cardNet'      => $cardNet,
+            'feeRate'      => CardFees::formattedRate(),
             'top'          => $top,
             'byCategory'   => $byCategory,
             'reorderAlerts'=> $reorderAlerts,

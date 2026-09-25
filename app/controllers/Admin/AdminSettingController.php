@@ -24,7 +24,7 @@ final class AdminSettingController extends AdminBaseController
         'mailer_from', 'mailer_from_name',
         'smtp_host', 'smtp_port', 'smtp_user', 'smtp_pass', 'smtp_encryption',
         'brevo_api_key',
-        'sumup_default_link', 'sumup_enabled', 'default_sumup_link',
+        'sumup_default_link', 'sumup_enabled', 'default_sumup_link', 'sumup_fee_rate',
         'maintenance_mode', 'orders_enabled', 'registrations_enabled',
         'og_image', 'twitter_handle', 'csp_directives',
         'facebook_url', 'instagram_url', 'linkedin_url',

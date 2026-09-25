@@ -48,6 +48,7 @@ $niceLabels = [
     'linkedin_url'        => 'Page LinkedIn',
     'csp_directives'      => 'Content-Security-Policy (avancé)',
     'default_sumup_link'  => 'Lien SumUp par défaut',
+    'sumup_fee_rate'      => 'Taux de commission SumUp (%) — estimation des frais carte',
     'discord_webhook_url' => 'URL Webhook Discord',
     'discord_enabled'     => 'Activer les annonces Discord',
     'membership_price'    => 'Prix de la cotisation (€)',
