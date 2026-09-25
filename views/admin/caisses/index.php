@@ -9,6 +9,7 @@ use App\Models\CashMovement;
  *
  * @var float $balance    Solde théorique actuel.
  * @var float $salesTotal Total des ventes en liquide.
+ * @var float $cardTotal  Total des ventes par carte (hors caisse).
  * @var list<array<string,mixed>> $movements Mouvements manuels récents.
  * @var list<array<string,mixed>> $counts    Comptages récents.
  * @var list<array<string,mixed>> $ecarts    Comptages avec écart (30 j).
@@ -26,6 +27,7 @@ $typeLabels = [
         <span class="stat-value"><?= e(formatPrice($balance)) ?></span>
         <span class="stat-label">Caisse théorique</span>
         <span class="card-meta">dont <?= e(formatPrice($salesTotal)) ?> de ventes en liquide</span>
+        <span class="card-meta">+ <?= e(formatPrice($cardTotal)) ?> de ventes par carte (hors caisse)</span>
     </div>
     <div class="stat-card surface glass">
         <span class="stat-value <?= $ecarts !== [] ? 'is-negative' : 'is-positive' ?>"><?= e((string) count($ecarts)) ?></span>

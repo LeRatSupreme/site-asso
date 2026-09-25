@@ -29,6 +29,7 @@ final class AdminCashController extends AdminBaseController
             'title'       => 'Caisses',
             'balance'     => CashLedger::balance(),
             'salesTotal'  => CashLedger::salesTotal(),
+            'cardTotal'   => CashLedger::cardSalesTotal(),
             'movements'   => CashMovement::recent(50),
             'counts'      => CashCount::recent(50),
             'ecarts'      => CashCount::recentEcarts(30),
