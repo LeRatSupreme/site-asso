@@ -80,7 +80,7 @@ final class AdminUserModelTest extends TestCase
     {
         AuditLog::log('user.role_change', 'adm1', 'user', 'ele1', [
             'from' => Auth::ROLE_ELEVE,
-            'to'   => Auth::ROLE_ADMIN,
+            'to' => Auth::ROLE_ADMIN,
         ]);
 
         $rows = AuditLog::recent(10);

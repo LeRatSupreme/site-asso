@@ -359,21 +359,8 @@ final class GameController extends Controller
         $mode = strtolower(trim((string) ($data['mode'] ?? 'normal')));
         $score = isset($data['score']) ? (int) $data['score'] : -1;
 
-        // Liste blanche : jeu → modes autorisés.
-        // Snake : terrain-vitesse (ex. murs-normal) ; Memory : taille de grille.
-        $snakeModes = [];
-        foreach (['murs', 'portail', 'obstacles'] as $terrain) {
-            foreach (['lent', 'normal', 'rapide'] as $vitesse) {
-                $snakeModes[] = $terrain . '-' . $vitesse;
-            }
-        }
-        $allowed = [
-            'memory' => ['4x3', '4x4', '6x4', '6x6', '8x6', '8x8', '10x8'],
-            'snake'  => $snakeModes,
-            'tetris' => ['marathon'],
-        ];
-
-        if (!isset($allowed[$game]) || !in_array($mode, $allowed[$game], true)) {
+        // Liste blanche centralisée dans GameScore (testée unitairement).
+        if (!GameScore::isValidArcadeMode($game, $mode)) {
             $this->json(['success' => false, 'error' => 'invalid_game'], 400);
         }
         if ($score < 0 || $score > 1_000_000) {
