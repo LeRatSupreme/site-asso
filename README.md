@@ -3,10 +3,14 @@
 Site de l'**AEIC — Association Étudiante Informatique de Calais**, développé en
 **PHP 8.2+ pur + HTML/CSS vanilla**, sans framework ni Docker.
 
+
+
 Le site est **complet et en production** : espace public (événements, sondages,
-pages, galerie, jeux), espace élève (compte, commandes cafétéria), et espace
-admin (comptabilité & imports SumUp, stocks & inventaire, réapprovisionnement,
-budgets, cafétéria, contenus, utilisateurs & attributions de pages, wiki).
+pages, galerie, zone jeux avec Wordle/Énigme/Memory/Snake/Tetris), espace élève
+(compte, commandes cafétéria), et espace admin (comptabilité & imports SumUp,
+stocks & inventaire, réapprovisionnement, budgets, cafétéria, contenus,
+utilisateurs & attributions de pages, wiki).
+
 
 > Référence : [`site_apres/ARCHITECTURE.md`](../site_apres/ARCHITECTURE.md) (cahier des charges complet).
 
@@ -16,6 +20,7 @@ budgets, cafétéria, contenus, utilisateurs & attributions de pages, wiki).
 
 ```
 site_final/
+
 ├── public/                          # Racine web (DocumentRoot Apache)
 │   ├── index.php                    # Front controller
 │   ├── .htaccess                    # Réécriture des URL vers index.php
@@ -67,10 +72,8 @@ site_final/
 ├── .gitignore
 └── README.md
 ```
-
 > `app/`, `views/`, `database/` et `config.env` sont **hors DocumentRoot** :
- ils ne sont jamais servis directement par le web.
-
+> ils ne sont jamais servis directement par le web.
 ---
 
 ## 🚀 Déploiement sur le VPS
@@ -79,6 +82,7 @@ Stack en place : Apache 2.4 + PHP 8.3 (module) + MariaDB 10.11 sur Ubuntu 24.04.
 DocumentRoot : `/var/www/aeic/public`. Domaine : `https://asso.aremond.ovh/`.
 
 ### 1. Copier le projet
+
 ```bash
 # Depuis votre machine
 scp -r site_final/* utilisateur@VPS:/tmp/aeic-dist/
@@ -90,6 +94,7 @@ sudo chown -R www-data:www-data /var/www/aeic
 ```
 
 ### 2. Configurer l'environnement
+
 ```bash
 cd /var/www/aeic
 sudo cp config.env.example config.env
@@ -99,18 +104,21 @@ sudo chmod 640 config.env
 ```
 
 ### 3. Installer Composer (si tests/dev) et les dépendances
+
 ```bash
 sudo apt install composer   # si absent
 composer install --no-dev --optimize-autoloader
 ```
 
 ### 4. Créer la base et importer le schéma + le seed
+
 ```bash
 mysql -u aeic -p aeic < /var/www/aeic/database/schema.sql
 mysql -u aeic -p aeic < /var/www/aeic/database/seed.sql
 ```
 
 ### 5. Activer le compte admin par défaut
+
 Le seed contient un **hash placeholder non valide** (sécurité). Générez le vrai hash
 pour `changeme123`, puis mettez-le en base :
 ```bash
@@ -121,6 +129,7 @@ mysql -u aeic -p aeic -e "UPDATE users SET password='<HASH>' WHERE email='admin@
 **Changez ce mot de passe immédiatement après la première connexion.**
 
 ### 6. Permissions uploads + rechargement Apache
+
 ```bash
 sudo mkdir -p /var/www/aeic/public/assets/uploads
 sudo chown -R www-data:www-data /var/www/aeic/public/assets/uploads
@@ -128,6 +137,7 @@ sudo systemctl reload apache2
 ```
 
 ### 7. (Apache) S'assurer que `public/` est le DocumentRoot
+
 La directive clé : `DocumentRoot /var/www/aeic/public` et, pour le routing,
 `FallbackResource /index.php` (mod_dir) ou un `.htaccess` de réécriture.
 
@@ -164,6 +174,7 @@ La directive clé : `DocumentRoot /var/www/aeic/public` et, pour le routing,
 
 ## 🧪 Tests
 
+
 ```bash
 composer install                 # installe phpunit (require-dev)
 ./vendor/bin/phpunit             # lance toute la suite
@@ -171,16 +182,14 @@ composer install                 # installe phpunit (require-dev)
 ```
 
 La base de test déclarée dans `phpunit.xml` est `aeic_test` (**jamais la prod**).
+
 Les tests couvrent : helpers (`e`, `formatDate`, `formatPrice`, `parseFrenchFloat`) et
 le routeur (matching, extraction `{slug}`/`{id}`, 404, 405).
-
 ### Tests d'intégration (route + base)
 
 Les tests d'intégration (`tests/Integration/`) exécutent de **vraies requêtes
 HTTP simulées** contre l'application branchée sur `aeic_test`, dans un
-sous-processus PHP dédié. CSRF et 2FA sont neutralisés via le flag
-`APP_TESTING` (jamais actif en production).
-
+sous-processus PHP dédié. CSRF et 2FA sont neutralisés via le flag`APP_TESTING` (jamais actif en production).
 Pré-requis : créer la base `aeic_test` et y importer le schéma :
 
 ```bash
@@ -193,9 +202,7 @@ Puis :
 ```bash
 ./vendor/bin/phpunit --testsuite Integration
 ```
-
-Couverture : inscription (RGPD, doublons, mot de passe), connexion, inscription
-aux événements (unicité), commande cafétéria (total serveur, stock, produit
+Couverture : inscription (RGPD, doublons, mot de passe), connexion, inscriptionaux événements (unicité), commande cafétéria (total serveur, stock, produit
 indisponible), import comptable SumUp (déduplication), et logique SMTP du Mailer.
 
 ---
@@ -205,13 +212,12 @@ indisponible), import comptable SumUp (déduplication), et logique SMTP du Maile
 - **PDO + requêtes préparées** partout (anti-injection SQL).
 - **`e()`** (htmlspecialchars) pour échapper toute sortie dynamique dans les vues (anti-XSS).
 - **CSRF** : `csrf_token()` / `csrf_field()` + `Csrf::verify()` (à brancher sur les POST des phases suivantes).
-- **Sessions** : `use_strict_mode`, `cookie_httponly`, `SameSite=Lax`, régénération d'ID au login.
-- **Config via `config.env`** hors webroot ; aucun credential en dur.
-- **Auth** base (login/logout/check/id/role/isAdmin/user) prête pour les phases suivantes.
 
+- **Sessions** : `use_strict_mode`, `cookie_httponly`, `SameSite=Lax`, régénération d'ID au login.- **Config via `config.env`** hors webroot ; aucun credential en dur.- **Auth** base (login/logout/check/id/role/isAdmin/user) prête pour les phases suivantes.
 ---
 
 ## 🗺️ État & suite (phases)
+
 
 - **Phase 1 ✅** Fondations (structure, config, PDO, routeur, charte CSS, layout).
 - **Phase 2 ✅** Pages publiques (accueil, événements liste/détail, association, équipe, CMS, sitemap).
@@ -228,57 +234,56 @@ indisponible), import comptable SumUp (déduplication), et logique SMTP du Maile
 - Phase 8+ — E2E, comptabilité, standards entreprise...
 
 Voir le §26 de `ARCHITECTURE.md` pour le plan complet.
-
 ---
 
 ## 🔐 Authentification & RGPD (Phase 3)
 
-- **Inscription** (`/register`) : validation serveur (prénom, nom, e-mail valide, mot de passe
-  ≥ 8 car. avec lettre + chiffre, confirmation), unicité de l'e-mail, hash bcrypt,
+- **Inscription** (`/register`) : validation serveur (prénom, nom, e-mail valide, mot de passe     ≥ 8 car. avec lettre + chiffre, confirmation), unicité de l'e-mail, hash bcrypt,
   **consentement RGPD obligatoire** (journalisé dans `consents`).
 - **Connexion** (`/login`) : message d'erreur générique (l'e-mail n'est jamais révélé),
   **limitation des tentatives** (5 essais / 10 min par IP via `RateLimiter`),
-  refus des comptes désactivés, régénération de l'ID de session.
-- **Déconnexion** (`/logout`) : destruction de session + retour accueil.
+  refus des comptes désactivés, régénération de l'ID de session.- **Déconnexion** (`/logout`) : destruction de session + retour accueil.
 - **Contrôle d'accès** (`App\Core\Middleware`) : `requireGuest`, `requireLogin`, `requireRole`
   (403 si rôle insuffisant), décision testable via `resolve()`/`isAuthorized()`.
+
 - **Droits RGPD** (`/account/*`, connexion requise) :
   - portabilité : export JSON de toutes les données (`/account/export`) ;
   - effacement : anonymisation du compte + désactivation (`/account/delete`),
     les enregistrements comptables obligatoires sont conservés mais déliés de l'identité.
-- **CSRF** : `csrf_field()` dans tous les formulaires POST, vérifié par le routeur.
-- **Pages légales** : `/legal`, `/privacy`, `/cgu` (CMS, slug en base).
 
+- **CSRF** : `csrf_field()` dans tous les formulaires POST, vérifié par le routeur.
+
+- **Pages légales** : `/legal`, `/privacy`, `/cgu` (CMS, slug en base).
 ---
 
 ## 🎓 Espace élève (Phase 4)
 
 Routes protégées par connexion (`/eleve/*`, accès ELEVE/TRESORERIE/ADMIN) :
-
 - **Tableau de bord** (`/eleve`) : prochains événements, mes inscriptions, dernières commandes.
+
 - **Profil** (`/eleve/profile`) : édition prénom/nom/e-mail + changement de mot de passe
   (ancien requis).
+
 - **Mes inscriptions** (`/eleve/inscriptions`) : événements inscrits + statut (à venir / passé).
+
 - **Mes commandes** (`/eleve/commandes`) : historique avec détail des lignes et badges de statut.
+
 - **Cafétéria** (`/eleve/cafeteria`) : catalogue par catégorie, **panier en session**
   (ajout/retrait/vidage), validation de commande.
-
 **Inscription événement** (`/events/{slug}`) : bouton dynamique selon l'état (connecté/déjà inscrit),
 sélection des **variantes obligatoires**, désinscription possible. Doublon impossible (contrainte unique).
-
 **Commandes cafétéria** — robustesse (§25.3) :
 - **total recalculé serveur** (jamais confiance au client) ;
 - **décrément de stock atomique** en transaction (`stock >= quantité`, jamais de stock négatif) ;
 - produit indisponible / stock insuffisant → commande rejetée, **rien n'est écrit** ;
 - **workflow de statut** (`PENDING → CONFIRMED → PREPARING → READY → DELIVERED`,
   `CANCELLED` depuis les états non terminaux) via `OrderWorkflow`.
-
 ---
 
-## 🎮 Zone jeux
-
-Menu des jeux (`/jeux`) : statistiques personnelles, pseudo de joueur (classement),
+## 🎮 Zone jeuxMenu des jeux (`/jeux`) : statistiques personnelles, pseudo de joueur (classement),
 et 5 jeux jouables sur mobile comme au clavier.
+
+
 
 - **Wordle** (`/jeux/wordle`) : FR/EN, 3 difficultés (5, 6 ou 7 lettres),
   mode **quotidien** (même mot pour tous, change à minuit) ou **libre** illimité.
@@ -289,8 +294,7 @@ et 5 jeux jouables sur mobile comme au clavier.
   mémorisé), record de temps local par taille, produits de la cafétéria en emojis.
 - **Snake** (`/jeux/snake`) : 3 terrains (🧱 Murs / 🌀 Portail / 🚧 Obstacles),
   3 vitesses, 1 à 3 fruits simultanés, fruits dorés à durée limitée, rendu fluide
-  (interpolation), jouable au clavier, au swipe ou au pad tactile.
-- **Tetris** (`/jeux/tetris`) : marathon, 7 pièces avec wall kicks, next, hold,
+  (interpolation), jouable au clavier, au swipe ou au pad tactile.- **Tetris** (`/jeux/tetris`) : marathon, 7 pièces avec wall kicks, next, hold,
   fantôme d'atterrissage, niveaux progressifs, records locaux + serveur.
 
 **Scores** (table `game_scores`) :
@@ -305,38 +309,39 @@ et 5 jeux jouables sur mobile comme au clavier.
 ---
 
 ## 🛠️ Espace admin (Phase 5)
-
 Routes protégées par le rôle **ADMIN** (`/admin/*`) — layout dédié, `noindex` :
 
 - **Tableau de bord** (`/admin`) : compteurs (membres, événements, commandes, CA),
   dernières commandes, **journal d'audit** récent.
+
 - **Événements** (`/admin/events`) : CRUD complet (création/édition/suppression),
   publication, **liste des inscrits** par événement.
+
 - **Cafétéria** : CRUD **produits** (`/admin/cafeteria`) et **catégories**,
   **commandes** (`/admin/cafeteria/commandes`) avec changement de statut (workflow).
+
 - **Pages CMS** (`/admin/pages`) : CRUD pages (contenu HTML, SEO meta, publication).
+
 - **Équipe** (`/admin/team`) : CRUD membres du bureau (ordre, mise en avant, pôle).
+
 - **Médias** (`/admin/media`) : upload d'images (validation MIME réelle, 5 Mo max,
   renommage aléatoire), suppression.
+
 - **Paramètres** (`/admin/settings`) : édition des settings regroupés, cache invalidé
   après sauvegarde, **mode maintenance**.
-
 **Gestion utilisateurs & rôles** (`/admin/users`) — sécurité (§10.2) :
 - promotion / rétrogradation (ADMIN / Trésorerie / Élève) et activation/désactivation ;
-- chaque changement de rôle est **journalisé** (audit log `user.role_change`) ;
-- **protection du dernier administrateur** : impossible de rétrograder ou désactiver
+- chaque changement de rôle est **journalisé** (audit log `user.role_change`) ;- **protection du dernier administrateur** : impossible de rétrograder ou désactiver
   le dernier ADMIN actif (règle pure et testée dans `UserPolicy`) ;
 - on ne peut pas modifier son propre rôle ni se désactiver soi-même.
-
 **Mode maintenance** (`maintenance_mode`) : bloque l'accès public (page 503),
 l'admin y a toujours accès.
-
 ---
 
 ## ✉️ E-mails & SEO (Phase 6)
-
 **E-mails transactionnels** (`App\Core\Mailer`) : templates HTML + texte, envoi
 via SMTP natif (configuré en admin/`.env`) ou `mail()` de secours.
+
 - **Bienvenue** envoyé à l'inscription ;
 - **Commande prête** envoyée quand l'admin passe une commande à `READY` ;
 - **Réinitialisation de mot de passe** : flux `/forgot-password` → `/reset-password`
@@ -345,17 +350,18 @@ via SMTP natif (configuré en admin/`.env`) ou `mail()` de secours.
 **SEO** :
 - méta dynamiques, **Open Graph** + **Twitter Cards**, **JSON-LD**
   (`Organization` en accueil, `Event` en page événement) ;
-- `og:image` configurable (setting) + image par défaut ;
-- **sitemap.xml** dynamique (`/sitemap.xml` : pages statiques + événements + pages CMS) ;
-- `robots.txt` (admin/espace membre exclus).
 
+- `og:image` configurable (setting) + image par défaut ;
+
+- **sitemap.xml** dynamique (`/sitemap.xml` : pages statiques + zone jeux +
+  événements + sondages + pages CMS, avec `lastmod`/`changefreq`/`priority`) ;
+
+- `robots.txt` (admin/espace membre exclus).
 **Performance** (`.htaccess`) : compression gzip/brotli, cache assets 1 an (`immutable`),
 en-têtes de sécurité de base (`X-Content-Type-Options`, `X-Frame-Options`,
 `Referrer-Policy`, `Permissions-Policy`).
-
 **Accessibilité** : `lang="fr"`, skip-link, `:focus-visible`, navigation ARIA,
 sémantique HTML, alt sur images, `loading="lazy"`.
-
 ---
 
 ## 🛡️ Sécurité avancée & exploitation (Phase 7)
@@ -371,7 +377,6 @@ sémantique HTML, alt sur images, `loading="lazy"`.
 **En-têtes de sécurité** (`App\Core\Security\SecurityHeaders`) : **CSP**
 (configurable), **HSTS** (HTTPS), `X-Frame-Options`, `X-Content-Type-Options`,
 `Referrer-Policy`, `Permissions-Policy`.
-
 **Sauvegarde / restauration** (PHP pur, sans `mysqldump`) — `App\Core\Backup\Backup` :
 - `php scripts/backup.php [fichier.sql]` : dump complet (structure + données) ;
 - `php scripts/restore.php fichier.sql` : restauration multi-requêtes.
@@ -381,18 +386,15 @@ sémantique HTML, alt sur images, `loading="lazy"`.
 
 **Journal d'audit** (`audit_logs`) : chaque action sensible (promotion, statut
 commande, activation/désactivation 2FA…) est tracée (qui, quoi, quand, IP).
-
 ---
 
 ## 💳 SumUp (paiement en ligne par lien)
-
 Le site utilise le **paiement par lien SumUp** (aucune intégration API complexe,
 aucun token/secret à stocker) :
-
 1. **Paramètres → « SumUp (paiement en ligne) »** :
    - `sumup_enabled` : active/désactive l'affichage des boutons de paiement ;
    - `sumup_default_link` : URL de paiement SumUp par défaut (collez ici le lien
-     généré depuis l'app/dashboard SumUp).
+      généré depuis l'app/dashboard SumUp).
 2. **Détail d'un événement** (`/events/{slug}`) : si l'événement possède son
    propre `sumup_link`, celui-ci est utilisé ; sinon c'est le lien par défaut.
    Un bouton teal **« Payer en ligne (SumUp) »** ouvre le lien dans un nouvel onglet.
@@ -408,7 +410,6 @@ aucun token/secret à stocker) :
 > paiement est utilisée.
 
 ---
-
 ## ✉️ Emails : délivrabilité (SPF / DKIM / DMARC)
 
 Le site envoie des e-mails transactionnels via SMTP (voir
@@ -417,70 +418,53 @@ réception (et non en spam), configurez ces enregistrements DNS chez le
 **registaire du domaine** `asso.aremond.ovh`.
 
 ### SPF (autorise le serveur/fournisseur à envoyer)
-
 Si vous passez par **Brevo** (recommandé) :
-
 ```
 asso.aremond.ovh.  IN  TXT  "v=spf1 include:spf.brevo.com ~all"
 ```
-
 Si le serveur envoie lui-même (fallback `mail()`) :
 
 ```
 asso.aremond.ovh.  IN  TXT  "v=spf1 mx a -all"
 ```
-
 ### DKIM (signature, fournie par le fournisseur SMTP)
-
 DKIM dépend du prestataire SMTP. **Brevo** fournit une clé publique à publier
 sous la forme :
-
 ```
 brevo._domainkey.aso.aremond.ovh.  IN  TXT  "v=DKIM1; p=<clé-fournie-par-brevo>"
 ```
 
 Récupérez la clé et le sélecteur dans le dashboard Brevo (ou de votre
 fournisseur SMTP) et publiez-les tels quels.
-
 ### DMARC (politique de réception — progressive)
-
 Commencez en mode **observatoire** (aucun impact, collecte des rapports) :
 
 ```
 _dmarc.aso.aremond.ovh.  IN  TXT  "v=DMARC1; p=none; rua=mailto:tresorerie@aeic.fr"
 ```
-
 Après quelques semaines de rapports sans anomalie, passez en mode **quarantaine** :
-
 ```
 _dmarc.aso.aremond.ovh.  IN  TXT  "v=DMARC1; p=quarantine; pct=100; rua=mailto:tresorerie@aeic.fr"
 ```
 
 > Remplacez `tresorerie@aeic.fr` par l'adresse qui recevra les rapports DMARC.
 > La propagation DNS peut prendre de quelques minutes à 48 h.
-
 ---
 
 ## 📈 Monitoring
-
 ### Endpoint `/health`
 
-Le site expose `GET /health` (JSON) : renvoie `200 OK` si la base est joignable,
-`503` sinon (charge/DB indisponible). Réponse type :
+Le site expose `GET /health` (JSON) : renvoie `200 OK` si la base est joignable,`503` sinon (charge/DB indisponible). Réponse type :
 
 ```json
 { "status": "ok", "db": "ok" }
 ```
 
 ### Surveillance externe (UptimeRobot & co.)
-
 Créer un check **HTTPS** sur :
 
 ```
 https://asso.aremond.ovh/health
 ```
 
-- Intervalle : 5 min ;
-- Alertes sur statut `!= 200` ou temps de réponse > seuil ;
-- Surveiller en parallèle `logs/app.log` et `logs/php-error.log` côté serveur.
-
+- Intervalle : 5 min ;- Alertes sur statut `!= 200` ou temps de réponse > seuil ;- Surveiller en parallèle `logs/app.log` et `logs/php-error.log` côté serveur.
