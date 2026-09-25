@@ -40,7 +40,10 @@ final class Csrf
      */
     public static function checkRequest(): bool
     {
-        if (getenv('APP_TESTING') === 'true') {
+        // 'true' : via phpunit.xml. Constante : définie par le runner
+        // d'intégration (tests/Integration/runner.php), qui reçoit APP_TESTING
+        // sous forme « 1 » depuis IntegrationTestCase::request().
+        if (getenv('APP_TESTING') === 'true' || (defined('APP_TESTING') && APP_TESTING)) {
             return true;
         }
 

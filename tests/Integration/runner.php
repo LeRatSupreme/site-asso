@@ -71,7 +71,9 @@ function db(): PDO
 }
 
 // --- Session contrôlée (sans cookie, ID fixe fourni par le test) ---
-$savePath = sys_get_temp_dir() . '/aeic_test_sessions';
+// Chemin DANS le dépôt : sous Windows, sys_get_temp_dir() peut tomber sur
+// C:\WINDOWS (non inscriptible) selon l'environnement du sous-processus.
+$savePath = dirname(__DIR__) . '/cache/test-sessions';
 if (!is_dir($savePath)) {
     @mkdir($savePath, 0777, true);
 }
@@ -94,6 +96,10 @@ if ($adminId !== '') {
     if ($u !== false) {
         $_SESSION['user_id'] = (string) $u['id'];
         $_SESSION['user_role'] = (string) $u['role'];
+        // Persiste IMMÉDIATEMENT : un session_start() ultérieur (Auth::user)
+        // relirait sinon le fichier de session vide et écraserait ces valeurs.
+        session_write_close();
+        session_start();
     }
 }
 

@@ -91,7 +91,9 @@ abstract class IntegrationTestCase extends TestCase
     protected function setUp(): void
     {
         // Nouvelle session logique pour chaque test.
-        $this->sessionId = 'test_' . bin2hex(random_bytes(8));
+        // « - » et l'hexadécimal sont les seuls caractères autorisés dans un
+        // ID de session PHP (« _ » ferait échouer session_start()).
+        $this->sessionId = 'test-' . bin2hex(random_bytes(8));
         $this->lastSessionId = $this->sessionId;
 
         // Le RateLimiter (login) repose sur des fichiers persistants ; on le

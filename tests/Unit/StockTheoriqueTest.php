@@ -71,7 +71,7 @@ final class StockTheoriqueTest extends TestCase
     }
 
     /** Ligne de vente au format importBatch (cf. CashLedgerTest::seedSales). */
-    private function saleRow(string $ref, string $soldAt, string $description, int $qty): array
+    private function saleRow(string $ref, string $soldAt, string $description, int $qty, ?string $productKey = null): array
     {
         return [
             'transaction_ref'  => $ref,
@@ -80,7 +80,7 @@ final class StockTheoriqueTest extends TestCase
             'payment_raw'      => 'Visa - Débit',
             'quantity'         => $qty,
             'description'      => $description,
-            'product_key'      => null,
+            'product_key'      => $productKey,
             'category'         => null,
             'sku'              => null,
             'currency'         => 'EUR',
@@ -120,9 +120,9 @@ final class StockTheoriqueTest extends TestCase
         ]);
 
         // Vente AVANT le comptage : déjà reflétée dans les 24 comptés.
-        $this->importSales([$this->saleRow('TAV1', '2026-09-15 10:00:00', 'Redbull Winter', 5)]);
+        $this->importSales([$this->saleRow('TAV1', '2026-09-15 10:00:00', 'Redbull Winter', 5, 'redbull-winter')]);
         // Vente APRÈS le comptage : déduite.
-        $this->importSales([$this->saleRow('TAV2', '2026-09-16 12:00:00', 'Redbull Winter', 2)]);
+        $this->importSales([$this->saleRow('TAV2', '2026-09-16 12:00:00', 'Redbull Winter', 2, 'redbull-winter')]);
 
         Loss::create([
             'lost_at'     => '2026-09-16',
@@ -177,7 +177,7 @@ final class StockTheoriqueTest extends TestCase
 
         $rows = [];
         for ($i = 1; $i <= 25; $i++) {
-            $rows[] = $this->saleRow('TW' . $i, '2026-09-15 12:30:00', 'Redbull Winter', 1);
+            $rows[] = $this->saleRow('TW' . $i, '2026-09-15 12:30:00', 'Redbull Winter', 1, 'redbull-winter');
         }
         $this->importSales($rows);
 
@@ -238,7 +238,11 @@ final class StockTheoriqueTest extends TestCase
         $batchId = ImportBatch::create(['filename' => 'avec-remboursement.csv']);
         Sale::importBatch($batchId, $parsed['rows']);
 
-        self::assertSame(1, Sale::count(), 'Le remboursement ne doit jamais arriver dans `sales`.');
-        self::assertSame(1, Sale::soldQtySince('redbull-winter', '1970-01-01 00:00:00'));
+        // Exactement 1 vente (la ligne « Vente »), jamais 2 (le remboursement
+        // ne doit jamais arriver dans `sales`).
+        $fresh = $this->connect();
+        self::assertSame(1, (int) $fresh->query('SELECT COUNT(*) FROM sales')->fetchColumn());
+        // soldQtySince matche la clé produit OU la description exacte.
+        self::assertSame(1, Sale::soldQtySince('Redbull Winter', '1970-01-01 00:00:00'));
     }
 }

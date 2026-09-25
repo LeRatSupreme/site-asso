@@ -75,7 +75,7 @@ final class UserConsentModelTest extends TestCase
 
         $user = User::find('u_existing');
 
-        self::assertSame('Compte supprimÃ©', $user['prenom']);
+        self::assertSame('Compte supprimé', $user['prenom']);
         // email NOT NULL/UNIQUE en base : anonymisÃ© en sentinelle invalide.
         self::assertNotSame('alex@exemple.fr', $user['email']);
         self::assertSame('deleted_u_existing@invalid.local', $user['email']);
