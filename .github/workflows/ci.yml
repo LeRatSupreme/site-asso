@@ -79,9 +79,12 @@ jobs:
             if ($x === false) { exit(0); }
             foreach ($x->xpath("//testcase") as $tc) {
               foreach ($tc->xpath("failure|error|warning") as $p) {
+                $type = (string) ($p["type"] ?? "ko");
                 $msg = trim((string) $p);
-                $first = strtok($msg, "\n") ?: "";
-                echo "::error file=" . $tc["file"] . "::" . $tc["classname"] . "::" . $tc["name"] . " — " . $first . "\n";
+                $msg = str_replace(["\r", "\n"], " | ", $msg);
+                $msg = mb_substr($msg, 0, 500);
+                $label = $tc["classname"] . "::" . $tc["name"];
+                echo "::error ::" . $label . " [" . $type . "] " . $msg . "\n";
               }
             }
           '
