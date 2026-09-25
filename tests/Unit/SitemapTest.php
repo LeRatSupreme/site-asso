@@ -89,6 +89,10 @@ final class SitemapTest extends TestCase
     {
         $xml = SeoController::buildSitemap();
 
+        // Assertion inconditionnelle : sans base (aucun lastmod produit),
+        // le test resterait sinon « risky » et échouerait en CI (failOnRisky).
+        self::assertIsString($xml);
+
         // lastmod optionnel mais toujours au format YYYY-MM-DD quand présent.
         if (preg_match_all('/<lastmod>([^<]+)<\/lastmod>/', $xml, $m)) {
             foreach ($m[1] as $date) {

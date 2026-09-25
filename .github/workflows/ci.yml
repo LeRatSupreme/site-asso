@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  phpunit:
+    name: PHPUnit (MariaDB)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      mariadb:
+        image: mariadb:10.11
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: aeic_test
+          MYSQL_USER: aeic
+          MYSQL_PASSWORD: aeic
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    env:
+      DB_HOST: 127.0.0.1
+      DB_NAME: aeic_test
+      DB_USER: aeic
+      DB_PASS: aeic
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: PHP 8.2
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: mbstring, pdo_mysql, gd
+          coverage: none
+
+      - name: Installer les dépendances Composer
+        run: composer install --prefer-dist --no-progress --no-interaction
+
+      - name: Créer la base aeic_test (schéma + migrations)
+        run: |
+          mysql -h127.0.0.1 -uaeic -paeic -e "CREATE DATABASE IF NOT EXISTS aeic_test CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+          mysql --force -h127.0.0.1 -uaeic -paeic aeic_test < database/schema.sql
+          # Migrations idempotentes : --force saute les ALTER déjà appliqués par le schéma.
+          for f in database/migrations/*.sql; do
+            mysql --force -h127.0.0.1 -uaeic -paeic aeic_test < "$f" || true
+          done
+
+      - name: Lancer la suite PHPUnit
+        run: vendor/bin/phpunit --no-coverage
