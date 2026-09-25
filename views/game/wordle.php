@@ -12,7 +12,6 @@ declare(strict_types=1);
 <header class="page-hero">
     <div class="halo halo-teal" aria-hidden="true"></div>
     <div class="container">
-        <a class="btn btn-outline" href="<?= e(url('/jeux')) ?>" style="margin-bottom:0.75rem;text-decoration:none;">← Retour aux jeux</a>
         <span class="eyebrow">Jeu de lettres</span>
         <h1 class="page-title">Wordle</h1>
         <p class="page-lead">3 difficultés · 2 langues · mode quotidien ou libre.</p>
@@ -21,6 +20,8 @@ declare(strict_types=1);
 
 <section class="section">
     <div class="container" style="max-width:560px;">
+
+        <a class="btn btn-outline btn-sm" style="display:inline-block;margin-bottom:1.25rem;text-decoration:none;" href="<?= e(url('/jeux')) ?>">← Retour aux jeux</a>
 
         <!-- Barre de réglages -->
         <div class="wordle-settings">

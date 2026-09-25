@@ -14,7 +14,6 @@ declare(strict_types=1);
 <header class="page-hero">
     <div class="halo halo-teal" aria-hidden="true"></div>
     <div class="container">
-        <a class="btn btn-outline" href="<?= e(url('/jeux')) ?>" style="margin-bottom:0.75rem;text-decoration:none;">← Retour aux jeux</a>
         <span class="eyebrow">Jeu d'arcade</span>
         <h1 class="page-title">Tetris</h1>
         <p class="page-lead">Empile les pièces, complète les lignes et va le plus loin possible&nbsp;!</p>
@@ -23,6 +22,8 @@ declare(strict_types=1);
 
 <section class="section">
     <div class="container game-zone">
+
+        <a class="btn btn-outline btn-sm" style="display:inline-block;margin-bottom:1.25rem;text-decoration:none;" href="<?= e(url('/jeux')) ?>">← Retour aux jeux</a>
 
         <!-- Barre de jeu -->
         <div class="game-bar">
