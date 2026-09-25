@@ -51,4 +51,76 @@ final class SitemapTest extends TestCase
         self::assertNotEmpty($doc->url);
         self::assertSame('https://example.test/', (string) $doc->url[0]->loc);
     }
+
+    public function test_sitemap_contient_la_zone_jeux(): void
+    {
+        $xml = SeoController::buildSitemap();
+
+        self::assertStringContainsString('<loc>https://example.test/jeux</loc>', $xml);
+        self::assertStringContainsString('<loc>https://example.test/jeux/wordle</loc>', $xml);
+        self::assertStringContainsString('<loc>https://example.test/jeux/enigme</loc>', $xml);
+        self::assertStringContainsString('<loc>https://example.test/jeux/memory</loc>', $xml);
+        self::assertStringContainsString('<loc>https://example.test/jeux/snake</loc>', $xml);
+        self::assertStringContainsString('<loc>https://example.test/jeux/tetris</loc>', $xml);
+        self::assertStringContainsString('<loc>https://example.test/jeux/leaderboard</loc>', $xml);
+    }
+
+    public function test_sitemap_renseigne_changefreq_et_priority(): void
+    {
+        $xml = SeoController::buildSitemap();
+        $doc = @simplexml_load_string($xml);
+
+        self::assertNotFalse($doc);
+
+        $found = ['daily' => false, 'weekly' => false, 'monthly' => false, 'yearly' => false];
+        foreach ($doc->url as $url) {
+            $cf = (string) $url->changefreq;
+            if (isset($found[$cf])) { $found[$cf] = true; }
+            // Chaque URL a une priorité et un loc non vides.
+            self::assertNotSame('', (string) $url->loc);
+            self::assertNotSame('', (string) $url->priority);
+        }
+        foreach ($found as $cf => $seen) {
+            self::assertTrue($seen, "changefreq '$cf' attendu dans le sitemap.");
+        }
+    }
+
+    public function test_sitemap_lastmod_a_le_format_date(): void
+    {
+        $xml = SeoController::buildSitemap();
+
+        // lastmod optionnel mais toujours au format YYYY-MM-DD quand présent.
+        if (preg_match_all('/<lastmod>([^<]+)<\/lastmod>/', $xml, $m)) {
+            foreach ($m[1] as $date) {
+                self::assertMatchesRegularExpression('/^\d{4}-\d{2}-\d{2}$/', $date);
+            }
+        }
+    }
+
+    public function test_sitemap_declare_le_namespace_image(): void
+    {
+        $xml = SeoController::buildSitemap();
+
+        self::assertStringContainsString(
+            'xmlns:image="http://www.google.com/schemas/sitemap-image/1.1"',
+            $xml
+        );
+    }
+
+    public function test_sitemap_avec_images_reste_parseable_et_valide(): void
+    {
+        $xml = SeoController::buildSitemap();
+        $doc = @simplexml_load_string($xml);
+
+        self::assertNotFalse($doc, 'Le sitemap avec extension image doit rester du XML bien formé.');
+
+        // Toute balise image:loc porte une URL non vide, dans un bloc image:image.
+        if (preg_match_all('/<image:loc>([^<]+)<\/image:loc>/', $xml, $m)) {
+            foreach ($m[1] as $u) {
+                self::assertNotSame('', $u);
+                self::assertStringStartsWith('http', $u);
+            }
+            self::assertStringContainsString('<image:image>', $xml);
+        }
+    }
 }
