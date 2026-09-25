@@ -107,6 +107,14 @@ final class SitemapTest extends TestCase
         );
     }
 
+    public function test_sitemap_reference_la_feuille_xsl(): void
+    {
+        $xml = SeoController::buildSitemap();
+
+        self::assertStringContainsString('<?xml-stylesheet type="text/xsl"', $xml);
+        self::assertStringContainsString('/sitemap.xsl', $xml);
+    }
+
     public function test_sitemap_avec_images_reste_parseable_et_valide(): void
     {
         $xml = SeoController::buildSitemap();
