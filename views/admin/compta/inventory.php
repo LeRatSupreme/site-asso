@@ -31,7 +31,7 @@ declare(strict_types=1);
         .ecarts-scroll.ecarts-open { max-height: 320px; overflow-y: auto; }
     </style>
     <div class="ecarts-head">
-        <h2 class="card-title">⚠️ Écarts détectés (30 derniers jours) <span class="ecarts-count">(<?= $gapTotal ?>)</span></h2>
+        <h2 class="card-title">Écarts détectés (30 derniers jours) <span class="ecarts-count">(<?= $gapTotal ?>)</span></h2>
         <?php if ($gapTotal > $gapShown): ?>
             <button type="button" class="btn btn-ghost btn-sm" id="ecarts-toggle"
                     onclick="(function (b) { var m = document.getElementById('ecarts-more'); var s = document.getElementById('ecarts-scroll'); var open = m.hidden; m.hidden = !open; s.classList.toggle('ecarts-open', open); b.textContent = open ? 'Réduire' : 'Voir tout (<?= $gapTotal ?>)'; })(this)">Voir tout (<?= $gapTotal ?>)</button>
@@ -105,7 +105,7 @@ declare(strict_types=1);
                             <strong><?= e($r['key']) ?></strong>
                             <button type="button" class="btn btn-ghost btn-sm merge-row-btn"
                                     data-key="<?= e($r['key']) ?>"
-                                    title="Fusionner ce produit avec un autre (doublon) : pré-remplit la clé source">🔗</button>
+                                    title="Fusionner ce produit avec un autre (doublon) : pré-remplit la clé source"></button>
                         </td>
                         <td>
                             <?php if ($r['counted_at'] !== null): ?>
@@ -139,7 +139,7 @@ declare(strict_types=1);
                         </td>
                         <td>
                             <button type="submit" class="btn btn-ghost btn-sm" form="<?= $disId ?>"
-                                    title="Plus en vente pour l'instant (ex. saisonnier : Redbull Summer hors été) : sort de cette grille, du comptage à l'aveugle et du réappro — rien n'est supprimé, rétablissement en bas de page">🚫</button>
+                                    title="Plus en vente pour l'instant (ex. saisonnier : Redbull Summer hors été) : sort de cette grille, du comptage à l'aveugle et du réappro — rien n'est supprimé, rétablissement en bas de page"></button>
                         </td>
                     </tr>
                 <?php endforeach; ?>
@@ -149,7 +149,7 @@ declare(strict_types=1);
             </tbody>
         </table>
         <p class="muted">Seules les lignes renseignées sont comptées. Chaque comptage devient le nouveau point de départ du stock théorique.
-        Les produits « ⏸ En pause » (plus en vente pour l'instant) n'apparaissent pas dans cette grille : ils sont listés en bas de page, rétablissement en un clic.</p>
+        Les produits « En pause » (plus en vente pour l'instant) n'apparaissent pas dans cette grille : ils sont listés en bas de page, rétablissement en un clic.</p>
         <div class="form-actions">
             <button type="submit" class="btn btn-primary">Enregistrer le comptage</button>
             <button type="button" class="btn btn-ghost" onclick="if (confirm('Effacer les quantités saisies ?')) this.form.reset();">Annuler</button>
@@ -159,11 +159,11 @@ declare(strict_types=1);
     <?php foreach ($rows as $r): ?>
         <?php if (!empty($r['paused'])) { continue; } // déjà en pause : rien à marquer ?>
         <?php $disId = 'dis-' . substr(md5((string) $r['key']), 0, 10); ?>
-        <!-- 🚫 plus en vente : formulaires hors du form principal (non imbriqués) -->
+        <!-- plus en vente : formulaires hors du form principal (non imbriqués) -->
         <form id="<?= $disId ?>" method="post"
               action="<?= e(url('/admin/compta/inventaire/' . rawurlencode((string) $r['key']) . '/discontinue')) ?>"
               data-confirm="Marquer « <?= e((string) $r['key']) ?> » plus en vente pour l'instant ? Rien n'est supprimé : il passe en pause (grisé, sans saisie), sort des comptages et du réappro, rétablissement en un clic en bas de page."
-              data-confirm-button="🚫 Plus en vente"
+              data-confirm-button="Plus en vente"
               data-preserve-scroll>
             <input type="hidden" name="back" value="inventaire">
             <?= csrf_field() ?>
@@ -173,7 +173,7 @@ declare(strict_types=1);
 
 <div class="card surface glass table-wrap">
     <details class="cost-card-lots">
-        <summary>🕘 Historique des comptages <span class="muted">(<?= count($history) ?> dernières lignes)</span></summary>
+        <summary>Historique des comptages <span class="muted">(<?= count($history) ?> dernières lignes)</span></summary>
         <table class="table">
             <thead>
                 <tr>
@@ -214,7 +214,7 @@ declare(strict_types=1);
 
 <div class="card surface glass table-wrap">
     <details class="cost-card-lots" open>
-        <summary>🚫 Plus en vente pour l'instant (<?= count($discontinuedRows) ?>)</summary>
+        <summary>Plus en vente pour l'instant (<?= count($discontinuedRows) ?>)</summary>
         <p class="muted">Marquage <strong>temporaire</strong> (ex. Redbull Summer hors été) : ces produits sortent de la grille de comptage ci-dessus, du comptage à l'aveugle et du réappro — <strong>rien n'est supprimé</strong> (ventes, stock et comptages conservés). « Remettre en vente » les réactive aussitôt.</p>
         <?php if ($discontinuedRows === []): ?>
             <p class="muted">Aucun produit marqué plus en vente pour l'instant.</p>
@@ -268,8 +268,8 @@ declare(strict_types=1);
 </div>
 
 <div class="card surface glass" id="merge-card">
-    <h2 class="card-title">🔗 Fusionner des clés produits</h2>
-    <p class="muted">Même produit sous deux noms (ex. « Madeleine » dans les ventes SumUp et « Madel Coquille » dans les achats) ? Déplace toutes les données d'une clé vers l'autre : ventes, achats, pertes, aliases, stocks, comptages, drapeaux. Le bouton 🔗 à côté de chaque produit ci-dessus pré-remplit la clé source.</p>
+    <h2 class="card-title">Fusionner des clés produits</h2>
+    <p class="muted">Même produit sous deux noms (ex. « Madeleine » dans les ventes SumUp et « Madel Coquille » dans les achats) ? Déplace toutes les données d'une clé vers l'autre : ventes, achats, pertes, aliases, stocks, comptages, drapeaux. Le bouton à côté de chaque produit ci-dessus pré-remplit la clé source.</p>
 
     <style>
         .merge-dupes { margin: 0 0 14px; }
@@ -311,7 +311,7 @@ declare(strict_types=1);
     ?>
     <?php if ($dupeRows !== []): ?>
     <div class="merge-dupes">
-        <p class="merge-dupes-title">🔎 Doublons probables (même nom à l'orthographe près) — en vert, la clé suggérée comme cible :</p>
+        <p class="merge-dupes-title">Doublons probables (même nom à l'orthographe près) — en vert, la clé suggérée comme cible :</p>
         <?php foreach ($dupeRows as $d): ?>
             <div class="merge-dupe-row">
                 <span class="merge-dupe-names">
@@ -327,7 +327,7 @@ declare(strict_types=1);
     <?php endif; ?>
 
     <form method="post" action="<?= e(url('/admin/compta/inventaire/merge')) ?>"
-          data-confirm="Fusionner ces clés ? Action irréversible." data-confirm-button="🔗 Fusionner" id="merge-form">
+          data-confirm="Fusionner ces clés ? Action irréversible." data-confirm-button="Fusionner" id="merge-form">
         <?= csrf_field() ?>
         <div class="merge-fields">
             <div class="field">
@@ -365,7 +365,7 @@ declare(strict_types=1);
 
 <script>
 /* Fusion de clés : combobox recherchables + stats par clé + aperçu de la
-   fusion avant validation. Le bouton 🔗 d'une ligne et « Remplir » des
+   fusion avant validation. Le bouton d'une ligne et « Remplir » des
    doublons probables passent par window.AEICMerge. */
 (function () {
     var statsEl = document.getElementById('merge-stats');
@@ -419,14 +419,14 @@ declare(strict_types=1);
         preview.hidden = false;
         if (s === t || norm(s) === norm(t)) {
             preview.className = 'merge-preview is-warn';
-            preview.textContent = '⚠️ Source et cible sont identiques : rien à fusionner.';
+            preview.textContent = 'Source et cible sont identiques : rien à fusionner.';
             return;
         }
         var ss = STATS[s];
         var ts = STATS[t];
         var lines = [];
         if (!ss) {
-            lines.push('⚠️ « ' + s + ' » est inconnue : vérifie l\'orthographe.');
+            lines.push('« ' + s + ' » est inconnue : vérifie l\'orthographe.');
         } else {
             var moved = [];
             if (ss.sales > 0) moved.push(plural(ss.sales, 'vente'));
@@ -441,12 +441,12 @@ declare(strict_types=1);
                 : '« ' + s + ' » n\'a aucune donnée : la clé sera simplement vidée.');
         }
         if (!ts) {
-            lines.push('⚠️ « ' + t + ' » est inconnue : elle sera créée par la fusion.');
+            lines.push('« ' + t + ' » est inconnue : elle sera créée par la fusion.');
         } else if (ss && ts && ss.stock !== null && ss.stock !== undefined && ts.stock !== null && ts.stock !== undefined) {
             lines.push('Stock fusionné : ' + ss.stock + ' + ' + ts.stock + ' = ' + (ss.stock + ts.stock) + '.');
         }
         if (ss && ss.sales > 0 && (!ts || ts.sales === 0)) {
-            lines.push('💡 « ' + s + ' » est la clé des ventes SumUp : garde-la en cible (bouton ⇄ pour inverser).');
+            lines.push('« ' + s + ' » est la clé des ventes SumUp : garde-la en cible (bouton ⇄ pour inverser).');
         }
         preview.className = 'merge-preview';
         var html = '';

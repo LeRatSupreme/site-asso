@@ -55,13 +55,13 @@ function wordlePageWindow(int $current, int $total): array
 <!-- Barre de filtres horizontale -->
 <form method="get" class="wordle-toolbar">
     <div class="wordle-search">
-        <input type="text" name="q" value="<?= e($search) ?>" placeholder="🔎 Rechercher un mot…" aria-label="Recherche" />
+        <input type="text" name="q" value="<?= e($search) ?>" placeholder="Rechercher un mot…" aria-label="Recherche" />
     </div>
 
     <select name="lang" aria-label="Langue">
         <option value="">Toutes langues</option>
-        <option value="fr" <?= $langFilter === 'fr' ? 'selected' : '' ?>>🇫🇷 FR</option>
-        <option value="en" <?= $langFilter === 'en' ? 'selected' : '' ?>>🇬🇧 EN</option>
+        <option value="fr" <?= $langFilter === 'fr' ? 'selected' : '' ?>>FR</option>
+        <option value="en" <?= $langFilter === 'en' ? 'selected' : '' ?>>EN</option>
     </select>
 
     <select name="diff" aria-label="Difficulté">
@@ -105,18 +105,18 @@ function wordlePageWindow(int $current, int $total): array
                 <?php foreach ($words as $w): ?>
                     <tr>
                         <td><strong style="letter-spacing:0.1em;"><?= e((string) $w['word']) ?></strong></td>
-                        <td><?= $w['language'] === 'en' ? '🇬🇧 EN' : '🇫🇷 FR' ?></td>
+                        <td><?= $w['language'] === 'en' ? 'EN' : 'FR' ?></td>
                         <td class="num"><?= (int) $w['length'] ?></td>
                         <td><?= e(ucfirst((string) $w['difficulty'])) ?></td>
                         <td><?= ((int) $w['is_active']) === 1
                                 ? '<span class="badge badge-success">Oui</span>'
                                 : '<span class="badge badge-muted">Non</span>' ?></td>
                         <td class="row-actions">
-                            <a class="btn btn-outline btn-sm" href="<?= e(url('/admin/jeux/wordle/' . (int) $w['id'])) ?>" title="Modifier">✏️</a>
+                            <a class="btn btn-outline btn-sm" href="<?= e(url('/admin/jeux/wordle/' . (int) $w['id'])) ?>" title="Modifier"></a>
                             <form method="post" action="<?= e(url('/admin/jeux/wordle/' . (int) $w['id'] . '/delete')) ?>" class="inline-form"
                                   data-confirm="Supprimer le mot « <?= e((string) $w['word']) ?> » ?" data-preserve-scroll>
                                 <?= csrf_field() ?>
-                                <button type="submit" class="btn btn-danger btn-sm" title="Supprimer">🗑️</button>
+                                <button type="submit" class="btn btn-danger btn-sm" title="Supprimer"></button>
                             </form>
                         </td>
                     </tr>

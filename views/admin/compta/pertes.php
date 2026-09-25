@@ -190,7 +190,7 @@ foreach ($allKeys as $k) {
                         <form method="post" action="<?= e(url('/admin/compta/pertes/' . rawurlencode((string) $r['id']) . '/delete')) ?>"
                               data-confirm="Supprimer cette perte ? Le stock théorique sera recalculé." data-preserve-scroll>
                             <?= csrf_field() ?>
-                            <button type="submit" class="btn btn-danger btn-sm" aria-label="Supprimer">🗑</button>
+                            <button type="submit" class="btn btn-danger btn-sm" aria-label="Supprimer"></button>
                         </form>
                     </td>
                 </tr>
@@ -228,7 +228,7 @@ foreach ($allKeys as $k) {
         function check() {
             var existing = normKeys[normKey(input.value)];
             if (existing && existing !== input.value) {
-                warn.textContent = '⚠️ « ' + input.value + ' » ressemble à la clé existante « ' + existing + ' » — préfère-la (autocomplétion) pour éviter un doublon.';
+                warn.textContent = '« ' + input.value + ' » ressemble à la clé existante « ' + existing + ' » — préfère-la (autocomplétion) pour éviter un doublon.';
                 warn.hidden = false;
             } else {
                 warn.hidden = true;

@@ -54,7 +54,7 @@ $profit = (float) $stats['ca'] - $costsTotal;
         <p class="kpi-label">Seuil de rentabilité</p>
         <p class="kpi-value">
             <?php if ($breakEven !== null): ?>
-                <?= e(sprintf('%d entrées', $breakEven)) ?><?= (int) $stats['qty'] >= $breakEven ? ' ✅' : ' ❌' ?>
+                <?= e(sprintf('%d entrées', $breakEven)) ?><?= (int) $stats['qty'] >= $breakEven ? ' ' : ' ' ?>
             <?php else: ?>
                 —
             <?php endif; ?>
@@ -113,7 +113,7 @@ $profit = (float) $stats['ca'] - $costsTotal;
                             <form method="post" action="<?= e(url('/admin/compta/evenements/' . rawurlencode((string) $event['id']) . '/couts/' . rawurlencode((string) $c['id']) . '/delete')) ?>"
                                   data-confirm="Supprimer ce coût (et sa dépense liée) ?" data-preserve-scroll>
                                 <?= csrf_field() ?>
-                                <button type="submit" class="btn btn-danger btn-sm" aria-label="Supprimer">🗑</button>
+                                <button type="submit" class="btn btn-danger btn-sm" aria-label="Supprimer"></button>
                             </form>
                         </td>
                     </tr>

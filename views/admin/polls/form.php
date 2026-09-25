@@ -37,7 +37,7 @@ $options     = $options ?? [];
                 <div class="poll-option-admin">
                     <input type="text" name="options[]" value="<?= e($option['label'] ?? '') ?>"
                            placeholder="Réponse <?= e((string) ($i + 1)) ?>" required>
-                    <button type="button" class="btn btn-ghost btn-sm poll-option-remove" aria-label="Supprimer">✕</button>
+                    <button type="button" class="btn btn-ghost btn-sm poll-option-remove" aria-label="Supprimer"></button>
                 </div>
             <?php endforeach; ?>
         </div>
@@ -79,7 +79,7 @@ $options     = $options ?? [];
         row.className = 'poll-option-admin';
         row.innerHTML =
             '<input type="text" name="options[]" placeholder="Réponse ' + idx + '" required>' +
-            '<button type="button" class="btn btn-ghost btn-sm poll-option-remove" aria-label="Supprimer">✕</button>';
+            '<button type="button" class="btn btn-ghost btn-sm poll-option-remove" aria-label="Supprimer"></button>';
         list.appendChild(row);
         removeHandler(row.querySelector('.poll-option-remove'));
         var input = row.querySelector('input');

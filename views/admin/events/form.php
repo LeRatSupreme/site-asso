@@ -13,7 +13,7 @@ $isNew = empty($event['id']);
 
     <!-- Titre + Slug -->
     <section class="card surface glass form-section">
-        <h2 class="form-section-title">📋 Informations générales</h2>
+        <h2 class="form-section-title">Informations générales</h2>
         <div class="field-row">
             <div class="field">
                 <label for="title">Titre de l'événement</label>
@@ -51,7 +51,7 @@ $isNew = empty($event['id']);
 
     <!-- Date + Lieu -->
     <section class="card surface glass form-section">
-        <h2 class="form-section-title">📅 Date & Lieu</h2>
+        <h2 class="form-section-title">Date & Lieu</h2>
         <div class="field-row">
             <?php datetime_selects_field(
                 'date',
@@ -78,7 +78,7 @@ $isNew = empty($event['id']);
 
     <!-- Prix + Capacité -->
     <section class="card surface glass form-section">
-        <h2 class="form-section-title">💰 Tarif & Places</h2>
+        <h2 class="form-section-title">Tarif & Places</h2>
         <div class="field-row">
             <div class="field">
                 <label for="price">Prix (€)</label>
@@ -98,7 +98,7 @@ $isNew = empty($event['id']);
 
     <!-- Image + Options -->
     <section class="card surface glass form-section">
-        <h2 class="form-section-title">🖼️ Image & Options</h2>
+        <h2 class="form-section-title">Image & Options</h2>
         <div class="field">
             <label for="image">Image de couverture (URL)</label>
             <input type="text" id="image" name="image" value="<?= e($event['image'] ?? '') ?>" placeholder="/assets/uploads/...">
@@ -108,13 +108,13 @@ $isNew = empty($event['id']);
                 <input type="checkbox" name="is_featured" value="1" <?= !empty($event['is_featured']) ? 'checked' : '' ?>
                        onchange="this.value = this.checked ? '1' : '0';">
                 <span class="toggle-slider-inline"></span>
-                <span>⭐ Mis en avant</span>
+                <span>Mis en avant</span>
             </label>
             <label class="toggle-switch">
                 <input type="checkbox" name="is_published" value="1" <?= !empty($event['is_published']) ? 'checked' : '' ?>
                        onchange="this.value = this.checked ? '1' : '0';">
                 <span class="toggle-slider-inline"></span>
-                <span>✅ Publié</span>
+                <span>Publié</span>
             </label>
         </div>
     </section>
@@ -122,7 +122,7 @@ $isNew = empty($event['id']);
     <!-- Actions -->
     <div class="form-actions">
         <a class="btn btn-ghost" href="<?= e(url('/admin/events')) ?>">← Retour</a>
-        <button type="submit" class="btn btn-primary btn-lg"><?= $isNew ? '🎉 Créer l\'événement' : '💾 Enregistrer' ?></button>
+        <button type="submit" class="btn btn-primary btn-lg"><?= $isNew ? 'Créer l\'événement' : 'Enregistrer' ?></button>
     </div>
 </form>
 

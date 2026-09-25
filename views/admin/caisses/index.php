@@ -19,9 +19,9 @@ use App\Models\CashMovement;
  */
 
 $typeLabels = [
-    CashMovement::TYPE_FOND       => '🏦 Fond',
-    CashMovement::TYPE_DEPOT      => '🏛️ Dépôt banque',
-    CashMovement::TYPE_AJUSTEMENT => '⚖️ Ajustement',
+    CashMovement::TYPE_FOND       => 'Fond',
+    CashMovement::TYPE_DEPOT      => 'Dépôt banque',
+    CashMovement::TYPE_AJUSTEMENT => 'Ajustement',
 ];
 ?>
 
@@ -35,20 +35,20 @@ $typeLabels = [
     </div>
     <div class="stat-card surface glass">
         <span class="stat-value <?= $ecarts !== [] ? 'is-negative' : 'is-positive' ?>"><?= e((string) count($ecarts)) ?></span>
-        <span class="stat-label">⚠️ Écarts détectés (30 derniers jours)</span>
+        <span class="stat-label">Écarts détectés (30 derniers jours)</span>
         <span class="card-meta">négatif = manquant (vol potentiel)</span>
     </div>
 </div>
 
 <section class="card surface glass">
-    <h2 class="card-title">⚠️ Écarts détectés (30 derniers jours)</h2>
+    <h2 class="card-title">Écarts détectés (30 derniers jours)</h2>
     <?php if ($ecarts === []): ?>
-        <p class="card-meta">Aucun écart : chaque comptage a collé au théorique. 👍</p>
+        <p class="card-meta">Aucun écart : chaque comptage a collé au théorique.</p>
     <?php else: ?>
         <ul class="list-rows">
             <?php foreach ($ecarts as $c): ?>
                 <li>
-                    <code><?= $c['ecart'] < 0 ? '🔴' : '🟠' ?> <?= e(formatPrice((float) $c['ecart'])) ?></code>
+                    <code><?= e(formatPrice((float) $c['ecart'])) ?></code>
                     <span class="card-meta">compté <?= e(formatPrice((float) $c['counted_amount'])) ?>
                         / théorique <?= e(formatPrice((float) $c['theoretical_amount'])) ?></span>
                     <span class="card-meta"><?= e(formatDateTime((string) $c['created_at'])) ?></span>
@@ -61,7 +61,7 @@ $typeLabels = [
 
 <div class="grid grid-3">
     <section class="card surface glass">
-        <h2 class="card-title">🧾 Comptage physique</h2>
+        <h2 class="card-title">Comptage physique</h2>
         <p class="card-meta">Comptez le liquide présent : l'écart est historisé et la caisse est réalignée sur le compté.</p>
         <form method="post" action="<?= e(url('/admin/caisses/comptage')) ?>">
             <?= csrf_field() ?>
@@ -79,7 +79,7 @@ $typeLabels = [
     </section>
 
     <section class="card surface glass">
-        <h2 class="card-title">🏛️ Dépôt à la banque</h2>
+        <h2 class="card-title">Dépôt à la banque</h2>
         <form method="post" action="<?= e(url('/admin/caisses/depot')) ?>">
             <?= csrf_field() ?>
             <div class="field">
@@ -96,7 +96,7 @@ $typeLabels = [
     </section>
 
     <section class="card surface glass">
-        <h2 class="card-title">🏦 Fond de caisse</h2>
+        <h2 class="card-title">Fond de caisse</h2>
         <p class="card-meta">Entrée de liquide hors ventes (caisse initiale, argent ramené de la banque).</p>
         <form method="post" action="<?= e(url('/admin/caisses/fond')) ?>">
             <?= csrf_field() ?>

@@ -22,7 +22,7 @@ declare(strict_types=1);
 <section class="card surface glass">
     <div class="mapping-sync-head">
         <div>
-            <h2 class="card-title">🔗 Catégories du mapping à synchroniser</h2>
+            <h2 class="card-title">Catégories du mapping à synchroniser</h2>
             <p class="mapping-sync-sub muted">Utilisées dans le mapping des libellés (compta) mais absentes de la carte.</p>
         </div>
         <?php if ($mappingMissing !== []): ?>
@@ -33,7 +33,7 @@ declare(strict_types=1);
         <?php endif; ?>
     </div>
     <?php if ($mappingMissing === []): ?>
-        <p class="muted">Toutes les catégories du mapping existent ici. 👍</p>
+        <p class="muted">Toutes les catégories du mapping existent ici. </p>
     <?php else: ?>
         <ul class="mapping-sync-list">
             <?php foreach ($mappingMissing as $name): ?>
@@ -41,7 +41,7 @@ declare(strict_types=1);
                     <form method="post" action="<?= e(url('/admin/cafeteria/categories/add-mapping')) ?>" class="mapping-sync-row" data-preserve-scroll>
                         <?= csrf_field() ?>
                         <input type="hidden" name="name" value="<?= e($name) ?>">
-                        <span class="mapping-sync-name">🏷️ <?= e($name) ?></span>
+                        <span class="mapping-sync-name"><?= e($name) ?></span>
                         <span class="mapping-sync-spacer"></span>
                         <button type="submit" class="btn btn-outline btn-sm">+ Ajouter</button>
                     </form>

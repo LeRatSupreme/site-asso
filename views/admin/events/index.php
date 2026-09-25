@@ -43,14 +43,14 @@ declare(strict_types=1);
                         </a>
                     </td>
                     <td class="row-actions">
-                        <a class="btn btn-outline btn-sm" href="<?= e(url('/admin/events/' . rawurlencode($slug))) ?>">✏️</a>
-                        <a class="btn btn-outline btn-sm" href="<?= e(url('/admin/events/' . rawurlencode($slug) . '/registrations')) ?>" title="Inscrits">📋</a>
-                        <a class="btn btn-outline btn-sm" href="<?= e(url('/admin/events/' . rawurlencode($slug) . '/checkin')) ?>" title="Check-in">📱</a>
-                        <a class="btn btn-outline btn-sm" href="<?= e(url('/events/' . rawurlencode($slug))) ?>" target="_blank" title="Voir">👁️</a>
+                        <a class="btn btn-outline btn-sm" href="<?= e(url('/admin/events/' . rawurlencode($slug))) ?>"></a>
+                        <a class="btn btn-outline btn-sm" href="<?= e(url('/admin/events/' . rawurlencode($slug) . '/registrations')) ?>" title="Inscrits"></a>
+                        <a class="btn btn-outline btn-sm" href="<?= e(url('/admin/events/' . rawurlencode($slug) . '/checkin')) ?>" title="Check-in"></a>
+                        <a class="btn btn-outline btn-sm" href="<?= e(url('/events/' . rawurlencode($slug))) ?>" target="_blank" title="Voir"></a>
                         <form method="post" action="<?= e(url('/admin/events/' . rawurlencode($slug) . '/delete')) ?>"
                               data-confirm="Supprimer « <?= e($ev['title'] ?? '') ?> » ?" data-preserve-scroll>
                             <?= csrf_field() ?>
-                            <button type="submit" class="btn btn-danger btn-sm" title="Supprimer">🗑️</button>
+                            <button type="submit" class="btn btn-danger btn-sm" title="Supprimer"></button>
                         </form>
                     </td>
                 </tr>

@@ -16,7 +16,7 @@ declare(strict_types=1);
 <!-- Barre de filtres horizontale -->
 <div class="enigma-toolbar">
     <div class="enigma-search">
-        <input type="text" id="enigma-search" placeholder="🔎 Rechercher une question ou réponse…" aria-label="Recherche" />
+        <input type="text" id="enigma-search" placeholder="Rechercher une question ou réponse…" aria-label="Recherche" />
     </div>
 
     <select id="enigma-active-filter" aria-label="Statut">
@@ -57,11 +57,11 @@ declare(strict_types=1);
                                 ? '<span class="badge badge-success">Oui</span>'
                                 : '<span class="badge badge-muted">Non</span>' ?></td>
                         <td class="row-actions">
-                            <a class="btn btn-outline btn-sm" href="<?= e(url('/admin/jeux/enigmes/' . (int) $en['id'])) ?>" title="Modifier">✏️</a>
+                            <a class="btn btn-outline btn-sm" href="<?= e(url('/admin/jeux/enigmes/' . (int) $en['id'])) ?>" title="Modifier"></a>
                             <form method="post" action="<?= e(url('/admin/jeux/enigmes/' . (int) $en['id'] . '/delete')) ?>" class="inline-form"
                                   data-confirm="Supprimer cette énigme ?" data-preserve-scroll>
                                 <?= csrf_field() ?>
-                                <button type="submit" class="btn btn-danger btn-sm" title="Supprimer">🗑️</button>
+                                <button type="submit" class="btn btn-danger btn-sm" title="Supprimer"></button>
                             </form>
                         </td>
                     </tr>

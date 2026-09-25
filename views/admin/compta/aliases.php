@@ -21,7 +21,7 @@ declare(strict_types=1);
             <a class="btn btn-primary" href="<?= e(url('/admin/compta/aliases/auto')) ?>">Auto-détecter les doublons</a>
         </p>
         <?php if ($unmapped === []): ?>
-            <p class="muted">Aucun libellé à classer. 🎉</p>
+            <p class="muted">Aucun libellé à classer. </p>
         <?php endif; ?>
         <?php foreach ($unmapped as $u): ?>
             <form method="post" action="<?= e(url('/admin/compta/aliases/save')) ?>" class="alias-form">
@@ -48,7 +48,7 @@ declare(strict_types=1);
             <?= csrf_field() ?>
         </form>
         <p class="admin-actions">
-            <button type="submit" class="btn btn-primary btn-sm" form="alias-bulk-form">💾 Enregistrer les catégories</button>
+            <button type="submit" class="btn btn-primary btn-sm" form="alias-bulk-form">Enregistrer les catégories</button>
             <span class="muted">Modifie plusieurs catégories puis enregistre tout d'un coup — les ventes correspondantes sont mises à jour.</span>
         </p>
         <table class="table">
@@ -76,7 +76,7 @@ declare(strict_types=1);
             </tbody>
         </table>
         <p class="admin-actions">
-            <button type="submit" class="btn btn-primary btn-sm" form="alias-bulk-form">💾 Enregistrer les catégories</button>
+            <button type="submit" class="btn btn-primary btn-sm" form="alias-bulk-form">Enregistrer les catégories</button>
         </p>
     </div>
 </div>

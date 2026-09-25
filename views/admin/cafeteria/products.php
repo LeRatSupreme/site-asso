@@ -71,10 +71,10 @@ declare(strict_types=1);
                         <?php endif; ?>
                     </td>
                     <td class="row-actions">
-                        <a class="btn btn-outline btn-sm" href="<?= e(url('/admin/cafeteria/' . rawurlencode((string) $p['id']) . '/edit')) ?>">✏️</a>
+                        <a class="btn btn-outline btn-sm" href="<?= e(url('/admin/cafeteria/' . rawurlencode((string) $p['id']) . '/edit')) ?>"></a>
                         <form method="post" action="<?= e(url('/admin/cafeteria/' . rawurlencode((string) $p['id']) . '/delete')) ?>" data-confirm="Supprimer ce produit ?" data-preserve-scroll>
                             <?= csrf_field() ?>
-                            <button type="submit" class="btn btn-danger btn-sm">🗑️</button>
+                            <button type="submit" class="btn btn-danger btn-sm"></button>
                         </form>
                     </td>
                 </tr>

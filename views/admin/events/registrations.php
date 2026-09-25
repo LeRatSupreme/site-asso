@@ -22,7 +22,7 @@ $slug       = (string) ($event['slug'] ?? '');
     <p><a href="<?= e(url('/admin/events')) ?>">← Événements</a></p>
     <h2 class="card-title">Inscriptions — <?= e($event['title'] ?? '') ?></h2>
     <p class="card-meta"><?= e((string) $count) ?> inscrit(s)<?php if (!empty($waitlist)): ?> · <?= e((string) count($waitlist)) ?> en attente<?php endif; ?></p>
-    <p><a class="btn btn-primary btn-sm" href="<?= e($checkinUrl) ?>">📱 Ouvrir le check-in (scanner QR)</a></p>
+    <p><a class="btn btn-primary btn-sm" href="<?= e($checkinUrl) ?>">Ouvrir le check-in (scanner QR)</a></p>
 </header>
 
 <div class="card surface glass table-wrap">
@@ -42,7 +42,7 @@ $slug       = (string) ($event['slug'] ?? '');
                         <td><?= e($r['nom'] ?? '') ?></td>
                         <td>
                             <span class="checkin-badge <?= $present ? 'is-present' : 'is-absent' ?>">
-                                <?= $present ? '✅ Présent' : '⬜ Absent' ?>
+                                <?= $present ? 'Présent' : 'Absent' ?>
                             </span>
                         </td>
                         <td>
@@ -127,11 +127,11 @@ $slug       = (string) ($event['slug'] ?? '');
                     if (!data.ok) { return; }
                     if (data.checked_in) {
                         badge.className = 'checkin-badge is-present';
-                        badge.textContent = '✅ Présent';
+                        badge.textContent = 'Présent';
                         btn.textContent = 'Marquer absent';
                     } else {
                         badge.className = 'checkin-badge is-absent';
-                        badge.textContent = '⬜ Absent';
+                        badge.textContent = 'Absent';
                         btn.textContent = 'Marquer présent';
                     }
                 });

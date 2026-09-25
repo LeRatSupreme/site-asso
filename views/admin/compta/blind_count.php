@@ -29,11 +29,11 @@ declare(strict_types=1);
 </div>
 
 <section class="card surface glass table-wrap">
-    <h2 class="card-title">📦 Comptage physique</h2>
+    <h2 class="card-title">Comptage physique</h2>
     <p class="card-meta">
         Comptage « à l'aveugle » : les quantités théoriques ne sont volontairement pas affichées,
         pour un comptage honnête. Laisse vide les produits non comptés.
-        Le bouton 🚫 met un produit <strong>« en pause »</strong> (« plus en vente pour l'instant »,
+        Le bouton met un produit <strong>« en pause »</strong> (« plus en vente pour l'instant »,
         ex. Redbull Summer hors été) : rien n'est supprimé, le produit sort de cette liste
         — rétablissement en un clic depuis la page Inventaire (groupe Système).
     </p>
@@ -54,10 +54,10 @@ declare(strict_types=1);
                 <td>
                     <form method="post" action="<?= e(url('/admin/compta/inventaire/comptage/' . rawurlencode($r['key']) . '/discontinue')) ?>"
                           data-confirm="Marquer « <?= e($r['key']) ?> » plus en vente pour l'instant ? Rien n'est supprimé : il passe en pause, sort de cette liste et restera rétablissable en un clic (page Inventaire)."
-                          data-confirm-button="🚫 Plus en vente"
+                          data-confirm-button="Plus en vente"
                           data-preserve-scroll>
                         <?= csrf_field() ?>
-                        <button type="submit" class="btn btn-outline btn-sm icon-btn" title="Plus en vente pour l'instant (saisonnier…) : met en pause, rien n'est supprimé">🚫</button>
+                        <button type="submit" class="btn btn-outline btn-sm icon-btn" title="Plus en vente pour l'instant (saisonnier…) : met en pause, rien n'est supprimé"></button>
                     </form>
                 </td>
             </tr>

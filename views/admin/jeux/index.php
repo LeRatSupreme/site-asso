@@ -10,30 +10,30 @@ declare(strict_types=1);
  */
 ?>
 <div class="admin-actions">
-    <a class="btn btn-outline btn-sm" href="<?= e(url('/jeux')) ?>" target="_blank" rel="noopener">👁️ Voir le site</a>
+    <a class="btn btn-outline btn-sm" href="<?= e(url('/jeux')) ?>" target="_blank" rel="noopener">Voir le site</a>
 </div>
 
 <div class="grid grid-3" style="margin-bottom:1.5rem;">
     <div class="card surface glass stat-card-admin">
-        <span class="stat-icon">🔤</span>
+        <span class="stat-icon"></span>
         <span class="stat-value"><?= number_format($stats['wordsFr'] + $stats['wordsEn'], 0, ',', ' ') ?></span>
         <span class="stat-label">Mots Wordle (total)</span>
-        <span class="stat-sub">🇫🇷 <?= number_format($stats['wordsFr']) ?> · 🇬🇧 <?= number_format($stats['wordsEn']) ?></span>
+        <span class="stat-sub"><?= number_format($stats['wordsFr']) ?> · <?= number_format($stats['wordsEn']) ?></span>
     </div>
     <div class="card surface glass stat-card-admin">
-        <span class="stat-icon">📊</span>
+        <span class="stat-icon"></span>
         <span class="stat-value"><?= $stats['wordsFacile'] ?> / <?= $stats['wordsMoyen'] ?> / <?= $stats['wordsDifficile'] ?></span>
         <span class="stat-label">Facile / Moyen / Difficile</span>
     </div>
     <div class="card surface glass stat-card-admin">
-        <span class="stat-icon">🧩</span>
+        <span class="stat-icon"></span>
         <span class="stat-value"><?= $stats['enigmas'] ?></span>
         <span class="stat-label">Énigmes actives</span>
     </div>
 </div>
 
 <div class="card surface glass stat-card-admin" style="margin-bottom:1.5rem;">
-    <span class="stat-icon">👥</span>
+    <span class="stat-icon"></span>
     <span class="stat-value"><?= $stats['players'] ?></span>
     <span class="stat-label">Joueurs ayant au moins une partie</span>
 </div>
@@ -41,17 +41,17 @@ declare(strict_types=1);
 <h2 class="form-section-title">Gérer</h2>
 <div class="grid grid-2">
     <a class="card surface glass card-hover" href="<?= e(url('/admin/jeux/scores')) ?>" style="text-decoration:none;color:inherit;">
-        <h3>👥 Joueurs & Pseudos</h3>
+        <h3>Joueurs & Pseudos</h3>
         <p>Voir tous les joueurs, modifier les pseudos, réinitialiser les scores.</p>
         <span class="btn btn-primary btn-sm">Ouvrir →</span>
     </a>
     <a class="card surface glass card-hover" href="<?= e(url('/admin/jeux/wordle')) ?>" style="text-decoration:none;color:inherit;">
-        <h3>🔤 Mots Wordle</h3>
+        <h3>Mots Wordle</h3>
         <p>Rechercher, ajouter, modifier ou supprimer des mots (5 à 7 lettres).</p>
         <span class="btn btn-primary btn-sm">Ouvrir →</span>
     </a>
     <a class="card surface glass card-hover" href="<?= e(url('/admin/jeux/enigmes')) ?>" style="text-decoration:none;color:inherit;">
-        <h3>🧩 Énigmes</h3>
+        <h3>Énigmes</h3>
         <p>Créer et modifier les devinettes quotidiennes (FR + EN + réponse).</p>
         <span class="btn btn-primary btn-sm">Ouvrir →</span>
     </a>

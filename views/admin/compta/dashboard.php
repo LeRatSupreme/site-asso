@@ -130,7 +130,7 @@ if ($reorderAlerts > 0) {
 
 <?php if ($alerts !== []): ?>
 <div class="card surface glass alert-card">
-    <h2 class="card-title">🔔 Alertes &amp; suivi</h2>
+    <h2 class="card-title">Alertes &amp; suivi</h2>
     <ul class="alert-list">
         <?php foreach ($alerts as $a): ?>
             <li class="alert-item alert-<?= e($a['level']) ?>"><?= $a['html'] ?></li>
@@ -139,7 +139,7 @@ if ($reorderAlerts > 0) {
 </div>
 <?php else: ?>
 <div class="card surface glass alert-card">
-    <p class="muted">✅ Tout est à jour</p>
+    <p class="muted">Tout est à jour</p>
 </div>
 <?php endif; ?>
 

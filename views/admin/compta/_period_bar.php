@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 /**
- * Barre « 📅 Période » partagée : pastilles cliquables + dates personnalisées.
+ * Barre « Période » partagée : pastilles cliquables + dates personnalisées.
  *
  * Attend en scope : $period (array{preset:string, from:?string, to:?string})
  * et $periodOptions (array<string,string>). Les autres paramètres GET de la
@@ -19,7 +19,7 @@ $keep = $_GET;
 unset($keep['period'], $keep['from'], $keep['to']);
 ?>
 <div class="period-bar" id="period-filters">
-    <span class="period-bar-label">📅 Période</span>
+    <span class="period-bar-label">Période</span>
 
     <nav class="period-pills" aria-label="Sélection de période">
         <?php foreach ($periodOptions as $k => $label): ?>

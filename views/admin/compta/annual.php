@@ -39,7 +39,7 @@ $totalDelta = $totals['caPrev'] > 0 ? round(($totals['ca'] - $totals['caPrev']) 
             <?php endif; ?>
         </select>
     </form>
-    <a class="btn btn-outline" href="<?= e(url('/admin/compta/annuel?year=' . $year . '&export=csv')) ?>">📄 Exporter CSV</a>
+    <a class="btn btn-outline" href="<?= e(url('/admin/compta/annuel?year=' . $year . '&export=csv')) ?>">Exporter CSV</a>
 </div>
 
 <div class="card surface glass table-wrap">

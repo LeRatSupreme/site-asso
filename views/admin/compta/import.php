@@ -82,7 +82,7 @@ $lastImport = $batches[0]['imported_at'] ?? null;
     <div class="card surface glass kpi">
         <p class="kpi-label">Dernier import</p>
         <p class="kpi-value" style="font-size:1.15rem"><?= $lastImport !== null ? e(formatDateTime((string) $lastImport)) : '—' ?></p>
-        <p class="kpi-sub"><?= $lastImport !== null ? 'tout est frais 👌' : 'aucun import pour l\'instant' ?></p>
+        <p class="kpi-sub"><?= $lastImport !== null ? 'tout est frais ' : 'aucun import pour l\'instant' ?></p>
     </div>
 </div>
 
@@ -93,7 +93,7 @@ $lastImport = $batches[0]['imported_at'] ?? null;
             <?= csrf_field() ?>
 
             <label class="dropzone" id="dropzone" for="csv">
-                <span class="dropzone-icon" aria-hidden="true">📄</span>
+                <span class="dropzone-icon" aria-hidden="true"></span>
                 <span class="dropzone-main" id="dz-main">Glisse le fichier CSV ici
                     <small>ou clique pour choisir un fichier</small>
                 </span>
@@ -164,7 +164,7 @@ $lastImport = $batches[0]['imported_at'] ?? null;
     <?php foreach ($syncDays as $d): ?>
         <details class="cost-card-lots">
             <summary>
-                📅 <?= e(formatDate($d['day'])) ?> — <?= (int) $d['count'] ?> synchronisation<?= (int) $d['count'] > 1 ? 's' : '' ?>
+                <?= e(formatDate($d['day'])) ?> — <?= (int) $d['count'] ?> synchronisation<?= (int) $d['count'] > 1 ? 's' : '' ?>
                 · <?= (int) $d['inserted'] ?> vente<?= (int) $d['inserted'] > 1 ? 's' : '' ?> importée<?= (int) $d['inserted'] > 1 ? 's' : '' ?>
                 · dernière à <?= e($d['last'] !== '' ? substr($d['last'], 11, 5) : '—') ?>
             </summary>
@@ -198,7 +198,7 @@ $lastImport = $batches[0]['imported_at'] ?? null;
 
 <?php if ($paymentRaw !== []): ?>
 <section class="card surface glass">
-    <h2 class="card-title">💳 Moyens de paiement importés</h2>
+    <h2 class="card-title">Moyens de paiement importés</h2>
     <p class="muted">
         Classement automatique : <strong>Espèces / Cash → Liquide</strong> (aucun frais SumUp),
         tout le reste → <strong>Carte</strong> (frais estimés au taux des Réglages).
@@ -252,7 +252,7 @@ $lastImport = $batches[0]['imported_at'] ?? null;
     function showFile(file) {
         if (!file) return;
         zone.classList.add('has-file');
-        main.innerHTML = '<span class="dropzone-filename">✅ ' +
+        main.innerHTML = '<span class="dropzone-filename">' +
             (typeof file.name === 'string' ? file.name.replace(/[&<>"']/g, function (c) {
                 return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
             }) : 'fichier') +

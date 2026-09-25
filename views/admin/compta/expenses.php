@@ -200,7 +200,7 @@ foreach ($byCategory as $c) {
                     <td class="row-actions">
                         <form method="post" action="<?= e(url('/admin/compta/depenses/' . rawurlencode((string) ($x['id'] ?? '')) . '/delete')) ?>" data-confirm="Supprimer cette dépense ?" data-preserve-scroll>
                             <?= csrf_field() ?>
-                            <button type="submit" class="btn btn-danger btn-sm" aria-label="Supprimer">🗑</button>
+                            <button type="submit" class="btn btn-danger btn-sm" aria-label="Supprimer"></button>
                         </form>
                     </td>
                 </tr>

@@ -35,30 +35,30 @@ $wikiAccess = [
 ];
 
 $wikiToc = [
-    'sec-start'      => '🚀 Démarrage',
-    'sec-events'     => '📅 Événements',
-    'sec-checkin'    => '📱 Check-in QR',
-    'sec-sondages'   => '📊 Sondages',
-    'sec-cafeteria'  => '☕ Cafétéria',
-    'sec-jeux'       => '🎮 Jeux',
-    'sec-compta'     => '💰 Compta',
-    'sec-couts'      => '🛒 Coûts',
-    'sec-caisse'     => '🧾 Comptage caisse',
-    'sec-reappro'    => '📦 Réappro',
-    'sec-analytics'  => '📈 Analytics',
-    'sec-caisses'    => '🏦 Caisses',
-    'sec-inventaire' => '🧮 Inventaire',
-    'sec-users'      => '👥 Utilisateurs',
-    'sec-emails'     => '📧 Emails',
-    'sec-settings'   => '⚙️ Paramètres',
-    'sec-tips'       => '💡 Conseils',
+    'sec-start'      => 'Démarrage',
+    'sec-events'     => 'Événements',
+    'sec-checkin'    => 'Check-in QR',
+    'sec-sondages'   => 'Sondages',
+    'sec-cafeteria'  => 'Cafétéria',
+    'sec-jeux'       => 'Jeux',
+    'sec-compta'     => 'Compta',
+    'sec-couts'      => 'Coûts',
+    'sec-caisse'     => 'Comptage caisse',
+    'sec-reappro'    => 'Réappro',
+    'sec-analytics'  => 'Analytics',
+    'sec-caisses'    => 'Caisses',
+    'sec-inventaire' => 'Inventaire',
+    'sec-users'      => 'Utilisateurs',
+    'sec-emails'     => 'Emails',
+    'sec-settings'   => 'Paramètres',
+    'sec-tips'       => 'Conseils',
 ];
 ?>
 <div class="wiki">
 
 <!-- ===================== HERO ===================== -->
 <header class="wiki-hero">
-    <span class="wiki-hero-emoji">📚</span>
+    <span class="wiki-hero-emoji"></span>
     <h1>Guide de l'administrateur</h1>
     <p>Tout ce qu'il faut savoir pour gérer le site AEIC au quotidien.</p>
     <p class="wiki-hero-role" style="opacity:.75;font-size:.95em">Guide adapté à ton rôle — seules les sections qui te concernent sont affichées.</p>
@@ -66,7 +66,7 @@ $wikiToc = [
 
 <!-- ===================== RECHERCHE ===================== -->
 <div class="wiki-search-wrap">
-    <input type="text" id="wiki-search" placeholder="🔎 Rechercher..." autocomplete="off">
+    <input type="text" id="wiki-search" placeholder="Rechercher..." autocomplete="off">
     <span id="wiki-count" class="wiki-count"></span>
 </div>
 
@@ -87,7 +87,7 @@ $wikiToc = [
 <!-- ===================== 1. DÉMARRAGE ===================== -->
 <?php if ($wikiAccess['sec-start'] ?? false): ?>
 <section class="wiki-section" id="sec-start">
-    <h2>🚀 Démarrage & connexion</h2>
+    <h2>Démarrage & connexion</h2>
 
     <div class="wiki-block">
         <h3>Comment se connecter</h3>
@@ -104,11 +104,11 @@ $wikiToc = [
         <h3>Le 2FA (authentification à deux facteurs)</h3>
         <p>Le 2FA est <strong>obligatoire</strong> pour le Fondateur, les administrateurs et les trésoriers. Il ajoute une couche de sécurité : même si quelqu'un vole ton mot de passe, il ne peut pas se connecter sans ton téléphone.</p>
         <div class="wiki-diagram">
-            <div class="wiki-diagram-box">📧 Email + mot de passe</div>
+            <div class="wiki-diagram-box">Email + mot de passe</div>
             <div class="wiki-arrow">↓</div>
-            <div class="wiki-diagram-box">📱 Code à 6 chiffres (app Authenticator)</div>
+            <div class="wiki-diagram-box">Code à 6 chiffres (app Authenticator)</div>
             <div class="wiki-arrow">↓</div>
-            <div class="wiki-diagram-box wiki-diagram-ok">✅ Connecté</div>
+            <div class="wiki-diagram-box wiki-diagram-ok">Connecté</div>
         </div>
         <p><strong>Comment configurer :</strong> à la première connexion, un QR code s'affiche. Scanne-le avec <strong>Google Authenticator</strong> (Android/iOS). L'app génère un code à 6 chiffres qui change toutes les 30 secondes.</p>
     </div>
@@ -133,7 +133,7 @@ $wikiToc = [
             <div class="wiki-table-row"><span class="wiki-tag wiki-tag-violet">JEUX</span><span>Jeux (Wordle, énigmes, classements) + cafétéria</span><span>Resp. jeux</span></div>
             <div class="wiki-table-row"><span class="wiki-tag wiki-tag-muted">ELEVE</span><span>Espace membre uniquement (pas d'admin)</span><span>Tous les étudiants inscrits</span></div>
         </div>
-        <p><strong>Pages + :</strong> au-delà du rôle, le Fondateur peut attribuer des pages individuellement (Admin → Utilisateurs → « 🔑 Pages ») : un membre du bureau accède alors à Inventaire, Caisses, Coûts de revient, Utilisateurs, Paramètres — ou à un module complet — sans changer de rôle.</p>
+        <p><strong>Pages + :</strong> au-delà du rôle, le Fondateur peut attribuer des pages individuellement (Admin → Utilisateurs → « Pages ») : un membre du bureau accède alors à Inventaire, Caisses, Coûts de revient, Utilisateurs, Paramètres — ou à un module complet — sans changer de rôle.</p>
     </div>
 
     <div class="wiki-block">
@@ -146,7 +146,7 @@ $wikiToc = [
 <!-- ===================== 2. ÉVÉNEMENTS ===================== -->
 <?php if ($wikiAccess['sec-events'] ?? false): ?>
 <section class="wiki-section" id="sec-events">
-    <h2>📅 Créer un événement</h2>
+    <h2>Créer un événement</h2>
 
     <div class="wiki-block">
         <h3>Étapes pour créer un événement</h3>
@@ -167,26 +167,26 @@ $wikiToc = [
         <h3>Capacité max et liste d'attente</h3>
         <p>Si tu mets une <strong>capacité max</strong> (ex: 50 places), voici comment ça marche :</p>
         <div class="wiki-diagram">
-            <div class="wiki-diagram-box">📝 Élève s'inscrit</div>
+            <div class="wiki-diagram-box">Élève s'inscrit</div>
             <div class="wiki-arrow">↓</div>
             <div class="wiki-diagram-box">Places restantes ?</div>
             <div class="wiki-arrow">↓ ↓</div>
             <div class="wiki-diagram-row">
-                <div class="wiki-diagram-box wiki-diagram-ok">✅ Oui → Inscription confirmée + QR code</div>
-                <div class="wiki-diagram-box wiki-diagram-warn">⚠️ Non → Liste d'attente (position X)</div>
+                <div class="wiki-diagram-box wiki-diagram-ok">Oui → Inscription confirmée + QR code</div>
+                <div class="wiki-diagram-box wiki-diagram-warn">Non → Liste d'attente (position X)</div>
             </div>
             <div class="wiki-arrow">↓ (si quelqu'un se désinscrit)</div>
-            <div class="wiki-diagram-box wiki-diagram-ok">✅ Premier de la file promu + email automatique</div>
+            <div class="wiki-diagram-box wiki-diagram-ok">Premier de la file promu + email automatique</div>
         </div>
     </div>
 
     <div class="wiki-block">
         <h3>Gérer les inscriptions</h3>
-        <p>Dans la liste des événements, clique l'icône 📋 → tu vois :</p>
+        <p>Dans la liste des événements, clique l'icône → tu vois :</p>
         <ul class="wiki-list">
             <li>Liste des inscrits (nom, prénom, date d'inscription)</li>
             <li>Leurs choix (menus, options) si l'événement a des variantes</li>
-            <li>Le statut de présence (✅/⬜) si le check-in QR a été fait</li>
+            <li>Le statut de présence (/) si le check-in QR a été fait</li>
             <li>La <strong>liste d'attente</strong> en bas (si l'événement est complet)</li>
         </ul>
         <p>Bouton <strong>« Export CSV »</strong> pour télécharger la liste.</p>
@@ -197,16 +197,16 @@ $wikiToc = [
 <!-- ===================== 3. CHECK-IN QR ===================== -->
 <?php if ($wikiAccess['sec-checkin'] ?? false): ?>
 <section class="wiki-section" id="sec-checkin">
-    <h2>📱 Check-in QR (le jour J)</h2>
+    <h2>Check-in QR (le jour J)</h2>
 
     <div class="wiki-block">
         <h3>Comment scanner les participants</h3>
         <p>Quand un élève s'inscrit à un événement, un <strong>QR code unique</strong> est généré. Il est visible sur la page de l'événement (si l'élève est connecté et inscrit).</p>
         <div class="wiki-steps">
-            <div class="wiki-step"><span class="wiki-step-n">1</span><div><strong>Le jour J</strong> → Admin → Événements → 📋 → <strong>« Ouvrir le check-in »</strong></div></div>
+            <div class="wiki-step"><span class="wiki-step-n">1</span><div><strong>Le jour J</strong> → Admin → Événements → → <strong>« Ouvrir le check-in »</strong></div></div>
             <div class="wiki-step"><span class="wiki-step-n">2</span><div>Une page avec un <strong>champ de saisie</strong> s'ouvre (autofocus)</div></div>
             <div class="wiki-step"><span class="wiki-step-n">3</span><div><strong>Scanne le QR</strong> du participant avec la caméra du téléphone (ou saisis le token manuellement) → Entrée</div></div>
-            <div class="wiki-step"><span class="wiki-step-n">4</span><div>Résultat : <span class="wiki-tag wiki-tag-green">✅ Présent</span> ou <span class="wiki-tag wiki-tag-warn">⚠️ Déjà checké</span></div></div>
+            <div class="wiki-step"><span class="wiki-step-n">4</span><div>Résultat : <span class="wiki-tag wiki-tag-green">Présent</span> ou <span class="wiki-tag wiki-tag-warn">Déjà checké</span></div></div>
         </div>
     </div>
 </section>
@@ -215,7 +215,7 @@ $wikiToc = [
 <!-- ===================== 4. SONDAGES ===================== -->
 <?php if ($wikiAccess['sec-sondages'] ?? false): ?>
 <section class="wiki-section" id="sec-sondages">
-    <h2>📊 Créer un sondage</h2>
+    <h2>Créer un sondage</h2>
 
     <div class="wiki-block">
         <h3>Étapes</h3>
@@ -234,7 +234,7 @@ $wikiToc = [
 <!-- ===================== 5. CAFÉTÉRIA ===================== -->
 <?php if ($wikiAccess['sec-cafeteria'] ?? false): ?>
 <section class="wiki-section" id="sec-cafeteria">
-    <h2>☕ Cafétéria — Produits & carte</h2>
+    <h2>Cafétéria — Produits & carte</h2>
 
     <div class="wiki-block">
         <h3>Ajouter un produit au menu</h3>
@@ -243,7 +243,7 @@ $wikiToc = [
             <div class="wiki-step"><span class="wiki-step-n">2</span><div><strong>Nom</strong> (ex: « Red Bull ») + <strong>Description</strong> (ex: « Boisson énergisante »)</div></div>
             <div class="wiki-step"><span class="wiki-step-n">3</span><div><strong>Prix de vente</strong> (ex: <code>1,50</code>) + <strong>Catégorie</strong> (Boissons, Snacks...)</div></div>
             <div class="wiki-step"><span class="wiki-step-n">4</span><div><strong>Image</strong> (optionnel) : colle une URL d'une image uploadée dans Médias</div></div>
-            <div class="wiki-step"><span class="wiki-step-n">5</span><div><strong>Stock</strong> (pour le réappro) + <strong>Disponible</strong> ✅ + <strong>Actif</strong> ✅</div></div>
+            <div class="wiki-step"><span class="wiki-step-n">5</span><div><strong>Stock</strong> (pour le réappro) + <strong>Disponible</strong> + <strong>Actif</strong> </div></div>
             <div class="wiki-step"><span class="wiki-step-n">6</span><div>Enregistrer → le produit apparaît dans <strong>« Notre carte »</strong> sur l'accueil</div></div>
         </div>
     </div>
@@ -252,14 +252,14 @@ $wikiToc = [
         <h3>Emojis automatiques</h3>
         <p>Si tu ne mets pas d'image, le site attribue automatiquement un emoji selon le nom :</p>
         <div class="wiki-emoji-grid">
-            <span>🥤 Coca, Fanta, Oasis, Orangina</span>
-            <span>💧 Eau, Cristaline, Perrier</span>
-            <span>⚡ Monster, Red Bull</span>
-            <span>🍫 Bueno, KitKat, Mars, Snickers</span>
-            <span>🍟 Chips</span>
-            <span>🍬 Bonbon</span>
-            <span>🍵 Lipton</span>
-            <span>🧃 Minute Maid, Pulco</span>
+            <span>Coca, Fanta, Oasis, Orangina</span>
+            <span>Eau, Cristaline, Perrier</span>
+            <span>Monster, Red Bull</span>
+            <span>Bueno, KitKat, Mars, Snickers</span>
+            <span>Chips</span>
+            <span>Bonbon</span>
+            <span>Lipton</span>
+            <span>Minute Maid, Pulco</span>
         </div>
     </div>
 </section>
@@ -268,7 +268,7 @@ $wikiToc = [
 <!-- ===================== 6. JEUX ===================== -->
 <?php if ($wikiAccess['sec-jeux'] ?? false): ?>
 <section class="wiki-section" id="sec-jeux">
-    <h2>🎮 Jeux</h2>
+    <h2>Jeux</h2>
 
     <div class="wiki-block">
         <h3>Gérer les jeux</h3>
@@ -286,7 +286,7 @@ $wikiToc = [
 <!-- ===================== 7. COMPTABILITÉ ===================== -->
 <?php if ($wikiAccess['sec-compta'] ?? false): ?>
 <section class="wiki-section" id="sec-compta">
-    <h2>💰 Comptabilité — Importer SumUp</h2>
+    <h2>Comptabilité — Importer SumUp</h2>
 
     <div class="wiki-block">
         <h3>Récupérer le rapport SumUp</h3>
@@ -301,15 +301,15 @@ $wikiToc = [
     <div class="wiki-block">
         <h3>Que fait le système à l'import ?</h3>
         <div class="wiki-diagram">
-            <div class="wiki-diagram-box">📄 Fichier CSV SumUp</div>
+            <div class="wiki-diagram-box">Fichier CSV SumUp</div>
             <div class="wiki-arrow">↓</div>
-            <div class="wiki-diagram-box">🔍 Parse : dates FR, prix (virgule), moyen de paiement</div>
+            <div class="wiki-diagram-box">Parse : dates FR, prix (virgule), moyen de paiement</div>
             <div class="wiki-arrow">↓</div>
-            <div class="wiki-diagram-box">💳 Normalise : Visa/Mastercard → CARTE, Espèces → LIQUIDE</div>
+            <div class="wiki-diagram-box">Normalise : Visa/Mastercard → CARTE, Espèces → LIQUIDE</div>
             <div class="wiki-arrow">↓</div>
-            <div class="wiki-diagram-box">🚫 Déduplication : clé unique (ref + date + produit). Réimport = 0 doublon.</div>
+            <div class="wiki-diagram-box">Déduplication : clé unique (ref + date + produit). Réimport = 0 doublon.</div>
             <div class="wiki-arrow">↓</div>
-            <div class="wiki-diagram-box wiki-diagram-ok">✅ Ventes disponibles dans tout le module compta</div>
+            <div class="wiki-diagram-box wiki-diagram-ok">Ventes disponibles dans tout le module compta</div>
         </div>
         <p>L'historique de la page garde les <strong>50 derniers imports manuels</strong>. La <strong>synchro API SumUp</strong> (automatique, toutes les minutes) est affichée à part et <strong>regroupée par jour</strong> : clique un jour pour voir le détail des passages.</p>
     </div>
@@ -332,17 +332,17 @@ $wikiToc = [
 <!-- ===================== 8. COÛTS DE REVIENT ===================== -->
 <?php if ($wikiAccess['sec-couts'] ?? false): ?>
 <section class="wiki-section" id="sec-couts">
-    <h2>🛒 Coûts de revient (bénéfice réel)</h2>
+    <h2>Coûts de revient (bénéfice réel)</h2>
 
     <div class="wiki-block">
         <p>Le bénéfice = <strong>prix de vente − coût d'achat</strong>. Sans coût saisi → marge à 100% (faux).</p>
         <p>Page du groupe <strong>Système</strong> (Admin → Système → Coûts de revient) : réservée au Fondateur, aux ADMIN explicitement autorisés, ou à qui la page a été attribuée (« Pages + »).</p>
         <div class="wiki-diagram">
-            <div class="wiki-diagram-box">💵 Prix de vente TTC : 1,00 €</div>
+            <div class="wiki-diagram-box">Prix de vente TTC : 1,00 €</div>
             <div class="wiki-arrow">−</div>
-            <div class="wiki-diagram-box">🛒 Coût d'achat : 0,60 €</div>
+            <div class="wiki-diagram-box">Coût d'achat : 0,60 €</div>
             <div class="wiki-arrow">=</div>
-            <div class="wiki-diagram-box wiki-diagram-ok">💰 Bénéfice : 0,40 € (marge 40%)</div>
+            <div class="wiki-diagram-box wiki-diagram-ok">Bénéfice : 0,40 € (marge 40%)</div>
         </div>
         <p><strong>Comment :</strong> recherche le produit → saisis le coût → Enregistrer. Si le prix d'achat change → crée un nouveau lot daté (l'historique des coûts est conservé).</p>
     </div>
@@ -352,7 +352,7 @@ $wikiToc = [
 <!-- ===================== 9. COMPTAGE DE CAISSE ===================== -->
 <?php if ($wikiAccess['sec-caisse'] ?? false): ?>
 <section class="wiki-section" id="sec-caisse">
-    <h2>🧾 Comptage de caisse</h2>
+    <h2>Comptage de caisse</h2>
 
     <div class="wiki-block">
         <p>Accessible à <strong>tout le bureau</strong> (hors élèves), même sans accès comptabilité : Admin → Comptabilité → <strong>Comptage caisse</strong>.</p>
@@ -369,19 +369,19 @@ $wikiToc = [
 <!-- ===================== 10. RÉAPPRO ===================== -->
 <?php if ($wikiAccess['sec-reappro'] ?? false): ?>
 <section class="wiki-section" id="sec-reappro">
-    <h2>📦 Réapprovisionnement</h2>
+    <h2>Réapprovisionnement</h2>
 
     <div class="wiki-block">
         <h3>Comment savoir combien racheter</h3>
         <p>La page est en <strong>lecture seule</strong> : plus aucune saisie de stock ici. Le stock affiché est le <strong>théorique de l'inventaire</strong> (dernier comptage + achats − ventes − pertes) : il suit automatiquement chaque mouvement.</p>
         <div class="wiki-diagram">
             <div class="wiki-diagram-row">
-                <div class="wiki-diagram-box">📊 Ventes réelles<br>(période analysée au choix)</div>
-                <div class="wiki-diagram-box">📅 Jours d'ouverture<br>(lun-ven = 22j/mois)</div>
-                <div class="wiki-diagram-box">🧮 Stock théorique<br>(issu de l'inventaire)</div>
+                <div class="wiki-diagram-box">Ventes réelles<br>(période analysée au choix)</div>
+                <div class="wiki-diagram-box">Jours d'ouverture<br>(lun-ven = 22j/mois)</div>
+                <div class="wiki-diagram-box">Stock théorique<br>(issu de l'inventaire)</div>
             </div>
             <div class="wiki-arrow">↓</div>
-            <div class="wiki-diagram-box wiki-diagram-ok">✅ « À commander : X unités »</div>
+            <div class="wiki-diagram-box wiki-diagram-ok">« À commander : X unités »</div>
         </div>
     </div>
 
@@ -401,7 +401,7 @@ $wikiToc = [
 <!-- ===================== 11. ANALYTICS ===================== -->
 <?php if ($wikiAccess['sec-analytics'] ?? false): ?>
 <section class="wiki-section" id="sec-analytics">
-    <h2>📈 Dashboard Analytics</h2>
+    <h2>Dashboard Analytics</h2>
 
     <div class="wiki-block">
         <h3>Filtres globaux</h3>
@@ -433,7 +433,7 @@ $wikiToc = [
 <!-- ===================== 11. CAISSES (SYSTÈME) ===================== -->
 <?php if ($wikiAccess['sec-caisses'] ?? false): ?>
 <section class="wiki-section" id="sec-caisses">
-    <h2>🏦 Caisses — traçabilité du liquide</h2>
+    <h2>Caisses — traçabilité du liquide</h2>
 
     <div class="wiki-block">
         <p>Page du groupe <strong>Système</strong> (Admin → Système → Caisses) : elle retrace tout le liquide, du comptage au dépôt en banque.</p>
@@ -452,7 +452,7 @@ $wikiToc = [
 <!-- ===================== 12. INVENTAIRE (SYSTÈME) ===================== -->
 <?php if ($wikiAccess['sec-inventaire'] ?? false): ?>
 <section class="wiki-section" id="sec-inventaire">
-    <h2>🧮 Inventaire</h2>
+    <h2>Inventaire</h2>
 
     <div class="wiki-block">
         <p>Page du groupe <strong>Système</strong> (Admin → Système → Inventaire) : tu comptes le stock <strong>physique</strong> et le site le compare au <strong>théorique</strong> (dernier comptage + achats − ventes). Un écart = perte, casse, offert ou erreur de saisie.</p>
@@ -469,18 +469,18 @@ $wikiToc = [
 <!-- ===================== 13. UTILISATEURS ===================== -->
 <?php if ($wikiAccess['sec-users'] ?? false): ?>
 <section class="wiki-section" id="sec-users">
-    <h2>👥 Utilisateurs & adhésions</h2>
+    <h2>Utilisateurs & adhésions</h2>
 
     <div class="wiki-block">
         <h3>Actions possibles sur un utilisateur</h3>
         <div class="wiki-table">
             <div class="wiki-table-row wiki-table-head"><span>Action</span><span>Effet</span></div>
-            <div class="wiki-table-row"><span>🔄 <strong>Changer le rôle</strong></span><span>ELEVE → ADMIN, TRESORERIE, COMMUNICATION, CAFETERIA ou JEUX (le rôle Fondateur n'est jamais attribuable depuis le site)</span></div>
-            <div class="wiki-table-row"><span>🔑 <strong>Pages</strong></span><span>Attribue des pages individuellement, au-delà du rôle : modules complets (Comptabilité, Événements...) ou pages Système (Inventaire, Coûts, Caisses, Utilisateurs, Paramètres)</span></div>
-            <div class="wiki-table-row"><span>✏️ <strong>Renommer</strong></span><span>Prénom et nom modifiables en place (clique hors du champ ou Entrée pour enregistrer)</span></div>
-            <div class="wiki-table-row"><span>🔒 <strong>Désactiver</strong></span><span>Bloque la connexion. Données conservées.</span></div>
-            <div class="wiki-table-row"><span>🔑 <strong>Reset MDP</strong></span><span>Génère un mot de passe temporaire envoyé par email.</span></div>
-            <div class="wiki-table-row"><span>🗑️ <strong>Supprimer</strong></span><span>Anonymise les données (RGPD). Comptabilité conservée anonyme.</span></div>
+            <div class="wiki-table-row"><span><strong>Changer le rôle</strong></span><span>ELEVE → ADMIN, TRESORERIE, COMMUNICATION, CAFETERIA ou JEUX (le rôle Fondateur n'est jamais attribuable depuis le site)</span></div>
+            <div class="wiki-table-row"><span><strong>Pages</strong></span><span>Attribue des pages individuellement, au-delà du rôle : modules complets (Comptabilité, Événements...) ou pages Système (Inventaire, Coûts, Caisses, Utilisateurs, Paramètres)</span></div>
+            <div class="wiki-table-row"><span><strong>Renommer</strong></span><span>Prénom et nom modifiables en place (clique hors du champ ou Entrée pour enregistrer)</span></div>
+            <div class="wiki-table-row"><span><strong>Désactiver</strong></span><span>Bloque la connexion. Données conservées.</span></div>
+            <div class="wiki-table-row"><span><strong>Reset MDP</strong></span><span>Génère un mot de passe temporaire envoyé par email.</span></div>
+            <div class="wiki-table-row"><span><strong>Supprimer</strong></span><span>Anonymise les données (RGPD). Comptabilité conservée anonyme.</span></div>
         </div>
         <p>Les <strong>adhésions</strong> se gèrent dans Admin → Adhésions (créer une cotisation, « Marquer payée »).</p>
     </div>
@@ -488,7 +488,7 @@ $wikiToc = [
     <div class="wiki-block">
         <h3>Sécurité</h3>
         <div class="wiki-alert wiki-alert-warn">
-            <strong>⚠️ Règles de sécurité :</strong>
+            <strong>Règles de sécurité :</strong>
             <ul class="wiki-list">
                 <li>Tu ne peux <strong>pas</strong> supprimer ton propre compte depuis l'admin</li>
                 <li>Tu ne peux <strong>pas</strong> supprimer/rétrograder le dernier administrateur</li>
@@ -504,25 +504,25 @@ $wikiToc = [
 <!-- ===================== 14. EMAILS ===================== -->
 <?php if ($wikiAccess['sec-emails'] ?? false): ?>
 <section class="wiki-section" id="sec-emails">
-    <h2>📧 Emails automatiques</h2>
+    <h2>Emails automatiques</h2>
 
     <div class="wiki-block">
         <p>Le site envoie automatiquement ces emails (si le SMTP/API Brevo est configuré) :</p>
         <div class="wiki-table">
             <div class="wiki-table-row wiki-table-head"><span>Déclencheur</span><span>Email envoyé</span></div>
-            <div class="wiki-table-row"><span>📝 Inscription d'un élève</span><span>Mot de passe temporaire (« Bienvenue à l'AEIC »)</span></div>
-            <div class="wiki-table-row"><span>📅 24h avant événement</span><span>« Plus que 24h ! » avec détails (date, lieu)</span></div>
-            <div class="wiki-table-row"><span>⏰ 1h avant événement</span><span>« Ça commence dans 1h ! »</span></div>
-            <div class="wiki-table-row"><span>🔑 Reset MDP (admin)</span><span>Mot de passe temporaire à l'utilisateur</span></div>
-            <div class="wiki-table-row"><span>🔐 Changement de mot de passe</span><span>« Votre mot de passe a été modifié »</span></div>
-            <div class="wiki-table-row"><span>🗑️ Suppression de compte</span><span>Confirmation RGPD (anonymisation)</span></div>
-            <div class="wiki-table-row"><span>✅ Liste d'attente promue</span><span>« Une place s'est libérée ! Vous êtes inscrit »</span></div>
+            <div class="wiki-table-row"><span>Inscription d'un élève</span><span>Mot de passe temporaire (« Bienvenue à l'AEIC »)</span></div>
+            <div class="wiki-table-row"><span>24h avant événement</span><span>« Plus que 24h ! » avec détails (date, lieu)</span></div>
+            <div class="wiki-table-row"><span>1h avant événement</span><span>« Ça commence dans 1h ! »</span></div>
+            <div class="wiki-table-row"><span>Reset MDP (admin)</span><span>Mot de passe temporaire à l'utilisateur</span></div>
+            <div class="wiki-table-row"><span>Changement de mot de passe</span><span>« Votre mot de passe a été modifié »</span></div>
+            <div class="wiki-table-row"><span>Suppression de compte</span><span>Confirmation RGPD (anonymisation)</span></div>
+            <div class="wiki-table-row"><span>Liste d'attente promue</span><span>« Une place s'est libérée ! Vous êtes inscrit »</span></div>
         </div>
     </div>
 
     <div class="wiki-block">
         <h3>Vérifier que les emails partent</h3>
-        <p>Admin → Paramètres → Emails/SMTP → <strong>« Envoyer un e-mail de test »</strong> → tape ton adresse → si tu reçois l'email → ✅ tout marche.</p>
+        <p>Admin → Paramètres → Emails/SMTP → <strong>« Envoyer un e-mail de test »</strong> → tape ton adresse → si tu reçois l'email → tout marche.</p>
         <p>Si échec → vérifie la <strong>clé API Brevo</strong> et l'<strong>adresse d'expédition</strong> (doit être un domaine vérifié comme <code>contact@aremond.ovh</code>).</p>
     </div>
 </section>
@@ -531,7 +531,7 @@ $wikiToc = [
 <!-- ===================== 15. PARAMÈTRES ===================== -->
 <?php if ($wikiAccess['sec-settings'] ?? false): ?>
 <section class="wiki-section" id="sec-settings">
-    <h2>⚙️ Paramètres du site</h2>
+    <h2>Paramètres du site</h2>
 
     <div class="wiki-block">
         <h3>Configuration Brevo (emails)</h3>
@@ -561,37 +561,37 @@ $wikiToc = [
 <!-- ===================== 16. CONSEILS ===================== -->
 <?php if ($wikiAccess['sec-tips'] ?? false): ?>
 <section class="wiki-section" id="sec-tips">
-    <h2>💡 Conseils pratiques</h2>
+    <h2>Conseils pratiques</h2>
 
     <div class="wiki-block">
         <h3>Routine mensuelle (trésorier)</h3>
         <div class="wiki-steps">
-            <div class="wiki-step"><span class="wiki-step-n">1</span><div>📥 <strong>Importe</strong> le rapport SumUp du mois écoulé (ou laisse la synchro API faire)</div></div>
-            <div class="wiki-step"><span class="wiki-step-n">2</span><div>🔗 <strong>Mappe</strong> les nouveaux libellés non reconnus (aliases + catégories)</div></div>
-            <div class="wiki-step"><span class="wiki-step-n">3</span><div>💸 <strong>Saisis</strong> les coûts de revient des nouveaux produits (si tu as l'accès Coûts)</div></div>
-            <div class="wiki-step"><span class="wiki-step-n">4</span><div>🧮 <strong>Fais l'inventaire</strong> (stock physique) pour fiabiliser le stock théorique</div></div>
-            <div class="wiki-step"><span class="wiki-step-n">5</span><div>📦 <strong>Vérifie</strong> le réappro (quantités à commander, autonomie)</div></div>
-            <div class="wiki-step"><span class="wiki-step-n">6</span><div>🧾 <strong>Compte la caisse</strong> puis dépôts du liquide en banque (Système → Caisses)</div></div>
-            <div class="wiki-step"><span class="wiki-step-n">7</span><div>📈 <strong>Analyse</strong> le dashboard Analytics (tendances, insights)</div></div>
+            <div class="wiki-step"><span class="wiki-step-n">1</span><div><strong>Importe</strong> le rapport SumUp du mois écoulé (ou laisse la synchro API faire)</div></div>
+            <div class="wiki-step"><span class="wiki-step-n">2</span><div><strong>Mappe</strong> les nouveaux libellés non reconnus (aliases + catégories)</div></div>
+            <div class="wiki-step"><span class="wiki-step-n">3</span><div><strong>Saisis</strong> les coûts de revient des nouveaux produits (si tu as l'accès Coûts)</div></div>
+            <div class="wiki-step"><span class="wiki-step-n">4</span><div><strong>Fais l'inventaire</strong> (stock physique) pour fiabiliser le stock théorique</div></div>
+            <div class="wiki-step"><span class="wiki-step-n">5</span><div><strong>Vérifie</strong> le réappro (quantités à commander, autonomie)</div></div>
+            <div class="wiki-step"><span class="wiki-step-n">6</span><div><strong>Compte la caisse</strong> puis dépôts du liquide en banque (Système → Caisses)</div></div>
+            <div class="wiki-step"><span class="wiki-step-n">7</span><div><strong>Analyse</strong> le dashboard Analytics (tendances, insights)</div></div>
         </div>
     </div>
 
     <div class="wiki-block">
         <h3>Routine début d'année (président)</h3>
         <ul class="wiki-list">
-            <li>👥 Crée les comptes pour les nouveaux membres du bureau</li>
-            <li>🔑 Donne le rôle ADMIN aux nouveaux (2FA obligatoire)</li>
-            <li>🎁 Attribue des <strong>Pages +</strong> si quelqu'un gère une page précise (inventaire, caisses...)</li>
-            <li>💳 Crée les adhésions pour la nouvelle saison</li>
-            <li>👥 Mets à jour la page Équipe (nouveaux membres, photos)</li>
-            <li>📅 Crée les événements de rentrée</li>
+            <li>Crée les comptes pour les nouveaux membres du bureau</li>
+            <li>Donne le rôle ADMIN aux nouveaux (2FA obligatoire)</li>
+            <li>Attribue des <strong>Pages +</strong> si quelqu'un gère une page précise (inventaire, caisses...)</li>
+            <li>Crée les adhésions pour la nouvelle saison</li>
+            <li>Mets à jour la page Équipe (nouveaux membres, photos)</li>
+            <li>Crée les événements de rentrée</li>
         </ul>
     </div>
 
     <div class="wiki-block">
         <h3>Si quelque chose ne marche pas</h3>
         <div class="wiki-alert wiki-alert-info">
-            <strong>🔧 Dépannage rapide :</strong>
+            <strong>Dépannage rapide :</strong>
             <ul class="wiki-list">
                 <li><strong>Page blanche / erreur 500</strong> → contacte Remond Adrien (développeur)</li>
                 <li><strong>Emails ne partent pas</strong> → vérifier Paramètres → Brevo API key + adresse d'expédition</li>
@@ -608,7 +608,7 @@ $wikiToc = [
 </div><!-- /wiki-body -->
 
 <div class="wiki-footer">
-    <p>💻 Développé par <strong style="color:var(--primary)">Remond Adrien</strong> · © 2026 AEIC · 100 % étudiant</p>
+    <p>Développé par <strong style="color:var(--primary)">Remond Adrien</strong> · © 2026 AEIC · 100 % étudiant</p>
 </div>
 
 </div><!-- /wiki -->
