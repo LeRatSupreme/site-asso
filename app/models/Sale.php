@@ -182,7 +182,9 @@ final class Sale extends Model
     public static function sumCardFeeEstimate(float $ratePercent, ?string $fromDay = null, ?string $toDay = null): float
     {
         $where = ['payment_method = ?', 'price_ttc > 0'];
-        $args = [$ratePercent];
+        // Ordre des placeholders dans le SQL : 1) taux dans le SELECT,
+        // 2) payment_method, puis les bornes de dates.
+        $args = [$ratePercent, 'CARTE'];
         if ($fromDay !== null && $fromDay !== '') {
             $where[] = 'sold_at >= ?';
             $args[] = $fromDay . ' 00:00:00';
