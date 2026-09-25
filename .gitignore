@@ -33,3 +33,4 @@ Rapport-ventes-*.csv
 Thumbs.db
 .idea/
 .vscode/
+tests/cache/
