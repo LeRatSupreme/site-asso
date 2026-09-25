@@ -8,6 +8,8 @@ use App\Models\ImportBatch;
  * @var array<string,mixed>       $user
  * @var list<array<string,mixed>> $batches    Derniers lots chargés (500 max) : imports manuels + passages de synchro API.
  * @var int                       $salesTotal Nombre total de ventes en base.
+ * @var list<array{payment_raw:string, payment_method:string, n:int, total:float}> $paymentRaw
+ *                                             Diagnostic de classification des moyens de paiement.
  */
 
 // Historique trié du plus récent au plus ancien. La synchro API SumUp crée
@@ -191,6 +193,43 @@ $lastImport = $batches[0]['imported_at'] ?? null;
             </div>
         </details>
     <?php endforeach; ?>
+</section>
+<?php endif; ?>
+
+<?php if ($paymentRaw !== []): ?>
+<section class="card surface glass">
+    <h2 class="card-title">💳 Moyens de paiement importés</h2>
+    <p class="muted">
+        Classement automatique : <strong>Espèces / Cash → Liquide</strong> (aucun frais SumUp),
+        tout le reste → <strong>Carte</strong> (frais estimés au taux des Réglages).
+        Un libellé inattendu classé « Carte » à tort gonflerait l'estimation de frais.
+    </p>
+    <div class="table-wrap">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Libellé SumUp</th>
+                    <th>Classé</th>
+                    <th class="th-num">Ventes</th>
+                    <th class="th-num">Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php foreach ($paymentRaw as $p): ?>
+                    <tr>
+                        <td><code><?= $p['payment_raw'] !== '' ? e($p['payment_raw']) : '—' ?></code></td>
+                        <td>
+                            <span class="badge <?= $p['payment_method'] === 'CARTE' ? 'badge-info' : 'badge-success' ?>">
+                                <?= e($p['payment_method'] === 'CARTE' ? 'Carte (frais 1,75 % estimés)' : 'Liquide (sans frais)') ?>
+                            </span>
+                        </td>
+                        <td class="num"><?= e((string) $p['n']) ?></td>
+                        <td class="num"><?= e(formatPrice($p['total'])) ?></td>
+                    </tr>
+                <?php endforeach; ?>
+            </tbody>
+        </table>
+    </div>
 </section>
 <?php endif; ?>
 

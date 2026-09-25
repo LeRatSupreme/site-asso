@@ -127,6 +127,8 @@ final class AdminComptaController extends AdminBaseController
             'batches' => ImportBatch::recent(500),
             // Compteur exact (indépendant de la borne ci-dessus).
             'salesTotal' => Sale::count(),
+            // Diagnostic de classification des moyens de paiement (frais CB).
+            'paymentRaw' => Sale::paymentRawBreakdown(),
         ]);
     }
 
