@@ -50,6 +50,60 @@ final class GameScore extends Model
     }
 
     /**
+     * Jeux d'arcade → modes autorisés (liste blanche serveur).
+     *
+     * Snake : terrain-vitesse ; Memory : taille de grille ; Tetris : marathon.
+     *
+     * @return array<string, list<string>>
+     */
+    public static function arcadeModes(): array
+    {
+        $snakeModes = [];
+        foreach (['murs', 'portail', 'obstacles'] as $terrain) {
+            foreach (['lent', 'normal', 'rapide'] as $vitesse) {
+                $snakeModes[] = $terrain . '-' . $vitesse;
+            }
+        }
+
+        return [
+            'memory' => ['4x3', '4x4', '6x4', '6x6', '8x6', '8x8', '10x8'],
+            'snake'  => $snakeModes,
+            'tetris' => ['marathon'],
+        ];
+    }
+
+    /**
+     * Liste blanche : le couple jeu/mode est-il autorisé ?
+     */
+    public static function isValidArcadeMode(string $game, string $mode): bool
+    {
+        $modes = self::arcadeModes()[$game] ?? null;
+
+        return $modes !== null && in_array($mode, $modes, true);
+    }
+
+    /**
+     * Score borné à [0, 1 000 000] (anti-abus côté serveur).
+     */
+    public static function clampScore(int $score): int
+    {
+        return max(0, min(1_000_000, $score));
+    }
+
+    /**
+     * Compteur optionnel (coups du memory / lignes du tetris) :
+     * null si absent ou négatif, sinon borné à [0, 10 000].
+     */
+    public static function clampCounter(?int $value): ?int
+    {
+        if ($value === null || $value < 0) {
+            return null;
+        }
+
+        return min(10_000, $value);
+    }
+
+    /**
      * Enregistre (ou améliore) le meilleur score du jour d'un jeu d'arcade
      * (memory, snake, tetris).
      *
@@ -61,13 +115,13 @@ final class GameScore extends Model
      */
     public static function saveArcadeResult(string $userId, string $game, string $mode, int $score, ?array $meta = null): bool
     {
-        $score = max(0, min(1_000_000, $score));
+        $score = self::clampScore($score);
         $attempts = null;
         if ($meta !== null) {
-            if (isset($meta['moves']) && $meta['moves'] >= 0) {
-                $attempts = (int) min(10_000, (int) $meta['moves']);
-            } elseif (isset($meta['lines']) && $meta['lines'] >= 0) {
-                $attempts = (int) min(10_000, (int) $meta['lines']);
+            if (array_key_exists('moves', $meta)) {
+                $attempts = self::clampCounter((int) $meta['moves']);
+            } elseif (array_key_exists('lines', $meta)) {
+                $attempts = self::clampCounter((int) $meta['lines']);
             }
         }
 
