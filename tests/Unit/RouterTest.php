@@ -26,6 +26,29 @@ final class RouterTest extends TestCase
         self::assertSame([], $match['params']);
     }
 
+    public function test_match_head_est_traite_comme_get(): void
+    {
+        // Sémantique HTTP : HEAD = GET sans corps. Les fetchers de sitemap
+        // (Google Search Console, moniteurs) sondent souvent en HEAD.
+        $router = new Router();
+        $router->get('/sitemap.xml', [FakeController::class, 'index']);
+
+        $match = $router->match('HEAD', '/sitemap.xml');
+
+        self::assertSame(200, $match['status']);
+        self::assertSame([FakeController::class, 'index'], $match['handler']);
+    }
+
+    public function test_head_sur_une_route_post_reste_405(): void
+    {
+        $router = new Router();
+        $router->post('/jeux/score', [FakeController::class, 'index']);
+
+        $match = $router->match('HEAD', '/jeux/score');
+
+        self::assertSame(405, $match['status']);
+    }
+
     public function test_match_extraire_parametre_slug(): void
     {
         $router = new Router();

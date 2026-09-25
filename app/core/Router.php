@@ -81,6 +81,12 @@ final class Router
     public function match(string $method, string $path): array
     {
         $method = strtoupper($method);
+        // Sémantique HTTP : HEAD est traité comme un GET (sans corps de réponse).
+        // Sans cela, un HEAD sur une route GET renvoie 405 — et les robots
+        // (fetchers de sitemap, moniteurs) qui sondent en HEAD échouent.
+        if ($method === 'HEAD') {
+            $method = 'GET';
+        }
         $path = '/' . trim(parse_url($path, PHP_URL_PATH) ?? $path, '/');
 
         $pathExists = false;
