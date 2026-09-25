@@ -230,6 +230,21 @@ $allPromoEmpty = empty($promotions);
     </div>
 </section>
 
+<!-- ===================== COORDONNÉES ===================== -->
+<section class="section section-alt">
+    <div class="container">
+        <div class="about-contact ae-reveal">
+            <div class="about-contact-body">
+                <h2 class="section-title about-contact-title"><?= e(t('about.contact.title')) ?></h2>
+                <p class="lead about-contact-text"><?= e(t('about.contact.label')) ?> — <?= e(t('about.contact.address')) ?></p>
+            </div>
+            <div class="about-contact-actions">
+                <a class="btn btn-primary" href="<?= e(url('/presentation')) ?>#ou-nous-trouver"><?= e(t('map.title')) ?></a>
+            </div>
+        </div>
+    </div>
+</section>
+
 <style>
 /* ============ Accueil — spécifique ============ */
 
@@ -319,6 +334,42 @@ $allPromoEmpty = empty($promotions);
 }
 @media (max-width: 640px) {
     .hm-feature { flex-direction: column; padding: 1.6rem 1.4rem; gap: 1rem; }
+}
+
+/* Coordonnées */
+.about-contact {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 1.75rem;
+    padding: 2.25rem 2.5rem;
+    border-radius: 24px;
+    background:
+        radial-gradient(80% 140% at 0% 0%, rgba(58, 155, 184, 0.1), transparent 55%),
+        rgba(255, 255, 255, 0.03);
+}
+.about-contact::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(135deg, rgba(74, 61, 143, 0.6), rgba(58, 155, 184, 0.5) 50%, rgba(255, 255, 255, 0.06));
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    mask-composite: exclude;
+    pointer-events: none;
+}
+.about-contact > * { position: relative; z-index: 1; }
+.about-contact-body { flex: 1; min-width: 0; }
+.about-contact-title { font-size: clamp(1.4rem, 3vw, 2rem); }
+.about-contact-text { margin: 0.5rem 0 0; font-size: 1rem; }
+.about-contact-actions { flex-shrink: 0; }
+@media (max-width: 980px) {
+    .about-contact { flex-direction: column; text-align: center; padding: 2rem 1.5rem; gap: 1.25rem; }
+    .about-contact-actions { width: 100%; }
+    .about-contact-actions .btn { width: 100%; }
 }
 </style>
 
