@@ -1129,9 +1129,9 @@ final class AdminComptaController extends AdminBaseController
             '2m' => ['label' => '2 mois',     'days' => 43],
             '3m' => ['label' => '3 mois',     'days' => 65],
         ];
-        $periodKey = $_GET['period'] ?? '1m';
+        $periodKey = $_GET['period'] ?? '1w';
         if (!isset($periods[$periodKey])) {
-            $periodKey = '1m';
+            $periodKey = '1w';
         }
         $targetDays = $periods[$periodKey]['days'];
 
