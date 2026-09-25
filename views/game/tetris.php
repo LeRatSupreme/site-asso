@@ -412,58 +412,20 @@ declare(strict_types=1);
     }
 
     // ================== RENDU ==================
-    function shade(hex, f) {
-        // f > 0 éclaircit, f < 0 assombrit.
-        var n = parseInt(hex.slice(1), 16);
-        var r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
-        if (f >= 0) {
-            r = Math.round(lerp(r, 255, f)); g = Math.round(lerp(g, 255, f)); b = Math.round(lerp(b, 255, f));
-        } else {
-            r = Math.round(lerp(r, 0, -f)); g = Math.round(lerp(g, 0, -f)); b = Math.round(lerp(b, 0, -f));
-        }
-        return 'rgb(' + r + ',' + g + ',' + b + ')';
-    }
-
-    function lerp(a, b, t) { return a + (b - a) * t; }
-
-    // Bloc brillant : dégradé vertical, reflet spéculaire, éclat et liseré interne.
-    // alpha : opacité (blocs posés atténués) · glow : halo lumineux (pièce qui tombe).
-    function drawBlock(c2, x, y, size, color, alpha, glow) {
+    // Bloc simple : carré arrondi uni. Les blocs posés sont légèrement atténués,
+    // la pièce qui tombe est pleine avec un liseré clair.
+    function drawBlock(c2, x, y, size, color, alpha) {
         c2.save();
         if (alpha !== undefined) { c2.globalAlpha = alpha; }
-
         var inset = Math.max(1, size * 0.05);
-        var r = size * 0.24;
+        var r = size * 0.22;
         var bw = size - inset * 2;
 
-        // Halo réservé à la pièce qui tombe.
-        if (glow) {
-            c2.shadowColor = color;
-            c2.shadowBlur = size * 0.26;
-        }
-
-        // Corps : dégradé doux, presque uni.
-        var grad = c2.createLinearGradient(x, y, x, y + size);
-        grad.addColorStop(0, shade(color, 0.20));
-        grad.addColorStop(0.5, color);
-        grad.addColorStop(1, shade(color, -0.16));
-        c2.fillStyle = grad;
+        c2.fillStyle = color;
         roundPath(c2, x + inset, y + inset, bw, bw, r);
         c2.fill();
-        c2.shadowBlur = 0;
 
-        // Fine arête claire en haut.
-        c2.fillStyle = 'rgba(255,255,255,0.28)';
-        roundPath(c2, x + inset + r * 0.4, y + inset + bw * 0.05, bw - r * 0.8, bw * 0.10, bw * 0.05);
-        c2.fill();
-
-        // Ombre douce en bas.
-        c2.fillStyle = 'rgba(0,0,0,0.22)';
-        roundPath(c2, x + inset + r * 0.4, y + inset + bw * 0.85, bw - r * 0.8, bw * 0.10, bw * 0.05);
-        c2.fill();
-
-        // Liseré net.
-        c2.strokeStyle = shade(color, -0.42);
+        c2.strokeStyle = alpha !== undefined ? 'rgba(0,0,0,0.30)' : 'rgba(255,255,255,0.55)';
         c2.lineWidth = 1.5;
         roundPath(c2, x + inset, y + inset, bw, bw, r);
         c2.stroke();
@@ -531,12 +493,12 @@ declare(strict_types=1);
             ctx.restore();
         }
 
-        // Pièce qui tombe : pleine luminosité + halo coloré → toujours lisible.
+        // Pièce qui tombe : pleine luminosité + liseré clair → toujours lisible.
         if (cur) {
             for (var y2 = 0; y2 < cur.m.length; y2++) {
                 for (var x2 = 0; x2 < cur.m[y2].length; x2++) {
                     if (cur.m[y2][x2] && cur.y + y2 >= 0) {
-                        drawBlock(ctx, (cur.x + x2) * CELL, (cur.y + y2) * CELL, CELL, cur.c, undefined, true);
+                        drawBlock(ctx, (cur.x + x2) * CELL, (cur.y + y2) * CELL, CELL, cur.c);
                     }
                 }
             }
