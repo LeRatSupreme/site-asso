@@ -22,7 +22,7 @@ declare(strict_types=1);
     <!-- Barre de filtres horizontale -->
     <div class="wordle-toolbar" style="margin-bottom:1rem;padding:0.85rem 1rem;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:12px;display:flex;flex-wrap:wrap;align-items:center;gap:0.75rem;">
         <div style="flex:1 1 200px;min-width:180px;">
-            <input type="text" id="player-search" placeholder="🔎 Nom, email ou pseudo…"
+            <input type="text" id="player-search" placeholder="Nom, email ou pseudo…"
                    style="width:100%;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:10px;color:var(--foreground);padding:0.5rem 0.7rem;font-size:0.9rem;" />
         </div>
 
@@ -53,8 +53,8 @@ declare(strict_types=1);
                 <tr>
                     <th>Joueur</th>
                     <th>Pseudo</th>
-                    <th class="num">Série 🔥</th>
-                    <th class="num">Record 🏆</th>
+                    <th class="num">Série </th>
+                    <th class="num">Record </th>
                     <th class="num">Victoires</th>
                     <th class="num">Parties</th>
                     <th>Actions</th>
@@ -81,7 +81,7 @@ declare(strict_types=1);
                                 <input type="hidden" name="user_id" value="<?= e((string) $p['id']) ?>">
                                 <input type="text" name="pseudo" value="<?= e($pseudo) ?>" maxlength="20"
                                        placeholder="—" style="width:130px;padding:0.3rem 0.5rem;border-radius:0.3rem;border:1px solid var(--border-strong);background:rgba(255,255,255,0.04);color:var(--foreground);font-size:0.85rem;" />
-                                <button type="submit" class="btn btn-outline btn-sm" title="Enregistrer le pseudo">💾</button>
+                                <button type="submit" class="btn btn-outline btn-sm" title="Enregistrer le pseudo"></button>
                             </form>
                         </td>
                         <td class="num"><strong style="color:var(--primary);"><?= (int) $p['currentStreak'] ?></strong></td>
@@ -93,7 +93,7 @@ declare(strict_types=1);
                                   data-confirm="Réinitialiser tous les scores de <?= e($p['prenom'] . ' ' . $p['nom']) ?> ?">
                                 <?= csrf_field() ?>
                                 <input type="hidden" name="user_id" value="<?= e((string) $p['id']) ?>">
-                                <button type="submit" class="btn btn-danger btn-sm" title="Réinitialiser les scores">🗑️ Scores</button>
+                                <button type="submit" class="btn btn-danger btn-sm" title="Réinitialiser les scores">Scores</button>
                             </form>
                         </td>
                     </tr>
@@ -103,7 +103,7 @@ declare(strict_types=1);
     </div>
 
     <p style="color:var(--muted);font-size:0.85rem;margin-top:1rem;">
-        💡 Astuce : pour <strong>effacer</strong> un pseudo, vide le champ puis clique sur 💾.
+        Astuce : pour <strong>effacer</strong> un pseudo, vide le champ puis clique sur .
         Le pseudo doit faire 3 à 20 caractères (lettres, chiffres, espaces, <code>- _ .</code>) et être unique.
     </p>
 

@@ -11,18 +11,18 @@ use App\Core\Permissions;
  */
 $roleLabels = Permissions::roles();
 $roleIcons = [
-    'SUPERADMIN'    => '🛡️',
-    'ADMIN'         => '👑',
-    'TRESORERIE'    => '💰',
-    'COMMUNICATION' => '📣',
-    'CAFETERIA'     => '🥤',
-    'JEUX'          => '🎮',
-    'ELEVE'         => '🎓',
+    'SUPERADMIN'    => '',
+    'ADMIN'         => '',
+    'TRESORERIE'    => '',
+    'COMMUNICATION' => '',
+    'CAFETERIA'     => '',
+    'JEUX'          => '',
+    'ELEVE'         => '',
 ];
 ?>
 <!-- Barre de filtres horizontale -->
 <div class="user-filters">
-    <input type="text" id="user-search" class="user-filter-search" placeholder="🔎 Rechercher…" autocomplete="off">
+    <input type="text" id="user-search" class="user-filter-search" placeholder="Rechercher…" autocomplete="off">
     <select id="user-role-filter" class="user-filter-select">
         <option value="">Tous les rôles</option>
         <?php foreach ($roleLabels as $value => $label): ?>
@@ -31,8 +31,8 @@ $roleIcons = [
     </select>
     <select id="user-status-filter" class="user-filter-select">
         <option value="">Tous</option>
-        <option value="active">✅ Actif</option>
-        <option value="inactive">⛔ Inactif</option>
+        <option value="active">Actif</option>
+        <option value="inactive">Inactif</option>
     </select>
     <span class="user-filter-count muted" id="user-count"></span>
 </div>
@@ -117,8 +117,8 @@ $roleIcons = [
                         $modulePageKeys = ['compta', 'events', 'content', 'cafeteria', 'games'];
                         $systemPageKeys = ['inventory', 'costs', 'cash', 'users', 'settings'];
                         $pageIcons = [
-                            'compta' => '💰', 'events' => '📅', 'content' => '📣', 'cafeteria' => '☕', 'games' => '🎮',
-                            'inventory' => '📦', 'costs' => '🧮', 'cash' => '🏦', 'users' => '👥', 'settings' => '⚙️',
+                            'compta' => '', 'events' => '', 'content' => '', 'cafeteria' => '', 'games' => '',
+                            'inventory' => '', 'costs' => '', 'cash' => '', 'users' => '', 'settings' => '',
                         ];
                         $fullName = e(trim(($u['prenom'] ?? '') . ' ' . ($u['nom'] ?? '')));
                         $dialogDomId = preg_replace('#[^A-Za-z0-9_-]#', '', (string) $u['id']);
@@ -126,16 +126,16 @@ $roleIcons = [
                         <form method="post" action="<?= e(url('/admin/users/' . rawurlencode((string) $u['id']) . '/pages')) ?>" class="inline-form pages-form">
                             <?= csrf_field() ?>
                             <?php if ($pagesLockTitle !== ''): ?>
-                                <span class="pages-chip is-muted" title="<?= e($pagesLockTitle) ?>">🔑 <?= count($grantedPages) ?></span>
+                                <span class="pages-chip is-muted" title="<?= e($pagesLockTitle) ?>"><?= count($grantedPages) ?></span>
                             <?php else: ?>
-                                <button type="button" class="pages-chip" title="Pages supplémentaires" onclick="document.getElementById('pages-dialog-<?= e($dialogDomId) ?>').showModal()">🔑 <?= count($grantedPages) ?></button>
+                                <button type="button" class="pages-chip" title="Pages supplémentaires" onclick="document.getElementById('pages-dialog-<?= e($dialogDomId) ?>').showModal()"><?= count($grantedPages) ?></button>
                                 <dialog id="pages-dialog-<?= e($dialogDomId) ?>" class="pages-dialog">
                                     <div class="pages-dialog-head">
                                         <div>
-                                            <p class="pages-dialog-title">🔑 Pages supplémentaires</p>
+                                            <p class="pages-dialog-title">Pages supplémentaires</p>
                                             <p class="pages-dialog-sub"><?= $fullName ?> · <b><span class="pages-count"><?= count($grantedPages) ?></span> sélectionnée(s)</b></p>
                                         </div>
-                                        <button type="button" class="pages-dialog-close" onclick="this.closest('dialog').close()" title="Fermer">✕</button>
+                                        <button type="button" class="pages-dialog-close" onclick="this.closest('dialog').close()" title="Fermer"></button>
                                     </div>
                                     <div class="pages-dialog-body">
                                         <p class="pages-group-title">Modules</p>
@@ -143,9 +143,9 @@ $roleIcons = [
                                             <?php foreach ($modulePageKeys as $pageKey): ?>
                                                 <label class="pages-check">
                                                     <input type="checkbox" name="pages[]" value="<?= e($pageKey) ?>" <?= in_array($pageKey, $grantedPages, true) ? 'checked' : '' ?>>
-                                                    <span class="pages-ico"><?= $pageIcons[$pageKey] ?? '📄' ?></span>
+                                                    <span class="pages-ico"><?= $pageIcons[$pageKey] ?? '' ?></span>
                                                     <span class="pages-label"><?= e($allExtraPages[$pageKey] ?? $pageKey) ?></span>
-                                                    <span class="pages-tick">✓</span>
+                                                    <span class="pages-tick"></span>
                                                 </label>
                                             <?php endforeach; ?>
                                         </div>
@@ -154,9 +154,9 @@ $roleIcons = [
                                             <?php foreach ($systemPageKeys as $pageKey): ?>
                                                 <label class="pages-check">
                                                     <input type="checkbox" name="pages[]" value="<?= e($pageKey) ?>" <?= in_array($pageKey, $grantedPages, true) ? 'checked' : '' ?>>
-                                                    <span class="pages-ico"><?= $pageIcons[$pageKey] ?? '📄' ?></span>
+                                                    <span class="pages-ico"><?= $pageIcons[$pageKey] ?? '' ?></span>
                                                     <span class="pages-label"><?= e($allExtraPages[$pageKey] ?? $pageKey) ?></span>
-                                                    <span class="pages-tick">✓</span>
+                                                    <span class="pages-tick"></span>
                                                 </label>
                                             <?php endforeach; ?>
                                         </div>
@@ -183,19 +183,19 @@ $roleIcons = [
                         <form method="post" action="<?= e(url('/admin/users/' . rawurlencode((string) $u['id']) . '/toggle-active')) ?>" class="inline-form">
                             <?= csrf_field() ?>
                             <button type="submit" class="btn btn-outline btn-sm icon-btn" <?= $isSelf ? 'disabled title="Vous ne pouvez pas vous désactiver"' : 'title="' . ($isActive ? 'Désactiver ce compte' : 'Réactiver ce compte') . '"' ?>>
-                                <?= $isActive ? '⏸' : '▶' ?>
+                                <?= $isActive ? '' : '▶' ?>
                             </button>
                         </form>
                         <form method="post" action="<?= e(url('/admin/users/' . rawurlencode((string) $u['id']) . '/reset-password')) ?>" class="inline-form"
                               data-confirm="Réinitialiser le mot de passe de <?= e(trim(($u['prenom'] ?? '') . ' ' . ($u['nom'] ?? ''))) ?> ? Un mot de passe temporaire sera envoyé par email.">
                             <?= csrf_field() ?>
-                            <button type="submit" class="btn btn-outline btn-sm icon-btn" title="Renvoyer un mot de passe temporaire par email">🔑</button>
+                            <button type="submit" class="btn btn-outline btn-sm icon-btn" title="Renvoyer un mot de passe temporaire par email"></button>
                         </form>
                         <form method="post" action="<?= e(url('/admin/users/' . rawurlencode((string) $u['id']) . '/delete')) ?>" class="inline-form"
                               data-confirm="Supprimer définitivement le compte de <?= e(trim(($u['prenom'] ?? '') . ' ' . ($u['nom'] ?? ''))) ?> ? Action irréversible." data-preserve-scroll>
                             <?= csrf_field() ?>
                             <button type="submit" class="btn btn-danger btn-sm icon-btn" <?= $isSelf ? 'disabled title="Vous ne pouvez pas supprimer votre propre compte ici"' : 'title="Supprimer définitivement"' ?>>
-                                🗑
+                                
                             </button>
                         </form>
                     </td>

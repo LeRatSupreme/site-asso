@@ -116,7 +116,7 @@ foreach ($allKeys as $k) {
                     <td><input type="number" name="quantity[]" value="1" min="1" step="1" style="width:100%;"></td>
                     <td><input type="text" name="total_amount[]" placeholder="ex: 18,60" inputmode="decimal" style="width:100%;"></td>
                     <td class="muted line-unit" hidden></td>
-                    <td><button type="button" class="btn btn-ghost btn-sm line-remove" aria-label="Supprimer la ligne">✕</button></td>
+                    <td><button type="button" class="btn btn-ghost btn-sm line-remove" aria-label="Supprimer la ligne"></button></td>
                 </tr>
             </tbody>
             <tfoot>
@@ -171,7 +171,7 @@ foreach ($allKeys as $k) {
                 if (!input || !warn) return;
                 var existing = normKeys[normKey(input.value)];
                 if (existing && existing !== input.value) {
-                    warn.textContent = '⚠️ « ' + input.value + ' » ressemble à la clé existante « ' + existing + ' » — préfère-la (autocomplétion) pour éviter un doublon.';
+                    warn.textContent = '« ' + input.value + ' » ressemble à la clé existante « ' + existing + ' » — préfère-la (autocomplétion) pour éviter un doublon.';
                     warn.hidden = false;
                 } else {
                     warn.hidden = true;
@@ -229,7 +229,7 @@ foreach ($allKeys as $k) {
                     '<td><input type="number" name="quantity[]" value="1" min="1" step="1" style="width:100%;"></td>' +
                     '<td><input type="text" name="total_amount[]" placeholder="ex: 18,60" inputmode="decimal" style="width:100%;"></td>' +
                     '<td class="muted line-unit" hidden></td>' +
-                    '<td><button type="button" class="btn btn-ghost btn-sm line-remove" aria-label="Supprimer la ligne">✕</button></td>';
+                    '<td><button type="button" class="btn btn-ghost btn-sm line-remove" aria-label="Supprimer la ligne"></button></td>';
                 tbody.appendChild(tr);
                 wireRow(tr);
                 if (focus) tr.querySelector('[name="product_key[]"]').focus();
@@ -245,9 +245,9 @@ foreach ($allKeys as $k) {
 <div class="compta-grid" style="margin-top:24px;">
     <section class="card surface glass">
         <h2 class="card-title">Comment ça marche</h2>
-        <p>📌 Le <a href="<?= e(url('/admin/compta/reappro')) ?>">réappro</a> calcule ce qu'il <strong>FAUT</strong> commander ; cette page trace ce qui a <strong>ÉTÉ</strong> commandé.</p>
-        <p>📌 Par défaut, chaque achat crée un <strong>nouveau lot de coût</strong> à ce prix<?php if (\App\Core\Permissions::isSystemAdmin()): ?> dans <a href="<?= e(url('/admin/compta/couts')) ?>">Coûts de revient</a><?php endif; ?> — décoche la case pour des prix inhabituels.</p>
-        <p>📌 Les achats alimentent le <strong>stock théorique</strong> visible<?php if (\App\Core\Permissions::isSystemAdmin()): ?> dans <a href="<?= e(url('/admin/compta/inventaire')) ?>">l'inventaire</a><?php endif; ?> : dernier comptage + achats − ventes.</p>
+        <p>Le <a href="<?= e(url('/admin/compta/reappro')) ?>">réappro</a> calcule ce qu'il <strong>FAUT</strong> commander ; cette page trace ce qui a <strong>ÉTÉ</strong> commandé.</p>
+        <p>Par défaut, chaque achat crée un <strong>nouveau lot de coût</strong> à ce prix<?php if (\App\Core\Permissions::isSystemAdmin()): ?> dans <a href="<?= e(url('/admin/compta/couts')) ?>">Coûts de revient</a><?php endif; ?> — décoche la case pour des prix inhabituels.</p>
+        <p>Les achats alimentent le <strong>stock théorique</strong> visible<?php if (\App\Core\Permissions::isSystemAdmin()): ?> dans <a href="<?= e(url('/admin/compta/inventaire')) ?>">l'inventaire</a><?php endif; ?> : dernier comptage + achats − ventes.</p>
     </section>
 </div>
 
@@ -291,7 +291,7 @@ foreach ($allKeys as $k) {
                         <form method="post" action="<?= e(url('/admin/compta/achats/' . rawurlencode((string) $r['id']) . '/delete')) ?>"
                               data-confirm="Supprimer cet achat ?" data-preserve-scroll>
                             <?= csrf_field() ?>
-                            <button type="submit" class="btn btn-danger btn-sm" aria-label="Supprimer">🗑</button>
+                            <button type="submit" class="btn btn-danger btn-sm" aria-label="Supprimer"></button>
                         </form>
                     </td>
                 </tr>

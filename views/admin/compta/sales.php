@@ -78,7 +78,7 @@ foreach ($rows as $r) {
     </select>
 
     <button type="submit" class="btn btn-primary btn-sm">Filtrer</button>
-    <a class="btn btn-outline btn-sm" href="<?= e(url('/admin/compta/ventes?' . http_build_query(array_merge($filters, ['export' => 'csv'])))) ?>">📄 Exporter CSV</a>
+    <a class="btn btn-outline btn-sm" href="<?= e(url('/admin/compta/ventes?' . http_build_query(array_merge($filters, ['export' => 'csv'])))) ?>">Exporter CSV</a>
 </form>
 
 <!-- Tableau -->
@@ -120,9 +120,9 @@ foreach ($rows as $r) {
                     <td class="num <?= $profit >= 0 ? 'is-positive' : 'is-negative' ?>"><?= $isCustom ? '<span class="muted">—</span>' : e(formatPrice($profit)) ?></td>
                     <td>
                         <?php if (($r['payment_method'] ?? '') === 'LIQUIDE'): ?>
-                            <span class="badge badge-muted">💵 Liquide</span>
+                            <span class="badge badge-muted">Liquide</span>
                         <?php else: ?>
-                            <span class="badge badge-success">💳 Carte</span>
+                            <span class="badge badge-success">Carte</span>
                         <?php endif; ?>
                     </td>
                 </tr>

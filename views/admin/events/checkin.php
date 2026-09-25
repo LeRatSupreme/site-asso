@@ -97,14 +97,14 @@ $slug    = (string) ($event['slug'] ?? '');
             .then(function (r) { return r.json(); })
             .then(function (data) {
                 if (data.ok && data.already) {
-                    addLine('⚠️ ' + data.message, 'warning');
+                    addLine('' + data.message, 'warning');
                 } else if (data.ok) {
-                    addLine('✅ ' + data.message, 'ok');
+                    addLine('' + data.message, 'ok');
                 } else {
-                    addLine('❌ ' + data.message, 'error');
+                    addLine('' + data.message, 'error');
                 }
             })
-            .catch(function () { addLine('❌ Erreur réseau.', 'error'); });
+            .catch(function () { addLine('Erreur réseau.', 'error'); });
 
             input.value = '';
             input.focus();

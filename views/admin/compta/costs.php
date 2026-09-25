@@ -21,7 +21,7 @@ declare(strict_types=1);
 
 <?php if (!empty($dupes)): ?>
 <section class="card surface glass dupes-card" id="dupes">
-    <h2 class="card-title">⚠️ Doublons détectés (<?= count($dupes) ?>)</h2>
+    <h2 class="card-title">Doublons détectés (<?= count($dupes) ?>)</h2>
     <p class="muted" style="font-size:0.85rem;margin:0 0 12px;">
         Même produit sous des orthographes différentes. Choisis le nom à <strong>garder</strong> puis fusionne :
         ventes, lots de coûts et libellés sont regroupés automatiquement.
@@ -67,9 +67,9 @@ declare(strict_types=1);
         </div>
     </div>
     <div class="cost-tips">
-        <p>📌 Le « coût d'achat » = ton prix pour <strong>une unité</strong> (un Bueno, une canette…), pas le prix de vente.</p>
-        <p>📌 Dès qu'au moins un lot est saisi pour un produit, le bénéfice se calcule automatiquement (le lot le plus pertinent est appliqué selon la date de vente).</p>
-        <p>📌 Tu peux <strong>modifier</strong> un lot (✏️), le <strong>clôturer</strong> ou le <strong>supprimer</strong> (icône corbeille).</p>
+        <p>Le « coût d'achat » = ton prix pour <strong>une unité</strong> (un Bueno, une canette…), pas le prix de vente.</p>
+        <p>Dès qu'au moins un lot est saisi pour un produit, le bénéfice se calcule automatiquement (le lot le plus pertinent est appliqué selon la date de vente).</p>
+        <p>Tu peux <strong>modifier</strong> un lot (), le <strong>clôturer</strong> ou le <strong>supprimer</strong> (icône corbeille).</p>
     </div>
 </section>
 
@@ -123,7 +123,7 @@ declare(strict_types=1);
     <section class="costs-list">
         <div class="costs-toolbar">
             <div class="search-box">
-                <input type="text" id="c-search" placeholder="🔎 Rechercher un produit…" autocomplete="off">
+                <input type="text" id="c-search" placeholder="Rechercher un produit…" autocomplete="off">
             </div>
             <select id="c-cat" aria-label="Filtrer par catégorie">
                 <option value="">Toutes les catégories</option>
@@ -176,7 +176,7 @@ declare(strict_types=1);
                                         <?php if ($hasCost): ?>
                                             <span class="badge badge-success">Lot en cours</span>
                                             <strong class="cost-card-price"><?= e(formatPrice($it['currentCost'], 3)) ?><span class="muted"> /unité</span></strong>
-                                            <a class="btn btn-outline btn-sm" href="<?= e(url('/admin/compta/couts?edit=' . rawurlencode((string) $it['currentLotId']) . '#costs-form')) ?>">✏️ Modifier</a>
+                                            <a class="btn btn-outline btn-sm" href="<?= e(url('/admin/compta/couts?edit=' . rawurlencode((string) $it['currentLotId']) . '#costs-form')) ?>">Modifier</a>
                                         <?php else: ?>
                                             <span class="badge badge-warning">Aucun coût</span>
                                         <?php endif; ?>
@@ -202,7 +202,7 @@ declare(strict_types=1);
                                                         </td>
                                                         <td><?= e((string) ($c['supplier'] ?? '—')) ?></td>
                                                         <td class="row-actions">
-                                                            <a class="btn btn-outline btn-sm" href="<?= e(url('/admin/compta/couts?edit=' . rawurlencode((string) $c['id']) . '#costs-form')) ?>">✏️ Modifier</a>
+                                                            <a class="btn btn-outline btn-sm" href="<?= e(url('/admin/compta/couts?edit=' . rawurlencode((string) $c['id']) . '#costs-form')) ?>">Modifier</a>
                                                             <?php if (empty($c['valid_to'])): ?>
                                                                 <form method="post" action="<?= e(url('/admin/compta/couts/' . rawurlencode((string) $c['id']) . '/close')) ?>" data-confirm="Clôturer ce lot maintenant ?">
                                                                     <?= csrf_field() ?>
@@ -211,7 +211,7 @@ declare(strict_types=1);
                                                             <?php endif; ?>
                                                             <form method="post" action="<?= e(url('/admin/compta/couts/' . rawurlencode((string) $c['id']) . '/delete')) ?>" data-confirm="Supprimer ce lot ? Action irréversible." data-preserve-scroll>
                                                                 <?= csrf_field() ?>
-                                                                <button type="submit" class="btn btn-danger btn-sm" aria-label="Supprimer">🗑</button>
+                                                                <button type="submit" class="btn btn-danger btn-sm" aria-label="Supprimer"></button>
                                                             </form>
                                                         </td>
                                                     </tr>
@@ -269,7 +269,7 @@ declare(strict_types=1);
                 <tr class="cost-bulk-line">
                     <td><input type="text" name="product_key[]" list="bulk-products" placeholder="Rechercher un produit…" autocomplete="off" style="width:100%;"></td>
                     <td><input type="text" name="cost_price[]" placeholder="ex: 0,60" inputmode="decimal" style="width:100%;"></td>
-                    <td><button type="button" class="btn btn-ghost btn-sm cost-bulk-remove" aria-label="Supprimer la ligne">✕</button></td>
+                    <td><button type="button" class="btn btn-ghost btn-sm cost-bulk-remove" aria-label="Supprimer la ligne"></button></td>
                 </tr>
             </tbody>
         </table>
@@ -303,7 +303,7 @@ declare(strict_types=1);
                 tr.innerHTML =
                     '<td><input type="text" name="product_key[]" list="bulk-products" placeholder="Rechercher un produit…" autocomplete="off" style="width:100%;"></td>' +
                     '<td><input type="text" name="cost_price[]" placeholder="ex: 0,60" inputmode="decimal" style="width:100%;"></td>' +
-                    '<td><button type="button" class="btn btn-ghost btn-sm cost-bulk-remove" aria-label="Supprimer la ligne">✕</button></td>';
+                    '<td><button type="button" class="btn btn-ghost btn-sm cost-bulk-remove" aria-label="Supprimer la ligne"></button></td>';
                 tbody.appendChild(tr);
                 wireRow(tr);
                 if (focus) tr.querySelector('[name="product_key[]"]').focus();

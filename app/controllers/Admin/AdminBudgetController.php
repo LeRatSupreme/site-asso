@@ -14,7 +14,7 @@ use App\Models\Sale;
  * Budgets prévisionnels vs réalisé : objectif de CA et enveloppes de
  * dépenses par mois. Réservé aux rôles ADMIN et TRESORERIE.
  *
- * La consultation agrège les mois couverts par la période « 📅 Période » ;
+ * La consultation agrège les mois couverts par la période « Période » ;
  * l'édition (formulaire de save) cible toujours le DERNIER mois couvert.
  */
 final class AdminBudgetController extends AdminBaseController

@@ -24,7 +24,7 @@ $cashPct = $caTotal > 0 ? round($cashTotal / $caTotal * 100, 1) : 0;
             <h1 class="page-title">Tableau de bord</h1>
             <p class="muted">Ventes encaissées via SumUp, issues des rapports importés. Pour rafraîchir, importe un nouveau CSV.</p>
         </div>
-        <a class="btn btn-primary btn-sm" href="<?= e(url('/admin/compta/import')) ?>">📥 Importer un rapport</a>
+        <a class="btn btn-primary btn-sm" href="<?= e(url('/admin/compta/import')) ?>">Importer un rapport</a>
     </div>
 </div>
 
@@ -32,11 +32,11 @@ $cashPct = $caTotal > 0 ? round($cashTotal / $caTotal * 100, 1) : 0;
 <div class="grid grid-4 stat-cards">
     <div class="stat-card surface glass">
         <span class="stat-value"><?= e(formatPrice($cardTotal)) ?></span>
-        <span class="stat-label">💳 Carte (<?= e($monthLabel) ?>)</span>
+        <span class="stat-label">Carte (<?= e($monthLabel) ?>)</span>
     </div>
     <div class="stat-card surface glass">
         <span class="stat-value"><?= e(formatPrice($cashTotal)) ?></span>
-        <span class="stat-label">💵 Espèces (<?= e($monthLabel) ?>)</span>
+        <span class="stat-label">Espèces (<?= e($monthLabel) ?>)</span>
     </div>
     <div class="stat-card surface glass">
         <span class="stat-value"><?= e((string) $txCount) ?></span>
@@ -53,15 +53,15 @@ $cashPct = $caTotal > 0 ? round($cashTotal / $caTotal * 100, 1) : 0;
     <h2 class="card-title">Répartition des encaissements</h2>
     <div class="split-bar">
         <div class="split-bar-card" style="width: <?= (float) $cardPct ?>%" title="Carte : <?= e(formatPrice($cardTotal)) ?> (<?= e(number_format($cardPct, 1, ',', ' ')) ?> %)">
-            <span class="split-label">💳 <?= e(number_format($cardPct, 1, ',', ' ')) ?> %</span>
+            <span class="split-label"><?= e(number_format($cardPct, 1, ',', ' ')) ?> %</span>
         </div>
         <div class="split-bar-cash" style="width: <?= (float) $cashPct ?>%" title="Espèces : <?= e(formatPrice($cashTotal)) ?> (<?= e(number_format($cashPct, 1, ',', ' ')) ?> %)">
-            <span class="split-label">💵 <?= e(number_format($cashPct, 1, ',', ' ')) ?> %</span>
+            <span class="split-label"><?= e(number_format($cashPct, 1, ',', ' ')) ?> %</span>
         </div>
     </div>
     <div class="split-legend">
-        <span class="badge badge-success">💳 Carte — <?= e(formatPrice($cardTotal)) ?></span>
-        <span class="badge badge-muted">💵 Espèces — <?= e(formatPrice($cashTotal)) ?></span>
+        <span class="badge badge-success">Carte — <?= e(formatPrice($cardTotal)) ?></span>
+        <span class="badge badge-muted">Espèces — <?= e(formatPrice($cashTotal)) ?></span>
     </div>
 </section>
 

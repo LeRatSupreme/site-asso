@@ -21,7 +21,7 @@ declare(strict_types=1);
 </div>
 
 <section class="card surface glass">
-    <h2 class="card-title">🧾 Comptage physique</h2>
+    <h2 class="card-title">Comptage physique</h2>
     <p class="card-meta">
         Comptage « à l'aveugle » : le montant théorique n'est volontairement pas affiché,
         pour un comptage honnête.

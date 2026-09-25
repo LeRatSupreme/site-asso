@@ -83,7 +83,7 @@ foreach ($rows as $r) {
             <p class="muted">Le stock est le <strong>théorique de l'inventaire</strong> (dernier comptage + achats − ventes − pertes) : il suit automatiquement chaque mouvement, aucune saisie ici. La consommation moyenne de la période donne la quantité à commander pour couvrir l'horizon choisi.</p>
         </div>
         <?php if ($canInventory): ?>
-            <a class="btn btn-ghost btn-sm" href="<?= e(url('/admin/compta/inventaire')) ?>">🧮 Faire l'inventaire</a>
+            <a class="btn btn-ghost btn-sm" href="<?= e(url('/admin/compta/inventaire')) ?>">Faire l'inventaire</a>
         <?php endif; ?>
     </div>
 </div>
@@ -117,7 +117,7 @@ foreach ($rows as $r) {
     <input type="hidden" name="etat" id="f-etat">
     <input type="hidden" name="tri" id="f-tri">
     <div class="reappro-field">
-        <span class="field-label">📅 Période analysée</span>
+        <span class="field-label">Période analysée</span>
         <div class="chip-row" role="radiogroup" aria-label="Période analysée">
             <?php foreach ($refOptions as $k => $label): ?>
                 <label class="chip" title="<?= e($label) ?>">
@@ -142,7 +142,7 @@ foreach ($rows as $r) {
     </div>
 
     <div class="reappro-field">
-        <label class="field-label" for="period">🎯 Couvrir pour</label>
+        <label class="field-label" for="period">Couvrir pour</label>
         <select name="period" id="period" data-autosubmit="1">
             <?php foreach ($periods as $k => $p): ?>
                 <option value="<?= e($k) ?>" <?= $k === $currentPeriod ? 'selected' : '' ?>><?= e($p['label']) ?></option>
@@ -153,19 +153,19 @@ foreach ($rows as $r) {
     <button type="submit" class="btn btn-primary btn-sm">Appliquer</button>
 
     <span class="reappro-meta" title="Période analysée : bornes et jours d'ouverture (lundi-vendredi) réels">
-        🗓️ <?= e(reorder_date_fr($refFrom)) ?> → <?= e(reorder_date_fr($refTo)) ?>
-        · <?= (int) $refOpenDays ?> j d'ouverture
+        <?= e(reorder_date_fr($refFrom)) ?> → <?= e(reorder_date_fr($refTo)) ?>
+        · <?= (int) $refOpenDays ?> j d'ouverture (sam.-dim. fermés)
     </span>
 </form>
 
 <?php if ($alerts > 0): ?>
     <div class="alert alert-warning">
-        ⚠️ <strong><?= $alerts ?></strong> produit<?= $alerts > 1 ? 's ont' : ' a' ?> un stock faible (autonomie &lt; 7 jours) — à racheter en priorité.
+        <strong><?= $alerts ?></strong> produit<?= $alerts > 1 ? 's ont' : ' a' ?> un stock faible (autonomie &lt; 7 jours) — à racheter en priorité.
     </div>
 <?php endif; ?>
 <?php if ($uncounted > 0): ?>
     <div class="alert alert-info">
-        🧮 <strong><?= $uncounted ?></strong> produit<?= $uncounted > 1 ? 's jamais' : ' jamais' ?> compté<?= $uncounted > 1 ? 's' : '' ?> en inventaire : « à commander » couvre le besoin complet.<?php if ($canInventory): ?> <a href="<?= e(url('/admin/compta/inventaire')) ?>">Faire un comptage →</a><?php endif ?>
+        <strong><?= $uncounted ?></strong> produit<?= $uncounted > 1 ? 's jamais' : ' jamais' ?> compté<?= $uncounted > 1 ? 's' : '' ?> en inventaire : « à commander » couvre le besoin complet.<?php if ($canInventory): ?> <a href="<?= e(url('/admin/compta/inventaire')) ?>">Faire un comptage →</a><?php endif ?>
     </div>
 <?php endif; ?>
 
@@ -181,7 +181,7 @@ foreach ($rows as $r) {
 </style>
     <div class="costs-toolbar" style="margin-bottom:0;border:none;background:none;padding:1rem 1.1rem 0;">
         <div class="search-box">
-            <input type="text" id="reorder-search" placeholder="🔎 Rechercher un produit…" autocomplete="off">
+            <input type="text" id="reorder-search" placeholder="Rechercher un produit…" autocomplete="off">
         </div>
         <select id="reorder-cat" aria-label="Filtrer par catégorie">
             <option value="">Toutes les catégories</option>
@@ -204,7 +204,7 @@ foreach ($rows as $r) {
             <option value="stock-desc">Stock ↓</option>
             <option value="autonomy-asc">Autonomie ↑</option>
         </select>
-        <button type="button" id="reorder-reset" class="reorder-reset" hidden title="Réinitialiser les filtres">✕</button>
+        <button type="button" id="reorder-reset" class="reorder-reset" hidden title="Réinitialiser les filtres"></button>
         <span class="costs-count muted" id="reorder-count"></span>
     </div>
 
@@ -329,11 +329,11 @@ foreach ($rows as $r) {
 </div>
 
 <p class="card-meta">
-    🕒 Cafétéria ouverte du lundi au vendredi : les moyennes sont ramenées aux <strong>jours d'ouverture réels</strong> de la période analysée.
+    Cafétéria ouverte du lundi au vendredi : les moyennes sont ramenées aux <strong>jours d'ouverture réels</strong> de la période analysée.
     Conso / jour = vendus ÷ jours d'ouverture · Conso / semaine = conso / jour × 5 · Conso / mois = conso / jour × 21,77.
     « À commander » = besoin sur l'horizon de couverture − <strong>stock théorique</strong> (minimum 0 ; un stock négatif majore la commande).
-    📦 Stock théorique = dernier comptage + achats − ventes − pertes (mis à jour par <strong>Inventaire</strong>, <strong>Achats</strong> et <strong>Pertes</strong>).
-    💶 « Coût ligne » = à commander × coût de revient du lot en cours · le total ≈ prix d'achat du panier (produits sans coût saisi exclus, comptés sous le total).
+    Stock théorique = dernier comptage + achats − ventes − pertes (mis à jour par <strong>Inventaire</strong>, <strong>Achats</strong> et <strong>Pertes</strong>).
+    « Coût ligne » = à commander × coût de revient du lot en cours · le total ≈ prix d'achat du panier (produits sans coût saisi exclus, comptés sous le total).
 </p>
 
 <script>

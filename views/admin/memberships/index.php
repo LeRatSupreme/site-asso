@@ -38,7 +38,7 @@ $statusBadge = [
 </div>
 
 <?php if (!$enabled): ?>
-    <p class="card-meta">⚠️ La gestion des adhésions est désactivée dans les paramètres.</p>
+    <p class="card-meta">La gestion des adhésions est désactivée dans les paramètres.</p>
 <?php endif; ?>
 
 <section class="card surface glass">

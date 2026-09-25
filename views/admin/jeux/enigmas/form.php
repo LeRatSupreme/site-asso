@@ -19,7 +19,7 @@ $isNew = (int) ($enigma['id'] ?? 0) === 0;
     <input type="hidden" name="id" value="<?= e((string) ($enigma['id'] ?? 0)) ?>">
 
     <section class="card surface glass form-section">
-        <h2 class="form-section-title"><?= $isNew ? '➕ Nouvelle énigme' : '✏️ Modifier l\'énigme' ?></h2>
+        <h2 class="form-section-title"><?= $isNew ? 'Nouvelle énigme' : 'Modifier l\'énigme' ?></h2>
 
         <div class="field-row">
             <div class="field">

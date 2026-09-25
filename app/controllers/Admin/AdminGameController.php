@@ -38,7 +38,7 @@ final class AdminGameController extends AdminBaseController
         ];
 
         $this->renderAdmin('admin/jeux/index', [
-            'title' => '🎮 Jeux',
+            'title' => 'Jeux',
             'stats' => $stats,
         ]);
     }
@@ -55,7 +55,7 @@ final class AdminGameController extends AdminBaseController
         $players = GameScore::playersForAdmin();
 
         $this->renderAdmin('admin/jeux/scores', [
-            'title'   => '🎮 Joueurs & Pseudos',
+            'title'   => 'Joueurs & Pseudos',
             'players' => $players,
         ]);
     }
@@ -150,7 +150,7 @@ final class AdminGameController extends AdminBaseController
         $totalPages = max(1, (int) ceil($result['total'] / $perPage));
 
         $this->renderAdmin('admin/jeux/wordle/index', [
-            'title'      => '🎮 Mots Wordle',
+            'title'      => 'Mots Wordle',
             'words'      => $result['rows'],
             'total'      => $result['total'],
             'search'     => $search,
@@ -178,7 +178,7 @@ final class AdminGameController extends AdminBaseController
         }
 
         $this->renderAdmin('admin/jeux/wordle/form', [
-            'title' => ($word['id'] ?? 0) > 0 ? '🎮 Modifier le mot' : '🎮 Nouveau mot',
+            'title' => ($word['id'] ?? 0) > 0 ? 'Modifier le mot' : 'Nouveau mot',
             'word'  => $word,
         ]);
     }
@@ -226,7 +226,7 @@ final class AdminGameController extends AdminBaseController
         $enigmas = DailyEnigma::allForAdmin();
 
         $this->renderAdmin('admin/jeux/enigmas/index', [
-            'title'   => '🎮 Énigmes',
+            'title'   => 'Énigmes',
             'enigmas' => $enigmas,
         ]);
     }
@@ -250,7 +250,7 @@ final class AdminGameController extends AdminBaseController
         }
 
         $this->renderAdmin('admin/jeux/enigmas/form', [
-            'title'  => ($enigma['id'] ?? 0) > 0 ? '🎮 Modifier l\'énigme' : '🎮 Nouvelle énigme',
+            'title'  => ($enigma['id'] ?? 0) > 0 ? 'Modifier l\'énigme' : 'Nouvelle énigme',
             'enigma' => $enigma,
         ]);
     }

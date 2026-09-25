@@ -44,7 +44,7 @@ $iconSvg = static function (string $name): string {
     <form method="get" class="analytics-filters" id="analytics-filters">
         <div class="af-row">
             <div class="af-group">
-                <label class="af-label">📅 Période</label>
+                <label class="af-label">Période</label>
                 <div class="af-pills" id="period-pills">
                     <?php foreach ($periods as $key => $label): ?>
                         <button type="button" class="af-pill <?= $filters['period'] === $key ? 'is-active' : '' ?>" data-period="<?= e($key) ?>"><?= e($label) ?></button>
@@ -64,7 +64,7 @@ $iconSvg = static function (string $name): string {
 
         <div class="af-row af-row-filters">
             <div class="af-group">
-                <label class="af-label">📊 Granularité</label>
+                <label class="af-label">Granularité</label>
                 <select name="granularity" class="af-select">
                     <option value="" <?= $filters['granularity'] === '' ? 'selected' : '' ?>>Auto</option>
                     <option value="day" <?= $filters['granularity'] === 'day' ? 'selected' : '' ?>>Jour</option>
@@ -74,7 +74,7 @@ $iconSvg = static function (string $name): string {
             </div>
 
             <div class="af-group">
-                <label class="af-label">🏷️ Catégorie</label>
+                <label class="af-label">Catégorie</label>
                 <select name="category" class="af-select">
                     <option value="all" <?= $filters['category'] === 'all' ? 'selected' : '' ?>>Toutes</option>
                     <option value="Boisson" <?= $filters['category'] === 'Boisson' ? 'selected' : '' ?>>Boisson</option>
@@ -88,7 +88,7 @@ $iconSvg = static function (string $name): string {
             </div>
 
             <div class="af-group">
-                <label class="af-label">💳 Paiement</label>
+                <label class="af-label">Paiement</label>
                 <select name="payment" class="af-select">
                     <option value="all" <?= $filters['payment'] === 'all' ? 'selected' : '' ?>>Tous</option>
                     <option value="CARTE" <?= $filters['payment'] === 'CARTE' ? 'selected' : '' ?>>Carte</option>
@@ -97,8 +97,8 @@ $iconSvg = static function (string $name): string {
             </div>
 
             <div class="af-actions">
-                <button type="submit" class="btn btn-primary">✅ Appliquer</button>
-                <a class="btn btn-ghost" href="<?= e(url('/admin/analytics')) ?>">🔄 Reset</a>
+                <button type="submit" class="btn btn-primary">Appliquer</button>
+                <a class="btn btn-ghost" href="<?= e(url('/admin/analytics')) ?>">Reset</a>
             </div>
         </div>
         <input type="hidden" name="period" id="period-hidden" value="<?= e($filters['period']) ?>">
@@ -205,10 +205,10 @@ $iconSvg = static function (string $name): string {
             </div>
             <div class="hm-filters">
                 <select id="hm-cat" class="af-select" onchange="document.getElementById('analytics-filters').submit()">
-                    <option value="">🔄 Toutes catégories</option>
-                    <option value="Boisson">💧 Boisson</option>
-                    <option value="Nourriture">🍫 Nourriture</option>
-                    <option value="Spécial">⭐ Spécial</option>
+                    <option value="">Toutes catégories</option>
+                    <option value="Boisson">Boisson</option>
+                    <option value="Nourriture">Nourriture</option>
+                    <option value="Spécial">Spécial</option>
                 </select>
             </div>
         </div>

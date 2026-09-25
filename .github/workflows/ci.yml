@@ -67,4 +67,21 @@ jobs:
           done
 
       - name: Lancer la suite PHPUnit
-        run: vendor/bin/phpunit --no-coverage
+        run: vendor/bin/phpunit --no-coverage --log-junit junit.xml
+
+      - name: Signaler les échecs en annotations
+        if: failure()
+        run: |
+          php -r '
+            $f = @file_get_contents("junit.xml");
+            if ($f === false) { exit(0); }
+            $x = @simplexml_load_string($f);
+            if ($x === false) { exit(0); }
+            foreach ($x->xpath("//testcase") as $tc) {
+              foreach ($tc->xpath("failure|error|warning") as $p) {
+                $msg = trim((string) $p);
+                $first = strtok($msg, "\n") ?: "";
+                echo "::error file=" . $tc["file"] . "::" . $tc["classname"] . "::" . $tc["name"] . " — " . $first . "\n";
+              }
+            }
+          '

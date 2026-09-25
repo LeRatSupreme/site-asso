@@ -21,7 +21,7 @@ declare(strict_types=1);
 
 <div class="costs-toolbar">
     <div class="search-box">
-        <input type="text" id="pk-search" placeholder="🔎 Rechercher un produit…" autocomplete="off">
+        <input type="text" id="pk-search" placeholder="Rechercher un produit…" autocomplete="off">
     </div>
     <select id="pk-cat" aria-label="Filtrer par catégorie">
         <option value="">Toutes les catégories</option>

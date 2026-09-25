@@ -55,7 +55,7 @@ foreach ($events as $ev) {
     <div class="card surface glass kpi">
         <p class="kpi-label">Événements rentables</p>
         <p class="kpi-value <?= $count > 0 && $rentables === $count ? 'is-positive' : ($rentables === 0 && $count > 0 ? 'is-negative' : '') ?>"><?= $count > 0 ? $rentables . ' / ' . $count : '—' ?></p>
-        <p class="kpi-sub">objectif : tous 😉</p>
+        <p class="kpi-sub">objectif : tous </p>
     </div>
 </div>
 
@@ -137,11 +137,11 @@ foreach ($events as $ev) {
 </div>
 
 <details class="card surface glass howto">
-    <summary>💡 Comment ça marche ?</summary>
+    <summary>Comment ça marche ?</summary>
     <div>
-        <p>📌 Le <strong>nom de l'événement = bouton SumUp</strong> : les ventes importées en CSV portant ce libellé se rattachent toutes seules.</p>
-        <p>📌 Les coûts saisis créent des <strong>dépenses « Événements »</strong> : les <a href="<?= e(url('/admin/compta/budgets')) ?>">budgets</a> et le <a href="<?= e(url('/admin/compta/depenses')) ?>">résultat net</a> restent à jour.</p>
-        <p>📌 Si aucune vente ne se rattache, vérifie l'orthographe du nom ou passe par le <a href="<?= e(url('/admin/compta/aliases')) ?>">Mapping libellés</a>. Clique sur le nom d'un événement pour son <strong>détail complet</strong> (ventes rattachées, seuil de rentabilité).</p>
+        <p>Le <strong>nom de l'événement = bouton SumUp</strong> : les ventes importées en CSV portant ce libellé se rattachent toutes seules.</p>
+        <p>Les coûts saisis créent des <strong>dépenses « Événements »</strong> : les <a href="<?= e(url('/admin/compta/budgets')) ?>">budgets</a> et le <a href="<?= e(url('/admin/compta/depenses')) ?>">résultat net</a> restent à jour.</p>
+        <p>Si aucune vente ne se rattache, vérifie l'orthographe du nom ou passe par le <a href="<?= e(url('/admin/compta/aliases')) ?>">Mapping libellés</a>. Clique sur le nom d'un événement pour son <strong>détail complet</strong> (ventes rattachées, seuil de rentabilité).</p>
     </div>
 </details>
 
@@ -199,7 +199,7 @@ foreach ($events as $ev) {
                         <form method="post" action="<?= e(url('/admin/compta/evenements/' . rawurlencode((string) $ev['id']) . '/delete')) ?>"
                               data-confirm="Supprimer cet événement, ses coûts et ses dépenses liées ?" data-preserve-scroll>
                             <?= csrf_field() ?>
-                            <button type="submit" class="btn btn-danger btn-sm" aria-label="Supprimer">🗑</button>
+                            <button type="submit" class="btn btn-danger btn-sm" aria-label="Supprimer"></button>
                         </form>
                     </td>
                 </tr>
@@ -236,7 +236,7 @@ foreach ($events as $ev) {
                               data-confirm="Supprimer ce coût (et sa dépense liée) ?" data-preserve-scroll>
                             <?= csrf_field() ?>
                             <input type="hidden" name="back" value="list">
-                            <button type="submit" class="btn btn-danger btn-sm" aria-label="Supprimer">🗑</button>
+                            <button type="submit" class="btn btn-danger btn-sm" aria-label="Supprimer"></button>
                         </form>
                     </td>
                 </tr>

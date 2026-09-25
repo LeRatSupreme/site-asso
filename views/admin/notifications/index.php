@@ -31,15 +31,15 @@ $dayLabels = [
 <!-- ===================== Messages programmés ===================== -->
 <section class="card surface glass">
     <div class="compta-head-row">
-        <h2 class="card-title">📨 Messages programmés (<?= count($schedules) ?>)</h2>
+        <h2 class="card-title">Messages programmés (<?= count($schedules) ?>)</h2>
         <form method="post" action="<?= e(url('/admin/notifications/create')) ?>">
             <?= csrf_field() ?>
-            <button type="submit" class="btn btn-primary">➕ Nouveau message</button>
+            <button type="submit" class="btn btn-primary">Nouveau message</button>
         </form>
     </div>
 
     <?php if ($schedules === []): ?>
-        <p class="muted">Aucun message pour l'instant — clique sur « ➕ Nouveau message » pour commencer.</p>
+        <p class="muted">Aucun message pour l'instant — clique sur « Nouveau message » pour commencer.</p>
     <?php endif; ?>
 
     <?php foreach ($schedules as $s):
@@ -58,12 +58,12 @@ $dayLabels = [
             <?php endif; ?>
             <form method="post" action="<?= e(url('/admin/notifications/' . $id . '/test')) ?>">
                 <?= csrf_field() ?>
-                <button type="submit" class="btn btn-outline btn-sm" title="Envoyer maintenant un test avec les données du jour">📤 Test</button>
+                <button type="submit" class="btn btn-outline btn-sm" title="Envoyer maintenant un test avec les données du jour">Test</button>
             </form>
             <form method="post" action="<?= e(url('/admin/notifications/' . $id . '/delete')) ?>"
                   data-confirm="Supprimer ce message programmé ?">
                 <?= csrf_field() ?>
-                <button type="submit" class="btn btn-danger btn-sm">🗑</button>
+                <button type="submit" class="btn btn-danger btn-sm"></button>
             </form>
         </div>
 
@@ -76,13 +76,13 @@ $dayLabels = [
                 <label class="toggle-switch">
                     <input type="checkbox" name="is_enabled" value="1" <?= $enabled ? 'checked' : '' ?>>
                     <span class="toggle-slider"></span>
-                    <span class="toggle-label <?= $enabled ? 'is-on' : '' ?>"><?= $enabled ? '✅ Activé' : '⛔ Désactivé' ?></span>
+                    <span class="toggle-label <?= $enabled ? 'is-on' : '' ?>"><?= $enabled ? 'Activé' : 'Désactivé' ?></span>
                 </label>
             </div>
 
             <div class="sms-planif-row">
                 <div class="field" style="flex:1;min-width:260px;">
-                    <label>📅 Jours d'envoi
+                    <label>Jours d'envoi
                         <span class="sms-quick-days">
                             <button type="button" class="btn btn-ghost btn-sm" data-days-preset="1,2,3,4,5">Lun-Ven</button>
                             <button type="button" class="btn btn-ghost btn-sm" data-days-preset="6,7">Week-end</button>
@@ -102,13 +102,13 @@ $dayLabels = [
                 </div>
 
                 <div class="field sms-planif-time">
-                    <label>⏰ Heure</label>
+                    <label>Heure</label>
                     <input type="time" name="send_time" value="<?= e($timeHm) ?>" required>
                 </div>
             </div>
 
             <div class="field">
-                <label>✉️ Modèle du message <span class="muted" style="font-weight:400;">— clique sur une variable dans le panneau ci-dessus pour l'insérer</span></label>
+                <label>Modèle du message <span class="muted" style="font-weight:400;">— clique sur une variable dans le panneau ci-dessus pour l'insérer</span></label>
                 <textarea name="template" rows="9" maxlength="999" class="sms-template-area js-tpl"><?= e(trim((string) ($s['template'] ?? '')) !== '' ? (string) $s['template'] : SmsReport::DEFAULT_TEMPLATE) ?></textarea>
                 <div class="sms-editor-foot">
                     <button type="button" class="btn btn-ghost btn-sm js-reset">↺ Modèle par défaut</button>
@@ -117,12 +117,12 @@ $dayLabels = [
             </div>
 
             <div class="field">
-                <label>👀 Aperçu live (données réelles du jour)</label>
+                <label>Aperçu live (données réelles du jour)</label>
                 <pre class="sms-preview surface glass js-preview"><?= e((string) ($s['preview'] ?? '')) ?></pre>
             </div>
 
             <div class="settings-save-bar">
-                <button type="submit" class="btn btn-primary">💾 Enregistrer ce message</button>
+                <button type="submit" class="btn btn-primary">Enregistrer ce message</button>
             </div>
         </form>
     </div>
@@ -132,7 +132,7 @@ $dayLabels = [
 
 <!-- ===================== Variables ===================== -->
 <section class="card surface glass">
-    <h2 class="card-title">🧩 Variables disponibles</h2>
+    <h2 class="card-title">Variables disponibles</h2>
     <p class="muted" style="font-size:0.82rem;">
         Clique sur une variable pour l'insérer dans le modèle du message que tu es en train de modifier.
         L'aperçu de chaque message se met à jour en temps réel avec les données réelles du jour.
@@ -154,7 +154,7 @@ $dayLabels = [
 
 <!-- ===================== Destinataires ===================== -->
 <section class="card surface glass">
-    <h2 class="card-title">📱 Destinataires (lignes Free Mobile)</h2>
+    <h2 class="card-title">Destinataires (lignes Free Mobile)</h2>
     <p class="muted" style="font-size:0.85rem;">
         Pour chaque ligne : active l'option « Notifications par SMS » dans l'espace abonné Free Mobile,
         puis note l'identifiant (8 chiffres) et la clé générée. Tous les messages partent vers toutes les lignes.
@@ -177,7 +177,7 @@ $dayLabels = [
                             <form method="post" action="<?= e(url('/admin/notifications/recipient/' . $i . '/delete')) ?>"
                                   style="display:inline;" data-confirm="Supprimer ce destinataire ?">
                                 <?= csrf_field() ?>
-                                <button type="submit" class="btn btn-danger btn-sm">🗑 Supprimer</button>
+                                <button type="submit" class="btn btn-danger btn-sm">Supprimer</button>
                             </form>
                         </td>
                     </tr>
@@ -202,7 +202,7 @@ $dayLabels = [
                 <label for="rcpt_pass">Clé d'identification</label>
                 <input type="text" id="rcpt_pass" name="pass" autocomplete="off" placeholder="clé de l'espace abonné" required>
             </div>
-            <button type="submit" class="btn btn-primary">➕ Ajouter (+ SMS de test)</button>
+            <button type="submit" class="btn btn-primary">Ajouter (+ SMS de test)</button>
         </div>
     </form>
 </section>
@@ -290,7 +290,7 @@ window.AEIC_SMS_DEFAULT_TEMPLATE = <?= json_encode(SmsReport::DEFAULT_TEMPLATE, 
         cb.addEventListener('change', function () {
             var label = this.parentElement.querySelector('.toggle-label');
             if (label) {
-                label.textContent = this.checked ? '✅ Activé' : '⛔ Désactivé';
+                label.textContent = this.checked ? 'Activé' : 'Désactivé';
                 label.classList.toggle('is-on', this.checked);
             }
         });

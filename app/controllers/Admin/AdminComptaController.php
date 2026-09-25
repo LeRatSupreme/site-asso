@@ -1344,11 +1344,11 @@ final class AdminComptaController extends AdminBaseController
         ]);
 
         if ($res['ecart'] < 0) {
-            $this->setFlash('error', sprintf('⚠️ Manquant de %s constaté — caisse réalignée.', formatPrice(abs($res['ecart']))));
+            $this->setFlash('error', sprintf('Manquant de %s constaté — caisse réalignée.', formatPrice(abs($res['ecart']))));
         } elseif ($res['ecart'] > 0) {
             $this->setFlash('success', sprintf('Surplus de %s constaté — caisse réalignée.', formatPrice($res['ecart'])));
         } else {
-            $this->setFlash('success', 'Comptage exact : aucun écart. 👍');
+            $this->setFlash('success', 'Comptage exact : aucun écart.');
         }
 
         redirect(url('/admin/compta/caisse'));
