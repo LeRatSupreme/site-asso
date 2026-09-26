@@ -238,6 +238,9 @@ final class InventoryCount extends Model
      *
      * @param array<string,int> $countedKeys Clés déjà comptées (flip).
      *
+     * Les achats « hors stock » (no_stock = 1) ne posent pas de base 0 :
+     * ils ne nourrissent pas le stock théorique.
+     *
      * @return list<string>
      */
     private static function movedWithoutCount(array $countedKeys): array
@@ -246,7 +249,7 @@ final class InventoryCount extends Model
             /** @var list<array-key,mixed> $rows */
             $rows = self::pdo()
                 ->query(
-                    'SELECT DISTINCT product_key FROM purchases
+                    'SELECT DISTINCT product_key FROM purchases WHERE no_stock = 0
                      UNION
                      SELECT DISTINCT product_key FROM losses'
                 )
@@ -267,13 +270,15 @@ final class InventoryCount extends Model
     }
 
     /**
-     * Le produit a-t-il au moins un achat ou une perte (base 0 posée) ?
+     * Le produit a-t-il au moins un achat (hors stock exclu) ou une perte
+     * (base 0 posée) ? Un achat « hors stock » n'établit pas de base 0 :
+     * il ne doit pas faire exister le stock théorique.
      */
     private static function hasMovement(string $productKey): bool
     {
         try {
             $stmt = self::pdo()->prepare(
-                'SELECT EXISTS(SELECT 1 FROM purchases WHERE product_key = ?)
+                'SELECT EXISTS(SELECT 1 FROM purchases WHERE product_key = ? AND no_stock = 0)
                      OR EXISTS(SELECT 1 FROM losses WHERE product_key = ?)'
             );
             $stmt->execute([$productKey, $productKey]);

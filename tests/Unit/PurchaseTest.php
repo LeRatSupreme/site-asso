@@ -52,7 +52,8 @@ final class PurchaseTest extends TestCase
     /**
      * Applique (best effort) les migrations achats
      * (database/migrations/2026_purchases_vat.sql,
-     * 2026_purchases_ht3.sql puis 2026_purchases_ttc3.sql)
+     * 2026_purchases_ht3.sql puis 2026_purchases_ttc3.sql,
+     * 2026_purchases_no_stock.sql)
      * sur la base de test.
      *
      * Une erreur (colonne déjà présente, type déjà modifié) est ignorée :
@@ -73,6 +74,7 @@ final class PurchaseTest extends TestCase
                 ADD COLUMN total_ht DECIMAL(10,3) NULL AFTER total_ttc',
             'ALTER TABLE purchases MODIFY total_ht DECIMAL(10,3) NULL',
             'ALTER TABLE purchases MODIFY total_ttc DECIMAL(10,3) NOT NULL DEFAULT 0',
+            'ALTER TABLE purchases ADD COLUMN no_stock TINYINT(1) NOT NULL DEFAULT 0 AFTER total_ht',
             'ALTER TABLE product_costs MODIFY cost_price DECIMAL(10,3) NOT NULL',
         ];
         foreach ($statements as $sql) {
@@ -293,6 +295,44 @@ final class PurchaseTest extends TestCase
         // Plage vide : zéros.
         $empty = Purchase::sumsBetween('2027-01-01', '2027-01-31');
         self::assertSame(['ht' => 0.0, 'ttc' => 0.0, 'vat' => 0.0], $empty);
+    }
+
+    /**
+     * Achat « hors stock » (no_stock) : la ligne et son montant restent
+     * dans la compta (totalBetween), mais ni le stock de référence ni
+     * qtySince() ne bougent ; un achat normal, lui, ajuste le stock.
+     */
+    public function test_create_hors_stock_n_alimente_pas_le_stock(): void
+    {
+        // Achat normal : le stock de référence suit (+24).
+        Purchase::create([
+            'purchased_at' => '2026-09-10',
+            'product_key'  => 'Coca 33cl',
+            'quantity'     => 24,
+            'total_ht'     => 12.00,
+            'vat_rate'     => 20.0,
+        ]);
+        self::assertSame(24, ProductStock::get('Coca 33cl'));
+
+        // Achat « hors stock » : comptabilisé, stock intact.
+        $id = Purchase::create([
+            'purchased_at' => '2026-09-11',
+            'product_key'  => 'Coca 33cl',
+            'quantity'     => 10,
+            'total_ht'     => 5.00,
+            'vat_rate'     => 20.0,
+            'no_stock'     => true,
+        ]);
+
+        $row = $this->fetchPurchase($id);
+        self::assertSame('1', (string) $row['no_stock'], 'Le drapeau no_stock est enregistré.');
+        self::assertSame('6.000', $row['total_ttc'], 'La ligne reste une dépense réelle (5,00 € HT + TVA 20 %).');
+
+        self::assertSame(24, ProductStock::get('Coca 33cl'), 'Le stock de référence ne bouge pas.');
+        self::assertSame(24, Purchase::qtySince('Coca 33cl', '2026-01-01'), 'qtySince ignore les achats hors stock.');
+
+        // La compta, elle, compte la ligne : 14,40 + 6,00 = 20,40 € TTC.
+        self::assertSame(20.40, Purchase::totalBetween('2026-09-01', '2026-09-30'));
     }
 
     private function fetchPurchase(string $id): array
