@@ -202,7 +202,9 @@ final class Sale extends Model
             );
             $stmt->execute($args);
 
-            return (float) ($stmt->fetchColumn() ?: 0);
+            // ROUND côté SQL renvoie un DOUBLE (imprécision binaire) : on
+            // borne l'affichage au centime pour une valeur stable.
+            return round((float) ($stmt->fetchColumn() ?: 0), 2);
         } catch (\Throwable) {
             return 0.0;
         }
