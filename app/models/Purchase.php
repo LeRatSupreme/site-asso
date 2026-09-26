@@ -26,11 +26,17 @@ final class Purchase extends Model
      * bénéfices. total_ttc = total_ht × (1 + taux/100) quand un taux
      * est fourni.
      *
+     * no_stock = achat « hors stock » : la ligne reste dans la compta
+     * (dépense réelle, lot de coût possible) mais n'alimente ni le stock
+     * de référence ni le stock théorique (conso bureau, fournitures,
+     * essais…).
+     *
      * @param array<string,mixed> $data purchased_at (« YYYY-MM-DD »),
      *                                  product_key, quantity, total_ht
      *                                  (montant total), vat_rate (?float,
      *                                  null = déjà TTC), supplier, notes,
-     *                                  created_by
+     *                                  created_by, no_stock (true = achat
+     *                                  « hors stock », hors inventaire)
      *
      * @return string Identifiant créé ('' si données invalides).
      */
@@ -44,6 +50,9 @@ final class Purchase extends Model
         $totalHt = round((float) ($data['total_ht'] ?? 0), 3);
         $vatRate = $data['vat_rate'] ?? null;
         $vatRate = $vatRate === null ? null : (float) $vatRate;
+        // no_stock = achat « hors stock » : comptabilisé mais sans effet
+        // sur le stock (ni référence, ni théorique).
+        $noStock = !empty($data['no_stock']);
 
         if ($purchasedAt === '' || $productKey === '' || $quantity < 1 || $totalHt <= 0.0) {
             return '';
@@ -68,13 +77,16 @@ final class Purchase extends Model
 
         self::pdo()->prepare(
             'INSERT INTO purchases
-                (id, purchased_at, supplier, product_key, quantity, unit_cost, vat_rate, total_ttc, total_ht, notes, created_by, created_at)
-             VALUES (?,?,?,?,?,?,?,?,?,?,?,NOW())'
-        )->execute([$id, $purchasedAt, $supplier, $productKey, $quantity, $unitCost, $vatRate, $totalTtc, $totalHt, $notes, $createdBy]);
+                (id, purchased_at, supplier, product_key, quantity, unit_cost, vat_rate, total_ttc, total_ht, no_stock, notes, created_by, created_at)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,NOW())'
+        )->execute([$id, $purchasedAt, $supplier, $productKey, $quantity, $unitCost, $vatRate, $totalTtc, $totalHt, $noStock ? 1 : 0, $notes, $createdBy]);
 
         // L'achat entre physiquement en stock : la référence de stock
         // (utilisée par le réappro) suit le stock théorique de l'inventaire.
-        ProductStock::adjust($productKey, $quantity);
+        // Un achat « hors stock » (conso bureau, essais…) n'y touche pas.
+        if (!$noStock) {
+            ProductStock::adjust($productKey, $quantity);
+        }
 
         return $id;
     }
@@ -226,6 +238,9 @@ final class Purchase extends Model
     /**
      * Quantité totale achetée pour un produit depuis un jour donné (inclus).
      *
+     * Les achats « hors stock » (no_stock = 1) sont ignorés : ils ne
+     * nourrissent pas le stock théorique.
+     *
      * @param string $day Jour « YYYY-MM-DD » (borne inférieure incluse).
      */
     public static function qtySince(string $productKey, string $day): int
@@ -234,7 +249,7 @@ final class Purchase extends Model
             $stmt = self::pdo()->prepare(
                 'SELECT COALESCE(SUM(quantity), 0)
                  FROM purchases
-                 WHERE product_key = ? AND purchased_at >= ?'
+                 WHERE product_key = ? AND purchased_at >= ? AND no_stock = 0'
             );
             $stmt->execute([$productKey, $day]);
 

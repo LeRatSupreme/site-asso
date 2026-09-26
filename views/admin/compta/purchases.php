@@ -27,7 +27,6 @@ foreach ($allKeys as $k) {
     }
 }
 ?>
-?>
 <div class="compta-head">
     <div>
         <p class="eyebrow">Comptabilité</p>
@@ -107,6 +106,7 @@ foreach ($allKeys as $k) {
                     <th style="width:90px;">Qté</th>
                     <th style="width:140px;">Montant total (€)</th>
                     <th style="width:150px;">≈ / unité</th>
+                    <th style="width:80px;" title="Cochée : l'achat est comptabilisé mais n'entre pas en stock">Stock</th>
                     <th style="width:50px;"></th>
                 </tr>
             </thead>
@@ -116,6 +116,7 @@ foreach ($allKeys as $k) {
                     <td><input type="number" name="quantity[]" value="1" min="1" step="1" style="width:100%;"></td>
                     <td><input type="text" name="total_amount[]" placeholder="ex: 18,60" inputmode="decimal" style="width:100%;"></td>
                     <td class="muted line-unit" hidden></td>
+                    <td class="nostock-cell"><label style="display:flex;align-items:center;gap:4px;font-weight:400;cursor:pointer;white-space:nowrap;" title="Cochée : n'alimente pas le stock théorique (conso bureau, essais…)"><input type="checkbox" class="line-no-stock" name="no_stock[]" value="1"> hors stock</label></td>
                     <td><button type="button" class="btn btn-ghost btn-sm line-remove" aria-label="Supprimer la ligne"></button></td>
                 </tr>
             </tbody>
@@ -123,7 +124,7 @@ foreach ($allKeys as $k) {
                 <tr>
                     <th colspan="2" class="num">Total des montants</th>
                     <th class="num" id="purchases-total">0,000 €</th>
-                    <th colspan="2"></th>
+                    <th colspan="3"></th>
                 </tr>
             </tfoot>
         </table>
@@ -132,7 +133,7 @@ foreach ($allKeys as $k) {
                 <option value="<?= e($p) ?>"></option>
             <?php endforeach; ?>
         </datalist>
-        <p class="field-help">Choisis des noms existants (mêmes noms que dans les ventes) pour alimenter le bon stock théorique. Les lignes vides sont ignorées.</p>
+        <p class="field-help">Choisis des noms existants (mêmes noms que dans les ventes) pour alimenter le bon stock théorique. Les lignes vides sont ignorées. Coche « hors stock » pour une ligne qui ne doit pas alimenter le stock (conso bureau, fournitures, essais…) : l'achat reste comptabilisé.</p>
 
         <div class="form-actions">
             <button type="button" class="btn btn-ghost" id="purchase-line-add">+ Ajouter une ligne</button>
@@ -229,6 +230,7 @@ foreach ($allKeys as $k) {
                     '<td><input type="number" name="quantity[]" value="1" min="1" step="1" style="width:100%;"></td>' +
                     '<td><input type="text" name="total_amount[]" placeholder="ex: 18,60" inputmode="decimal" style="width:100%;"></td>' +
                     '<td class="muted line-unit" hidden></td>' +
+                    '<td class="nostock-cell"><label style="display:flex;align-items:center;gap:4px;font-weight:400;cursor:pointer;white-space:nowrap;" title="Cochée : n\'alimente pas le stock théorique (conso bureau, essais…)"><input type="checkbox" class="line-no-stock" name="no_stock[]" value="1"> hors stock</label></td>' +
                     '<td><button type="button" class="btn btn-ghost btn-sm line-remove" aria-label="Supprimer la ligne"></button></td>';
                 tbody.appendChild(tr);
                 wireRow(tr);
@@ -238,6 +240,18 @@ foreach ($allKeys as $k) {
             Array.prototype.forEach.call(tbody.querySelectorAll('tr.purchase-line'), wireRow);
             addBtn.addEventListener('click', function () { addLine(true); });
             updateTotal();
+
+            // Cases non cochées non postées + lignes supprimées : on
+            // renumérote no_stock[i] dans l'ordre des lignes juste avant
+            // l'envoi, pour rester aligné avec product_key[i].
+            var form = tbody.closest('form');
+            form.addEventListener('submit', function () {
+                var rows = tbody.querySelectorAll('tr.purchase-line');
+                Array.prototype.forEach.call(rows, function (tr, i) {
+                    var cb = tr.querySelector('.line-no-stock');
+                    if (cb) cb.name = 'no_stock[' + i + ']';
+                });
+            });
         })();
     </script>
 </section>
@@ -248,6 +262,7 @@ foreach ($allKeys as $k) {
         <p>Le <a href="<?= e(url('/admin/compta/reappro')) ?>">réappro</a> calcule ce qu'il <strong>FAUT</strong> commander ; cette page trace ce qui a <strong>ÉTÉ</strong> commandé.</p>
         <p>Par défaut, chaque achat crée un <strong>nouveau lot de coût</strong> à ce prix<?php if (\App\Core\Permissions::isSystemAdmin()): ?> dans <a href="<?= e(url('/admin/compta/couts')) ?>">Coûts de revient</a><?php endif; ?> — décoche la case pour des prix inhabituels.</p>
         <p>Les achats alimentent le <strong>stock théorique</strong> visible<?php if (\App\Core\Permissions::isSystemAdmin()): ?> dans <a href="<?= e(url('/admin/compta/inventaire')) ?>">l'inventaire</a><?php endif; ?> : dernier comptage + achats − ventes.</p>
+        <p>Une ligne peut aussi être <strong>« hors stock »</strong> (conso bureau, fournitures, essais, invités…) : coche la case — l'achat reste comptabilisé mais n'alimente ni le stock théorique ni le stock de référence.</p>
     </section>
 </div>
 
@@ -272,7 +287,7 @@ foreach ($allKeys as $k) {
                 <?php $hasVat = $r['vat_rate'] !== null; ?>
                 <tr>
                     <td><?= e(formatDate((string) $r['purchased_at'])) ?></td>
-                    <td><strong><?= e((string) $r['product_key']) ?></strong></td>
+                    <td><strong><?= e((string) $r['product_key']) ?></strong><?php if (!empty($r['no_stock'])): ?> <small class="muted">· hors stock</small><?php endif; ?></td>
                     <td class="num"><?= (int) $r['quantity'] ?></td>
                     <td class="num">
                         <?= e(formatPrice((float) $r['unit_cost'], 3)) ?>

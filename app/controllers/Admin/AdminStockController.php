@@ -43,8 +43,12 @@ final class AdminStockController extends AdminBaseController
         $rows = Purchase::between($period['from'], $period['to'], 200);
 
         // Quantité totale reçue sur la période (KPI + pied du journal).
+        // Les lignes « hors stock » n'entrent pas en stock : exclues du KPI.
         $qtyTotal = 0;
         foreach ($rows as $r) {
+            if (!empty($r['no_stock'])) {
+                continue;
+            }
             $qtyTotal += (int) $r['quantity'];
         }
 
@@ -89,10 +93,18 @@ final class AdminStockController extends AdminBaseController
         $vatRaw = trim((string) ($_POST['vat_rate'] ?? ''));
 
         $keys = is_array($_POST['product_key'] ?? null) ? $_POST['product_key'] : [];
+
+        // Case « hors stock » par ligne : cochée, la ligne reste un achat
+        // réel (compta, lot de coût) mais n'entre pas en stock. Les noms
+        // indexés no_stock[N] sont renumérotés par le JS au submit pour
+        // rester alignés sur product_key[N].
+        $noStockFlags = is_array($_POST['no_stock'] ?? null) ? $_POST['no_stock'] : [];
+
         $quantities = is_array($_POST['quantity'] ?? null) ? $_POST['quantity'] : [];
         $amounts = is_array($_POST['total_amount'] ?? null) ? $_POST['total_amount'] : [];
 
         $inserted = 0;
+        $noStockInserted = 0;
         $products = [];
         $errors = [];
         $count = max(count($keys), count($quantities), count($amounts));
@@ -100,6 +112,8 @@ final class AdminStockController extends AdminBaseController
         for ($i = 0; $i < $count; $i++) {
             $key = trim((string) ($keys[$i] ?? ''));
             $amountRaw = trim((string) ($amounts[$i] ?? ''));
+            // Case « hors stock » de la ligne N (renumérotée au submit).
+            $noStock = (($noStockFlags[$i] ?? null) === '1' || ($noStockFlags[$i] ?? null) === 1);
 
             // Ligne totalement vide (jamais remplie) : ignorée sans bruit.
             if ($key === '' && $amountRaw === '') {
@@ -113,12 +127,16 @@ final class AdminStockController extends AdminBaseController
                 'total_amount' => $amountRaw,
                 'vat_rate'     => $vatRaw,
                 'update_cost'  => $updateCost ? '1' : '',
+                'no_stock'     => $noStock,
                 'supplier'     => $supplier,
                 'notes'        => $notes,
             ], $user);
 
             if ($reason === '') {
                 $inserted++;
+                if ($noStock) {
+                    $noStockInserted++;
+                }
                 $products[$key] = true;
             } else {
                 $errors[] = ($key !== '' ? $key : '(sans nom)') . ' : ' . $reason;
@@ -141,6 +159,7 @@ final class AdminStockController extends AdminBaseController
             'ignored'     => count($errors),
             'vat_rate'    => $vatRaw === '' ? null : parseFrenchFloat($vatRaw),
             'update_cost' => $updateCost,
+            'no_stock'    => $noStockInserted,
             'supplier'    => $supplier,
             'purchased_at' => $purchasedAt,
         ]);
@@ -157,14 +176,21 @@ final class AdminStockController extends AdminBaseController
         // Les achats font bouger le théorique : la carte publique suit.
         StockPublic::invalidate();
 
+        // Message adapté : « stock mis à jour » seulement si au moins une
+        // ligne est réellement entrée en stock.
+        $allNoStock = $noStockInserted === $inserted;
         $flash = sprintf(
-            '%d achat%s enregistré%s pour %d produit%s — stock mis à jour.',
+            '%d achat%s enregistré%s pour %d produit%s — %s',
             $inserted,
             $inserted > 1 ? 's' : '',
             $inserted > 1 ? 's' : '',
             count($products),
-            count($products) > 1 ? 's' : ''
+            count($products) > 1 ? 's' : '',
+            $allNoStock ? 'stock inchangé (hors stock).' : 'stock mis à jour.'
         );
+        if ($noStockInserted > 0 && !$allNoStock) {
+            $flash .= sprintf(' %d ligne(s) hors stock (stock inchangé).', $noStockInserted);
+        }
         if ($errors !== []) {
             $flash .= ' Lignes ignorées : ' . implode(' · ', $errors);
         }
@@ -185,7 +211,8 @@ final class AdminStockController extends AdminBaseController
      * @param array<string,mixed> $data purchased_at, product_key,
      *                                  quantity, total_amount, vat_rate
      *                                  ('' = déjà TTC), update_cost,
-     *                                  supplier, notes
+     *                                  supplier, notes, no_stock (case
+     *                                  « hors stock » : compta sans stock)
      * @param array<string,mixed> $user Utilisateur courant (created_by).
      *
      * @return string '' si l'achat est créé, sinon le motif d'erreur
@@ -234,6 +261,7 @@ final class AdminStockController extends AdminBaseController
             'quantity'     => $quantity,
             'total_ht'     => $totalHt,
             'vat_rate'     => $vatRate,
+            'no_stock'     => !empty($data['no_stock']),
             'supplier'     => trim((string) ($data['supplier'] ?? '')),
             'notes'        => trim((string) ($data['notes'] ?? '')),
             'created_by'   => $user['id'] ?? null,
@@ -273,6 +301,8 @@ final class AdminStockController extends AdminBaseController
      * vit au même endroit, les modèles restant des primitives. Contre-
      * passe aussi le stock de référence : Purchase::create() avait fait
      * ProductStock::adjust(+qty), la suppression retire la quantité.
+     * Un achat « hors stock » (no_stock = 1) n'ayant rien ajouté au stock,
+     * sa suppression le laisse inchangé.
      */
     public function deletePurchase(string $id): void
     {
@@ -289,6 +319,10 @@ final class AdminStockController extends AdminBaseController
         $productKey = (string) $purchase['product_key'];
         $quantity = (int) $purchase['quantity'];
 
+        // Achat « hors stock » : aucun stock n'avait été ajouté à la
+        // création — rien à contre-passé ici.
+        $noStock = !empty($purchase['no_stock']);
+
         // Cascade : supprime les lots de coût liés à l'achat ; si l'un
         // d'eux était « en cours », le lot antérieur est réouvert
         // (ProductCost::delete) pour ne pas casser la chaîne de coûts.
@@ -297,8 +331,11 @@ final class AdminStockController extends AdminBaseController
         Purchase::delete($id);
 
         // Contre-passation du stock de référence : ajusté de +quantity à
-        // la création de l'achat.
-        ProductStock::adjust($productKey, -$quantity);
+        // la création de l'achat — sauf achat « hors stock » (rien n'avait
+        // été ajouté).
+        if (!$noStock) {
+            ProductStock::adjust($productKey, -$quantity);
+        }
 
         StockPublic::invalidate();
 
@@ -306,13 +343,17 @@ final class AdminStockController extends AdminBaseController
             'product_key'    => $productKey,
             'quantity'       => $quantity,
             'lots_deleted'   => $lotsDeleted,
-            'stock_adjusted' => -$quantity,
+            'stock_adjusted' => $noStock ? 0 : -$quantity,
+            'no_stock'       => $noStock,
         ]);
 
         $flash = sprintf(
             'Achat supprimé — stock de référence ajusté (−%d).',
             $quantity
         );
+        if ($noStock) {
+            $flash = 'Achat supprimé — stock inchangé (achat hors stock).';
+        }
         if ($lotsDeleted > 0) {
             $flash .= sprintf(' %d lot(s) de coût lié(s) supprimé(s), lot antérieur réouvert.', $lotsDeleted);
         }
