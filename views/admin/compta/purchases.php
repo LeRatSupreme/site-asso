@@ -117,7 +117,7 @@ foreach ($allKeys as $k) {
                     <td><input type="text" name="total_amount[]" placeholder="ex: 18,60" inputmode="decimal" style="width:100%;"></td>
                     <td class="muted line-unit" hidden></td>
                     <td class="nostock-cell"><label style="display:flex;align-items:center;gap:4px;font-weight:400;cursor:pointer;white-space:nowrap;" title="Cochée : n'alimente pas le stock théorique (conso bureau, essais…)"><input type="checkbox" class="line-no-stock" name="no_stock[]" value="1"> hors stock</label></td>
-                    <td><button type="button" class="btn btn-ghost btn-sm line-remove" aria-label="Supprimer la ligne"></button></td>
+                    <td><button type="button" class="btn btn-ghost btn-sm line-remove" aria-label="Supprimer la ligne">Retirer</button></td>
                 </tr>
             </tbody>
             <tfoot>
@@ -231,7 +231,7 @@ foreach ($allKeys as $k) {
                     '<td><input type="text" name="total_amount[]" placeholder="ex: 18,60" inputmode="decimal" style="width:100%;"></td>' +
                     '<td class="muted line-unit" hidden></td>' +
                     '<td class="nostock-cell"><label style="display:flex;align-items:center;gap:4px;font-weight:400;cursor:pointer;white-space:nowrap;" title="Cochée : n\'alimente pas le stock théorique (conso bureau, essais…)"><input type="checkbox" class="line-no-stock" name="no_stock[]" value="1"> hors stock</label></td>' +
-                    '<td><button type="button" class="btn btn-ghost btn-sm line-remove" aria-label="Supprimer la ligne"></button></td>';
+                    '<td><button type="button" class="btn btn-ghost btn-sm line-remove" aria-label="Supprimer la ligne">Retirer</button></td>';
                 tbody.appendChild(tr);
                 wireRow(tr);
                 if (focus) tr.querySelector('[name="product_key[]"]').focus();
@@ -306,7 +306,7 @@ foreach ($allKeys as $k) {
                         <form method="post" action="<?= e(url('/admin/compta/achats/' . rawurlencode((string) $r['id']) . '/delete')) ?>"
                               data-confirm="Supprimer cet achat ?" data-preserve-scroll>
                             <?= csrf_field() ?>
-                            <button type="submit" class="btn btn-danger btn-sm" aria-label="Supprimer"></button>
+                            <button type="submit" class="btn btn-danger btn-sm" aria-label="Supprimer">Supprimer</button>
                         </form>
                     </td>
                 </tr>

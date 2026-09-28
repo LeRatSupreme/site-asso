@@ -211,7 +211,7 @@ declare(strict_types=1);
                                                             <?php endif; ?>
                                                             <form method="post" action="<?= e(url('/admin/compta/couts/' . rawurlencode((string) $c['id']) . '/delete')) ?>" data-confirm="Supprimer ce lot ? Action irréversible." data-preserve-scroll>
                                                                 <?= csrf_field() ?>
-                                                                <button type="submit" class="btn btn-danger btn-sm" aria-label="Supprimer"></button>
+                                                                <button type="submit" class="btn btn-danger btn-sm" aria-label="Supprimer">Supprimer</button>
                                                             </form>
                                                         </td>
                                                     </tr>
@@ -269,7 +269,7 @@ declare(strict_types=1);
                 <tr class="cost-bulk-line">
                     <td><input type="text" name="product_key[]" list="bulk-products" placeholder="Rechercher un produit…" autocomplete="off" style="width:100%;"></td>
                     <td><input type="text" name="cost_price[]" placeholder="ex: 0,60" inputmode="decimal" style="width:100%;"></td>
-                    <td><button type="button" class="btn btn-ghost btn-sm cost-bulk-remove" aria-label="Supprimer la ligne"></button></td>
+                    <td><button type="button" class="btn btn-ghost btn-sm cost-bulk-remove" aria-label="Supprimer la ligne">Retirer</button></td>
                 </tr>
             </tbody>
         </table>
@@ -303,7 +303,7 @@ declare(strict_types=1);
                 tr.innerHTML =
                     '<td><input type="text" name="product_key[]" list="bulk-products" placeholder="Rechercher un produit…" autocomplete="off" style="width:100%;"></td>' +
                     '<td><input type="text" name="cost_price[]" placeholder="ex: 0,60" inputmode="decimal" style="width:100%;"></td>' +
-                    '<td><button type="button" class="btn btn-ghost btn-sm cost-bulk-remove" aria-label="Supprimer la ligne"></button></td>';
+                    '<td><button type="button" class="btn btn-ghost btn-sm cost-bulk-remove" aria-label="Supprimer la ligne">Retirer</button></td>';
                 tbody.appendChild(tr);
                 wireRow(tr);
                 if (focus) tr.querySelector('[name="product_key[]"]').focus();

@@ -113,7 +113,7 @@ $profit = (float) $stats['ca'] - $costsTotal;
                             <form method="post" action="<?= e(url('/admin/compta/evenements/' . rawurlencode((string) $event['id']) . '/couts/' . rawurlencode((string) $c['id']) . '/delete')) ?>"
                                   data-confirm="Supprimer ce coût (et sa dépense liée) ?" data-preserve-scroll>
                                 <?= csrf_field() ?>
-                                <button type="submit" class="btn btn-danger btn-sm" aria-label="Supprimer"></button>
+                                <button type="submit" class="btn btn-danger btn-sm" aria-label="Supprimer">Supprimer</button>
                             </form>
                         </td>
                     </tr>

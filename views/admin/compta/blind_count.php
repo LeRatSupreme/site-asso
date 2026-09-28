@@ -57,7 +57,7 @@ declare(strict_types=1);
                           data-confirm-button="Plus en vente"
                           data-preserve-scroll>
                         <?= csrf_field() ?>
-                        <button type="submit" class="btn btn-outline btn-sm icon-btn" title="Plus en vente pour l'instant (saisonnier…) : met en pause, rien n'est supprimé"></button>
+                        <button type="submit" class="btn btn-outline btn-sm" title="Plus en vente pour l'instant (saisonnier…) : met en pause, rien n'est supprimé">Mettre en pause</button>
                     </form>
                 </td>
             </tr>

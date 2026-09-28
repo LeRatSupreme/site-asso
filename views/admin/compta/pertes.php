@@ -190,7 +190,7 @@ foreach ($allKeys as $k) {
                         <form method="post" action="<?= e(url('/admin/compta/pertes/' . rawurlencode((string) $r['id']) . '/delete')) ?>"
                               data-confirm="Supprimer cette perte ? Le stock théorique sera recalculé." data-preserve-scroll>
                             <?= csrf_field() ?>
-                            <button type="submit" class="btn btn-danger btn-sm" aria-label="Supprimer"></button>
+                            <button type="submit" class="btn btn-danger btn-sm" aria-label="Supprimer">Supprimer</button>
                         </form>
                     </td>
                 </tr>
