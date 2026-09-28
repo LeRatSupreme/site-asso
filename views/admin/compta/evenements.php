@@ -199,7 +199,7 @@ foreach ($events as $ev) {
                         <form method="post" action="<?= e(url('/admin/compta/evenements/' . rawurlencode((string) $ev['id']) . '/delete')) ?>"
                               data-confirm="Supprimer cet événement, ses coûts et ses dépenses liées ?" data-preserve-scroll>
                             <?= csrf_field() ?>
-                            <button type="submit" class="btn btn-danger btn-sm" aria-label="Supprimer"></button>
+                            <button type="submit" class="btn btn-danger btn-sm" aria-label="Supprimer">Supprimer</button>
                         </form>
                     </td>
                 </tr>
@@ -236,7 +236,7 @@ foreach ($events as $ev) {
                               data-confirm="Supprimer ce coût (et sa dépense liée) ?" data-preserve-scroll>
                             <?= csrf_field() ?>
                             <input type="hidden" name="back" value="list">
-                            <button type="submit" class="btn btn-danger btn-sm" aria-label="Supprimer"></button>
+                            <button type="submit" class="btn btn-danger btn-sm" aria-label="Supprimer">Supprimer</button>
                         </form>
                     </td>
                 </tr>
