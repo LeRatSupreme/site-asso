@@ -81,7 +81,7 @@ declare(strict_types=1);
                                 <input type="hidden" name="user_id" value="<?= e((string) $p['id']) ?>">
                                 <input type="text" name="pseudo" value="<?= e($pseudo) ?>" maxlength="20"
                                        placeholder="—" style="width:130px;padding:0.3rem 0.5rem;border-radius:0.3rem;border:1px solid var(--border-strong);background:rgba(255,255,255,0.04);color:var(--foreground);font-size:0.85rem;" />
-                                <button type="submit" class="btn btn-outline btn-sm" title="Enregistrer le pseudo"></button>
+                                <button type="submit" class="btn btn-outline btn-sm" title="Enregistrer le pseudo">Enregistrer</button>
                             </form>
                         </td>
                         <td class="num"><strong style="color:var(--primary);"><?= (int) $p['currentStreak'] ?></strong></td>

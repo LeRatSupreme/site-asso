@@ -135,7 +135,7 @@ $roleIcons = [
                                             <p class="pages-dialog-title">Pages supplémentaires</p>
                                             <p class="pages-dialog-sub"><?= $fullName ?> · <b><span class="pages-count"><?= count($grantedPages) ?></span> sélectionnée(s)</b></p>
                                         </div>
-                                        <button type="button" class="pages-dialog-close" onclick="this.closest('dialog').close()" title="Fermer"></button>
+                                        <button type="button" class="pages-dialog-close" onclick="this.closest('dialog').close()" title="Fermer">×</button>
                                     </div>
                                     <div class="pages-dialog-body">
                                         <p class="pages-group-title">Modules</p>
@@ -189,7 +189,7 @@ $roleIcons = [
                         <form method="post" action="<?= e(url('/admin/users/' . rawurlencode((string) $u['id']) . '/reset-password')) ?>" class="inline-form"
                               data-confirm="Réinitialiser le mot de passe de <?= e(trim(($u['prenom'] ?? '') . ' ' . ($u['nom'] ?? ''))) ?> ? Un mot de passe temporaire sera envoyé par email.">
                             <?= csrf_field() ?>
-                            <button type="submit" class="btn btn-outline btn-sm icon-btn" title="Renvoyer un mot de passe temporaire par email"></button>
+                            <button type="submit" class="btn btn-outline btn-sm" title="Renvoyer un mot de passe temporaire par email">Renvoyer mdp</button>
                         </form>
                         <form method="post" action="<?= e(url('/admin/users/' . rawurlencode((string) $u['id']) . '/delete')) ?>" class="inline-form"
                               data-confirm="Supprimer définitivement le compte de <?= e(trim(($u['prenom'] ?? '') . ' ' . ($u['nom'] ?? ''))) ?> ? Action irréversible." data-preserve-scroll>
