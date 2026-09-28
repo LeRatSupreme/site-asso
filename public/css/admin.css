@@ -24,6 +24,8 @@
     display: grid;
     grid-template-columns: 260px 1fr;
     min-height: 100vh;
+    position: relative;
+    z-index: 1;
 }
 
 /* ---- Sidebar ----------------------------------------------------------- */
@@ -365,7 +367,6 @@
 }
 .dropzone:hover { border-color: var(--primary); background: rgba(72, 189, 211, 0.06); }
 .dropzone.is-drag { border-color: var(--primary); background: rgba(72, 189, 211, 0.12); transform: scale(1.01); }
-.dropzone-emoji { font-size: 1.8rem; }
 .dropzone-title { font-weight: 700; color: var(--foreground); font-size: 0.98rem; }
 .dropzone-sub { font-size: 0.8rem; color: var(--muted); }
 
@@ -438,15 +439,15 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-width: 2rem;
-    height: 2rem;
-    padding: 0 0.4rem;
+    min-height: 2rem;
+    padding: 0.25rem 0.65rem;
     border: 1px solid var(--border);
     border-radius: 0.45rem;
     background: rgba(255, 255, 255, 0.04);
     color: var(--foreground);
     font-size: 0.9rem;
     line-height: 1;
+    white-space: nowrap;
     cursor: pointer;
     transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
 }
@@ -508,10 +509,18 @@
 }
 .media-dialog-close {
     background: transparent; border: none; color: var(--muted);
-    font-size: 1rem; cursor: pointer; line-height: 1;
-    padding: 0.2rem 0.35rem; border-radius: 6px;
+    font-size: 1.2rem; cursor: pointer; line-height: 1;
+    padding: 0.15rem 0.45rem; border-radius: 6px;
 }
 .media-dialog-close:hover { color: var(--foreground); background: rgba(255, 255, 255, 0.07); }
+
+/* Bouton « × » de la modale « Pages » (même squelette que .media-dialog-close) */
+.pages-dialog-close {
+    background: transparent; border: none; color: var(--muted);
+    font-size: 1.2rem; cursor: pointer; line-height: 1;
+    padding: 0.15rem 0.45rem; border-radius: 6px;
+}
+.pages-dialog-close:hover { color: var(--foreground); background: rgba(255, 255, 255, 0.07); }
 .media-dialog-body { padding: 0.9rem 1rem 0.2rem; overflow-y: auto; }
 .media-dialog-body .field input[type="text"] { padding: 0.55rem 0.75rem; }
 .media-dialog-foot {

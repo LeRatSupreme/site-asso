@@ -182,8 +182,8 @@ $roleIcons = [
                     <td class="row-actions">
                         <form method="post" action="<?= e(url('/admin/users/' . rawurlencode((string) $u['id']) . '/toggle-active')) ?>" class="inline-form">
                             <?= csrf_field() ?>
-                            <button type="submit" class="btn btn-outline btn-sm icon-btn" <?= $isSelf ? 'disabled title="Vous ne pouvez pas vous désactiver"' : 'title="' . ($isActive ? 'Désactiver ce compte' : 'Réactiver ce compte') . '"' ?>>
-                                <?= $isActive ? '' : '▶' ?>
+                            <button type="submit" class="btn btn-outline btn-sm" <?= $isSelf ? 'disabled title="Vous ne pouvez pas vous désactiver"' : 'title="' . ($isActive ? 'Désactiver ce compte' : 'Réactiver ce compte') . '"' ?>>
+                                <?= $isActive ? 'Désactiver' : 'Réactiver' ?>
                             </button>
                         </form>
                         <form method="post" action="<?= e(url('/admin/users/' . rawurlencode((string) $u['id']) . '/reset-password')) ?>" class="inline-form"
@@ -194,8 +194,8 @@ $roleIcons = [
                         <form method="post" action="<?= e(url('/admin/users/' . rawurlencode((string) $u['id']) . '/delete')) ?>" class="inline-form"
                               data-confirm="Supprimer définitivement le compte de <?= e(trim(($u['prenom'] ?? '') . ' ' . ($u['nom'] ?? ''))) ?> ? Action irréversible." data-preserve-scroll>
                             <?= csrf_field() ?>
-                            <button type="submit" class="btn btn-danger btn-sm icon-btn" <?= $isSelf ? 'disabled title="Vous ne pouvez pas supprimer votre propre compte ici"' : 'title="Supprimer définitivement"' ?>>
-                                
+                            <button type="submit" class="btn btn-danger btn-sm" <?= $isSelf ? 'disabled title="Vous ne pouvez pas supprimer votre propre compte ici"' : 'title="Supprimer définitivement"' ?>>
+                                Supprimer
                             </button>
                         </form>
                     </td>
@@ -376,9 +376,6 @@ $roleIcons = [
 .name-prenom { width: 9ch; min-width: 7ch; }
 .name-nom { width: 12ch; min-width: 8ch; }
 .role-select { cursor: pointer; max-width: 11ch; }
-
-/* Actions en icônes */
-.icon-btn { padding: 0.2rem 0.45rem; font-size: 0.95rem; line-height: 1; }
 
 @media (max-width: 700px) {
     .table-users th:nth-child(6), .table-users td:nth-child(6) { display: none; } /* Inscription */

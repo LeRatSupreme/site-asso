@@ -14,7 +14,6 @@ declare(strict_types=1);
 
         <label class="dropzone" for="media-file" id="mediaDropzone">
             <input type="file" id="media-file" name="file" accept="image/*" required hidden>
-            <span class="dropzone-emoji"></span>
             <span class="dropzone-title">Clique ou dépose une image ici</span>
             <span class="dropzone-sub" id="mediaFileName">JPG, PNG, GIF, WebP — 5 Mo max</span>
         </label>
@@ -63,17 +62,17 @@ declare(strict_types=1);
                     </div>
                     <code class="media-url" id="media-url-<?= e($domId) ?>"><?= e($fullUrl) ?></code>
                     <div class="media-actions">
-                        <button type="button" class="media-icon-btn copy-url" data-target="media-url-<?= e($domId) ?>" title="Copier l'URL"></button>
+                        <button type="button" class="media-icon-btn copy-url" data-target="media-url-<?= e($domId) ?>" title="Copier l'URL">Copier</button>
                         <form method="post" action="<?= e(url('/admin/media/' . rawurlencode($id) . '/update')) ?>" class="inline-form media-edit-form">
                             <?= csrf_field() ?>
-                            <button type="button" class="media-icon-btn" title="Éditer" onclick="document.getElementById('media-dialog-<?= e($domId) ?>').showModal()"></button>
+                            <button type="button" class="media-icon-btn" title="Éditer" onclick="document.getElementById('media-dialog-<?= e($domId) ?>').showModal()">Éditer</button>
                             <dialog id="media-dialog-<?= e($domId) ?>" class="media-dialog">
                                 <div class="media-dialog-head">
                                     <div>
                                         <p class="media-dialog-title">Éditer le média</p>
                                         <p class="media-dialog-sub"><?= e($name) ?></p>
                                     </div>
-                                    <button type="button" class="media-dialog-close" onclick="this.closest('dialog').close()" title="Fermer"></button>
+                                    <button type="button" class="media-dialog-close" onclick="this.closest('dialog').close()" title="Fermer">×</button>
                                 </div>
                                 <div class="media-dialog-body">
                                     <div class="field">
@@ -99,14 +98,14 @@ declare(strict_types=1);
                             <form method="post" action="<?= e(url('/admin/media/' . rawurlencode($id) . '/delete-cascade')) ?>" class="inline-form media-delete-form" data-preserve-scroll>
                                 <?= csrf_field() ?>
                                 <button type="button" class="media-icon-btn is-danger" title="Suppression bloquée — voir pourquoi"
-                                        onclick="document.getElementById('media-usage-dialog-<?= e($domId) ?>').showModal()"></button>
+                                        onclick="document.getElementById('media-usage-dialog-<?= e($domId) ?>').showModal()">Pourquoi ?</button>
                                 <dialog id="media-usage-dialog-<?= e($domId) ?>" class="media-dialog">
                                     <div class="media-dialog-head">
                                         <div>
                                             <p class="media-dialog-title">Média utilisé par <?= count($used) ?> produit(s)</p>
                                             <p class="media-dialog-sub"><?= e($name) ?></p>
                                         </div>
-                                        <button type="button" class="media-dialog-close" onclick="this.closest('dialog').close()" title="Fermer"></button>
+                                        <button type="button" class="media-dialog-close" onclick="this.closest('dialog').close()" title="Fermer">×</button>
                                     </div>
                                     <div class="media-dialog-body">
                                         <p class="media-usage-intro">Suppression simple impossible : ce média est l'image des produits suivants.</p>
@@ -132,7 +131,7 @@ declare(strict_types=1);
                             <form method="post" action="<?= e(url('/admin/media/' . rawurlencode($id) . '/delete')) ?>" class="inline-form media-delete-form"
                                   data-confirm="Supprimer définitivement « <?= e($name) ?> » ? Action irréversible." data-preserve-scroll>
                                 <?= csrf_field() ?>
-                                <button type="submit" class="media-icon-btn is-danger" title="Supprimer"></button>
+                                <button type="submit" class="media-icon-btn is-danger" title="Supprimer">Supprimer</button>
                             </form>
                         <?php endif; ?>
                     </div>

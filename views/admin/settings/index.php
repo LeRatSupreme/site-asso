@@ -7,16 +7,16 @@ declare(strict_types=1);
  */
 
 $groupConfig = [
-    'general'   => ['icon' => '', 'label' => 'Général'],
-    'contact'   => ['icon' => '', 'label' => 'Contact & Localisation'],
-    'email'     => ['icon' => '', 'label' => 'Emails / SMTP'],
-    'seo'       => ['icon' => '', 'label' => 'SEO & Réseaux sociaux'],
-    'features'  => ['icon' => '', 'label' => 'Fonctionnalités'],
-    'sumup'     => ['icon' => '', 'label' => 'SumUp — Paiement en ligne'],
-    'site'      => ['icon' => '', 'label' => 'Site'],
-    'cafeteria' => ['icon' => '', 'label' => 'Cafétéria'],
-    'events'    => ['icon' => '', 'label' => 'Événements'],
-    'social'    => ['icon' => '', 'label' => 'Réseaux sociaux & Discord'],
+    'general'   => ['label' => 'Général'],
+    'contact'   => ['label' => 'Contact & Localisation'],
+    'email'     => ['label' => 'Emails / SMTP'],
+    'seo'       => ['label' => 'SEO & Réseaux sociaux'],
+    'features'  => ['label' => 'Fonctionnalités'],
+    'sumup'     => ['label' => 'SumUp — Paiement en ligne'],
+    'site'      => ['label' => 'Site'],
+    'cafeteria' => ['label' => 'Cafétéria'],
+    'events'    => ['label' => 'Événements'],
+    'social'    => ['label' => 'Réseaux sociaux & Discord'],
 ];
 
 // Libellés lisibles par clé technique.
@@ -63,7 +63,7 @@ $passwordKeys = ['smtp_pass', 'brevo_api_key', 'discord_webhook_url'];
     <?= csrf_field() ?>
 
     <?php foreach ($groups as $group => $settings):
-        $cfg = $groupConfig[$group] ?? ['icon' => '', 'label' => ucfirst($group)];
+        $cfg = $groupConfig[$group] ?? ['label' => ucfirst($group)];
     ?>
         <section class="card surface glass settings-group">
             <div class="settings-group-head">

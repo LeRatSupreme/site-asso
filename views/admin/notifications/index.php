@@ -63,7 +63,7 @@ $dayLabels = [
             <form method="post" action="<?= e(url('/admin/notifications/' . $id . '/delete')) ?>"
                   data-confirm="Supprimer ce message programmé ?">
                 <?= csrf_field() ?>
-                <button type="submit" class="btn btn-danger btn-sm"></button>
+                <button type="submit" class="btn btn-danger btn-sm">Supprimer</button>
             </form>
         </div>
 

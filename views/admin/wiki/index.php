@@ -58,7 +58,6 @@ $wikiToc = [
 
 <!-- ===================== HERO ===================== -->
 <header class="wiki-hero">
-    <span class="wiki-hero-emoji"></span>
     <h1>Guide de l'administrateur</h1>
     <p>Tout ce qu'il faut savoir pour gérer le site AEIC au quotidien.</p>
     <p class="wiki-hero-role" style="opacity:.75;font-size:.95em">Guide adapté à ton rôle — seules les sections qui te concernent sont affichées.</p>
@@ -630,7 +629,6 @@ $wikiToc = [
     content: ''; position: absolute; inset: 0 0 auto 0; height: 3px;
     background: linear-gradient(90deg, transparent, var(--primary), transparent);
 }
-.wiki-hero-emoji { font-size: 2.4rem; display: block; }
 .wiki-hero h1 {
     font-size: 1.7rem; font-weight: 900; margin: 0.4rem 0 0.3rem;
     color: var(--primary); text-transform: none; letter-spacing: -0.02em;
