@@ -57,11 +57,11 @@ declare(strict_types=1);
                                 ? '<span class="badge badge-success">Oui</span>'
                                 : '<span class="badge badge-muted">Non</span>' ?></td>
                         <td class="row-actions">
-                            <a class="btn btn-outline btn-sm" href="<?= e(url('/admin/jeux/enigmes/' . (int) $en['id'])) ?>" title="Modifier"></a>
+                            <a class="btn btn-outline btn-sm" href="<?= e(url('/admin/jeux/enigmes/' . (int) $en['id'])) ?>" title="Modifier">Modifier</a>
                             <form method="post" action="<?= e(url('/admin/jeux/enigmes/' . (int) $en['id'] . '/delete')) ?>" class="inline-form"
                                   data-confirm="Supprimer cette énigme ?" data-preserve-scroll>
                                 <?= csrf_field() ?>
-                                <button type="submit" class="btn btn-danger btn-sm" title="Supprimer"></button>
+                                <button type="submit" class="btn btn-danger btn-sm" title="Supprimer">Supprimer</button>
                             </form>
                         </td>
                     </tr>
