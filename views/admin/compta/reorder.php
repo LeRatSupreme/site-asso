@@ -174,7 +174,7 @@ foreach ($rows as $r) {
 .reorder-table mark { background: rgba(72,189,211,0.32); color: inherit; border-radius: 3px; padding: 0 1px; }
 .reorder-reset {
     border: 1px solid var(--border-strong); background: var(--card); color: var(--muted);
-    border-radius: 8px; width: 32px; height: 36px; cursor: pointer; font-size: 0.9rem; line-height: 1;
+    border-radius: 8px; padding: 0.45rem 0.8rem; cursor: pointer; font-size: 0.9rem; line-height: 1;
     flex-shrink: 0;
 }
 .reorder-reset:hover { color: var(--foreground); border-color: var(--primary); }
@@ -204,7 +204,7 @@ foreach ($rows as $r) {
             <option value="stock-desc">Stock ↓</option>
             <option value="autonomy-asc">Autonomie ↑</option>
         </select>
-        <button type="button" id="reorder-reset" class="reorder-reset" hidden title="Réinitialiser les filtres"></button>
+        <button type="button" id="reorder-reset" class="reorder-reset" hidden title="Réinitialiser les filtres">Réinitialiser</button>
         <span class="costs-count muted" id="reorder-count"></span>
     </div>
 
