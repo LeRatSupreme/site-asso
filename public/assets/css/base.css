@@ -249,6 +249,8 @@ ul, ol { list-style: none; }
 
 .accent, .aeic-gradient-text { color: var(--primary); }
 
+.muted { color: var(--muted); }
+
 /* ----------------------------- Surfaces & effets ----------------------------- */
 .surface {
     background: rgba(255, 255, 255, 0.04);
@@ -374,6 +376,17 @@ ul, ol { list-style: none; }
 .btn-ghost:hover { background: rgba(255, 255, 255, 0.08); }
 
 .btn-destructive { background: var(--accent-danger); color: #fff; }
+
+.btn-danger {
+    background: rgba(212, 75, 75, 0.14);
+    border-color: rgba(212, 75, 75, 0.55);
+    color: #f87171;
+}
+.btn-danger:hover {
+    background: rgba(212, 75, 75, 0.28);
+    border-color: rgba(212, 75, 75, 0.85);
+    color: #fca5a5;
+}
 
 .btn-warning {
     background: #d97706;
@@ -1240,7 +1253,6 @@ ul, ol { list-style: none; }
     justify-content: center;
 }
 .confirm-buttons .btn { min-width: 120px; }
-}
 
 /* ----------------------------- Scrollbar ----------------------------- */
 ::-webkit-scrollbar { width: 8px; height: 8px; }

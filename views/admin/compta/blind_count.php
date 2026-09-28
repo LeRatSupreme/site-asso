@@ -17,9 +17,6 @@ declare(strict_types=1);
  * @var list<array{key:string}> $rows
  */
 ?>
-<style>
-    .icon-btn { padding: 0.2rem 0.45rem; font-size: 0.95rem; line-height: 1; }
-</style>
 <div class="compta-head">
     <div>
         <p class="eyebrow">Comptage</p>

@@ -105,7 +105,7 @@ declare(strict_types=1);
                             <strong><?= e($r['key']) ?></strong>
                             <button type="button" class="btn btn-ghost btn-sm merge-row-btn"
                                     data-key="<?= e($r['key']) ?>"
-                                    title="Fusionner ce produit avec un autre (doublon) : pré-remplit la clé source"></button>
+                                    title="Fusionner ce produit avec un autre (doublon) : pré-remplit la clé source">Fusionner</button>
                         </td>
                         <td>
                             <?php if ($r['counted_at'] !== null): ?>
@@ -139,7 +139,7 @@ declare(strict_types=1);
                         </td>
                         <td>
                             <button type="submit" class="btn btn-ghost btn-sm" form="<?= $disId ?>"
-                                    title="Plus en vente pour l'instant (ex. saisonnier : Redbull Summer hors été) : sort de cette grille, du comptage à l'aveugle et du réappro — rien n'est supprimé, rétablissement en bas de page"></button>
+                                    title="Plus en vente pour l'instant (ex. saisonnier : Redbull Summer hors été) : sort de cette grille, du comptage à l'aveugle et du réappro — rien n'est supprimé, rétablissement en bas de page">Mettre en pause</button>
                         </td>
                     </tr>
                 <?php endforeach; ?>

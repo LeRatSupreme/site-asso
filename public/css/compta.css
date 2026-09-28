@@ -792,26 +792,26 @@
 .alert-item.alert-danger {
     background: rgba(220, 38, 38, 0.08);
     border-color: rgba(220, 38, 38, 0.35);
-    color: #b91c1c;
+    color: #fca5a5;
 }
 .alert-item.alert-warning {
     background: rgba(217, 119, 6, 0.10);
     border-color: rgba(217, 119, 6, 0.35);
-    color: #92400e;
+    color: #fbbf24;
 }
 .alert-item.alert-ok {
     background: rgba(5, 150, 105, 0.08);
     border-color: rgba(5, 150, 105, 0.3);
-    color: #047857;
+    color: #34d399;
 }
 
 .alert-item a {
     font-weight: 700;
     white-space: nowrap;
 }
-.alert-item.alert-danger a { color: #b91c1c; }
-.alert-item.alert-warning a { color: #92400e; }
-.alert-item.alert-ok a { color: #047857; }
+.alert-item.alert-danger a { color: #f87171; }
+.alert-item.alert-warning a { color: #fcd34d; }
+.alert-item.alert-ok a { color: #6ee7b7; }
 
 /* ---- Pieds de formulaire : valider / annuler côte à côte ---- */
 .form-actions {
@@ -900,7 +900,7 @@ details.howto p {
     color: var(--muted, #6b7280);
 }
 .dropzone-filename {
-    color: #047857;
+    color: #34d399;
     word-break: break-all;
 }
 .import-steps {
