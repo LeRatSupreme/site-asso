@@ -30,7 +30,7 @@ final class Expense extends Model
      *
      * @param array<string,mixed> $data spent_at (« YYYY-MM-DD »), category,
      *                                  label, amount_ttc, amount_ht, vat,
-     *                                  supplier, notes, receipt_path
+     *                                  invoice_number, notes, receipt_path
      *                                  (chemin relatif sous /assets, ex.
      *                                  « uploads/receipts/xx.pdf »),
      *                                  created_by
@@ -59,7 +59,7 @@ final class Expense extends Model
         $rawVat = $data['vat'] ?? null;
         $vat = ($rawVat === null || $rawVat === '') ? null : (float) $rawVat;
 
-        $supplier = ($data['supplier'] ?? '') !== '' ? (string) $data['supplier'] : null;
+        $invoiceNumber = ($data['invoice_number'] ?? '') !== '' ? (string) $data['invoice_number'] : null;
         $notes = ($data['notes'] ?? '') !== '' ? (string) $data['notes'] : null;
         $receiptPath = ($data['receipt_path'] ?? '') !== '' ? (string) $data['receipt_path'] : null;
         $createdBy = ($data['created_by'] ?? '') !== '' ? (string) $data['created_by'] : null;
@@ -68,9 +68,9 @@ final class Expense extends Model
 
         self::pdo()->prepare(
             'INSERT INTO expenses
-                (id, spent_at, category, label, amount_ttc, amount_ht, vat, supplier, notes, receipt_path, created_by, created_at)
+                (id, spent_at, category, label, amount_ttc, amount_ht, vat, invoice_number, notes, receipt_path, created_by, created_at)
              VALUES (?,?,?,?,?,?,?,?,?,?,?,NOW())'
-        )->execute([$id, $spentAt, $category, $label, $amountTtc, $amountHt, $vat, $supplier, $notes, $receiptPath, $createdBy]);
+        )->execute([$id, $spentAt, $category, $label, $amountTtc, $amountHt, $vat, $invoiceNumber, $notes, $receiptPath, $createdBy]);
 
         return $id;
     }
