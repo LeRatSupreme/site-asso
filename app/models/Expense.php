@@ -30,7 +30,10 @@ final class Expense extends Model
      *
      * @param array<string,mixed> $data spent_at (« YYYY-MM-DD »), category,
      *                                  label, amount_ttc, amount_ht, vat,
-     *                                  supplier, notes, created_by
+     *                                  supplier, notes, receipt_path
+     *                                  (chemin relatif sous /assets, ex.
+     *                                  « uploads/receipts/xx.pdf »),
+     *                                  created_by
      *
      * @return string Identifiant créé ('' si données invalides).
      */
@@ -58,15 +61,16 @@ final class Expense extends Model
 
         $supplier = ($data['supplier'] ?? '') !== '' ? (string) $data['supplier'] : null;
         $notes = ($data['notes'] ?? '') !== '' ? (string) $data['notes'] : null;
+        $receiptPath = ($data['receipt_path'] ?? '') !== '' ? (string) $data['receipt_path'] : null;
         $createdBy = ($data['created_by'] ?? '') !== '' ? (string) $data['created_by'] : null;
 
         $id = 'expense_' . bin2hex(random_bytes(10));
 
         self::pdo()->prepare(
             'INSERT INTO expenses
-                (id, spent_at, category, label, amount_ttc, amount_ht, vat, supplier, notes, created_by, created_at)
-             VALUES (?,?,?,?,?,?,?,?,?,?,NOW())'
-        )->execute([$id, $spentAt, $category, $label, $amountTtc, $amountHt, $vat, $supplier, $notes, $createdBy]);
+                (id, spent_at, category, label, amount_ttc, amount_ht, vat, supplier, notes, receipt_path, created_by, created_at)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,NOW())'
+        )->execute([$id, $spentAt, $category, $label, $amountTtc, $amountHt, $vat, $supplier, $notes, $receiptPath, $createdBy]);
 
         return $id;
     }

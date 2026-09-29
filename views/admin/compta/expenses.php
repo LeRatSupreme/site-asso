@@ -62,7 +62,7 @@ foreach ($byCategory as $c) {
 <div class="compta-grid">
     <section class="card surface glass">
         <h2 class="card-title">Ajouter une dépense</h2>
-        <form method="post" action="<?= e(url('/admin/compta/depenses/save')) ?>">
+        <form method="post" action="<?= e(url('/admin/compta/depenses/save')) ?>" enctype="multipart/form-data">
             <?= csrf_field() ?>
 
             <div class="field-row">
@@ -112,6 +112,11 @@ foreach ($byCategory as $c) {
                     <input type="text" id="supplier" name="supplier" placeholder="ex: Metro…">
                 </div>
             </details>
+
+            <div class="field">
+                <label for="receipt">Justificatif (ticket de caisse) <span class="muted">(optionnel — PDF, JPG, PNG ou WEBP · 5 Mo max)</span></label>
+                <input type="file" id="receipt" name="receipt" accept=".pdf,.jpg,.jpeg,.png,.webp">
+            </div>
 
             <div class="form-actions">
                 <button type="submit" class="btn btn-primary">Enregistrer</button>
@@ -177,6 +182,7 @@ foreach ($byCategory as $c) {
                 <th class="th-num">TTC</th>
                 <th class="th-num">HT</th>
                 <th>Fournisseur</th>
+                <th>Justif.</th>
                 <th>Actions</th>
             </tr>
         </thead>
@@ -197,6 +203,13 @@ foreach ($byCategory as $c) {
                     <td class="num"><strong><?= e(formatPrice($x['amount_ttc'] ?? 0)) ?></strong></td>
                     <td class="num muted"><?= ($x['amount_ht'] ?? null) !== null ? e(formatPrice($x['amount_ht'])) : '—' ?></td>
                     <td><?= (string) ($x['supplier'] ?? '') !== '' ? e((string) $x['supplier']) : '—' ?></td>
+                    <td>
+                        <?php if (!empty($x['receipt_path'])): ?>
+                            <a class="btn btn-ghost btn-sm" href="<?= e(asset((string) $x['receipt_path'])) ?>" target="_blank" rel="noopener" title="Ouvrir le justificatif">Voir</a>
+                        <?php else: ?>
+                            <span class="muted">—</span>
+                        <?php endif; ?>
+                    </td>
                     <td class="row-actions">
                         <form method="post" action="<?= e(url('/admin/compta/depenses/' . rawurlencode((string) ($x['id'] ?? '')) . '/delete')) ?>" data-confirm="Supprimer cette dépense ?" data-preserve-scroll>
                             <?= csrf_field() ?>
@@ -206,7 +219,7 @@ foreach ($byCategory as $c) {
                 </tr>
             <?php endforeach; ?>
             <?php if ($expenses === []): ?>
-                <tr><td colspan="7" class="muted">Aucune dépense sur cette période.</td></tr>
+                <tr><td colspan="8" class="muted">Aucune dépense sur cette période.</td></tr>
             <?php endif; ?>
         </tbody>
     </table>

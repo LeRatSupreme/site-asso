@@ -39,6 +39,75 @@ final class AdminExpenseController extends AdminBaseController
     //  Ajout / suppression
     // -----------------------------------------------------------------
 
+    // Justificatifs : PDF ou image, 5 Mo max, MIME réel vérifié (comme les
+    // médias). Stockés sous /assets/uploads/receipts/ avec un nom aléatoire.
+    private const RECEIPT_MAX_SIZE = 5 * 1024 * 1024;
+    private const RECEIPT_ALLOWED = [
+        'pdf'  => 'application/pdf',
+        'jpg'  => 'image/jpeg',
+        'jpeg' => 'image/jpeg',
+        'png'  => 'image/png',
+        'webp' => 'image/webp',
+    ];
+
+    /**
+     * Valide et déplace le justificatif envoyé avec la dépense.
+     * Renvoie le chemin relatif (« uploads/receipts/xx.ext ») ou null si
+     * aucun fichier ; arrête la requête (flash + redirect) en cas d'erreur.
+     */
+    private function storeReceipt(): ?string
+    {
+        $receipt = $_FILES['receipt'] ?? null;
+        if (!is_array($receipt) || (int) ($receipt['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+            return null;
+        }
+
+        if ((int) ($receipt['error'] ?? 1) !== UPLOAD_ERR_OK) {
+            $this->setFlash('error', 'Échec de l\'envoi du justificatif (erreur ' . (int) ($receipt['error'] ?? 0) . ').');
+            redirect(url('/admin/compta/depenses'));
+        }
+
+        if ((int) ($receipt['size'] ?? 0) > self::RECEIPT_MAX_SIZE) {
+            $this->setFlash('error', 'Justificatif trop volumineux (5 Mo maximum).');
+            redirect(url('/admin/compta/depenses'));
+        }
+
+        $ext = strtolower(pathinfo((string) ($receipt['name'] ?? ''), PATHINFO_EXTENSION));
+        if (!isset(self::RECEIPT_ALLOWED[$ext])) {
+            $this->setFlash('error', 'Justificatif : formats acceptés PDF, JPG, PNG ou WEBP.');
+            redirect(url('/admin/compta/depenses'));
+        }
+
+        // Validation MIME réelle : l'extension déclarée n'est jamais une preuve.
+        $detected = null;
+        if (function_exists('mime_content_type')) {
+            $detected = mime_content_type((string) $receipt['tmp_name']);
+        } elseif (function_exists('finfo_open')) {
+            $finfo = finfo_open(FILEINFO_MIME_TYPE);
+            if ($finfo !== false) {
+                $detected = finfo_file($finfo, (string) $receipt['tmp_name']);
+                finfo_close($finfo);
+            }
+        }
+        if ($detected !== self::RECEIPT_ALLOWED[$ext]) {
+            $this->setFlash('error', 'Le contenu du justificatif ne correspond pas à son extension.');
+            redirect(url('/admin/compta/depenses'));
+        }
+
+        $dir = AEIC_PUBLIC . '/assets/uploads/receipts';
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0775, true);
+        }
+
+        $name = bin2hex(random_bytes(12)) . '.' . $ext;
+        if (!move_uploaded_file((string) $receipt['tmp_name'], $dir . '/' . $name)) {
+            $this->setFlash('error', 'Échec de l\'enregistrement du justificatif.');
+            redirect(url('/admin/compta/depenses'));
+        }
+
+        return 'uploads/receipts/' . $name;
+    }
+
     public function save(): void
     {
         $user = $this->guardCompta();
@@ -51,6 +120,8 @@ final class AdminExpenseController extends AdminBaseController
             $this->setFlash('error', 'Libellé et montant HT (> 0) requis.');
             redirect(url('/admin/compta/depenses'));
         }
+
+        $receiptPath = $this->storeReceipt();
 
         $category = strtoupper(trim((string) ($_POST['category'] ?? '')));
         if (!in_array($category, Expense::CATEGORIES, true)) {
@@ -81,6 +152,7 @@ final class AdminExpenseController extends AdminBaseController
             'vat'        => $vat,
             'supplier'   => (string) ($_POST['supplier'] ?? ''),
             'notes'      => (string) ($_POST['notes'] ?? ''),
+            'receipt_path' => $receiptPath,
             'created_by' => (string) ($user['id'] ?? ''),
         ]);
 
@@ -94,6 +166,7 @@ final class AdminExpenseController extends AdminBaseController
             'category'   => $category,
             'amount_ht'  => $amountHt,
             'amount_ttc' => $amountTtc,
+            'receipt'    => $receiptPath,
         ]);
         $this->setFlash('success', 'Dépense enregistrée.');
         redirect(url('/admin/compta/depenses'));
@@ -102,6 +175,17 @@ final class AdminExpenseController extends AdminBaseController
     public function delete(string $id): void
     {
         $this->guardCompta();
+
+        // Supprime aussi le justificatif associé (chemin contenu dans le
+        // dossier receipts uniquement, jamais un chemin arbitraire).
+        $expense = Expense::find($id);
+        if ($expense !== null && !empty($expense['receipt_path'])) {
+            $file = realpath(AEIC_PUBLIC . '/assets/' . ltrim((string) $expense['receipt_path'], '/'));
+            $base = realpath(AEIC_PUBLIC . '/assets/uploads/receipts');
+            if ($file !== false && $base !== false && str_starts_with($file, $base)) {
+                @unlink($file);
+            }
+        }
 
         Expense::delete($id);
         $this->audit('compta.expense.delete', 'expense', $id);
