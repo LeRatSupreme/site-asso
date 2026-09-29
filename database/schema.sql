@@ -399,6 +399,7 @@ CREATE TABLE IF NOT EXISTS expenses (
     vat         DECIMAL(10,2) NULL,
     supplier    VARCHAR(255) NULL,
     notes       TEXT NULL,
+    receipt_path VARCHAR(255) NULL,
     created_by  VARCHAR(255) NULL,
     created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     KEY idx_expenses_date (spent_at),
