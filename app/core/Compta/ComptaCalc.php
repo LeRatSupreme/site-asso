@@ -257,6 +257,35 @@ final class ComptaCalc
     }
 
     /**
+     * Nombre de jours CALENDaires entre deux dates, bornes incluses
+     * (week-end compris). Sert au réappro : la consommation est ramenée
+     * à un rythme 7 j/7 pour que l'autonomie compte le week-end.
+     *
+     * @param string $fromDay « YYYY-MM-DD » (inclus).
+     * @param string $toDay   « YYYY-MM-DD » (inclus).
+     */
+    public static function calendarDaysBetween(string $fromDay, string $toDay): int
+    {
+        try {
+            $cur = new \DateTimeImmutable($fromDay);
+            $end = new \DateTimeImmutable($toDay);
+        } catch (\Exception) {
+            return 0;
+        }
+
+        if ($cur > $end) {
+            return 0;
+        }
+
+        // Garde-fou : plage absurde (> ~10 ans) plafonnée.
+        if ($end->getTimestamp() - $cur->getTimestamp() > 3660 * 86400) {
+            $end = $cur->modify('+3660 days');
+        }
+
+        return (int) $cur->diff($end)->days + 1;
+    }
+
+    /**
      * Nombre de jours d'ouverture (lundi→vendredi) entre deux dates, bornes
      * incluses. Sert à rapporter une consommation à des journées réelles
      * d'activité de la cafétéria.

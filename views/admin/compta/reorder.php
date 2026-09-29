@@ -21,6 +21,7 @@ declare(strict_types=1);
  * @var int                                          $refOpenDays
  * @var string                                       $du
  * @var string                                       $au
+ * @var int                                          $refCalDays
  */
 
 function reorder_qty(float $v): string {
@@ -107,7 +108,7 @@ foreach ($rows as $r) {
     <div class="card surface glass kpi">
         <p class="kpi-label">Alertes stock</p>
         <p class="kpi-value <?= $alerts > 0 ? 'is-negative' : 'is-positive' ?>"><?= (int) $alerts ?></p>
-        <p class="kpi-sub">autonomie &lt; 7 jours d'ouverture</p>
+        <p class="kpi-sub">autonomie &lt; 7 jours (7j/7, week-end inclus)</p>
     </div>
 </div>
 
@@ -152,9 +153,9 @@ foreach ($rows as $r) {
 
     <button type="submit" class="btn btn-primary btn-sm">Appliquer</button>
 
-    <span class="reappro-meta" title="Période analysée : bornes et jours d'ouverture (lundi-vendredi) réels">
+    <span class="reappro-meta" title="Période analysée : bornes et nombre de jours calendaires (week-end inclus)">
         <?= e(reorder_date_fr($refFrom)) ?> → <?= e(reorder_date_fr($refTo)) ?>
-        · <?= (int) $refOpenDays ?> j d'ouverture (sam.-dim. fermés)
+        · <?= (int) $refCalDays ?> j analysés (week-end inclus)
     </span>
 </form>
 
@@ -215,10 +216,10 @@ foreach ($rows as $r) {
                 <th>Catégorie</th>
                 <th class="th-num" title="Quantité totale vendue sur la période analysée">Vendus<br>(période)</th>
                 <th class="th-num" title="Stock théorique de l'inventaire : dernier comptage + achats − ventes − pertes">Stock théorique</th>
-                <th class="th-num" title="Conso moyenne par jour d'ouverture (lun-ven)">Conso / jour<br><small>(ouv.)</small></th>
-                <th class="th-num" title="Conso / jour × 5">Conso /<br>semaine</th>
-                <th class="th-num" title="Conso / jour × 21,77 (jours ouvrés moyens)">Conso /<br>mois</th>
-                <th class="th-num" title="Jours d'ouverture avant rupture (stock ÷ conso / jour)">Autonomie</th>
+                <th class="th-num" title="Conso moyenne par jour (7 j/7, week-end inclus)">Conso / jour<br><small>(7j/7)</small></th>
+                <th class="th-num" title="Conso / jour × 7 (semaine calendaire)">Conso /<br>semaine</th>
+                <th class="th-num" title="Conso / jour × 30,44 (mois calendaire moyen)">Conso /<br>mois</th>
+                <th class="th-num" title="Jours avant rupture, week-end inclus (stock ÷ conso / jour)">Autonomie</th>
                 <th class="th-num" title="Besoin estimé pour couvrir l'horizon choisi">Besoin<br>(<?= e($periods[$currentPeriod]['label']) ?>)</th>
                 <th class="th-num" title="Besoin − stock théorique (minimum 0)">À commander</th>
                 <th class="th-num" title="À commander × coût de revient du lot en cours">Coût ligne</th>
@@ -270,7 +271,7 @@ foreach ($rows as $r) {
                             <span class="auto-pill auto-none" title="Aucune vente sur la période">∞</span>
                         <?php else: ?>
                             <span class="auto-pill <?= reorder_autonomy_class($autonomy, true) ?>"
-                                  title="<?= $autonomy ?> jour(s) d'ouverture avant rupture">
+                                  title="<?= $autonomy ?> jour(s) avant rupture (week-end inclus)">
                                 <?= $autonomy ?> j
                             </span>
                         <?php endif; ?>
@@ -329,8 +330,9 @@ foreach ($rows as $r) {
 </div>
 
 <p class="card-meta">
-    Cafétéria ouverte du lundi au vendredi : les moyennes sont ramenées aux <strong>jours d'ouverture réels</strong> de la période analysée.
-    Conso / jour = vendus ÷ jours d'ouverture · Conso / semaine = conso / jour × 5 · Conso / mois = conso / jour × 21,77.
+    Moyennes calculées sur les <strong>jours calendaires</strong> de la période analysée : le <strong>week-end est inclus</strong> (7 j/7), comme les ventes qu'il génère.
+    Conso / jour = vendus ÷ jours analysés · Conso / semaine = conso / jour × 7 · Conso / mois = conso / jour × 30,44.
+    L'<strong>autonomie</strong> est le nombre de jours avant rupture, week-end compris.
     « À commander » = besoin sur l'horizon de couverture − <strong>stock théorique</strong> (minimum 0 ; un stock négatif majore la commande).
     Stock théorique = dernier comptage + achats − ventes − pertes (mis à jour par <strong>Inventaire</strong>, <strong>Achats</strong> et <strong>Pertes</strong>).
     « Coût ligne » = à commander × coût de revient du lot en cours · le total ≈ prix d'achat du panier (produits sans coût saisi exclus, comptés sous le total).

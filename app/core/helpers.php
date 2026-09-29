@@ -118,6 +118,23 @@ function formatPrice(float|int|string|null $n, int $decimals = 2): string
 }
 
 /**
+ * Formate un taux de TVA « à la française » : 20 → « 20 % »,
+ * 5.5 → « 5,5 % », 2.1 → « 2,1 % » (virgule, sans décimale inutile).
+ *
+ * @param float|int|string|null $n
+ */
+function formatFrenchPercent(float|int|string|null $n): string
+{
+    $value = (float) ($n ?? 0);
+    $formatted = rtrim(rtrim(number_format($value, 1, ',', ' '), '0'), ',');
+    if ($formatted === '' || $formatted === '-') {
+        $formatted = '0';
+    }
+
+    return $formatted . ' %';
+}
+
+/**
  * Parse un nombre "à la française" (virgule décimale) en float.
  *
  * Gère "1,75", "1.75", "1 234,5", "0,99".
