@@ -89,6 +89,9 @@ function aeic_register_routes(Router $router): void
 
     // SEO.
     $router->get('/sitemap.xml', [SeoController::class, 'sitemap']);
+    // Alias de débogage Search Console : même contenu, URL différente pour
+    // forcer une relecture saine de GSC (robots.txt déclare /sitemaps.xml).
+    $router->get('/sitemaps.xml', [SeoController::class, 'sitemap']);
     $router->get('/search', [SeoController::class, 'search']);
 
     // Graphique image du jour pour les SMS (protégé par jeton secret).
