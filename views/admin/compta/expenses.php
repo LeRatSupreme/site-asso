@@ -87,8 +87,16 @@ foreach ($byCategory as $c) {
 
             <div class="field-row">
                 <div class="field">
-                    <label for="amount_ht">Montant HT (€)</label>
-                    <input type="text" id="amount_ht" name="amount_ht" inputmode="decimal" placeholder="ex: 21,58" required>
+                    <label for="amount_ht">Montant HT (€) <span class="muted">(ou laisse vide)</span></label>
+                    <input type="text" id="amount_ht" name="amount_ht" inputmode="decimal" placeholder="ex: 21,58">
+                </div>
+                <div class="field">
+                    <label for="amount_ttc">Montant TTC (€) <span class="muted">(ou laisse vide)</span></label>
+                    <input type="text" id="amount_ttc" name="amount_ttc" inputmode="decimal" placeholder="ex: 25,90">
+                </div>
+                <div class="field">
+                    <label for="vat_amount">TVA (€) <span class="muted">(optionnel)</span></label>
+                    <input type="text" id="vat_amount" name="vat_amount" inputmode="decimal" placeholder="ex: 4,32">
                 </div>
                 <div class="field">
                     <label for="vat_rate">Taux de TVA</label>
@@ -103,7 +111,10 @@ foreach ($byCategory as $c) {
                 </div>
             </div>
 
-            <p class="field-meta">Montant TTC calculé : <strong id="ttc-preview">0,00 €</strong> <span class="muted">(la TVA est ajoutée au montant HT)</span></p>
+            <p class="field-meta">
+                Saisis ce que ton ticket indique : <strong>HT</strong> ou <strong>TTC</strong> (l'app déduit l'autre).
+                Le montant de TVA saisi prime sur le taux. TTC calculé : <strong id="ttc-preview">0,00 €</strong>
+            </p>
 
             <details style="margin:12px 0;">
                 <summary>Détails (facture)</summary>
@@ -127,20 +138,47 @@ foreach ($byCategory as $c) {
         <script>
         (function () {
             var ht = document.getElementById('amount_ht');
+            var ttc = document.getElementById('amount_ttc');
+            var vat = document.getElementById('vat_amount');
             var rate = document.getElementById('vat_rate');
             var preview = document.getElementById('ttc-preview');
-            if (!ht || !rate || !preview) return;
+            if (!ht || !ttc || !vat || !rate || !preview) return;
             function fr(n) { return n.toFixed(2).replace('.', ',') + ' €'; }
-            function update() {
-                var h = parseFloat(String(ht.value).replace(',', '.'));
-                if (!isFinite(h) || h < 0) h = 0;
-                var r = parseFloat(rate.value);
-                var ttc = h + (isFinite(r) ? h * r / 100 : 0);
-                preview.textContent = fr(ttc);
+            function num(el) {
+                var v = parseFloat(String(el.value).replace(',', '.'));
+                return isFinite(v) && v >= 0 ? v : null;
             }
-            ht.addEventListener('input', update);
-            rate.addEventListener('change', update);
-            update();
+            // Chaque saisie recalcule les autres champs à partir du taux
+            // (ou du montant de TVA saisi, prioritaire).
+            function recalc(source) {
+                var h = num(ht), t = num(ttc), v = num(vat);
+                var r = parseFloat(rate.value);
+                var hasRate = isFinite(r);
+
+                if (source === 'ttc') {
+                    if (t === null) { preview.textContent = fr(h ?? 0); return; }
+                    if (v !== null && v > 0) { ht.value = Math.max(0, t - v).toFixed(2).replace('.', ','); }
+                    else if (hasRate && r > 0) {
+                        var hh = t / (1 + r / 100);
+                        ht.value = hh.toFixed(2).replace('.', ',');
+                        vat.value = (t - hh).toFixed(2).replace('.', ',');
+                    } else if (h === null) { ht.value = t.toFixed(2).replace('.', ','); }
+                } else if (source === 'vat') {
+                    if (h !== null) { ttc.value = (h + (v ?? 0)).toFixed(2).replace('.', ','); }
+                } else { // source === 'ht'
+                    var vatUsed = (v !== null && v > 0) ? v : (hasRate ? h * r / 100 : 0);
+                    if (isFinite(vatUsed) && (ttc.value === '' || num(ttc) === null)) {
+                        ttc.value = (h + vatUsed).toFixed(2).replace('.', ',');
+                    }
+                }
+                var tf = num(ttc);
+                preview.textContent = fr(tf ?? h ?? 0);
+            }
+            ht.addEventListener('input', function () { recalc('ht'); });
+            ttc.addEventListener('input', function () { recalc('ttc'); });
+            vat.addEventListener('input', function () { recalc('vat'); });
+            rate.addEventListener('change', function () { recalc('ht'); });
+            recalc('ht');
         })();
         </script>
     </section>
