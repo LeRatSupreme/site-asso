@@ -397,7 +397,7 @@ CREATE TABLE IF NOT EXISTS expenses (
     amount_ttc  DECIMAL(10,2) NOT NULL,
     amount_ht   DECIMAL(10,2) NULL,
     vat         DECIMAL(10,2) NULL,
-    supplier    VARCHAR(255) NULL,
+    invoice_number VARCHAR(255) NULL,
     notes       TEXT NULL,
     receipt_path VARCHAR(255) NULL,
     created_by  VARCHAR(255) NULL,

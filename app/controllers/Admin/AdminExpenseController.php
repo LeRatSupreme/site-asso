@@ -150,7 +150,7 @@ final class AdminExpenseController extends AdminBaseController
             'amount_ttc' => $amountTtc,
             'amount_ht'  => $amountHt,
             'vat'        => $vat,
-            'supplier'   => (string) ($_POST['supplier'] ?? ''),
+            'invoice_number' => (string) ($_POST['invoice_number'] ?? ''),
             'notes'      => (string) ($_POST['notes'] ?? ''),
             'receipt_path' => $receiptPath,
             'created_by' => (string) ($user['id'] ?? ''),

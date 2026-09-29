@@ -106,10 +106,10 @@ foreach ($byCategory as $c) {
             <p class="field-meta">Montant TTC calculé : <strong id="ttc-preview">0,00 €</strong> <span class="muted">(la TVA est ajoutée au montant HT)</span></p>
 
             <details style="margin:12px 0;">
-                <summary>Détails (fournisseur)</summary>
+                <summary>Détails (facture)</summary>
                 <div class="field">
-                    <label for="supplier">Fournisseur <span class="muted">(optionnel)</span></label>
-                    <input type="text" id="supplier" name="supplier" placeholder="ex: Metro…">
+                    <label for="invoice_number">Numéro de facture <span class="muted">(optionnel)</span></label>
+                    <input type="text" id="invoice_number" name="invoice_number" placeholder="ex: FAC-2026-001">
                 </div>
             </details>
 
@@ -181,7 +181,7 @@ foreach ($byCategory as $c) {
                 <th>Libellé</th>
                 <th class="th-num">TTC</th>
                 <th class="th-num">HT</th>
-                <th>Fournisseur</th>
+                <th>Facture n°</th>
                 <th>Justif.</th>
                 <th>Actions</th>
             </tr>
@@ -202,7 +202,7 @@ foreach ($byCategory as $c) {
                     <td><strong><?= e((string) ($x['label'] ?? '')) ?></strong></td>
                     <td class="num"><strong><?= e(formatPrice($x['amount_ttc'] ?? 0)) ?></strong></td>
                     <td class="num muted"><?= ($x['amount_ht'] ?? null) !== null ? e(formatPrice($x['amount_ht'])) : '—' ?></td>
-                    <td><?= (string) ($x['supplier'] ?? '') !== '' ? e((string) $x['supplier']) : '—' ?></td>
+                    <td><?= (string) ($x['invoice_number'] ?? '') !== '' ? e((string) $x['invoice_number']) : '—' ?></td>
                     <td>
                         <?php if (!empty($x['receipt_path'])): ?>
                             <a class="btn btn-ghost btn-sm" href="<?= e(asset((string) $x['receipt_path'])) ?>" target="_blank" rel="noopener" title="Ouvrir le justificatif">Voir</a>
