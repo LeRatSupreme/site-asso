@@ -22,7 +22,11 @@ final class SeoController extends Controller
     public function sitemap(): void
     {
         header('Content-Type: application/xml; charset=utf-8');
-        header('X-Robots-Tag: noindex');
+        // PAS de X-Robots-Tag: noindex ici : un sitemap ne doit jamais être
+        // noindexé, Google Search Console refuse alors de le lire.
+        // Cache-Control public remplace le « no-store » posé par la session :
+        // Google peut relire le sitemap sans avoir à le régénérer à chaque fois.
+        header('Cache-Control: public, max-age=3600');
 
         echo self::buildSitemap();
     }
