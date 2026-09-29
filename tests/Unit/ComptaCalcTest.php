@@ -221,4 +221,20 @@ final class ComptaCalcTest extends TestCase
         // Septembre 2026 : 30 jours dont 22 ouvrés (lun-ven).
         self::assertSame(22, ComptaCalc::openDaysBetween('2026-09-01', '2026-09-30'));
     }
+
+    public function test_calendar_days_between_inclut_le_week_end(): void
+    {
+        // Lundi 7 → dimanche 13 septembre 2026 : 7 jours calendaires
+        // (le week-end compte, contrairement à openDaysBetween).
+        self::assertSame(7, ComptaCalc::calendarDaysBetween('2026-09-07', '2026-09-13'));
+        // Samedi → dimanche : 2 jours.
+        self::assertSame(2, ComptaCalc::calendarDaysBetween('2026-09-12', '2026-09-13'));
+        // Bornes incluses : un même jour compte pour 1.
+        self::assertSame(1, ComptaCalc::calendarDaysBetween('2026-09-14', '2026-09-14'));
+        // Mois complet : 30 jours.
+        self::assertSame(30, ComptaCalc::calendarDaysBetween('2026-09-01', '2026-09-30'));
+        // Plage inversée ou invalide : 0.
+        self::assertSame(0, ComptaCalc::calendarDaysBetween('2026-09-13', '2026-09-07'));
+        self::assertSame(0, ComptaCalc::calendarDaysBetween('pas-une-date', '2026-09-07'));
+    }
 }

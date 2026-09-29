@@ -915,6 +915,53 @@ details.howto p {
     color: var(--primary, #4f46e5);
 }
 
+/* ---- Onglets compta (Achats & stock, Dépenses) ---- */
+.compta-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-bottom: 1.5rem;
+    padding: 4px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+}
+.compta-tab {
+    appearance: none;
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--muted);
+    font-family: inherit;
+    font-size: 0.88rem;
+    font-weight: 800;
+    padding: 0.55rem 1.05rem;
+    border-radius: 10px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+.compta-tab:hover { color: var(--foreground); }
+.compta-tab:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.compta-tab.is-active {
+    background: var(--primary);
+    color: var(--primary-foreground, #fff);
+    box-shadow: 0 4px 14px rgba(72, 189, 211, 0.25);
+}
+.compta-tabpane[hidden] { display: none; }
+
+/* Lien interne déguisé en texte (bascule d'onglet depuis un KPI) */
+.linklike {
+    appearance: none;
+    background: none;
+    border: none;
+    padding: 0;
+    font: inherit;
+    color: var(--primary);
+    font-weight: 700;
+    cursor: pointer;
+}
+.linklike:hover { text-decoration: underline; }
+
 /* ---- Barre « 📅 Période » partagée (pastilles) ---- */
 .period-bar {
     display: flex;

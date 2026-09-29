@@ -42,15 +42,9 @@ final class AdminStockController extends AdminBaseController
         $period = ComptaCalc::resolvePeriod($_GET['period'] ?? null, $_GET['from'] ?? null, $_GET['to'] ?? null);
         $rows = Purchase::between($period['from'], $period['to'], 200);
 
-        // Quantité totale reçue sur la période (KPI + pied du journal).
-        // Les lignes « hors stock » n'entrent pas en stock : exclues du KPI.
-        $qtyTotal = 0;
-        foreach ($rows as $r) {
-            if (!empty($r['no_stock'])) {
-                continue;
-            }
-            $qtyTotal += (int) $r['quantity'];
-        }
+        // Statistiques complètes de la période (toutes les lignes, pas
+        // seulement les 200 affichées) : total, lignes, quantité, HT/TVA/TTC.
+        $stats = Purchase::statsBetween($period['from'], $period['to']);
 
         $this->renderAdmin('admin/compta/purchases', [
             'title'         => 'Achats & stock',
@@ -59,10 +53,8 @@ final class AdminStockController extends AdminBaseController
             'products'      => Sale::distinctProducts(),
             'period'        => $period,
             'periodOptions' => ComptaCalc::PERIOD_OPTIONS,
-            'total'         => Purchase::totalBetween($period['from'], $period['to']),
-            'sums'          => Purchase::sumsBetween($period['from'], $period['to']),
-            'count'         => count($rows),
-            'qtyTotal'      => $qtyTotal,
+            'stats'         => $stats,
+            'vatRows'       => Purchase::vatByRateBetween($period['from'], $period['to']),
             'allKeys'       => ProductKeyMerge::allKeys(),
         ]);
     }
@@ -91,6 +83,10 @@ final class AdminStockController extends AdminBaseController
 
         // '' = montants saisis déjà TTC (pas de TVA à calculer), sinon taux en %.
         $vatRaw = trim((string) ($_POST['vat_rate'] ?? ''));
+
+        // Base des montants saisis : « ht » (TVA à ajouter, défaut) ou
+        // « ttc » (TVA déjà incluse — HT déduit du taux choisi).
+        $basis = (string) ($_POST['amount_basis'] ?? 'ht') === 'ttc' ? 'ttc' : 'ht';
 
         $keys = is_array($_POST['product_key'] ?? null) ? $_POST['product_key'] : [];
 
@@ -126,6 +122,7 @@ final class AdminStockController extends AdminBaseController
                 'quantity'     => (string) ($quantities[$i] ?? ''),
                 'total_amount' => $amountRaw,
                 'vat_rate'     => $vatRaw,
+                'amount_basis' => $basis,
                 'update_cost'  => $updateCost ? '1' : '',
                 'no_stock'     => $noStock,
                 'supplier'     => $supplier,
@@ -154,13 +151,14 @@ final class AdminStockController extends AdminBaseController
         // Audit agrégé unique : un seul evénement pour toute la grille
         // (les ids des achats/ lots restent consultables dans le journal).
         $this->audit('compta.purchase.create_bulk', 'purchase', null, [
-            'inserted'    => $inserted,
-            'products'    => count($products),
-            'ignored'     => count($errors),
-            'vat_rate'    => $vatRaw === '' ? null : parseFrenchFloat($vatRaw),
-            'update_cost' => $updateCost,
-            'no_stock'    => $noStockInserted,
-            'supplier'    => $supplier,
+            'inserted'     => $inserted,
+            'products'     => count($products),
+            'ignored'      => count($errors),
+            'vat_rate'     => $vatRaw === '' ? null : parseFrenchFloat($vatRaw),
+            'amount_basis' => $basis,
+            'update_cost'  => $updateCost,
+            'no_stock'     => $noStockInserted,
+            'supplier'     => $supplier,
             'purchased_at' => $purchasedAt,
         ]);
 
@@ -205,14 +203,20 @@ final class AdminStockController extends AdminBaseController
      * Crée UN achat (et son lot de coût optionnel) à partir d'un jeu de
      * champs — cœur partagé de la saisie en lot.
      *
-     * Sémantique du montant : la saisie fait foi. HT si un taux de TVA
-     * est fourni, déjà TTC sinon (vat_rate null — comportement historique).
+     * Sémantique du montant : la saisie fait foi, dans la base choisie.
+     * « amount_basis » = « ht » (défaut) : le montant est HT, le TTC est
+     * calculé avec le taux ; « ttc » : le montant est déjà TTC (ticket de
+     * caisse), le HT est déduit du taux (TTC / (1 + taux/100)) et la TVA
+     * apparaît décomposée. Sans taux (''), le montant est pris tel quel
+     * (HT = TTC — comportement historique).
      *
      * @param array<string,mixed> $data purchased_at, product_key,
      *                                  quantity, total_amount, vat_rate
-     *                                  ('' = déjà TTC), update_cost,
-     *                                  supplier, notes, no_stock (case
-     *                                  « hors stock » : compta sans stock)
+     *                                  ('' = sans décomposition TVA),
+     *                                  amount_basis ('ht'|'ttc'),
+     *                                  update_cost, supplier, notes,
+     *                                  no_stock (case « hors stock » :
+     *                                  compta sans stock)
      * @param array<string,mixed> $user Utilisateur courant (created_by).
      *
      * @return string '' si l'achat est créé, sinon le motif d'erreur
@@ -228,16 +232,19 @@ final class AdminStockController extends AdminBaseController
         $quantity = (int) ($data['quantity'] ?? 0);
         $totalAmount = parseFrenchFloat((string) ($data['total_amount'] ?? ''));
 
-        // '' = montant saisi déjà TTC (pas de TVA à calculer), sinon taux en %.
+        // '' = montant saisi sans TVA (HT = TTC), sinon taux en %.
         $vatRaw = trim((string) ($data['vat_rate'] ?? ''));
         $vatRate = null;
         if ($vatRaw !== '') {
             $candidate = parseFrenchFloat($vatRaw);
             if (!in_array($candidate, self::VAT_RATES, true)) {
-                return 'Taux de TVA invalide.';
+                return 'Taux de TVA invalide (taux français : 20, 10, 5,5, 2,1 ou 0).';
             }
             $vatRate = $candidate;
         }
+
+        // Base du montant saisi : HT (TVA à ajouter) ou TTC (TVA incluse).
+        $isTtcBasis = ($data['amount_basis'] ?? 'ht') === 'ttc';
 
         if ($productKey === '') {
             return 'produit manquant';
@@ -249,10 +256,21 @@ final class AdminStockController extends AdminBaseController
             return 'montant invalide';
         }
 
-        // Le montant saisi fait foi : HT si un taux est choisi, déjà TTC sinon.
-        $totalHt = round($totalAmount, 3);
-        // Coût unitaire dérivé (même calcul que Purchase::create) : sert au
-        // lot de coût de revient et à l'audit.
+        // Le montant saisi fait foi, dans sa base ; l'autre côté est déduit.
+        $total = round($totalAmount, 3);
+        if ($vatRate === null) {
+            $totalHt = $total;
+            $totalTtc = $total;
+        } elseif ($isTtcBasis) {
+            $totalTtc = $total;
+            $totalHt = round($total / (1 + $vatRate / 100), 3);
+        } else {
+            $totalHt = $total;
+            $totalTtc = round($total * (1 + $vatRate / 100), 3);
+        }
+
+        // Coût unitaire dérivé (HT) : sert au lot de coût de revient et
+        // à l'audit.
         $unitCost = round($totalHt / $quantity, 3);
 
         $id = Purchase::create([
@@ -260,6 +278,7 @@ final class AdminStockController extends AdminBaseController
             'product_key'  => $productKey,
             'quantity'     => $quantity,
             'total_ht'     => $totalHt,
+            'total_ttc'    => $isTtcBasis && $vatRate !== null ? $totalTtc : null,
             'vat_rate'     => $vatRate,
             'no_stock'     => !empty($data['no_stock']),
             'supplier'     => trim((string) ($data['supplier'] ?? '')),
@@ -277,7 +296,7 @@ final class AdminStockController extends AdminBaseController
         if (!empty($data['update_cost'])) {
             // Coût de revient en TTC pour bénéfices cohérents avec ventes TTC :
             // les prix de vente sont TTC, le coût doit l'être aussi.
-            $costTtc = $vatRate === null ? $unitCost : round($unitCost * (1 + $vatRate / 100), 3);
+            $costTtc = round($totalTtc / $quantity, 3);
             ProductCost::create([
                 'product_key' => $productKey,
                 'cost_price'  => $costTtc,

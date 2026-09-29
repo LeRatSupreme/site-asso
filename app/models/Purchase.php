@@ -34,9 +34,13 @@ final class Purchase extends Model
      * @param array<string,mixed> $data purchased_at (« YYYY-MM-DD »),
      *                                  product_key, quantity, total_ht
      *                                  (montant total), vat_rate (?float,
-     *                                  null = déjà TTC), supplier, notes,
-     *                                  created_by, no_stock (true = achat
-     *                                  « hors stock », hors inventaire)
+     *                                  null = déjà TTC), total_ttc
+     *                                  (?float, optionnel — TTC exact
+     *                                  quand le montant saisi était TTC ;
+     *                                  sinon dérivé du HT), supplier,
+     *                                  notes, created_by, no_stock
+     *                                  (true = achat « hors stock », hors
+     *                                  inventaire)
      *
      * @return string Identifiant créé ('' si données invalides).
      */
@@ -64,6 +68,10 @@ final class Purchase extends Model
 
         if ($vatRate === null) {
             $totalTtc = $totalHt;
+        } elseif (isset($data['total_ttc']) && $data['total_ttc'] !== null && $data['total_ttc'] !== '') {
+            // Montant saisi déjà TTC : le TTC fait foi (exact), le HT est
+            // déjà fourni précalculé (TTC / (1 + taux/100)).
+            $totalTtc = round((float) $data['total_ttc'], 3);
         } else {
             // 3 décimales : 25,152 € HT + TVA 5,5 % = 26,535 € (et non 26,54 €).
             $totalTtc = round($totalHt * (1 + $vatRate / 100), 3);
@@ -232,6 +240,116 @@ final class Purchase extends Model
             return ['ht' => $ht, 'ttc' => $ttc, 'vat' => round($ttc - $ht, 3)];
         } catch (\Throwable) {
             return ['ht' => 0.0, 'ttc' => 0.0, 'vat' => 0.0];
+        }
+    }
+
+    /**
+     * Statistiques d'une plage de jours (bornes incluses), en une seule
+     * requête : nombre de lignes, quantité entrée en stock (hors lignes
+     * « hors stock »), totaux HT / TTC et TVA.
+     *
+     * Les lignes historiques (total_ht NULL, saisies avant la TVA) sont
+     * considérées comme déjà TTC : COALESCE(total_ht, total_ttc).
+     *
+     * @param string|null $fromDay Jour de début « YYYY-MM-DD » (inclus), ou null.
+     * @param string|null $toDay   Jour de fin « YYYY-MM-DD » (inclus), ou null.
+     *
+     * @return array{lines:int, qty:int, ht:float, ttc:float, vat:float}
+     */
+    public static function statsBetween(?string $fromDay, ?string $toDay): array
+    {
+        $where = [];
+        $args = [];
+        if ($fromDay !== null && $fromDay !== '') {
+            $where[] = 'purchased_at >= ?';
+            $args[] = $fromDay;
+        }
+        if ($toDay !== null && $toDay !== '') {
+            $where[] = 'purchased_at <= ?';
+            $args[] = $toDay;
+        }
+        $whereSql = $where === [] ? '' : 'WHERE ' . implode(' AND ', $where);
+
+        try {
+            $stmt = self::pdo()->prepare(
+                'SELECT COUNT(*) AS lines,
+                        COALESCE(SUM(CASE WHEN no_stock = 0 THEN quantity ELSE 0 END), 0) AS qty,
+                        COALESCE(SUM(COALESCE(total_ht, total_ttc)), 0) AS ht,
+                        COALESCE(SUM(total_ttc), 0) AS ttc
+                 FROM purchases ' . $whereSql
+            );
+            $stmt->execute($args);
+            $row = $stmt->fetch() ?: [];
+
+            $ht = (float) ($row['ht'] ?? 0);
+            $ttc = (float) ($row['ttc'] ?? 0);
+
+            return [
+                'lines' => (int) ($row['lines'] ?? 0),
+                'qty'   => (int) ($row['qty'] ?? 0),
+                'ht'    => $ht,
+                'ttc'   => $ttc,
+                'vat'   => round($ttc - $ht, 3),
+            ];
+        } catch (\Throwable) {
+            return ['lines' => 0, 'qty' => 0, 'ht' => 0.0, 'ttc' => 0.0, 'vat' => 0.0];
+        }
+    }
+
+    /**
+     * Totaux HT / TVA / TTC groupés par taux de TVA sur une plage de jours
+     * (bornes incluses) — alimente l'onglet « TVA payée » des achats.
+     *
+     * vat_rate NULL = lignes saisies « déjà TTC » sans décomposition
+     * (historiques) : groupées à part, en fin de liste.
+     *
+     * @param string|null $fromDay Jour de début « YYYY-MM-DD » (inclus), ou null.
+     * @param string|null $toDay   Jour de fin « YYYY-MM-DD » (inclus), ou null.
+     *
+     * @return list<array{rate:?float, lines:int, ht:float, ttc:float, vat:float}>
+     */
+    public static function vatByRateBetween(?string $fromDay, ?string $toDay): array
+    {
+        $where = [];
+        $args = [];
+        if ($fromDay !== null && $fromDay !== '') {
+            $where[] = 'purchased_at >= ?';
+            $args[] = $fromDay;
+        }
+        if ($toDay !== null && $toDay !== '') {
+            $where[] = 'purchased_at <= ?';
+            $args[] = $toDay;
+        }
+        $whereSql = $where === [] ? '' : 'WHERE ' . implode(' AND ', $where);
+
+        try {
+            $stmt = self::pdo()->prepare(
+                'SELECT vat_rate,
+                        COUNT(*) AS lines,
+                        COALESCE(SUM(COALESCE(total_ht, total_ttc)), 0) AS ht,
+                        COALESCE(SUM(total_ttc), 0) AS ttc
+                 FROM purchases ' . $whereSql . '
+                 GROUP BY vat_rate
+                 ORDER BY vat_rate DESC'
+            );
+            $stmt->execute($args);
+
+            $out = [];
+            foreach ($stmt->fetchAll() as $r) {
+                $ht = (float) $r['ht'];
+                $ttc = (float) $r['ttc'];
+                $out[] = [
+                    'rate'  => $r['vat_rate'] === null ? null : (float) $r['vat_rate'],
+                    'lines' => (int) $r['lines'],
+                    'ht'    => $ht,
+                    'ttc'   => $ttc,
+                    'vat'   => round($ttc - $ht, 3),
+                ];
+            }
+
+            return $out;
+        } catch (\Throwable) {
+            return [];
         }
     }
 

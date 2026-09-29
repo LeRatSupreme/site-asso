@@ -65,7 +65,7 @@ final class AdminComptaController extends AdminBaseController
             5,
             $refFrom,
             date('Y-m-d'),
-            ComptaCalc::openDaysBetween($refFrom, date('Y-m-d'))
+            ComptaCalc::calendarDaysBetween($refFrom, date('Y-m-d'))
         )['alerts'];
 
         // Suivi avancé : dépenses, résultat net, fiabilité des coûts, alertes.
@@ -1124,18 +1124,20 @@ final class AdminComptaController extends AdminBaseController
                 break;
         }
 
-        // Jours d'ouverture réels dans la période (lun-ven).
-        $openDays = ($fromDay !== null && $toDay !== null)
-            ? ComptaCalc::openDaysBetween($fromDay, $toDay)
+        // Jours CALENDaires de la période (week-end inclus) : les moyennes
+        // de consommation et l'autonomie sont exprimées en 7 j/7.
+        $calDays = ($fromDay !== null && $toDay !== null)
+            ? ComptaCalc::calendarDaysBetween($fromDay, $toDay)
             : 0;
 
         // ── Horizon de COUVERTURE (pour quoi commander) ─────────────────
+        // Horizons en jours calendaires : le week-end est couvert aussi.
         $periods = [
-            '1w' => ['label' => '1 semaine',  'days' => 5],   // 5 j d'ouverture
-            '2w' => ['label' => '2 semaines', 'days' => 10],
-            '1m' => ['label' => '1 mois',     'days' => 22],  // ≈ 22 j ouvrés
-            '2m' => ['label' => '2 mois',     'days' => 43],
-            '3m' => ['label' => '3 mois',     'days' => 65],
+            '1w' => ['label' => '1 semaine',  'days' => 7],    // 7 j calendaires
+            '2w' => ['label' => '2 semaines', 'days' => 14],
+            '1m' => ['label' => '1 mois',     'days' => 30],   // ≈ 1 mois calendaire
+            '2m' => ['label' => '2 mois',     'days' => 61],
+            '3m' => ['label' => '3 mois',     'days' => 91],
         ];
         $periodKey = $_GET['period'] ?? '1w';
         if (!isset($periods[$periodKey])) {
@@ -1143,7 +1145,7 @@ final class AdminComptaController extends AdminBaseController
         }
         $targetDays = $periods[$periodKey]['days'];
 
-        $data = $this->reorderData($targetDays, $fromDay, $toDay, $openDays);
+        $data = $this->reorderData($targetDays, $fromDay, $toDay, $calDays);
 
         $this->renderAdmin('admin/compta/reorder', [
             'title'         => 'Réapprovisionnement',
@@ -1157,7 +1159,7 @@ final class AdminComptaController extends AdminBaseController
             'currentRef'    => $ref,
             'refFrom'       => $fromDay,
             'refTo'         => $toDay,
-            'refOpenDays'   => $openDays,
+            'refCalDays'    => $calDays,
             'du'            => $duOk ? $du : '',
             'au'            => $auOk ? $au : '',
         ]);
@@ -1167,30 +1169,33 @@ final class AdminComptaController extends AdminBaseController
      * Calcule l'analyse de réapprovisionnement sur une période donnée.
      *
      * Chaque produit vendu dans la période d'analyse est listé avec sa
-     * consommation moyenne (rapportée aux jours d'ouverture réels de la
-     * période) par jour / semaine / mois, et la quantité à commander pour
-      * couvrir l'horizon cible. Le stock est le THÉORIQUE de l'inventaire
-      * (dernier comptage + achats − ventes − pertes) : jamais une saisie
-      * manuelle qui se périme. Un achat ou une perte établit une base 0 :
-      * le théorique existe même sans comptage préalable ; seuls les
-      * produits sans aucune donnée (ni comptage, ni achat, ni perte)
-      * apparaissent « à compter », besoin calculé sans stock déduit. Les
-      * produits marqués « plus en vente » sont exclus (voir
-      * ProductDiscontinued).
+     * consommation moyenne (rapportée aux jours CALENDaires de la période,
+     * week-end inclus — rythme 7 j/7) par jour / semaine / mois, et la
+     * quantité à commander pour couvrir l'horizon cible (lui aussi en
+     * jours calendaires). L'autonomie est donc le nombre de jours avant
+     * rupture WEEK-END COMPRIS. Le stock est le THÉORIQUE de l'inventaire
+     * (dernier comptage + achats − ventes − pertes) : jamais une saisie
+     * manuelle qui se périme. Un achat ou une perte établit une base 0 :
+     * le théorique existe même sans comptage préalable ; seuls les
+     * produits sans aucune donnée (ni comptage, ni achat, ni perte)
+     * apparaissent « à compter », besoin calculé sans stock déduit. Les
+     * produits marqués « plus en vente » sont exclus (voir
+     * ProductDiscontinued).
      *
-     * @param string|null $fromDay  Début de la période d'analyse (inclus).
-     * @param string|null $toDay    Fin de la période d'analyse (inclus).
-     * @param int         $openDays Jours d'ouverture (lun-ven) de la période.
+     * @param int         $targetDays Horizon de couverture, en jours calendaires.
+     * @param string|null $fromDay    Début de la période d'analyse (inclus).
+     * @param string|null $toDay      Fin de la période d'analyse (inclus).
+     * @param int         $calDays    Jours calendaires de la période (week-end inclus).
      *
      * @return array{rows:list<array<string,mixed>>, alerts:int}
      */
-    private function reorderData(int $targetDays, ?string $fromDay, ?string $toDay, int $openDays): array
+    private function reorderData(int $targetDays, ?string $fromDay, ?string $toDay, int $calDays): array
     {
         // 100 % basé sur les ventes SumUp : chaque produit du CSV est listé,
         // sa catégorie vient du CSV, et son stock est le théorique issu de
         // l'inventaire (même source que la page Inventaire).
         $consumption = Sale::consumptionBetween($fromDay, $toDay);
-        $openDays = max(1, $openDays);
+        $calDays = max(1, $calDays);
 
         // Produits marqués « plus en vente » (saisonniers/discontinués) :
         // exclus du réappro pour ne pas encombrer l'analyse des commandes.
@@ -1221,17 +1226,20 @@ final class AdminComptaController extends AdminBaseController
             }
 
             $qty      = (int) ($data['qty'] ?? 0);
-            $avgDay   = $qty / $openDays;
-            $avgWeek  = $avgDay * 5.0;
-            $avgMonth = $avgDay * 21.77;
+            // Rythme 7 j/7 : les ventes du week-end sont incluses dans la
+            // quantité ET dans le nombre de jours — week-end couvert.
+            $avgDay   = $qty / $calDays;
+            $avgWeek  = $avgDay * 7.0;
+            $avgMonth = $avgDay * 30.44;
 
             $lookupKey = strtolower(trim($key));
             $hasStock = array_key_exists($lookupKey, $theoreticalLower);
             $stock    = $hasStock ? $theoreticalLower[$lookupKey] : null;
             $countedAt = $lastCountsLower[$lookupKey]['at'] ?? null;
 
-            // Autonomie : jours d'ouverture avant rupture (arrondie à la
-            // baisse ; un stock négatif signifie rupture déjà atteinte).
+            // Autonomie : jours CALENDaires avant rupture, week-end inclus
+            // (arrondie à la baisse ; un stock négatif signifie rupture
+            // déjà atteinte).
             $autonomy = ($stock !== null && $avgDay > 0)
                 ? max(0, (int) floor($stock / $avgDay))
                 : null;

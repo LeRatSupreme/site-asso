@@ -32,6 +32,7 @@ final class AdminExpenseController extends AdminBaseController
             'expenses'      => Expense::between($period['from'], $period['to']),
             'agg'           => Expense::aggregatesBetween($period['from'], $period['to']),
             'byCategory'    => Expense::byCategoryBetween($period['from'], $period['to']),
+            'vatStats'      => Expense::vatBetween($period['from'], $period['to']),
         ]);
     }
 
@@ -113,11 +114,28 @@ final class AdminExpenseController extends AdminBaseController
         $user = $this->guardCompta();
 
         $label = trim((string) ($_POST['label'] ?? ''));
-        // Saisie souple : le ticket peut n'indiquer que le TTC. On accepte
-        // HT et/ou TTC ; le TTC fourni fait foi, l'autre montant est déduit
-        // à partir du montant de TVA saisi (prioritaire) ou du taux.
+        // Saisie souple : un seul montant, dans une base explicite.
+        // « amount_basis » = « ttc » (défaut — les tickets indiquent le TTC)
+        // ou « ht ». Le HT/TTC manquant est déduit du montant de TVA saisi
+        // (prioritaire) ou du taux choisi.
+        $amount = parseFrenchFloat((string) ($_POST['amount'] ?? ''));
+        $basis = (string) ($_POST['amount_basis'] ?? '');
         $amountHtInput = parseFrenchFloat((string) ($_POST['amount_ht'] ?? ''));
         $amountTtcInput = parseFrenchFloat((string) ($_POST['amount_ttc'] ?? ''));
+        if ($basis !== 'ht' && $basis !== 'ttc') {
+            // Compatibilité ancien formulaire (champs HT/TTC séparés) :
+            // le TTC fourni fait foi, sinon le HT.
+            if ($amountTtcInput > 0) {
+                $basis = 'ttc';
+                $amount = $amountTtcInput;
+            } elseif ($amountHtInput > 0) {
+                $basis = 'ht';
+                $amount = $amountHtInput;
+            } else {
+                $basis = 'ttc';
+            }
+        }
+
         $vatAmountInput = parseFrenchFloat((string) ($_POST['vat_amount'] ?? ''));
         $vatRaw = trim((string) ($_POST['vat_rate'] ?? ''));
         $rate = $vatRaw !== '' ? parseFrenchFloat($vatRaw) : null;
@@ -125,8 +143,8 @@ final class AdminExpenseController extends AdminBaseController
             $rate = null;
         }
 
-        if ($label === '' || ($amountHtInput <= 0 && $amountTtcInput <= 0)) {
-            $this->setFlash('error', 'Libellé requis, avec un montant HT ou TTC (> 0).');
+        if ($label === '' || $amount <= 0) {
+            $this->setFlash('error', 'Libellé requis, avec un montant (> 0).');
             redirect(url('/admin/compta/depenses'));
         }
 
@@ -134,9 +152,9 @@ final class AdminExpenseController extends AdminBaseController
         $amountTtc = null;
         $vat = null;
 
-        if ($amountTtcInput > 0) {
+        if ($basis === 'ttc') {
             // TTC fait foi.
-            $amountTtc = round($amountTtcInput, 2);
+            $amountTtc = round($amount, 2);
             if ($vatAmountInput > 0) {
                 $vat = round($vatAmountInput, 2);
                 $amountHt = round($amountTtc - $vat, 2);
@@ -144,20 +162,21 @@ final class AdminExpenseController extends AdminBaseController
                 $amountHt = round($amountTtc / (1 + $rate / 100), 2);
                 $vat = round($amountTtc - $amountHt, 2);
             } else {
-                $amountHt = $amountHtInput > 0 ? round($amountHtInput, 2) : $amountTtc;
-                $vat = ($amountHt < $amountTtc) ? round($amountTtc - $amountHt, 2) : ($rate === 0.0 ? 0.0 : null);
+                $amountHt = $amountTtc;
+                $vat = 0.0;
             }
         } else {
             // HT fait foi.
-            $amountHt = round($amountHtInput, 2);
+            $amountHt = round($amount, 2);
             if ($vatAmountInput > 0) {
                 $vat = round($vatAmountInput, 2);
                 $amountTtc = round($amountHt + $vat, 2);
-            } elseif ($rate !== null) {
+            } elseif ($rate !== null && $rate > 0) {
                 $vat = round($amountHt * $rate / 100, 2);
                 $amountTtc = round($amountHt + $vat, 2);
             } else {
                 $amountTtc = $amountHt;
+                $vat = 0.0;
             }
         }
 
@@ -182,15 +201,18 @@ final class AdminExpenseController extends AdminBaseController
         ]);
 
         if ($id === '') {
-            $this->setFlash('error', 'Libellé requis, avec un montant HT ou TTC (> 0).');
+            $this->setFlash('error', 'Libellé requis, avec un montant (> 0).');
             redirect(url('/admin/compta/depenses'));
         }
 
         $this->audit('compta.expense.create', 'expense', $id, [
             'label'      => $label,
             'category'   => $category,
+            'basis'      => $basis,
+            'vat_rate'   => $rate,
             'amount_ht'  => $amountHt,
             'amount_ttc' => $amountTtc,
+            'vat'        => $vat,
             'receipt'    => $receiptPath,
         ]);
         $this->setFlash('success', 'Dépense enregistrée.');

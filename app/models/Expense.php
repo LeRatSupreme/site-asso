@@ -291,7 +291,7 @@ final class Expense extends Model
      * @param string|null $fromDay Jour de début « YYYY-MM-DD » (inclus), ou null.
      * @param string|null $toDay   Jour de fin « YYYY-MM-DD » (inclus), ou null.
      *
-     * @return list<array{category:string, ttc:float, count:int}>
+     * @return list<array{category:string, ttc:float, ht:float, vat:float, count:int}>
      */
     public static function byCategoryBetween(?string $fromDay, ?string $toDay): array
     {
@@ -301,6 +301,8 @@ final class Expense extends Model
             $stmt = self::pdo()->prepare(
                 'SELECT category,
                         COALESCE(SUM(amount_ttc), 0) AS ttc,
+                        COALESCE(SUM(amount_ht), 0) AS ht,
+                        COALESCE(SUM(vat), 0) AS vat,
                         COUNT(*) AS count
                  FROM expenses ' . $whereSql . '
                  GROUP BY category
@@ -317,11 +319,50 @@ final class Expense extends Model
             $out[] = [
                 'category' => (string) $r['category'],
                 'ttc'      => (float) $r['ttc'],
+                'ht'       => (float) $r['ht'],
+                'vat'      => (float) $r['vat'],
                 'count'    => (int) $r['count'],
             ];
         }
 
         return $out;
+    }
+
+    /**
+     * Totaux de TVA d'une plage de jours (bornes incluses) — alimente
+     * l'onglet « TVA payée » des dépenses.
+     *
+     * @param string|null $fromDay Jour de début « YYYY-MM-DD » (inclus), ou null.
+     * @param string|null $toDay   Jour de fin « YYYY-MM-DD » (inclus), ou null.
+     *
+     * @return array{ttc:float, ht:float, vat:float, with_vat:int, without_vat:int}
+     */
+    public static function vatBetween(?string $fromDay, ?string $toDay): array
+    {
+        [$whereSql, $args] = self::betweenWhere($fromDay, $toDay);
+
+        try {
+            $stmt = self::pdo()->prepare(
+                'SELECT COALESCE(SUM(amount_ttc), 0) AS ttc,
+                        COALESCE(SUM(amount_ht), 0) AS ht,
+                        COALESCE(SUM(vat), 0) AS vat,
+                        COALESCE(SUM(CASE WHEN vat IS NOT NULL AND vat > 0 THEN 1 ELSE 0 END), 0) AS with_vat,
+                        COALESCE(SUM(CASE WHEN vat IS NULL OR vat = 0 THEN 1 ELSE 0 END), 0) AS without_vat
+                 FROM expenses ' . $whereSql
+            );
+            $stmt->execute($args);
+            $row = $stmt->fetch() ?: [];
+        } catch (\Throwable) {
+            return ['ttc' => 0.0, 'ht' => 0.0, 'vat' => 0.0, 'with_vat' => 0, 'without_vat' => 0];
+        }
+
+        return [
+            'ttc'         => (float) ($row['ttc'] ?? 0),
+            'ht'          => (float) ($row['ht'] ?? 0),
+            'vat'         => (float) ($row['vat'] ?? 0),
+            'with_vat'    => (int) ($row['with_vat'] ?? 0),
+            'without_vat' => (int) ($row['without_vat'] ?? 0),
+        ];
     }
 
     /**
