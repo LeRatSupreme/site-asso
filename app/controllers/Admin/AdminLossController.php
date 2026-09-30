@@ -44,8 +44,10 @@ final class AdminLossController extends AdminBaseController
             $aggValue += (float) $r['value'];
         }
 
-        $this->renderAdmin('admin/compta/pertes', [
-            'title'         => 'Pertes',
+        // Page fusionnée « Opérations » (voir AdminStockController::purchases).
+        $this->renderAdmin('admin/compta/operations', [
+            'title'         => 'Opérations · Pertes',
+            'section'       => 'pertes',
             'user'          => $user,
             'period'        => $period,
             'periodOptions' => ComptaCalc::PERIOD_OPTIONS,

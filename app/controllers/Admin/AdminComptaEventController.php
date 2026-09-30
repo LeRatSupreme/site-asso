@@ -38,8 +38,10 @@ final class AdminComptaEventController extends AdminBaseController
             $profitT += (float) $ev['profit'];
         }
 
-        $this->renderAdmin('admin/compta/evenements', [
-            'title'         => 'Événements',
+        // Page fusionnée « Opérations » (voir AdminStockController::purchases).
+        $this->renderAdmin('admin/compta/operations', [
+            'title'         => 'Opérations · Événements',
+            'section'       => 'evenements',
             'user'          => $user,
             'period'        => $period,
             'periodOptions' => ComptaCalc::PERIOD_OPTIONS,

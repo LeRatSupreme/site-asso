@@ -49,9 +49,12 @@ $sections = [
         'Énigmes'       => '/admin/jeux/enigmes',
     ],
     'Comptabilité' => [
-        'Dashboard'       => '/admin/compta',
-        'Bilan annuel'    => '/admin/compta/annuel',
-        'Analytics'       => '/admin/analytics',
+        'Dashboard'    => '/admin/compta',
+        'Opérations'   => '/admin/compta/achats',
+        'Bilan annuel' => '/admin/compta/annuel',
+        'Analytics'    => '/admin/analytics',
+        'Budgets'      => '/admin/compta/budgets',
+        'Réappro'      => '/admin/compta/reappro',
     ],
     'Ventes' => [
         'Importer CSV'    => '/admin/compta/import',
@@ -63,16 +66,6 @@ $sections = [
         'Catégories'       => '/admin/compta/categories',
         'Mapping libellés' => '/admin/compta/aliases',
     ],
-    'Trésorerie' => [
-        'Dépenses'   => '/admin/compta/depenses',
-        'Budgets'    => '/admin/compta/budgets',
-        'Événements' => '/admin/compta/evenements',
-    ],
-    'Stock' => [
-        'Achats & stock' => '/admin/compta/achats',
-        'Pertes'         => '/admin/compta/pertes',
-        'Réappro'        => '/admin/compta/reappro',
-    ],
 ];
 
 // Filtre les groupes de menu selon les modules autorisés au rôle :
@@ -83,8 +76,6 @@ $sectionModules = [
     'Comptabilité'     => Permissions::MODULE_COMPTA,
     'Ventes'           => Permissions::MODULE_COMPTA,
     'Produits & coûts' => Permissions::MODULE_COMPTA,
-    'Trésorerie'       => Permissions::MODULE_COMPTA,
-    'Stock'            => Permissions::MODULE_COMPTA,
 ];
 $viewerRole = (string) ($user['role'] ?? '');
 foreach ($sectionModules as $group => $module) {
@@ -139,6 +130,22 @@ if (in_array($user['role'] ?? null, Permissions::adminRoles(), true)) {
         $sections['Système'] = $system;
     }
 }
+// Pages fusionnées « Opérations » : les quatre URL de sections (et leurs
+// sous-routes, ex. détail d'un événement) allument l'entrée unique de la
+// sidebar. Règle aussi les URL portant un paramètre (?period=...).
+$operationsPrefixes = [
+    '/admin/compta/achats',
+    '/admin/compta/depenses',
+    '/admin/compta/pertes',
+    '/admin/compta/evenements',
+];
+$activePath = $currentPath;
+foreach ($operationsPrefixes as $opPrefix) {
+    if (str_starts_with($activePath, $opPrefix)) {
+        $activePath = '/admin/compta/achats';
+        break;
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="fr">
@@ -175,15 +182,15 @@ if (in_array($user['role'] ?? null, Permissions::adminRoles(), true)) {
                         // État actif : match exact OU sous-route directe.
                         // Évite que /admin/compta reste allumé sur /admin/compta/produits.
                         $active = false;
-                        if ($currentPath === $path) {
+                        if ($activePath === $path) {
                             $active = true;
-                        } elseif (str_starts_with($currentPath, $path . '/')) {
+                        } elseif (str_starts_with($activePath, $path . '/')) {
                             // Sous-route : on ne marque actif que si c'est le parent le plus précis.
                             // On vérifie qu'aucun autre lien plus long ne matche mieux.
                             $betterMatch = false;
                             foreach ($sections as $g2 => $links2) {
                                 foreach ($links2 as $l2 => $p2) {
-                                    if ($p2 !== $path && strlen($p2) > strlen($path) && str_starts_with($currentPath, $p2)) {
+                                    if ($p2 !== $path && strlen($p2) > strlen($path) && str_starts_with($activePath, $p2)) {
                                         $betterMatch = true;
                                         break 2;
                                     }
@@ -192,7 +199,7 @@ if (in_array($user['role'] ?? null, Permissions::adminRoles(), true)) {
                             $active = !$betterMatch;
                         }
                         // Cas spécial : /admin (tableau de bord) n'est actif que sur /admin exact.
-                        if ($path === '/admin' && $currentPath !== '/admin') {
+                        if ($path === '/admin' && $activePath !== '/admin') {
                             $active = false;
                         }
                         ?>

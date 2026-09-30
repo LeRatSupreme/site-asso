@@ -25,14 +25,10 @@ foreach ($allKeys as $k) {
     }
 }
 ?>
-<div class="compta-head">
-    <div>
-        <p class="eyebrow">Comptabilité</p>
-        <h1 class="page-title">Achats & stock</h1>
-        <p class="muted">Note ici <strong>ce que tu commandes vraiment</strong>. Ces achats alimentent le stock théorique de l'inventaire : dernier comptage + achats − ventes.</p>
-    </div>
-</div>
-
+<?php
+// En-tête et onglets de niveau 1 fournis par la page fusionnée
+// « Opérations » (operations.php) qui inclut cette vue.
+?>
 <div class="admin-actions">
     <?php require AEIC_VIEWS . '/admin/compta/_period_bar.php'; ?>
 </div>

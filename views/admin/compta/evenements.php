@@ -15,14 +15,10 @@ declare(strict_types=1);
  * @var list<array<string,mixed>> $recentCosts
  */
 ?>
-<div class="compta-head">
-    <div>
-        <p class="eyebrow">Comptabilité</p>
-        <h1 class="page-title">Événements</h1>
-        <p class="muted">Crée un événement avec le <strong>nom exact du bouton SumUp</strong> : les ventes importées s'y rattachent automatiquement, tu saisis les coûts, et le bénéfice se calcule tout seul.</p>
-    </div>
-</div>
-
+<?php
+// En-tête et onglets de niveau 1 fournis par la page fusionnée
+// « Opérations » (operations.php) qui inclut cette vue.
+?>
 <div class="admin-actions">
     <?php require AEIC_VIEWS . '/admin/compta/_period_bar.php'; ?>
 </div>

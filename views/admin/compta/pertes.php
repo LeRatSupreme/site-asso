@@ -47,14 +47,10 @@ foreach ($allKeys as $k) {
     }
 }
 ?>
-<div class="compta-head">
-    <div>
-        <p class="eyebrow">Comptabilité</p>
-        <h1 class="page-title">Pertes</h1>
-        <p class="muted">Casse, périmé, vol, offert... Chaque perte est <strong>valorisée au coût</strong> et <strong>déduite du stock théorique</strong> : elle explique un écart d'inventaire au lieu de le laisser mystérieux.</p>
-    </div>
-</div>
-
+<?php
+// En-tête et onglets de niveau 1 fournis par la page fusionnée
+// « Opérations » (operations.php) qui inclut cette vue.
+?>
 <div class="admin-actions">
     <?php require AEIC_VIEWS . '/admin/compta/_period_bar.php'; ?>
 </div>
