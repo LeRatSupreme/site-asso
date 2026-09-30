@@ -272,7 +272,11 @@ final class Purchase extends Model
 
         try {
             $stmt = self::pdo()->prepare(
-                'SELECT COUNT(*) AS lines,
+                // Alias « n_lines » : « lines » est un mot réservé MariaDB
+                // (LOAD DATA … LINES) refusé comme alias — la requête
+                // renvoyait une erreur 1064, avalée par le catch, d'où des
+                // statistiques affichées à zéro.
+                'SELECT COUNT(*) AS n_lines,
                         COALESCE(SUM(CASE WHEN no_stock = 0 THEN quantity ELSE 0 END), 0) AS qty,
                         COALESCE(SUM(COALESCE(total_ht, total_ttc)), 0) AS ht,
                         COALESCE(SUM(total_ttc), 0) AS ttc
@@ -285,7 +289,7 @@ final class Purchase extends Model
             $ttc = (float) ($row['ttc'] ?? 0);
 
             return [
-                'lines' => (int) ($row['lines'] ?? 0),
+                'lines' => (int) ($row['n_lines'] ?? 0),
                 'qty'   => (int) ($row['qty'] ?? 0),
                 'ht'    => $ht,
                 'ttc'   => $ttc,
@@ -324,8 +328,9 @@ final class Purchase extends Model
 
         try {
             $stmt = self::pdo()->prepare(
+                // « n_lines » : cf. statsBetween, « lines » est refusé par MariaDB.
                 'SELECT vat_rate,
-                        COUNT(*) AS lines,
+                        COUNT(*) AS n_lines,
                         COALESCE(SUM(COALESCE(total_ht, total_ttc)), 0) AS ht,
                         COALESCE(SUM(total_ttc), 0) AS ttc
                  FROM purchases ' . $whereSql . '
@@ -340,7 +345,7 @@ final class Purchase extends Model
                 $ttc = (float) $r['ttc'];
                 $out[] = [
                     'rate'  => $r['vat_rate'] === null ? null : (float) $r['vat_rate'],
-                    'lines' => (int) $r['lines'],
+                    'lines' => (int) $r['n_lines'],
                     'ht'    => $ht,
                     'ttc'   => $ttc,
                     'vat'   => round($ttc - $ht, 3),
