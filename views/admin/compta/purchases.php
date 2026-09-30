@@ -96,12 +96,18 @@ foreach ($allKeys as $k) {
 </div>
 
 <!-- ==================== Onglet : Saisir des achats ==================== -->
+<?php
+// Liste de picking : produits vendus + clés réelles existantes (les
+// mêmes que les suggestions anti-doublons), triées naturellement.
+$pickerList = array_values(array_unique(array_merge($products, array_values($normKeys))));
+usort($pickerList, 'strnatcasecmp');
+?>
 <div class="compta-tabpane" data-pane="saisie" hidden>
     <section class="card surface glass">
         <h2 class="card-title">Enregistrer des achats</h2>
-        <p class="muted">Une ligne par produit, un seul « Enregistrer » à la fin — une course entière (Metro…) en une fois. Champs communs en tête : date, TVA, fournisseur.</p>
+        <p class="muted">Une course entière (Metro…) en une fois, même à 20 produits. Le plus rapide : <strong>colle la commande du fournisseur</strong> ci-dessous. Sinon clique les produits connus ou tape au clavier — un seul « Enregistrer » à la fin.</p>
 
-        <form method="post" action="<?= e(url('/admin/compta/achats/save-bulk')) ?>">
+        <form method="post" action="<?= e(url('/admin/compta/achats/save-bulk')) ?>" data-purchase-form>
             <?= csrf_field() ?>
 
             <div class="field-row">
@@ -141,64 +147,90 @@ foreach ($allKeys as $k) {
                 <p class="field-help">Décoche si ces prix sont inhabituels (promo, erreur, test…) pour ne pas fausser le calcul du bénéfice.</p>
             </div>
 
-            <table class="table" id="purchases-grid" data-dup-keys="<?= e(json_encode($normKeys)) ?>">
-                <thead>
-                    <tr>
-                        <th>Produit</th>
-                        <th style="width:90px;">Qté</th>
-                        <th style="width:140px;">Montant total (€)</th>
-                        <th style="width:220px;">≈ / unité</th>
-                        <th style="width:80px;" title="Cochée : l'achat est comptabilisé mais n'entre pas en stock">Stock</th>
-                        <th style="width:50px;"></th>
-                    </tr>
-                </thead>
-                <tbody id="purchases-lines">
-                    <tr class="purchase-line">
-                        <td><input type="text" name="product_key[]" list="purchase-products" placeholder="ex: Coca 33cl" autocomplete="off" style="width:100%;"><div class="dup-warning" hidden style="margin-top:4px;padding:4px 8px;border-radius:6px;background:#fff3cd;border:1px solid #ffeeba;color:#7a5b00;font-size:0.78rem;"></div></td>
-                        <td><input type="number" name="quantity[]" value="1" min="1" step="1" style="width:100%;"></td>
-                        <td><input type="text" name="total_amount[]" placeholder="ex: 18,60" inputmode="decimal" style="width:100%;"></td>
-                        <td class="muted line-unit" hidden></td>
-                        <td class="nostock-cell"><label style="display:flex;align-items:center;gap:4px;font-weight:400;cursor:pointer;white-space:nowrap;" title="Cochée : n'alimente pas le stock théorique (conso bureau, essais…)"><input type="checkbox" class="line-no-stock" name="no_stock[]" value="1"> hors stock</label></td>
-                        <td><button type="button" class="btn btn-ghost btn-sm line-remove" aria-label="Supprimer la ligne">Retirer</button></td>
-                    </tr>
-                </tbody>
-                <tfoot>
-                    <tr>
-                        <th colspan="2" class="num">Total des montants</th>
-                        <th class="num"><span id="purchases-total">0,000 €</span> <span class="muted" id="purchases-total-basis"></span></th>
-                        <th class="num muted" id="purchases-total-other"></th>
-                        <th colspan="2"></th>
-                    </tr>
-                </tfoot>
-            </table>
+            <!-- ── 1) Coller la commande : le plus rapide pour ~20 lignes ── -->
+            <div class="pa-paste">
+                <p class="pa-paste-title">📋 Coller la commande entière <span class="muted">— copie l'e-mail fournisseur ou Excel, une ligne par produit</span></p>
+                <textarea id="purchase-paste" rows="5" placeholder="Coca 33cl ; 24 ; 18,60&#10;Fanta Orange 33cl ; 24 ; 15,20&#10;Bonbons ; 10,45" spellcheck="false"></textarea>
+                <p class="field-help">Format <code>Nom ; Qté ; Montant</code> (tabulations acceptées ; Qté et Montant optionnels).</p>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-primary btn-sm" id="purchase-paste-apply">Importer les lignes →</button>
+                    <button type="button" class="btn btn-ghost btn-sm" id="purchase-paste-clear">Vider</button>
+                    <span class="muted pa-paste-status" id="purchase-paste-status"></span>
+                </div>
+            </div>
+
+            <!-- ── 2) Ajouter un produit connu : recherche + clic ── -->
+            <div class="combobox pa-picker">
+                <input type="text" id="pa-search" class="combobox-input" placeholder="🔍 Ou ajoute un produit connu… (tape, puis Entrée ou clic)"
+                       autocomplete="off" aria-label="Rechercher un produit connu à ajouter">
+                <ul class="combobox-list" id="pa-results" hidden></ul>
+            </div>
+
+            <!-- ── 3) La commande : lignes compactes ── -->
+            <div class="pa-grid" id="purchases-grid"
+                 data-dup-keys="<?= e(json_encode($normKeys)) ?>"
+                 data-picker-keys="<?= e(json_encode($pickerList, JSON_UNESCAPED_UNICODE)) ?>">
+                <div class="pa-head" aria-hidden="true">
+                    <span>#</span>
+                    <span>Produit</span>
+                    <span>Qté</span>
+                    <span>Montant total (€)</span>
+                    <span>≈ / unité · stock</span>
+                    <span></span>
+                </div>
+                <div id="purchases-lines"></div>
+            </div>
             <datalist id="purchase-products">
                 <?php foreach ($products as $p): ?>
                     <option value="<?= e($p) ?>"></option>
                 <?php endforeach; ?>
             </datalist>
-            <p class="field-help">Choisis des noms existants (mêmes noms que dans les ventes) pour alimenter le bon stock théorique. Les lignes vides sont ignorées. Coche « hors stock » pour une ligne qui ne doit pas alimenter le stock (conso bureau, fournitures, essais…) : l'achat reste comptabilisé.</p>
 
-            <div class="form-actions">
-                <button type="button" class="btn btn-ghost" id="purchase-line-add">+ Ajouter une ligne</button>
-                <button type="submit" class="btn btn-primary">Enregistrer les achats</button>
-                <button type="button" class="btn btn-ghost" onclick="if (confirm('Effacer la saisie en cours ?')) this.form.reset();">Annuler</button>
+            <!-- Récap collant : compte, totaux et actions toujours visibles -->
+            <div class="pa-recap" id="pa-recap">
+                <div class="pa-recap-info">
+                    <strong id="pa-count">0 ligne</strong>
+                    <span class="pa-recap-total"><span id="purchases-total">0,000 €</span> <span class="muted" id="purchases-total-basis"></span></span>
+                    <span class="muted" id="purchases-total-other"></span>
+                </div>
+                <div class="pa-recap-actions">
+                    <button type="button" class="btn btn-ghost btn-sm" id="purchase-line-add">+ Ligne</button>
+                    <button type="button" class="btn btn-ghost btn-sm" id="purchase-line-add5">+ 5</button>
+                    <button type="button" class="btn btn-ghost btn-sm" onclick="if (confirm('Effacer la saisie en cours ?')) this.form.reset();">Annuler</button>
+                    <button type="submit" class="btn btn-primary" id="pa-submit">Enregistrer les achats</button>
+                </div>
             </div>
+
+            <p class="field-help">
+                Au clavier : <strong>Produit → Entrée → Qté → Entrée → Montant → Entrée</strong> enchaîne les lignes (une ligne vide s'ajoute toute seule) ; <strong>Ctrl+Entrée</strong> enregistre.
+                Choisis des noms existants (mêmes noms que dans les ventes) pour alimenter le bon stock théorique ; les lignes vides sont ignorées.
+                Coche « hors stock » pour une ligne qui ne doit pas alimenter le stock (conso bureau, fournitures, essais…) : l'achat reste comptabilisé.
+            </p>
         </form>
         <script>
         (function () {
+            var grid = document.getElementById('purchases-grid');
             var tbody = document.getElementById('purchases-lines');
             var addBtn = document.getElementById('purchase-line-add');
+            var add5Btn = document.getElementById('purchase-line-add5');
+            var countEl = document.getElementById('pa-count');
             var totalEl = document.getElementById('purchases-total');
             var totalBasisEl = document.getElementById('purchases-total-basis');
             var totalOtherEl = document.getElementById('purchases-total-other');
             var rateEl = document.getElementById('vat_rate');
             var basisInputs = document.querySelectorAll('input[name="amount_basis"]');
-            if (!tbody || !addBtn) return;
+            var form = document.querySelector('[data-purchase-form]');
+            if (!tbody || !addBtn || !grid || !form) return;
+
+            var MAX_LINES = 60;
+            var START_LINES = 5; // une commande complète tient d'un coup
 
             // Carte des clés existantes, normalisées côté PHP
             // (data-dup-keys) : clé normalisée -> clé réelle à préférer.
             var normKeys = {};
-            try { normKeys = JSON.parse(document.getElementById('purchases-grid').getAttribute('data-dup-keys') || '{}'); } catch (e) { normKeys = {}; }
+            try { normKeys = JSON.parse(grid.getAttribute('data-dup-keys') || '{}'); } catch (e) { normKeys = {}; }
+            var pickerKeys = [];
+            try { pickerKeys = JSON.parse(grid.getAttribute('data-picker-keys') || '[]'); } catch (e) { pickerKeys = []; }
 
             // Règle de normalisation dupliquée en JS (pas de PHP côté
             // client) : identique à StockPublic::normalizeKey — minuscules,
@@ -213,18 +245,14 @@ foreach ($allKeys as $k) {
                     .replace(/ /g, '');
             }
 
-            function checkDup(tr) {
-                var input = tr.querySelector('[name="product_key[]"]');
-                var warn = tr.querySelector('.dup-warning');
-                if (!input || !warn) return;
-                var existing = normKeys[normKey(input.value)];
-                if (existing && existing !== input.value) {
-                    warn.textContent = '« ' + input.value + ' » ressemble à la clé existante « ' + existing + ' » — préfère-la (autocomplétion) pour éviter un doublon.';
-                    warn.hidden = false;
-                } else {
-                    warn.hidden = true;
-                    warn.textContent = '';
-                }
+            function esc(s) {
+                return String(s).replace(/[&<>"]/g, function (c) {
+                    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+                });
+            }
+
+            function rows() {
+                return Array.prototype.slice.call(tbody.querySelectorAll('.pa-row'));
             }
 
             function parseAmount(v) {
@@ -267,74 +295,376 @@ foreach ($allKeys as $k) {
                     return;
                 }
                 var s = split(a);
-                hint.textContent = '≈ ' + (s.ht / q).toFixed(3).replace('.', ',') + ' € HT · ' + (s.ttc / q).toFixed(3).replace('.', ',') + ' € TTC / unité';
+                hint.textContent = '≈ ' + (s.ht / q).toFixed(3).replace('.', ',') + ' · ' + (s.ttc / q).toFixed(3).replace('.', ',') + ' € TTC /u';
                 hint.hidden = false;
             }
 
             function updateTotals() {
-                var sum = 0;
-                Array.prototype.forEach.call(tbody.querySelectorAll('tr.purchase-line'), function (tr) {
+                var sum = 0, filled = 0;
+                Array.prototype.forEach.call(rows(), function (tr) {
                     var a = parseAmount(tr.querySelector('[name="total_amount[]"]').value);
+                    if (tr.querySelector('[name="product_key[]"]').value.trim() !== '' || (isFinite(a) && a > 0)) filled++;
                     if (isFinite(a) && a > 0) sum += a;
                 });
                 var isTtc = basis() === 'ttc';
                 var s = split(sum);
+                countEl.textContent = filled + ' ligne' + (filled > 1 ? 's' : '');
                 totalEl.textContent = fmt3(sum);
                 totalBasisEl.textContent = isTtc ? 'TTC' : 'HT';
-                totalOtherEl.textContent = isTtc ? 'dont ' + fmt3(s.ht) + ' HT · ' + fmt3(s.ttc - s.ht) + ' TVA' : 'soit ' + fmt3(s.ttc) + ' TTC';
+                totalOtherEl.textContent = sum <= 0 ? '' : (isTtc
+                    ? 'dont ' + fmt3(s.ht) + ' HT · ' + fmt3(s.ttc - s.ht) + ' TVA'
+                    : 'soit ' + fmt3(s.ttc) + ' TTC');
+            }
+
+            function refreshIdx() {
+                Array.prototype.forEach.call(rows(), function (tr, i) {
+                    tr.querySelector('.pa-idx').textContent = i + 1;
+                });
+            }
+
+            // Doublons : suggestion d'une clé existante qui ressemble, et
+            // détection de deux lignes identiques dans la même commande.
+            function checkDup(tr) {
+                var input = tr.querySelector('[name="product_key[]"]');
+                var warn = tr.querySelector('.pa-warn');
+                if (!input || !warn) return;
+                var value = input.value.trim();
+                var msg = '';
+
+                var existing = normKeys[normKey(value)];
+                if (existing && existing !== value) {
+                    msg = '« ' + value + ' » ressemble à « ' + existing + ' » — préfère ce nom existant (autocomplétion).';
+                }
+
+                if (value !== '') {
+                    var key = normKey(value);
+                    var firstAt = -1, me = rows().indexOf(tr);
+                    for (var i = 0; i < rows().length; i++) {
+                        if (i === me) continue;
+                        var other = rows()[i].querySelector('[name="product_key[]"]').value.trim();
+                        if (other !== '' && normKey(other) === key) { firstAt = i + 1; break; }
+                    }
+                    if (firstAt !== -1) {
+                        msg = '« ' + value + ' » est déjà en ligne ' + firstAt + ' — fusionne les quantités sur une seule ligne.';
+                    }
+                }
+
+                warn.textContent = msg;
+                warn.hidden = msg === '';
+            }
+
+            function refreshDups() {
+                Array.prototype.forEach.call(rows(), checkDup);
             }
 
             function recalcAll() {
-                Array.prototype.forEach.call(tbody.querySelectorAll('tr.purchase-line'), updateRow);
+                Array.prototype.forEach.call(rows(), updateRow);
                 updateTotals();
+            }
+
+            // Navigation clavier : Entrée = champ suivant sur la ligne,
+            // puis ligne suivante (une nouvelle ligne est créée si on est
+            // sur la dernière).
+            function focusField(tr, name) {
+                var el = tr.querySelector('[name="' + name + '"]');
+                if (el) el.focus();
+            }
+
+            function nextRow(tr) {
+                var all = rows();
+                var i = all.indexOf(tr);
+                if (i === -1) return null;
+                if (i + 1 < all.length) return all[i + 1];
+                if (all.length < MAX_LINES) return addLine(false);
+                return null;
+            }
+
+            function setQty(tr, q) {
+                var input = tr.querySelector('[name="quantity[]"]');
+                input.value = String(Math.max(1, q));
+                updateRow(tr);
             }
 
             function wireRow(tr) {
                 var keyInput = tr.querySelector('[name="product_key[]"]');
+                var qtyInput = tr.querySelector('[name="quantity[]"]');
+                var amountInput = tr.querySelector('[name="total_amount[]"]');
+
                 keyInput.addEventListener('blur', function () { checkDup(tr); });
                 keyInput.addEventListener('change', function () { checkDup(tr); });
-                tr.querySelector('[name="total_amount[]"]').addEventListener('input', function () {
+                keyInput.addEventListener('input', function () { updateTotals(); });
+                keyInput.addEventListener('keydown', function (ev) {
+                    if (ev.key === 'Enter') { ev.preventDefault(); focusField(tr, 'quantity[]'); }
+                });
+
+                // Sélection auto au focus : la valeur « 1 » s'écrase direct.
+                qtyInput.addEventListener('focus', function () { qtyInput.select(); });
+                qtyInput.addEventListener('input', function () { updateRow(tr); });
+                qtyInput.addEventListener('keydown', function (ev) {
+                    if (ev.key === 'Enter') { ev.preventDefault(); focusField(tr, 'total_amount[]'); }
+                });
+
+                Array.prototype.forEach.call(tr.querySelectorAll('.pa-step'), function (btn) {
+                    btn.addEventListener('click', function () {
+                        var q = parseInt(qtyInput.value, 10) || 1;
+                        setQty(tr, q + (btn.getAttribute('data-step') === '1' ? 1 : -1));
+                    });
+                });
+
+                amountInput.addEventListener('focus', function () { amountInput.select(); });
+                amountInput.addEventListener('input', function () {
                     updateRow(tr); updateTotals();
+                    // Dernière ligne remplie → une nouvelle ligne apparaît :
+                    // on enchaîne les produits sans jamais cliquer.
+                    if (amountInput.value !== '' && rows()[rows().length - 1] === tr && rows().length < MAX_LINES) {
+                        addLine(false);
+                        refreshIdx();
+                    }
                 });
-                tr.querySelector('[name="quantity[]"]').addEventListener('input', function () {
-                    updateRow(tr);
+                amountInput.addEventListener('keydown', function (ev) {
+                    if (ev.key === 'Enter') {
+                        ev.preventDefault();
+                        var next = nextRow(tr);
+                        if (next) focusField(next, 'product_key[]');
+                    }
                 });
-                tr.querySelector('.line-remove').addEventListener('click', function () {
-                    tr.remove(); updateTotals();
+
+                tr.querySelector('.pa-remove').addEventListener('click', function () {
+                    var all = rows();
+                    if (all.length <= 1) {
+                        // Dernière ligne : on la vide au lieu de la retirer.
+                        tr.querySelectorAll('input[type="text"], input[type="number"]').forEach(function (el) { el.value = el.name === 'quantity[]' ? '1' : ''; });
+                        tr.querySelector('.line-no-stock').checked = false;
+                        updateRow(tr); updateTotals(); refreshDups();
+                        return;
+                    }
+                    tr.remove(); updateTotals(); refreshIdx(); refreshDups();
                 });
                 updateRow(tr);
             }
 
             function addLine(focus) {
-                var tr = document.createElement('tr');
-                tr.className = 'purchase-line';
+                var tr = document.createElement('div');
+                tr.className = 'pa-row';
                 tr.innerHTML =
-                    '<td><input type="text" name="product_key[]" list="purchase-products" placeholder="ex: Coca 33cl" autocomplete="off" style="width:100%;"><div class="dup-warning" hidden style="margin-top:4px;padding:4px 8px;border-radius:6px;background:#fff3cd;border:1px solid #ffeeba;color:#7a5b00;font-size:0.78rem;"></div></td>' +
-                    '<td><input type="number" name="quantity[]" value="1" min="1" step="1" style="width:100%;"></td>' +
-                    '<td><input type="text" name="total_amount[]" placeholder="ex: 18,60" inputmode="decimal" style="width:100%;"></td>' +
-                    '<td class="muted line-unit" hidden></td>' +
-                    '<td class="nostock-cell"><label style="display:flex;align-items:center;gap:4px;font-weight:400;cursor:pointer;white-space:nowrap;" title="Cochée : n\'alimente pas le stock théorique (conso bureau, essais…)"><input type="checkbox" class="line-no-stock" name="no_stock[]" value="1"> hors stock</label></td>' +
-                    '<td><button type="button" class="btn btn-ghost btn-sm line-remove" aria-label="Supprimer la ligne">Retirer</button></td>';
+                    '<span class="pa-idx">0</span>' +
+                    '<div class="pa-prod"><input type="text" name="product_key[]" list="purchase-products" placeholder="ex: Coca 33cl" autocomplete="off"><div class="pa-warn" hidden></div></div>' +
+                    '<div class="pa-qty">' +
+                        '<button type="button" class="pa-step" data-step="-1" aria-label="Moins un">−</button>' +
+                        '<input type="number" name="quantity[]" value="1" min="1" step="1" inputmode="numeric">' +
+                        '<button type="button" class="pa-step" data-step="1" aria-label="Plus un">+</button>' +
+                    '</div>' +
+                    '<div class="pa-amount"><input type="text" name="total_amount[]" placeholder="ex: 18,60" inputmode="decimal"></div>' +
+                    '<div class="pa-meta">' +
+                        '<span class="muted line-unit" hidden></span>' +
+                        '<label class="pa-nostock" title="Cochée : n\'alimente pas le stock théorique (conso bureau, essais…)"><input type="checkbox" class="line-no-stock" name="no_stock[]" value="1"> hors stock</label>' +
+                    '</div>' +
+                    '<button type="button" class="pa-remove" aria-label="Retirer la ligne" title="Retirer la ligne">×</button>';
                 tbody.appendChild(tr);
                 wireRow(tr);
+                refreshIdx();
                 if (focus) tr.querySelector('[name="product_key[]"]').focus();
+
+                return tr;
             }
 
-            Array.prototype.forEach.call(tbody.querySelectorAll('tr.purchase-line'), wireRow);
+            function addLines(n) {
+                for (var i = 0; i < n && rows().length < MAX_LINES; i++) addLine(false);
+                updateTotals();
+            }
+
+            function firstEmptyRow() {
+                var all = rows();
+                for (var i = 0; i < all.length; i++) {
+                    if (all[i].querySelector('[name="product_key[]"]').value.trim() === '') return all[i];
+                }
+                return null;
+            }
+
+            // Remplit une ligne (picker ou import) : nom, qté, montant.
+            function fillRow(tr, name, qty, amount) {
+                tr.querySelector('[name="product_key[]"]').value = name;
+                tr.querySelector('[name="quantity[]"]').value = String(qty || 1);
+                tr.querySelector('[name="total_amount[]"]').value = amount || '';
+                updateRow(tr);
+                checkDup(tr);
+                updateTotals();
+            }
+
+            // ── Sélecteur de produits connus : tape, flèches, Entrée ──
+            var searchInput = document.getElementById('pa-search');
+            var resultList = document.getElementById('pa-results');
+            var activeAt = -1;
+            if (searchInput && resultList) {
+                function inOrderKeys() {
+                    var set = {};
+                    Array.prototype.forEach.call(rows(), function (tr) {
+                        var v = tr.querySelector('[name="product_key[]"]').value.trim();
+                        if (v !== '') set[normKey(v)] = true;
+                    });
+                    return set;
+                }
+
+                function renderResults() {
+                    var q = normKey(searchInput.value);
+                    var inOrder = inOrderKeys();
+                    var matches = [];
+                    Array.prototype.forEach.call(pickerKeys, function (name) {
+                        if (q === '' || normKey(name).indexOf(q) !== -1) matches.push(name);
+                    });
+                    var html = '';
+                    var shown = matches.slice(0, 8);
+                    Array.prototype.forEach.call(shown, function (name) {
+                        html += '<li class="combobox-option" data-name="' + esc(name) + '">' +
+                            (inOrder[normKey(name)] ? '✓ ' : '') + esc(name) +
+                            (inOrder[normKey(name)] ? ' <small class="muted">déjà dans la commande</small>' : '') +
+                            '</li>';
+                    });
+                    if (searchInput.value.trim() !== '' && normKey(searchInput.value) !== '' && !inOrder[normKey(searchInput.value)]) {
+                        var known = matches.some(function (n) { return normKey(n) === normKey(searchInput.value); });
+                        if (!known) {
+                            html += '<li class="combobox-option combobox-new" data-name="' + esc(searchInput.value.trim()) + '">+ Nouveau produit : « ' + esc(searchInput.value.trim()) + ' »</li>';
+                        }
+                    }
+                    resultList.innerHTML = html;
+                    activeAt = shown.length > 0 ? 0 : (resultList.children.length > 0 ? 0 : -1);
+                    highlight();
+                    resultList.hidden = resultList.children.length === 0;
+                }
+
+                function highlight() {
+                    Array.prototype.forEach.call(resultList.children, function (li, i) {
+                        li.classList.toggle('is-active', i === activeAt);
+                    });
+                }
+
+                function applyAt(i) {
+                    var li = resultList.children[i];
+                    if (!li) return;
+                    var name = li.getAttribute('data-name');
+                    var tr = firstEmptyRow() || (rows().length < MAX_LINES ? addLine(false) : null);
+                    if (!tr) return;
+                    fillRow(tr, name, 1, '');
+                    searchInput.value = '';
+                    resultList.hidden = true;
+                    focusField(tr, 'quantity[]');
+                }
+
+                searchInput.addEventListener('input', renderResults);
+                searchInput.addEventListener('focus', renderResults);
+                searchInput.addEventListener('keydown', function (ev) {
+                    if (ev.key === 'ArrowDown') { ev.preventDefault(); if (activeAt < resultList.children.length - 1) activeAt++; highlight(); }
+                    else if (ev.key === 'ArrowUp') { ev.preventDefault(); if (activeAt > 0) activeAt--; highlight(); }
+                    else if (ev.key === 'Enter') { ev.preventDefault(); applyAt(activeAt); }
+                    else if (ev.key === 'Escape') { resultList.hidden = true; }
+                });
+                searchInput.addEventListener('blur', function () {
+                    window.setTimeout(function () { resultList.hidden = true; }, 150);
+                });
+                resultList.addEventListener('mousedown', function (ev) {
+                    var li = ev.target.closest('.combobox-option');
+                    if (!li) return;
+                    ev.preventDefault();
+                    applyAt(Array.prototype.indexOf.call(resultList.children, li));
+                });
+            }
+
+            // ── Coller la commande : comptage en direct, puis import ──
+            // (tabulations Excel acceptées ; « Nom ; Montant » aussi, le
+            // montant est repéré à sa virgule/son point décimal).
+            function parsePasteLine(line) {
+                var sep = line.indexOf('\t') !== -1 ? '\t' : (line.indexOf(';') !== -1 ? ';' : null);
+                var parts = (sep ? line.split(sep) : [line]).map(function (p) { return p.trim(); });
+                var name = parts[0] || '';
+                if (name === '') return null;
+
+                var qty = 1;
+                var amount = '';
+                if (parts.length >= 3) {
+                    qty = parseInt(parts[1], 10) || 1;
+                    amount = parts[2];
+                } else if (parts.length === 2) {
+                    if (/^\d{1,4}$/.test(parts[1])) {
+                        qty = parseInt(parts[1], 10) || 1;
+                    } else {
+                        amount = parts[1];
+                    }
+                }
+
+                return { name: name, qty: qty, amount: amount };
+            }
+
+            var pasteArea = document.getElementById('purchase-paste');
+            var pasteApply = document.getElementById('purchase-paste-apply');
+            var pasteStatus = document.getElementById('purchase-paste-status');
+            if (pasteArea && pasteApply) {
+                pasteArea.addEventListener('input', function () {
+                    var n = 0;
+                    Array.prototype.forEach.call(pasteArea.value.split(/\r?\n/), function (line) {
+                        if (String(line).trim() !== '' && parsePasteLine(String(line).trim())) n++;
+                    });
+                    pasteStatus.textContent = pasteArea.value.trim() === ''
+                        ? ''
+                        : n + ' ligne' + (n > 1 ? 's' : '') + ' détectée' + (n > 1 ? 's' : '') + ' — clique « Importer ».';
+                });
+
+                pasteApply.addEventListener('click', function () {
+                    var count = 0;
+                    Array.prototype.forEach.call(pasteArea.value.split(/\r?\n/), function (line) {
+                        if (String(line).trim() === '') return;
+                        var entry = parsePasteLine(String(line).trim());
+                        if (!entry) return;
+
+                        // Remplit d'abord les lignes vides existantes.
+                        var tr = firstEmptyRow();
+                        if (!tr && rows().length < MAX_LINES) tr = addLine(false);
+                        if (!tr) return;
+
+                        fillRow(tr, entry.name, entry.qty, entry.amount);
+                        count++;
+                    });
+                    refreshIdx(); refreshDups(); updateTotals();
+                    pasteStatus.textContent = count > 0
+                        ? count + ' ligne' + (count > 1 ? 's' : '') + ' importée' + (count > 1 ? 's' : '') + ' — vérifie puis enregistre.'
+                        : 'Rien à importer : une ligne par produit, « Nom ; Qté ; Montant ».';
+                    if (count > 0) pasteArea.value = '';
+                });
+                var pasteClear = document.getElementById('purchase-paste-clear');
+                if (pasteClear) {
+                    pasteClear.addEventListener('click', function () {
+                        pasteArea.value = '';
+                        pasteStatus.textContent = '';
+                        pasteArea.focus();
+                    });
+                }
+            }
+
+            // Grille prête : quelques lignes vides pour saisir direct.
+            addLines(START_LINES);
             addBtn.addEventListener('click', function () { addLine(true); });
+            if (add5Btn) add5Btn.addEventListener('click', function () { addLines(5); });
             Array.prototype.forEach.call(basisInputs, function (input) {
                 input.addEventListener('change', recalcAll);
             });
             rateEl.addEventListener('change', recalcAll);
             updateTotals();
 
+            // Ctrl+Entrée : enregistrer sans aller chercher le bouton
+            // tout en bas d'une longue commande.
+            form.addEventListener('keydown', function (ev) {
+                if ((ev.ctrlKey || ev.metaKey) && ev.key === 'Enter') {
+                    ev.preventDefault();
+                    var submit = document.getElementById('pa-submit');
+                    if (submit) submit.click();
+                }
+            });
+
             // Cases non cochées non postées + lignes supprimées : on
             // renumérote no_stock[i] dans l'ordre des lignes juste avant
             // l'envoi, pour rester aligné avec product_key[i].
-            var form = tbody.closest('form');
             form.addEventListener('submit', function () {
-                var rows = tbody.querySelectorAll('tr.purchase-line');
-                Array.prototype.forEach.call(rows, function (tr, i) {
+                var all = rows();
+                Array.prototype.forEach.call(all, function (tr, i) {
                     var cb = tr.querySelector('.line-no-stock');
                     if (cb) cb.name = 'no_stock[' + i + ']';
                 });
