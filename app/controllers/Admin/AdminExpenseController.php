@@ -24,8 +24,10 @@ final class AdminExpenseController extends AdminBaseController
 
         $period = ComptaCalc::resolvePeriod($_GET['period'] ?? null, $_GET['from'] ?? null, $_GET['to'] ?? null);
 
-        $this->renderAdmin('admin/compta/expenses', [
-            'title'         => 'Dépenses',
+        // Page fusionnée « Opérations » (voir AdminStockController::purchases).
+        $this->renderAdmin('admin/compta/operations', [
+            'title'         => 'Opérations · Dépenses',
+            'section'       => 'depenses',
             'user'          => $user,
             'period'        => $period,
             'periodOptions' => ComptaCalc::PERIOD_OPTIONS,

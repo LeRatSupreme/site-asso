@@ -46,8 +46,12 @@ final class AdminStockController extends AdminBaseController
         // seulement les 200 affichées) : total, lignes, quantité, HT/TVA/TTC.
         $stats = Purchase::statsBetween($period['from'], $period['to']);
 
-        $this->renderAdmin('admin/compta/purchases', [
-            'title'         => 'Achats & stock',
+        // Page fusionnée « Opérations » : les quatre sections compta
+        // (achats, dépenses, pertes, événements) partagent la même vue
+        // avec un onglet de niveau 1 ; $section sélectionne l'onglet.
+        $this->renderAdmin('admin/compta/operations', [
+            'title'         => 'Opérations · Achats & stock',
+            'section'       => 'achats',
             'user'          => $user,
             'rows'          => $rows,
             'products'      => Sale::distinctProducts(),
