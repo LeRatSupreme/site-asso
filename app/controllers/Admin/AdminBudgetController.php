@@ -127,6 +127,7 @@ final class AdminBudgetController extends AdminBaseController
             'periodOptions' => ComptaCalc::PERIOD_OPTIONS,
             'editMonth'     => $editMonth,
             'monthsCount'   => count($months),
+            'months'        => $months,
             'rows'          => $rows,
             'totals'        => $totals,
         ]);
