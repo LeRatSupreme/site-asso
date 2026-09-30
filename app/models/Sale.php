@@ -528,6 +528,42 @@ final class Sale extends Model
     }
 
     /**
+     * CA total (TTC) sur une plage de jours (bornes incluses).
+     *
+     * Utilisé par les budgets : le « réalisé » suit exactement la période
+     * sélectionnée au lieu de mois calendaires entiers.
+     *
+     * @param string|null $fromDay Jour de début « YYYY-MM-DD » (inclus), ou null.
+     * @param string|null $toDay   Jour de fin « YYYY-MM-DD » (inclus), ou null.
+     */
+    public static function caBetween(?string $fromDay, ?string $toDay): float
+    {
+        $where = [];
+        $args = [];
+        if ($fromDay !== null && $fromDay !== '') {
+            $where[] = 'sold_at >= ?';
+            $args[] = $fromDay . ' 00:00:00';
+        }
+        if ($toDay !== null && $toDay !== '') {
+            $where[] = 'sold_at <= ?';
+            $args[] = $toDay . ' 23:59:59';
+        }
+        $whereSql = $where === [] ? '' : 'WHERE ' . implode(' AND ', $where);
+
+        try {
+            $stmt = self::pdo()->prepare(
+                'SELECT COALESCE(SUM(price_ttc), 0) AS ca FROM sales ' . $whereSql
+            );
+            $stmt->execute($args);
+            $row = $stmt->fetch();
+
+            return (float) ($row['ca'] ?? 0);
+        } catch (\Throwable) {
+            return 0.0;
+        }
+    }
+
+    /**
      * Agrégats par produit canonique pour un mois donné.
      *
      * @return list<array<string,mixed>>
