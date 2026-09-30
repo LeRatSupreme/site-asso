@@ -7,8 +7,7 @@ declare(strict_types=1);
  * @var array{preset:string,from:?string,to:?string} $period
  * @var array<string,string> $periodOptions
  * @var array{year:int,month:int,value:string} $editMonth
- * @var int $monthsCount
- * @var list<array{0:int,1:int}> $months
+ * @var string $rangeLabel
  * @var list<array{key:string,label:string,planned:float,realized:float}> $rows
  * @var array{planned:float,realized:float} $totals
  */
@@ -36,17 +35,6 @@ foreach ($rows as $r) {
 $resultPlanned = $plannedCa - $plannedExp;
 $resultRealized = $realizedCa - $realizedExp;
 $resultGap = $resultRealized - $resultPlanned;
-
-// Libellé lisible des mois couverts : « sept. 2026 » ou « 12 mois entiers ».
-$monthShort = [1 => 'janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
-if (count($months) <= 3) {
-    $monthsLabel = implode(' · ', array_map(
-        static fn(array $ym): string => $monthShort[$ym[1]] . ' ' . $ym[0],
-        $months
-    ));
-} else {
-    $monthsLabel = sprintf('%d mois entiers', count($months));
-}
 ?>
 <div class="compta-head">
     <div>
@@ -64,20 +52,20 @@ if (count($months) <= 3) {
     <div class="card surface glass kpi">
         <p class="kpi-label">Résultat prévu</p>
         <p class="kpi-value"><?= e(formatPrice($resultPlanned)) ?></p>
-        <p class="kpi-sub">CA prévu − dépenses prévues · <?= e($monthsLabel) ?></p>
+        <p class="kpi-sub">CA prévu − dépenses prévues · <?= e($rangeLabel) ?></p>
     </div>
     <div class="card surface glass kpi">
         <p class="kpi-label">Résultat réalisé</p>
         <p class="kpi-value <?= $resultRealized >= 0 ? 'is-positive' : 'is-negative' ?>"><?= e(formatPrice($resultRealized)) ?></p>
-        <p class="kpi-sub">CA réalisé − dépenses réalisées · <?= e($monthsLabel) ?></p>
+        <p class="kpi-sub">CA réalisé − dépenses réalisées · <?= e($rangeLabel) ?></p>
     </div>
 </div>
 
 <div class="card surface glass table-wrap">
     <h2 class="card-title">Prévu vs Réalisé</h2>
     <p class="muted">
-        Mois couverts : <strong><?= e($monthsLabel) ?></strong> — tu édites le budget du mois <strong><?= e(sprintf('%02d/%04d', $editMonth['month'], $editMonth['year'])) ?></strong> (dernier mois de la période).
-        Les montants « réalisé » couvrent chaque mois <strong>en entier</strong>, même si la période choisie est plus courte (ex : du 30/09 au 30/09 affiche tout septembre).
+        Réalisé : <strong><?= e($rangeLabel) ?></strong> — tu édites le budget du mois <strong><?= e(sprintf('%02d/%04d', $editMonth['month'], $editMonth['year'])) ?></strong> (dernier mois de la période).
+        Le « prévu » est ajusté au prorata des jours de la période (ex : 1 jour en septembre compare à 1/30 du budget de septembre) pour que la comparaison reste équitable sur n'importe quelle durée.
     </p>
     <form method="post" action="<?= e(url('/admin/compta/budgets/save')) ?>">
         <?= csrf_field() ?>

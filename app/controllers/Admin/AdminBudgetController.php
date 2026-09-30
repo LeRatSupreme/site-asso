@@ -12,10 +12,13 @@ use App\Models\Sale;
 
 /**
  * Budgets prévisionnels vs réalisé : objectif de CA et enveloppes de
- * dépenses par mois. Réservé aux rôles ADMIN et TRESORERIE.
+ * dépenses. Réservé aux rôles ADMIN et TRESORERIE.
  *
- * La consultation agrège les mois couverts par la période « Période » ;
- * l'édition (formulaire de save) cible toujours le DERNIER mois couvert.
+ * Le « réalisé » suit EXACTEMENT la période sélectionnée (bornes
+ * journalières incluses) ; le « prévu » somme les budgets des mois
+ * couverts, ajustés au prorata des jours de la période dans chaque mois
+ * (une période d'1 jour sur septembre compare donc à 1/30 du budget de
+ * septembre). L'édition (formulaire de save) cible le DERNIER mois couvert.
  */
 final class AdminBudgetController extends AdminBaseController
 {
@@ -53,32 +56,43 @@ final class AdminBudgetController extends AdminBaseController
             $months = array_slice($months, -24);
         }
 
-        // Agrégation en PHP des budgets et des réalisés sur ces mois.
+        // Bornes journalières réelles du « réalisé ». Sans bornes (« Tout »),
+        // on borne à la fenêtre des mois couverts pour que prévu et réalisé
+        // comparent la même durée.
+        $fromDay = $period['from'] ?? $start->format('Y-m-d');
+        $toDay = $period['to'] ?? $today->format('Y-m-d');
+        $periodStart = new \DateTimeImmutable($fromDay);
+        $periodEnd = new \DateTimeImmutable($toDay);
+
+        // Prévu : budgets des mois couverts, ajustés au prorata du nombre
+        // de jours de la période qui tombent dans chaque mois (budget
+        // mensuel × jours couverts ÷ jours du mois).
+        $plannedByCat = [];
+        foreach ($months as [$y, $m]) {
+            $monthStart = \DateTimeImmutable::createFromFormat('Y-m-d', sprintf('%04d-%02d-01', $y, $m));
+            $monthEnd = $monthStart->modify('last day of this month');
+            $ovStart = $monthStart > $periodStart ? $monthStart : $periodStart;
+            $ovEnd = $monthEnd < $periodEnd ? $monthEnd : $periodEnd;
+            if ($ovEnd < $ovStart) {
+                continue;
+            }
+            $factor = ((float) $ovStart->diff($ovEnd)->days + 1) / (float) $monthStart->format('t');
+            foreach (Budget::forMonth($y, $m) as $cat => $planned) {
+                $plannedByCat[$cat] = ($plannedByCat[$cat] ?? 0.0) + $planned * $factor;
+            }
+        }
+
+        // Réalisé : exactement la période choisie (bornes incluses).
         // L'enveloppe MATIERE se nourrit des ACHATS de stock (page Achats
         // & stock) : c'est la vraie sortie d'argent « courses cafétéria »,
         // en plus d'éventuelles dépenses MATIERE saisies manuellement.
-        $plannedByCat = [];
-        $realizedCa = 0.0;
+        $realizedCa = Sale::caBetween($fromDay, $toDay);
         $realizedExpenses = [];
-        $purchasesByYear = [];
-        foreach ($months as [$y, $m]) {
-            foreach (Budget::forMonth($y, $m) as $cat => $planned) {
-                $plannedByCat[$cat] = ($plannedByCat[$cat] ?? 0.0) + $planned;
-            }
-            $realizedCa += (float) Sale::monthAggregates($y, $m)['ca'];
-            foreach (Expense::byCategory($y, $m) as $c) {
-                $realizedExpenses[$c['category']] = ($realizedExpenses[$c['category']] ?? 0.0) + (float) $c['ttc'];
-            }
-
-            if (!isset($purchasesByYear[$y])) {
-                $purchasesByYear[$y] = [];
-                foreach (Purchase::monthlyTotals($y) as $p) {
-                    $purchasesByYear[$y][(int) $p['m']] = (float) $p['ttc'];
-                }
-            }
-            $realizedExpenses['MATIERE'] = ($realizedExpenses['MATIERE'] ?? 0.0)
-                + ($purchasesByYear[$y][$m] ?? 0.0);
+        foreach (Expense::byCategoryBetween($fromDay, $toDay) as $c) {
+            $realizedExpenses[(string) $c['category']] = (float) $c['ttc'];
         }
+        $realizedExpenses['MATIERE'] = ($realizedExpenses['MATIERE'] ?? 0.0)
+            + (float) Purchase::statsBetween($fromDay, $toDay)['ttc'];
 
         // Le formulaire édite le dernier mois couvert par la période.
         [$lastY, $lastM] = $months[count($months) - 1];
@@ -87,6 +101,10 @@ final class AdminBudgetController extends AdminBaseController
             'month' => $lastM,
             'value' => sprintf('%04d-%02d', $lastY, $lastM),
         ];
+
+        $rangeLabel = $fromDay === $toDay
+            ? 'le ' . formatDate($fromDay, 'd/m/Y')
+            : 'du ' . formatDate($fromDay, 'd/m/Y') . ' au ' . formatDate($toDay, 'd/m/Y');
 
         $labels = [
             'CA'        => "Chiffre d'affaires",
@@ -126,8 +144,7 @@ final class AdminBudgetController extends AdminBaseController
             'period'        => $period,
             'periodOptions' => ComptaCalc::PERIOD_OPTIONS,
             'editMonth'     => $editMonth,
-            'monthsCount'   => count($months),
-            'months'        => $months,
+            'rangeLabel'    => $rangeLabel,
             'rows'          => $rows,
             'totals'        => $totals,
         ]);
