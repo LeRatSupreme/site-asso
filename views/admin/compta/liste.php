@@ -91,27 +91,29 @@ use App\Models\Setting;
         font-size: 1.2rem; font-weight: 900; color: var(--muted, #8892a6);
     }
 
-    /* Rond « stock restant » en haut à gauche de la vignette. */
-    .shop-stock {
-        position: absolute; top: 0.45rem; left: 0.45rem;
+    /* Bulles d'info : stock restant (vert, haut gauche) et conso / semaine
+       (rouge, haut droite). Masquées quand la vignette est grisée. */
+    .shop-stock, .shop-week {
+        position: absolute; top: 0.45rem;
         min-width: 26px; height: 26px; padding: 0 7px;
         display: flex; align-items: center; justify-content: center;
         border-radius: 999px;
-        background: rgba(8, 23, 45, 0.6);
-        border: 1px solid rgba(255, 255, 255, 0.16);
         font-size: 0.74rem; font-weight: 800;
-        color: var(--foreground, inherit);
     }
-    .shop-item.is-zero .shop-stock {
-        background: rgba(245, 158, 11, 0.18);
-        border-color: rgba(245, 158, 11, 0.45);
-        color: #fbbf24;
+    .shop-stock {
+        left: 0.45rem;
+        background: rgba(34, 197, 94, 0.16);
+        border: 1px solid rgba(34, 197, 94, 0.5);
+        color: #4ade80;
     }
-    .shop-item.is-out .shop-stock {
-        background: rgba(239, 68, 68, 0.16);
-        border-color: rgba(239, 68, 68, 0.45);
+    .shop-week {
+        right: 0.45rem;
+        background: rgba(239, 68, 68, 0.12);
+        border: 1px solid rgba(239, 68, 68, 0.4);
         color: #f87171;
     }
+    .shop-item.is-done .shop-stock,
+    .shop-item.is-done .shop-week { display: none; }
 
     .shop-empty { text-align: center; padding: 3.5rem 1rem; }
     .shop-empty-emoji { font-size: 3rem; margin-bottom: 0.6rem; }
@@ -119,6 +121,17 @@ use App\Models\Setting;
     .shop-empty-sub { color: var(--muted, #8892a6); margin: 0; }
 
     .shop-footnote { text-align: center; margin-top: 1.75rem; }
+    .shop-footnote nav { display: flex; gap: 0.5rem; justify-content: center; flex-wrap: wrap; }
+
+    .shop-legend {
+        display: flex; align-items: center; justify-content: center; gap: 1.6rem;
+        flex-wrap: wrap; margin-top: 1.5rem;
+        font-size: 0.78rem; color: var(--muted, #8892a6);
+    }
+    .shop-legend .leg { display: inline-flex; align-items: center; gap: 0.45rem; }
+    .shop-legend .dot { width: 13px; height: 13px; border-radius: 50%; display: inline-block; }
+    .shop-legend .dot-stock { background: #4ade80; }
+    .shop-legend .dot-week { background: rgba(239, 68, 68, 0.75); }
 
     @media print {
         .shop-seg, details, .compta-head .eyebrow { display: none !important; }
@@ -162,10 +175,11 @@ use App\Models\Setting;
 <?php else: ?>
 <ul class="shop-grid">
     <?php foreach ($items as $r): $uid = 'sp-' . substr(md5((string) $r['name']), 0, 10); ?>
-        <li class="shop-item<?= (int) $r['stock'] < 0 ? ' is-out' : ((int) $r['stock'] === 0 ? ' is-zero' : '') ?>" id="<?= e($uid) ?>"
+        <li class="shop-item" id="<?= e($uid) ?>"
             role="button" tabindex="0" aria-pressed="false"
             title="Clique pour griser (acheté) — re-clique pour dégriser">
             <span class="shop-stock" title="Stock théorique restant (dernier comptage + achats − ventes − pertes)"><?= (int) $r['stock'] ?></span>
+            <span class="shop-week" title="Consommation par semaine (7 j/7)"><?= number_format((float) $r['avg_week'], (float) $r['avg_week'] >= 10 ? 0 : 1, ',', ' ') ?></span>
             <?php if ((int) $r['to_order'] > 0): ?>
             <span class="shop-qty"><?= (int) $r['to_order'] ?></span>
         <?php else: ?>
@@ -179,6 +193,11 @@ use App\Models\Setting;
     <?php endforeach; ?>
 </ul>
 <?php endif; ?>
+
+<p class="shop-legend">
+    <span class="leg"><span class="dot dot-stock"></span> stock restant</span>
+    <span class="leg"><span class="dot dot-week"></span> consommé par semaine</span>
+</p>
 
 <?php if (!$kiosk): ?>
 <details class="card surface glass" style="padding: 0.85rem 1.1rem; margin-top: 1.25rem;">
