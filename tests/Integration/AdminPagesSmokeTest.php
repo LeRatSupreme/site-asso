@@ -51,7 +51,7 @@ final class AdminPagesSmokeTest extends IntegrationTestCase
 
         $pdo->prepare(
             "INSERT INTO wordle_words (word, language, length, difficulty, is_active)
-             VALUES ('POMME', 'fr', 5, 'moyen', 1)"
+             VALUES ('POMME', 'fr', 5, 'facile', 1)"
         )->execute();
     }
 
