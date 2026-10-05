@@ -41,6 +41,18 @@ abstract class Controller
     }
 
     /**
+     * Rend une vue dans le layout « kiosque » (accès par lien secret,
+     * ex. Réappro/Liste/Comptage sur téléphone) : coquille minimale SANS
+     * navigation — rien d'autre que la vue n'est visible.
+     *
+     * @param array<string,mixed> $data
+     */
+    protected function renderKiosk(string $view, array $data = []): void
+    {
+        $this->render($view, $data, 'kiosk');
+    }
+
+    /**
      * Renvoie une réponse JSON et termine le script.
      *
      * @param array<string,mixed>|list<mixed> $data
