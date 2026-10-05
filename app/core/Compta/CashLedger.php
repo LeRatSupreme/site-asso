@@ -28,6 +28,16 @@ use App\Models\Sale;
 final class CashLedger
 {
     /**
+     * Frais bancaires fixes prélevés par la banque sur CHAQUE dépôt
+     * d'espèces (uniquement les dépôts — jamais sur le fond de caisse
+     * ni les comptages). Le solde de la CAISSE n'est pas affecté : les
+     * frais sont pris sur le compte banque ; ils sont comptabilisés
+     * automatiquement en dépense catégorie « FRAIS » (voir
+     * AdminCashController::deposit).
+     */
+    public const DEPOSIT_FEE = 3.50;
+
+    /**
      * Solde théorique actuel de la caisse.
      */
     public static function balance(): float

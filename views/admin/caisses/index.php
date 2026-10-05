@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Core\Compta\CashLedger;
 use App\Models\CashMovement;
 
 /**
@@ -80,6 +81,11 @@ $typeLabels = [
 
     <section class="card surface glass">
         <h2 class="card-title">Dépôt à la banque</h2>
+        <p class="card-meta">
+            Frais bancaires fixes : <strong>−<?= e(formatPrice(CashLedger::DEPOSIT_FEE)) ?> par dépôt</strong>
+            (net crédité en banque ≈ montant − <?= e(formatPrice(CashLedger::DEPOSIT_FEE)) ?>).
+            Ils sont ajoutés automatiquement aux dépenses, catégorie « Frais bancaires ».
+        </p>
         <form method="post" action="<?= e(url('/admin/caisses/depot')) ?>">
             <?= csrf_field() ?>
             <div class="field">

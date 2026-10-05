@@ -10,6 +10,7 @@ use App\Core\Compta\CashLedger;
 use App\Models\AuditLog;
 use App\Models\CashCount;
 use App\Models\CashMovement;
+use App\Models\Expense;
 
 /**
  * Caisses — traçabilité du liquide (groupe « Système » ou attribution
@@ -42,6 +43,11 @@ final class AdminCashController extends AdminBaseController
 
     /**
      * Dépôt à la banque (sortie de liquide).
+     *
+     * Chaque dépôt génère automatiquement une dépense de frais bancaires
+     * (CashLedger::DEPOSIT_FEE, catégorie « FRAIS ») : la banque prélève
+     * ces frais sur le compte, jamais dans la caisse — le mouvement DEPOT
+     * sort donc uniquement le montant déposé.
      */
     public function deposit(): void
     {
@@ -60,11 +66,45 @@ final class AdminCashController extends AdminBaseController
         }
 
         $label = trim((string) ($_POST['label'] ?? ''));
+        $by = (string) Auth::user()['email'];
+        $fee = CashLedger::DEPOSIT_FEE;
 
-        $id = CashLedger::recordDeposit($amount, $label, (string) Auth::user()['email'], $date['value']);
-        AuditLog::log('cash.depot', Auth::id(), 'cash', $id, ['amount' => $amount, 'label' => $label]);
+        // Dépôt + frais bancaires : les deux écritures sont créées
+        // atomiquement. Sans date saisie (valeur null = « maintenant »),
+        // la dépense de frais est datée du jour.
+        $pdo = CashCount::connection();
+        $pdo->beginTransaction();
+        try {
+            $id = CashLedger::recordDeposit($amount, $label, $by, $date['value']);
+            $feeExpenseId = Expense::create([
+                'spent_at'   => $date['value'] !== null ? substr((string) $date['value'], 0, 10) : date('Y-m-d'),
+                'category'   => 'FRAIS',
+                'label'      => 'Frais de dépôt banque' . ($label !== '' ? ' — ' . $label : ''),
+                'amount_ttc' => $fee,
+                'created_by' => $by,
+            ]);
+            $pdo->commit();
+        } catch (\Throwable $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
 
-        $this->setFlash('success', sprintf('Dépôt de %s enregistré.', formatPrice($amount)));
+            throw $e;
+        }
+
+        AuditLog::log('cash.depot', Auth::id(), 'cash', $id, [
+            'amount'         => $amount,
+            'label'          => $label,
+            'fee'            => $fee,
+            'fee_expense_id' => $feeExpenseId !== '' ? $feeExpenseId : null,
+        ]);
+
+        $this->setFlash('success', sprintf(
+            'Dépôt de %s enregistré — frais bancaires de %s ajoutés aux dépenses (net crédité en banque ≈ %s).',
+            formatPrice($amount),
+            formatPrice($fee),
+            formatPrice(max(0.0, round($amount - $fee, 2)))
+        ));
         redirect(url('/admin/caisses'));
     }
 
