@@ -9,6 +9,7 @@ use App\Core\Compta\AliasSuggester;
 use App\Core\Compta\CardFees;
 use App\Core\Compta\CashLedger;
 use App\Core\Compta\ComptaCalc;
+use App\Core\Compta\Kiosk;
 use App\Core\Compta\ProductAutoSync;
 use App\Core\Compta\StockPublic;
 use App\Core\Compta\SumUpCsvParser;
@@ -1222,14 +1223,10 @@ final class AdminComptaController extends AdminBaseController
         }
 
         // Lien kiosque — même jeton que le Réappro (généré paresseusement).
-        $kioskUrl = '';
+        $kioskToken = Kiosk::token();
+        $kioskUrl   = '';
         if (!$kiosk) {
-            $kioskToken = trim((string) Setting::get('reappro_kiosk_token', ''));
-            if ($kioskToken === '') {
-                $kioskToken = bin2hex(random_bytes(20));
-                Setting::set('reappro_kiosk_token', $kioskToken);
-            }
-            $kioskUrl = url('/kiosque/liste/' . $kioskToken);
+            $kioskUrl = Kiosk::url('/kiosque/liste/');
         }
 
         $viewData = [
@@ -1265,12 +1262,7 @@ final class AdminComptaController extends AdminBaseController
         // Lien kiosque : généré à la première visite (connecté uniquement).
         $kioskUrl = '';
         if (!$kiosk) {
-            $kioskToken = trim((string) Setting::get('reappro_kiosk_token', ''));
-            if ($kioskToken === '') {
-                $kioskToken = bin2hex(random_bytes(20));
-                Setting::set('reappro_kiosk_token', $kioskToken);
-            }
-            $kioskUrl = url('/kiosque/reappro/' . $kioskToken);
+            $kioskUrl = Kiosk::url('/kiosque/reappro/');
         }
 
         // ── Période d'ANALYSE (sur quoi calculer les moyennes) ──────────
@@ -1643,8 +1635,10 @@ final class AdminComptaController extends AdminBaseController
         $user = $this->guardAdminArea();
 
         $this->renderAdmin('admin/compta/caisse', [
-            'title' => 'Comptage de caisse',
-            'user'  => $user,
+            'title'       => 'Comptage de caisse',
+            'user'        => $user,
+            'kioskHub'    => Kiosk::url('/kiosque/comptage/'),
+            'kioskCaisse' => Kiosk::url('/kiosque/comptage/caisse/'),
         ]);
     }
 
