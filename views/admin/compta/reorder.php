@@ -246,9 +246,9 @@ foreach ($rows as $r) {
                     data-unitcost="<?= $r['unit_cost'] !== null ? e((string) $r['unit_cost']) : '' ?>"
                     data-autonomy="<?= $autonomy ?? 99999 ?>">
                     <td><strong><?= e($key) ?></strong></td>
-                    <td><?= e((string) $r['category']) ?></td>
-                    <td class="num muted"><?= (int) $r['qty'] ?></td>
-                    <td class="num">
+                    <td data-label="Catégorie"><?= e((string) $r['category']) ?></td>
+                    <td class="num muted" data-label="Vendus (période)"><?= (int) $r['qty'] ?></td>
+                    <td class="num" data-label="Stock théorique">
                         <?php if ($hasStock): ?>
                             <strong class="stock-value<?= $stockVal <= 0 ? ' is-out' : '' ?>"
                                     title="<?= $stockVal < 0 ? 'Stock négatif : survente (ventes sans stock reconstitué)' : 'Stock théorique de l\'inventaire' ?>">
@@ -261,10 +261,10 @@ foreach ($rows as $r) {
                             <span class="badge badge-muted" title="Jamais compté en inventaire : fais un comptage pour affiner">À compter</span>
                         <?php endif; ?>
                     </td>
-                    <td class="num muted"><?= reorder_qty((float) $r['avg_day']) ?></td>
-                    <td class="num muted"><?= reorder_qty((float) $r['avg_week']) ?></td>
-                    <td class="num muted"><?= reorder_qty((float) $r['avg_month']) ?></td>
-                    <td class="num">
+                    <td class="num muted" data-label="Conso / jour (7j/7)"><?= reorder_qty((float) $r['avg_day']) ?></td>
+                    <td class="num muted" data-label="Conso / semaine"><?= reorder_qty((float) $r['avg_week']) ?></td>
+                    <td class="num muted" data-label="Conso / mois"><?= reorder_qty((float) $r['avg_month']) ?></td>
+                    <td class="num" data-label="Autonomie">
                         <?php if (!$hasStock || $autonomy === null): ?>
                             <span class="auto-pill auto-none" title="Stock inconnu">—</span>
                         <?php elseif ($r['avg_day'] <= 0): ?>
@@ -276,15 +276,15 @@ foreach ($rows as $r) {
                             </span>
                         <?php endif; ?>
                     </td>
-                    <td class="num"><?= (int) $r['need'] ?></td>
-                    <td class="num to-order-cell">
+                    <td class="num" data-label="Besoin (<?= e($periods[$currentPeriod]['label']) ?>)"><?= (int) $r['need'] ?></td>
+                    <td class="num to-order-cell" data-label="À commander">
                         <?php if ((int) $r['to_order'] > 0): ?>
                             <strong style="color:var(--primary)" title="<?= !$hasStock ? 'Stock jamais compté : le besoin complet est proposé' : 'Besoin − stock théorique' ?>"><?= (int) $r['to_order'] ?></strong>
                         <?php else: ?>
                             <span class="muted">0</span>
                         <?php endif; ?>
                     </td>
-                    <td class="num cost-line-cell">
+                    <td class="num cost-line-cell" data-label="Coût ligne">
                         <?php if ($r['order_cost'] !== null && (int) $r['to_order'] > 0): ?>
                             <strong><?= e(formatPrice((float) $r['order_cost'])) ?></strong>
                             <span class="cost-sub"><?= e(formatPrice((float) $r['unit_cost'], 3)) ?> / u</span>
@@ -312,9 +312,9 @@ foreach ($rows as $r) {
         <?php if ($rows !== []): ?>
         <tfoot>
             <tr>
-                <th colspan="9" style="text-align:right">Total à commander (<?= e($periods[$currentPeriod]['label']) ?>) :</th>
-                <th class="num"><strong id="reorder-total" style="color:var(--primary)"><?= (int) $totalToOrder ?></strong></th>
-                <th class="num">
+                <th colspan="9">Total à commander (<?= e($periods[$currentPeriod]['label']) ?>) :</th>
+                <th class="num" data-label="À commander"><strong id="reorder-total" style="color:var(--primary)"><?= (int) $totalToOrder ?></strong></th>
+                <th class="num" data-label="Coût du panier">
                     <strong id="reorder-total-cost" style="color:var(--primary)">≈ <?= e(formatPrice($totalCost)) ?></strong>
                     <?php if ($missingCost > 0): ?>
                         <span class="muted" style="display:block;font-weight:400;font-size:0.72rem;" title="Produits à commander sans coût de revient saisi">
