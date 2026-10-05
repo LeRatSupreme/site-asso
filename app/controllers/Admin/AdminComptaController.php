@@ -1177,19 +1177,19 @@ final class AdminComptaController extends AdminBaseController
 
         $data = $this->reorderData($covers[$coverKey]['days'], $fromDay, $toDay, $calDays);
 
-        // Uniquement ce qu'il faut acheter : « à racheter » (stock épuisé
-        // ou autonomie < 7 j, même sans ventes sur la période → quantité
-        // inconnue affichée « — ») ET les « à compter » à besoin complet.
-        // Les artefacts SumUp (« custom amount », « montant personnalisé »)
-        // ne sont jamais des produits : exclus de la liste.
+        // Uniquement les produits « À racheter » de la page Réappro :
+        // stock épuisé ou autonomie < 7 jours. Les « à compter » (jamais
+        // comptés, ex. Mister Freeze) n'apparaissent PAS : compte-les en
+        // inventaire ou marque-les « stock ∞ ». Les artefacts SumUp
+        // (« custom amount », « montant personnalisé ») sont exclus aussi.
         $parser = new SumUpCsvParser();
         $isArtifact = static fn(string $k): bool => $parser->isCustomAmount($k);
 
         $items = array_values(array_filter(
             $data['rows'],
             static fn(array $r): bool =>
-                !($isArtifact)((string) ($r['name'] ?? ''))
-                && (($r['state'] ?? '') === 'reorder' || (int) ($r['to_order'] ?? 0) > 0)
+                ($r['state'] ?? '') === 'reorder'
+                && !($isArtifact)((string) ($r['name'] ?? ''))
         ));
 
         // Complète avec les produits à stock connu et ÉPUISÉ mais sans

@@ -247,25 +247,33 @@ final class ComptaConsistencyTest extends IntegrationTestCase
 
     public function test_liste_courses_uniquement_a_acheter_avec_packs(): void
     {
-        // cola : 3 ventes du jour, jamais compté → à acheter (besoin 2, pack 12).
+        // cola : compté 0 puis 3 ventes du jour (théorique −3) → à racheter,
+        // besoin 2 + reconstitution 3 = 5 → pack 12 → commander 12.
         for ($i = 1; $i <= 3; $i++) {
             $this->insertSale('s_lst_' . $i, 'TLST0' . $i, date('Y-m-d ') . sprintf('09:0%d:00', $i), '1.50', 'cola');
         }
+        $this->insertCount('inv_lst_0', '2026-01-01 08:00:00', 'cola', 0);
         $this->pdo->prepare('INSERT INTO product_packs (product_key, pack_size, updated_by) VALUES (?,?,?)')
             ->execute(['cola', 12, 'test']);
+
+        // misterfreeze : jamais compté (« à compter ») → PAS dans la liste.
+        for ($i = 1; $i <= 2; $i++) {
+            $this->insertSale('s_lst_mf' . $i, 'TLSTM' . $i, date('Y-m-d ') . sprintf('10:0%d:00', $i), '2.00', 'misterfreeze');
+        }
 
         // eau : gros stock compté → rien à acheter, absent de la liste.
         $this->insertCount('inv_lst_1', '2026-01-01 09:00:00', 'eau', 100);
 
-        // chips : stock 0 compté → à acheter, sans pack.
+        // chips : compté 0, aucune vente → à racheter, quantité inconnue (—).
         $this->insertCount('inv_lst_2', '2026-01-01 09:05:00', 'chips', 0);
 
         $r = $this->request('GET', '/admin/compta/liste', [], [], $this->rootId);
         self::assertSame(200, (int) ($r['code'] ?? 0), 'La page Liste de courses doit répondre.');
         $body = (string) ($r['body'] ?? '');
         self::assertStringContainsString('Liste de courses', $body);
-        self::assertStringContainsString('cola', $body, 'Le produit à acheter (cola) doit figurer dans la liste.');
-        self::assertStringContainsString('chips', $body, 'Le produit à acheter (chips) doit figurer dans la liste.');
+        self::assertStringContainsString('cola', $body, 'Le produit à racheter (cola) doit figurer dans la liste.');
+        self::assertStringContainsString('chips', $body, 'Le produit à racheter (chips) doit figurer dans la liste.');
+        self::assertStringNotContainsString('misterfreeze', $body, 'Un produit « à compter » ne doit pas apparaître dans la liste.');
         self::assertStringNotContainsString('>eau<', $body, 'Un produit avec du stock ne doit pas apparaître dans la liste.');
 
         // Kiosque sans session : 200 lecture seule, sans navigation.
