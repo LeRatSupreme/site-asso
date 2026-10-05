@@ -1186,6 +1186,58 @@ final class AdminComptaController extends AdminBaseController
                 ($r['state'] ?? '') === 'reorder' || (int) ($r['to_order'] ?? 0) > 0
         ));
 
+        // Complète avec les produits à stock connu et ÉPUISÉ mais sans
+        // aucune vente sur la période : absents du pipeline « ventes » du
+        // réappro, ils doivent quand même figurer sur la liste de courses
+        // (quantité inconnue → « — »). Hors pauses et « stock infini ».
+        $present = [];
+        foreach ($data['rows'] as $r) {
+            $present[strtolower(trim((string) $r['name']))] = true;
+        }
+        $discontinuedRows = array_flip(array_map(
+            static fn(string $k): string => strtolower(trim($k)),
+            ProductDiscontinued::keys()
+        ));
+        $infiniteKeys = array_flip(array_map(
+            static fn(string $k): string => strtolower(trim($k)),
+            ProductInfinite::keys()
+        ));
+        $packSizes = ProductPack::sizesMap();
+
+        foreach (InventoryCount::theoreticalStocksMap() as $stockKey => $theoreticalStock) {
+            $norm = strtolower(trim((string) $stockKey));
+
+            if ($norm === ''
+                || isset($present[$norm])
+                || isset($discontinuedRows[$norm])
+                || isset($infiniteKeys[$norm])
+                || (int) $theoreticalStock > 0
+            ) {
+                continue; // déjà listé, hors périmètre, ou stock disponible
+            }
+
+            $items[] = [
+                'name'         => (string) $stockKey,
+                'category'     => '',
+                'qty'          => 0,
+                'stock'        => (int) $theoreticalStock,
+                'counted_at'   => null,
+                'avg_day'      => 0.0,
+                'avg_week'     => 0.0,
+                'avg_month'    => 0.0,
+                'unit_cost'    => null,
+                'order_cost'   => null,
+                'autonomy'     => null,
+                'need'         => 0,
+                'to_order'     => 0,
+                'to_order_raw' => 0,
+                'pack'         => $packSizes[$norm] ?? 0,
+                'state'        => 'reorder',
+                'is_alert'     => true,
+                'infinite'     => false,
+            ];
+        }
+
         // Tri « course » : par catégorie (A→Z), puis autonomie croissante.
         usort($items, static function (array $a, array $b): int {
             $byCat = strcasecmp((string) $a['category'], (string) $b['category']);
