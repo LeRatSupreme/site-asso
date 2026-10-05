@@ -32,11 +32,79 @@ final class AdminSettingController extends AdminBaseController
         'membership_price', 'membership_enabled', 'membership_season',
     ];
 
+    /**
+     * Clés connues avec leur groupe et valeur par défaut : une clé absente
+     * de la base est quand même AFFICHÉE sur la page Paramètres (sinon il
+     * serait impossible de la créer via l'interface — le formulaire ne
+     * génère que les champs rendus).
+     *
+     * @var array<string,array{0:string,1:string}>
+     */
+    private const KNOWN_DEFAULTS = [
+        'site_name'              => ['general', 'AEIC'],
+        'site_description'       => ['general', ''],
+        'contact_email'          => ['contact', ''],
+        'address'                => ['contact', ''],
+        'map_lat'                => ['contact', ''],
+        'map_lon'                => ['contact', ''],
+        'mailer_from'            => ['email', ''],
+        'mailer_from_name'       => ['email', ''],
+        'smtp_host'              => ['email', ''],
+        'smtp_port'              => ['email', ''],
+        'smtp_user'              => ['email', ''],
+        'smtp_pass'              => ['email', ''],
+        'smtp_encryption'        => ['email', ''],
+        'brevo_api_key'          => ['email', ''],
+        'sumup_default_link'     => ['sumup', ''],
+        'sumup_enabled'          => ['sumup', '0'],
+        'default_sumup_link'     => ['sumup', ''],
+        'sumup_fee_rate'         => ['sumup', '1.75'],
+        'maintenance_mode'       => ['features', '0'],
+        'orders_enabled'         => ['features', '1'],
+        'registrations_enabled'  => ['features', '1'],
+        'og_image'               => ['seo', ''],
+        'twitter_handle'         => ['seo', ''],
+        'csp_directives'         => ['seo', ''],
+        'facebook_url'           => ['social', ''],
+        'instagram_url'          => ['social', ''],
+        'linkedin_url'           => ['social', ''],
+        'discord_webhook_url'    => ['social', ''],
+        'discord_enabled'        => ['social', '0'],
+        'membership_price'       => ['cafeteria', ''],
+        'membership_enabled'     => ['cafeteria', '0'],
+        'membership_season'      => ['cafeteria', ''],
+    ];
+
     public function index(): void
     {
         $this->guardSystemOrPage('settings');
 
         $settings = Setting::all();
+
+        // Fusionne les clés connues absentes de la base (valeur par défaut) :
+        // sans ça, une clé jamais créée n'apparaît pas et ne peut pas être
+        // enregistrée depuis l'interface.
+        $present = [];
+        foreach ($settings as $s) {
+            $present[(string) $s['key']] = true;
+        }
+        foreach (self::KNOWN_DEFAULTS as $key => [$group, $default]) {
+            if (!isset($present[$key])) {
+                $settings[] = [
+                    'id'    => 'set_default_' . $key,
+                    'key'   => $key,
+                    'value' => $default,
+                    'type'  => 'text',
+                    'label' => $key,
+                    'group' => $group,
+                ];
+            }
+        }
+        unset($s);
+        usort($settings, static fn(array $a, array $b): int =>
+            strcasecmp((string) $a['group'], (string) $b['group'])
+            ?: strcasecmp((string) $a['key'], (string) $b['key'])
+        );
 
         // Regroupement par `group`.
         $groups = [];
