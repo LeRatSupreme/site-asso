@@ -55,6 +55,7 @@ $sections = [
         'Analytics'    => '/admin/analytics',
         'Budgets'      => '/admin/compta/budgets',
         'Réappro'      => '/admin/compta/reappro',
+        'Liste de courses' => '/admin/compta/liste',
     ],
     'Ventes' => [
         'Importer CSV'    => '/admin/compta/import',

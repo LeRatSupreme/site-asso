@@ -245,6 +245,49 @@ final class ComptaConsistencyTest extends IntegrationTestCase
         );
     }
 
+    public function test_liste_courses_uniquement_a_acheter_avec_packs(): void
+    {
+        // cola : 3 ventes du jour, jamais compté → à acheter (besoin 2, pack 12).
+        for ($i = 1; $i <= 3; $i++) {
+            $this->insertSale('s_lst_' . $i, 'TLST0' . $i, date('Y-m-d ') . sprintf('09:0%d:00', $i), '1.50', 'cola');
+        }
+        $this->pdo->prepare('INSERT INTO product_packs (product_key, pack_size, updated_by) VALUES (?,?,?)')
+            ->execute(['cola', 12, 'test']);
+
+        // eau : gros stock compté → rien à acheter, absent de la liste.
+        $this->insertCount('inv_lst_1', '2026-01-01 09:00:00', 'eau', 100);
+
+        // chips : stock 0 compté → à acheter, sans pack.
+        $this->insertCount('inv_lst_2', '2026-01-01 09:05:00', 'chips', 0);
+
+        $r = $this->request('GET', '/admin/compta/liste', [], [], $this->rootId);
+        self::assertSame(200, (int) ($r['code'] ?? 0), 'La page Liste de courses doit répondre.');
+        $body = (string) ($r['body'] ?? '');
+        self::assertStringContainsString('Liste de courses', $body);
+        self::assertStringContainsString('cola', $body, 'Le produit à acheter (cola) doit figurer dans la liste.');
+        self::assertStringContainsString('chips', $body, 'Le produit à acheter (chips) doit figurer dans la liste.');
+        self::assertStringNotContainsString('>eau<', $body, 'Un produit avec du stock ne doit pas apparaître dans la liste.');
+
+        // Kiosque sans session : 200 lecture seule, sans navigation.
+        $token = (string) $this->pdo->query(
+            "SELECT value FROM settings WHERE `key` = 'reappro_kiosk_token'"
+        )->fetchColumn();
+        self::assertNotSame('', $token, 'Le jeton kiosque doit être généré par la page liste.');
+
+        $rk = $this->request('GET', '/kiosque/liste/' . $token);
+        self::assertSame(200, (int) ($rk['code'] ?? 0), 'La liste kiosque doit fonctionner sans connexion.');
+        $bodyK = (string) ($rk['body'] ?? '');
+        self::assertStringContainsString('cola', $bodyK);
+        self::assertStringNotContainsString('admin-sidebar', $bodyK, 'Aucune navigation en kiosque.');
+
+        // Mauvais jeton : 403.
+        self::assertSame(
+            403,
+            (int) ($this->request('GET', '/kiosque/liste/mauvais-jeton')['code'] ?? 0),
+            'Un jeton invalide doit être refusé (403).'
+        );
+    }
+
     public function test_acces_kiosque_reappro_sans_connexion_par_jeton(): void
     {
         // Le jeton est généré paresseusement à la première visite connectée.

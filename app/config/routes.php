@@ -291,6 +291,10 @@ function aeic_register_routes(Router $router): void
     // valide lui-même le jeton (403 sinon).
     $router->get('/kiosque/reappro/{token}', [AdminComptaController::class, 'kioskReorder']);
     $router->post('/admin/compta/reappro/kiosk/regenerate', [AdminComptaController::class, 'regenerateKioskToken']);
+    // Liste de courses : réappro simplifié (à racheter + packs). Même
+    // version kiosque par lien secret que le Réappro (même jeton).
+    $router->get('/admin/compta/liste', [AdminComptaController::class, 'liste']);
+    $router->get('/kiosque/liste/{token}', [AdminComptaController::class, 'kioskListe']);
 
     // Suivi avancé : dépenses, budgets, achats, inventaire, pertes, événements, rapport annuel.
     $router->get('/admin/compta/depenses', [AdminExpenseController::class, 'index']);

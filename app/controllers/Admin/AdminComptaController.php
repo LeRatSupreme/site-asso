@@ -1115,6 +1115,132 @@ final class AdminComptaController extends AdminBaseController
         redirect(url('/admin/compta/reappro'));
     }
 
+    // -----------------------------------------------------------------
+    //  Liste de courses (Réappro simplifié)
+    // -----------------------------------------------------------------
+
+    /**
+     * Liste de courses : uniquement les produits à acheter, avec arrondi
+     * aux packs d'achat. Analyse FIXE sur 14 jours (non affichée) ; seule
+     * la couverture (« Couvrir pour ») est choisissable.
+     */
+    public function liste(): void
+    {
+        $user = $this->guardCompta();
+
+        $this->renderListePage(false, $user);
+    }
+
+    /**
+     * Accès « kiosque » à la liste de courses par lien secret (même jeton
+     * que le Réappro) : lecture seule, sans connexion, sans navigation.
+     */
+    public function kioskListe(string $token): void
+    {
+        $expected = trim((string) Setting::get('reappro_kiosk_token', ''));
+        $given    = trim($token);
+
+        if ($expected === '' || $given === '' || !hash_equals($expected, $given)) {
+            http_response_code(403);
+            echo '<h1>Erreur 403 — Lien invalide ou révoqué.</h1>';
+
+            return;
+        }
+
+        $this->renderListePage(true, null, $token);
+    }
+
+    /**
+     * Assemble et rend la liste de courses (connecté OU kiosque).
+     *
+     * @param array<string,mixed>|null $user Utilisateur connecté (null en kiosque).
+     */
+    private function renderListePage(bool $kiosk, ?array $user = null, ?string $kioskToken = null): void
+    {
+        // Analyse FIXE : 14 derniers jours glissants (masquée de l'interface).
+        $fromDay = date('Y-m-d', strtotime('-13 days'));
+        $toDay   = date('Y-m-d');
+        $calDays = ComptaCalc::calendarDaysBetween($fromDay, $toDay);
+
+        // Couverture (« Couvrir pour »), défaut 1 semaine.
+        $covers = [
+            '1w' => ['label' => '1 semaine',  'days' => 7],
+            '2w' => ['label' => '2 semaines', 'days' => 14],
+            '1m' => ['label' => '1 mois',     'days' => 30],
+            '2m' => ['label' => '2 mois',     'days' => 61],
+            '3m' => ['label' => '3 mois',     'days' => 91],
+        ];
+        $coverKey = (string) ($_GET['c'] ?? '1w');
+        if (!isset($covers[$coverKey])) {
+            $coverKey = '1w';
+        }
+
+        $data = $this->reorderData($covers[$coverKey]['days'], $fromDay, $toDay, $calDays);
+
+        // Uniquement ce qu'il faut acheter (quantité à commander > 0) :
+        // couvre les « à racheter » ET les « à compter » (jamais comptés).
+        $items = array_values(array_filter(
+            $data['rows'],
+            static fn(array $r): bool => (int) ($r['to_order'] ?? 0) > 0
+        ));
+
+        // Tri « course » : par catégorie (A→Z), puis autonomie croissante.
+        usort($items, static function (array $a, array $b): int {
+            $byCat = strcasecmp((string) $a['category'], (string) $b['category']);
+            if ($byCat !== 0) {
+                return $byCat;
+            }
+
+            return ($a['autonomy'] ?? PHP_INT_MAX) <=> ($b['autonomy'] ?? PHP_INT_MAX);
+        });
+
+        // Totaux sur les quantités arrondies au pack (= ce qu'on achète).
+        $totalUnits  = 0;
+        $totalCost   = 0.0;
+        $missingCost = 0;
+        foreach ($items as $r) {
+            $totalUnits += (int) $r['to_order'];
+            if ($r['order_cost'] !== null) {
+                $totalCost += (float) $r['order_cost'];
+            } else {
+                $missingCost++;
+            }
+        }
+
+        // Lien kiosque — même jeton que le Réappro (généré paresseusement).
+        $kioskUrl = '';
+        if (!$kiosk) {
+            $kioskToken = trim((string) Setting::get('reappro_kiosk_token', ''));
+            if ($kioskToken === '') {
+                $kioskToken = bin2hex(random_bytes(20));
+                Setting::set('reappro_kiosk_token', $kioskToken);
+            }
+            $kioskUrl = url('/kiosque/liste/' . $kioskToken);
+        }
+
+        $viewData = [
+            'title'       => 'Liste de courses',
+            'user'        => $user,
+            'items'       => $items,
+            'covers'      => $covers,
+            'coverKey'    => $coverKey,
+            'totalUnits'  => $totalUnits,
+            'totalCost'   => round($totalCost, 2),
+            'missingCost' => $missingCost,
+            'kiosk'       => $kiosk,
+            'kioskUrl'    => $kioskUrl,
+            'kioskToken'  => (string) $kioskToken,
+        ];
+
+        if ($kiosk) {
+            $this->renderKiosk('admin/compta/liste', $viewData);
+
+            return;
+        }
+
+        $this->renderAdmin('admin/compta/liste', $viewData);
+    }
+
     /**
      * Assemble et rend la page Réapprovisionnement (connecté OU kiosque).
      *
