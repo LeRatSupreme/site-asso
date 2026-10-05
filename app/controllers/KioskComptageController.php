@@ -141,8 +141,9 @@ final class KioskComptageController extends Controller
             foreach ($catRows as $row) {
                 $catByKey[strtolower(trim((string) $row['k']))] = trim((string) $row['cat']);
             }
-        } catch (\Throwable) {
+        } catch (\Throwable $e) {
             // Pas de catégories disponibles : tri alphabétique simple.
+            error_log('[kiosque] catégories indisponibles : ' . $e->getMessage());
         }
 
         $active = [];
