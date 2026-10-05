@@ -180,16 +180,20 @@ final class AdminPagesSmokeTest extends IntegrationTestCase
 
     public function test_zones_protegees_refusees_aux_invites_et_eleves(): void
     {
-        // Invité : /admin → 403 (défense routeur, sans être connecté).
+        // Invité : /admin → redirection vers la connexion, avec la page
+        // demandée mémorisée (callbackUrl) pour y revenir après login.
         $r = $this->request('GET', '/admin');
-        self::assertSame(403, (int) ($r['code'] ?? 0), 'Un invité ne doit pas accéder à /admin.');
+        self::assertSame(302, (int) ($r['code'] ?? 0), 'Un invité doit être redirigé vers la connexion.');
+        $loc = $this->location($r);
+        self::assertStringContainsString('/login', $loc);
+        self::assertStringContainsString('callbackUrl', $loc);
 
         // Invité : /eleve → redirection vers /login.
         $r = $this->request('GET', '/eleve');
         self::assertSame(302, (int) ($r['code'] ?? 0), 'Un invité doit être redirigé depuis /eleve.');
         self::assertStringContainsString('/login', $this->location($r));
 
-        // Élève : refusé sur tout l'espace admin (compta et système inclus).
+        // Élève : refusé sur tout l'espace admin (403), y compris compta et système.
         foreach (['/admin', '/admin/compta', '/admin/users', '/admin/caisses'] as $path) {
             $r = $this->request('GET', $path, [], [], $this->eleveId);
             self::assertSame(
