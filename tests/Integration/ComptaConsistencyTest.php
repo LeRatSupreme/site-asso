@@ -297,6 +297,60 @@ final class ComptaConsistencyTest extends IntegrationTestCase
         );
     }
 
+    public function test_kiosque_comptage_caisse_et_inventaire(): void
+    {
+        // Jeton kiosque inséré directement (même clé que les pages kiosque).
+        $this->pdo->prepare(
+            "INSERT INTO settings (id, `key`, value) VALUES ('set_kiosk_t', 'reappro_kiosk_token', 'jetoncomptage123')
+             ON DUPLICATE KEY UPDATE value = 'jetoncomptage123'"
+        )->execute();
+        $token = 'jetoncomptage123';
+
+        // Hub : les deux tuiles de comptage.
+        $rh = $this->request('GET', '/kiosque/comptage/' . $token);
+        self::assertSame(200, (int) ($rh['code'] ?? 0), 'Le hub kiosque comptage doit répondre.');
+        $bodyH = (string) ($rh['body'] ?? '');
+        self::assertStringContainsString('Comptage caisse', $bodyH);
+        self::assertStringContainsString('Comptage inventaire', $bodyH);
+        self::assertStringNotContainsString('admin-sidebar', $bodyH, 'Aucune navigation en kiosque.');
+
+        // Comptage caisse : formulaire accessible sans session…
+        $rc = $this->request('GET', '/kiosque/comptage/caisse/' . $token);
+        self::assertSame(200, (int) ($rc['code'] ?? 0));
+        self::assertStringContainsString('Montant compté', (string) ($rc['body'] ?? ''));
+
+        // … et enregistrement réel (comptage à l'aveugle, trace kiosque).
+        $this->request('POST', '/kiosque/comptage/caisse/' . $token, [
+            'counted' => '10,50',
+            'label'   => 'test kiosque',
+        ]);
+        self::assertSame(
+            1,
+            (int) $this->pdo->query("SELECT COUNT(*) FROM cash_counts WHERE created_by = 'kiosque' AND counted = 10.5")->fetchColumn(),
+            'Le comptage de caisse kiosque doit être enregistré.'
+        );
+
+        // Comptage inventaire : le produit vendu apparaît (à l'aveugle)…
+        $this->insertSale('s_kt_1', 'TKIOSK1', date('Y-m-d 08:00:00'), '1.00', 'colakiosque');
+        $ri = $this->request('GET', '/kiosque/comptage/inventaire/' . $token);
+        self::assertSame(200, (int) ($ri['code'] ?? 0));
+        self::assertStringContainsString('colakiosque', (string) ($ri['body'] ?? ''));
+
+        // … et l'enregistrement crée bien le comptage (théorique calculé côté serveur).
+        $this->request('POST', '/kiosque/comptage/inventaire/save/' . $token, [
+            'count' => ['colakiosque' => '7'],
+        ]);
+        self::assertSame(
+            1,
+            (int) $this->pdo->query("SELECT COUNT(*) FROM inventory_counts WHERE product_key = 'colakiosque' AND counted_qty = 7 AND created_by = 'kiosque'")->fetchColumn(),
+            'Le comptage inventaire kiosque doit être enregistré.'
+        );
+
+        // Mauvais jeton : 403 sur le hub et sur les POST.
+        self::assertSame(403, (int) ($this->request('GET', '/kiosque/comptage/mauvais-jeton')['code'] ?? 0));
+        self::assertSame(403, (int) ($this->request('POST', '/kiosque/comptage/caisse/mauvais-jeton', ['counted' => '5'])['code'] ?? 0));
+    }
+
     public function test_acces_kiosque_reappro_sans_connexion_par_jeton(): void
     {
         // Le jeton est généré paresseusement à la première visite connectée.

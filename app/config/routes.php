@@ -31,6 +31,7 @@ use App\Controllers\EventController;
 use App\Controllers\GameController;
 use App\Controllers\HealthController;
 use App\Controllers\HomeController;
+use App\Controllers\KioskComptageController;
 use App\Controllers\LocaleController;
 use App\Controllers\NotificationController;
 use App\Controllers\PageController;
@@ -295,6 +296,14 @@ function aeic_register_routes(Router $router): void
     // version kiosque par lien secret que le Réappro (même jeton).
     $router->get('/admin/compta/liste', [AdminComptaController::class, 'liste']);
     $router->get('/kiosque/liste/{token}', [AdminComptaController::class, 'kioskListe']);
+    // Kiosque « Comptage » : hub + comptage caisse + comptage inventaire,
+    // par lien secret (même jeton). Les POST enregistrent réellement
+    // (traces « kiosque ») — l'authentification est le jeton lui-même.
+    $router->get('/kiosque/comptage/{token}', [KioskComptageController::class, 'hub']);
+    $router->get('/kiosque/comptage/caisse/{token}', [KioskComptageController::class, 'caisse']);
+    $router->post('/kiosque/comptage/caisse/{token}', [KioskComptageController::class, 'caisseSave']);
+    $router->get('/kiosque/comptage/inventaire/{token}', [KioskComptageController::class, 'inventaire']);
+    $router->post('/kiosque/comptage/inventaire/save/{token}', [KioskComptageController::class, 'inventaireSave']);
 
     // Suivi avancé : dépenses, budgets, achats, inventaire, pertes, événements, rapport annuel.
     $router->get('/admin/compta/depenses', [AdminExpenseController::class, 'index']);

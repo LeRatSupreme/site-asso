@@ -35,11 +35,12 @@ $siteName = Setting::get('site_name', 'AEIC');
 </head>
 <body class="admin-body">
     <main class="admin-main" style="max-width: 1100px; margin: 0 auto; padding: 1.1rem 1rem 2.5rem;">
+        <?php require AEIC_VIEWS . '/partials/flash_messages.php'; ?>
         <div class="admin-content">
             <?= $content ?>
         </div>
         <p class="card-meta" style="text-align: center; margin-top: 1.75rem;">
-            <?= e($siteName) ?> — consultation seule · accès limité à cette page
+            <?= e($siteName) ?> — accès limité à cette page
         </p>
     </main>
 </body>
