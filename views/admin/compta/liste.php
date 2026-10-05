@@ -199,7 +199,7 @@ use App\Models\Setting;
     <span class="leg"><span class="dot dot-week"></span> consommé par semaine</span>
 </p>
 
-<?php if (!$kiosk): ?>
+<?php if (!$kiosk && ($user['role'] ?? '') === 'SUPERADMIN'): ?>
 <details class="card surface glass" style="padding: 0.85rem 1.1rem; margin-top: 1.25rem;">
     <summary style="cursor: pointer; font-weight: 800;">📱 Accès téléphone sans connexion</summary>
     <p class="muted" style="margin: 0.6rem 0 0.4rem;">
