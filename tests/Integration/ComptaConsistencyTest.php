@@ -213,6 +213,11 @@ final class ComptaConsistencyTest extends IntegrationTestCase
             $body,
             'Pas de bloc « accès téléphone » imbriqué en mode kiosque.'
         );
+        // Layout kiosque : aucune navigation admin visible — que la page.
+        self::assertStringNotContainsString('admin-sidebar', $body, 'Le menu latéral ne doit pas apparaître en kiosque.');
+        self::assertStringNotContainsString('admin-toggle', $body, 'Le bouton menu admin ne doit pas apparaître en kiosque.');
+        self::assertStringNotContainsString('Déconnexion', $body, 'Aucun lien de déconnexion en kiosque.');
+        self::assertStringNotContainsString('Voir le site', $body, 'Aucun lien externe en kiosque.');
 
         // Mauvais jeton : 403.
         $r3 = $this->request('GET', '/kiosque/reappro/mauvais-jeton');

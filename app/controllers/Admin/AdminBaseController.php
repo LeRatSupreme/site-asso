@@ -147,4 +147,16 @@ abstract class AdminBaseController extends Controller
     {
         $this->render($view, $data, 'admin');
     }
+
+    /**
+     * Rend une vue dans le layout « kiosque » (accès par lien secret,
+     * ex. Réapprovisionnement sur téléphone) : coquille minimale SANS
+     * navigation — rien d'autre que la vue n'est visible.
+     *
+     * @param array<string,mixed> $data
+     */
+    protected function renderKiosk(string $view, array $data = []): void
+    {
+        $this->render($view, $data, 'kiosk');
+    }
 }
