@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 /**
  * Liste de courses : produits à acheter uniquement, quantités arrondies
- * aux packs d'achat. Interface volontairement VISUELLE et minimaliste —
- * utilisable en kiosque (layout kiosk, sans navigation) sur le téléphone.
+ * aux packs d'achat. Interface en GRILLE DE PETITS CARRÉS — utilisable
+ * en kiosque (layout kiosk, sans navigation) sur le téléphone.
  *
  * @var list<array<string,mixed>> $items
  * @var array<string,array{label:string,days:int}> $covers
@@ -103,10 +103,17 @@ uksort($groups, static function (string $a, string $b): int {
         background: rgba(255, 255, 255, 0.06); border-radius: 999px; padding: 0.1rem 0.55rem;
     }
 
-    /* ── Tuiles produit ─────────────────────────────────────────── */
+    /* ── Grille de petits carrés ────────────────────────────────── */
+    .shop-grid {
+        list-style: none; margin: 0; padding: 0;
+        display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+        gap: 0.6rem;
+    }
     .shop-item {
-        display: flex; align-items: center; gap: 0.95rem;
-        padding: 0.85rem 1rem; margin-bottom: 0.6rem;
+        position: relative;
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: 0.2rem; text-align: center;
+        aspect-ratio: 1 / 1; padding: 0.7rem 0.55rem;
         background: rgba(255, 255, 255, 0.035);
         border: 1px solid rgba(255, 255, 255, 0.07);
         border-radius: 16px;
@@ -114,31 +121,37 @@ uksort($groups, static function (string $a, string $b): int {
     }
     .shop-check {
         appearance: none; -webkit-appearance: none;
-        width: 27px; height: 27px; flex-shrink: 0; margin: 0; cursor: pointer;
+        position: absolute; top: 0.45rem; left: 0.45rem;
+        width: 22px; height: 22px; margin: 0; cursor: pointer;
         border: 2px solid var(--muted, #8892a6); border-radius: 50%;
-        background: transparent; position: relative;
+        background: transparent;
         transition: background 0.15s, border-color 0.15s;
     }
     .shop-check:checked { background: var(--primary, #48bdd3); border-color: var(--primary, #48bdd3); }
     .shop-check:checked::after {
         content: '✓'; position: absolute; inset: 0;
         display: flex; align-items: center; justify-content: center;
-        font-size: 0.95rem; font-weight: 900; color: #06222b;
+        font-size: 0.8rem; font-weight: 900; color: #06222b;
     }
-    .shop-label { display: flex; flex-direction: column; gap: 0.3rem; cursor: pointer; min-width: 0; }
-    .shop-name { font-size: 1.06rem; font-weight: 800; line-height: 1.2; word-break: break-word; }
-    .shop-meta { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+    .shop-qty { font-size: 2.3rem; font-weight: 900; line-height: 1; color: var(--primary, #48bdd3); }
+    .shop-qty small {
+        display: block; font-size: 0.62rem; font-weight: 800;
+        color: var(--muted, #8892a6); text-transform: uppercase; letter-spacing: 0.07em;
+        margin-top: 0.2rem;
+    }
+    .shop-name {
+        font-size: 0.9rem; font-weight: 800; line-height: 1.15;
+        display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+        word-break: break-word; max-width: 100%;
+    }
     .shop-pack {
-        font-size: 0.7rem; font-weight: 800; color: var(--primary, #48bdd3);
-        background: rgba(72, 189, 211, 0.14); border-radius: 999px; padding: 0.12rem 0.6rem;
+        font-size: 0.66rem; font-weight: 800; color: var(--primary, #48bdd3);
+        background: rgba(72, 189, 211, 0.14); border-radius: 999px; padding: 0.1rem 0.5rem;
+        white-space: nowrap;
     }
-    .shop-need { font-size: 0.74rem; color: var(--muted, #8892a6); }
-    .shop-qty {
-        margin-left: auto; font-size: 2.05rem; font-weight: 900; line-height: 1;
-        color: var(--primary, #48bdd3); white-space: nowrap; text-align: right;
-    }
-    .shop-qty small { font-size: 0.72rem; font-weight: 800; color: var(--muted, #8892a6); display: block; text-align: right; }
-    .shop-item.is-done { opacity: 0.42; border-color: transparent; }
+    .shop-need { font-size: 0.66rem; color: var(--muted, #8892a6); white-space: nowrap; }
+    .shop-meta { display: flex; flex-direction: column; align-items: center; gap: 0.15rem; }
+    .shop-item.is-done { opacity: 0.38; border-color: transparent; }
     .shop-item.is-done .shop-name { text-decoration: line-through; }
 
     .shop-empty { text-align: center; padding: 3.5rem 1rem; }
@@ -206,26 +219,24 @@ uksort($groups, static function (string $a, string $b): int {
         <?= e($cat) ?>
         <span class="shop-cat-count"><?= count($groupItems) ?></span>
     </h2>
-    <ul style="list-style: none; margin: 0; padding: 0;">
+    <ul class="shop-grid">
         <?php foreach ($groupItems as $r): $uid = 'sp-' . substr(md5((string) $r['name']), 0, 10); ?>
         <li class="shop-item" id="<?= e($uid) ?>">
-            <input type="checkbox" class="shop-check" id="<?= e($uid) ?>-chk">
-            <label class="shop-label" for="<?= e($uid) ?>-chk">
-                <span class="shop-name"><?= e((string) $r['name']) ?></span>
-                <span class="shop-meta">
-                    <?php if ((int) $r['pack'] > 1): ?>
-                        <span class="shop-pack">pack de <?= (int) $r['pack'] ?></span>
-                    <?php endif; ?>
-                    <?php if ((int) $r['to_order_raw'] !== (int) $r['to_order']): ?>
-                        <span class="shop-need" title="Besoin avant arrondi au pack">besoin <?= (int) $r['to_order_raw'] ?></span>
-                    <?php endif; ?>
-                </span>
-            </label>
+            <input type="checkbox" class="shop-check" id="<?= e($uid) ?>-chk" aria-label="Acheté : <?= e((string) $r['name']) ?>">
             <span class="shop-qty" title="<?= (int) $r['to_order'] > 0 ? 'À acheter (arrondi au pack)' : 'Stock épuisé — consommation inconnue sur la période' ?>">
                 <?php if ((int) $r['to_order'] > 0): ?>
                     <?= (int) $r['to_order'] ?><small>à acheter</small>
                 <?php else: ?>
                     —<small>stock épuisé</small>
+                <?php endif; ?>
+            </span>
+            <span class="shop-name" title="<?= e((string) $r['name']) ?>"><?= e((string) $r['name']) ?></span>
+            <span class="shop-meta">
+                <?php if ((int) $r['pack'] > 1): ?>
+                    <span class="shop-pack">pack de <?= (int) $r['pack'] ?></span>
+                <?php endif; ?>
+                <?php if ((int) $r['to_order_raw'] !== (int) $r['to_order']): ?>
+                    <span class="shop-need" title="Besoin avant arrondi au pack">besoin <?= (int) $r['to_order_raw'] ?></span>
                 <?php endif; ?>
             </span>
         </li>
