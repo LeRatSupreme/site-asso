@@ -149,7 +149,16 @@ final class Router
         // publique ne commence par ces préfixes (cf. app/config/routes.php).
         $routePath = (string) (parse_url($path, PHP_URL_PATH) ?: $path);
         if (str_starts_with($routePath, '/admin')) {
-            if (!Auth::check() || Auth::role() === Auth::ROLE_ELEVE) {
+            if (!Auth::check()) {
+                // Invité : connexion en mémorisant la page demandée (utile
+                // pour les raccourcis écran d'accueil type « Réappro » sur
+                // téléphone : après reconnexion, retour direct sur la page).
+                $callback = (string) ($_SERVER['REQUEST_URI'] ?? '/admin');
+                redirect(url('/login?callbackUrl=') . rawurlencode($callback));
+
+                return;
+            }
+            if (Auth::role() === Auth::ROLE_ELEVE) {
                 http_response_code(403);
                 echo '<h1>Erreur 403 — Accès refusé.</h1>';
 
