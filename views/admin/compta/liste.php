@@ -18,42 +18,6 @@ declare(strict_types=1);
  */
 
 use App\Models\Setting;
-
-$siteName = Setting::get('site_name', 'AEIC');
-
-/** Emoji par catégorie (recherche insensible à la casse, fallback 🛒). */
-function liste_cat_emoji(string $cat): string
-{
-    $c = mb_strtolower($cat);
-
-    return match (true) {
-        str_contains($c, 'boisson')   => '🥤',
-        str_contains($c, 'snack')     => '🍫',
-        str_contains($c, 'bonbon'),
-        str_contains($c, 'confiserie') => '🍬',
-        str_contains($c, 'chip'),
-        str_contains($c, 'apéritif'),
-        str_contains($c, 'aperitif')  => '🍿',
-        str_contains($c, 'aliment'),
-        str_contains($c, 'food')      => '🥐',
-        str_contains($c, 'hygiène'),
-        str_contains($c, 'hygiene')   => '🧼',
-        str_contains($c, 'fournit'),
-        str_contains($c, 'matériel'),
-        str_contains($c, 'materiel')  => '🧾',
-        default                        => '🛒',
-    };
-}
-
-// Regroupement par catégorie (catégorie vide → « Divers »).
-$groups = [];
-foreach ($items as $r) {
-    $cat = (string) ($r['category'] !== '' ? $r['category'] : 'Divers');
-    $groups[$cat][] = $r;
-}
-uksort($groups, static function (string $a, string $b): int {
-    return strcasecmp($a, $b);
-});
 ?>
 <style>
     .shop-seg { display: flex; gap: 0.4rem; flex-wrap: wrap; margin: 0 0 1.2rem; }
@@ -79,17 +43,6 @@ uksort($groups, static function (string $a, string $b): int {
     }
     .shop-total strong { font-size: 1.1rem; color: var(--primary, #48bdd3); }
 
-    .shop-cat {
-        display: flex; align-items: center; gap: 0.55rem;
-        margin: 1.4rem 0.15rem 0.7rem; font-size: 0.95rem; font-weight: 800;
-        text-transform: uppercase; letter-spacing: 0.06em;
-    }
-    .shop-cat .shop-cat-emoji { font-size: 1.25rem; }
-    .shop-cat .shop-cat-count {
-        font-size: 0.7rem; font-weight: 800; color: var(--muted, #8892a6);
-        background: rgba(255, 255, 255, 0.06); border-radius: 999px; padding: 0.1rem 0.55rem;
-    }
-
     .shop-grid {
         list-style: none; margin: 0; padding: 0;
         display: grid; grid-template-columns: repeat(auto-fill, minmax(135px, 1fr));
@@ -103,22 +56,11 @@ uksort($groups, static function (string $a, string $b): int {
         background: rgba(255, 255, 255, 0.035);
         border: 1px solid rgba(255, 255, 255, 0.07);
         border-radius: 16px;
-        transition: opacity 0.15s ease, border-color 0.15s ease;
+        cursor: pointer; user-select: none; -webkit-user-select: none;
+        -webkit-tap-highlight-color: transparent;
+        transition: opacity 0.15s ease, border-color 0.15s ease, background 0.15s ease;
     }
-    .shop-check {
-        appearance: none; -webkit-appearance: none;
-        position: absolute; top: 0.4rem; left: 0.4rem;
-        width: 22px; height: 22px; margin: 0; cursor: pointer;
-        border: 2px solid var(--muted, #8892a6); border-radius: 50%;
-        background: transparent;
-        transition: background 0.15s, border-color 0.15s;
-    }
-    .shop-check:checked { background: var(--primary, #48bdd3); border-color: var(--primary, #48bdd3); }
-    .shop-check:checked::after {
-        content: '✓'; position: absolute; inset: 0;
-        display: flex; align-items: center; justify-content: center;
-        font-size: 0.8rem; font-weight: 900; color: #06222b;
-    }
+    .shop-item:focus-visible { outline: 2px solid var(--primary, #48bdd3); outline-offset: 2px; }
     .shop-qty { font-size: 2.4rem; font-weight: 900; line-height: 1; color: var(--primary, #48bdd3); }
     .shop-qty.is-unknown { color: var(--muted, #8892a6); font-size: 1.7rem; }
     .shop-name {
@@ -131,8 +73,19 @@ uksort($groups, static function (string $a, string $b): int {
         background: rgba(72, 189, 211, 0.14); border-radius: 999px; padding: 0.08rem 0.5rem;
         white-space: nowrap;
     }
-    .shop-item.is-done { opacity: 0.35; border-color: transparent; }
-    .shop-item.is-done .shop-name { text-decoration: line-through; }
+    /* Carré « acheté » : grisé, barré, petit ✓. */
+    .shop-item.is-done {
+        background: rgba(136, 146, 166, 0.14);
+        border-color: rgba(255, 255, 255, 0.04);
+        opacity: 0.55;
+    }
+    .shop-item.is-done .shop-name { text-decoration: line-through; color: var(--muted, #8892a6); }
+    .shop-item.is-done .shop-qty { color: var(--muted, #8892a6); }
+    .shop-item.is-done .shop-pack { color: var(--muted, #8892a6); background: rgba(136, 146, 166, 0.18); }
+    .shop-item.is-done::after {
+        content: '✓'; position: absolute; top: 0.35rem; right: 0.55rem;
+        font-size: 1rem; font-weight: 900; color: var(--muted, #8892a6);
+    }
 
     .shop-empty { text-align: center; padding: 3.5rem 1rem; }
     .shop-empty-emoji { font-size: 3rem; margin-bottom: 0.6rem; }
@@ -181,31 +134,23 @@ uksort($groups, static function (string $a, string $b): int {
     <p class="shop-empty-sub">Le stock couvre la période choisie. essaie « Couvrir pour » plus long.</p>
 </section>
 <?php else: ?>
-<?php foreach ($groups as $cat => $groupItems): ?>
-<section>
-    <h2 class="shop-cat">
-        <span class="shop-cat-emoji"><?= liste_cat_emoji($cat) ?></span>
-        <?= e($cat) ?>
-        <span class="shop-cat-count"><?= count($groupItems) ?></span>
-    </h2>
-    <ul class="shop-grid">
-        <?php foreach ($groupItems as $r): $uid = 'sp-' . substr(md5((string) $r['name']), 0, 10); ?>
-        <li class="shop-item" id="<?= e($uid) ?>">
-            <input type="checkbox" class="shop-check" id="<?= e($uid) ?>-chk" aria-label="Acheté : <?= e((string) $r['name']) ?>">
-            <?php if ((int) $r['to_order'] > 0): ?>
-                <span class="shop-qty"><?= (int) $r['to_order'] ?></span>
-            <?php else: ?>
-                <span class="shop-qty is-unknown" title="Stock épuisé — consommation inconnue sur la période">—</span>
-            <?php endif; ?>
-            <span class="shop-name" title="<?= e((string) $r['name']) ?>"><?= e((string) $r['name']) ?></span>
-            <?php if ((int) $r['pack'] > 1): ?>
-                <span class="shop-pack">pack de <?= (int) $r['pack'] ?></span>
-            <?php endif; ?>
-        </li>
-        <?php endforeach; ?>
-    </ul>
-</section>
-<?php endforeach; ?>
+<ul class="shop-grid">
+    <?php foreach ($items as $r): $uid = 'sp-' . substr(md5((string) $r['name']), 0, 10); ?>
+    <li class="shop-item" id="<?= e($uid) ?>"
+        role="button" tabindex="0" aria-pressed="false"
+        title="Clique pour griser (acheté) — re-clique pour dégriser">
+        <?php if ((int) $r['to_order'] > 0): ?>
+            <span class="shop-qty"><?= (int) $r['to_order'] ?></span>
+        <?php else: ?>
+            <span class="shop-qty is-unknown" title="Stock épuisé — consommation inconnue sur la période">—</span>
+        <?php endif; ?>
+        <span class="shop-name" title="<?= e((string) $r['name']) ?>"><?= e((string) $r['name']) ?></span>
+        <?php if ((int) $r['pack'] > 1): ?>
+            <span class="shop-pack">pack de <?= (int) $r['pack'] ?></span>
+        <?php endif; ?>
+    </li>
+    <?php endforeach; ?>
+</ul>
 <?php endif; ?>
 
 <?php if (!$kiosk): ?>
@@ -226,10 +171,17 @@ uksort($groups, static function (string $a, string $b): int {
 
 <script>
 (function () {
-    Array.prototype.forEach.call(document.querySelectorAll('.shop-check'), function (b) {
-        b.addEventListener('change', function () {
-            var item = b.closest('.shop-item');
-            if (item) item.classList.toggle('is-done', b.checked);
+    Array.prototype.forEach.call(document.querySelectorAll('.shop-item'), function (item) {
+        function toggle() {
+            var done = item.classList.toggle('is-done');
+            item.setAttribute('aria-pressed', done ? 'true' : 'false');
+        }
+        item.addEventListener('click', toggle);
+        item.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                toggle();
+            }
         });
     });
 })();

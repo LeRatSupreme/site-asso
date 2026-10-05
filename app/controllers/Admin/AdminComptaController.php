@@ -1245,14 +1245,19 @@ final class AdminComptaController extends AdminBaseController
             ];
         }
 
-        // Tri « course » : par catégorie (A→Z), puis autonomie croissante.
+        // Tri comme le Réappro : autonomie croissante (les plus critiques
+        // en premier, « inconnue » en dernier), puis quantité, puis nom.
         usort($items, static function (array $a, array $b): int {
-            $byCat = strcasecmp((string) $a['category'], (string) $b['category']);
-            if ($byCat !== 0) {
-                return $byCat;
+            $aa = $a['autonomy'] ?? PHP_INT_MAX;
+            $bb = $b['autonomy'] ?? PHP_INT_MAX;
+            if ($aa !== $bb) {
+                return $aa <=> $bb;
+            }
+            if ((int) $a['to_order'] !== (int) $b['to_order']) {
+                return (int) $b['to_order'] <=> (int) $a['to_order'];
             }
 
-            return ($a['autonomy'] ?? PHP_INT_MAX) <=> ($b['autonomy'] ?? PHP_INT_MAX);
+            return strcasecmp((string) $a['name'], (string) $b['name']);
         });
 
         // Totaux sur les quantités arrondies au pack (= ce qu'on achète).
