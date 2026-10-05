@@ -326,7 +326,7 @@ final class ComptaConsistencyTest extends IntegrationTestCase
         ]);
         self::assertSame(
             1,
-            (int) $this->pdo->query("SELECT COUNT(*) FROM cash_counts WHERE created_by = 'kiosque' AND counted = 10.5")->fetchColumn(),
+            (int) $this->pdo->query("SELECT COUNT(*) FROM cash_counts WHERE created_by = 'kiosque' AND counted_amount = 10.5")->fetchColumn(),
             'Le comptage de caisse kiosque doit être enregistré.'
         );
 
