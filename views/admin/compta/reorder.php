@@ -91,7 +91,7 @@ foreach ($rows as $r) {
     </div>
 </div>
 
-<?php if (!$kiosk): ?>
+<?php if (!$kiosk && ($user['role'] ?? '') === 'SUPERADMIN'): ?>
 <details class="card surface glass" style="padding: 0.85rem 1.1rem; margin-bottom: 1.25rem;">
     <summary style="cursor: pointer; font-weight: 800;">📱 Accès téléphone sans connexion</summary>
     <p class="muted" style="margin: 0.6rem 0 0.4rem;">

@@ -43,6 +43,7 @@ declare(strict_types=1);
         </div>    </form>
 </section>
 
+<?php if (($user['role'] ?? '') === 'SUPERADMIN'): ?>
 <details class="card surface glass" style="padding: 0.85rem 1.1rem; margin-top: 1.25rem;">
     <summary style="cursor: pointer; font-weight: 800;">📱 Accès téléphone sans connexion</summary>
     <p class="muted" style="margin: 0.6rem 0 0.4rem;">
@@ -64,3 +65,4 @@ declare(strict_types=1);
                 onclick="(function (b) { var i = document.getElementById('kiosk-caisse'); i.select(); try { document.execCommand('copy'); } catch (e) {} if (navigator.clipboard) { navigator.clipboard.writeText(i.value); } b.textContent = 'Copié ✓'; setTimeout(function () { b.textContent = 'Copier'; }, 1500); })(this)">Copier</button>
     </div>
 </details>
+<?php endif; ?>
