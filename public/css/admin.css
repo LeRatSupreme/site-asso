@@ -657,6 +657,36 @@
     .pos-cart { position: static; }
 }
 
+/* ---- Menu réductible (desktop) ------------------------------------------
+   Le hamburger de la topbar replie la sidebar sur desktop : la piste de
+   grille passe de 260px à 0 et le contenu prend toute la largeur. L'état
+   est mémorisé dans localStorage (voir layout admin, clé
+   « aeic_admin_sidebar_collapsed »). Mobile (<961px) : comportement
+   drawer inchangé. */
+@media (min-width: 961px) {
+    .admin-toggle { display: block; }
+
+    .admin-shell {
+        transition: grid-template-columns 0.22s ease;
+    }
+    body.sidebar-collapsed .admin-shell { grid-template-columns: 0px 1fr; }
+
+    .admin-sidebar {
+        transition: opacity 0.16s ease, visibility 0.22s ease;
+    }
+    body.sidebar-collapsed .admin-sidebar {
+        padding-left: 0;
+        padding-right: 0;
+        border-right-color: transparent;
+        overflow: hidden;
+        opacity: 0;
+        visibility: hidden; /* sort aussi les liens du focus clavier */
+    }
+
+    /* Le title du bouton est mis à jour en JS ; outline visible au clavier. */
+    .admin-toggle:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+}
+
 /* ---- Dashboard SumUp --------------------------------------------------- */
 
 .sumup-split { margin-bottom: 1.5rem; }

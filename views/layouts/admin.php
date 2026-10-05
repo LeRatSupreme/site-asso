@@ -163,12 +163,20 @@ foreach ($operationsPrefixes as $opPrefix) {
     <?php endif; ?>
 </head>
 <body class="admin-body">
+    <script>
+        /* Restaure l'état « menu réduit » AVANT le premier rendu (pas de flash). */
+        try {
+            if (localStorage.getItem('aeic_admin_sidebar_collapsed') === '1') {
+                document.body.classList.add('sidebar-collapsed');
+            }
+        } catch (e) {}
+    </script>
     <div class="starfield" id="starfield" aria-hidden="true"></div>
     <a class="skip-link" href="#contenu">Aller au contenu</a>
 
     <div class="admin-shell">
         <div class="admin-backdrop" id="admin-backdrop" hidden></div>
-        <aside class="admin-sidebar">
+        <aside class="admin-sidebar" id="admin-sidebar">
             <a class="brand" href="<?= e(url('/admin')) ?>">
                 <span class="brand-logo" aria-hidden="true">AE</span>
                 <span class="brand-name">Admin <?= e($siteName) ?></span>
@@ -237,17 +245,43 @@ foreach ($operationsPrefixes as $opPrefix) {
             var btn = document.querySelector('.admin-toggle');
             var side = document.querySelector('.admin-sidebar');
             var backdrop = document.getElementById('admin-backdrop');
+            var body = document.body;
+            var mobileMq = window.matchMedia('(max-width: 960px)');
+            var COLLAPSE_KEY = 'aeic_admin_sidebar_collapsed';
+
+            function isCollapsed() { return body.classList.contains('sidebar-collapsed'); }
+
+            /* aria-expanded du hamburger = menu visible ?
+               Desktop : visible sauf si réduit. Mobile : drawer ouvert. */
+            function syncToggle() {
+                if (!btn) return;
+                var expanded = mobileMq.matches
+                    ? (side ? side.classList.contains('is-open') : false)
+                    : !isCollapsed();
+                btn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+                btn.title = expanded ? 'Réduire le menu' : 'Afficher le menu';
+            }
 
             function setOpen(open) {
                 if (!side) return;
                 side.classList.toggle('is-open', open);
-                if (btn) btn.setAttribute('aria-expanded', open ? 'true' : 'false');
                 if (backdrop) backdrop.hidden = !open;
+                syncToggle();
+            }
+
+            function setCollapsed(collapsed) {
+                body.classList.toggle('sidebar-collapsed', collapsed);
+                try { localStorage.setItem(COLLAPSE_KEY, collapsed ? '1' : '0'); } catch (e) {}
+                syncToggle();
             }
 
             if (btn && side) {
                 btn.addEventListener('click', function () {
-                    setOpen(!side.classList.contains('is-open'));
+                    if (mobileMq.matches) {
+                        setOpen(!side.classList.contains('is-open'));
+                    } else {
+                        setCollapsed(!isCollapsed());
+                    }
                 });
                 if (backdrop) {
                     backdrop.addEventListener('click', function () { setOpen(false); });
@@ -259,7 +293,23 @@ foreach ($operationsPrefixes as $opPrefix) {
                 side.addEventListener('click', function (e) {
                     if (e.target.closest('a')) { setOpen(false); }
                 });
+
+                // Changement de breakpoint : on referme le drawer et on
+                // resynchronise l'état aria/title (la classe sidebar-collapsed
+                // est sans effet en mobile : CSS scopé ≥961px).
+                var onMqChange = function () {
+                    setOpen(false);
+                    syncToggle();
+                };
+                if (typeof mobileMq.addEventListener === 'function') {
+                    mobileMq.addEventListener('change', onMqChange);
+                } else if (typeof mobileMq.addListener === 'function') {
+                    mobileMq.addListener(onMqChange);
+                }
             }
+
+            // État initial (aria + title, restauration faite en début de body).
+            syncToggle();
 
             // Sauvegarde et restaure la position du scroll de la sidebar.
             if (side) {
