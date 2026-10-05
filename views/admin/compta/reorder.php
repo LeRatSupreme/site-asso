@@ -226,6 +226,7 @@ foreach ($rows as $r) {
             <option value="ok">OK</option>
         </select>
         <select id="reorder-sort" aria-label="Trier par">
+            <option value="autonomy-asc" selected>Autonomie ↑</option>
             <option value="to_order">À commander ↓</option>
             <option value="name">Produit (A→Z)</option>
             <option value="name-desc">Produit (Z→A)</option>
@@ -235,7 +236,6 @@ foreach ($rows as $r) {
             <option value="need-desc">Besoin ↓</option>
             <option value="stock-asc">Stock ↑</option>
             <option value="stock-desc">Stock ↓</option>
-            <option value="autonomy-asc">Autonomie ↑</option>
         </select>
         <button type="button" id="reorder-reset" class="reorder-reset" hidden title="Réinitialiser les filtres">Réinitialiser</button>
         <span class="costs-count muted" id="reorder-count"></span>
@@ -440,6 +440,8 @@ foreach ($rows as $r) {
     var catSel   = document.getElementById('reorder-cat');
     var stateSel = document.getElementById('reorder-state');
     var sortSel  = document.getElementById('reorder-sort');
+    // Tri par défaut : autonomie croissante (les plus critiques en premier).
+    var DEFAULT_SORT = 'autonomy-asc';
     var countEl  = document.getElementById('reorder-count');
     var resetBtn = document.getElementById('reorder-reset');
     var tbody    = document.querySelector('.reorder-table tbody');
@@ -503,7 +505,7 @@ foreach ($rows as $r) {
     }
 
     function sortRows() {
-        var sort = sortSel ? sortSel.value : 'to_order';
+        var sort = sortSel && sortSel.value !== '' ? sortSel.value : DEFAULT_SORT;
         rows.sort(function (a, b) {
             var an, bn;
             switch (sort) {
@@ -583,7 +585,7 @@ foreach ($rows as $r) {
         // Synchronise l'URL (filtres partageables / rechargements).
         if (window.URLSearchParams && window.history && window.history.replaceState) {
             var sp = new URLSearchParams(window.location.search);
-            [['q', search.value.trim()], ['cat', cat], ['etat', state], ['tri', (sortSel && sortSel.value !== 'to_order') ? sortSel.value : '']]
+            [['q', search.value.trim()], ['cat', cat], ['etat', state], ['tri', (sortSel && sortSel.value !== DEFAULT_SORT) ? sortSel.value : '']]
                 .forEach(function (p) { if (p[1]) { sp.set(p[0], p[1]); } else { sp.delete(p[0]); } });
             var qs = sp.toString();
             window.history.replaceState(null, '', window.location.pathname + (qs ? '?' + qs : ''));
@@ -607,7 +609,7 @@ foreach ($rows as $r) {
         search.value = '';
         if (catSel) catSel.value = '';
         if (stateSel) stateSel.value = '';
-        if (sortSel) sortSel.value = 'to_order';
+        if (sortSel) sortSel.value = DEFAULT_SORT;
         apply();
         search.focus();
     });
