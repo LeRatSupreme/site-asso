@@ -114,6 +114,18 @@ $_SERVER['SERVER_PORT'] = '443';
 $_SERVER['SERVER_NAME'] = 'example.test';
 $_SERVER['HTTP_HOST'] = 'example.test';
 
+// Query string éventuel inclus dans le chemin (ex. « /admin/compta/annuel?year=2026 ») :
+// alimente $_GET et QUERY_STRING comme le ferait un vrai SAPI — sinon les pages
+// pilotées par filtres GET (analytics, exports CSV, périodes) ne sont pas testables.
+$_GET = [];
+$_SERVER['QUERY_STRING'] = '';
+$qpos = strpos($path, '?');
+if ($qpos !== false) {
+    $_SERVER['QUERY_STRING'] = substr($path, $qpos + 1);
+    parse_str($_SERVER['QUERY_STRING'], $_GET);
+    $path = substr($path, 0, $qpos);
+}
+
 $_POST = [];
 if ($postJson !== '') {
     $decoded = json_decode($postJson, true);
