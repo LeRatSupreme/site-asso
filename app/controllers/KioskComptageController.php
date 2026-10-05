@@ -7,6 +7,7 @@ namespace App\Controllers;
 use App\Core\Compta\CashLedger;
 use App\Core\Compta\ProductAutoSync;
 use App\Core\Compta\StockPublic;
+use App\Core\Compta\SumUpCsvParser;
 use App\Core\Controller;
 use App\Models\AuditLog;
 use App\Models\InventoryCount;
@@ -124,27 +125,55 @@ final class KioskComptageController extends Controller
         }
 
         $pausedKeys = array_flip(ProductDiscontinued::keys());
+        $parser = new SumUpCsvParser();
+
+        // Catégorie de chaque clé produit (la plus fréquente dans les ventes)
+        // pour trier la liste par rayon.
+        $catByKey = [];
+        try {
+            $catRows = InventoryCount::connection()->query(
+                "SELECT COALESCE(NULLIF(TRIM(product_key), ''), TRIM(description)) AS k,
+                        MAX(COALESCE(category, '')) AS cat
+                 FROM sales
+                 WHERE category IS NOT NULL AND category <> ''
+                 GROUP BY k"
+            )->fetchAll();
+            foreach ($catRows as $row) {
+                $catByKey[strtolower(trim((string) $row['k']))] = trim((string) $row['cat']);
+            }
+        } catch (\Throwable) {
+            // Pas de catégories disponibles : tri alphabétique simple.
+        }
+
         $active = [];
         $paused = [];
         foreach (Sale::distinctProducts() as $key) {
-            $k = (string) $key;
-            if ($k === '') {
+            $k = trim((string) $key);
+            // Artefact SumUp (« custom amount », « montant personnalisé ») :
+            // jamais un produit à compter.
+            if ($k === '' || $parser->isCustomAmount($k)) {
                 continue;
             }
+            $cat = $catByKey[strtolower($k)] ?? 'Divers';
+            if ($cat === '') {
+                $cat = 'Divers';
+            }
             if (isset($pausedKeys[$k])) {
-                $paused[] = ['key' => $k, 'paused' => true];
+                $paused[] = ['key' => $k, 'cat' => $cat, 'paused' => true];
             } else {
-                $active[] = ['key' => $k, 'paused' => false];
+                $active[] = ['key' => $k, 'cat' => $cat, 'paused' => false];
             }
         }
-        $byName = static fn(array $a, array $b): int => strcasecmp($a['key'], $b['key']);
-        usort($active, $byName);
-        usort($paused, $byName);
+        $byCat = static fn(array $a, array $b): int =>
+            strcasecmp($a['cat'], $b['cat']) ?: strcasecmp($a['key'], $b['key']);
+        usort($active, $byCat);
+        usort($paused, $byCat);
 
         $this->renderKiosk('admin/compta/kiosk-inventaire', [
             'title' => 'Comptage inventaire',
             'token' => $token,
-            'rows'  => array_merge($active, $paused),
+            'active' => $active,
+            'paused' => $paused,
         ]);
     }
 

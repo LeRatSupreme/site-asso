@@ -5,12 +5,12 @@ declare(strict_types=1);
 /**
  * Kiosque — comptage inventaire « à l'aveugle » : les théoriques ne sont
  * volontairement pas affichés, les écarts sont calculés à l'enregistrement.
- * Interface facilitée : recherche instantanée, gros boutons − / +,
- * compteur de produits comptés. Les produits en pause sont listés sans
- * saisie (ignorés côté serveur).
+ * Tri par catégorie, recherche instantanée, gros boutons − / +. Les
+ * produits en pause sont listés sans saisie (ignorés côté serveur).
  *
  * @var string $token
- * @var list<array{key:string,paused:bool}> $rows
+ * @var list<array{key:string,cat:string,paused:bool}> $active
+ * @var list<array{key:string,cat:string,paused:bool}> $paused
  */
 ?>
 <style>
@@ -32,7 +32,17 @@ declare(strict_types=1);
     }
     .kprog strong { color: var(--primary, #48bdd3); }
 
-    .klist { list-style: none; margin: 0; padding: 0; }
+    .ksec { margin-bottom: 1.3rem; }
+    .ksec-title {
+        display: flex; align-items: center; gap: 0.5rem;
+        margin: 0 0.15rem 0.5rem; font-size: 0.95rem; font-weight: 800;
+        text-transform: uppercase; letter-spacing: 0.06em;
+    }
+    .ksec-title .ksec-count {
+        font-size: 0.7rem; font-weight: 800; color: var(--muted, #8892a6);
+        background: rgba(255, 255, 255, 0.06); border-radius: 999px; padding: 0.1rem 0.55rem;
+    }
+    .klist { list-style: none; margin: 0; padding: 0 0.2rem; }
     .krow {
         padding: 0.7rem 0.5rem; border-bottom: 1px solid rgba(255, 255, 255, 0.06);
         transition: opacity 0.15s ease;
@@ -92,31 +102,50 @@ declare(strict_types=1);
 
     <p class="kprog"><span id="kProgTxt"></span><span>laisse vide = non compté</span></p>
 
-    <ul class="klist" id="kList">
-        <?php $activeRows = array_filter($rows, static fn(array $r): bool => empty($r['paused'])); ?>
-        <?php $pausedRows = array_filter($rows, static fn(array $r): bool => !empty($r['paused'])); ?>
-        <?php foreach ($activeRows as $r): ?>
-        <li class="krow" data-name="<?= e(mb_strtolower($r['key'])) ?>">
-            <p class="kname"><?= e($r['key']) ?></p>
-            <div class="kstep">
-                <button type="button" class="kbtn" data-step="-1" aria-label="Retirer 1 à <?= e($r['key']) ?>">−</button>
-                <input type="number" class="kinput" name="count[<?= e($r['key']) ?>]"
-                       min="0" step="1" inputmode="numeric" placeholder="0"
-                       aria-label="Quantité comptée de <?= e($r['key']) ?>">
-                <button type="button" class="kbtn" data-step="1" aria-label="Ajouter 1 à <?= e($r['key']) ?>">+</button>
-            </div>
-        </li>
-        <?php endforeach; ?>
-        <?php if ($activeRows === []): ?>
-        <li class="knone">Aucun produit enregistré pour le moment.</li>
-        <?php endif; ?>
-        <?php foreach ($pausedRows as $r): ?>
-        <li class="krow is-paused" data-name="<?= e(mb_strtolower($r['key'])) ?>">
-            <p class="kname"><?= e($r['key']) ?></p>
-            <span class="kpaused">en pause (hors comptage)</span>
-        </li>
-        <?php endforeach; ?>
-    </ul>
+    <?php $groups = []; ?>
+    <?php foreach ($active as $r) { $groups[$r['cat']][] = $r; } ?>
+    <?php uksort($groups, static function (string $a, string $b): int { return strcasecmp($a, $b); }); ?>
+
+    <?php foreach ($groups as $cat => $items): ?>
+    <section class="ksec">
+        <h2 class="ksec-title">
+            <?= e($cat) ?>
+            <span class="ksec-count"><?= count($items) ?></span>
+        </h2>
+        <ul class="klist">
+            <?php foreach ($items as $r): ?>
+            <li class="krow" data-name="<?= e(mb_strtolower($r['key'])) ?>">
+                <p class="kname"><?= e($r['key']) ?></p>
+                <div class="kstep">
+                    <button type="button" class="kbtn" data-step="-1" aria-label="Retirer 1 à <?= e($r['key']) ?>">−</button>
+                    <input type="number" class="kinput" name="count[<?= e($r['key']) ?>]"
+                           min="0" step="1" inputmode="numeric" placeholder="0"
+                           aria-label="Quantité comptée de <?= e($r['key']) ?>">
+                    <button type="button" class="kbtn" data-step="1" aria-label="Ajouter 1 à <?= e($r['key']) ?>">+</button>
+                </div>
+            </li>
+            <?php endforeach; ?>
+        </ul>
+    </section>
+    <?php endforeach; ?>
+
+    <?php if ($active === []): ?>
+    <p class="knone">Aucun produit enregistré pour le moment.</p>
+    <?php endif; ?>
+
+    <?php if ($paused !== []): ?>
+    <section class="ksec">
+        <h2 class="ksec-title">En pause (hors comptage)</h2>
+        <ul class="klist">
+            <?php foreach ($paused as $r): ?>
+            <li class="krow is-paused" data-name="<?= e(mb_strtolower($r['key'])) ?>">
+                <p class="kname"><?= e($r['key']) ?></p>
+                <span class="kpaused">en pause</span>
+            </li>
+            <?php endforeach; ?>
+        </ul>
+    </section>
+    <?php endif; ?>
 
     <div class="kform-actions">
         <button type="submit" class="btn btn-primary">Enregistrer le comptage</button>
@@ -132,13 +161,13 @@ declare(strict_types=1);
 
 <script>
 (function () {
-    var rows = document.querySelectorAll('#kList .krow');
+    var rows = document.querySelectorAll('#kList ~ * .krow, .ksec .krow');
     var search = document.getElementById('kq');
     var progTxt = document.getElementById('kProgTxt');
 
     function countFilled() {
         var n = 0;
-        Array.prototype.forEach.call(document.querySelectorAll('#kList .kinput'), function (i) {
+        Array.prototype.forEach.call(document.querySelectorAll('.kinput'), function (i) {
             if (i.value !== '') n++;
         });
         return n;
@@ -147,9 +176,15 @@ declare(strict_types=1);
     function refresh() {
         var n = countFilled();
         if (progTxt) progTxt.innerHTML = '<strong>' + n + '</strong> produit(s) compté(s)';
-        Array.prototype.forEach.call(rows, function (row) {
+        Array.prototype.forEach.call(document.querySelectorAll('.krow'), function (row) {
             var input = row.querySelector('.kinput');
             if (input) row.classList.toggle('is-counted', input.value !== '');
+        });
+        // Masque les sections dont tous les produits sont filtrés.
+        Array.prototype.forEach.call(document.querySelectorAll('.ksec'), function (sec) {
+            var visible = sec.querySelectorAll('.krow:not(.khidden)').length;
+            var hasInputs = sec.querySelector('.kinput') !== null;
+            sec.classList.toggle('khidden', hasInputs && visible === 0);
         });
     }
 
@@ -161,7 +196,7 @@ declare(strict_types=1);
             var v = parseInt(input.value, 10);
             if (isNaN(v)) { v = 0; }
             v = Math.max(0, v + step);
-            input.value = v === 0 && input.value === '' && step < 0 ? '' : v;
+            input.value = (v === 0 && input.value === '' && step < 0) ? '' : v;
             refresh();
         });
     });
@@ -170,15 +205,20 @@ declare(strict_types=1);
     if (search) {
         search.addEventListener('input', function () {
             var q = search.value.trim().toLowerCase();
-            Array.prototype.forEach.call(rows, function (row) {
+            Array.prototype.forEach.call(document.querySelectorAll('.krow'), function (row) {
                 var name = row.getAttribute('data-name') || '';
                 row.classList.toggle('khidden', q !== '' && name.indexOf(q) === -1);
+            });
+            Array.prototype.forEach.call(document.querySelectorAll('.ksec'), function (sec) {
+                var visible = sec.querySelectorAll('.krow:not(.khidden)').length;
+                var hasInputs = sec.querySelector('.kinput') !== null;
+                sec.classList.toggle('khidden', hasInputs && visible === 0);
             });
         });
     }
 
     // Saisie clavier : suivi du comptage.
-    Array.prototype.forEach.call(document.querySelectorAll('#kList .kinput'), function (input) {
+    Array.prototype.forEach.call(document.querySelectorAll('#kList .kinput, .ksec .kinput'), function (input) {
         input.addEventListener('input', refresh);
     });
 
