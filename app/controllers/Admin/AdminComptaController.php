@@ -1075,9 +1075,9 @@ final class AdminComptaController extends AdminBaseController
 
     public function reorder(): void
     {
-        $this->guardCompta();
+        $user = $this->guardCompta();
 
-        $this->renderReorderPage(false);
+        $this->renderReorderPage(false, $user);
     }
 
     /**
@@ -1116,8 +1116,10 @@ final class AdminComptaController extends AdminBaseController
 
     /**
      * Assemble et rend la page Réapprovisionnement (connecté OU kiosque).
+     *
+     * @param array<string,mixed>|null $user Utilisateur connecté (null en kiosque).
      */
-    private function renderReorderPage(bool $kiosk): void
+    private function renderReorderPage(bool $kiosk, ?array $user = null): void
     {
         // Lien kiosque : généré à la première visite (connecté uniquement).
         $kioskUrl = '';
@@ -1202,6 +1204,30 @@ final class AdminComptaController extends AdminBaseController
 
         $data = $this->reorderData($targetDays, $fromDay, $toDay, $calDays);
 
+        if ($kiosk) {
+            // Layout kiosque : aucune navigation, rien d'autre que la page.
+            $this->renderKiosk('admin/compta/reorder', [
+                'title'         => 'Réapprovisionnement',
+                'user'          => null,
+                'rows'          => $data['rows'],
+                'alerts'        => $data['alerts'],
+                'periods'       => $periods,
+                'currentPeriod' => $periodKey,
+                'targetDays'    => $targetDays,
+                'refOptions'    => $refOptions,
+                'currentRef'    => $ref,
+                'refFrom'       => $fromDay,
+                'refTo'         => $toDay,
+                'refCalDays'    => $calDays,
+                'du'            => $duOk ? $du : '',
+                'au'            => $auOk ? $au : '',
+                'kiosk'         => true,
+                'kioskUrl'      => '',
+            ]);
+
+            return;
+        }
+
         $this->renderAdmin('admin/compta/reorder', [
             'title'         => 'Réapprovisionnement',
             'user'          => $user,
@@ -1217,7 +1243,7 @@ final class AdminComptaController extends AdminBaseController
             'refCalDays'    => $calDays,
             'du'            => $duOk ? $du : '',
             'au'            => $auOk ? $au : '',
-            'kiosk'         => $kiosk,
+            'kiosk'         => false,
             'kioskUrl'      => $kioskUrl,
         ]);
     }
