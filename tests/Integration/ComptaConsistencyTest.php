@@ -187,6 +187,48 @@ final class ComptaConsistencyTest extends IntegrationTestCase
         self::assertStringContainsString('Stock infini (marqué manuellement)', $body3);
     }
 
+    public function test_acces_kiosque_reappro_sans_connexion_par_jeton(): void
+    {
+        // Le jeton est généré paresseusement à la première visite connectée.
+        $r1 = $this->request('GET', '/admin/compta/reappro', [], [], $this->rootId);
+        self::assertSame(200, (int) ($r1['code'] ?? 0));
+
+        $token = (string) $this->pdo->query(
+            "SELECT value FROM settings WHERE `key` = 'reappro_kiosk_token'"
+        )->fetchColumn();
+        self::assertNotSame('', $token, 'Le jeton kiosque doit être généré automatiquement.');
+
+        // Lien kiosque SANS session : la page s'affiche en lecture seule.
+        $r2 = $this->request('GET', '/kiosque/reappro/' . $token);
+        self::assertSame(200, (int) ($r2['code'] ?? 0), 'Le lien kiosque doit fonctionner sans connexion.');
+        $body = (string) ($r2['body'] ?? '');
+        self::assertStringContainsString('Réapprovisionnement', $body);
+        self::assertStringNotContainsString(
+            '/admin/compta/reappro/infinite',
+            $body,
+            'Le mode kiosque doit être en lecture seule (pas de bouton stock ∞).'
+        );
+        self::assertStringNotContainsString(
+            'Accès téléphone',
+            $body,
+            'Pas de bloc « accès téléphone » imbriqué en mode kiosque.'
+        );
+
+        // Mauvais jeton : 403.
+        $r3 = $this->request('GET', '/kiosque/reappro/mauvais-jeton');
+        self::assertSame(403, (int) ($r3['code'] ?? 0), 'Un jeton invalide doit être refusé (403).');
+
+        // Régénération (connecté) : l'ancien lien est révoqué.
+        $r4 = $this->request('POST', '/admin/compta/reappro/kiosk/regenerate', [], [], $this->rootId);
+        self::assertSame(
+            1,
+            (int) $this->pdo->query("SELECT COUNT(*) FROM settings WHERE `key` = 'reappro_kiosk_token'")->fetchColumn()
+        );
+
+        $r5 = $this->request('GET', '/kiosque/reappro/' . $token);
+        self::assertSame(403, (int) ($r5['code'] ?? 0), 'L\'ancien lien doit être révoqué après régénération.');
+    }
+
     public function test_bilan_annuel_csv_conforme_aux_donnees_saisies(): void
     {
         $rows = $this->annualCsvRows(2026);

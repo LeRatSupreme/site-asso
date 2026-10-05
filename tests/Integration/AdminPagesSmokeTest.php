@@ -152,11 +152,10 @@ final class AdminPagesSmokeTest extends IntegrationTestCase
             }
 
             // Route paramétrée appelée avec une valeur inexistante : le
-            // contrôleur DOIT répondre gracieusement, 404 inclus (page
-            // « introuvable », JSON d'erreur…). Les codes 500/403 restent
-            // des échecs — un 403 sur une ressource inexistante révèle un
-            // guard posé avant la recherche, un 500 un crash.
-            $autorisés = $page['parameterized'] ? [200, 302, 404] : [200, 302];
+            // contrôleur DOIT répondre gracieusement — 404 (page introuvable)
+            // ou 403 (route à jeton secret, ex. /kiosque/reappro/{token}) —
+            // jamais 500. Les routes concrètes restent limitées à 200/302.
+            $autorisés = $page['parameterized'] ? [200, 302, 404, 403] : [200, 302];
             if (!in_array($code, $autorisés, true)) {
                 $failures[] = sprintf(
                     'GET %s → code HTTP %d inattendu : %s',

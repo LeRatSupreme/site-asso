@@ -23,6 +23,7 @@ use App\Models\ProductDiscontinued;
 use App\Models\ProductInfinite;
 use App\Models\Sale;
 use App\Models\SaleAdjustment;
+use App\Models\Setting;
 
 /**
  * Module Comptabilité & gestion des achats (Cafétéria).
@@ -1074,7 +1075,60 @@ final class AdminComptaController extends AdminBaseController
 
     public function reorder(): void
     {
-        $user = $this->guardCompta();
+        $this->guardCompta();
+
+        $this->renderReorderPage(false);
+    }
+
+    /**
+     * Accès « kiosque » au Réapprovisionnement par lien secret, SANS
+     * connexion : destiné au raccourci écran d'accueil du téléphone.
+     * Lecture seule ; jeton révocable via regenerateKioskToken().
+     */
+    public function kioskReorder(string $token): void
+    {
+        $expected = trim((string) Setting::get('reappro_kiosk_token', ''));
+        $given    = trim($token);
+
+        if ($expected === '' || $given === '' || !hash_equals($expected, $given)) {
+            http_response_code(403);
+            echo '<h1>Erreur 403 — Lien invalide ou révoqué.</h1>';
+
+            return;
+        }
+
+        $this->renderReorderPage(true);
+    }
+
+    /**
+     * Régénère le jeton du lien kiosque : l'ancien lien cesse de fonctionner.
+     */
+    public function regenerateKioskToken(): void
+    {
+        $this->guardCompta();
+
+        Setting::set('reappro_kiosk_token', bin2hex(random_bytes(20)));
+        $this->audit('compta.reappro.kiosk', 'setting', 'reappro_kiosk_token', ['regenerated' => true]);
+        $this->setFlash('success', "Lien téléphone régénéré — l'ancien lien ne fonctionne plus.");
+
+        redirect(url('/admin/compta/reappro'));
+    }
+
+    /**
+     * Assemble et rend la page Réapprovisionnement (connecté OU kiosque).
+     */
+    private function renderReorderPage(bool $kiosk): void
+    {
+        // Lien kiosque : généré à la première visite (connecté uniquement).
+        $kioskUrl = '';
+        if (!$kiosk) {
+            $kioskToken = trim((string) Setting::get('reappro_kiosk_token', ''));
+            if ($kioskToken === '') {
+                $kioskToken = bin2hex(random_bytes(20));
+                Setting::set('reappro_kiosk_token', $kioskToken);
+            }
+            $kioskUrl = url('/kiosque/reappro/' . $kioskToken);
+        }
 
         // ── Période d'ANALYSE (sur quoi calculer les moyennes) ──────────
         $refOptions = [
@@ -1163,6 +1217,8 @@ final class AdminComptaController extends AdminBaseController
             'refCalDays'    => $calDays,
             'du'            => $duOk ? $du : '',
             'au'            => $auOk ? $au : '',
+            'kiosk'         => $kiosk,
+            'kioskUrl'      => $kioskUrl,
         ]);
     }
 
