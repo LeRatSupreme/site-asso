@@ -1177,11 +1177,13 @@ final class AdminComptaController extends AdminBaseController
 
         $data = $this->reorderData($covers[$coverKey]['days'], $fromDay, $toDay, $calDays);
 
-        // Uniquement ce qu'il faut acheter (quantité à commander > 0) :
-        // couvre les « à racheter » ET les « à compter » (jamais comptés).
+        // Uniquement ce qu'il faut acheter : « à racheter » (stock épuisé
+        // ou autonomie < 7 j, même sans ventes sur la période → quantité
+        // inconnue affichée « — ») ET les « à compter » à besoin complet.
         $items = array_values(array_filter(
             $data['rows'],
-            static fn(array $r): bool => (int) ($r['to_order'] ?? 0) > 0
+            static fn(array $r): bool =>
+                ($r['state'] ?? '') === 'reorder' || (int) ($r['to_order'] ?? 0) > 0
         ));
 
         // Tri « course » : par catégorie (A→Z), puis autonomie croissante.
