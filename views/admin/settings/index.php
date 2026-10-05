@@ -98,10 +98,12 @@ $passwordKeys = ['smtp_pass', 'brevo_api_key', 'discord_webhook_url'];
 
                         <?php if ($isBool): ?>
                             <?php $truthy = in_array(strtolower($value), ['1', 'true', 'on', 'yes'], true); ?>
+                            <!-- Champ caché : une case DÉCOCHÉE n'est jamais envoyée par
+                                 le navigateur — sans ce 0, impossible d'enregistrer « désactivé ». -->
+                            <input type="hidden" name="settings[<?= e($key) ?>]" value="0">
                             <label class="toggle-switch">
                                 <input type="checkbox" id="set_<?= e((string) $s['id']) ?>"
-                                       name="settings[<?= e($key) ?>]" value="1" <?= $truthy ? 'checked' : '' ?>
-                                       onchange="this.value = this.checked ? '1' : '0';">
+                                       name="settings[<?= e($key) ?>]" value="1" <?= $truthy ? 'checked' : '' ?>>
                                 <span class="toggle-slider"></span>
                                 <span class="toggle-label <?= $truthy ? 'is-on' : '' ?>">
                                     <?= $truthy ? 'Activé' : 'Désactivé' ?>

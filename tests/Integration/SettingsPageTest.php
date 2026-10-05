@@ -39,5 +39,16 @@ final class SettingsPageTest extends IntegrationTestCase
             (int) $pdo->query("SELECT COUNT(*) FROM settings WHERE `key` = 'maintenance_mode' AND value = '1'")->fetchColumn(),
             'L\'enregistrement doit créer la ligne maintenance_mode.'
         );
+
+        // Décocher (case non envoyée + champ caché 0) doit enregistrer « 0 » :
+        // c'est le bug historique — on pouvait activer mais jamais désactiver.
+        $this->request('POST', '/admin/settings/save', [
+            'settings' => ['maintenance_mode' => '0'],
+        ], [], 'u_set_root');
+        self::assertSame(
+            1,
+            (int) $pdo->query("SELECT COUNT(*) FROM settings WHERE `key` = 'maintenance_mode' AND value = '0'")->fetchColumn(),
+            'Décocher un interrupteur doit enregistrer « 0 ».'
+        );
     }
 }
