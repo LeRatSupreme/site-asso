@@ -168,7 +168,7 @@
 
 /* ---- Page Réappro ---- */
 .reorder-table th, .reorder-table td { vertical-align: middle; }
-.reorder-table tfoot th { padding-top: 1rem; border-top: 2px solid var(--border); }
+.reorder-table tfoot th { padding-top: 1rem; border-top: 2px solid var(--border); text-align: right; }
 .reorder-table .num { text-align: right; }
 .reorder-table td { padding: 0.8rem 0.75rem; }
 .reorder-table tbody tr:hover { background: rgba(72, 189, 211, 0.08); }
@@ -1257,6 +1257,149 @@ details.howto p {
     padding: 4px 8px;
     font: inherit;
 }
+
+/* =========================================================
+   Page « Réappro » : vue CARTES sur petits écrans (iPhone)
+   La table 12 colonnes devient une pile de cartes lisibles sans
+   défilement horizontal : nom du produit + badge d'état en tête,
+   puis lignes libellé → valeur (stock, autonomie, à commander,
+   coût…), l'essentiel d'abord, les détails ensuite.
+   Le JS (recherche / tri / totaux) agit sur les <tr> : inchangé.
+   ========================================================= */
+@media (max-width: 700px) {
+    /* Neutralise le défilement horizontal imposé aux tables mobiles. */
+    .table-wrap .table.reorder-table { min-width: 0; }
+
+    .reorder-table thead { display: none; }
+    .reorder-table, .reorder-table tbody { display: block; }
+
+    /* Une carte par produit. */
+    .reorder-table tbody tr[data-name] {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        margin: 0 0 0.85rem;
+        background: rgba(255, 255, 255, 0.02);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        overflow: hidden;
+    }
+    .reorder-table tbody tr.row-alert {
+        background: rgba(245, 158, 11, 0.08);
+        border-color: rgba(245, 158, 11, 0.35);
+    }
+
+    /* Lignes internes : libellé à gauche (data-label), valeur à droite. */
+    .reorder-table tbody tr[data-name] td {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.2rem 0.75rem;
+        padding: 0.5rem 0.95rem;
+        border-top: 1px solid rgba(255, 255, 255, 0.06);
+        font-size: 0.95rem;
+    }
+    .reorder-table tbody tr[data-name] td[data-label]::before {
+        content: attr(data-label);
+        font-size: 0.66rem;
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+        font-weight: 800;
+        color: var(--muted);
+        white-space: nowrap;
+    }
+
+    /* En-tête de carte : produit, badge d'état en absolu à droite. */
+    .reorder-table tbody tr[data-name] td:nth-child(1) {
+        display: block;
+        order: 0;
+        padding: 0.85rem 6.6rem 0.6rem 0.95rem;
+        border-top: none;
+        font-size: 1.05rem;
+    }
+    .reorder-table tbody tr[data-name] td:nth-child(12) {
+        position: absolute;
+        top: 0.8rem;
+        right: 0.8rem;
+        border-top: none;
+    }
+
+    /* Ordre de lecture : l'essentiel d'abord, détails ensuite. */
+    .reorder-table tbody tr[data-name] td:nth-child(4)  { order: 1; border-top: none; }                 /* stock */
+    .reorder-table tbody tr[data-name] td:nth-child(8)  { order: 2; }                                   /* autonomie */
+    .reorder-table tbody tr[data-name] td:nth-child(10) { order: 3; background: rgba(72, 189, 211, 0.07); } /* à commander */
+    .reorder-table tbody tr[data-name] td:nth-child(11) { order: 4; }                                   /* coût */
+    .reorder-table tbody tr[data-name] td:nth-child(2)  { order: 5; border-top: 2px solid rgba(255, 255, 255, 0.10); } /* catégorie : sépare les détails */
+    .reorder-table tbody tr[data-name] td:nth-child(3)  { order: 6; }                                   /* vendus */
+    .reorder-table tbody tr[data-name] td:nth-child(5)  { order: 7; }                                   /* conso / jour */
+    .reorder-table tbody tr[data-name] td:nth-child(6)  { order: 8; }                                   /* conso / semaine */
+    .reorder-table tbody tr[data-name] td:nth-child(7)  { order: 9; }                                   /* conso / mois */
+    .reorder-table tbody tr[data-name] td:nth-child(9)  { order: 10; }                                  /* besoin */
+
+    .reorder-table tbody tr[data-name] td:nth-child(10) strong { font-size: 1.2rem; }
+
+    /* Sous-lignes (« compté le … », « 0,250 € / u ») sur leur propre ligne. */
+    .reorder-table tbody tr[data-name] .cell-sub,
+    .reorder-table tbody tr[data-name] .cost-sub {
+        flex-basis: 100%;
+        order: 11;
+        white-space: normal;
+    }
+
+    /* Lignes non produit (vide / aucun résultat) : simple bloc.
+       [hidden] doit rester prioritaire sur ces display, sinon la ligne
+       « aucun résultat » du JS resterait toujours visible. */
+    .reorder-table tbody tr:not([data-name]) { display: block; }
+    .reorder-table tbody tr:not([data-name]) td { display: block; padding: 1rem; }
+    .reorder-table tr[hidden] { display: none !important; }
+
+    /* Pied : total à commander + coût du panier en deux pastilles. */
+    .reorder-table tfoot { display: block; }
+    .reorder-table tfoot tr {
+        display: flex;
+        align-items: stretch;
+        gap: 0.6rem;
+        padding: 0.15rem 0.1rem 0.3rem;
+    }
+    .reorder-table tfoot th {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 0.1rem;
+        padding: 0.55rem 0.85rem;
+        border-top: none;
+        text-align: left;
+        white-space: normal;
+        font-size: 0.85rem;
+    }
+    .reorder-table tfoot th:first-child { flex: 1; align-self: center; padding-left: 0.4rem; }
+    .reorder-table tfoot th:nth-child(2),
+    .reorder-table tfoot th:nth-child(3) {
+        background: rgba(72, 189, 211, 0.08);
+        border: 1px solid rgba(72, 189, 211, 0.3);
+        border-radius: 12px;
+    }
+    .reorder-table tfoot th:last-child { display: none; }
+    .reorder-table tfoot th[data-label]::before {
+        content: attr(data-label);
+        font-size: 0.62rem;
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+        font-weight: 800;
+        color: var(--muted);
+    }
+
+    /* Barre de filtres : recherche pleine largeur, filtres côte à côte,
+       et taille 16 px pour éviter le zoom automatique d'iOS au focus. */
+    .costs-toolbar .search-box { flex: 1 1 100%; }
+    .costs-toolbar .search-box input,
+    .costs-toolbar select,
+    .reappro-bar select,
+    .reappro-dates input[type="date"] { font-size: 16px; }
+    .costs-toolbar select { flex: 1 1 30%; width: auto; }
+}
+
 
 
 
