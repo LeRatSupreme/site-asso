@@ -19,6 +19,8 @@ namespace Tests\Integration;
  *   3. Un dépôt à la banque génère bien : le mouvement de caisse (−
  *      montant déposé), la dépense de frais bancaires (3,50 €) ET la
  *      Majoration des dépenses dans le bilan annuel.
+ *   4. La page Inventaire valorise le stock (Σ stock théorique × coût du
+ *      lot en cours) et signale les produits sans coût saisi.
  *
  * Base `aeic_test` requise (les tests sont sautés sinon).
  */
@@ -30,7 +32,17 @@ final class ComptaConsistencyTest extends IntegrationTestCase
     {
         parent::setUp();
         $pdo = $this->requireDatabase();
-        $this->reset(['sale_adjustments', 'sales', 'import_batches', 'expenses', 'cash_movements', 'cash_counts', 'users']);
+        $this->reset([
+            'sale_adjustments',
+            'sales',
+            'import_batches',
+            'expenses',
+            'cash_movements',
+            'cash_counts',
+            'inventory_counts',
+            'product_costs',
+            'users',
+        ]);
         $this->seedUser($this->rootId, 'compta-root@exemple.fr', 'Password123456', 'SUPERADMIN');
 
         // Ventes : juin = 25,00 € (2 lignes), septembre = 100,00 € (1 ligne).
@@ -42,6 +54,34 @@ final class ComptaConsistencyTest extends IntegrationTestCase
         $this->insertExpense('exp_cons_j1', '2026-06-10', 'MATIERE', 'Gobelets', '5.00');
         $this->insertExpense('exp_cons_s1', '2026-09-10', 'MATIERE', 'Cafetière', '12.50');
         $this->insertExpense('exp_cons_s2', '2026-09-12', 'FRAIS', 'Frais bancaires', '3.50');
+    }
+
+    public function test_inventaire_affiche_la_valeur_du_stock(): void
+    {
+        // Stock : « café » compté 10 u. avec un coût de 2,50 € (lot en cours)
+        // → 25,00 € valorisés. « thé » compté 4 u. sans coût saisi → compté
+        // dans les unités mais signalé « sans coût », hors total.
+        $this->pdo->prepare(
+            'INSERT INTO inventory_counts (id, counted_at, product_key, counted_qty, theoretical_qty, gap, created_by)
+             VALUES (?,?,?,?,?,?,?)'
+        )->execute(['inv_cons_1', '2026-09-20 10:00:00', 'café', 10, 10, 0, 'test']);
+        $this->pdo->prepare(
+            'INSERT INTO inventory_counts (id, counted_at, product_key, counted_qty, theoretical_qty, gap, created_by)
+             VALUES (?,?,?,?,?,?,?)'
+        )->execute(['inv_cons_2', '2026-09-20 10:05:00', 'thé', 4, 4, 0, 'test']);
+
+        $this->pdo->prepare(
+            'INSERT INTO product_costs (id, product_key, cost_price, valid_from) VALUES (?,?,?,?)'
+        )->execute(['pc_cons_1', 'café', '2.500', '2026-01-01']);
+
+        $r = $this->request('GET', '/admin/compta/inventaire', [], [], $this->rootId);
+        self::assertSame(200, (int) ($r['code'] ?? 0), 'La page Inventaire doit répondre.');
+        $body = (string) ($r['body'] ?? '');
+
+        self::assertStringContainsString('Valeur du stock', $body, 'Le bloc « Valeur du stock » est absent de l\'Inventaire.');
+        self::assertStringContainsString('25,00', $body, 'La valeur du stock ne correspond pas à Σ (stock × coût du lot en cours).');
+        self::assertStringContainsString('14 u.', $body, 'Le total d\'unités en stock est erroné (10 + 4 attendus).');
+        self::assertStringContainsString('1 produit sans coût', $body, 'Le produit sans coût saisi doit être signalé, hors total.');
     }
 
     public function test_bilan_annuel_csv_conforme_aux_donnees_saisies(): void

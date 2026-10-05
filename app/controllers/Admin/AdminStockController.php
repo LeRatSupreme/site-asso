@@ -463,6 +463,47 @@ final class AdminStockController extends AdminBaseController
         // aperçu des données déplacées, suggestions pré-remplies).
         $keyStats = ProductKeyMerge::keyStats();
 
+        // Valeur du stock : Σ (stock théorique × coût de revient du lot en
+        // cours, même source que la page Réappro). Les produits jamais
+        // comptés ou à stock nul/négatif ne représentent rien de physique :
+        // exclus. Ceux sans coût saisi sont comptés à part (total sous-
+        // estimé, signalé dans l'interface). Les produits « en pause »
+        // (plus en vente pour l'instant) ont un stock physique réel mais
+        // sorti de la vente : valorisés à part.
+        $stockValue = 0.0;
+        $stockUnits = 0;
+        $valuedLines = 0;
+        $noCostLines = 0;
+        $pausedValue = 0.0;
+        $pausedUnits = 0;
+
+        foreach ($rows as $r) {
+            $stock = $r['theoretical'];
+            if ($stock === null || (int) $stock <= 0) {
+                continue;
+            }
+            $stockUnits += (int) $stock;
+            $cost = ProductCost::costAt((string) $r['key'], date('Y-m-d'));
+            if ($cost === null) {
+                $noCostLines++;
+                continue;
+            }
+            $stockValue += (int) $stock * (float) $cost;
+            $valuedLines++;
+        }
+
+        foreach ($discontinuedRows as $d) {
+            $stock = $d['theoretical'];
+            if ($stock === null || (int) $stock <= 0) {
+                continue;
+            }
+            $pausedUnits += (int) $stock;
+            $cost = ProductCost::costAt((string) $d['key'], date('Y-m-d'));
+            if ($cost !== null) {
+                $pausedValue += (int) $stock * (float) $cost;
+            }
+        }
+
         $this->renderAdmin('admin/compta/inventory', [
             'title'            => 'Inventaire',
             'user'             => $user,
@@ -472,6 +513,12 @@ final class AdminStockController extends AdminBaseController
             'gaps'             => InventoryCount::recentGaps(30),
             'keyStats'         => $keyStats,
             'mergeDupes'       => AliasSuggester::groupDuplicates(array_keys($keyStats)),
+            'stockValue'       => round($stockValue, 2),
+            'stockUnits'       => $stockUnits,
+            'valuedLines'      => $valuedLines,
+            'noCostLines'      => $noCostLines,
+            'pausedValue'      => round($pausedValue, 2),
+            'pausedUnits'      => $pausedUnits,
         ]);
     }
 

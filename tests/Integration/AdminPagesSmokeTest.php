@@ -79,14 +79,14 @@ final class AdminPagesSmokeTest extends IntegrationTestCase
     /**
      * Pages GET sans paramètre (parcours complet attendu : 200/302).
      *
-     * @return list<string>
+     * @return list<array{path:string, parameterized:false}>
      */
     private function concretePaths(): array
     {
         $paths = [];
         foreach ($this->getRoutes() as $pattern) {
             if (!str_contains($pattern, '{')) {
-                $paths[] = $pattern;
+                $paths[] = ['path' => $pattern, 'parameterized' => false];
             }
         }
 
@@ -97,14 +97,17 @@ final class AdminPagesSmokeTest extends IntegrationTestCase
      * Pages GET paramétrées, appelées avec des valeurs inexistantes
      * (réponse gracieuse attendue : 200, 302 ou 404 — jamais 500).
      *
-     * @return list<string>
+     * @return list<array{path:string, parameterized:true}>
      */
     private function parameterizedPaths(): array
     {
         $paths = [];
         foreach ($this->getRoutes() as $pattern) {
             if (str_contains($pattern, '{')) {
-                $paths[] = (string) preg_replace('#\{[^}]+\}#', 'inexistant-smoke', $pattern);
+                $paths[] = [
+                    'path'          => (string) preg_replace('#\{[^}]+\}#', 'inexistant-smoke', $pattern),
+                    'parameterized' => true,
+                ];
             }
         }
 
@@ -117,21 +120,22 @@ final class AdminPagesSmokeTest extends IntegrationTestCase
 
     public function test_toutes_les_pages_get_repondent_sans_erreur(): void
     {
-        $paths = array_merge($this->concretePaths(), $this->parameterizedPaths());
+        $pages = array_merge($this->concretePaths(), $this->parameterizedPaths());
 
         // Garde-fou : si l'énumération casse, le test ne doit pas passer
         // silencieusement sur une liste vide.
         self::assertGreaterThanOrEqual(
             50,
-            count($paths),
+            count($pages),
             'Énumération des routes GET suspecte (moins de 50 pages) : vérifier app/config/routes.php.'
         );
 
         $failures = [];
-        foreach ($paths as $path) {
-            $r    = $this->request('GET', $path, [], [], $this->rootId);
-            $code = (int) ($r['code'] ?? 0);
-            $body = (string) ($r['body'] ?? '');
+        foreach ($pages as $page) {
+            $path    = $page['path'];
+            $r       = $this->request('GET', $path, [], [], $this->rootId);
+            $code    = (int) ($r['code'] ?? 0);
+            $body    = (string) ($r['body'] ?? '');
 
             $erreur = $this->bodyError($body);
             if ($erreur !== null) {
@@ -139,7 +143,12 @@ final class AdminPagesSmokeTest extends IntegrationTestCase
                 continue;
             }
 
-            $autorisés = str_contains($path, '{') ? [200, 302, 404] : [200, 302];
+            // Route paramétrée appelée avec une valeur inexistante : le
+            // contrôleur DOIT répondre gracieusement, 404 inclus (page
+            // « introuvable », JSON d'erreur…). Les codes 500/403 restent
+            // des échecs — un 403 sur une ressource inexistante révèle un
+            // guard posé avant la recherche, un 500 un crash.
+            $autorisés = $page['parameterized'] ? [200, 302, 404] : [200, 302];
             if (!in_array($code, $autorisés, true)) {
                 $failures[] = sprintf(
                     'GET %s → code HTTP %d inattendu : %s',
