@@ -45,32 +45,32 @@ use App\Models\Setting;
 
     .shop-grid {
         list-style: none; margin: 0; padding: 0;
-        display: grid; grid-template-columns: repeat(auto-fill, minmax(135px, 1fr));
-        gap: 0.6rem;
+        display: grid; grid-template-columns: repeat(auto-fill, minmax(165px, 1fr));
+        gap: 0.7rem;
     }
     .shop-item {
         position: relative;
         display: flex; flex-direction: column; align-items: center; justify-content: center;
-        gap: 0.25rem; text-align: center;
-        aspect-ratio: 1 / 1; padding: 0.6rem 0.5rem;
+        gap: 0.3rem; text-align: center;
+        aspect-ratio: 1 / 1; padding: 0.8rem 0.6rem;
         background: rgba(255, 255, 255, 0.035);
         border: 1px solid rgba(255, 255, 255, 0.07);
-        border-radius: 16px;
+        border-radius: 18px;
         cursor: pointer; user-select: none; -webkit-user-select: none;
         -webkit-tap-highlight-color: transparent;
         transition: opacity 0.15s ease, border-color 0.15s ease, background 0.15s ease;
     }
     .shop-item:focus-visible { outline: 2px solid var(--primary, #48bdd3); outline-offset: 2px; }
-    .shop-qty { font-size: 2.4rem; font-weight: 900; line-height: 1; color: var(--primary, #48bdd3); }
-    .shop-qty.is-unknown { color: var(--muted, #8892a6); font-size: 1.7rem; }
+    .shop-qty { font-size: 2.9rem; font-weight: 900; line-height: 1; color: var(--primary, #48bdd3); }
+    .shop-qty.is-unknown { color: var(--muted, #8892a6); font-size: 2rem; }
     .shop-name {
-        font-size: 0.9rem; font-weight: 800; line-height: 1.15;
+        font-size: 1.05rem; font-weight: 800; line-height: 1.15;
         display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
         word-break: break-word; max-width: 100%;
     }
     .shop-pack {
-        font-size: 0.64rem; font-weight: 800; color: var(--primary, #48bdd3);
-        background: rgba(72, 189, 211, 0.14); border-radius: 999px; padding: 0.08rem 0.5rem;
+        font-size: 0.75rem; font-weight: 800; color: var(--primary, #48bdd3);
+        background: rgba(72, 189, 211, 0.14); border-radius: 999px; padding: 0.12rem 0.6rem;
         white-space: nowrap;
     }
     /* Carré « acheté » : grisé, barré, petit ✓. */
@@ -83,8 +83,8 @@ use App\Models\Setting;
     .shop-item.is-done .shop-qty { color: var(--muted, #8892a6); }
     .shop-item.is-done .shop-pack { color: var(--muted, #8892a6); background: rgba(136, 146, 166, 0.18); }
     .shop-item.is-done::after {
-        content: '✓'; position: absolute; top: 0.35rem; right: 0.55rem;
-        font-size: 1rem; font-weight: 900; color: var(--muted, #8892a6);
+        content: '✓'; position: absolute; top: 0.4rem; right: 0.6rem;
+        font-size: 1.2rem; font-weight: 900; color: var(--muted, #8892a6);
     }
 
     .shop-empty { text-align: center; padding: 3.5rem 1rem; }
