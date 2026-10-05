@@ -20,6 +20,7 @@ use App\Models\ProductAlias;
 use App\Models\ProductCategory;
 use App\Models\ProductCost;
 use App\Models\ProductDiscontinued;
+use App\Models\ProductInfinite;
 use App\Models\Sale;
 use App\Models\SaleAdjustment;
 
@@ -1166,6 +1167,35 @@ final class AdminComptaController extends AdminBaseController
     }
 
     /**
+     * Bascule le drapeau « stock infini » d'un produit (page Réappro).
+     *
+     * Un produit marqué infini affiche une autonomie « ∞ » et n'est jamais
+     * proposé à la commande, même « à compter » (jamais inventorié).
+     */
+    public function toggleInfiniteStock(): void
+    {
+        $this->guardCompta();
+
+        $key  = trim((string) ($_POST['product_key'] ?? ''));
+        $back = trim((string) ($_POST['back'] ?? ''));
+        $to   = url('/admin/compta/reappro' . ($back !== '' ? '?' . $back : ''));
+
+        if ($key === '') {
+            $this->setFlash('error', 'Produit manquant.');
+            redirect($to);
+        }
+
+        $added = ProductInfinite::toggle($key, (string) (Auth::user()['email'] ?? null));
+        $this->audit('compta.reappro.infinite', 'product_infinite', $key, ['infinite' => $added]);
+
+        $this->setFlash('success', $added
+            ? sprintf('« %s » : stock marqué infini (∞) — plus jamais proposé à la commande.', $key)
+            : sprintf('« %s » : marquage stock infini retiré.', $key));
+
+        redirect($to);
+    }
+
+    /**
      * Calcule l'analyse de réapprovisionnement sur une période donnée.
      *
      * Chaque produit vendu dans la période d'analyse est listé avec sa
@@ -1203,6 +1233,13 @@ final class AdminComptaController extends AdminBaseController
         $discontinued = array_flip(array_map(
             static fn(string $k): string => strtolower(trim($k)),
             ProductDiscontinued::keys()
+        ));
+
+        // Produits marqués « stock infini » (jamais réapprovisionnés) :
+        // autonomie ∞, jamais proposés à la commande, même « à compter ».
+        $infinite = array_flip(array_map(
+            static fn(string $k): string => strtolower(trim($k)),
+            ProductInfinite::keys()
         ));
 
         // Stock théorique + dernier comptage, indexés en minuscules pour un
@@ -1249,13 +1286,23 @@ final class AdminComptaController extends AdminBaseController
             // reconstituer le niveau perdu en plus de couvrir le besoin.
             $toOrder = max(0, $need - ($stock ?? 0));
 
+            // Stock déclaré infini : autonomie ∞ et jamais à commander,
+            // même si le produit n'a jamais été compté (« à compter »).
+            $infiniteStock = isset($infinite[$lookupKey]);
+            if ($infiniteStock) {
+                $autonomy = null;
+                $toOrder  = 0;
+            }
+
             // Coût unitaire actuel (lot en cours à aujourd'hui) et coût
             // estimé de la ligne (qté à commander × coût unitaire).
             $unitCostRaw = ProductCost::costAt($key, date('Y-m-d'));
             $unitCost = $unitCostRaw !== null ? (float) $unitCostRaw : null;
             $orderCost = $unitCost !== null ? round($toOrder * $unitCost, 2) : null;
 
-            if ($stock === null) {
+            if ($infiniteStock) {
+                $state = 'ok';
+            } elseif ($stock === null) {
                 $state = 'unknown';
             } elseif ($stock <= 0 || ($autonomy !== null && $autonomy < 7)) {
                 $state = 'reorder';
@@ -1283,6 +1330,7 @@ final class AdminComptaController extends AdminBaseController
                 'to_order'   => $toOrder,
                 'state'      => $state,
                 'is_alert'   => $isAlert,
+                'infinite'   => $infiniteStock,
             ];
         }
 

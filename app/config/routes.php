@@ -280,6 +280,9 @@ function aeic_register_routes(Router $router): void
     // Réappro : analyse en lecture seule — le stock affiché est le théorique
     // issu de l'inventaire (mis à jour via /admin/compta/inventaire).
     $router->get('/admin/compta/reappro', [AdminComptaController::class, 'reorder']);
+    // Drapeau « stock infini » : produit jamais réapprovisionné (∞, jamais
+    // à commander) — bascule depuis la ligne du tableau Réappro.
+    $router->post('/admin/compta/reappro/infinite', [AdminComptaController::class, 'toggleInfiniteStock']);
 
     // Suivi avancé : dépenses, budgets, achats, inventaire, pertes, événements, rapport annuel.
     $router->get('/admin/compta/depenses', [AdminExpenseController::class, 'index']);

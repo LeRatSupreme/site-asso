@@ -18,6 +18,16 @@ final class ProductDiscontinued extends Model
     protected static string $table = 'product_discontinued';
 
     /**
+     * Connexion PDO partagée (transactions et requêtes du cycle de vie
+     * automatique à cheval sur `product_discontinued` et
+     * `product_zero_since` — voir ProductLifecycle::sweep).
+     */
+    public static function connection(): \PDO
+    {
+        return self::pdo();
+    }
+
+    /**
      * Toutes les clés produits marquées « plus en vente ».
      *
      * @return list<string>
@@ -35,6 +45,33 @@ final class ProductDiscontinued extends Model
 
         $out = [];
         foreach ($rows as $r) {
+            $out[] = (string) $r['product_key'];
+        }
+
+        return $out;
+    }
+
+    /**
+     * Clés produits mises en pause AUTOMATIQUEMENT (updated_by = « auto »,
+     * voir ProductLifecycle::sweep) : stock à 0 depuis au moins 7 jours.
+     * Contrairement aux pauses manuelles (saisonnières, posées par un
+     * membre du bureau), celles-ci sont levées dès que du stock réapparaît.
+     *
+     * @return list<string>
+     */
+    public static function autoPausedKeys(): array
+    {
+        try {
+            $stmt = self::pdo()->prepare(
+                'SELECT product_key FROM product_discontinued WHERE updated_by = ?'
+            );
+            $stmt->execute(['auto']);
+        } catch (\Throwable) {
+            return [];
+        }
+
+        $out = [];
+        foreach ($stmt->fetchAll() as $r) {
             $out[] = (string) $r['product_key'];
         }
 

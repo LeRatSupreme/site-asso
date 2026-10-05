@@ -8,6 +8,7 @@ use App\Core\Auth;
 use App\Core\Compta\AliasSuggester;
 use App\Core\Compta\ComptaCalc;
 use App\Core\Compta\ProductAutoSync;
+use App\Core\Compta\ProductLifecycle;
 use App\Core\Compta\StockPublic;
 use App\Models\InventoryCount;
 use App\Models\ProductCost;
@@ -392,6 +393,11 @@ final class AdminStockController extends AdminBaseController
     {
         $user = $this->guardSystemOrPage('inventory');
 
+        // Cycle de vie automatique : pauses automatiques avec du stock →
+        // remise en vente ; produits en vente à stock 0 depuis ≥ 7 jours →
+        // mise en pause (voir ProductLifecycle::sweep).
+        $sweep = ProductLifecycle::sweep();
+
         $lastCounts = InventoryCount::lastCountsMap();
         $theoretical = InventoryCount::theoreticalStocksMap();
         $stockMap = ProductStock::allMap();
@@ -519,6 +525,7 @@ final class AdminStockController extends AdminBaseController
             'noCostLines'      => $noCostLines,
             'pausedValue'      => round($pausedValue, 2),
             'pausedUnits'      => $pausedUnits,
+            'sweep'            => $sweep,
         ]);
     }
 
