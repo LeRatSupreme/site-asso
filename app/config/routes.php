@@ -283,6 +283,9 @@ function aeic_register_routes(Router $router): void
     // Drapeau « stock infini » : produit jamais réapprovisionné (∞, jamais
     // à commander) — bascule depuis la ligne du tableau Réappro.
     $router->post('/admin/compta/reappro/infinite', [AdminComptaController::class, 'toggleInfiniteStock']);
+    // Tailles de pack d'achat (12, 24, 32…) : « À commander » arrondi au
+    // multiple supérieur du pack — édition inline dans le tableau.
+    $router->post('/admin/compta/reappro/packs', [AdminComptaController::class, 'savePacks']);
     // Lien secret « kiosque » : Réappro sans connexion (raccourci téléphone).
     // Hors préfixe /admin pour contourner la garde routeur ; le contrôleur
     // valide lui-même le jeton (403 sinon).
