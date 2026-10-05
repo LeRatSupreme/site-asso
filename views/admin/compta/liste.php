@@ -221,7 +221,13 @@ uksort($groups, static function (string $a, string $b): int {
                     <?php endif; ?>
                 </span>
             </label>
-            <span class="shop-qty"><?= (int) $r['to_order'] ?><small>à acheter</small></span>
+            <span class="shop-qty" title="<?= (int) $r['to_order'] > 0 ? 'À acheter (arrondi au pack)' : 'Stock épuisé — consommation inconnue sur la période' ?>">
+                <?php if ((int) $r['to_order'] > 0): ?>
+                    <?= (int) $r['to_order'] ?><small>à acheter</small>
+                <?php else: ?>
+                    —<small>stock épuisé</small>
+                <?php endif; ?>
+            </span>
         </li>
         <?php endforeach; ?>
     </ul>
