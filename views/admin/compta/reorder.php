@@ -242,7 +242,7 @@ foreach ($rows as $r) {
     </div>
 
     <?php $backQuery = (string) ($_SERVER['QUERY_STRING'] ?? ''); ?>
-    <form method="post" action="<?= e(url('/admin/compta/reappro/packs')) ?>">
+    <form method="post" action="<?= e(url('/admin/compta/reappro/packs')) ?>" data-preserve-scroll>
         <?= csrf_field() ?>
         <input type="hidden" name="back" value="<?= e($backQuery) ?>">
 
@@ -316,7 +316,7 @@ foreach ($rows as $r) {
                             </span>
                         <?php endif; ?>
                         <?php if (!$kiosk && (!empty($r['infinite']) || ($r['state'] ?? '') === 'unknown')): ?>
-                            <form method="post" action="<?= e(url('/admin/compta/reappro/infinite')) ?>" class="reinf-form">
+                            <form method="post" action="<?= e(url('/admin/compta/reappro/infinite')) ?>" class="reinf-form" data-preserve-scroll>
                                 <?= csrf_field() ?>
                                 <input type="hidden" name="product_key" value="<?= e($key) ?>">
                                 <input type="hidden" name="back" value="<?= e($backQuery) ?>">
