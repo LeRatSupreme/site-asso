@@ -100,7 +100,7 @@ declare(strict_types=1);
         <input type="search" id="kq" placeholder="Rechercher un produit…" autocomplete="off" aria-label="Rechercher un produit">
     </div>
 
-    <p class="kprog"><span id="kProgTxt"></span><span>laisse vide = non compté</span></p>
+    <p class="kprog"><span id="kProgTxt"></span><span id="kSaveTxt">sauvegarde auto activée</span></p>
 
     <?php $groups = []; ?>
     <?php foreach ($active as $r) { $groups[$r['cat']][] = $r; } ?>
@@ -164,6 +164,11 @@ declare(strict_types=1);
     var rows = document.querySelectorAll('#kList ~ * .krow, .ksec .krow');
     var search = document.getElementById('kq');
     var progTxt = document.getElementById('kProgTxt');
+    var saveTxt = document.getElementById('kSaveTxt');
+
+    var form = document.querySelector('form');
+    var saveTimer = null;
+    var dirty = false;
 
     function countFilled() {
         var n = 0;
@@ -180,12 +185,31 @@ declare(strict_types=1);
             var input = row.querySelector('.kinput');
             if (input) row.classList.toggle('is-counted', input.value !== '');
         });
-        // Masque les sections dont tous les produits sont filtrés.
-        Array.prototype.forEach.call(document.querySelectorAll('.ksec'), function (sec) {
-            var visible = sec.querySelectorAll('.krow:not(.khidden)').length;
-            var hasInputs = sec.querySelector('.kinput') !== null;
-            sec.classList.toggle('khidden', hasInputs && visible === 0);
+    }
+
+    /* Sauvegarde automatique : 2 s après la dernière saisie, le formulaire
+       part en fetch (même POST que le bouton — seules les lignes remplies
+       sont enregistrées côté serveur). Tu peux verrouiller/reprendre sans
+       rien perdre ; le bouton « Enregistrer » reste disponible. */
+    function autoSave() {
+        if (!dirty || !form) return;
+        dirty = false;
+        fetch(form.action, {
+            method: 'POST',
+            body: new FormData(form),
+            credentials: 'same-origin'
+        }).then(function () {
+            if (saveTxt) saveTxt.textContent = '✓ sauvegardé à ' + new Date().toLocaleTimeString('fr-FR');
+        }).catch(function () {
+            dirty = true; /* réseau indisponible : on retentera à la prochaine saisie */
         });
+    }
+
+    function markDirty() {
+        dirty = true;
+        if (saveTxt) saveTxt.textContent = '…';
+        clearTimeout(saveTimer);
+        saveTimer = setTimeout(autoSave, 2000);
     }
 
     // Boutons − / + : ajustent la quantité sans clavier.
@@ -198,6 +222,7 @@ declare(strict_types=1);
             v = Math.max(0, v + step);
             input.value = (v === 0 && input.value === '' && step < 0) ? '' : v;
             refresh();
+            markDirty();
         });
     });
 
@@ -217,9 +242,20 @@ declare(strict_types=1);
         });
     }
 
-    // Saisie clavier : suivi du comptage.
-    Array.prototype.forEach.call(document.querySelectorAll('#kList .kinput, .ksec .kinput'), function (input) {
-        input.addEventListener('input', refresh);
+    // Saisie clavier : suivi du comptage + auto-save.
+    Array.prototype.forEach.call(document.querySelectorAll('.ksec .kinput'), function (input) {
+        input.addEventListener('input', function () {
+            refresh();
+            markDirty();
+        });
+    });
+
+    // Sécurité : sauvegarde finale si le téléphone se verrouille / onglet caché.
+    window.addEventListener('pagehide', function () {
+        if (dirty && form && navigator.sendBeacon) {
+            navigator.sendBeacon(form.action, new FormData(form));
+            dirty = false;
+        }
     });
 
     refresh();
