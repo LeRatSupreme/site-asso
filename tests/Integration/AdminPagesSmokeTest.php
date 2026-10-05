@@ -42,9 +42,17 @@ final class AdminPagesSmokeTest extends IntegrationTestCase
     {
         parent::setUp();
         $pdo = $this->requireDatabase();
-        $this->reset(['users']);
+        // wordle_words : l'API /jeux/wordle/word renvoie un 404 légitime
+        // (« no_word_available ») si aucun mot n'existe — on en seed un
+        // pour que la page réponde 200 comme en production.
+        $this->reset(['users', 'wordle_words']);
         $this->seedUser($this->rootId, 'smoke-root@exemple.fr', 'Password123456', 'SUPERADMIN');
         $this->seedUser($this->eleveId, 'smoke-eleve@exemple.fr', 'Password123456', 'ELEVE');
+
+        $pdo->prepare(
+            "INSERT INTO wordle_words (word, language, length, difficulty, is_active)
+             VALUES ('POMME', 'fr', 5, 'moyen', 1)"
+        )->execute();
     }
 
     // -----------------------------------------------------------------

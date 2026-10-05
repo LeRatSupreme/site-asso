@@ -179,6 +179,14 @@ foreach ($rows as $r) {
     flex-shrink: 0;
 }
 .reorder-reset:hover { color: var(--foreground); border-color: var(--primary); }
+.reinf-form { margin-top: 0.35rem; text-align: right; }
+.reinf-btn {
+    border: 1px solid var(--border); background: rgba(255, 255, 255, 0.04); color: var(--muted);
+    border-radius: 999px; padding: 0.12rem 0.55rem; font-size: 0.68rem; font-weight: 700;
+    cursor: pointer; line-height: 1.5; white-space: nowrap;
+    transition: color 0.15s, border-color 0.15s;
+}
+.reinf-btn:hover { color: var(--primary); border-color: var(--primary); }
 </style>
     <div class="costs-toolbar" style="margin-bottom:0;border:none;background:none;padding:1rem 1.1rem 0;">
         <div class="search-box">
@@ -227,6 +235,7 @@ foreach ($rows as $r) {
             </tr>
         </thead>
         <tbody>
+            <?php $backQuery = (string) ($_SERVER['QUERY_STRING'] ?? ''); ?>
             <?php foreach ($rows as $r):
                 $key = (string) $r['name'];
                 $hasStock = $r['stock'] !== null;
@@ -244,7 +253,7 @@ foreach ($rows as $r) {
                     data-need="<?= (int) $r['need'] ?>"
                     data-toorder="<?= (int) $r['to_order'] ?>"
                     data-unitcost="<?= $r['unit_cost'] !== null ? e((string) $r['unit_cost']) : '' ?>"
-                    data-autonomy="<?= $autonomy ?? 99999 ?>">
+                    data-autonomy="<?= !empty($r['infinite']) ? 999999 : ($autonomy ?? 99999) ?>">
                     <td><strong><?= e($key) ?></strong></td>
                     <td data-label="Catégorie"><?= e((string) $r['category']) ?></td>
                     <td class="num muted" data-label="Vendus (période)"><?= (int) $r['qty'] ?></td>
@@ -265,8 +274,10 @@ foreach ($rows as $r) {
                     <td class="num muted" data-label="Conso / semaine"><?= reorder_qty((float) $r['avg_week']) ?></td>
                     <td class="num muted" data-label="Conso / mois"><?= reorder_qty((float) $r['avg_month']) ?></td>
                     <td class="num" data-label="Autonomie">
-                        <?php if (!$hasStock || $autonomy === null): ?>
-                            <span class="auto-pill auto-none" title="Stock inconnu">—</span>
+                        <?php if (!empty($r['infinite'])): ?>
+                            <span class="auto-pill auto-none" title="Stock infini (marqué manuellement) : jamais proposé à la commande">∞</span>
+                        <?php elseif (!$hasStock || $autonomy === null): ?>
+                            <span class="auto-pill auto-none" title="Stock inconnu : compte le produit en inventaire, ou marque-le « stock infini » s'il n'est jamais réapprovisionné">—</span>
                         <?php elseif ($r['avg_day'] <= 0): ?>
                             <span class="auto-pill auto-none" title="Aucune vente sur la période">∞</span>
                         <?php else: ?>
@@ -275,11 +286,24 @@ foreach ($rows as $r) {
                                 <?= $autonomy ?> j
                             </span>
                         <?php endif; ?>
+                        <?php if (!empty($r['infinite']) || ($r['state'] ?? '') === 'unknown'): ?>
+                            <form method="post" action="<?= e(url('/admin/compta/reappro/infinite')) ?>" class="reinf-form">
+                                <?= csrf_field() ?>
+                                <input type="hidden" name="product_key" value="<?= e($key) ?>">
+                                <input type="hidden" name="back" value="<?= e($backQuery) ?>">
+                                <button type="submit" class="reinf-btn"
+                                        title="<?= !empty($r['infinite']) ? 'Retirer le marquage « stock infini » : le produit redevient « à compter »' : 'Marquer « stock infini » : produit jamais réapprovisionné, autonomie ∞, jamais proposé à la commande' ?>">
+                                    <?= !empty($r['infinite']) ? 'retirer ∞' : 'stock ∞' ?>
+                                </button>
+                            </form>
+                        <?php endif; ?>
                     </td>
                     <td class="num" data-label="Besoin (<?= e($periods[$currentPeriod]['label']) ?>)"><?= (int) $r['need'] ?></td>
                     <td class="num to-order-cell" data-label="À commander">
                         <?php if ((int) $r['to_order'] > 0): ?>
                             <strong style="color:var(--primary)" title="<?= !$hasStock ? 'Stock jamais compté : le besoin complet est proposé' : 'Besoin − stock théorique' ?>"><?= (int) $r['to_order'] ?></strong>
+                        <?php elseif (!empty($r['infinite'])): ?>
+                            <span class="muted" title="Stock infini : jamais à commander">0</span>
                         <?php else: ?>
                             <span class="muted">0</span>
                         <?php endif; ?>
@@ -336,6 +360,7 @@ foreach ($rows as $r) {
     « À commander » = besoin sur l'horizon de couverture − <strong>stock théorique</strong> (minimum 0 ; un stock négatif majore la commande).
     Stock théorique = dernier comptage + achats − ventes − pertes (mis à jour par <strong>Inventaire</strong>, <strong>Achats</strong> et <strong>Pertes</strong>).
     « Coût ligne » = à commander × coût de revient du lot en cours · le total ≈ prix d'achat du panier (produits sans coût saisi exclus, comptés sous le total).
+    Un produit marqué <strong>« stock ∞ »</strong> (bouton sous l'autonomie) n'est jamais réapprovisionné : autonomie ∞, jamais proposé à la commande — réversible en un clic.
 </p>
 
 <script>

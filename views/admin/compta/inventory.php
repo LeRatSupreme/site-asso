@@ -16,6 +16,7 @@ declare(strict_types=1);
  * @var int   $noCostLines  Produits en stock sans coût saisi (hors total).
  * @var float $pausedValue  Valeur du stock des produits « en pause » (hors vente).
  * @var int   $pausedUnits  Unités en stock des produits « en pause ».
+ * @var array{resumed:list<string>, paused:list<string>} $sweep Changements automatiques appliqués au chargement.
  */
 ?>
 <div class="compta-head">
@@ -25,6 +26,19 @@ declare(strict_types=1);
         <p class="muted">Compte le stock <strong>physique</strong> et compare au <strong>théorique</strong> (dernier comptage + achats − ventes). Un écart = perte, casse, offert ou erreur de saisie.</p>
     </div>
 </div>
+
+<?php if ($sweep['resumed'] !== [] || $sweep['paused'] !== []): ?>
+<div class="alert alert-info">
+    <strong>Automatique</strong> —
+    <?php if ($sweep['resumed'] !== []): ?>
+        remis en vente (stock disponible) : <strong><?= e(implode(', ', $sweep['resumed'])) ?></strong>
+    <?php endif; ?>
+    <?php if ($sweep['resumed'] !== [] && $sweep['paused'] !== []): ?> · <?php endif; ?>
+    <?php if ($sweep['paused'] !== []): ?>
+        mis en pause (stock à 0 depuis 7 jours ou plus) : <strong><?= e(implode(', ', $sweep['paused'])) ?></strong>
+    <?php endif; ?>
+</div>
+<?php endif; ?>
 
 <?php $gapTotal = count($gaps); $gapShown = min(6, $gapTotal); ?>
 <?php if ($gaps !== []): ?>
@@ -273,7 +287,8 @@ declare(strict_types=1);
 <div class="card surface glass table-wrap">
     <details class="cost-card-lots" open>
         <summary>Plus en vente pour l'instant (<?= count($discontinuedRows) ?>)</summary>
-        <p class="muted">Marquage <strong>temporaire</strong> (ex. Redbull Summer hors été) : ces produits sortent de la grille de comptage ci-dessus, du comptage à l'aveugle et du réappro — <strong>rien n'est supprimé</strong> (ventes, stock et comptages conservés). « Remettre en vente » les réactive aussitôt.</p>
+        <p class="muted">Marquage <strong>temporaire</strong> (ex. Redbull Summer hors été) : ces produits sortent de la grille de comptage ci-dessus, du comptage à l'aveugle et du réappro — <strong>rien n'est supprimé</strong> (ventes, stock et comptages conservés). « Remettre en vente » les réactive aussitôt.
+        Automatique : les produits mis en pause <em>par le système</em> (stock à 0 depuis 7 jours ou plus) repassent en vente dès que du stock réapparaît — les pauses posées manuellement ne sont jamais touchées.</p>
         <?php if ($discontinuedRows === []): ?>
             <p class="muted">Aucun produit marqué plus en vente pour l'instant.</p>
         <?php else: ?>

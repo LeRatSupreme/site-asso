@@ -21,6 +21,10 @@ namespace Tests\Integration;
  *      Majoration des dépenses dans le bilan annuel.
  *   4. La page Inventaire valorise le stock (Σ stock théorique × coût du
  *      lot en cours) et signale les produits sans coût saisi.
+ *   5. Cycle de vie automatique : pause auto + stock → reprise ; en vente
+ *      à stock 0 depuis ≥ 7 jours → pause ; pauses manuelles intouchées.
+ *   6. Le drapeau « stock infini » (Réappro) exclut un produit « à
+ *      compter » de la commande.
  *
  * Base `aeic_test` requise (les tests sont sautés sinon).
  */
@@ -41,6 +45,9 @@ final class ComptaConsistencyTest extends IntegrationTestCase
             'cash_counts',
             'inventory_counts',
             'product_costs',
+            'product_discontinued',
+            'product_zero_since',
+            'product_infinite',
             'users',
         ]);
         $this->seedUser($this->rootId, 'compta-root@exemple.fr', 'Password123456', 'SUPERADMIN');
@@ -61,14 +68,8 @@ final class ComptaConsistencyTest extends IntegrationTestCase
         // Stock : « café » compté 10 u. avec un coût de 2,50 € (lot en cours)
         // → 25,00 € valorisés. « thé » compté 4 u. sans coût saisi → compté
         // dans les unités mais signalé « sans coût », hors total.
-        $this->pdo->prepare(
-            'INSERT INTO inventory_counts (id, counted_at, product_key, counted_qty, theoretical_qty, gap, created_by)
-             VALUES (?,?,?,?,?,?,?)'
-        )->execute(['inv_cons_1', '2026-09-20 10:00:00', 'café', 10, 10, 0, 'test']);
-        $this->pdo->prepare(
-            'INSERT INTO inventory_counts (id, counted_at, product_key, counted_qty, theoretical_qty, gap, created_by)
-             VALUES (?,?,?,?,?,?,?)'
-        )->execute(['inv_cons_2', '2026-09-20 10:05:00', 'thé', 4, 4, 0, 'test']);
+        $this->insertCount('inv_cons_1', '2026-09-20 10:00:00', 'café', 10);
+        $this->insertCount('inv_cons_2', '2026-09-20 10:05:00', 'thé', 4);
 
         $this->pdo->prepare(
             'INSERT INTO product_costs (id, product_key, cost_price, valid_from) VALUES (?,?,?,?)'
@@ -81,7 +82,109 @@ final class ComptaConsistencyTest extends IntegrationTestCase
         self::assertStringContainsString('Valeur du stock', $body, 'Le bloc « Valeur du stock » est absent de l\'Inventaire.');
         self::assertStringContainsString('25,00', $body, 'La valeur du stock ne correspond pas à Σ (stock × coût du lot en cours).');
         self::assertStringContainsString('14 u.', $body, 'Le total d\'unités en stock est erroné (10 + 4 attendus).');
-        self::assertStringContainsString('1 produit sans coût', $body, 'Le produit sans coût saisi doit être signalé, hors total.');
+        // Le libellé « coût manquant » est éclaté sur plusieurs balises HTML :
+        // on vérifie ses fragments plutôt qu'une phrase continue.
+        self::assertStringContainsString('Coût manquant', $body, 'Le bloc « Coût manquant » est absent.');
+        self::assertStringContainsString('sans coût saisi', $body, 'Les produits sans coût saisi ne sont pas signalés.');
+    }
+
+    public function test_cycle_automatique_pause_et_reprise_selon_stock(): void
+    {
+        // A) Pause AUTOMATIQUE + stock reconstitué → remise en vente.
+        $this->insertCount('inv_auto_1', '2026-01-01 10:00:00', 'bonbon', 12);
+        $this->markPaused('bonbon', 'auto');
+
+        // B) Produit en vente à stock 0 depuis 8 jours → mise en pause auto.
+        $this->insertCount('inv_auto_2', '2026-01-01 10:05:00', 'chips', 0);
+        $this->markZeroSince('chips', 8);
+
+        // C) Produit en vente à stock 0 récent (1 jour) → suivi seulement.
+        $this->insertCount('inv_auto_3', '2026-01-01 10:10:00', 'fanta', 0);
+        $this->markZeroSince('fanta', 1);
+
+        // D) Pause MANUELLE (saisonnière) avec stock → jamais reprise ici.
+        $this->insertCount('inv_auto_4', '2026-01-01 10:15:00', 'redbull_ete', 30);
+        $this->markPaused('redbull_ete', 'u_manuel');
+
+        $r = $this->request('GET', '/admin/compta/inventaire', [], [], $this->rootId);
+        self::assertSame(200, (int) ($r['code'] ?? 0), 'La page Inventaire doit répondre.');
+        $body = (string) ($r['body'] ?? '');
+        self::assertStringContainsString('Automatique', $body, 'Le bandeau du cycle automatique est absent.');
+
+        // A) « bonbon » repris : drapeau levé.
+        self::assertSame(
+            0,
+            (int) $this->pdo->query("SELECT COUNT(*) FROM product_discontinued WHERE product_key = 'bonbon'")->fetchColumn(),
+            'Une pause automatique avec du stock doit être levée.'
+        );
+
+        // B) « chips » mis en pause automatiquement, suivi à zéro nettoyé.
+        self::assertSame(
+            1,
+            (int) $this->pdo->query("SELECT COUNT(*) FROM product_discontinued WHERE product_key = 'chips' AND updated_by = 'auto'")->fetchColumn(),
+            'Un produit à stock 0 depuis 8 jours doit être mis en pause automatiquement.'
+        );
+        self::assertSame(
+            0,
+            (int) $this->pdo->query("SELECT COUNT(*) FROM product_zero_since WHERE product_key = 'chips'")->fetchColumn(),
+            'Le suivi « à zéro depuis » doit être nettoyé après la pause.'
+        );
+
+        // C) « fanta » : seulement suivi, pas encore 7 jours.
+        self::assertSame(
+            0,
+            (int) $this->pdo->query("SELECT COUNT(*) FROM product_discontinued WHERE product_key = 'fanta'")->fetchColumn(),
+            'Un produit à stock 0 depuis moins de 7 jours ne doit pas être mis en pause.'
+        );
+        self::assertSame(
+            1,
+            (int) $this->pdo->query("SELECT COUNT(*) FROM product_zero_since WHERE product_key = 'fanta'")->fetchColumn(),
+            'Le début du stock à zéro doit être suivi.'
+        );
+
+        // D) « redbull_ete » : pause manuelle conservée malgré le stock.
+        self::assertSame(
+            1,
+            (int) $this->pdo->query("SELECT COUNT(*) FROM product_discontinued WHERE product_key = 'redbull_ete' AND updated_by = 'u_manuel'")->fetchColumn(),
+            'Une pause manuelle (saisonnière) ne doit jamais être levée automatiquement.'
+        );
+    }
+
+    public function test_reappro_marquage_stock_infini_exclut_de_la_commande(): void
+    {
+        // Vente du jour d'un produit jamais compté : « à compter », besoin
+        // complet proposé par défaut.
+        $this->insertSale('s_inf_1', 'TINF001', date('Y-m-d 12:00:00'), '2.00', 'siropinfini');
+
+        $r1 = $this->request('GET', '/admin/compta/reappro', [], [], $this->rootId);
+        self::assertSame(200, (int) ($r1['code'] ?? 0));
+        $body1 = (string) ($r1['body'] ?? '');
+        self::assertMatchesRegularExpression(
+            '/data-name="siropinfini"[^>]*data-state="unknown"/',
+            $body1,
+            'Le produit sans comptage doit être « à compter » (unknown) avant marquage.'
+        );
+
+        // Marquage « stock infini » depuis la ligne du tableau.
+        $r2 = $this->request('POST', '/admin/compta/reappro/infinite', ['product_key' => 'siropinfini'], [], $this->rootId);
+        $flash = $r2['session']['_flash'] ?? [];
+        $last  = is_array($flash) && $flash !== [] ? end($flash) : null;
+        self::assertSame('success', $last['type'] ?? '', 'La bascule doit produire un flash de succès.');
+        self::assertSame(1, (int) $this->pdo->query("SELECT COUNT(*) FROM product_infinite WHERE product_key = 'siropinfini'")->fetchColumn());
+
+        $r3 = $this->request('GET', '/admin/compta/reappro', [], [], $this->rootId);
+        $body3 = (string) ($r3['body'] ?? '');
+        self::assertMatchesRegularExpression(
+            '/data-name="siropinfini"[^>]*data-state="ok"/',
+            $body3,
+            'Le produit « stock infini » doit passer en état OK.'
+        );
+        self::assertMatchesRegularExpression(
+            '/data-name="siropinfini"[^>]*data-toorder="0"/',
+            $body3,
+            'Le produit « stock infini » ne doit jamais être proposé à la commande.'
+        );
+        self::assertStringContainsString('Stock infini (marqué manuellement)', $body3);
     }
 
     public function test_bilan_annuel_csv_conforme_aux_donnees_saisies(): void
@@ -178,12 +281,12 @@ final class ComptaConsistencyTest extends IntegrationTestCase
     /**
      * Insère une vente directement en base (SumUp simulé).
      */
-    private function insertSale(string $id, string $ref, string $soldAt, string $priceTtc): void
+    private function insertSale(string $id, string $ref, string $soldAt, string $priceTtc, ?string $description = null): void
     {
         $this->pdo->prepare(
             'INSERT INTO sales (id, transaction_ref, sold_at, payment_method, payment_raw, quantity, description, price_ttc, is_custom_amount)
              VALUES (?,?,?,?,?,1,?,?,0)'
-        )->execute([$id, $ref, $soldAt, 'CARTE', 'Visa - Débit', $ref, $priceTtc]);
+        )->execute([$id, $ref, $soldAt, 'CARTE', 'Visa - Débit', $description ?? $ref, $priceTtc]);
     }
 
     /**
@@ -195,6 +298,40 @@ final class ComptaConsistencyTest extends IntegrationTestCase
             'INSERT INTO expenses (id, spent_at, category, label, amount_ttc, created_by)
              VALUES (?,?,?,?,?,?)'
         )->execute([$id, $spentAt, $category, $label, $amountTtc, 'test@aeic.fr']);
+    }
+
+    /**
+     * Insère un comptage inventaire (théorique = compté, aucun mouvement).
+     */
+    private function insertCount(string $id, string $countedAt, string $productKey, int $qty): void
+    {
+        $this->pdo->prepare(
+            'INSERT INTO inventory_counts (id, counted_at, product_key, counted_qty, theoretical_qty, gap, created_by)
+             VALUES (?,?,?,?,?,?,?)'
+        )->execute([$id, $countedAt, $productKey, $qty, $qty, 0, 'test']);
+    }
+
+    /**
+     * Pose un drapeau « plus en vente » avec l'auteur donné
+     * (« auto » = pause automatique du système, sinon pause manuelle).
+     */
+    private function markPaused(string $productKey, string $updatedBy): void
+    {
+        $this->pdo->prepare(
+            'INSERT INTO product_discontinued (product_key, updated_by, updated_at)
+             VALUES (?, ?, NOW())
+             ON DUPLICATE KEY UPDATE updated_by = VALUES(updated_by), updated_at = NOW()'
+        )->execute([$productKey, $updatedBy]);
+    }
+
+    /**
+     * Note le produit « à zéro » depuis N jours (table product_zero_since).
+     */
+    private function markZeroSince(string $productKey, int $daysAgo): void
+    {
+        $this->pdo->prepare(
+            'INSERT INTO product_zero_since (product_key, zero_since) VALUES (?, ?)'
+        )->execute([$productKey, date('Y-m-d H:i:s', time() - $daysAgo * 86400)]);
     }
 
     /**

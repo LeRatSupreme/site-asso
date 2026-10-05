@@ -602,6 +602,28 @@ CREATE TABLE IF NOT EXISTS product_discontinued (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- -------------------------------------------------------------------
+--  Drapeau « stock infini » par produit
+--  Produits jamais réapprovisionnés : autonomie ∞ sur la page Réappro,
+--  jamais proposés à la commande (migration 2026_product_infinite.sql)
+-- -------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS product_infinite (
+    product_key VARCHAR(255) NOT NULL PRIMARY KEY,
+    updated_by  VARCHAR(255) NULL,
+    updated_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -------------------------------------------------------------------
+--  Suivi « stock à zéro depuis quand ? » (cycle pause/reprise auto)
+--  Produit en vente à stock 0 noté ici ; toujours à 0 après 7 jours →
+--  mise en pause automatique (migration 2026_product_zero_since.sql)
+-- -------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS product_zero_since (
+    product_key VARCHAR(255) NOT NULL PRIMARY KEY,
+    zero_since  DATETIME NOT NULL,
+    updated_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -------------------------------------------------------------------
 --  Jeux : scores (Wordle FR/EN + classement)
 --  (migration 2026_games.sql)
 -- -------------------------------------------------------------------
