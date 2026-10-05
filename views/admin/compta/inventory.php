@@ -10,6 +10,12 @@ declare(strict_types=1);
  * @var list<array<string,mixed>> $gaps
  * @var array<string, array{sales:int, purchases:int, losses:int, counts:int, costs:int, aliases:int, stock:?int, discontinued:bool}> $keyStats
  * @var list<list<string>> $mergeDupes
+ * @var float $stockValue   Valeur du stock valorisé (Σ stock × coût du lot en cours).
+ * @var int   $stockUnits   Unités physiques en stock (stocks théoriques positifs).
+ * @var int   $valuedLines  Produits valorisés (coût connu).
+ * @var int   $noCostLines  Produits en stock sans coût saisi (hors total).
+ * @var float $pausedValue  Valeur du stock des produits « en pause » (hors vente).
+ * @var int   $pausedUnits  Unités en stock des produits « en pause ».
  */
 ?>
 <div class="compta-head">
@@ -85,6 +91,58 @@ declare(strict_types=1);
 
 <section class="card surface glass table-wrap">
     <h2 class="card-title">Comptage</h2>
+
+    <?php if ($rows !== [] || $discontinuedRows !== []): ?>
+    <style>
+        .stock-total-row {
+            display: flex; align-items: stretch; flex-wrap: wrap;
+            gap: 0.6rem 1.4rem; margin: 0.25rem 0 1rem;
+            padding: 0.8rem 1.1rem;
+            background: rgba(72, 189, 211, 0.07);
+            border: 1px solid rgba(72, 189, 211, 0.25);
+            border-radius: 12px;
+        }
+        .stock-total-item { display: flex; flex-direction: column; justify-content: center; gap: 0.15rem; }
+        .stock-total-label {
+            font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.08em;
+            font-weight: 800; color: var(--muted, #8892a6);
+        }
+        .stock-total-value { font-size: 1.5rem; font-weight: 900; color: var(--primary, #48bdd3); line-height: 1.1; }
+        .stock-total-sub { font-size: 0.78rem; color: var(--muted, #8892a6); }
+        .stock-total-sep { width: 1px; align-self: stretch; background: rgba(255, 255, 255, 0.12); }
+        @media (max-width: 640px) { .stock-total-sep { display: none; } }
+    </style>
+    <div class="stock-total-row">
+        <div class="stock-total-item"
+             title="Σ (stock théorique × coût de revient du lot en cours, même source que la page Réappro). Produits jamais comptés ou à stock nul/négatif exclus.">
+            <span class="stock-total-label">Valeur du stock</span>
+            <strong class="stock-total-value"><?= e(formatPrice($stockValue)) ?></strong>
+        </div>
+        <div class="stock-total-sep" aria-hidden="true"></div>
+        <div class="stock-total-item">
+            <span class="stock-total-label">En stock</span>
+            <strong class="stock-total-value"><?= $stockUnits ?> u.</strong>
+            <span class="stock-total-sub"><?= $valuedLines ?> produit<?= $valuedLines > 1 ? 's' : '' ?> valorisé<?= $valuedLines > 1 ? 's' : '' ?></span>
+        </div>
+        <?php if ($noCostLines > 0): ?>
+        <div class="stock-total-sep" aria-hidden="true"></div>
+        <div class="stock-total-item">
+            <span class="stock-total-label">Coût manquant</span>
+            <strong class="stock-total-value" style="color: var(--accent-warning, #f59e0b); font-size: 1.15rem;"><?= $noCostLines ?> produit<?= $noCostLines > 1 ? 's' : '' ?></strong>
+            <span class="stock-total-sub">sans coût saisi — hors total (page Coûts de revient)</span>
+        </div>
+        <?php endif; ?>
+        <?php if ($pausedValue > 0.0 || $pausedUnits > 0): ?>
+        <div class="stock-total-sep" aria-hidden="true"></div>
+        <div class="stock-total-item">
+            <span class="stock-total-label">Hors vente (en pause)</span>
+            <strong class="stock-total-value" style="font-size: 1.15rem;"><?= e(formatPrice($pausedValue)) ?></strong>
+            <span class="stock-total-sub"><?= $pausedUnits ?> u. — non comptés dans la valeur principale</span>
+        </div>
+        <?php endif; ?>
+    </div>
+    <?php endif; ?>
+
     <form method="post" action="<?= e(url('/admin/compta/inventaire/save')) ?>">
         <?= csrf_field() ?>
         <table class="table">
