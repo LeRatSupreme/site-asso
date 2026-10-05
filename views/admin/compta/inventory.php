@@ -157,7 +157,7 @@ declare(strict_types=1);
     </div>
     <?php endif; ?>
 
-    <form method="post" action="<?= e(url('/admin/compta/inventaire/save')) ?>">
+    <form method="post" action="<?= e(url('/admin/compta/inventaire/save')) ?>" data-preserve-scroll>
         <?= csrf_field() ?>
         <table class="table">
             <thead>
