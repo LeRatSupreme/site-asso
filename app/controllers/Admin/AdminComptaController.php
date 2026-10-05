@@ -1178,20 +1178,26 @@ final class AdminComptaController extends AdminBaseController
 
         $data = $this->reorderData($covers[$coverKey]['days'], $fromDay, $toDay, $calDays);
 
-        // Uniquement les produits « À racheter » de la page Réappro :
-        // stock épuisé ou autonomie < 7 jours, avec de la consommation sur
-        // la période. Les produits sans ventes (saisonniers écoulés, ex.
-        // « red bull blue ») et les « à compter » (jamais comptés, ex.
-        // Mister Freeze) n'apparaissent PAS. Les artefacts SumUp
-        // (« custom amount », « montant personnalisé ») sont exclus aussi.
+        // Uniquement ce qu'il faut acheter pour l'horizon choisi :
+        // les « À racheter » du réappro (stock épuisé / autonomie < 7 j)
+        // ET tout produit dont la quantité à commander devient positive
+        // quand on allonge la couverture (ex. autonomie 20 j + couvrir
+        // 1 mois → commander). Les « à compter » (jamais comptés, ex.
+        // Mister Freeze) et les artefacts SumUp sont exclus.
         $parser = new SumUpCsvParser();
         $isArtifact = static fn(string $k): bool => $parser->isCustomAmount($k);
 
         $items = array_values(array_filter(
             $data['rows'],
             static fn(array $r): bool =>
-                ($r['state'] ?? '') === 'reorder'
-                && !($isArtifact)((string) ($r['name'] ?? ''))
+                !($isArtifact)((string) ($r['name'] ?? ''))
+                && (
+                    ($r['state'] ?? '') === 'reorder'
+                    || (
+                        (int) ($r['to_order'] ?? 0) > 0
+                        && ($r['state'] ?? '') !== 'unknown'
+                    )
+                )
         ));
 
         // Tri comme le Réappro : autonomie croissante (les plus critiques

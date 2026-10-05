@@ -264,6 +264,13 @@ final class ComptaConsistencyTest extends IntegrationTestCase
         // eau : gros stock compté → rien à acheter, absent de la liste.
         $this->insertCount('inv_lst_1', '2026-01-01 09:00:00', 'eau', 100);
 
+        // pulco : compté 8, 4 ventes du jour → autonomie ~28 j : absent en
+        // couverture 1 semaine, PRÉSENT en couverture 1 mois.
+        for ($i = 1; $i <= 4; $i++) {
+            $this->insertSale('s_lst_p' . $i, 'TLSTP' . $i, date('Y-m-d ') . sprintf('11:0%d:00', $i), '1.00', 'pulco');
+        }
+        $this->insertCount('inv_lst_3', '2026-01-01 09:10:00', 'pulco', 8);
+
         // chips : compté 0 mais AUCUNE vente → pas dans la liste (produit
         // sans consommation, ex. saisonnier écoulé).
         $this->insertCount('inv_lst_2', '2026-01-01 09:05:00', 'chips', 0);
@@ -273,9 +280,15 @@ final class ComptaConsistencyTest extends IntegrationTestCase
         $body = (string) ($r['body'] ?? '');
         self::assertStringContainsString('Liste de courses', $body);
         self::assertStringContainsString('cola', $body, 'Le produit à racheter (cola) doit figurer dans la liste.');
+        self::assertStringNotContainsString('pulco', $body, 'pulco couvre 1 semaine : absent par défaut.');
         self::assertStringNotContainsString('chips', $body, 'Un produit sans aucune vente ne doit pas apparaître dans la liste.');
         self::assertStringNotContainsString('misterfreeze', $body, 'Un produit « à compter » ne doit pas apparaître dans la liste.');
         self::assertStringNotContainsString('>eau<', $body, 'Un produit avec du stock ne doit pas apparaître dans la liste.');
+
+        // Couverture 1 mois : pulco (autonomie ~28 j) doit maintenant apparaître.
+        $rm = $this->request('GET', '/admin/compta/liste?c=1m', [], [], $this->rootId);
+        self::assertSame(200, (int) ($rm['code'] ?? 0));
+        self::assertStringContainsString('pulco', (string) ($rm['body'] ?? ''), 'Allonger la couverture doit ajouter les produits à acheter.');
 
         // Kiosque sans session : 200 lecture seule, sans navigation.
         $token = (string) $this->pdo->query(
