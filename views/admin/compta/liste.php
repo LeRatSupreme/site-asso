@@ -48,6 +48,7 @@ use App\Models\Setting;
         display: grid; grid-template-columns: repeat(auto-fill, minmax(165px, 1fr));
         gap: 0.7rem;
     }
+    .shop-grid > .shop-item { min-width: 0; }
     .shop-item {
         position: relative;
         display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -61,17 +62,20 @@ use App\Models\Setting;
         transition: opacity 0.15s ease, border-color 0.15s ease, background 0.15s ease;
     }
     .shop-item:focus-visible { outline: 2px solid var(--primary, #48bdd3); outline-offset: 2px; }
-    .shop-qty { font-size: 2.9rem; font-weight: 900; line-height: 1; color: var(--primary, #48bdd3); }
+    .shop-qty { font-size: 2.9rem; font-weight: 900; line-height: 1; color: var(--primary, #48bdd3); width: 100%; }
     .shop-qty.is-unknown { color: var(--muted, #8892a6); font-size: 2rem; }
+    /* Nom en bloc simple : PAS de -webkit-box (Safari peut l'écraser à une
+       lettre de large dans une tuile flex). La vignette grandit en hauteur
+       si le nom est long — lisible avant tout. */
     .shop-name {
-        font-size: 1.05rem; font-weight: 800; line-height: 1.15;
-        display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
-        word-break: break-word; max-width: 100%;
+        font-size: 1.02rem; font-weight: 800; line-height: 1.2;
+        width: 100%; min-width: 0;
+        overflow-wrap: anywhere;
     }
     .shop-pack {
         font-size: 0.75rem; font-weight: 800; color: var(--primary, #48bdd3);
         background: rgba(72, 189, 211, 0.14); border-radius: 999px; padding: 0.12rem 0.6rem;
-        white-space: nowrap;
+        white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis;
     }
     /* Carré « acheté » : grisé, barré, petit ✓. */
     .shop-item.is-done {
