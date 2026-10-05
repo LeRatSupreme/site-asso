@@ -440,7 +440,7 @@ $wikiToc = [
             <li><strong>Solde théorique</strong> = ventes en espèces + mouvements manuels (fond de caisse, dépôts, ajustements)</li>
             <li><strong>Comptage physique</strong> : saisis le montant compté → l'<strong>écart</strong> est historisé puis un ajustement réaligne le théorique</li>
             <li><strong>Écarts détectés</strong> (30 derniers jours) : vue rapide des anomalies</li>
-            <li><strong>Dépôt à la banque</strong> : montant, date et n° de bordereau</li>
+            <li><strong>Dépôt à la banque</strong> : montant, date et n° de bordereau — des frais bancaires fixes de 3,50 € par dépôt sont automatiquement ajoutés aux dépenses (catégorie « Frais bancaires »)</li>
             <li><strong>Fond de caisse</strong> : le montant permanent laissé en caisse</li>
             <li><strong>Historiques</strong> : tous les mouvements et tous les comptages (compté / théorique / écart / par qui)</li>
         </ul>
