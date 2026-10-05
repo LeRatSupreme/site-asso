@@ -21,6 +21,7 @@ use App\Models\ProductCategory;
 use App\Models\ProductCost;
 use App\Models\ProductDiscontinued;
 use App\Models\ProductInfinite;
+use App\Models\ProductPack;
 use App\Models\Sale;
 use App\Models\SaleAdjustment;
 use App\Models\Setting;
@@ -1249,6 +1250,46 @@ final class AdminComptaController extends AdminBaseController
     }
 
     /**
+     * Enregistre les tailles de pack éditées depuis le tableau Réappro
+     * (tableaux parallèles pack_keys[] / pack_sizes[] pour préserver les
+     * clés produits contenant espaces/accents).
+     */
+    public function savePacks(): void
+    {
+        $this->guardCompta();
+
+        $back = trim((string) ($_POST['back'] ?? ''));
+        $to   = url('/admin/compta/reappro' . ($back !== '' ? '?' . $back : ''));
+
+        $keys  = is_array($_POST['pack_keys'] ?? null) ? $_POST['pack_keys'] : [];
+        $sizes = is_array($_POST['pack_sizes'] ?? null) ? $_POST['pack_sizes'] : [];
+        $userId = (string) (Auth::id() ?? '');
+        $saved  = 0;
+
+        foreach ($keys as $i => $rawKey) {
+            $key = trim((string) $rawKey);
+            if ($key === '') {
+                continue;
+            }
+
+            $size = (int) trim((string) ($sizes[$i] ?? ''));
+            if ($size <= 0) {
+                // Vide ou 0 : pas de pack, commande à l'unité.
+                ProductPack::remove($key);
+                continue;
+            }
+
+            ProductPack::set($key, min(9999, $size), $userId);
+            $saved++;
+        }
+
+        $this->audit('compta.reappro.packs', 'product_packs', null, ['saved' => $saved]);
+        $this->setFlash('success', sprintf('Packs enregistrés (%d produit(s)).', $saved));
+
+        redirect($to);
+    }
+
+    /**
      * Bascule le drapeau « stock infini » d'un produit (page Réappro).
      *
      * Un produit marqué infini affiche une autonomie « ∞ » et n'est jamais
@@ -1324,6 +1365,10 @@ final class AdminComptaController extends AdminBaseController
             ProductInfinite::keys()
         ));
 
+        // Packs d'achat (12, 24, 32…) : « À commander » est arrondi au
+        // multiple supérieur du pack — on achète par pack, pas à l'unité.
+        $packs = ProductPack::sizesMap();
+
         // Stock théorique + dernier comptage, indexés en minuscules pour un
         // rapprochement insensible à la casse (ex. « Red bull » == « Red Bull »).
         $theoreticalLower = [];
@@ -1366,7 +1411,16 @@ final class AdminComptaController extends AdminBaseController
             $need   = (int) ceil($avgDay * $targetDays);
             // Un stock négatif (survente) majore la quantité à commander :
             // reconstituer le niveau perdu en plus de couvrir le besoin.
-            $toOrder = max(0, $need - ($stock ?? 0));
+            $toOrderRaw = max(0, $need - ($stock ?? 0));
+
+            // Pack d'achat : arrondi au multiple supérieur (besoin brut 2,
+            // pack de 12 → commander 12). 0/absent = commande à l'unité.
+            $packSize = $packs[$lookupKey] ?? 0;
+            if ($packSize > 1 && $toOrderRaw > 0) {
+                $toOrder = (int) ceil($toOrderRaw / $packSize) * $packSize;
+            } else {
+                $toOrder = $toOrderRaw;
+            }
 
             // Stock déclaré infini : autonomie ∞ et jamais à commander,
             // même si le produit n'a jamais été compté (« à compter »).
@@ -1410,6 +1464,8 @@ final class AdminComptaController extends AdminBaseController
                 'autonomy'   => $autonomy,
                 'need'       => $need,
                 'to_order'   => $toOrder,
+                'to_order_raw' => $toOrderRaw,
+                'pack'       => $packSize,
                 'state'      => $state,
                 'is_alert'   => $isAlert,
                 'infinite'   => $infiniteStock,

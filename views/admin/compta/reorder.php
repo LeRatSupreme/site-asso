@@ -241,6 +241,11 @@ foreach ($rows as $r) {
         <span class="costs-count muted" id="reorder-count"></span>
     </div>
 
+    <?php $backQuery = (string) ($_SERVER['QUERY_STRING'] ?? ''); ?>
+    <form method="post" action="<?= e(url('/admin/compta/reappro/packs')) ?>">
+        <?= csrf_field() ?>
+        <input type="hidden" name="back" value="<?= e($backQuery) ?>">
+
     <table class="table reorder-table">
         <thead>
             <tr>
@@ -254,12 +259,12 @@ foreach ($rows as $r) {
                 <th class="th-num" title="Jours avant rupture, week-end inclus (stock ÷ conso / jour)">Autonomie</th>
                 <th class="th-num" title="Besoin estimé pour couvrir l'horizon choisi">Besoin<br>(<?= e($periods[$currentPeriod]['label']) ?>)</th>
                 <th class="th-num" title="Besoin − stock théorique (minimum 0)">À commander</th>
+                <th class="th-num" title="Quantité par pack d'achat (12, 24, 32…) : « À commander » est arrondi au multiple supérieur du pack. Vide = commande à l'unité.">Pack</th>
                 <th class="th-num" title="À commander × coût de revient du lot en cours">Coût ligne</th>
                 <th>État</th>
             </tr>
         </thead>
         <tbody>
-            <?php $backQuery = (string) ($_SERVER['QUERY_STRING'] ?? ''); ?>
             <?php foreach ($rows as $r):
                 $key = (string) $r['name'];
                 $hasStock = $r['stock'] !== null;
@@ -325,11 +330,24 @@ foreach ($rows as $r) {
                     <td class="num" data-label="Besoin (<?= e($periods[$currentPeriod]['label']) ?>)"><?= (int) $r['need'] ?></td>
                     <td class="num to-order-cell" data-label="À commander">
                         <?php if ((int) $r['to_order'] > 0): ?>
-                            <strong style="color:var(--primary)" title="<?= !$hasStock ? 'Stock jamais compté : le besoin complet est proposé' : 'Besoin − stock théorique' ?>"><?= (int) $r['to_order'] ?></strong>
+                            <strong style="color:var(--primary)" title="<?= !$hasStock ? 'Stock jamais compté : le besoin complet est proposé' : 'Besoin − stock théorique' ?><?= (int) $r['pack'] > 1 ? ', arrondi au pack de ' . (int) $r['pack'] : '' ?>"><?= (int) $r['to_order'] ?></strong>
+                            <?php if ((int) $r['pack'] > 1 && (int) $r['to_order_raw'] !== (int) $r['to_order']): ?>
+                                <span class="cost-sub" title="Besoin brut avant arrondi au pack">besoin <?= (int) $r['to_order_raw'] ?> · pack <?= (int) $r['pack'] ?></span>
+                            <?php endif; ?>
                         <?php elseif (!empty($r['infinite'])): ?>
                             <span class="muted" title="Stock infini : jamais à commander">0</span>
                         <?php else: ?>
                             <span class="muted">0</span>
+                        <?php endif; ?>
+                    </td>
+                    <td class="num" data-label="Pack (acheté par)">
+                        <?php if ($kiosk): ?>
+                            <span class="muted"><?= (int) $r['pack'] > 0 ? (int) $r['pack'] : '—' ?></span>
+                        <?php else: ?>
+                            <input type="number" name="pack_sizes[]" value="<?= (int) $r['pack'] > 0 ? (int) $r['pack'] : '' ?>"
+                                   min="0" max="9999" step="1" placeholder="—" style="width: 72px;" inputmode="numeric"
+                                   aria-label="Taille du pack pour <?= e($key) ?>" title="Quantité par pack d'achat (vide = à l'unité)">
+                            <input type="hidden" name="pack_keys[]" value="<?= e($key) ?>">
                         <?php endif; ?>
                     </td>
                     <td class="num cost-line-cell" data-label="Coût ligne">
@@ -354,7 +372,7 @@ foreach ($rows as $r) {
                 </tr>
             <?php endforeach; ?>
             <?php if ($rows === []): ?>
-                <tr><td colspan="12" class="muted">Aucun produit à analyser sur cette période. Importe d'abord un rapport SumUp.</td></tr>
+                <tr><td colspan="13" class="muted">Aucun produit à analyser sur cette période. Importe d'abord un rapport SumUp.</td></tr>
             <?php endif; ?>
         </tbody>
         <?php if ($rows !== []): ?>
@@ -362,6 +380,7 @@ foreach ($rows as $r) {
             <tr>
                 <th colspan="9">Total à commander (<?= e($periods[$currentPeriod]['label']) ?>) :</th>
                 <th class="num" data-label="À commander"><strong id="reorder-total" style="color:var(--primary)"><?= (int) $totalToOrder ?></strong></th>
+                <th class="num" data-label="Pack"></th>
                 <th class="num" data-label="Coût du panier">
                     <strong id="reorder-total-cost" style="color:var(--primary)">≈ <?= e(formatPrice($totalCost)) ?></strong>
                     <?php if ($missingCost > 0): ?>
@@ -375,13 +394,22 @@ foreach ($rows as $r) {
         </tfoot>
         <?php endif; ?>
     </table>
+
+        <?php if (!$kiosk): ?>
+        <div class="form-actions" style="padding: 0.9rem 1.1rem 1rem;">
+            <button type="submit" class="btn btn-primary btn-sm">Enregistrer les packs</button>
+            <span class="muted" style="align-self: center;">« À commander » est arrondi au multiple du pack (besoin 2 + pack 12 → commander 12).</span>
+        </div>
+        <?php endif; ?>
+    </form>
 </div>
 
 <p class="card-meta">
     Moyennes calculées sur les <strong>jours calendaires</strong> de la période analysée : le <strong>week-end est inclus</strong> (7 j/7), comme les ventes qu'il génère.
     Conso / jour = vendus ÷ jours analysés · Conso / semaine = conso / jour × 7 · Conso / mois = conso / jour × 30,44.
     L'<strong>autonomie</strong> est le nombre de jours avant rupture, week-end compris.
-    « À commander » = besoin sur l'horizon de couverture − <strong>stock théorique</strong> (minimum 0 ; un stock négatif majore la commande).
+    « À commander » = besoin sur l'horizon de couverture − <strong>stock théorique</strong> (minimum 0 ; un stock négatif majore la commande),
+    <strong>arrondi au multiple du pack</strong> quand une taille de pack est définie dans la colonne « Pack » (besoin 2 + pack 12 → commander 12 ; vide = à l'unité).
     Stock théorique = dernier comptage + achats − ventes − pertes (mis à jour par <strong>Inventaire</strong>, <strong>Achats</strong> et <strong>Pertes</strong>).
     « Coût ligne » = à commander × coût de revient du lot en cours · le total ≈ prix d'achat du panier (produits sans coût saisi exclus, comptés sous le total).
     Un produit marqué <strong>« stock ∞ »</strong> (bouton sous l'autonomie) n'est jamais réapprovisionné : autonomie ∞, jamais proposé à la commande — réversible en un clic.
@@ -461,7 +489,7 @@ foreach ($rows as $r) {
     var emptyRow = document.createElement('tr');
     emptyRow.className = 'reorder-empty';
     emptyRow.hidden = true;
-    emptyRow.innerHTML = '<td colspan="12" class="muted" style="text-align:center;padding:2.25rem 1rem">Aucun produit ne correspond à ces filtres.</td>';
+    emptyRow.innerHTML = '<td colspan="13" class="muted" style="text-align:center;padding:2.25rem 1rem">Aucun produit ne correspond à ces filtres.</td>';
     if (tbody) tbody.appendChild(emptyRow);
 
     function norm(s) { return String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim(); }

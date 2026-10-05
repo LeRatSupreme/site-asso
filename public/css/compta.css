@@ -1325,17 +1325,19 @@ details.howto p {
         border-top: none;
     }
 
-    /* Ordre de lecture : l'essentiel d'abord, détails ensuite. */
+    /* Ordre de lecture : l'essentiel d'abord, détails ensuite.
+       (13 colonnes depuis l'ajout de « Pack » après « À commander ».) */
     .reorder-table tbody tr[data-name] td:nth-child(4)  { order: 1; border-top: none; }                 /* stock */
     .reorder-table tbody tr[data-name] td:nth-child(8)  { order: 2; }                                   /* autonomie */
     .reorder-table tbody tr[data-name] td:nth-child(10) { order: 3; background: rgba(72, 189, 211, 0.07); } /* à commander */
-    .reorder-table tbody tr[data-name] td:nth-child(11) { order: 4; }                                   /* coût */
-    .reorder-table tbody tr[data-name] td:nth-child(2)  { order: 5; border-top: 2px solid rgba(255, 255, 255, 0.10); } /* catégorie : sépare les détails */
-    .reorder-table tbody tr[data-name] td:nth-child(3)  { order: 6; }                                   /* vendus */
-    .reorder-table tbody tr[data-name] td:nth-child(5)  { order: 7; }                                   /* conso / jour */
-    .reorder-table tbody tr[data-name] td:nth-child(6)  { order: 8; }                                   /* conso / semaine */
-    .reorder-table tbody tr[data-name] td:nth-child(7)  { order: 9; }                                   /* conso / mois */
-    .reorder-table tbody tr[data-name] td:nth-child(9)  { order: 10; }                                  /* besoin */
+    .reorder-table tbody tr[data-name] td:nth-child(11) { order: 4; }                                   /* pack */
+    .reorder-table tbody tr[data-name] td:nth-child(12) { order: 5; }                                   /* coût */
+    .reorder-table tbody tr[data-name] td:nth-child(2)  { order: 6; border-top: 2px solid rgba(255, 255, 255, 0.10); } /* catégorie : sépare les détails */
+    .reorder-table tbody tr[data-name] td:nth-child(3)  { order: 7; }                                   /* vendus */
+    .reorder-table tbody tr[data-name] td:nth-child(5)  { order: 8; }                                   /* conso / jour */
+    .reorder-table tbody tr[data-name] td:nth-child(6)  { order: 9; }                                   /* conso / semaine */
+    .reorder-table tbody tr[data-name] td:nth-child(7)  { order: 10; }                                  /* conso / mois */
+    .reorder-table tbody tr[data-name] td:nth-child(9)  { order: 11; }                                  /* besoin */
 
     .reorder-table tbody tr[data-name] td:nth-child(10) strong { font-size: 1.2rem; }
 

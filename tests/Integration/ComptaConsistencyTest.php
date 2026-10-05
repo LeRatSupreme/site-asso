@@ -48,6 +48,7 @@ final class ComptaConsistencyTest extends IntegrationTestCase
             'product_discontinued',
             'product_zero_since',
             'product_infinite',
+            'product_packs',
             'users',
         ]);
         $this->seedUser($this->rootId, 'compta-root@exemple.fr', 'Password123456', 'SUPERADMIN');
@@ -185,6 +186,63 @@ final class ComptaConsistencyTest extends IntegrationTestCase
             'Le produit « stock infini » ne doit jamais être proposé à la commande.'
         );
         self::assertStringContainsString('Stock infini (marqué manuellement)', $body3);
+    }
+
+    public function test_reappro_arrondit_au_pack_dachat(): void
+    {
+        // 3 ventes de « cola » aujourd'hui, jamais compté : besoin brut 2
+        // (3 ventes / 14 jours × 7 jours d'horizon, arrondi au-dessus).
+        for ($i = 1; $i <= 3; $i++) {
+            $this->insertSale('s_pack_' . $i, 'TPACK0' . $i, date('Y-m-d ') . sprintf('12:0%d:00', $i), '1.50', 'cola');
+        }
+
+        // Sans pack : à commander = besoin brut (2).
+        $r1 = $this->request('GET', '/admin/compta/reappro', [], [], $this->rootId);
+        self::assertMatchesRegularExpression(
+            '/data-name="cola"[^>]*data-toorder="2"/',
+            (string) ($r1['body'] ?? ''),
+            'Sans pack, « à commander » doit être le besoin brut.'
+        );
+
+        // Pack de 12 défini en base : 2 → arrondi à 12, avec l'info « besoin ».
+        $this->pdo->prepare('INSERT INTO product_packs (product_key, pack_size, updated_by) VALUES (?,?,?)')
+            ->execute(['cola', 12, 'test']);
+        $r2 = $this->request('GET', '/admin/compta/reappro', [], [], $this->rootId);
+        $body2 = (string) ($r2['body'] ?? '');
+        self::assertMatchesRegularExpression(
+            '/data-name="cola"[^>]*data-toorder="12"/',
+            $body2,
+            'La commande doit être arrondie au pack de 12.'
+        );
+        self::assertStringContainsString('besoin 2', $body2, 'L\'info « besoin brut · pack » doit être affichée.');
+
+        // Modification via le formulaire : pack de 6 → 2 arrondi à 6.
+        $this->request('POST', '/admin/compta/reappro/packs', [
+            'pack_keys'  => ['cola'],
+            'pack_sizes' => ['6'],
+        ], [], $this->rootId);
+        self::assertSame(
+            6,
+            (int) $this->pdo->query("SELECT pack_size FROM product_packs WHERE product_key = 'cola'")->fetchColumn(),
+            'Le pack édité doit être enregistré.'
+        );
+        $r4 = $this->request('GET', '/admin/compta/reappro', [], [], $this->rootId);
+        self::assertMatchesRegularExpression(
+            '/data-name="cola"[^>]*data-toorder="6"/',
+            (string) ($r4['body'] ?? ''),
+            'Le pack de 6 doit arrondir 2 → 6.'
+        );
+
+        // Pack vidé : retour à la commande à l'unité (besoin brut 2).
+        $this->request('POST', '/admin/compta/reappro/packs', [
+            'pack_keys'  => ['cola'],
+            'pack_sizes' => [''],
+        ], [], $this->rootId);
+        self::assertSame(
+            0,
+            (int) $this->pdo->query("SELECT COUNT(*) FROM product_packs WHERE product_key = 'cola'")->fetchColumn(),
+            'Un pack vidé doit être supprimé (retour à l\'unité).'
+        );
     }
 
     public function test_acces_kiosque_reappro_sans_connexion_par_jeton(): void
