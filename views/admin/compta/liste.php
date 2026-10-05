@@ -87,6 +87,28 @@ use App\Models\Setting;
         font-size: 1.2rem; font-weight: 900; color: var(--muted, #8892a6);
     }
 
+    /* Rond « stock restant » en haut à gauche de la vignette. */
+    .shop-stock {
+        position: absolute; top: 0.45rem; left: 0.45rem;
+        min-width: 26px; height: 26px; padding: 0 7px;
+        display: flex; align-items: center; justify-content: center;
+        border-radius: 999px;
+        background: rgba(8, 23, 45, 0.6);
+        border: 1px solid rgba(255, 255, 255, 0.16);
+        font-size: 0.74rem; font-weight: 800;
+        color: var(--foreground, inherit);
+    }
+    .shop-item.is-zero .shop-stock {
+        background: rgba(245, 158, 11, 0.18);
+        border-color: rgba(245, 158, 11, 0.45);
+        color: #fbbf24;
+    }
+    .shop-item.is-out .shop-stock {
+        background: rgba(239, 68, 68, 0.16);
+        border-color: rgba(239, 68, 68, 0.45);
+        color: #f87171;
+    }
+
     .shop-empty { text-align: center; padding: 3.5rem 1rem; }
     .shop-empty-emoji { font-size: 3rem; margin-bottom: 0.6rem; }
     .shop-empty-title { font-size: 1.25rem; font-weight: 900; margin: 0 0 0.3rem; }
@@ -136,10 +158,11 @@ use App\Models\Setting;
 <?php else: ?>
 <ul class="shop-grid">
     <?php foreach ($items as $r): $uid = 'sp-' . substr(md5((string) $r['name']), 0, 10); ?>
-    <li class="shop-item" id="<?= e($uid) ?>"
-        role="button" tabindex="0" aria-pressed="false"
-        title="Clique pour griser (acheté) — re-clique pour dégriser">
-        <?php if ((int) $r['to_order'] > 0): ?>
+        <li class="shop-item<?= (int) $r['stock'] < 0 ? ' is-out' : ((int) $r['stock'] === 0 ? ' is-zero' : '') ?>" id="<?= e($uid) ?>"
+            role="button" tabindex="0" aria-pressed="false"
+            title="Clique pour griser (acheté) — re-clique pour dégriser">
+            <span class="shop-stock" title="Stock théorique restant (dernier comptage + achats − ventes − pertes)"><?= (int) $r['stock'] ?></span>
+            <?php if ((int) $r['to_order'] > 0): ?>
             <span class="shop-qty"><?= (int) $r['to_order'] ?></span>
         <?php else: ?>
             <span class="shop-qty is-unknown" title="Stock épuisé — consommation inconnue sur la période">—</span>
