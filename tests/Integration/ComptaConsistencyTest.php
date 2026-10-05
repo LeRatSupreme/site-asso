@@ -339,10 +339,15 @@ final class ComptaConsistencyTest extends IntegrationTestCase
         );
 
         // Comptage inventaire : le produit vendu apparaît (à l'aveugle)…
-        $this->insertSale('s_kt_1', 'TKIOSK1', date('Y-m-d 08:00:00'), '1.00', 'colakiosque');
+        $this->insertSale('s_kt_1', 'TKIOSK1', date('Y-m-d 08:00:00'), '1.00', 'colakiosque', 'Boissons');
+        $this->insertSale('s_kt_2', 'TKIOSK2', date('Y-m-d 08:30:00'), '2.00', 'snackkiosque', 'Snacks');
         $ri = $this->request('GET', '/kiosque/comptage/inventaire/' . $token);
         self::assertSame(200, (int) ($ri['code'] ?? 0));
-        self::assertStringContainsString('colakiosque', (string) ($ri['body'] ?? ''));
+        $bodyI = (string) ($ri['body'] ?? '');
+        self::assertStringContainsString('colakiosque', $bodyI);
+        // Tri par catégorie : les titres de rayons sont présents.
+        self::assertStringContainsString('Boissons', $bodyI, 'Les catégories doivent grouper la liste.');
+        self::assertStringContainsString('Snacks', $bodyI, 'Les catégories doivent grouper la liste.');
 
         // … et l'enregistrement crée bien le comptage (théorique calculé côté serveur).
         $this->request('POST', '/kiosque/comptage/inventaire/save/' . $token, [
@@ -500,12 +505,12 @@ final class ComptaConsistencyTest extends IntegrationTestCase
     /**
      * Insère une vente directement en base (SumUp simulé).
      */
-    private function insertSale(string $id, string $ref, string $soldAt, string $priceTtc, ?string $description = null): void
+    private function insertSale(string $id, string $ref, string $soldAt, string $priceTtc, ?string $description = null, ?string $category = null): void
     {
         $this->pdo->prepare(
-            'INSERT INTO sales (id, transaction_ref, sold_at, payment_method, payment_raw, quantity, description, price_ttc, is_custom_amount)
-             VALUES (?,?,?,?,?,1,?,?,0)'
-        )->execute([$id, $ref, $soldAt, 'CARTE', 'Visa - Débit', $description ?? $ref, $priceTtc]);
+            'INSERT INTO sales (id, transaction_ref, sold_at, payment_method, payment_raw, quantity, description, price_ttc, is_custom_amount, category)
+             VALUES (?,?,?,?,?,1,?,?,0,?)'
+        )->execute([$id, $ref, $soldAt, 'CARTE', 'Visa - Débit', $description ?? $ref, $priceTtc, $category]);
     }
 
     /**

@@ -20,6 +20,15 @@ final class InventoryCount extends Model
     protected static string $table = 'inventory_counts';
 
     /**
+     * Connexion PDO partagée (requêtes transverses, ex. catégories du
+     * comptage kiosque).
+     */
+    public static function connection(): \PDO
+    {
+        return self::pdo();
+    }
+
+    /**
      * Enregistre un comptage physique.
      *
      * 1. calcule le stock théorique actuel ;
