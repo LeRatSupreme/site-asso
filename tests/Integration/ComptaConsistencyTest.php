@@ -314,6 +314,14 @@ final class ComptaConsistencyTest extends IntegrationTestCase
         self::assertStringContainsString('Comptage inventaire', $bodyH);
         self::assertStringNotContainsString('admin-sidebar', $bodyH, 'Aucune navigation en kiosque.');
 
+        // Les pages admin Comptage affichent les liens kiosque à copier.
+        $ra = $this->request('GET', '/admin/compta/caisse', [], [], $this->rootId);
+        self::assertSame(200, (int) ($ra['code'] ?? 0));
+        self::assertStringContainsString('/kiosque/comptage/caisse/', (string) ($ra['body'] ?? ''), 'La page Comptage caisse doit afficher le lien kiosque.');
+        $rb = $this->request('GET', '/admin/compta/inventaire/comptage', [], [], $this->rootId);
+        self::assertSame(200, (int) ($rb['code'] ?? 0));
+        self::assertStringContainsString('/kiosque/comptage/inventaire/', (string) ($rb['body'] ?? ''), 'La page Comptage inventaire doit afficher le lien kiosque.');
+
         // Comptage caisse : formulaire accessible sans session…
         $rc = $this->request('GET', '/kiosque/comptage/caisse/' . $token);
         self::assertSame(200, (int) ($rc['code'] ?? 0));

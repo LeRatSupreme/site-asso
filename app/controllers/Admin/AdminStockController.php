@@ -9,6 +9,7 @@ use App\Core\Compta\AliasSuggester;
 use App\Core\Compta\ComptaCalc;
 use App\Core\Compta\ProductAutoSync;
 use App\Core\Compta\ProductLifecycle;
+use App\Core\Compta\Kiosk;
 use App\Core\Compta\StockPublic;
 use App\Models\InventoryCount;
 use App\Models\ProductCost;
@@ -638,9 +639,11 @@ final class AdminStockController extends AdminBaseController
         $rows = array_merge($active, $paused);
 
         $this->renderAdmin('admin/compta/blind_count', [
-            'title' => 'Comptage inventaire',
-            'user'  => $user,
-            'rows'  => $rows,
+            'title'         => 'Comptage inventaire',
+            'user'          => $user,
+            'rows'          => $rows,
+            'kioskHub'      => Kiosk::url('/kiosque/comptage/'),
+            'kioskInventaire' => Kiosk::url('/kiosque/comptage/inventaire/'),
         ]);
     }
 
