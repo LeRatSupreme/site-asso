@@ -264,7 +264,8 @@ final class ComptaConsistencyTest extends IntegrationTestCase
         // eau : gros stock compté → rien à acheter, absent de la liste.
         $this->insertCount('inv_lst_1', '2026-01-01 09:00:00', 'eau', 100);
 
-        // chips : compté 0, aucune vente → à racheter, quantité inconnue (—).
+        // chips : compté 0 mais AUCUNE vente → pas dans la liste (produit
+        // sans consommation, ex. saisonnier écoulé).
         $this->insertCount('inv_lst_2', '2026-01-01 09:05:00', 'chips', 0);
 
         $r = $this->request('GET', '/admin/compta/liste', [], [], $this->rootId);
@@ -272,7 +273,7 @@ final class ComptaConsistencyTest extends IntegrationTestCase
         $body = (string) ($r['body'] ?? '');
         self::assertStringContainsString('Liste de courses', $body);
         self::assertStringContainsString('cola', $body, 'Le produit à racheter (cola) doit figurer dans la liste.');
-        self::assertStringContainsString('chips', $body, 'Le produit à racheter (chips) doit figurer dans la liste.');
+        self::assertStringNotContainsString('chips', $body, 'Un produit sans aucune vente ne doit pas apparaître dans la liste.');
         self::assertStringNotContainsString('misterfreeze', $body, 'Un produit « à compter » ne doit pas apparaître dans la liste.');
         self::assertStringNotContainsString('>eau<', $body, 'Un produit avec du stock ne doit pas apparaître dans la liste.');
 

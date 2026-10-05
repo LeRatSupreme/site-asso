@@ -1178,9 +1178,10 @@ final class AdminComptaController extends AdminBaseController
         $data = $this->reorderData($covers[$coverKey]['days'], $fromDay, $toDay, $calDays);
 
         // Uniquement les produits « À racheter » de la page Réappro :
-        // stock épuisé ou autonomie < 7 jours. Les « à compter » (jamais
-        // comptés, ex. Mister Freeze) n'apparaissent PAS : compte-les en
-        // inventaire ou marque-les « stock ∞ ». Les artefacts SumUp
+        // stock épuisé ou autonomie < 7 jours, avec de la consommation sur
+        // la période. Les produits sans ventes (saisonniers écoulés, ex.
+        // « red bull blue ») et les « à compter » (jamais comptés, ex.
+        // Mister Freeze) n'apparaissent PAS. Les artefacts SumUp
         // (« custom amount », « montant personnalisé ») sont exclus aussi.
         $parser = new SumUpCsvParser();
         $isArtifact = static fn(string $k): bool => $parser->isCustomAmount($k);
@@ -1191,59 +1192,6 @@ final class AdminComptaController extends AdminBaseController
                 ($r['state'] ?? '') === 'reorder'
                 && !($isArtifact)((string) ($r['name'] ?? ''))
         ));
-
-        // Complète avec les produits à stock connu et ÉPUISÉ mais sans
-        // aucune vente sur la période : absents du pipeline « ventes » du
-        // réappro, ils doivent quand même figurer sur la liste de courses
-        // (quantité inconnue → « — »). Hors pauses et « stock infini ».
-        $present = [];
-        foreach ($data['rows'] as $r) {
-            $present[strtolower(trim((string) $r['name']))] = true;
-        }
-        $discontinuedRows = array_flip(array_map(
-            static fn(string $k): string => strtolower(trim($k)),
-            ProductDiscontinued::keys()
-        ));
-        $infiniteKeys = array_flip(array_map(
-            static fn(string $k): string => strtolower(trim($k)),
-            ProductInfinite::keys()
-        ));
-        $packSizes = ProductPack::sizesMap();
-
-        foreach (InventoryCount::theoreticalStocksMap() as $stockKey => $theoreticalStock) {
-            $norm = strtolower(trim((string) $stockKey));
-
-            if ($norm === ''
-                || $isArtifact((string) $stockKey)
-                || isset($present[$norm])
-                || isset($discontinuedRows[$norm])
-                || isset($infiniteKeys[$norm])
-                || (int) $theoreticalStock > 0
-            ) {
-                continue; // déjà listé, artefact SumUp, hors périmètre, ou stock disponible
-            }
-
-            $items[] = [
-                'name'         => (string) $stockKey,
-                'category'     => '',
-                'qty'          => 0,
-                'stock'        => (int) $theoreticalStock,
-                'counted_at'   => null,
-                'avg_day'      => 0.0,
-                'avg_week'     => 0.0,
-                'avg_month'    => 0.0,
-                'unit_cost'    => null,
-                'order_cost'   => null,
-                'autonomy'     => null,
-                'need'         => 0,
-                'to_order'     => 0,
-                'to_order_raw' => 0,
-                'pack'         => $packSizes[$norm] ?? 0,
-                'state'        => 'reorder',
-                'is_alert'     => true,
-                'infinite'     => false,
-            ];
-        }
 
         // Tri comme le Réappro : autonomie croissante (les plus critiques
         // en premier, « inconnue » en dernier), puis quantité, puis nom.
