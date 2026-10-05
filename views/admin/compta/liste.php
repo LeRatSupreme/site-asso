@@ -4,15 +4,14 @@ declare(strict_types=1);
 
 /**
  * Liste de courses : produits à acheter uniquement, quantités arrondies
- * aux packs d'achat. Interface en GRILLE DE PETITS CARRÉS — utilisable
- * en kiosque (layout kiosk, sans navigation) sur le téléphone.
+ * aux packs d'achat. ULTRA SIMPLE — une grille de carrés : coche, chiffre,
+ * nom. Utilisable en kiosque (layout kiosk, sans navigation) sur téléphone.
  *
  * @var list<array<string,mixed>> $items
  * @var array<string,array{label:string,days:int}> $covers
  * @var string $coverKey
  * @var int    $totalUnits
  * @var float  $totalCost
- * @var int    $missingCost
  * @var bool   $kiosk
  * @var string $kioskUrl
  * @var string $kioskToken
@@ -57,7 +56,6 @@ uksort($groups, static function (string $a, string $b): int {
 });
 ?>
 <style>
-    /* ── Segmented « Couvrir pour » ─────────────────────────────── */
     .shop-seg { display: flex; gap: 0.4rem; flex-wrap: wrap; margin: 0 0 1.2rem; }
     .shop-seg a {
         padding: 0.5rem 1rem; border-radius: 999px;
@@ -72,26 +70,15 @@ uksort($groups, static function (string $a, string $b): int {
         color: #06222b;
     }
 
-    /* ── Bandeau total ──────────────────────────────────────────── */
     .shop-total {
-        display: flex; align-items: center; gap: 2rem; flex-wrap: wrap;
-        padding: 1.1rem 1.4rem; margin-bottom: 1.2rem;
+        display: flex; align-items: center; gap: 1.4rem; flex-wrap: wrap;
+        padding: 0.75rem 1.2rem; margin-bottom: 1.2rem;
         background: linear-gradient(135deg, rgba(72, 189, 211, 0.28), rgba(72, 189, 211, 0.08));
         border: 1px solid rgba(72, 189, 211, 0.35);
-        border-radius: 18px;
+        border-radius: 14px; font-size: 0.95rem;
     }
-    .shop-total-num { display: block; font-size: 1.9rem; font-weight: 900; line-height: 1.05; }
-    .shop-total-lbl {
-        display: block; font-size: 0.66rem; text-transform: uppercase;
-        letter-spacing: 0.09em; font-weight: 800; opacity: 0.75; margin-top: 0.15rem;
-    }
+    .shop-total strong { font-size: 1.1rem; color: var(--primary, #48bdd3); }
 
-    /* ── Progression ────────────────────────────────────────────── */
-    .shop-progress { height: 7px; border-radius: 999px; background: rgba(255, 255, 255, 0.09); overflow: hidden; margin-bottom: 0.35rem; }
-    .shop-progress-bar { height: 100%; width: 0%; border-radius: 999px; background: var(--primary, #48bdd3); transition: width 0.2s ease; }
-    .shop-progress-txt { font-size: 0.75rem; color: var(--muted, #8892a6); margin: 0 0 1.2rem; }
-
-    /* ── Catégories ─────────────────────────────────────────────── */
     .shop-cat {
         display: flex; align-items: center; gap: 0.55rem;
         margin: 1.4rem 0.15rem 0.7rem; font-size: 0.95rem; font-weight: 800;
@@ -103,17 +90,16 @@ uksort($groups, static function (string $a, string $b): int {
         background: rgba(255, 255, 255, 0.06); border-radius: 999px; padding: 0.1rem 0.55rem;
     }
 
-    /* ── Grille de petits carrés ────────────────────────────────── */
     .shop-grid {
         list-style: none; margin: 0; padding: 0;
-        display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+        display: grid; grid-template-columns: repeat(auto-fill, minmax(135px, 1fr));
         gap: 0.6rem;
     }
     .shop-item {
         position: relative;
         display: flex; flex-direction: column; align-items: center; justify-content: center;
-        gap: 0.2rem; text-align: center;
-        aspect-ratio: 1 / 1; padding: 0.7rem 0.55rem;
+        gap: 0.25rem; text-align: center;
+        aspect-ratio: 1 / 1; padding: 0.6rem 0.5rem;
         background: rgba(255, 255, 255, 0.035);
         border: 1px solid rgba(255, 255, 255, 0.07);
         border-radius: 16px;
@@ -121,7 +107,7 @@ uksort($groups, static function (string $a, string $b): int {
     }
     .shop-check {
         appearance: none; -webkit-appearance: none;
-        position: absolute; top: 0.45rem; left: 0.45rem;
+        position: absolute; top: 0.4rem; left: 0.4rem;
         width: 22px; height: 22px; margin: 0; cursor: pointer;
         border: 2px solid var(--muted, #8892a6); border-radius: 50%;
         background: transparent;
@@ -133,25 +119,19 @@ uksort($groups, static function (string $a, string $b): int {
         display: flex; align-items: center; justify-content: center;
         font-size: 0.8rem; font-weight: 900; color: #06222b;
     }
-    .shop-qty { font-size: 2.3rem; font-weight: 900; line-height: 1; color: var(--primary, #48bdd3); }
-    .shop-qty small {
-        display: block; font-size: 0.62rem; font-weight: 800;
-        color: var(--muted, #8892a6); text-transform: uppercase; letter-spacing: 0.07em;
-        margin-top: 0.2rem;
-    }
+    .shop-qty { font-size: 2.4rem; font-weight: 900; line-height: 1; color: var(--primary, #48bdd3); }
+    .shop-qty.is-unknown { color: var(--muted, #8892a6); font-size: 1.7rem; }
     .shop-name {
         font-size: 0.9rem; font-weight: 800; line-height: 1.15;
         display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
         word-break: break-word; max-width: 100%;
     }
     .shop-pack {
-        font-size: 0.66rem; font-weight: 800; color: var(--primary, #48bdd3);
-        background: rgba(72, 189, 211, 0.14); border-radius: 999px; padding: 0.1rem 0.5rem;
+        font-size: 0.64rem; font-weight: 800; color: var(--primary, #48bdd3);
+        background: rgba(72, 189, 211, 0.14); border-radius: 999px; padding: 0.08rem 0.5rem;
         white-space: nowrap;
     }
-    .shop-need { font-size: 0.66rem; color: var(--muted, #8892a6); white-space: nowrap; }
-    .shop-meta { display: flex; flex-direction: column; align-items: center; gap: 0.15rem; }
-    .shop-item.is-done { opacity: 0.38; border-color: transparent; }
+    .shop-item.is-done { opacity: 0.35; border-color: transparent; }
     .shop-item.is-done .shop-name { text-decoration: line-through; }
 
     .shop-empty { text-align: center; padding: 3.5rem 1rem; }
@@ -162,7 +142,7 @@ uksort($groups, static function (string $a, string $b): int {
     .shop-footnote { text-align: center; margin-top: 1.75rem; }
 
     @media print {
-        .shop-seg, .shop-progress, .shop-progress-txt, details, .compta-head .eyebrow { display: none !important; }
+        .shop-seg, details, .compta-head .eyebrow { display: none !important; }
         body { background: #fff !important; color: #111 !important; }
         .card, .shop-item { background: #fff !important; border-color: #ddd !important; }
     }
@@ -172,7 +152,6 @@ uksort($groups, static function (string $a, string $b): int {
     <div>
         <p class="eyebrow">Comptabilité</p>
         <h1 class="page-title">Liste de courses</h1>
-        <p class="muted">Produits à racheter, quantités arrondies aux packs d'achat.</p>
     </div>
 </div>
 
@@ -190,18 +169,8 @@ uksort($groups, static function (string $a, string $b): int {
 
 <?php if ($items !== []): ?>
 <div class="shop-total">
-    <div>
-        <span class="shop-total-num"><?= (int) $totalUnits ?></span>
-        <span class="shop-total-lbl">unités à acheter</span>
-    </div>
-    <div>
-        <span class="shop-total-num">≈ <?= e(formatPrice($totalCost)) ?></span>
-        <span class="shop-total-lbl">panier estimé<?php if ($missingCost > 0): ?> (+<?= $missingCost ?> sans coût)<?php endif ?></span>
-    </div>
-    <div style="margin-left: auto; min-width: 160px; flex: 1 1 160px;">
-        <div class="shop-progress"><div class="shop-progress-bar" id="spBar"></div></div>
-        <p class="shop-progress-txt" id="spTxt"></p>
-    </div>
+    <strong><?= (int) $totalUnits ?> unités</strong>
+    <span>≈ <?= e(formatPrice($totalCost)) ?></span>
 </div>
 <?php endif; ?>
 
@@ -223,22 +192,15 @@ uksort($groups, static function (string $a, string $b): int {
         <?php foreach ($groupItems as $r): $uid = 'sp-' . substr(md5((string) $r['name']), 0, 10); ?>
         <li class="shop-item" id="<?= e($uid) ?>">
             <input type="checkbox" class="shop-check" id="<?= e($uid) ?>-chk" aria-label="Acheté : <?= e((string) $r['name']) ?>">
-            <span class="shop-qty" title="<?= (int) $r['to_order'] > 0 ? 'À acheter (arrondi au pack)' : 'Stock épuisé — consommation inconnue sur la période' ?>">
-                <?php if ((int) $r['to_order'] > 0): ?>
-                    <?= (int) $r['to_order'] ?><small>à acheter</small>
-                <?php else: ?>
-                    —<small>stock épuisé</small>
-                <?php endif; ?>
-            </span>
+            <?php if ((int) $r['to_order'] > 0): ?>
+                <span class="shop-qty"><?= (int) $r['to_order'] ?></span>
+            <?php else: ?>
+                <span class="shop-qty is-unknown" title="Stock épuisé — consommation inconnue sur la période">—</span>
+            <?php endif; ?>
             <span class="shop-name" title="<?= e((string) $r['name']) ?>"><?= e((string) $r['name']) ?></span>
-            <span class="shop-meta">
-                <?php if ((int) $r['pack'] > 1): ?>
-                    <span class="shop-pack">pack de <?= (int) $r['pack'] ?></span>
-                <?php endif; ?>
-                <?php if ((int) $r['to_order_raw'] !== (int) $r['to_order']): ?>
-                    <span class="shop-need" title="Besoin avant arrondi au pack">besoin <?= (int) $r['to_order_raw'] ?></span>
-                <?php endif; ?>
-            </span>
+            <?php if ((int) $r['pack'] > 1): ?>
+                <span class="shop-pack">pack de <?= (int) $r['pack'] ?></span>
+            <?php endif; ?>
         </li>
         <?php endforeach; ?>
     </ul>
@@ -264,24 +226,11 @@ uksort($groups, static function (string $a, string $b): int {
 
 <script>
 (function () {
-    var boxes = document.querySelectorAll('.shop-check');
-    var bar = document.getElementById('spBar');
-    var txt = document.getElementById('spTxt');
-
-    function refresh() {
-        var done = document.querySelectorAll('.shop-check:checked').length;
-        var total = boxes.length;
-        if (bar) bar.style.width = total > 0 ? Math.round(done / total * 100) + '%' : '0%';
-        if (txt) txt.textContent = done + ' / ' + total + ' articles cochés';
-        Array.prototype.forEach.call(boxes, function (b) {
+    Array.prototype.forEach.call(document.querySelectorAll('.shop-check'), function (b) {
+        b.addEventListener('change', function () {
             var item = b.closest('.shop-item');
             if (item) item.classList.toggle('is-done', b.checked);
         });
-    }
-
-    Array.prototype.forEach.call(boxes, function (b) {
-        b.addEventListener('change', refresh);
     });
-    refresh();
 })();
 </script>

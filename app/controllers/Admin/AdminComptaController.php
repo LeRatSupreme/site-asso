@@ -1180,10 +1180,16 @@ final class AdminComptaController extends AdminBaseController
         // Uniquement ce qu'il faut acheter : « à racheter » (stock épuisé
         // ou autonomie < 7 j, même sans ventes sur la période → quantité
         // inconnue affichée « — ») ET les « à compter » à besoin complet.
+        // Les artefacts SumUp (« custom amount », « montant personnalisé »)
+        // ne sont jamais des produits : exclus de la liste.
+        $parser = new SumUpCsvParser();
+        $isArtifact = static fn(string $k): bool => $parser->isCustomAmount($k);
+
         $items = array_values(array_filter(
             $data['rows'],
             static fn(array $r): bool =>
-                ($r['state'] ?? '') === 'reorder' || (int) ($r['to_order'] ?? 0) > 0
+                !($isArtifact)((string) ($r['name'] ?? ''))
+                && (($r['state'] ?? '') === 'reorder' || (int) ($r['to_order'] ?? 0) > 0)
         ));
 
         // Complète avec les produits à stock connu et ÉPUISÉ mais sans
@@ -1208,12 +1214,13 @@ final class AdminComptaController extends AdminBaseController
             $norm = strtolower(trim((string) $stockKey));
 
             if ($norm === ''
+                || $isArtifact((string) $stockKey)
                 || isset($present[$norm])
                 || isset($discontinuedRows[$norm])
                 || isset($infiniteKeys[$norm])
                 || (int) $theoreticalStock > 0
             ) {
-                continue; // déjà listé, hors périmètre, ou stock disponible
+                continue; // déjà listé, artefact SumUp, hors périmètre, ou stock disponible
             }
 
             $items[] = [
