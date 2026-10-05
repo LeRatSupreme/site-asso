@@ -62,6 +62,7 @@ declare(strict_types=1);
     </form>
 </section>
 
-<p class="shop-footnote">
+<p class="shop-footnote" style="display: flex; gap: 0.5rem; justify-content: center; flex-wrap: wrap;">
     <a class="btn btn-ghost btn-sm" href="<?= e(url('/kiosque/comptage/' . rawurlencode($token))) ?>">← Retour au comptage</a>
+    <a class="btn btn-outline btn-sm" href="<?= e(url('/kiosque/comptage/caisse/' . rawurlencode($token))) ?>">💵 Passer au comptage caisse</a>
 </p>
