@@ -588,7 +588,7 @@ $mapsUrl = 'https://www.google.com/maps/search/?api=1&query='
     </script>
 
     <!-- PWA : enregistrement du service worker -->
-    <script>if ('serviceWorker' in navigator) { window.addEventListener('load', function () { navigator.serviceWorker.register('/sw.js'); }); }</script>
+    <script>if ('serviceWorker' in navigator) { window.addEventListener('load', function () { navigator.serviceWorker.register('/sw.js').catch(function () {}); }); }</script>
     <script src="<?= e(assetVersioned('js/stars.js')) ?>" defer></script>
 </body>
 </html>
