@@ -58,24 +58,13 @@ declare(strict_types=1);
         font-size: 0.92rem; font-weight: 800; margin: 0;
         white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
-    .kstep { display: flex; align-items: stretch; gap: 0.35rem; }
-    .kbtn {
-        width: 42px; height: 44px; flex-shrink: 0;
-        font-size: 1.25rem; font-weight: 900; line-height: 1;
-        border: 1px solid var(--border, rgba(255,255,255,0.15));
-        border-radius: 10px; background: rgba(255, 255, 255, 0.06);
-        color: var(--foreground, inherit); cursor: pointer;
-        user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent;
-        transition: background 0.12s ease, border-color 0.12s ease;
-    }
-    .kbtn:active { background: rgba(72, 189, 211, 0.2); border-color: var(--primary, #48bdd3); }
     .kinput {
-        flex: 1; min-width: 0; text-align: center;
-        padding: 0.4rem 0.3rem;
+        width: 100%; text-align: center;
+        padding: 0.55rem 0.4rem;
         border: 1px solid var(--border, rgba(255,255,255,0.15));
         border-radius: 10px; background: rgba(255, 255, 255, 0.05);
         color: var(--foreground, inherit);
-        font-size: 1.15rem; font-weight: 800;
+        font-size: 1.3rem; font-weight: 800;
     }
     .krow.is-paused { opacity: 0.4; }
     .krow.is-paused .kname { margin-bottom: 0; font-weight: 600; }
@@ -125,13 +114,9 @@ declare(strict_types=1);
             <?php foreach ($items as $r): ?>
             <li class="krow" data-name="<?= e(mb_strtolower($r['key'])) ?>" title="<?= e($r['key']) ?>">
                 <p class="kname"><?= e($r['key']) ?></p>
-                <div class="kstep">
-                    <button type="button" class="kbtn" data-step="-1" aria-label="Retirer 1 à <?= e($r['key']) ?>">−</button>
-                    <input type="number" class="kinput" name="count[<?= e($r['key']) ?>]"
-                           min="0" step="1" inputmode="numeric" placeholder="0"
-                           aria-label="Quantité comptée de <?= e($r['key']) ?>">
-                    <button type="button" class="kbtn" data-step="1" aria-label="Ajouter 1 à <?= e($r['key']) ?>">+</button>
-                </div>
+                <input type="number" class="kinput" name="count[<?= e($r['key']) ?>]"
+                       min="0" step="1" inputmode="numeric" placeholder="0"
+                       aria-label="Quantité comptée de <?= e($r['key']) ?>">
             </li>
             <?php endforeach; ?>
         </ul>
@@ -220,20 +205,6 @@ declare(strict_types=1);
         clearTimeout(saveTimer);
         saveTimer = setTimeout(autoSave, 2000);
     }
-
-    // Boutons − / + : ajustent la quantité sans clavier.
-    Array.prototype.forEach.call(document.querySelectorAll('.kbtn'), function (btn) {
-        btn.addEventListener('click', function () {
-            var input = btn.closest('.kstep').querySelector('.kinput');
-            var step = parseInt(btn.getAttribute('data-step'), 10) || 0;
-            var v = parseInt(input.value, 10);
-            if (isNaN(v)) { v = 0; }
-            v = Math.max(0, v + step);
-            input.value = (v === 0 && input.value === '' && step < 0) ? '' : v;
-            refresh();
-            markDirty();
-        });
-    });
 
     // Recherche instantanée sur le nom du produit.
     if (search) {
