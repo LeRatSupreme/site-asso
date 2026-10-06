@@ -199,6 +199,16 @@ use App\Models\Setting;
     <span class="leg"><span class="dot dot-week"></span> consommé par semaine</span>
 </p>
 
+<?php if ($kiosk): ?>
+<p class="shop-footnote">
+    <nav>
+        <a class="btn btn-ghost btn-sm" href="<?= e(url('/kiosque/comptage/' . rawurlencode($kioskToken))) ?>">← Retour au comptage</a>
+        <a class="btn btn-outline btn-sm" href="<?= e(url('/kiosque/comptage/caisse/' . rawurlencode($kioskToken))) ?>">💵 Comptage caisse</a>
+        <a class="btn btn-outline btn-sm" href="<?= e(url('/kiosque/comptage/inventaire/' . rawurlencode($kioskToken))) ?>">📦 Comptage inventaire</a>
+    </nav>
+</p>
+<?php endif; ?>
+
 <?php if (!$kiosk && ($user['role'] ?? '') === 'SUPERADMIN'): ?>
 <details class="card surface glass" style="padding: 0.85rem 1.1rem; margin-top: 1.25rem;">
     <summary style="cursor: pointer; font-weight: 800;">📱 Accès téléphone sans connexion</summary>

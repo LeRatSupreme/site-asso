@@ -29,7 +29,7 @@ declare(strict_types=1);
     <div>
         <p class="eyebrow">Comptabilité</p>
         <h1 class="page-title">Comptage</h1>
-        <p class="muted">Choisis ce que tu comptes — l'enregistrement est immédiat.</p>
+        <p class="muted">Choisis ce que tu fais — l'enregistrement est immédiat.</p>
     </div>
 </div>
 
@@ -43,5 +43,10 @@ declare(strict_types=1);
         <span class="kiosk-emoji">📦</span>
         <span class="kiosk-tile-title">Comptage inventaire</span>
         <span class="kiosk-tile-sub">produits en stock, à l'aveugle</span>
+    </a>
+    <a href="<?= e(url('/kiosque/liste/' . rawurlencode($token))) ?>">
+        <span class="kiosk-emoji">🛒</span>
+        <span class="kiosk-tile-title">Liste de courses</span>
+        <span class="kiosk-tile-sub">ce qu'il faut racheter</span>
     </a>
 </div>
