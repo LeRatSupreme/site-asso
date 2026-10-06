@@ -32,51 +32,29 @@ final class AdminBudgetController extends AdminBaseController
 
         $period = ComptaCalc::resolvePeriod($_GET['period'] ?? null, $_GET['from'] ?? null, $_GET['to'] ?? null);
 
-        // Mois couverts par la période (plafonnés aux 24 derniers mois) :
-        // du 1er jour du mois de départ à celui du mois d'arrivée. Sans
-        // bornes (« Tout ») → 24 derniers mois.
-        $today = new \DateTimeImmutable('today');
-        $start = ($period['from'] !== null
-            ? new \DateTimeImmutable($period['from'])
-            : $today->modify('first day of this month')->modify('-23 months'))
-            ->modify('first day of this month');
-        $end = ($period['to'] !== null
-            ? new \DateTimeImmutable($period['to'])
-            : $today)
-            ->modify('first day of this month');
-
-        $months = [];
-        $cur = $start;
-        while ($cur <= $end) {
-            $months[] = [(int) $cur->format('Y'), (int) $cur->format('n')];
-            $cur = $cur->modify('+1 month');
-        }
-        if (count($months) > 24) {
-            // Période trop large : on garde les 24 derniers mois.
-            $months = array_slice($months, -24);
-        }
-
         // Bornes journalières réelles du « réalisé ». Sans bornes (« Tout »),
         // on borne à la fenêtre des mois couverts pour que prévu et réalisé
         // comparent la même durée.
-        $fromDay = $period['from'] ?? $start->format('Y-m-d');
+        $today = new \DateTimeImmutable('today');
+        $windowStart = ($period['from'] !== null
+            ? new \DateTimeImmutable($period['from'])
+            : $today->modify('first day of this month')->modify('-23 months'))
+            ->modify('first day of this month');
+        $fromDay = $period['from'] ?? $windowStart->format('Y-m-d');
         $toDay = $period['to'] ?? $today->format('Y-m-d');
-        $periodStart = new \DateTimeImmutable($fromDay);
-        $periodEnd = new \DateTimeImmutable($toDay);
+
+        // Mois couverts (helper partagé, testé dans BudgetProrataTest).
+        $months = ComptaCalc::monthsCoveredBy($fromDay, $toDay);
 
         // Prévu : budgets des mois couverts, ajustés au prorata du nombre
         // de jours de la période qui tombent dans chaque mois (budget
         // mensuel × jours couverts ÷ jours du mois).
         $plannedByCat = [];
         foreach ($months as [$y, $m]) {
-            $monthStart = \DateTimeImmutable::createFromFormat('Y-m-d', sprintf('%04d-%02d-01', $y, $m));
-            $monthEnd = $monthStart->modify('last day of this month');
-            $ovStart = $monthStart > $periodStart ? $monthStart : $periodStart;
-            $ovEnd = $monthEnd < $periodEnd ? $monthEnd : $periodEnd;
-            if ($ovEnd < $ovStart) {
+            $factor = ComptaCalc::monthBudgetFactor(sprintf('%04d-%02d-01', $y, $m), $fromDay, $toDay);
+            if ($factor <= 0.0) {
                 continue;
             }
-            $factor = ((float) $ovStart->diff($ovEnd)->days + 1) / (float) $monthStart->format('t');
             foreach (Budget::forMonth($y, $m) as $cat => $planned) {
                 $plannedByCat[$cat] = ($plannedByCat[$cat] ?? 0.0) + $planned * $factor;
             }
