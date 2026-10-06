@@ -220,6 +220,10 @@ use App\Models\Setting;
 </p>
 <?php endif; ?>
 
+<!-- Jeton CSRF pour les POST de coche/décoche (aucun formulaire visible
+     sur cette page : le token vit ici, utilisé par le script ci-dessous). -->
+<form method="post" style="display:none" aria-hidden="true"><?= csrf_field() ?></form>
+
 <?php if (!$kiosk && ($user['role'] ?? '') === 'SUPERADMIN'): ?>
 <details class="card surface glass" style="padding: 0.85rem 1.1rem; margin-top: 1.25rem;">
     <summary style="cursor: pointer; font-weight: 800;">📱 Accès téléphone sans connexion</summary>
