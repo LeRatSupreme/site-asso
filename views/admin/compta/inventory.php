@@ -254,11 +254,25 @@ declare(strict_types=1);
                     <th class="th-num">Compté</th>
                     <th class="th-num">Théorique</th>
                     <th>Écart</th>
+                    <th>Par</th>
                     <th>Note</th>
                 </tr>
             </thead>
         <tbody>
             <?php foreach ($history as $h): $gap = (int) $h['gap']; ?>
+                <?php
+                    // Qui a compté : membre admin (usr_… → nom), identité
+                    // kiosque (« Prénom Nom (rôle) ») — ou rien pour les
+                    // écritures de script / anciens comptages anonymes.
+                    $by = trim((string) ($h['created_by'] ?? ''));
+                    if ($by !== '' && str_starts_with($by, 'usr_')) {
+                        $who = trim(($h['prenom'] ?? '') . ' ' . ($h['nom'] ?? ''));
+                    } elseif ($by === '' || $by === 'kiosque' || $by === 'auto' || $by === 'script' || $by === 'system') {
+                        $who = '';
+                    } else {
+                        $who = $by;
+                    }
+                ?>
                 <tr>
                     <td><?= e(formatDateTime((string) $h['counted_at'])) ?></td>
                     <td><strong><?= e((string) $h['product_key']) ?></strong></td>
@@ -273,11 +287,12 @@ declare(strict_types=1);
                             <span class="badge badge-warning">+<?= $gap ?></span>
                         <?php endif; ?>
                     </td>
+                    <td><?= $who !== '' ? e($who) : '' ?></td>
                     <td><?= e((string) ($h['note'] ?? '') !== '' ? (string) $h['note'] : '—') ?></td>
                 </tr>
             <?php endforeach; ?>
             <?php if ($history === []): ?>
-                <tr><td colspan="6" class="muted">Aucun comptage enregistré.</td></tr>
+                <tr><td colspan="7" class="muted">Aucun comptage enregistré.</td></tr>
             <?php endif; ?>
         </tbody>
         </table>

@@ -209,9 +209,14 @@ declare(strict_types=1);
     /* Sauvegarde automatique : 2 s après la dernière saisie, le formulaire
        part en fetch (même POST que le bouton — seules les lignes remplies
        sont enregistrées côté serveur). Tu peux verrouiller/reprendre sans
-       rien perdre ; le bouton « Enregistrer » reste disponible. */
+       rien perdre ; le bouton « Enregistrer » reste disponible.
+       Aucune écriture sans identité complète (prénom, nom, rôle). */
     function autoSave() {
         if (!dirty || !form) return;
+        if (window.KiosqueWho && !window.KiosqueWho.ok()) {
+            window.KiosqueWho.open();
+            return; /* dirty reste vrai : la saisie partira après l'identité */
+        }
         dirty = false;
         fetch(form.action, {
             method: 'POST',
@@ -256,14 +261,9 @@ declare(strict_types=1);
     /* -------- Pause / reprise d'un produit (dynamique, sans recharger) --- */
     var TOGGLE_URL = <?= json_encode(url('/kiosque/comptage/inventaire/pause/' . $token)) ?>;
 
-    function whoLabel() {
-        try {
-            var w = JSON.parse(localStorage.getItem('aeic_kiosque_who') || 'null');
-            if (!w) return '';
-            var base = ((w.prenom || '') + ' ' + (w.nom || '')).trim();
-            if (base === '') base = w.alias || '';
-            return w.alias ? (base + ' (' + w.alias + ')') : base;
-        } catch (e) { return ''; }
+    function whoFields() {
+        if (window.KiosqueWho) return window.KiosqueWho.fields();
+        return { who: '', who_prenom: '', who_nom: '', who_alias: '' };
     }
 
     function pauseBtn(key, state) {
@@ -363,15 +363,23 @@ declare(strict_types=1);
         var btn = e.target.closest('.kpause');
         if (!btn) return;
         e.preventDefault();
+        if (window.KiosqueWho && !window.KiosqueWho.ok()) {
+            window.KiosqueWho.open();
+            return;
+        }
         var key = btn.getAttribute('data-key') || '';
         var state = btn.getAttribute('data-state') === 'resume' ? 'resume' : 'pause';
         var li = btn.closest('.krow');
         var cat = li ? (li.getAttribute('data-cat') || 'Divers') : 'Divers';
 
+        var who = whoFields();
         var fd = new FormData();
         fd.append('key', key);
         fd.append('state', state);
-        fd.append('who', whoLabel());
+        fd.append('who', who.who);
+        fd.append('who_prenom', who.who_prenom);
+        fd.append('who_nom', who.who_nom);
+        fd.append('who_alias', who.who_alias);
         var csrf = document.querySelector('input[name="_csrf"]');
         if (csrf) fd.append('_csrf', csrf.value);
 
@@ -383,9 +391,15 @@ declare(strict_types=1);
                     moveRow(li, key, cat, state === 'pause');
                 } else {
                     btn.disabled = false;
+                    if (j && /identite/.test(j.error || '') && window.KiosqueWho) window.KiosqueWho.open();
                 }
             })
             .catch(function () { btn.disabled = false; });
+    });
+
+    /* Après avoir renseigné l'identité : la saisie en attente part aussitôt. */
+    document.addEventListener('kiosque-who-saved', function () {
+        if (dirty) autoSave();
     });
 
     // Saisie clavier : suivi du comptage + auto-save.
