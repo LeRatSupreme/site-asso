@@ -21,7 +21,7 @@ $extTabs = [
     ['🧮', 'Dashboard', url('/admin/compta')],
     ['📜', 'Journal', url('/admin/compta/ventes')],
     ['📅', 'Bilan', url('/admin/compta/annuel')],
-    ['📈', 'Réappro', url('/kiosque/reappro/' . rawurlencode($token))],
+    ['📈', 'Réappro', \App\Core\Compta\Kiosk::url('/kiosque/reappro/')],
 ];
 ?>
 <style>
