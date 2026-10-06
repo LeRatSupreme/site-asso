@@ -61,4 +61,9 @@ declare(strict_types=1);
         <span class="kiosk-tile-title">Liste de courses</span>
         <span class="kiosk-tile-sub">ce qu'il faut racheter</span>
     </a>
+    <a href="<?= e(url('/kiosque/comptage/jour/' . rawurlencode($token))) ?>">
+        <span class="kiosk-emoji">📊</span>
+        <span class="kiosk-tile-title">Récap du jour</span>
+        <span class="kiosk-tile-sub">CA et bénéfice d'aujourd'hui</span>
+    </a>
 </div>
