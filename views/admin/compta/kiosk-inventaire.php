@@ -173,7 +173,7 @@ declare(strict_types=1);
 
 <p class="shop-footnote">
     <nav>
-        <a class="btn btn-ghost btn-sm" href="<?= e(url('/kiosque/comptage/' . rawurlencode($token))) ?>">← Retour au comptage</a>
+        <a class="btn btn-ghost btn-sm" href="<?= e(($hubUrl ?? '') !== '' ? $hubUrl : url('/kiosque/comptage/' . rawurlencode($token))) ?>">← Retour au comptage</a>
         <a class="btn btn-outline btn-sm" href="<?= e(url('/kiosque/comptage/caisse/' . rawurlencode($token))) ?>">💵 Passer au comptage caisse</a>
     </nav>
 </p>

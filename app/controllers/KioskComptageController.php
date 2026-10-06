@@ -56,6 +56,20 @@ final class KioskComptageController extends Controller
         return $this->tokenOk($token) || $this->adminTokenOk($token);
     }
 
+    /**
+     * URL du hub correspondant au jeton fourni : jeton admin → hub admin,
+     * jeton membres → hub membres. Les liens « retour » des pages outils
+     * restent ainsi dans l'espace d'origine.
+     */
+    private function hubUrlFor(string $token): string
+    {
+        $admin = trim((string) Setting::get('admin_kiosk_token', ''));
+
+        return $admin !== '' && hash_equals($admin, trim($token))
+            ? url('/kiosque/admin/' . trim($token))
+            : url('/kiosque/comptage/' . trim($token));
+    }
+
     private function deny(): void
     {
         http_response_code(403);
@@ -365,8 +379,9 @@ final class KioskComptageController extends Controller
         }
 
         $this->renderKiosk('admin/compta/kiosk-caisse', [
-            'title' => 'Comptage caisse',
-            'token' => $token,
+            'title'  => 'Comptage caisse',
+            'token'  => $token,
+            'hubUrl' => $this->hubUrlFor($token),
         ]);
     }
 
@@ -475,8 +490,9 @@ final class KioskComptageController extends Controller
         usort($paused, $byCat);
 
         $this->renderKiosk('admin/compta/kiosk-inventaire', [
-            'title' => 'Comptage inventaire',
-            'token' => $token,
+            'title'  => 'Comptage inventaire',
+            'token'  => $token,
+            'hubUrl' => $this->hubUrlFor($token),
             'active' => $active,
             'paused' => $paused,
         ]);

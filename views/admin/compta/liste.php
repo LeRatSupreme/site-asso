@@ -213,7 +213,7 @@ use App\Models\Setting;
 <?php if ($kiosk): ?>
 <p class="shop-footnote">
     <nav>
-        <a class="btn btn-ghost btn-sm" href="<?= e(url('/kiosque/comptage/' . rawurlencode($kioskToken))) ?>">← Retour au comptage</a>
+        <a class="btn btn-ghost btn-sm" href="<?= e(($hubUrl ?? '') !== '' ? $hubUrl : url('/kiosque/comptage/' . rawurlencode($kioskToken))) ?>">← Retour au comptage</a>
         <a class="btn btn-outline btn-sm" href="<?= e(url('/kiosque/comptage/caisse/' . rawurlencode($kioskToken))) ?>">💵 Comptage caisse</a>
         <a class="btn btn-outline btn-sm" href="<?= e(url('/kiosque/comptage/inventaire/' . rawurlencode($kioskToken))) ?>">📦 Comptage inventaire</a>
     </nav>
