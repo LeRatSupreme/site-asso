@@ -183,7 +183,10 @@ final class InventoryCount extends Model
         try {
             /** @var list<array<string,mixed>> $r */
             return self::pdo()
-                ->query('SELECT * FROM inventory_counts ORDER BY counted_at DESC LIMIT ' . $limit)
+                ->query('SELECT c.*, u.prenom, u.nom
+                         FROM inventory_counts c
+                         LEFT JOIN users u ON u.id = c.created_by
+                         ORDER BY c.counted_at DESC LIMIT ' . $limit)
                 ->fetchAll();
         } catch (\Throwable) {
             return [];

@@ -41,16 +41,15 @@ $siteName = Setting::get('site_name', 'AEIC');
     <div id="kWhoModal" class="kwho-modal" hidden>
         <div class="kwho-card" role="dialog" aria-modal="true" aria-labelledby="kWhoTitle">
             <h2 id="kWhoTitle" class="kwho-title">Qui fais le comptage ?</h2>
-            <p class="kwho-sub">Ton nom sera attaché aux comptages et modifications.</p>
-            <label class="kwho-field"><span>Prénom</span>
+            <p class="kwho-sub">Obligatoire pour enregistrer : ton nom sera attaché à chaque modification.</p>
+            <label class="kwho-field"><span>Prénom (obligatoire)</span>
                 <input type="text" id="kWhoPrenom" autocomplete="given-name" maxlength="60"></label>
-            <label class="kwho-field"><span>Nom</span>
+            <label class="kwho-field"><span>Nom (obligatoire)</span>
                 <input type="text" id="kWhoNom" autocomplete="family-name" maxlength="60"></label>
-            <label class="kwho-field"><span>Alias (optionnel — ex. vice-trésorier)</span>
+            <label class="kwho-field"><span>Rôle (obligatoire — ex. vice-trésorier)</span>
                 <input type="text" id="kWhoAlias" maxlength="60" placeholder="vice-trésorier, président…"></label>
-            <p class="kwho-error" id="kWhoError" hidden>Mets au moins un prénom ou un nom.</p>
+            <p class="kwho-error" id="kWhoError" hidden>Prénom, nom et rôle sont obligatoires pour enregistrer.</p>
             <div class="kwho-actions">
-                <button type="button" class="btn btn-ghost btn-sm" id="kWhoCancel">Plus tard</button>
                 <button type="button" class="btn btn-primary btn-sm" id="kWhoSave">Enregistrer</button>
             </div>
         </div>
@@ -109,31 +108,36 @@ $siteName = Setting::get('site_name', 'AEIC');
             try { return JSON.parse(localStorage.getItem(KEY) || 'null') || null; }
             catch (e) { return null; }
         }
+        function complete(w) {
+            return !!(w && (w.prenom || '').trim() !== '' && (w.nom || '').trim() !== '' && (w.alias || '').trim() !== '');
+        }
         function label(w) {
-            if (!w) return '';
+            if (!complete(w)) return '';
             var base = ((w.prenom || '') + ' ' + (w.nom || '')).trim();
-            if (base === '') base = w.alias || '';
-            return w.alias ? (base + ' (' + w.alias + ')') : base;
+            return base + ' (' + (w.alias || '').trim() + ')';
         }
         function initials(w) {
             if (!w) return '?';
             var s = ((w.prenom || '').charAt(0) + (w.nom || '').charAt(0)).trim();
             return (s === '' ? (w.alias || '?').charAt(0) : s).toUpperCase();
         }
-        /* Champ caché « who » injecté dans chaque formulaire : envoyé avec
-           chaque enregistrement (comptage caisse, inventaire, pause). */
+        /* Champs cachés d'identité injectés dans chaque formulaire : envoyés
+           avec chaque enregistrement (comptage caisse, inventaire, pause). */
         function syncForms() {
-            var w = read();
+            var w = read() || {};
             var v = label(w);
             Array.prototype.forEach.call(document.querySelectorAll('form'), function (f) {
-                var input = f.querySelector('input[name="who"]');
-                if (!input) {
-                    input = document.createElement('input');
-                    input.type = 'hidden';
-                    input.name = 'who';
-                    f.appendChild(input);
-                }
-                input.value = v;
+                [['who', v], ['who_prenom', w.prenom || ''], ['who_nom', w.nom || ''], ['who_alias', w.alias || '']]
+                    .forEach(function (pair) {
+                        var input = f.querySelector('input[name="' + pair[0] + '"]');
+                        if (!input) {
+                            input = document.createElement('input');
+                            input.type = 'hidden';
+                            input.name = pair[0];
+                            f.appendChild(input);
+                        }
+                        input.value = pair[1];
+                    });
             });
         }
         function render() {
@@ -150,34 +154,61 @@ $siteName = Setting::get('site_name', 'AEIC');
             modal.hidden = false;
             try { (prenom.value ? nom : prenom).focus(); } catch (e) {}
         }
-        function close() { modal.hidden = true; }
+        /* Fermable uniquement une fois l'identité complète. */
+        function close() { if (complete(read())) modal.hidden = true; }
         function save() {
             var w = {
                 prenom: prenom.value.trim(),
                 nom: nom.value.trim(),
                 alias: alias.value.trim()
             };
-            if (w.prenom === '' && w.nom === '') {
+            if (!complete(w)) {
                 err.hidden = false;
                 return;
             }
             localStorage.setItem(KEY, JSON.stringify(w));
             close();
             render();
+            document.dispatchEvent(new CustomEvent('kiosque-who-saved'));
         }
 
         btn.addEventListener('click', open);
         document.getElementById('kWhoSave').addEventListener('click', save);
-        document.getElementById('kWhoCancel').addEventListener('click', close);
-        modal.addEventListener('click', function (e) { if (e.target === modal) close(); });
         modal.addEventListener('keydown', function (e) {
             if (e.key === 'Enter' && e.target.tagName === 'INPUT') { e.preventDefault(); save(); }
-            if (e.key === 'Escape') close();
         });
 
+        /* Toute soumission de formulaire est bloquée tant que l'identité
+           complète (prénom, nom, rôle) n'est pas renseignée. */
+        document.addEventListener('submit', function (e) {
+            if (!complete(read())) {
+                e.preventDefault();
+                e.stopPropagation();
+                open();
+                return;
+            }
+            syncForms();
+        }, true);
+
+        /* API pour les vues (autosave, boutons pause) : refuser d'écrire
+           sans identité. */
+        window.KiosqueWho = {
+            ok: function () { return complete(read()); },
+            open: open,
+            fields: function () {
+                var w = read() || {};
+                return {
+                    who: label(w),
+                    who_prenom: (w.prenom || '').trim(),
+                    who_nom: (w.nom || '').trim(),
+                    who_alias: (w.alias || '').trim()
+                };
+            }
+        };
+
         /* Les formulaires sont plus bas dans le DOM : on se synchronise au
-           chargement ET à chaque submit (valeur toujours fraîche). */
-        var needWho = !read();
+           chargement. Identité incomplète = la fenêtre s'ouvre d'office. */
+        var needWho = !complete(read());
         document.addEventListener('DOMContentLoaded', function () {
             render();
             if (needWho) open();

@@ -40,16 +40,22 @@ final class KioskComptageController extends Controller
     }
 
     /**
-     * Identité déclarée par le membre sur la page kiosque (prénom, nom,
-     * alias libre — ex. « vice-trésorier »). Saisie via la pastille profil,
-     * stockée côté appareil et envoyée avec chaque enregistrement pour
-     * tracer QUI a compté. Repli : « kiosque » (anonyme).
+     * Identité OBLIGATOIRE du membre kiosque : prénom, nom et rôle (ex.
+     * « vice-trésorier »), saisis via la pastille profil. Les trois parties
+     * sont exigées — sans elles, tout enregistrement est refusé. La trace
+     * générée ressemble à « Jean Dupont (vice-trésorier) ».
      */
     private function whoFromPost(): string
     {
-        $who = trim(strip_tags((string) ($_POST['who'] ?? '')));
+        $p = trim(strip_tags((string) ($_POST['who_prenom'] ?? '')));
+        $n = trim(strip_tags((string) ($_POST['who_nom'] ?? '')));
+        $a = trim(strip_tags((string) ($_POST['who_alias'] ?? '')));
 
-        return $who !== '' ? mb_substr($who, 0, 200) : 'kiosque';
+        if ($p === '' || $n === '' || $a === '') {
+            return '';
+        }
+
+        return mb_substr($p . ' ' . $n . ' (' . $a . ')', 0, 200);
     }
 
     /**
@@ -105,8 +111,13 @@ final class KioskComptageController extends Controller
             redirect($back);
         }
 
+        $who = $this->whoFromPost();
+        if ($who === '') {
+            $this->setFlash('error', 'Indique qui tu es (prénom, nom et rôle) via la pastille en haut à droite avant d\'enregistrer.');
+            redirect($back);
+        }
+
         $label = trim((string) ($_POST['label'] ?? ''));
-        $who   = $this->whoFromPost();
         $res   = CashLedger::recordCount($counted, $label, $who, null);
         AuditLog::log('cash.count', null, 'cash', $res['count_id'], [
             'counted'     => $counted,
@@ -215,6 +226,10 @@ final class KioskComptageController extends Controller
 
         $pausedKeys = array_flip(ProductDiscontinued::keys());
         $who = $this->whoFromPost();
+        if ($who === '') {
+            $this->setFlash('error', 'Indique qui tu es (prénom, nom et rôle) via la pastille en haut à droite avant d\'enregistrer.');
+            redirect($back);
+        }
         $done = 0;
         $gaps = 0;
 
@@ -276,6 +291,13 @@ final class KioskComptageController extends Controller
         $key   = trim((string) ($_POST['key'] ?? ''));
         $state = ($_POST['state'] ?? '') === 'resume' ? 'resume' : 'pause';
         $who   = $this->whoFromPost();
+
+        if ($who === '') {
+            http_response_code(422);
+            echo '{"ok":false,"error":"identite requise (prenom, nom, role)"}';
+
+            return;
+        }
 
         $parser = new SumUpCsvParser();
         if ($key === '' || $parser->isCustomAmount($key)) {
