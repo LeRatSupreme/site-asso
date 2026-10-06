@@ -77,8 +77,6 @@ $dateLabel = $jours[(int) $dt->format('N') - 1] . ' ' . $dt->format('j') . ' ' .
         <p class="muted"><?= e(ucfirst($dateLabel)) ?> — uniquement la journée en cours, chiffres du dashboard.</p>
     </div>
 </div>
-
-<?php $active = 'jour'; require AEIC_VIEWS . '/admin/compta/_kiosk-admin-tabs.php'; ?>
 </div>
 
 <div class="kday-grid">

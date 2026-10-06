@@ -72,8 +72,6 @@ declare(strict_types=1);
     </div>
 </div>
 
-<?php $active = 'hub'; require AEIC_VIEWS . '/admin/compta/_kiosk-admin-tabs.php'; ?>
-
 <div class="kah-strip">
     <div class="kah-strip-card">
         <p class="kah-k">Aujourd'hui</p>
