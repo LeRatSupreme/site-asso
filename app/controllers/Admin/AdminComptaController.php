@@ -1097,7 +1097,7 @@ final class AdminComptaController extends AdminBaseController
             return;
         }
 
-        $this->renderReorderPage(true);
+        $this->renderReorderPage(true, null, $token);
     }
 
     /**
@@ -1416,13 +1416,17 @@ final class AdminComptaController extends AdminBaseController
      *
      * @param array<string,mixed>|null $user Utilisateur connecté (null en kiosque).
      */
-    private function renderReorderPage(bool $kiosk, ?array $user = null): void
+    private function renderReorderPage(bool $kiosk, ?array $user = null, ?string $kioskToken = null): void
     {
         // Lien kiosque : généré à la première visite (connecté uniquement).
         $kioskUrl = '';
         if (!$kiosk) {
             $kioskUrl = Kiosk::url('/kiosque/reappro/');
         }
+        // Hub de retour selon le jeton entrant (admin ou membres).
+        $kioskHubUrl = ($kiosk && $kioskToken !== null && trim($kioskToken) !== '')
+            ? $this->listeHubUrl(trim($kioskToken))
+            : '';
 
         // ── Période d'ANALYSE (sur quoi calculer les moyennes) ──────────
         $refOptions = [
@@ -1515,6 +1519,8 @@ final class AdminComptaController extends AdminBaseController
                 'au'            => $auOk ? $au : '',
                 'kiosk'         => true,
                 'kioskUrl'      => '',
+                // Bouton retour flottant : hub du bon espace (admin/membres).
+                'kioskHubUrl'   => $kioskHubUrl,
             ]);
 
             return;
