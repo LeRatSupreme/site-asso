@@ -1139,10 +1139,7 @@ final class AdminComptaController extends AdminBaseController
      */
     public function kioskListe(string $token): void
     {
-        $expected = trim((string) Setting::get('reappro_kiosk_token', ''));
-        $given    = trim($token);
-
-        if ($expected === '' || $given === '' || !hash_equals($expected, $given)) {
+        if (!$this->kioskAnyTokenOk($token)) {
             http_response_code(403);
             echo '<h1>Erreur 403 — Lien invalide ou révoqué.</h1>';
 
@@ -1181,6 +1178,22 @@ final class AdminComptaController extends AdminBaseController
         return $expected !== '' && $given !== '' && hash_equals($expected, $given);
     }
 
+    /**
+     * Jeton MEMBRES ou ADMIN accepté : les pages outils (liste, réappro)
+     * sont accessibles depuis les deux espaces kiosque, l'URL conservant
+     * le contexte d'origine (les liens de retour y restent).
+     */
+    private function kioskAnyTokenOk(string $token): bool
+    {
+        if ($this->kioskTokenOk($token)) {
+            return true;
+        }
+
+        $expected = trim((string) Setting::get('admin_kiosk_token', ''));
+
+        return $expected !== '' && hash_equals($expected, trim($token));
+    }
+
     private function listeStatePayload(): array
     {
         $checks = [];
@@ -1206,7 +1219,7 @@ final class AdminComptaController extends AdminBaseController
     public function kioskListeState(string $token): void
     {
         header('Content-Type: application/json; charset=utf-8');
-        if (!$this->kioskTokenOk($token)) {
+        if (!$this->kioskAnyTokenOk($token)) {
             http_response_code(403);
             echo '{"ok":false,"error":"lien invalide"}';
 
@@ -1226,7 +1239,7 @@ final class AdminComptaController extends AdminBaseController
     public function kioskListeCheck(string $token): void
     {
         header('Content-Type: application/json; charset=utf-8');
-        if (!$this->kioskTokenOk($token)) {
+        if (!$this->kioskAnyTokenOk($token)) {
             http_response_code(403);
             echo '{"ok":false,"error":"lien invalide"}';
 

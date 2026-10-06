@@ -46,6 +46,16 @@ final class KioskComptageController extends Controller
         return $expected !== '' && $given !== '' && hash_equals($expected, $given);
     }
 
+    /**
+     * Pages outils (caisse, inventaire, liste) : accessibles avec l'un OU
+     * l'autre jeton — l'URL porte le contexte et les liens de retour
+     * conservent l'espace (membres ou admin) d'origine.
+     */
+    private function anyTokenOk(string $token): bool
+    {
+        return $this->tokenOk($token) || $this->adminTokenOk($token);
+    }
+
     private function deny(): void
     {
         http_response_code(403);
@@ -150,13 +160,6 @@ final class KioskComptageController extends Controller
             'jour'    => ['ca' => round($aggToday['ca'], 2), 'profit' => round($aggToday['profit'], 2)],
             'semaine' => ['ca' => round($aggWeek['ca'], 2), 'profit' => round($aggWeek['profit'], 2)],
             'mois'    => ['ca' => round($aggMonth['ca'], 2), 'profit' => round($aggMonth['profit'], 2)],
-            // Outils kiosque membres (utiles aussi à l'admin) : jeton membres.
-            'membreUrls' => [
-                'caisse'     => \App\Core\Compta\Kiosk::url('/kiosque/comptage/caisse/'),
-                'inventaire' => \App\Core\Compta\Kiosk::url('/kiosque/comptage/inventaire/'),
-                'liste'      => \App\Core\Compta\Kiosk::url('/kiosque/liste/'),
-                'reappro'    => \App\Core\Compta\Kiosk::url('/kiosque/reappro/'),
-            ],
         ]);
     }
 
@@ -355,7 +358,7 @@ final class KioskComptageController extends Controller
      */
     public function caisse(string $token): void
     {
-        if (!$this->tokenOk($token)) {
+        if (!$this->anyTokenOk($token)) {
             $this->deny();
 
             return;
@@ -372,7 +375,7 @@ final class KioskComptageController extends Controller
      */
     public function caisseSave(string $token): void
     {
-        if (!$this->tokenOk($token)) {
+        if (!$this->anyTokenOk($token)) {
             $this->deny();
 
             return;
@@ -419,7 +422,7 @@ final class KioskComptageController extends Controller
      */
     public function inventaire(string $token): void
     {
-        if (!$this->tokenOk($token)) {
+        if (!$this->anyTokenOk($token)) {
             $this->deny();
 
             return;
@@ -486,7 +489,7 @@ final class KioskComptageController extends Controller
      */
     public function inventaireSave(string $token): void
     {
-        if (!$this->tokenOk($token)) {
+        if (!$this->anyTokenOk($token)) {
             $this->deny();
 
             return;
@@ -556,7 +559,7 @@ final class KioskComptageController extends Controller
     {
         header('Content-Type: application/json; charset=utf-8');
 
-        if (!$this->tokenOk($token)) {
+        if (!$this->anyTokenOk($token)) {
             http_response_code(403);
             echo '{"ok":false,"error":"lien invalide"}';
 

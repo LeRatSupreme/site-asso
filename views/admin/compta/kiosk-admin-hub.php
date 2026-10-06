@@ -122,19 +122,19 @@ declare(strict_types=1);
         <span class="kiosk-emoji">🗓️</span>
         <span class="kiosk-tile-title">Mois</span>
     </a>
-    <a href="<?= e($membreUrls['liste']) ?>">
+    <a href="<?= e(url('/kiosque/liste/' . rawurlencode($token))) ?>">
         <span class="kiosk-emoji">🛒</span>
         <span class="kiosk-tile-title">Liste de courses</span>
     </a>
-    <a href="<?= e($membreUrls['caisse']) ?>">
+    <a href="<?= e(url('/kiosque/comptage/caisse/' . rawurlencode($token))) ?>">
         <span class="kiosk-emoji">💵</span>
         <span class="kiosk-tile-title">Comptage caisse</span>
     </a>
-    <a href="<?= e($membreUrls['inventaire']) ?>">
+    <a href="<?= e(url('/kiosque/comptage/inventaire/' . rawurlencode($token))) ?>">
         <span class="kiosk-emoji">📦</span>
         <span class="kiosk-tile-title">Comptage inventaire</span>
     </a>
-    <a href="<?= e($membreUrls['reappro']) ?>">
+    <a href="<?= e(url('/kiosque/reappro/' . rawurlencode($token))) ?>">
         <span class="kiosk-emoji">📈</span>
         <span class="kiosk-tile-title">Réappro</span>
     </a>
