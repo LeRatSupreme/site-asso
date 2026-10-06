@@ -72,10 +72,13 @@ $dateLabel = $jours[(int) $dt->format('N') - 1] . ' ' . $dt->format('j') . ' ' .
 
 <div class="compta-head">
     <div>
-        <p class="eyebrow">Comptabilité</p>
+        <p class="eyebrow">Comptabilité — accès admin</p>
         <h1 class="page-title">Récap du jour</h1>
         <p class="muted"><?= e(ucfirst($dateLabel)) ?> — uniquement la journée en cours, chiffres du dashboard.</p>
     </div>
+</div>
+
+<?php $active = 'jour'; require AEIC_VIEWS . '/admin/compta/_kiosk-admin-tabs.php'; ?>
 </div>
 
 <div class="kday-grid">
