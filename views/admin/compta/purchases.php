@@ -203,8 +203,13 @@ usort($pickerList, 'strnatcasecmp');
                 Coche « hors stock » pour une ligne qui ne doit pas alimenter le stock (conso bureau, fournitures, essais…) : l'achat reste comptabilisé.
             </p>
         </form>
+        <!-- Helpers purs (normalisation, collage, HT/TTC, doublons) :
+             logique partagée et testée automatiquement
+             (tests/js/compta-saisie.test.js via tests/Unit/PurchaseGridJsTest.php). -->
+        <script src="<?= e(rootAssetVersioned('/assets/js/compta-saisie.js')) ?>"></script>
         <script>
         (function () {
+            var H = window.ComptaSaisie;
             var grid = document.getElementById('purchases-grid');
             var tbody = document.getElementById('purchases-lines');
             var addBtn = document.getElementById('purchase-line-add');
@@ -216,7 +221,7 @@ usort($pickerList, 'strnatcasecmp');
             var rateEl = document.getElementById('vat_rate');
             var basisInputs = document.querySelectorAll('input[name="amount_basis"]');
             var form = document.querySelector('[data-purchase-form]');
-            if (!tbody || !addBtn || !grid || !form) return;
+            if (!H || !tbody || !addBtn || !grid || !form) return;
 
             var MAX_LINES = 60;
             var START_LINES = 5; // une commande complète tient d'un coup
@@ -228,18 +233,12 @@ usort($pickerList, 'strnatcasecmp');
             var pickerKeys = [];
             try { pickerKeys = JSON.parse(grid.getAttribute('data-picker-keys') || '[]'); } catch (e) { pickerKeys = []; }
 
-            // Règle de normalisation dupliquée en JS (pas de PHP côté
-            // client) : identique à StockPublic::normalizeKey — minuscules,
-            // sans accents, séparateurs et espaces supprimés.
-            function normKey(v) {
-                return String(v || '')
-                    .toLowerCase()
-                    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-                    .replace(/[_\-\.()\[\]\{\},;:\/]+/g, ' ')
-                    .replace(/\s+/g, ' ')
-                    .trim()
-                    .replace(/ /g, '');
-            }
+            // Helpers purs partagés (fichier compta-saisie.js) : le DOM
+            // reste ici, la logique est testée automatiquement.
+            var normKey = H.normKey;
+            var parseAmount = H.parseAmount;
+            var fmt3 = H.fmt3;
+            var parsePasteLine = H.parsePasteLine;
 
             function esc(s) {
                 return String(s).replace(/[&<>"]/g, function (c) {
@@ -250,12 +249,6 @@ usort($pickerList, 'strnatcasecmp');
             function rows() {
                 return Array.prototype.slice.call(tbody.querySelectorAll('.pa-row'));
             }
-
-            function parseAmount(v) {
-                return parseFloat(String(v).replace(/\s/g, '').replace(',', '.'));
-            }
-
-            function fmt3(n) { return n.toFixed(3).replace('.', ',') + ' €'; }
 
             function basis() {
                 for (var i = 0; i < basisInputs.length; i++) {
@@ -269,29 +262,17 @@ usort($pickerList, 'strnatcasecmp');
                 return isFinite(r) ? r : 0;
             }
 
-            // Décomposition HT/TTC d'un montant saisi, selon la base et le
-            // taux choisis. Recalculée à chaque changement (jamais figée).
-            function split(amount) {
-                var r = rate();
-                if (basis() === 'ttc') {
-                    var ht = r > 0 ? amount / (1 + r / 100) : amount;
-                    return { ht: ht, ttc: amount };
-                }
-                var ttc = r > 0 ? amount * (1 + r / 100) : amount;
-                return { ht: amount, ttc: ttc };
-            }
-
             function updateRow(tr) {
                 var a = parseAmount(tr.querySelector('[name="total_amount[]"]').value);
                 var q = parseInt(tr.querySelector('[name="quantity[]"]').value, 10);
                 var hint = tr.querySelector('.line-unit');
-                if (!isFinite(a) || a <= 0 || !q || q < 1) {
+                var text = H.unitHint(a, q, rate(), basis());
+                if (text === '') {
                     hint.hidden = true;
                     hint.textContent = '';
                     return;
                 }
-                var s = split(a);
-                hint.textContent = '≈ ' + (s.ht / q).toFixed(3).replace('.', ',') + ' · ' + (s.ttc / q).toFixed(3).replace('.', ',') + ' € TTC /u';
+                hint.textContent = text;
                 hint.hidden = false;
             }
 
@@ -303,7 +284,7 @@ usort($pickerList, 'strnatcasecmp');
                     if (isFinite(a) && a > 0) sum += a;
                 });
                 var isTtc = basis() === 'ttc';
-                var s = split(sum);
+                var s = H.splitVat(sum, rate(), basis());
                 countEl.textContent = filled + ' ligne' + (filled > 1 ? 's' : '');
                 totalEl.textContent = fmt3(sum);
                 totalBasisEl.textContent = isTtc ? 'TTC' : 'HT';
@@ -333,13 +314,11 @@ usort($pickerList, 'strnatcasecmp');
                 }
 
                 if (value !== '') {
-                    var key = normKey(value);
-                    var firstAt = -1, me = rows().indexOf(tr);
-                    for (var i = 0; i < rows().length; i++) {
-                        if (i === me) continue;
-                        var other = rows()[i].querySelector('[name="product_key[]"]').value.trim();
-                        if (other !== '' && normKey(other) === key) { firstAt = i + 1; break; }
-                    }
+                    var all = rows();
+                    var names = all.map(function (row) {
+                        return row.querySelector('[name="product_key[]"]').value;
+                    });
+                    var firstAt = H.findDuplicateLine(names, all.indexOf(tr));
                     if (firstAt !== -1) {
                         msg = '« ' + value + ' » est déjà en ligne ' + firstAt + ' — fusionne les quantités sur une seule ligne.';
                     }
@@ -566,29 +545,7 @@ usort($pickerList, 'strnatcasecmp');
             }
 
             // ── Coller la commande : comptage en direct, puis import ──
-            // (tabulations Excel acceptées ; « Nom ; Montant » aussi, le
-            // montant est repéré à sa virgule/son point décimal).
-            function parsePasteLine(line) {
-                var sep = line.indexOf('\t') !== -1 ? '\t' : (line.indexOf(';') !== -1 ? ';' : null);
-                var parts = (sep ? line.split(sep) : [line]).map(function (p) { return p.trim(); });
-                var name = parts[0] || '';
-                if (name === '') return null;
-
-                var qty = 1;
-                var amount = '';
-                if (parts.length >= 3) {
-                    qty = parseInt(parts[1], 10) || 1;
-                    amount = parts[2];
-                } else if (parts.length === 2) {
-                    if (/^\d{1,4}$/.test(parts[1])) {
-                        qty = parseInt(parts[1], 10) || 1;
-                    } else {
-                        amount = parts[1];
-                    }
-                }
-
-                return { name: name, qty: qty, amount: amount };
-            }
+            // (analyse déléguée au helper partagé H.parsePasteLine)
 
             var pasteArea = document.getElementById('purchase-paste');
             var pasteApply = document.getElementById('purchase-paste-apply');
