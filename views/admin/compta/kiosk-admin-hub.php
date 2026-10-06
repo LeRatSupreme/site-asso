@@ -36,17 +36,18 @@ declare(strict_types=1);
         gap: 0.8rem; max-width: 44rem; margin: 0 auto 1rem;
     }
     .kah-grid a {
-        display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.5rem;
-        aspect-ratio: 4 / 3; padding: 1.2rem; text-align: center; text-decoration: none;
+        display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.45rem;
+        aspect-ratio: 1 / 1; padding: 0.9rem 0.6rem; text-align: center; text-decoration: none;
         background: rgba(255, 255, 255, 0.035);
         border: 1px solid rgba(255, 255, 255, 0.07);
-        border-radius: 18px;
+        border-radius: 20px;
         transition: border-color 0.15s ease, background 0.15s ease;
     }
     .kah-grid a:hover { border-color: var(--primary, #48bdd3); background: rgba(72, 189, 211, 0.07); }
-    .kah-grid .kiosk-emoji { font-size: 2.4rem; }
-    .kah-grid .kiosk-tile-title { font-size: 1.1rem; font-weight: 900; }
-    .kah-grid .kiosk-tile-sub { font-size: 0.78rem; color: var(--muted, #8892a6); }
+    .kah-grid .kiosk-emoji { font-size: 2.3rem; }
+    .kah-grid .kiosk-tile-title { font-size: 0.98rem; font-weight: 900; }
+    .kah-grid .kiosk-tile-sub { font-size: 0.68rem; color: var(--muted, #8892a6); }
+    .kah-grid .kah-ext { color: #a78bfa; }
     /* Tuile seule sur la 2e rangée : même taille, centrée. */
     .kah-grid a:last-child:nth-child(odd) {
         grid-column: 1 / -1;
@@ -92,20 +93,45 @@ declare(strict_types=1);
 </div>
 
 <div class="kah-grid">
+    <a href="<?= e(url('/kiosque/admin/' . rawurlencode($token))) ?>">
+        <span class="kiosk-emoji">🏠</span>
+        <span class="kiosk-tile-title">Accueil</span>
+    </a>
     <a href="<?= e(url('/kiosque/comptage/jour/' . rawurlencode($token))) ?>">
         <span class="kiosk-emoji">📊</span>
-        <span class="kiosk-tile-title">Récap du jour</span>
-        <span class="kiosk-tile-sub">détail complet, auto-actualisé</span>
+        <span class="kiosk-tile-title">Jour</span>
     </a>
     <a href="<?= e(url('/kiosque/admin/semaine/' . rawurlencode($token))) ?>">
         <span class="kiosk-emoji">📅</span>
-        <span class="kiosk-tile-title">7 derniers jours</span>
-        <span class="kiosk-tile-sub">jour par jour + top produits</span>
+        <span class="kiosk-tile-title">7 jours</span>
     </a>
     <a href="<?= e(url('/kiosque/admin/mois/' . rawurlencode($token))) ?>">
         <span class="kiosk-emoji">🗓️</span>
-        <span class="kiosk-tile-title">Mois en cours</span>
-        <span class="kiosk-tile-sub">vs mois précédent + top</span>
+        <span class="kiosk-tile-title">Mois</span>
+    </a>
+    <a href="<?= e(url('/admin/analytics')) ?>">
+        <span class="kiosk-emoji">📈</span>
+        <span class="kiosk-tile-title">Analytics</span>
+        <span class="kiosk-tile-sub kah-ext">↗ connexion admin</span>
+    </a>
+    <a href="<?= e(url('/admin/compta')) ?>">
+        <span class="kiosk-emoji">🧮</span>
+        <span class="kiosk-tile-title">Dashboard</span>
+        <span class="kiosk-tile-sub kah-ext">↗ connexion admin</span>
+    </a>
+    <a href="<?= e(url('/admin/compta/ventes')) ?>">
+        <span class="kiosk-emoji">📜</span>
+        <span class="kiosk-tile-title">Journal</span>
+        <span class="kiosk-tile-sub kah-ext">↗ connexion admin</span>
+    </a>
+    <a href="<?= e(url('/admin/compta/annuel')) ?>">
+        <span class="kiosk-emoji">📅</span>
+        <span class="kiosk-tile-title">Bilan</span>
+        <span class="kiosk-tile-sub kah-ext">↗ connexion admin</span>
+    </a>
+    <a href="<?= e(\App\Core\Compta\Kiosk::url('/kiosque/reappro/')) ?>">
+        <span class="kiosk-emoji">📈</span>
+        <span class="kiosk-tile-title">Réappro</span>
     </a>
 </div>
 
