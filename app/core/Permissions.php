@@ -215,6 +215,7 @@ final class Permissions
             'inventory'  => 'Inventaire',
             'costs'      => 'Coûts de revient',
             'cash'       => 'Caisses',
+            'kiosques'   => 'Kiosques (liens téléphone)',
             'users'      => 'Utilisateurs',
             'notifications' => 'Notifications SMS',
             'settings'   => 'Paramètres',
