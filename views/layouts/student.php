@@ -84,7 +84,7 @@ $nav = [
                 <p class="dash-hello"><?= e($user['prenom'] ?? '') ?></p>
                 <nav aria-label="<?= e(t('dash.eyebrow.member')) ?>">
                     <?php foreach ($nav as $path => $label): ?>
-                        <?php $active = $path === '/eleve' ? $currentPath === $path : str_starts_with($currentPath, $path); ?>
+                        <?php $currentUrlPath = (string) (parse_url($currentPath, PHP_URL_PATH) ?: '/'); $active = $path === '/eleve' ? $currentUrlPath === $path : str_starts_with($currentUrlPath, $path); ?>
                         <a class="dash-link<?= $active ? ' is-active' : '' ?>" href="<?= e(url($path)) ?>"><?= e($label) ?></a>
                     <?php endforeach; ?>
                 </nav>
