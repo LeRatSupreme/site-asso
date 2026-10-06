@@ -47,8 +47,12 @@ declare(strict_types=1);
     .kah-grid .kiosk-emoji { font-size: 2.2rem; }
     .kah-grid .kiosk-tile-title { font-size: 1.05rem; font-weight: 900; }
     .kah-grid .kiosk-tile-sub { font-size: 0.76rem; color: var(--muted, #8892a6); }
-    .kah-grid .kah-needs-login { color: #a78bfa; }
-    .kah-grid a.is-ext { border-style: dashed; }
+    /* Tuile seule sur la 2e rangée : même taille, centrée. */
+    .kah-grid a:last-child:nth-child(odd) {
+        grid-column: 1 / -1;
+        justify-self: center;
+        width: calc(50% - 0.4rem);
+    }
     .kah-foot {
         max-width: 44rem; margin: 1.1rem auto 0; text-align: center;
         font-size: 0.78rem; color: var(--muted, #8892a6);
@@ -100,22 +104,13 @@ declare(strict_types=1);
         <span class="kiosk-tile-title">Mois en cours</span>
         <span class="kiosk-tile-sub">vs mois précédent + top</span>
     </a>
-    <a class="is-ext" href="<?= e(url('/admin/compta/ventes')) ?>" target="_blank">
-        <span class="kiosk-emoji">📜</span>
-        <span class="kiosk-tile-title">Journal des ventes</span>
-        <span class="kiosk-tile-sub kah-needs-login">connexion admin requise</span>
-    </a>
-    <a class="is-ext" href="<?= e(url('/admin/analytics')) ?>" target="_blank">
-        <span class="kiosk-emoji">📈</span>
-        <span class="kiosk-tile-title">Analytics</span>
-        <span class="kiosk-tile-sub kah-needs-login">connexion admin requise</span>
-    </a>
-    <a class="is-ext" href="<?= e(url('/admin/compta')) ?>" target="_blank">
-        <span class="kiosk-emoji">🧮</span>
-        <span class="kiosk-tile-title">Dashboard compta</span>
-        <span class="kiosk-tile-sub kah-needs-login">connexion admin requise</span>
-    </a>
 </div>
+
+<p class="kah-foot">
+    Analytics, journal des ventes et dashboard complet : accessible depuis
+    <a href="<?= e(url('/admin/compta')) ?>" style="color: var(--primary, #48bdd3);">l'espace admin</a>
+    (connexion requise) — volontairement pas liés ici.
+</p>
 
 <p class="kah-foot">
     Gestion des liens et régénération : Système → Kiosques (connexion admin).
