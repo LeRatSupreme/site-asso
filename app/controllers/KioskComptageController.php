@@ -173,8 +173,8 @@ final class KioskComptageController extends Controller
     }
 
     /**
-     * Version restreinte pour les membres : CA global et produits vendus
-     * (quantités), sans montants par produit ni bénéfice.
+     * Version restreinte pour les membres : CA global, produits vendus
+     * (quantités) et CA de chaque produit — sans bénéfice ni paiements.
      *
      * @return array<string,mixed>
      */
@@ -183,8 +183,12 @@ final class KioskComptageController extends Controller
         $today = (new \DateTimeImmutable('today', new \DateTimeZone('Europe/Paris')))->format('Y-m-d');
 
         $agg = Sale::aggregatesBetween($today, $today);
-        $topQty = array_map(
-            static fn (array $t): array => ['label' => (string) $t['label'], 'qty' => (int) $t['qty']],
+        $top = array_map(
+            static fn (array $t): array => [
+                'label' => (string) $t['label'],
+                'qty'   => (int) $t['qty'],
+                'ca'    => round((float) $t['ca'], 2),
+            ],
             Sale::topProductsBetween($today, $today, 10)
         );
 
@@ -192,7 +196,7 @@ final class KioskComptageController extends Controller
             'date'        => $today,
             'ca'          => round($agg['ca'], 2),
             'qty'         => $agg['qty'],
-            'top'         => $topQty,
+            'top'         => $top,
             'computed_at' => (new \DateTimeImmutable('now', new \DateTimeZone('Europe/Paris')))->format('H:i:s'),
         ];
     }
