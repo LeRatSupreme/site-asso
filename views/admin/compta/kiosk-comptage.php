@@ -10,7 +10,13 @@ declare(strict_types=1);
  */
 ?>
 <style>
-    .kiosk-hub { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0.8rem; }
+    .kiosk-hub {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.8rem;
+        max-width: 40rem;
+        margin: 0 auto;
+    }
     .kiosk-hub a {
         display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.5rem;
         aspect-ratio: 4 / 3; padding: 1.2rem; text-align: center; text-decoration: none;
@@ -20,6 +26,12 @@ declare(strict_types=1);
         transition: border-color 0.15s ease, background 0.15s ease;
     }
     .kiosk-hub a:hover { border-color: var(--primary, #48bdd3); background: rgba(72, 189, 211, 0.07); }
+    /* Tuile seule sur la 2e rangée (nombre impair) : même taille, centrée. */
+    .kiosk-hub a:last-child:nth-child(odd) {
+        grid-column: 1 / -1;
+        justify-self: center;
+        width: calc(50% - 0.4rem);
+    }
     .kiosk-hub .kiosk-emoji { font-size: 2.4rem; }
     .kiosk-hub .kiosk-tile-title { font-size: 1.15rem; font-weight: 900; }
     .kiosk-hub .kiosk-tile-sub { font-size: 0.8rem; color: var(--muted, #8892a6); }
