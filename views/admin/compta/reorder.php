@@ -78,6 +78,23 @@ foreach ($rows as $r) {
     }
 }
 ?>
+<?php if ($kiosk && ($kioskHubUrl ?? '') !== ''): ?>
+<style>
+    .kr-back {
+        position: fixed; top: 12px; right: 12px; z-index: 60;
+        display: inline-flex; align-items: center; gap: 0.35rem;
+        padding: 0.55rem 0.95rem; border-radius: 999px;
+        border: 2px solid var(--primary, #48bdd3);
+        background: rgba(10, 22, 38, 0.92);
+        color: var(--primary, #48bdd3); font-size: 0.85rem; font-weight: 800;
+        text-decoration: none; user-select: none;
+        backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+    }
+    .kr-back:hover { background: var(--primary, #48bdd3); color: #062033; }
+</style>
+<a class="kr-back" href="<?= e($kioskHubUrl) ?>">← Retour</a>
+<?php endif; ?>
 <div class="compta-head">
     <div class="compta-head-row">
         <div>
