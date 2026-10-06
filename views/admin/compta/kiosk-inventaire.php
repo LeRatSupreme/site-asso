@@ -32,15 +32,23 @@ declare(strict_types=1);
     }
     .kprog strong { color: var(--primary, #48bdd3); }
 
-    .ksec { margin-bottom: 1.3rem; }
+    .ksec { margin-bottom: 1.7rem; }
     .ksec-title {
         display: flex; align-items: center; gap: 0.5rem;
-        margin: 0 0.15rem 0.5rem; font-size: 0.95rem; font-weight: 800;
+        margin: 0 0 0.65rem; padding: 0.5rem 0.65rem;
+        font-size: 0.95rem; font-weight: 800;
         text-transform: uppercase; letter-spacing: 0.06em;
+        color: var(--foreground, inherit);
+        background: rgba(255, 255, 255, 0.055);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-left: 4px solid var(--primary, #48bdd3);
+        border-radius: 10px;
+        position: sticky; top: 0; z-index: 4;
+        backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
     }
     .ksec-title .ksec-count {
         font-size: 0.7rem; font-weight: 800; color: var(--muted, #8892a6);
-        background: rgba(255, 255, 255, 0.06); border-radius: 999px; padding: 0.1rem 0.55rem;
+        background: rgba(255, 255, 255, 0.08); border-radius: 999px; padding: 0.1rem 0.55rem;
     }
     .klist {
         list-style: none; margin: 0; padding: 0.2rem;
