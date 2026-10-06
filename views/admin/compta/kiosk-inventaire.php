@@ -56,6 +56,7 @@ declare(strict_types=1);
         gap: 0.55rem;
     }
     .krow {
+        position: relative;
         display: flex; flex-direction: column; gap: 0.45rem;
         padding: 0.6rem 0.55rem;
         border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 12px;
@@ -64,8 +65,20 @@ declare(strict_types=1);
     .krow.is-counted { background: rgba(72, 189, 211, 0.06); border-color: rgba(72, 189, 211, 0.25); }
     .kname {
         font-size: 0.92rem; font-weight: 800; margin: 0;
+        padding-right: 28px;
         white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
+    .kpause {
+        position: absolute; top: 6px; right: 6px;
+        width: 28px; height: 28px; border-radius: 50%;
+        border: 1px solid var(--border, rgba(255,255,255,0.15));
+        background: rgba(255, 255, 255, 0.05);
+        color: var(--muted, #8892a6); font-size: 0.8rem; line-height: 1;
+        cursor: pointer; padding: 0;
+        user-select: none; -webkit-tap-highlight-color: transparent;
+    }
+    .kpause:hover { color: var(--foreground, inherit); border-color: var(--primary, #48bdd3); }
+    .kpause:disabled { opacity: 0.4; }
     .kinput {
         width: 100%; text-align: center;
         padding: 0.55rem 0.4rem;
@@ -113,18 +126,20 @@ declare(strict_types=1);
     <?php uksort($groups, static function (string $a, string $b): int { return strcasecmp($a, $b); }); ?>
 
     <?php foreach ($groups as $cat => $items): ?>
-    <section class="ksec">
+    <section class="ksec" data-cat="<?= e($cat) ?>">
         <h2 class="ksec-title">
             <?= e($cat) ?>
             <span class="ksec-count"><?= count($items) ?></span>
         </h2>
         <ul class="klist">
             <?php foreach ($items as $r): ?>
-            <li class="krow" data-name="<?= e(mb_strtolower($r['key'])) ?>" title="<?= e($r['key']) ?>">
+            <li class="krow" data-name="<?= e(mb_strtolower($r['key'])) ?>" data-key="<?= e($r['key']) ?>" data-cat="<?= e($cat) ?>" title="<?= e($r['key']) ?>">
                 <p class="kname"><?= e($r['key']) ?></p>
                 <input type="number" class="kinput" name="count[<?= e($r['key']) ?>]"
                        min="0" step="1" inputmode="numeric" placeholder="0"
                        aria-label="Quantité comptée de <?= e($r['key']) ?>">
+                <button type="button" class="kpause" data-key="<?= e($r['key']) ?>" data-state="pause"
+                        title="Mettre en pause (sort du comptage)" aria-label="Mettre <?= e($r['key']) ?> en pause">⏸</button>
             </li>
             <?php endforeach; ?>
         </ul>
@@ -135,19 +150,21 @@ declare(strict_types=1);
     <p class="knone">Aucun produit enregistré pour le moment.</p>
     <?php endif; ?>
 
-    <?php if ($paused !== []): ?>
-    <section class="ksec">
-        <h2 class="ksec-title">En pause (hors comptage)</h2>
-        <ul class="klist">
+    <section class="ksec<?= $paused === [] ? ' khidden' : '' ?>" id="kPausedSec">
+        <h2 class="ksec-title">En pause (hors comptage)
+            <span class="ksec-count" id="kPausedCount"><?= count($paused) ?></span>
+        </h2>
+        <ul class="klist" id="kPausedList">
             <?php foreach ($paused as $r): ?>
-            <li class="krow is-paused" data-name="<?= e(mb_strtolower($r['key'])) ?>">
+            <li class="krow is-paused" data-name="<?= e(mb_strtolower($r['key'])) ?>" data-key="<?= e($r['key']) ?>" title="<?= e($r['key']) ?>">
                 <p class="kname"><?= e($r['key']) ?></p>
                 <span class="kpaused">en pause</span>
+                <button type="button" class="kpause" data-key="<?= e($r['key']) ?>" data-state="resume"
+                        title="Remettre en comptage" aria-label="Remettre <?= e($r['key']) ?> en comptage">▶</button>
             </li>
             <?php endforeach; ?>
         </ul>
     </section>
-    <?php endif; ?>
 
     <div class="kform-actions">
         <button type="submit" class="btn btn-primary">Enregistrer le comptage</button>
@@ -225,10 +242,151 @@ declare(strict_types=1);
             Array.prototype.forEach.call(document.querySelectorAll('.ksec'), function (sec) {
                 var visible = sec.querySelectorAll('.krow:not(.khidden)').length;
                 var hasInputs = sec.querySelector('.kinput') !== null;
+                var isPausedSec = sec.id === 'kPausedSec';
                 sec.classList.toggle('khidden', hasInputs && visible === 0);
+                if (isPausedSec) {
+                    var total = sec.querySelectorAll('.krow').length;
+                    var visibleRows = sec.querySelectorAll('.krow:not(.khidden)').length;
+                    sec.classList.toggle('khidden', total === 0 || visibleRows === 0);
+                }
             });
         });
     }
+
+    /* -------- Pause / reprise d'un produit (dynamique, sans recharger) --- */
+    var TOGGLE_URL = <?= json_encode(url('/kiosque/comptage/inventaire/pause/' . $token)) ?>;
+
+    function whoLabel() {
+        try {
+            var w = JSON.parse(localStorage.getItem('aeic_kiosque_who') || 'null');
+            if (!w) return '';
+            var base = ((w.prenom || '') + ' ' + (w.nom || '')).trim();
+            if (base === '') base = w.alias || '';
+            return w.alias ? (base + ' (' + w.alias + ')') : base;
+        } catch (e) { return ''; }
+    }
+
+    function pauseBtn(key, state) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'kpause';
+        b.setAttribute('data-key', key);
+        b.setAttribute('data-state', state);
+        b.title = state === 'pause' ? 'Mettre en pause (sort du comptage)' : 'Remettre en comptage';
+        b.textContent = state === 'pause' ? '⏸' : '▶';
+        return b;
+    }
+
+    function makePausedLi(key) {
+        var li = document.createElement('li');
+        li.className = 'krow is-paused';
+        li.setAttribute('data-name', key.toLowerCase());
+        li.setAttribute('data-key', key);
+        li.title = key;
+        var p = document.createElement('p');
+        p.className = 'kname';
+        p.textContent = key;
+        var s = document.createElement('span');
+        s.className = 'kpaused';
+        s.textContent = 'en pause';
+        li.appendChild(p);
+        li.appendChild(s);
+        li.appendChild(pauseBtn(key, 'resume'));
+        return li;
+    }
+
+    function makeActiveLi(key, cat) {
+        var li = document.createElement('li');
+        li.className = 'krow';
+        li.setAttribute('data-name', key.toLowerCase());
+        li.setAttribute('data-key', key);
+        li.setAttribute('data-cat', cat);
+        li.title = key;
+        var p = document.createElement('p');
+        p.className = 'kname';
+        p.textContent = key;
+        var input = document.createElement('input');
+        input.type = 'number';
+        input.className = 'kinput';
+        input.name = 'count[' + key + ']';
+        input.min = '0';
+        input.step = '1';
+        input.setAttribute('inputmode', 'numeric');
+        input.placeholder = '0';
+        input.setAttribute('aria-label', 'Quantité comptée de ' + key);
+        input.addEventListener('input', function () { refresh(); markDirty(); });
+        li.appendChild(p);
+        li.appendChild(input);
+        li.appendChild(pauseBtn(key, 'pause'));
+        return li;
+    }
+
+    function updateBadges() {
+        Array.prototype.forEach.call(document.querySelectorAll('.ksec'), function (sec) {
+            var badge = sec.querySelector('.ksec-count');
+            if (!badge || sec.id === 'kPausedSec') return;
+            badge.textContent = sec.querySelectorAll('.krow').length;
+        });
+        var pausedSec = document.getElementById('kPausedSec');
+        var pausedCount = document.getElementById('kPausedCount');
+        if (pausedSec && pausedCount) {
+            var n = pausedSec.querySelectorAll('.krow').length;
+            pausedCount.textContent = n;
+            pausedSec.classList.toggle('khidden', n === 0);
+        }
+    }
+
+    function moveRow(li, key, cat, nowPaused) {
+        li.remove();
+        if (nowPaused) {
+            var pausedList = document.getElementById('kPausedList');
+            if (pausedList) pausedList.appendChild(makePausedLi(key));
+        } else {
+            var target = null;
+            Array.prototype.forEach.call(document.querySelectorAll('.ksec[data-cat]'), function (sec) {
+                if (!target && sec.getAttribute('data-cat') === cat) target = sec;
+            });
+            if (!target) {
+                var firstList = document.querySelector('.ksec .klist');
+                if (firstList) target = firstList.closest('.ksec');
+            }
+            if (target) {
+                var list = target.querySelector('.klist');
+                if (list) list.appendChild(makeActiveLi(key, cat));
+            }
+        }
+        updateBadges();
+        refresh();
+    }
+
+    document.addEventListener('click', function (e) {
+        var btn = e.target.closest('.kpause');
+        if (!btn) return;
+        e.preventDefault();
+        var key = btn.getAttribute('data-key') || '';
+        var state = btn.getAttribute('data-state') === 'resume' ? 'resume' : 'pause';
+        var li = btn.closest('.krow');
+        var cat = li ? (li.getAttribute('data-cat') || 'Divers') : 'Divers';
+
+        var fd = new FormData();
+        fd.append('key', key);
+        fd.append('state', state);
+        fd.append('who', whoLabel());
+        var csrf = document.querySelector('input[name="_csrf"]');
+        if (csrf) fd.append('_csrf', csrf.value);
+
+        btn.disabled = true;
+        fetch(TOGGLE_URL, { method: 'POST', body: fd, credentials: 'same-origin' })
+            .then(function (r) { return r.json(); })
+            .then(function (j) {
+                if (j && j.ok) {
+                    moveRow(li, key, cat, state === 'pause');
+                } else {
+                    btn.disabled = false;
+                }
+            })
+            .catch(function () { btn.disabled = false; });
+    });
 
     // Saisie clavier : suivi du comptage + auto-save.
     Array.prototype.forEach.call(document.querySelectorAll('.ksec .kinput'), function (input) {
