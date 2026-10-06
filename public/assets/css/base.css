@@ -455,6 +455,12 @@ ul, ol { list-style: none; }
     color: #fff;
 }
 .hero-lead { color: var(--muted); max-width: 520px; font-size: 1.1rem; margin-bottom: 2rem; }
+.hero-tagline {
+    font-size: clamp(1.05rem, 2.2vw, 1.4rem);
+    font-weight: 900;
+    letter-spacing: -0.01em;
+    margin: -0.9rem 0 1.1rem;
+}
 .hero-actions { display: flex; flex-wrap: wrap; gap: 0.75rem; }
 
 .hero-stats {

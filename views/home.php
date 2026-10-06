@@ -30,6 +30,9 @@ $allPromoEmpty = empty($promotions);
                 <?= e(t('home.title.line1')) ?>
                 <?= e(t('home.title.line2')) ?>
             </h1>
+            <p class="hero-tagline ae-title-grad">
+                <?= e(t('home.tagline')) ?>
+            </p>
             <p class="hero-lead">
                 <?= e(tc($description ?: t('home.description'))) ?>
             </p>

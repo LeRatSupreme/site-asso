@@ -6,7 +6,7 @@
    Aucun build, vanilla JS. Cache versionnée pour faciliter la mise à jour.
    ===================================================================== */
 
-const CACHE_VERSION = 'aeic-v2';
+const CACHE_VERSION = 'aeic-v3';
 const CACHE_ASSETS  = CACHE_VERSION + '-assets';
 const CACHE_PAGES   = CACHE_VERSION + '-pages';
 
