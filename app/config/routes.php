@@ -296,6 +296,12 @@ function aeic_register_routes(Router $router): void
     // version kiosque par lien secret que le Réappro (même jeton).
     $router->get('/admin/compta/liste', [AdminComptaController::class, 'liste']);
     $router->get('/kiosque/liste/{token}', [AdminComptaController::class, 'kioskListe']);
+    // Cases cochées partagées : état (GET, rafraîchi toutes les 5 s) et
+    // coche/décoche (POST, identité obligatoire). Kiosque et admin.
+    $router->get('/admin/compta/liste/state', [AdminComptaController::class, 'listeState']);
+    $router->post('/admin/compta/liste/check', [AdminComptaController::class, 'listeCheck']);
+    $router->get('/kiosque/liste/state/{token}', [AdminComptaController::class, 'kioskListeState']);
+    $router->post('/kiosque/liste/check/{token}', [AdminComptaController::class, 'kioskListeCheck']);
     // Kiosque « Comptage » : hub + comptage caisse + comptage inventaire,
     // par lien secret (même jeton). Les POST enregistrent réellement
     // (traces « kiosque ») — l'authentification est le jeton lui-même.

@@ -15,6 +15,7 @@ declare(strict_types=1);
  * @var bool   $kiosk
  * @var string $kioskUrl
  * @var string $kioskToken
+ * @var string $adminWho
  */
 
 use App\Models\Setting;
@@ -115,6 +116,14 @@ use App\Models\Setting;
     .shop-item.is-done .shop-stock,
     .shop-item.is-done .shop-week { display: none; }
 
+    /* Qui a coché (état partagé, rafraîchi en continu). */
+    .shop-by {
+        font-size: 0.66rem; font-weight: 700; color: var(--primary, #48bdd3);
+        max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        min-height: 0;
+    }
+    .shop-by:empty { display: none; }
+
     .shop-empty { text-align: center; padding: 3.5rem 1rem; }
     .shop-empty-emoji { font-size: 3rem; margin-bottom: 0.6rem; }
     .shop-empty-title { font-size: 1.25rem; font-weight: 900; margin: 0 0 0.3rem; }
@@ -176,8 +185,9 @@ use App\Models\Setting;
 <ul class="shop-grid">
     <?php foreach ($items as $r): $uid = 'sp-' . substr(md5((string) $r['name']), 0, 10); ?>
         <li class="shop-item" id="<?= e($uid) ?>"
+            data-key="<?= e((string) $r['name']) ?>"
             role="button" tabindex="0" aria-pressed="false"
-            title="Clique pour griser (acheté) — re-clique pour dégriser">
+            title="Clique pour cocher (acheté) — re-clique pour décocher. Partagé avec tout le monde.">
             <span class="shop-stock" title="Stock théorique restant (dernier comptage + achats − ventes − pertes)"><?= (int) $r['stock'] ?></span>
             <span class="shop-week" title="Consommation par semaine (7 j/7)"><?= number_format((float) $r['avg_week'], (float) $r['avg_week'] >= 10 ? 0 : 1, ',', ' ') ?></span>
             <?php if ((int) $r['to_order'] > 0): ?>
@@ -189,6 +199,7 @@ use App\Models\Setting;
         <?php if ((int) $r['pack'] > 1): ?>
             <span class="shop-pack">pack de <?= (int) $r['pack'] ?></span>
         <?php endif; ?>
+        <span class="shop-by"></span>
     </li>
     <?php endforeach; ?>
 </ul>
@@ -227,18 +238,104 @@ use App\Models\Setting;
 
 <script>
 (function () {
+    'use strict';
+    var CHECK_URL = <?= json_encode($kiosk ? url('/kiosque/liste/check/' . $kioskToken) : url('/admin/compta/liste/check')) ?>;
+    var STATE_URL = <?= json_encode($kiosk ? url('/kiosque/liste/state/' . $kioskToken) : url('/admin/compta/liste/state')) ?>;
+
+    var items = {};   /* clé produit → <li> */
+    var pending = {}; /* coches locales en cours d'envoi (non écrasées par le refresh) */
+
     Array.prototype.forEach.call(document.querySelectorAll('.shop-item'), function (item) {
-        function toggle() {
-            var done = item.classList.toggle('is-done');
-            item.setAttribute('aria-pressed', done ? 'true' : 'false');
+        items[item.getAttribute('data-key')] = item;
+    });
+
+    function whoFields() {
+        <?php if ($kiosk): ?>
+        if (window.KiosqueWho && window.KiosqueWho.ok()) return window.KiosqueWho.fields();
+        return null; /* identité kiosque obligatoire */
+        <?php else: ?>
+        return { who: <?= json_encode($adminWho) ?>, who_prenom: <?= json_encode((string) ($user['prenom'] ?? '')) ?>, who_nom: <?= json_encode((string) ($user['nom'] ?? '')) ?>, who_alias: <?= json_encode((string) ($user['role'] ?? '')) ?> };
+        <?php endif; ?>
+    }
+
+    function apply(item, checked, by, at) {
+        item.classList.toggle('is-done', checked);
+        item.setAttribute('aria-pressed', checked ? 'true' : 'false');
+        item.querySelector('.shop-by').textContent = checked ? ('✓ ' + by + ' · ' + at) : '';
+    }
+
+    function post(key, checked) {
+        var who = whoFields();
+        var fd = new FormData();
+        fd.append('key', key);
+        fd.append('state', checked ? '1' : '0');
+        fd.append('who', who.who);
+        fd.append('who_prenom', who.who_prenom);
+        fd.append('who_nom', who.who_nom);
+        fd.append('who_alias', who.who_alias);
+        var csrf = document.querySelector('input[name="_csrf"]');
+        if (csrf) fd.append('_csrf', csrf.value);
+        return fetch(CHECK_URL, { method: 'POST', body: fd, credentials: 'same-origin' })
+            .then(function (r) { return r.json(); });
+    }
+
+    function toggle(item) {
+        var key = item.getAttribute('data-key');
+        <?php if ($kiosk): ?>
+        if (window.KiosqueWho && !window.KiosqueWho.ok()) {
+            window.KiosqueWho.open();
+            return;
         }
-        item.addEventListener('click', toggle);
+        <?php endif; ?>
+        var checked = !item.classList.contains('is-done');
+        var who = whoFields();
+        if (!who || who.who === '') { return; } /* pas d'identité : rien */
+
+        pending[key] = true;
+        apply(item, checked, who.who, new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }));
+        post(key, checked).then(function (j) {
+            if (!(j && j.ok)) {
+                /* refus (ex. identité manquante) : retour à l'état serveur */
+                apply(item, !checked, '', '');
+                delete pending[key];
+                refresh();
+                return;
+            }
+            apply(item, j.checked, j.by || who.who, j.at);
+            delete pending[key];
+        }).catch(function () {
+            delete pending[key];
+            refresh();
+        });
+    }
+
+    Array.prototype.forEach.call(document.querySelectorAll('.shop-item'), function (item) {
+        item.addEventListener('click', function () { toggle(item); });
         item.addEventListener('keydown', function (e) {
             if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault();
-                toggle();
+                toggle(item);
             }
         });
     });
+
+    /* Synchronisation : toutes les 5 s, l'état partagé écrase l'affichage
+       (sauf coches locales en cours d'envoi). Cocher ici se voit partout. */
+    function refresh() {
+        fetch(STATE_URL, { credentials: 'same-origin' })
+            .then(function (r) { return r.json(); })
+            .then(function (j) {
+                if (!j || !j.ok) return;
+                var checks = j.checks || {};
+                Object.keys(items).forEach(function (key) {
+                    if (pending[key]) return;
+                    var c = checks[key];
+                    apply(items[key], !!c, c ? c.by : '', c ? c.at : '');
+                });
+            })
+            .catch(function () { /* offline : on retentera */ });
+    }
+    setInterval(refresh, 5000);
+    refresh();
 })();
 </script>
