@@ -320,6 +320,9 @@ function aeic_register_routes(Router $router): void
     // Récap du jour (lecture seule) : page + données JSON pour l'auto-refresh.
     $router->get('/kiosque/comptage/jour/{token}', [KioskComptageController::class, 'jour']);
     $router->get('/kiosque/comptage/jour/data/{token}', [KioskComptageController::class, 'jourData']);
+    // Récap du jour version membres (CA + produits vendus, sans bénéfice).
+    $router->get('/kiosque/comptage/jour-membre/{token}', [KioskComptageController::class, 'jourMembre']);
+    $router->get('/kiosque/comptage/jour-membre/data/{token}', [KioskComptageController::class, 'jourMembreData']);
 
     // Suivi avancé : dépenses, budgets, achats, inventaire, pertes, événements, rapport annuel.
     $router->get('/admin/compta/depenses', [AdminExpenseController::class, 'index']);
