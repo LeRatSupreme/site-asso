@@ -123,12 +123,13 @@ $isSemaine = $mode === 'semaine';
     </div>
 
     <div class="kx-pair">
+        <?php $mPct = (float) $stats['ca'] > 0 ? round((float) $stats['profit'] / (float) $stats['ca'] * 100, 1) : 0.0; ?>
         <div class="kx-card">
             <p class="kx-card-label">Bénéfice</p>
             <div class="kx-card-value <?= (float) $stats['profit'] >= 0 ? 'is-profit' : 'is-loss' ?>">
                 <?= e(formatPrice((float) $stats['profit'])) ?>
             </div>
-            <p class="kx-card-sub">perso exclus</p>
+            <p class="kx-card-sub">Marge : <?= e(number_format($mPct, 1, ',', ' ')) ?> % · perso exclus</p>
         </div>
         <div class="kx-card">
             <p class="kx-card-label">Produits vendus</p>
