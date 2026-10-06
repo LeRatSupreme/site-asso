@@ -109,30 +109,6 @@ declare(strict_types=1);
         <span class="kiosk-emoji">🗓️</span>
         <span class="kiosk-tile-title">Mois</span>
     </a>
-    <a href="<?= e(url('/admin/analytics')) ?>">
-        <span class="kiosk-emoji">📈</span>
-        <span class="kiosk-tile-title">Analytics</span>
-        <span class="kiosk-tile-sub kah-ext">↗ connexion admin</span>
-    </a>
-    <a href="<?= e(url('/admin/compta')) ?>">
-        <span class="kiosk-emoji">🧮</span>
-        <span class="kiosk-tile-title">Dashboard</span>
-        <span class="kiosk-tile-sub kah-ext">↗ connexion admin</span>
-    </a>
-    <a href="<?= e(url('/admin/compta/ventes')) ?>">
-        <span class="kiosk-emoji">📜</span>
-        <span class="kiosk-tile-title">Journal</span>
-        <span class="kiosk-tile-sub kah-ext">↗ connexion admin</span>
-    </a>
-    <a href="<?= e(url('/admin/compta/annuel')) ?>">
-        <span class="kiosk-emoji">📅</span>
-        <span class="kiosk-tile-title">Bilan</span>
-        <span class="kiosk-tile-sub kah-ext">↗ connexion admin</span>
-    </a>
-    <a href="<?= e(\App\Core\Compta\Kiosk::url('/kiosque/reappro/')) ?>">
-        <span class="kiosk-emoji">📈</span>
-        <span class="kiosk-tile-title">Réappro</span>
-    </a>
 </div>
 
 <p class="kah-foot">
