@@ -59,8 +59,16 @@ declare(strict_types=1);
         font-size: 0.78rem; color: var(--muted, #8892a6);
     }
     .kah-foot a { color: var(--primary, #48bdd3); }
+    /* Téléphone : le bandeau reste en 2 colonnes (3e carte centrée). */
     @media (max-width: 480px) {
-        .kah-strip { grid-template-columns: 1fr; }
+        .kah-strip { gap: 0.7rem; }
+        .kah-strip-card { padding: 0.9rem 0.4rem; }
+        .kah-strip-card .kah-ca { font-size: 1.1rem; }
+        .kah-strip-card:nth-child(3) {
+            grid-column: 1 / -1;
+            justify-self: center;
+            width: calc(50% - 0.35rem);
+        }
     }
 </style>
 
