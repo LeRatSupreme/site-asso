@@ -335,6 +335,125 @@ final class PurchaseTest extends TestCase
         self::assertSame(20.40, Purchase::totalBetween('2026-09-01', '2026-09-30'));
     }
 
+    /**
+     * statsBetween : lignes, quantités (hors « hors stock »), HT/TTC/TVA
+     * sur une plage. Régression : l'alias SQL « AS lines » est refusé par
+     * MariaDB (mot réservé de LOAD DATA … LINES) — l'erreur 1064 était
+     * avalée par le catch et toutes les statistiques s'affichaient à zéro.
+     */
+    public function test_stats_between_compte_lignes_quantites_et_montants(): void
+    {
+        // Achat HT + TVA 20 % : 25,20 € HT / 30,24 € TTC, entre en stock.
+        Purchase::create([
+            'purchased_at' => '2026-09-10',
+            'product_key'  => 'Coca 33cl',
+            'quantity'     => 24,
+            'total_ht'     => 25.20,
+            'vat_rate'     => 20.0,
+        ]);
+        // Achat TTC (TTC exact fourni, HT dérivé) : 26,535 € TTC / 25,152 € HT.
+        Purchase::create([
+            'purchased_at' => '2026-09-11',
+            'product_key'  => 'Bueno',
+            'quantity'     => 24,
+            'total_ht'     => 25.152,
+            'total_ttc'    => 26.535,
+            'vat_rate'     => 5.5,
+        ]);
+        // Achat « hors stock » : compté dans les montants, pas dans la quantité.
+        Purchase::create([
+            'purchased_at' => '2026-09-12',
+            'product_key'  => 'MMS',
+            'quantity'     => 36,
+            'total_ht'     => 20.96,
+            'vat_rate'     => 5.5,
+            'no_stock'     => true,
+        ]);
+        // Ligne historique (total_ht NULL) : comptée en TTC.
+        $this->pdo->exec(
+            "INSERT INTO purchases (id, purchased_at, product_key, quantity, unit_cost, total_ttc, total_ht, created_at)
+             VALUES ('purchase_hist', '2026-09-13', 'Fanta', 4, 2.000, 8.00, NULL, NOW())"
+        );
+        // Hors période : ignoré.
+        Purchase::create([
+            'purchased_at' => '2026-08-01',
+            'product_key'  => 'Café',
+            'quantity'     => 1,
+            'total_ht'     => 50.00,
+            'vat_rate'     => 20.0,
+        ]);
+
+        $stats = Purchase::statsBetween('2026-09-01', '2026-09-30');
+
+        self::assertSame(4, $stats['lines'], 'Quatre lignes sur la période (l’alias « lines » doit être accepté).');
+        self::assertSame(28, $stats['qty'], 'Quantité entrée en stock : 24 + 4, le hors stock (36) exclu.');
+        self::assertEqualsWithDelta(79.312, $stats['ht'], 0.001, '25,20 + 25,152 + 20,96 + 8 (historique en TTC).');
+        self::assertEqualsWithDelta(86.888, $stats['ttc'], 0.001, '30,24 + 26,535 + 22,113 (MMS TTC) + 8.');
+        self::assertEqualsWithDelta(7.576, $stats['vat'], 0.001, 'TVA = TTC − HT.');
+
+        // Plage vide : zéros explicites (jamais d’exception avalée).
+        $empty = Purchase::statsBetween('2027-01-01', '2027-01-31');
+        self::assertSame(0, $empty['lines']);
+        self::assertSame(0, $empty['qty']);
+        self::assertSame(0.0, $empty['ttc']);
+    }
+
+    /**
+     * vatByRateBetween : décomposition HT/TVA/TTC par taux, lignes sans
+     * décomposition (vat_rate NULL) groupées à part en fin de liste.
+     * Même classe de régression que statsBetween (alias « lines »).
+     */
+    public function test_vat_by_rate_groupe_par_taux(): void
+    {
+        Purchase::create([
+            'purchased_at' => '2026-09-10',
+            'product_key'  => 'Coca 33cl',
+            'quantity'     => 24,
+            'total_ht'     => 25.20,
+            'vat_rate'     => 20.0,
+        ]);
+        Purchase::create([
+            'purchased_at' => '2026-09-11',
+            'product_key'  => 'Bonbon',
+            'quantity'     => 10,
+            'total_ht'     => 15.50,
+            'vat_rate'     => 5.5,
+        ]);
+        $this->pdo->exec(
+            "INSERT INTO purchases (id, purchased_at, product_key, quantity, unit_cost, total_ttc, total_ht, created_at)
+             VALUES ('purchase_hist', '2026-09-12', 'Fanta', 4, 2.000, 8.00, NULL, NOW())"
+        );
+
+        $rows = Purchase::vatByRateBetween('2026-09-01', '2026-09-30');
+
+        self::assertCount(3, $rows, 'Trois groupes : 20 %, 5,5 %, puis « déjà TTC ».');
+
+        self::assertSame(20.0, $rows[0]['rate']);
+        self::assertSame(1, $rows[0]['lines']);
+        self::assertEqualsWithDelta(25.20, $rows[0]['ht'], 0.001);
+        self::assertEqualsWithDelta(30.24, $rows[0]['ttc'], 0.001);
+
+        self::assertSame(5.5, $rows[1]['rate']);
+        self::assertSame(1, $rows[1]['lines']);
+
+        self::assertNull($rows[2]['rate'], 'Les lignes sans décomposition sont groupées à part.');
+        self::assertSame(1, $rows[2]['lines']);
+        self::assertEqualsWithDelta(8.00, $rows[2]['ttc'], 0.001);
+    }
+
+    /**
+     * caBetween : le CA de ventes d'une plage de jours (bornes incluses),
+     * utilisé par le « réalisé » des budgets.
+     */
+    public function test_stats_between_et_ca_between_bornes_incluses(): void
+    {
+        $stats = Purchase::statsBetween('2026-09-10', '2026-09-11');
+        self::assertSame(0, $stats['lines'], 'Base vide au départ : pas d’exception, zéros.');
+
+        $ca = \App\Models\Sale::caBetween('2026-09-10', '2026-09-11');
+        self::assertSame(0.0, $ca, 'Aucune vente : CA nul (méthode robuste sur table vide).');
+    }
+
     private function fetchPurchase(string $id): array
     {
         $stmt = $this->pdo->prepare('SELECT * FROM purchases WHERE id = ?');
