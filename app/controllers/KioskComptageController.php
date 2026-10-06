@@ -185,7 +185,7 @@ final class KioskComptageController extends Controller
         $agg = Sale::aggregatesBetween($today, $today);
         $topQty = array_map(
             static fn (array $t): array => ['label' => (string) $t['label'], 'qty' => (int) $t['qty']],
-            Sale::topProductsBetween($today, $today, 5)
+            Sale::topProductsBetween($today, $today, 10)
         );
 
         return [

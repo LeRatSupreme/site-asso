@@ -5,7 +5,7 @@ declare(strict_types=1);
 /**
  * Kiosque — ventes du jour, version MEMBRES : uniquement le CA et les
  * produits vendus (quantités). Ni bénéfice, ni paiements, ni CA/produit.
- * Lecture seule, auto-actualisée toutes les 60 s.
+ * Lecture seule, auto-actualisée toutes les 60 s (pas de bouton).
  *
  * @var string $token
  * @var array<string,mixed> $stats ca, qty, top (label, qty), computed_at, date
@@ -16,34 +16,78 @@ $dt = new DateTimeImmutable('today', new DateTimeZone('Europe/Paris'));
 $dateLabel = $jours[(int) $dt->format('N') - 1] . ' ' . $dt->format('j') . ' ' . $mois[(int) $dt->format('n') - 1] . ' ' . $dt->format('Y');
 ?>
 <style>
-    .kday-grid {
-        display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 0.8rem; max-width: 40rem; margin: 0 auto 1rem;
+    .km-wrap { max-width: 46rem; margin: 0 auto; }
+
+    .km-hero {
+        text-align: center;
+        padding: 2.2rem 1.4rem 2rem;
+        background: linear-gradient(160deg, rgba(72, 189, 211, 0.14), rgba(97, 80, 170, 0.08));
+        border: 1px solid rgba(72, 189, 211, 0.28);
+        border-radius: 24px;
+        margin-bottom: 1rem;
     }
-    .kday-card {
-        padding: 1.1rem 1rem; text-align: center;
+    .km-hero-label {
+        font-size: 0.85rem; font-weight: 800; text-transform: uppercase;
+        letter-spacing: 0.08em; color: var(--muted, #8892a6); margin: 0 0 0.6rem;
+    }
+    .km-hero-value {
+        font-size: clamp(3rem, 10vw, 4.2rem); font-weight: 900; line-height: 1;
+        color: var(--primary, #48bdd3); letter-spacing: -0.02em;
+    }
+    .km-hero-sub { margin: 0.8rem 0 0; font-size: 1rem; color: var(--muted, #8892a6); }
+    .km-hero-sub strong { color: var(--foreground, inherit); font-size: 1.15rem; }
+
+    .km-row {
+        display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.9rem; margin-bottom: 1rem;
+    }
+    .km-card {
+        padding: 1.2rem 1.1rem; text-align: center;
         background: rgba(255, 255, 255, 0.035);
         border: 1px solid rgba(255, 255, 255, 0.07);
-        border-radius: 18px;
+        border-radius: 20px;
     }
-    .kday-card.is-wide { grid-column: 1 / -1; }
-    .kday-label {
+    .km-card-label {
         font-size: 0.78rem; font-weight: 800; text-transform: uppercase;
-        letter-spacing: 0.06em; color: var(--muted, #8892a6); margin: 0 0 0.35rem;
+        letter-spacing: 0.07em; color: var(--muted, #8892a6); margin: 0 0 0.45rem;
     }
-    .kday-value { font-size: 2rem; font-weight: 900; line-height: 1.05; }
-    .kday-value.is-ca { color: var(--primary, #48bdd3); }
-    .kday-top { list-style: none; margin: 0; padding: 0; text-align: left; }
-    .kday-top li {
-        display: flex; justify-content: space-between; gap: 0.6rem;
-        padding: 0.4rem 0.15rem; border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-        font-size: 0.9rem;
+    .km-card-value { font-size: 2.1rem; font-weight: 900; line-height: 1; }
+
+    .km-top-card {
+        padding: 1.3rem 1.3rem 1rem;
+        background: rgba(255, 255, 255, 0.035);
+        border: 1px solid rgba(255, 255, 255, 0.07);
+        border-radius: 20px;
+        margin-bottom: 1rem;
     }
-    .kday-top li:last-child { border-bottom: none; }
-    .kday-top .kday-top-qty { font-weight: 900; color: var(--primary, #48bdd3); white-space: nowrap; }
+    .km-top-title {
+        display: flex; align-items: center; gap: 0.5rem;
+        font-size: 0.82rem; font-weight: 800; text-transform: uppercase;
+        letter-spacing: 0.07em; color: var(--muted, #8892a6); margin: 0 0 0.7rem;
+    }
+    .km-top { list-style: none; margin: 0; padding: 0; }
+    .km-top li {
+        display: flex; align-items: center; gap: 0.75rem;
+        padding: 0.65rem 0.2rem; border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        font-size: 1rem;
+    }
+    .km-top li:last-child { border-bottom: none; }
+    .km-rank {
+        flex-shrink: 0; width: 30px; height: 30px; border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 0.8rem; font-weight: 900;
+        background: rgba(72, 189, 211, 0.12); color: var(--primary, #48bdd3);
+    }
+    .km-top li:first-child .km-rank { background: rgba(72, 189, 211, 0.28); }
+    .km-top-name {
+        flex: 1; min-width: 0; font-weight: 700;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .km-top-qty { font-weight: 900; color: var(--primary, #48bdd3); white-space: nowrap; }
+
     .kday-meta {
         text-align: center; font-size: 0.78rem; color: var(--muted, #8892a6);
-        margin: 0.4rem 0 1rem;
+        margin: 0.2rem 0 1rem;
     }
     .kday-live {
         display: inline-block; width: 9px; height: 9px; border-radius: 50%;
@@ -55,10 +99,6 @@ $dateLabel = $jours[(int) $dt->format('N') - 1] . ' ' . $dt->format('j') . ' ' .
         max-width: 40rem; margin: 0 auto;
         display: flex; gap: 0.5rem; flex-wrap: wrap; justify-content: center;
     }
-    @media (max-width: 480px) {
-        .kday-grid { grid-template-columns: 1fr; }
-        .kday-value { font-size: 2.4rem; }
-    }
 </style>
 
 <div class="compta-head">
@@ -69,22 +109,21 @@ $dateLabel = $jours[(int) $dt->format('N') - 1] . ' ' . $dt->format('j') . ' ' .
     </div>
 </div>
 
-<div class="kday-grid">
-    <div class="kday-card is-wide">
-        <p class="kday-label">Ventes du jour (TTC)</p>
-        <div class="kday-value is-ca" id="kmCa"><?= e(formatPrice((float) $stats['ca'])) ?></div>
+<div class="km-wrap">
+    <div class="km-hero">
+        <p class="km-hero-label">Ventes du jour (TTC)</p>
+        <div class="km-hero-value" id="kmCa"><?= e(formatPrice((float) $stats['ca'])) ?></div>
+        <p class="km-hero-sub"><strong id="kmQty"><?= (int) $stats['qty'] ?></strong> produits vendus aujourd'hui</p>
     </div>
-    <div class="kday-card is-wide">
-        <p class="kday-label">Produits vendus</p>
-        <div class="kday-value" id="kmQty"><?= (int) $stats['qty'] ?></div>
-    </div>
-    <div class="kday-card is-wide">
-        <p class="kday-label">Top produits du jour</p>
-        <ul class="kday-top" id="kmTop">
-            <?php foreach ($stats['top'] as $t): ?>
+
+    <div class="km-top-card">
+        <p class="km-top-title">🏆 Top produits du jour</p>
+        <ul class="km-top" id="kmTop">
+            <?php foreach ($stats['top'] as $i => $t): ?>
             <li>
-                <span><?= e($t['label']) ?></span>
-                <span class="kday-top-qty">×<?= (int) $t['qty'] ?></span>
+                <span class="km-rank"><?= $i + 1 ?></span>
+                <span class="km-top-name" title="<?= e($t['label']) ?>"><?= e($t['label']) ?></span>
+                <span class="km-top-qty">×<?= (int) $t['qty'] ?></span>
             </li>
             <?php endforeach; ?>
             <?php if ($stats['top'] === []): ?>
@@ -92,13 +131,12 @@ $dateLabel = $jours[(int) $dt->format('N') - 1] . ' ' . $dt->format('j') . ' ' .
             <?php endif; ?>
         </ul>
     </div>
-</div>
 
-<p class="kday-meta"><span class="kday-live"></span>Actualisation auto toutes les 60 s — dernière : <span id="kmAt"><?= e((string) $stats['computed_at']) ?></span></p>
+    <p class="kday-meta"><span class="kday-live"></span>Mise à jour automatique toutes les 60 s — dernière : <span id="kmAt"><?= e((string) $stats['computed_at']) ?></span></p>
 
-<div class="kday-actions">
-    <button type="button" class="btn btn-outline btn-sm" id="kmRefresh">↻ Actualiser</button>
-    <a class="btn btn-ghost btn-sm" href="<?= e(url('/kiosque/comptage/' . rawurlencode($token))) ?>">← Retour au comptage</a>
+    <div class="kday-actions">
+        <a class="btn btn-ghost btn-sm" href="<?= e(url('/kiosque/comptage/' . rawurlencode($token))) ?>">← Retour au comptage</a>
+    </div>
 </div>
 
 <script>
@@ -124,15 +162,25 @@ $dateLabel = $jours[(int) $dt->format('N') - 1] . ' ' . $dt->format('j') . ' ' .
                 li.textContent = 'Aucune vente pour le moment.';
                 top.appendChild(li);
             } else {
-                j.top.forEach(function (t) {
+                j.top.forEach(function (t, i) {
                     var li = document.createElement('li');
-                    var left = document.createElement('span');
-                    left.textContent = t.label;
-                    var right = document.createElement('span');
-                    right.className = 'kday-top-qty';
-                    right.textContent = '×' + t.qty;
-                    li.appendChild(left);
-                    li.appendChild(right);
+
+                    var rank = document.createElement('span');
+                    rank.className = 'km-rank';
+                    rank.textContent = String(i + 1);
+
+                    var name = document.createElement('span');
+                    name.className = 'km-top-name';
+                    name.textContent = t.label;
+                    name.title = t.label;
+
+                    var qty = document.createElement('span');
+                    qty.className = 'km-top-qty';
+                    qty.textContent = '×' + t.qty;
+
+                    li.appendChild(rank);
+                    li.appendChild(name);
+                    li.appendChild(qty);
                     top.appendChild(li);
                 });
             }
@@ -146,7 +194,6 @@ $dateLabel = $jours[(int) $dt->format('N') - 1] . ' ' . $dt->format('j') . ' ' .
             .catch(function () { /* offline : on retentera */ });
     }
 
-    document.getElementById('kmRefresh').addEventListener('click', refresh);
     setInterval(refresh, 60000);
 })();
 </script>
