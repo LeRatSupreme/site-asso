@@ -10,6 +10,7 @@ declare(strict_types=1);
  * @var array{ca:float,profit:float} $jour
  * @var array{ca:float,profit:float} $semaine
  * @var array{ca:float,profit:float} $mois
+ * @var array{caisse:string,inventaire:string,liste:string,reappro:string} $membreUrls
  */
 ?>
 <style>
@@ -108,20 +109,42 @@ declare(strict_types=1);
         </div>
     </div>
 
-    <div class="kah-grid">
-        <a href="<?= e(url('/kiosque/comptage/jour/' . rawurlencode($token))) ?>">
-            <span class="kiosk-emoji">📊</span>
-            <span class="kiosk-tile-title">Récap du jour</span>
-        </a>
-        <a href="<?= e(url('/kiosque/admin/semaine/' . rawurlencode($token))) ?>">
-            <span class="kiosk-emoji">📅</span>
-            <span class="kiosk-tile-title">7 jours</span>
-        </a>
-        <a href="<?= e(url('/kiosque/admin/mois/' . rawurlencode($token))) ?>">
-            <span class="kiosk-emoji">🗓️</span>
-            <span class="kiosk-tile-title">Mois</span>
-        </a>
-    </div>
+<div class="kah-grid">
+    <a href="<?= e(url('/kiosque/comptage/jour/' . rawurlencode($token))) ?>">
+        <span class="kiosk-emoji">📊</span>
+        <span class="kiosk-tile-title">Récap du jour</span>
+    </a>
+    <a href="<?= e(url('/kiosque/admin/semaine/' . rawurlencode($token))) ?>">
+        <span class="kiosk-emoji">📅</span>
+        <span class="kiosk-tile-title">7 jours</span>
+    </a>
+    <a href="<?= e(url('/kiosque/admin/mois/' . rawurlencode($token))) ?>">
+        <span class="kiosk-emoji">🗓️</span>
+        <span class="kiosk-tile-title">Mois</span>
+    </a>
+    <a href="<?= e($membreUrls['liste']) ?>">
+        <span class="kiosk-emoji">🛒</span>
+        <span class="kiosk-tile-title">Liste de courses</span>
+    </a>
+    <a href="<?= e($membreUrls['caisse']) ?>">
+        <span class="kiosk-emoji">💵</span>
+        <span class="kiosk-tile-title">Comptage caisse</span>
+    </a>
+    <a href="<?= e($membreUrls['inventaire']) ?>">
+        <span class="kiosk-emoji">📦</span>
+        <span class="kiosk-tile-title">Comptage inventaire</span>
+    </a>
+    <a href="<?= e($membreUrls['reappro']) ?>">
+        <span class="kiosk-emoji">📈</span>
+        <span class="kiosk-tile-title">Réappro</span>
+    </a>
+</div>
+
+<p class="kah-foot">
+    Outils en bas de grille : accès direct aux pages kiosque membres.<br>
+    Analytics, journal des ventes et dashboard complet : depuis
+    <a href="<?= e(url('/admin/compta')) ?>">l'espace admin</a> (connexion requise).
+</p>
 
     <p class="kah-foot">
         Analytics, journal des ventes et dashboard complet : depuis

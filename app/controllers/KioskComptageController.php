@@ -150,6 +150,13 @@ final class KioskComptageController extends Controller
             'jour'    => ['ca' => round($aggToday['ca'], 2), 'profit' => round($aggToday['profit'], 2)],
             'semaine' => ['ca' => round($aggWeek['ca'], 2), 'profit' => round($aggWeek['profit'], 2)],
             'mois'    => ['ca' => round($aggMonth['ca'], 2), 'profit' => round($aggMonth['profit'], 2)],
+            // Outils kiosque membres (utiles aussi à l'admin) : jeton membres.
+            'membreUrls' => [
+                'caisse'     => \App\Core\Compta\Kiosk::url('/kiosque/comptage/caisse/'),
+                'inventaire' => \App\Core\Compta\Kiosk::url('/kiosque/comptage/inventaire/'),
+                'liste'      => \App\Core\Compta\Kiosk::url('/kiosque/liste/'),
+                'reappro'    => \App\Core\Compta\Kiosk::url('/kiosque/reappro/'),
+            ],
         ]);
     }
 
