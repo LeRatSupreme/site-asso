@@ -16,13 +16,6 @@ $tabs = [
     'semaine' => ['📅', '7 jours', url('/kiosque/admin/semaine/' . rawurlencode($token))],
     'mois'    => ['🗓️', 'Mois', url('/kiosque/admin/mois/' . rawurlencode($token))],
 ];
-$extTabs = [
-    ['📈', 'Analytics', url('/admin/analytics')],
-    ['🧮', 'Dashboard', url('/admin/compta')],
-    ['📜', 'Journal', url('/admin/compta/ventes')],
-    ['📅', 'Bilan', url('/admin/compta/annuel')],
-    ['📈', 'Réappro', \App\Core\Compta\Kiosk::url('/kiosque/reappro/')],
-];
 ?>
 <style>
     .katab {
@@ -58,9 +51,5 @@ $extTabs = [
 <nav class="katab" aria-label="Kiosque admin">
     <?php foreach ($tabs as $key => [$emoji, $label, $urlTab]): ?>
     <a href="<?= e($urlTab) ?>" class="<?= $active === $key ? 'is-active' : '' ?>"><?= $emoji ?> <?= e($label) ?></a>
-    <?php endforeach; ?>
-    <span class="katab-sep" aria-hidden="true"></span>
-    <?php foreach ($extTabs as [$emoji, $label, $urlTab]): ?>
-    <a href="<?= e($urlTab) ?>" class="is-ext" title="Connexion admin requise"><?= $emoji ?> <?= e($label) ?> ↗</a>
     <?php endforeach; ?>
 </nav>
