@@ -89,7 +89,14 @@ $retourUrl = url('/kiosque/admin/' . rawurlencode($token));
     }
     @media (max-width: 480px) {
         .kp-hero { grid-template-columns: 1fr; }
-        .kp-day-profit { display: none; }
+        .kp-value { font-size: 2.5rem; }
+        /* Sur téléphone : le détail journalier passe sur 2 lignes et
+           garde TOUTES les infos (qté, CA, bénéfice). */
+        .kp-days li { flex-wrap: wrap; row-gap: 0.15rem; padding: 0.6rem 0.15rem; }
+        .kp-day-label { flex: 1 1 100%; padding-right: 0.3rem; }
+        .kp-day-qty { flex: 0 0 30%; text-align: left; }
+        .kp-day-ca { flex: 0 0 40%; text-align: right; }
+        .kp-day-profit { display: block; flex: 1 1 30%; text-align: right; }
     }
 </style>
 
