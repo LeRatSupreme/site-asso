@@ -81,7 +81,7 @@ foreach ($rows as $r) {
 <?php if ($kiosk && ($kioskHubUrl ?? '') !== ''): ?>
 <style>
     .kr-back {
-        position: fixed; top: 12px; right: 12px; z-index: 60;
+        position: fixed; top: 12px; left: 12px; z-index: 60;
         display: inline-flex; align-items: center; gap: 0.35rem;
         padding: 0.55rem 0.95rem; border-radius: 999px;
         border: 2px solid var(--primary, #48bdd3);
