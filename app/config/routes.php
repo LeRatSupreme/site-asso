@@ -317,12 +317,17 @@ function aeic_register_routes(Router $router): void
     $router->post('/kiosque/comptage/inventaire/save/{token}', [KioskComptageController::class, 'inventaireSave']);
     // Pause / reprise d'un produit depuis le kiosque (JSON, sans rechargement).
     $router->post('/kiosque/comptage/inventaire/pause/{token}', [KioskComptageController::class, 'inventairePause']);
-    // Récap du jour (lecture seule) : page + données JSON pour l'auto-refresh.
+    // Récap du jour (lecture seule, JETON ADMIN) : page + données JSON.
     $router->get('/kiosque/comptage/jour/{token}', [KioskComptageController::class, 'jour']);
     $router->get('/kiosque/comptage/jour/data/{token}', [KioskComptageController::class, 'jourData']);
     // Récap du jour version membres (CA + produits vendus, sans bénéfice).
     $router->get('/kiosque/comptage/jour-membre/{token}', [KioskComptageController::class, 'jourMembre']);
     $router->get('/kiosque/comptage/jour-membre/data/{token}', [KioskComptageController::class, 'jourMembreData']);
+    // Partie ADMIN du kiosque (JETON ADMIN dédié, détachée des membres) :
+    // hub de tuiles + récaps semaine et mois.
+    $router->get('/kiosque/admin/{token}', [KioskComptageController::class, 'adminHub']);
+    $router->get('/kiosque/admin/semaine/{token}', [KioskComptageController::class, 'semaine']);
+    $router->get('/kiosque/admin/mois/{token}', [KioskComptageController::class, 'mois']);
 
     // Suivi avancé : dépenses, budgets, achats, inventaire, pertes, événements, rapport annuel.
     $router->get('/admin/compta/depenses', [AdminExpenseController::class, 'index']);

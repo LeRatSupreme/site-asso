@@ -64,10 +64,18 @@ declare(strict_types=1);
         La régénération du lien <strong>révoque tous les liens d'un coup</strong>.
     </p>
     <form method="post" action="<?= e(url('/admin/kiosques/regenerate')) ?>"
-          data-confirm="Régénérer le lien kiosque ? TOUS les liens déjà partagés (membres et admins) cesseront de fonctionner — il faudra redistribuer les nouveaux."
-          data-confirm-button="Régénérer">
+          data-confirm="Régénérer le lien MEMBRES ? Tous les liens membres déjà partagés (hub, comptages, liste, ventes du jour) cesseront de fonctionner."
+          data-confirm-button="Régénérer membres">
         <?= csrf_field() ?>
-        <button type="submit" class="btn btn-outline btn-sm">🔄 Régénérer le lien (révoquer tout)</button>
+        <input type="hidden" name="scope" value="membres">
+        <button type="submit" class="btn btn-outline btn-sm">👥 Régénérer le lien membres</button>
+    </form>
+    <form method="post" action="<?= e(url('/admin/kiosques/regenerate')) ?>" style="margin-top: 0.5rem;"
+          data-confirm="Régénérer le lien ADMIN ? Tous les liens financiers déjà copiés (hub admin, récaps) cesseront de fonctionner."
+          data-confirm-button="Régénérer admins">
+        <?= csrf_field() ?>
+        <input type="hidden" name="scope" value="admins">
+        <button type="submit" class="btn btn-outline btn-sm">🔐 Régénérer le lien admins</button>
     </form>
 </div>
 
@@ -98,10 +106,11 @@ declare(strict_types=1);
     <p class="kq-section-sub">Données financières complètes. Les pages /admin demandent la connexion admin (mémorisée sur ton téléphone) ; les liens kiosque marchent sans connexion.</p>
 
     <?php foreach ($adminPages as $p): ?>
-    <div class="kq-card is-admin">
+    <div class="kq-card is-admin<?= !empty($p['main']) ? ' is-main' : '' ?>">
         <div class="kq-head">
             <span class="kq-emoji"><?= $p['emoji'] ?></span>
             <span class="kq-label"><?= e($p['label']) ?></span>
+            <?php if (!empty($p['main'])): ?><span class="kq-badge">à garder sous la main</span><?php endif; ?>
             <?php if (empty($p['kiosk'])): ?><span class="kq-badge" style="color:#a78bfa;background:rgba(97,80,170,0.16)">connexion requise</span><?php endif; ?>
         </div>
         <p class="kq-desc"><?= e($p['desc']) ?></p>

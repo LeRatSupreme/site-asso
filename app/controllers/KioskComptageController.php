@@ -33,6 +33,19 @@ final class KioskComptageController extends Controller
         return $expected !== '' && $given !== '' && hash_equals($expected, $given);
     }
 
+    /**
+     * Jeton ADMIN (données financières complètes) — totalement indépendant
+     * du jeton membres : la partie admin du kiosque est détachée et
+     * révocable séparément.
+     */
+    private function adminTokenOk(string $token): bool
+    {
+        $expected = trim((string) Setting::get('admin_kiosk_token', ''));
+        $given    = trim($token);
+
+        return $expected !== '' && $given !== '' && hash_equals($expected, $given);
+    }
+
     private function deny(): void
     {
         http_response_code(403);
@@ -76,14 +89,15 @@ final class KioskComptageController extends Controller
     }
 
     /**
-     * Récap du jour (kiosque, lecture seule) : CA, bénéfice, ventes de la
-     * journée en cours (heure de Paris) — mêmes calculs que le dashboard
+     * Récap du jour (partie ADMIN, lecture seule) : CA, bénéfice, ventes de
+     * la journée en cours (heure de Paris) — mêmes calculs que le dashboard
      * analytics (montants personnalisés inclus dans le CA, exclus du
      * bénéfice). Auto-actualisé par la vue via jourData().
+     * Accès par le JETON ADMIN (partie détachée des membres).
      */
     public function jour(string $token): void
     {
-        if (!$this->tokenOk($token)) {
+        if (!$this->adminTokenOk($token)) {
             $this->deny();
 
             return;
@@ -101,7 +115,7 @@ final class KioskComptageController extends Controller
     public function jourData(string $token): void
     {
         header('Content-Type: application/json; charset=utf-8');
-        if (!$this->tokenOk($token)) {
+        if (!$this->adminTokenOk($token)) {
             http_response_code(403);
             echo '{"ok":false}';
 
@@ -109,6 +123,134 @@ final class KioskComptageController extends Controller
         }
 
         echo json_encode(['ok' => true] + $this->jourStats());
+    }
+
+    /**
+     * HUB ADMIN kiosque : menu de tuiles avec données financières
+     * complètes — totalement détaché du hub membres (jeton dédié).
+     */
+    public function adminHub(string $token): void
+    {
+        if (!$this->adminTokenOk($token)) {
+            $this->deny();
+
+            return;
+        }
+
+        $today = (new \DateTimeImmutable('today', new \DateTimeZone('Europe/Paris')))->format('Y-m-d');
+        $aggToday = Sale::aggregatesBetween($today, $today);
+        $weekStart = (new \DateTimeImmutable('6 days ago', new \DateTimeZone('Europe/Paris')))->format('Y-m-d');
+        $aggWeek = Sale::aggregatesBetween($weekStart, $today);
+        $monthStart = (new \DateTimeImmutable('first day of this month', new \DateTimeZone('Europe/Paris')))->format('Y-m-d');
+        $aggMonth = Sale::aggregatesBetween($monthStart, $today);
+
+        $this->renderKiosk('admin/compta/kiosk-admin-hub', [
+            'title'   => 'Kiosque admin',
+            'token'   => $token,
+            'jour'    => ['ca' => round($aggToday['ca'], 2), 'profit' => round($aggToday['profit'], 2)],
+            'semaine' => ['ca' => round($aggWeek['ca'], 2), 'profit' => round($aggWeek['profit'], 2)],
+            'mois'    => ['ca' => round($aggMonth['ca'], 2), 'profit' => round($aggMonth['profit'], 2)],
+        ]);
+    }
+
+    /**
+     * Récap des 7 DERNIERS JOURS (admin) : total, détail jour par jour,
+     * paiements, top produits.
+     */
+    public function semaine(string $token): void
+    {
+        if (!$this->adminTokenOk($token)) {
+            $this->deny();
+
+            return;
+        }
+
+        $to = new \DateTimeImmutable('today', new \DateTimeZone('Europe/Paris'));
+        $from = $to->modify('-6 days');
+        $this->renderKiosk('admin/compta/kiosk-admin-periode', [
+            'title'      => '7 derniers jours',
+            'token'      => $token,
+            'mode'       => 'semaine',
+            'stats'      => $this->periodeStats($from->format('Y-m-d'), $to->format('Y-m-d'), true),
+            'rangeLabel' => 'du ' . $from->format('d/m') . ' au ' . $to->format('d/m'),
+        ]);
+    }
+
+    /**
+     * Récap du MOIS EN COURS (admin) : total, comparaison mois précédent,
+     * paiements, top produits.
+     */
+    public function mois(string $token): void
+    {
+        if (!$this->adminTokenOk($token)) {
+            $this->deny();
+
+            return;
+        }
+
+        $paris = new \DateTimeZone('Europe/Paris');
+        $from = new \DateTimeImmutable('first day of this month', $paris);
+        $to = new \DateTimeImmutable('today', $paris);
+        $prevFrom = $from->modify('-1 month');
+        $prevTo = $from->modify('-1 day');
+        $prev = Sale::aggregatesBetween($prevFrom->format('Y-m-d'), $prevTo->format('Y-m-d'));
+
+        $stats = $this->periodeStats($from->format('Y-m-d'), $to->format('Y-m-d'), false);
+        $stats['prev_ca'] = round($prev['ca'], 2);
+        $stats['prev_label'] = $prevFrom->format('m/Y');
+
+        $this->renderKiosk('admin/compta/kiosk-admin-periode', [
+            'title'      => 'Mois en cours',
+            'token'      => $token,
+            'mode'       => 'mois',
+            'stats'      => $stats,
+            'rangeLabel' => 'du ' . $from->format('d/m') . ' au ' . $to->format('d/m'),
+        ]);
+    }
+
+    /**
+     * Agrégats d'une période (bornes incluses) avec option détail
+     * jour par jour.
+     *
+     * @return array<string,mixed>
+     */
+    private function periodeStats(string $from, string $to, bool $perDay): array
+    {
+        $agg = Sale::aggregatesBetween($from, $to);
+        $split = Sale::paymentSplitBetween($from, $to);
+        $top = Sale::topProductsBetween($from, $to, 10);
+        $tx = Sale::transactionsBetween($from, $to);
+
+        $days = [];
+        if ($perDay) {
+            $start = new \DateTimeImmutable($from);
+            $end = new \DateTimeImmutable($to);
+            $jours = ['lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.', 'dim.'];
+            for ($cur = $start; $cur <= $end; $cur = $cur->modify('+1 day')) {
+                $day = $cur->format('Y-m-d');
+                $a = Sale::aggregatesBetween($day, $day);
+                $days[] = [
+                    'label'  => $jours[(int) $cur->format('N') - 1] . ' ' . $cur->format('d/m'),
+                    'ca'     => round($a['ca'], 2),
+                    'profit' => round($a['profit'], 2),
+                    'qty'    => $a['qty'],
+                ];
+            }
+        }
+
+        return [
+            'from'         => $from,
+            'to'           => $to,
+            'ca'           => round($agg['ca'], 2),
+            'profit'       => round($agg['profit'], 2),
+            'qty'          => $agg['qty'],
+            'transactions' => $tx,
+            'liquide'      => round((float) ($split['LIQUIDE'] ?? 0), 2),
+            'carte'        => round((float) ($split['CARTE'] ?? 0), 2),
+            'top'          => $top,
+            'days'         => $days,
+            'computed_at'  => (new \DateTimeImmutable('now', new \DateTimeZone('Europe/Paris')))->format('H:i:s'),
+        ];
     }
 
     /**
