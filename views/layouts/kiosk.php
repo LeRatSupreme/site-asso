@@ -34,6 +34,42 @@ $siteName = Setting::get('site_name', 'AEIC');
     <link rel="stylesheet" href="<?= e(rootAssetVersioned('/css/compta.css')) ?>">
 </head>
 <body class="admin-body">
+    <?php
+    // Bouton retour flottant : présent sur toutes les pages kiosque SAUF
+    // les hubs eux-mêmes. Le hub de retour dépend du jeton de l'URL
+    // (jeton admin → hub admin, jeton membres → hub membres) : chaque
+    // espace boucle sur lui-même.
+    $krBackUrl = null;
+    $krUri = (string) (parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/');
+    $krAdmin = trim((string) Setting::get('admin_kiosk_token', ''));
+    $krMember = trim((string) Setting::get('reappro_kiosk_token', ''));
+    if (preg_match('#^/kiosque/(comptage/caisse|comptage/inventaire|comptage/jour|comptage/jour-membre|admin/semaine|admin/mois|liste|reappro)/([^/]+)$#', $krUri, $krM)) {
+        $krTok = trim($krM[2]);
+        if ($krAdmin !== '' && hash_equals($krAdmin, $krTok)) {
+            $krBackUrl = url('/kiosque/admin/' . $krTok);
+        } elseif ($krMember !== '' && hash_equals($krMember, $krTok)) {
+            $krBackUrl = url('/kiosque/comptage/' . $krTok);
+        }
+    }
+    ?>
+    <?php if ($krBackUrl !== null): ?>
+    <style>
+        .kr-back {
+            position: fixed; top: 12px; left: 12px; z-index: 60;
+            display: inline-flex; align-items: center; gap: 0.35rem;
+            padding: 0.55rem 0.95rem; border-radius: 999px;
+            border: 2px solid var(--primary, #48bdd3);
+            background: rgba(10, 22, 38, 0.92);
+            color: var(--primary, #48bdd3); font-size: 0.85rem; font-weight: 800;
+            text-decoration: none; user-select: none;
+            backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+        }
+        .kr-back:hover { background: var(--primary, #48bdd3); color: #062033; }
+    </style>
+    <a class="kr-back" href="<?= e($krBackUrl) ?>">← Retour</a>
+    <?php endif; ?>
+
     <!-- Pastille profil : qui est connecté sur ce kiosque (identité stockée
          sur l'appareil, envoyée avec chaque enregistrement pour la trace). -->
     <button type="button" id="kWhoBtn" class="kwho" aria-label="Indiquer qui tu es">?</button>
