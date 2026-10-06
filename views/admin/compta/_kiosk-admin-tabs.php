@@ -30,12 +30,12 @@ $tabs = [
     .katab::-webkit-scrollbar { display: none; }
     .katab a {
         flex-shrink: 0;
-        display: inline-flex; align-items: center; gap: 0.3rem;
-        padding: 0.42rem 0.75rem; border-radius: 999px;
+        display: inline-flex; align-items: center; gap: 0.35rem;
+        padding: 0.55rem 0.95rem; border-radius: 999px;
         border: 1px solid rgba(255, 255, 255, 0.09);
         background: rgba(255, 255, 255, 0.04);
         color: var(--muted, #8892a6);
-        font-size: 0.83rem; font-weight: 800; text-decoration: none;
+        font-size: 0.9rem; font-weight: 800; text-decoration: none;
         white-space: nowrap;
     }
     .katab a:hover { color: var(--foreground, inherit); border-color: var(--primary, #48bdd3); }
