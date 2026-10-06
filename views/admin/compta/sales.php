@@ -101,9 +101,20 @@ foreach ($rows as $r) {
                 <?php
                     $profit = (float) ($r['profit'] ?? 0);
                     $isCustom = !empty($r['is_custom_amount']);
+                    // sold_at est déjà en heure locale du point de vente
+                    // (Paris) : PAS de conversion UTC→Paris ici, sinon +2 h.
+                    $soldAtRaw = trim((string) ($r['sold_at'] ?? ''));
+                    $soldAt = '';
+                    if ($soldAtRaw !== '') {
+                        try {
+                            $soldAt = (new DateTimeImmutable($soldAtRaw))->format('d/m/Y H:i');
+                        } catch (Throwable) {
+                            $soldAt = $soldAtRaw;
+                        }
+                    }
                 ?>
                 <tr class="<?= $isCustom ? 'row-muted' : '' ?>">
-                    <td class="muted"><?= e(formatDateTime($r['sold_at'] ?? null)) ?></td>
+                    <td class="muted"><?= e($soldAt) ?></td>
                     <td>
                         <strong><?= e((string) ($r['description'] ?? '—')) ?></strong>
                         <?php if (!empty($r['product_key']) && $r['product_key'] !== $r['description']): ?>
