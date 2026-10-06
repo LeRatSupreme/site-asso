@@ -1372,7 +1372,11 @@ final class AdminComptaController extends AdminBaseController
         }
 
         // Lien kiosque — même jeton que le Réappro (généré paresseusement).
-        $kioskToken = Kiosk::token();
+        // En mode kiosque avec un jeton fourni : conserver CE jeton (espace
+        // membres OU admin) pour que les liens de retour y restent.
+        $kioskToken = ($kiosk && $kioskToken !== null && trim($kioskToken) !== '')
+            ? trim($kioskToken)
+            : Kiosk::token();
         $kioskUrl   = '';
         if (!$kiosk) {
             $kioskUrl = Kiosk::url('/kiosque/liste/');
