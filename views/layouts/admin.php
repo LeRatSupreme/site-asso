@@ -18,6 +18,9 @@ use App\Models\Setting;
 
 $siteName    = Setting::get('site_name', 'AEIC');
 $currentPath = $_SERVER['REQUEST_URI'] ?? '/';
+// Chemin SANS query string, pour le matching actif de la sidebar :
+// « /admin/compta/ventes?period=... » doit allumer « Journal ventes ».
+$currentUrlPath = (string) (parse_url($currentPath, PHP_URL_PATH) ?: '/');
 $user        = Auth::user();
 $lang        = current_lang();
 
@@ -140,7 +143,7 @@ $operationsPrefixes = [
     '/admin/compta/pertes',
     '/admin/compta/evenements',
 ];
-$activePath = $currentPath;
+$activePath = $currentUrlPath;
 foreach ($operationsPrefixes as $opPrefix) {
     if (str_starts_with($activePath, $opPrefix)) {
         $activePath = '/admin/compta/achats';
