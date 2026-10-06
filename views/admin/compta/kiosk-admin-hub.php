@@ -31,32 +31,11 @@ declare(strict_types=1);
     .kah-strip-card .kah-pf { font-size: 0.85rem; font-weight: 800; margin-top: 0.15rem; color: #4ade80; }
     .kah-strip-card .kah-pf.is-loss { color: #f87171; }
 
-    .kah-grid {
-        display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 0.8rem; max-width: 44rem; margin: 0 auto;
-    }
-    .kah-grid a {
-        display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.5rem;
-        aspect-ratio: 4 / 3; padding: 1.2rem; text-align: center; text-decoration: none;
-        background: rgba(255, 255, 255, 0.035);
-        border: 1px solid rgba(255, 255, 255, 0.07);
-        border-radius: 18px;
-        transition: border-color 0.15s ease, background 0.15s ease;
-    }
-    .kah-grid a:hover { border-color: var(--primary, #48bdd3); background: rgba(72, 189, 211, 0.07); }
-    .kah-grid .kiosk-emoji { font-size: 2.2rem; }
-    .kah-grid .kiosk-tile-title { font-size: 1.05rem; font-weight: 900; }
-    .kah-grid .kiosk-tile-sub { font-size: 0.76rem; color: var(--muted, #8892a6); }
-    /* Tuile seule sur la 2e rangée : même taille, centrée. */
-    .kah-grid a:last-child:nth-child(odd) {
-        grid-column: 1 / -1;
-        justify-self: center;
-        width: calc(50% - 0.4rem);
-    }
     .kah-foot {
         max-width: 44rem; margin: 1.1rem auto 0; text-align: center;
         font-size: 0.78rem; color: var(--muted, #8892a6);
     }
+    .kah-foot a { color: var(--primary, #48bdd3); }
     @media (max-width: 480px) {
         .kah-strip { grid-template-columns: 1fr; }
     }
@@ -69,6 +48,8 @@ declare(strict_types=1);
         <p class="muted">Toutes les données financières du jour, de la semaine et du mois.</p>
     </div>
 </div>
+
+<?php $active = 'hub'; require AEIC_VIEWS . '/admin/compta/_kiosk-admin-tabs.php'; ?>
 
 <div class="kah-strip">
     <div class="kah-strip-card">
@@ -88,28 +69,9 @@ declare(strict_types=1);
     </div>
 </div>
 
-<div class="kah-grid">
-    <a href="<?= e(url('/kiosque/comptage/jour/' . rawurlencode($token))) ?>">
-        <span class="kiosk-emoji">📊</span>
-        <span class="kiosk-tile-title">Récap du jour</span>
-        <span class="kiosk-tile-sub">détail complet, auto-actualisé</span>
-    </a>
-    <a href="<?= e(url('/kiosque/admin/semaine/' . rawurlencode($token))) ?>">
-        <span class="kiosk-emoji">📅</span>
-        <span class="kiosk-tile-title">7 derniers jours</span>
-        <span class="kiosk-tile-sub">jour par jour + top produits</span>
-    </a>
-    <a href="<?= e(url('/kiosque/admin/mois/' . rawurlencode($token))) ?>">
-        <span class="kiosk-emoji">🗓️</span>
-        <span class="kiosk-tile-title">Mois en cours</span>
-        <span class="kiosk-tile-sub">vs mois précédent + top</span>
-    </a>
-</div>
-
 <p class="kah-foot">
-    Analytics, journal des ventes et dashboard complet : accessible depuis
-    <a href="<?= e(url('/admin/compta')) ?>" style="color: var(--primary, #48bdd3);">l'espace admin</a>
-    (connexion requise) — volontairement pas liés ici.
+    📊 Jour · 📅 7 jours · 🗓️ Mois : détail dans les onglets ci-dessus.<br>
+    Analytics, journal des ventes et dashboard complet : accès via les onglets ↗ (connexion admin).
 </p>
 
 <p class="kah-foot">

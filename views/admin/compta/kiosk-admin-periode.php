@@ -101,6 +101,8 @@ $retourUrl = url('/kiosque/admin/' . rawurlencode($token));
     </div>
 </div>
 
+<?php $active = $mode; require AEIC_VIEWS . '/admin/compta/_kiosk-admin-tabs.php'; ?>
+
 <div class="kp-wrap">
     <div class="kp-hero">
         <div class="kp-card">
