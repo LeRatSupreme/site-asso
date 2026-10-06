@@ -40,6 +40,19 @@ final class KioskComptageController extends Controller
     }
 
     /**
+     * Identité déclarée par le membre sur la page kiosque (prénom, nom,
+     * alias libre — ex. « vice-trésorier »). Saisie via la pastille profil,
+     * stockée côté appareil et envoyée avec chaque enregistrement pour
+     * tracer QUI a compté. Repli : « kiosque » (anonyme).
+     */
+    private function whoFromPost(): string
+    {
+        $who = trim(strip_tags((string) ($_POST['who'] ?? '')));
+
+        return $who !== '' ? mb_substr($who, 0, 200) : 'kiosque';
+    }
+
+    /**
      * Hub : les deux comptages accessibles.
      */
     public function hub(string $token): void
@@ -93,12 +106,14 @@ final class KioskComptageController extends Controller
         }
 
         $label = trim((string) ($_POST['label'] ?? ''));
-        $res   = CashLedger::recordCount($counted, $label, 'kiosque', null);
+        $who   = $this->whoFromPost();
+        $res   = CashLedger::recordCount($counted, $label, $who, null);
         AuditLog::log('cash.count', null, 'cash', $res['count_id'], [
             'counted'     => $counted,
             'theoretical' => round($counted - $res['ecart'], 2),
             'ecart'       => $res['ecart'],
             'via'         => 'kiosque',
+            'who'         => $who,
         ]);
 
         if ($res['ecart'] < 0) {
@@ -199,6 +214,7 @@ final class KioskComptageController extends Controller
         }
 
         $pausedKeys = array_flip(ProductDiscontinued::keys());
+        $who = $this->whoFromPost();
         $done = 0;
         $gaps = 0;
 
@@ -213,7 +229,7 @@ final class KioskComptageController extends Controller
                 continue;
             }
 
-            InventoryCount::record($productKey, $counted, null, 'kiosque');
+            InventoryCount::record($productKey, $counted, null, $who);
             $done++;
         }
 
@@ -225,6 +241,7 @@ final class KioskComptageController extends Controller
         AuditLog::log('compta.inventory.count', null, 'inventory_count', null, [
             'products' => $done,
             'via'      => 'kiosque',
+            'who'      => $who,
         ]);
 
         try {
@@ -237,5 +254,58 @@ final class KioskComptageController extends Controller
         $this->setFlash('success', sprintf('%d produit(s) compté(s).', $done));
 
         redirect($back);
+    }
+
+    /**
+     * Met en pause / réactive un produit DEPUIS le kiosque (réponse JSON,
+     * consommée par la page de comptage qui déplace la ligne sans recharger).
+     * Mêmes mécaniques que l'admin : drapeau product_discontinued, aucune
+     * suppression de données, traçabilité (updated_by = identité kiosque).
+     */
+    public function inventairePause(string $token): void
+    {
+        header('Content-Type: application/json; charset=utf-8');
+
+        if (!$this->tokenOk($token)) {
+            http_response_code(403);
+            echo '{"ok":false,"error":"lien invalide"}';
+
+            return;
+        }
+
+        $key   = trim((string) ($_POST['key'] ?? ''));
+        $state = ($_POST['state'] ?? '') === 'resume' ? 'resume' : 'pause';
+        $who   = $this->whoFromPost();
+
+        $parser = new SumUpCsvParser();
+        if ($key === '' || $parser->isCustomAmount($key)) {
+            http_response_code(422);
+            echo '{"ok":false,"error":"produit invalide"}';
+
+            return;
+        }
+
+        if ($state === 'pause') {
+            ProductDiscontinued::mark($key, $who);
+        } else {
+            ProductDiscontinued::resume($key);
+        }
+
+        AuditLog::log(
+            $state === 'pause' ? 'compta.product.pause' : 'compta.product.resume',
+            null,
+            'product_discontinued',
+            $key,
+            ['via' => 'kiosque', 'who' => $who]
+        );
+
+        try {
+            ProductAutoSync::sync();
+        } catch (\Throwable) {
+            // Jamais bloquant.
+        }
+        StockPublic::invalidate();
+
+        echo json_encode(['ok' => true, 'key' => $key, 'paused' => $state === 'pause']);
     }
 }
