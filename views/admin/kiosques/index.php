@@ -18,14 +18,20 @@ declare(strict_types=1);
         margin: 0 0 0.65rem; font-size: 1rem; font-weight: 900;
     }
     .kq-section-sub { margin: -0.3rem 0 0.8rem; font-size: 0.82rem; color: var(--muted, #8892a6); }
+    /* Grille 2 colonnes : plus dense, tout se voit d'un coup d'œil. */
+    .kq-grid {
+        display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.9rem; align-items: stretch;
+    }
     .kq-card {
         display: flex; flex-direction: column; gap: 0.45rem;
-        padding: 1rem 1.1rem; margin-bottom: 0.9rem;
+        padding: 1rem 1.1rem;
         background: rgba(255, 255, 255, 0.035);
         border: 1px solid rgba(255, 255, 255, 0.07);
         border-radius: 14px;
+        min-width: 0;
     }
-    .kq-card.is-main { border-color: rgba(72, 189, 211, 0.45); background: rgba(72, 189, 211, 0.06); }
+    .kq-card.is-main { grid-column: 1 / -1; border-color: rgba(72, 189, 211, 0.45); background: rgba(72, 189, 211, 0.06); }
     .kq-card.is-admin { border-left: 4px solid rgba(97, 80, 170, 0.65); }
     .kq-head { display: flex; align-items: baseline; gap: 0.5rem; flex-wrap: wrap; }
     .kq-emoji { font-size: 1.25rem; }
@@ -36,12 +42,15 @@ declare(strict_types=1);
         border-radius: 999px; padding: 0.1rem 0.55rem;
     }
     .kq-desc { margin: 0; font-size: 0.85rem; color: var(--muted, #8892a6); }
-    .kq-row { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin-top: 0.25rem; }
+    .kq-row { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin-top: auto; }
     .kq-row input {
-        flex: 1 1 320px; padding: 0.5rem 0.7rem;
+        flex: 1 1 200px; min-width: 0; padding: 0.5rem 0.7rem;
         border: 1px solid var(--border); border-radius: 8px;
         background: rgba(255, 255, 255, 0.04); color: var(--foreground);
-        font-size: 0.83rem; font-family: monospace;
+        font-size: 0.8rem; font-family: monospace;
+    }
+    @media (max-width: 860px) {
+        .kq-grid { grid-template-columns: 1fr; }
     }
     .kq-note { font-size: 0.85rem; color: var(--muted, #8892a6); margin: 0 0 1rem; max-width: 720px; }
     .kq-note strong { color: var(--foreground); }
@@ -83,6 +92,7 @@ declare(strict_types=1);
     <h2 class="kq-section-title">👥 Membres — à partager</h2>
     <p class="kq-section-sub">Outils de saisie et suivi léger : aucun bénéfice ni donnée financière sensible.</p>
 
+    <div class="kq-grid">
     <?php foreach ($memberPages as $p): ?>
     <div class="kq-card<?= !empty($p['main']) ? ' is-main' : '' ?>">
         <div class="kq-head">
@@ -99,12 +109,14 @@ declare(strict_types=1);
         </div>
     </div>
     <?php endforeach; ?>
+    </div>
 </section>
 
 <section class="kq-section">
     <h2 class="kq-section-title">🔐 Admins — pour ton téléphone</h2>
     <p class="kq-section-sub">Données financières complètes. Les pages /admin demandent la connexion admin (mémorisée sur ton téléphone) ; les liens kiosque marchent sans connexion.</p>
 
+    <div class="kq-grid">
     <?php foreach ($adminPages as $p): ?>
     <div class="kq-card is-admin<?= !empty($p['main']) ? ' is-main' : '' ?>">
         <div class="kq-head">
@@ -122,6 +134,7 @@ declare(strict_types=1);
         </div>
     </div>
     <?php endforeach; ?>
+    </div>
 </section>
 
 <script>
