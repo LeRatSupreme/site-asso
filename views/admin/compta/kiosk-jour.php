@@ -112,12 +112,13 @@ $dateLabel = $jours[(int) $dt->format('N') - 1] . ' ' . $dt->format('j') . ' ' .
     </div>
 
     <div class="kx-pair">
+        <?php $mJour = (float) $stats['ca'] > 0 ? round((float) $stats['profit'] / (float) $stats['ca'] * 100, 1) : 0.0; ?>
         <div class="kx-card">
             <p class="kx-card-label">Bénéfice</p>
             <div class="kx-card-value <?= (float) $stats['profit'] >= 0 ? 'is-profit' : 'is-loss' ?>" id="kdayProfit">
                 <?= e(formatPrice((float) $stats['profit'])) ?>
             </div>
-            <p class="kx-card-sub">perso exclus</p>
+            <p class="kx-card-sub"><span id="kdayMargin"><?= e(number_format($mJour, 1, ',', ' ')) ?> %</span> de marge · perso exclus</p>
         </div>
         <div class="kx-card">
             <p class="kx-card-label">Produits vendus</p>
@@ -186,6 +187,12 @@ $dateLabel = $jours[(int) $dt->format('N') - 1] . ' ' . $dt->format('j') . ' ' .
             p.textContent = price(j.profit);
             p.classList.toggle('is-profit', Number(j.profit) >= 0);
             p.classList.toggle('is-loss', Number(j.profit) < 0);
+        }
+
+        var marge = document.getElementById('kdayMargin');
+        if (marge) {
+            var pct = Number(j.ca) > 0 ? Math.round(Number(j.profit) / Number(j.ca) * 1000) / 10 : 0;
+            marge.textContent = String(pct).replace('.', ',') + ' %';
         }
 
         var top = document.getElementById('kdayTop');

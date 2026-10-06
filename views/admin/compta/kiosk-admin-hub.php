@@ -10,8 +10,15 @@ declare(strict_types=1);
  * @var array{ca:float,profit:float} $jour
  * @var array{ca:float,profit:float} $semaine
  * @var array{ca:float,profit:float} $mois
- * @var array{caisse:string,inventaire:string,liste:string,reappro:string} $membreUrls
  */
+$marge = static function (float $ca, float $profit): string {
+    $pct = $ca > 0 ? round($profit / $ca * 100, 1) : 0.0;
+
+    return number_format($pct, 1, ',', ' ') . ' %';
+};
+$mJourMarge = $marge($jour['ca'], $jour['profit']);
+$mSemMarge = $marge($semaine['ca'], $semaine['profit']);
+$mMoisMarge = $marge($mois['ca'], $mois['profit']);
 ?>
 <style>
     .kx-wrap { max-width: 44rem; margin: 0 auto; }
@@ -93,19 +100,19 @@ declare(strict_types=1);
     <div class="kx-hero">
         <p class="kx-hero-label">Aujourd'hui</p>
         <div class="kx-hero-value"><?= e(formatPrice($jour['ca'])) ?></div>
-        <p class="kx-hero-sub">Bénéfice : <strong class="<?= $jour['profit'] >= 0 ? '' : 'is-loss' ?>"><?= e(formatPrice($jour['profit'])) ?></strong></p>
+        <p class="kx-hero-sub">Bénéfice : <strong class="<?= $jour['profit'] >= 0 ? '' : 'is-loss' ?>"><?= e(formatPrice($jour['profit'])) ?> (<?= e($mJourMarge) ?>)</strong></p>
     </div>
 
     <div class="kx-pair">
         <div class="kx-card">
             <p class="kx-card-label">7 derniers jours</p>
             <div class="kx-card-value"><?= e(formatPrice($semaine['ca'])) ?></div>
-            <p class="kx-card-sub <?= $semaine['profit'] < 0 ? 'is-loss' : '' ?>">+<?= e(formatPrice($semaine['profit'])) ?> bénéfice</p>
+            <p class="kx-card-sub <?= $semaine['profit'] < 0 ? 'is-loss' : '' ?>">+<?= e(formatPrice($semaine['profit'])) ?> bénéfice · <?= e($mSemMarge) ?></p>
         </div>
         <div class="kx-card">
             <p class="kx-card-label">Ce mois</p>
             <div class="kx-card-value"><?= e(formatPrice($mois['ca'])) ?></div>
-            <p class="kx-card-sub <?= $mois['profit'] < 0 ? 'is-loss' : '' ?>">+<?= e(formatPrice($mois['profit'])) ?> bénéfice</p>
+            <p class="kx-card-sub <?= $mois['profit'] < 0 ? 'is-loss' : '' ?>">+<?= e(formatPrice($mois['profit'])) ?> bénéfice · <?= e($mMoisMarge) ?></p>
         </div>
     </div>
 
