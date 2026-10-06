@@ -42,19 +42,28 @@ declare(strict_types=1);
         font-size: 0.7rem; font-weight: 800; color: var(--muted, #8892a6);
         background: rgba(255, 255, 255, 0.06); border-radius: 999px; padding: 0.1rem 0.55rem;
     }
-    .klist { list-style: none; margin: 0; padding: 0 0.2rem; }
+    .klist {
+        list-style: none; margin: 0; padding: 0.2rem;
+        display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+        gap: 0.55rem;
+    }
     .krow {
-        padding: 0.7rem 0.5rem; border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        display: flex; flex-direction: column; gap: 0.45rem;
+        padding: 0.6rem 0.55rem;
+        border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 12px;
         transition: opacity 0.15s ease;
     }
-    .krow.is-counted { background: rgba(72, 189, 211, 0.06); border-radius: 12px; border-bottom-color: transparent; }
-    .kname { font-size: 1.02rem; font-weight: 800; word-break: break-word; margin: 0 0 0.5rem; }
-    .kstep { display: flex; align-items: stretch; gap: 0.45rem; }
+    .krow.is-counted { background: rgba(72, 189, 211, 0.06); border-color: rgba(72, 189, 211, 0.25); }
+    .kname {
+        font-size: 0.92rem; font-weight: 800; margin: 0;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .kstep { display: flex; align-items: stretch; gap: 0.35rem; }
     .kbtn {
-        width: 56px; height: 50px; flex-shrink: 0;
-        font-size: 1.5rem; font-weight: 900; line-height: 1;
+        width: 42px; height: 44px; flex-shrink: 0;
+        font-size: 1.25rem; font-weight: 900; line-height: 1;
         border: 1px solid var(--border, rgba(255,255,255,0.15));
-        border-radius: 12px; background: rgba(255, 255, 255, 0.06);
+        border-radius: 10px; background: rgba(255, 255, 255, 0.06);
         color: var(--foreground, inherit); cursor: pointer;
         user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent;
         transition: background 0.12s ease, border-color 0.12s ease;
@@ -62,11 +71,11 @@ declare(strict_types=1);
     .kbtn:active { background: rgba(72, 189, 211, 0.2); border-color: var(--primary, #48bdd3); }
     .kinput {
         flex: 1; min-width: 0; text-align: center;
-        padding: 0.5rem 0.5rem;
+        padding: 0.4rem 0.3rem;
         border: 1px solid var(--border, rgba(255,255,255,0.15));
-        border-radius: 12px; background: rgba(255, 255, 255, 0.05);
+        border-radius: 10px; background: rgba(255, 255, 255, 0.05);
         color: var(--foreground, inherit);
-        font-size: 1.35rem; font-weight: 800;
+        font-size: 1.15rem; font-weight: 800;
     }
     .krow.is-paused { opacity: 0.4; }
     .krow.is-paused .kname { margin-bottom: 0; font-weight: 600; }
@@ -114,7 +123,7 @@ declare(strict_types=1);
         </h2>
         <ul class="klist">
             <?php foreach ($items as $r): ?>
-            <li class="krow" data-name="<?= e(mb_strtolower($r['key'])) ?>">
+            <li class="krow" data-name="<?= e(mb_strtolower($r['key'])) ?>" title="<?= e($r['key']) ?>">
                 <p class="kname"><?= e($r['key']) ?></p>
                 <div class="kstep">
                     <button type="button" class="kbtn" data-step="-1" aria-label="Retirer 1 à <?= e($r['key']) ?>">−</button>
