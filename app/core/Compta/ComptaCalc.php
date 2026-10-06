@@ -118,6 +118,69 @@ final class ComptaCalc
     }
 
     /**
+     * Mois couverts par une plage de jours (bornes incluses), du premier
+     * jour du mois de départ à celui du mois d'arrivée.
+     *
+     * Utilisé par les budgets : une période « du 30/09 au 30/09 » couvre
+     * un seul mois (septembre), les budgets se comparant par mois calendaire.
+     *
+     * @param int $maxMonths Plafond de sécurité (les mois les plus anciens
+     *                       sont retirés en cas de période trop large).
+     *
+     * @return list<array{0:int,1:int}> Couples [année, mois] chronologiques.
+     */
+    public static function monthsCoveredBy(string $fromDay, string $toDay, int $maxMonths = 24): array
+    {
+        $start = (new \DateTimeImmutable($fromDay))->modify('first day of this month');
+        $end = (new \DateTimeImmutable($toDay))->modify('first day of this month');
+
+        $months = [];
+        $cur = $start;
+        while ($cur <= $end) {
+            $months[] = [(int) $cur->format('Y'), (int) $cur->format('n')];
+            $cur = $cur->modify('+1 month');
+        }
+
+        if (count($months) > $maxMonths) {
+            $months = array_slice($months, -$maxMonths);
+        }
+
+        return $months;
+    }
+
+    /**
+     * Part du budget mensuel que couvre une période de jours : rapport
+     * entre le chevauchement [période ∩ mois] et la durée du mois.
+     *
+     * Utilisé par les budgets pour comparer un « réalisé » sur n'importe
+     * quelle durée à un budget mensuel : une période d'un jour en
+     * septembre compare à 1/30 du budget de septembre.
+     *
+     * @param string $monthStartDay Premier jour du mois (« YYYY-MM-01 »).
+     * @param string $periodStartDay Début de période (« YYYY-MM-DD »).
+     * @param string $periodEndDay   Fin de période (« YYYY-MM-DD »).
+     *
+     * @return float Facteur dans [0.0 ; 1.0].
+     */
+    public static function monthBudgetFactor(string $monthStartDay, string $periodStartDay, string $periodEndDay): float
+    {
+        $monthStart = new \DateTimeImmutable($monthStartDay);
+        $monthEnd = $monthStart->modify('last day of this month');
+        $pStart = new \DateTimeImmutable($periodStartDay);
+        $pEnd = new \DateTimeImmutable($periodEndDay);
+
+        $ovStart = $monthStart > $pStart ? $monthStart : $pStart;
+        $ovEnd = $monthEnd < $pEnd ? $monthEnd : $pEnd;
+        if ($ovEnd < $ovStart) {
+            return 0.0;
+        }
+
+        $days = $ovStart->diff($ovEnd)->days + 1;
+
+        return min(1.0, ((float) $days) / (float) $monthStart->format('t'));
+    }
+
+    /**
      * Bénéfice d'une ligne de vente.
      *
      * Formule : price_ttc − (cost_price × quantity).
