@@ -13,6 +13,7 @@ use App\Controllers\Admin\AdminController;
 use App\Controllers\Admin\AdminEventController;
 use App\Controllers\Admin\AdminExpenseController;
 use App\Controllers\Admin\AdminGameController;
+use App\Controllers\Admin\AdminKiosquesController;
 use App\Controllers\Admin\AdminLossController;
 use App\Controllers\Admin\AdminMembershipController;
 use App\Controllers\Admin\AdminMediaController;
@@ -245,6 +246,10 @@ function aeic_register_routes(Router $router): void
     $router->post('/admin/caisses/depot', [AdminCashController::class, 'deposit']);
     $router->post('/admin/caisses/comptage', [AdminCashController::class, 'count']);
     $router->post('/admin/caisses/fond', [AdminCashController::class, 'fund']);
+
+    // Kiosques — centralisation des liens téléphone (groupe Système).
+    $router->get('/admin/kiosques', [AdminKiosquesController::class, 'index']);
+    $router->post('/admin/kiosques/regenerate', [AdminKiosquesController::class, 'regenerate']);
     $router->get('/admin/wiki', [AdminController::class, 'wiki']);
     $router->post('/admin/settings/save', [AdminSettingController::class, 'save']);
     $router->post('/admin/settings/test-email', [AdminSettingController::class, 'testEmail']);

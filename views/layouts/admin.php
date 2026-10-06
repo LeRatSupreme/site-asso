@@ -115,6 +115,7 @@ if (isset($sections['Contenu']) && $sections['Contenu'] === []) {
 $systemEntries = [
     'Utilisateurs'     => ['/admin/users', 'users'],
     'Caisses'          => ['/admin/caisses', 'cash'],
+    'Kiosques'         => ['/admin/kiosques', 'kiosques'],
     'Inventaire'       => ['/admin/compta/inventaire', 'inventory'],
     'Coûts de revient' => ['/admin/compta/couts', 'costs'],
     'Notifications'    => ['/admin/notifications', 'notifications'],
