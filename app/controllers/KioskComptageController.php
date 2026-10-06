@@ -285,6 +285,24 @@ final class KioskComptageController extends Controller
             return;
         }
 
+        // La clé doit exister (produit déjà vendu) ou être déjà en pause :
+        // impossible de créer une entrée parasite via le kiosque.
+        $known = ProductDiscontinued::isDiscontinued($key);
+        if (!$known) {
+            foreach (Sale::distinctProducts() as $k) {
+                if (trim((string) $k) === $key) {
+                    $known = true;
+                    break;
+                }
+            }
+        }
+        if (!$known) {
+            http_response_code(422);
+            echo '{"ok":false,"error":"produit inconnu"}';
+
+            return;
+        }
+
         if ($state === 'pause') {
             ProductDiscontinued::mark($key, $who);
         } else {
