@@ -1090,10 +1090,7 @@ final class AdminComptaController extends AdminBaseController
      */
     public function kioskReorder(string $token): void
     {
-        $expected = trim((string) Setting::get('reappro_kiosk_token', ''));
-        $given    = trim($token);
-
-        if ($expected === '' || $given === '' || !hash_equals($expected, $given)) {
+        if (!$this->kioskAnyTokenOk($token)) {
             http_response_code(403);
             echo '<h1>Erreur 403 — Lien invalide ou révoqué.</h1>';
 
