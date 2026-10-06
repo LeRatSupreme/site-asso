@@ -65,8 +65,12 @@ $dateLabel = $jours[(int) $dt->format('N') - 1] . ' ' . $dt->format('j') . ' ' .
         display: flex; gap: 0.5rem; flex-wrap: wrap; justify-content: center;
     }
     @media (max-width: 480px) {
-        .kday-grid { grid-template-columns: 1fr; }
-        .kday-value { font-size: 2.4rem; }
+        /* 2:2 conservé sur téléphone, valeurs recalibrées. */
+        .kday-grid { gap: 0.7rem; }
+        .kday-card { padding: 1rem 0.5rem; }
+        .kday-value { font-size: 1.55rem; }
+        .kday-card.is-wide { padding: 1.2rem 0.7rem; }
+        .kday-card.is-wide .kday-value { font-size: 2.1rem; }
     }
 </style>
 

@@ -88,8 +88,12 @@ $retourUrl = url('/kiosque/admin/' . rawurlencode($token));
         display: flex; gap: 0.5rem; flex-wrap: wrap; justify-content: center;
     }
     @media (max-width: 480px) {
-        .kp-hero { grid-template-columns: 1fr; }
-        .kp-value { font-size: 2.5rem; }
+        /* 2:2 conservé sur téléphone, valeurs recalibrées. */
+        .kp-hero { gap: 0.7rem; }
+        .kp-card { padding: 1rem 0.5rem; }
+        .kp-value { font-size: 1.55rem; }
+        .kp-sub { font-size: 0.72rem; }
+        .kp-card.is-wide { padding: 1.2rem 0.7rem; }
         /* Sur téléphone : le détail journalier passe sur 2 lignes et
            garde TOUTES les infos (qté, CA, bénéfice). */
         .kp-days li { flex-wrap: wrap; row-gap: 0.15rem; padding: 0.6rem 0.15rem; }
