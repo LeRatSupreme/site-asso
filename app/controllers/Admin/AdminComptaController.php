@@ -26,6 +26,7 @@ use App\Models\ProductPack;
 use App\Models\Sale;
 use App\Models\SaleAdjustment;
 use App\Models\Setting;
+use App\Models\ShoppingCheck;
 
 /**
  * Module Comptabilité & gestion des achats (Cafétéria).
@@ -1151,6 +1152,125 @@ final class AdminComptaController extends AdminBaseController
         $this->renderListePage(true, null, $token);
     }
 
+    // -----------------------------------------------------------------
+    //  Liste de courses : cases cochées partagées (kiosque + admin)
+    // -----------------------------------------------------------------
+
+    /**
+     * Identité OBLIGATOIRE pour cocher (comme pour tout enregistrement
+     * kiosque) : prénom, nom et rôle. Mêmes champs que la pastille profil.
+     */
+    private function whoStrict(): string
+    {
+        $p = trim(strip_tags((string) ($_POST['who_prenom'] ?? '')));
+        $n = trim(strip_tags((string) ($_POST['who_nom'] ?? '')));
+        $a = trim(strip_tags((string) ($_POST['who_alias'] ?? '')));
+
+        if ($p === '' || $n === '' || $a === '') {
+            return '';
+        }
+
+        return mb_substr($p . ' ' . $n . ' (' . $a . ')', 0, 200);
+    }
+
+    private function kioskTokenOk(string $token): bool
+    {
+        $expected = trim((string) Setting::get('reappro_kiosk_token', ''));
+        $given    = trim($token);
+
+        return $expected !== '' && $given !== '' && hash_equals($expected, $given);
+    }
+
+    private function listeStatePayload(): array
+    {
+        $checks = [];
+        foreach (ShoppingCheck::all() as $key => $c) {
+            $checks[$key] = [
+                'by' => $c['by'],
+                'at' => substr($c['at'], 11, 5),
+            ];
+        }
+
+        return ['ok' => true, 'checks' => $checks];
+    }
+
+    /** État des cases (JSON) — version connectée. */
+    public function listeState(): void
+    {
+        $this->guardCompta();
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode($this->listeStatePayload());
+    }
+
+    /** État des cases (JSON) — version kiosque. */
+    public function kioskListeState(string $token): void
+    {
+        header('Content-Type: application/json; charset=utf-8');
+        if (!$this->kioskTokenOk($token)) {
+            http_response_code(403);
+            echo '{"ok":false,"error":"lien invalide"}';
+
+            return;
+        }
+        echo json_encode($this->listeStatePayload());
+    }
+
+    /** Cocher / décocher (JSON) — version connectée. */
+    public function listeCheck(): void
+    {
+        $this->guardCompta();
+        $this->handleListeCheck();
+    }
+
+    /** Cocher / décocher (JSON) — version kiosque. */
+    public function kioskListeCheck(string $token): void
+    {
+        header('Content-Type: application/json; charset=utf-8');
+        if (!$this->kioskTokenOk($token)) {
+            http_response_code(403);
+            echo '{"ok":false,"error":"lien invalide"}';
+
+            return;
+        }
+        $this->handleListeCheck();
+    }
+
+    private function handleListeCheck(): void
+    {
+        header('Content-Type: application/json; charset=utf-8');
+
+        $key     = trim((string) ($_POST['key'] ?? ''));
+        $checked = ($_POST['state'] ?? '1') === '1';
+        $who     = $this->whoStrict();
+
+        if ($key === '') {
+            http_response_code(422);
+            echo '{"ok":false,"error":"produit manquant"}';
+
+            return;
+        }
+        if ($who === '') {
+            http_response_code(422);
+            echo '{"ok":false,"error":"identite requise (prenom, nom, role)"}';
+
+            return;
+        }
+
+        if ($checked) {
+            ShoppingCheck::mark($key, $who);
+        } else {
+            ShoppingCheck::unmark($key);
+        }
+
+        echo json_encode([
+            'ok'      => true,
+            'key'     => $key,
+            'checked' => $checked,
+            'by'      => $checked ? $who : '',
+            'at'      => date('H:i'),
+        ]);
+    }
+
     /**
      * Assemble et rend la liste de courses (connecté OU kiosque).
      *
@@ -1247,6 +1367,10 @@ final class AdminComptaController extends AdminBaseController
             'kiosk'       => $kiosk,
             'kioskUrl'    => $kioskUrl,
             'kioskToken'  => (string) $kioskToken,
+            // Identité des connected (trace des cases cochées côté admin).
+            'adminWho'    => (!$kiosk && $user !== null)
+                ? trim(trim(($user['prenom'] ?? '') . ' ' . ($user['nom'] ?? '')) . ' (' . ($user['role'] ?? '') . ')')
+                : '',
         ];
 
         if ($kiosk) {
