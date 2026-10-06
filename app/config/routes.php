@@ -312,6 +312,9 @@ function aeic_register_routes(Router $router): void
     $router->post('/kiosque/comptage/inventaire/save/{token}', [KioskComptageController::class, 'inventaireSave']);
     // Pause / reprise d'un produit depuis le kiosque (JSON, sans rechargement).
     $router->post('/kiosque/comptage/inventaire/pause/{token}', [KioskComptageController::class, 'inventairePause']);
+    // Récap du jour (lecture seule) : page + données JSON pour l'auto-refresh.
+    $router->get('/kiosque/comptage/jour/{token}', [KioskComptageController::class, 'jour']);
+    $router->get('/kiosque/comptage/jour/data/{token}', [KioskComptageController::class, 'jourData']);
 
     // Suivi avancé : dépenses, budgets, achats, inventaire, pertes, événements, rapport annuel.
     $router->get('/admin/compta/depenses', [AdminExpenseController::class, 'index']);

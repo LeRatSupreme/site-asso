@@ -76,6 +76,70 @@ final class KioskComptageController extends Controller
     }
 
     /**
+     * Récap du jour (kiosque, lecture seule) : CA, bénéfice, ventes de la
+     * journée en cours (heure de Paris) — mêmes calculs que le dashboard
+     * analytics (montants personnalisés inclus dans le CA, exclus du
+     * bénéfice). Auto-actualisé par la vue via jourData().
+     */
+    public function jour(string $token): void
+    {
+        if (!$this->tokenOk($token)) {
+            $this->deny();
+
+            return;
+        }
+
+        $stats = $this->jourStats();
+        $this->renderKiosk('admin/compta/kiosk-jour', [
+            'title' => 'Récap du jour',
+            'token' => $token,
+            'stats' => $stats,
+        ]);
+    }
+
+    /** Données du récap du jour (JSON) — consommées par l'auto-refresh. */
+    public function jourData(string $token): void
+    {
+        header('Content-Type: application/json; charset=utf-8');
+        if (!$this->tokenOk($token)) {
+            http_response_code(403);
+            echo '{"ok":false}';
+
+            return;
+        }
+
+        echo json_encode(['ok' => true] + $this->jourStats());
+    }
+
+    /**
+     * Agrégats du jour (Europe/Paris, bornes 00:00 → 23:59 locales).
+     *
+     * @return array<string,mixed>
+     */
+    private function jourStats(): array
+    {
+        $today = (new \DateTimeImmutable('today', new \DateTimeZone('Europe/Paris')))->format('Y-m-d');
+
+        $agg = Sale::aggregatesBetween($today, $today);
+        $split = Sale::paymentSplitBetween($today, $today);
+        $top = Sale::topProductsBetween($today, $today, 5);
+        $tx = Sale::transactionsBetween($today, $today);
+
+        return [
+            'date'         => $today,
+            'ca'           => round($agg['ca'], 2),
+            'profit'       => round($agg['profit'], 2),
+            'qty'          => $agg['qty'],
+            'ca_products'  => round($agg['ca_products'], 2),
+            'transactions' => $tx,
+            'liquide'      => round((float) ($split['LIQUIDE'] ?? 0), 2),
+            'carte'        => round((float) ($split['CARTE'] ?? 0), 2),
+            'top'          => $top,
+            'computed_at'  => (new \DateTimeImmutable('now', new \DateTimeZone('Europe/Paris')))->format('H:i:s'),
+        ];
+    }
+
+    /**
      * Comptage de caisse (à l'aveugle : le théorique n'est pas affiché).
      */
     public function caisse(string $token): void
