@@ -84,6 +84,10 @@ $dateLabel = $jours[(int) $dt->format('N') - 1] . ' ' . $dt->format('j') . ' ' .
         white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
     .km-top-qty { font-weight: 900; color: var(--primary, #48bdd3); white-space: nowrap; }
+    .km-top-ca {
+        font-weight: 800; font-size: 0.85rem; white-space: nowrap;
+        color: var(--foreground, inherit); min-width: 64px; text-align: right;
+    }
 
     .kday-meta {
         text-align: center; font-size: 0.78rem; color: var(--muted, #8892a6);
@@ -124,6 +128,7 @@ $dateLabel = $jours[(int) $dt->format('N') - 1] . ' ' . $dt->format('j') . ' ' .
                 <span class="km-rank"><?= $i + 1 ?></span>
                 <span class="km-top-name" title="<?= e($t['label']) ?>"><?= e($t['label']) ?></span>
                 <span class="km-top-qty">×<?= (int) $t['qty'] ?></span>
+                <span class="km-top-ca"><?= e(formatPrice((float) $t['ca'])) ?></span>
             </li>
             <?php endforeach; ?>
             <?php if ($stats['top'] === []): ?>
@@ -178,9 +183,14 @@ $dateLabel = $jours[(int) $dt->format('N') - 1] . ' ' . $dt->format('j') . ' ' .
                     qty.className = 'km-top-qty';
                     qty.textContent = '×' + t.qty;
 
+                    var ca = document.createElement('span');
+                    ca.className = 'km-top-ca';
+                    ca.textContent = price(t.ca);
+
                     li.appendChild(rank);
                     li.appendChild(name);
                     li.appendChild(qty);
+                    li.appendChild(ca);
                     top.appendChild(li);
                 });
             }
