@@ -112,6 +112,39 @@ final class KioskComptageController extends Controller
     }
 
     /**
+     * Récap du jour version MEMBRES (partagée sur le hub) : uniquement le
+     * CA et les produits vendus — ni bénéfice, ni paiements, ni CA/produit.
+     */
+    public function jourMembre(string $token): void
+    {
+        if (!$this->tokenOk($token)) {
+            $this->deny();
+
+            return;
+        }
+
+        $this->renderKiosk('admin/compta/kiosk-jour-membre', [
+            'title' => 'Ventes du jour',
+            'token' => $token,
+            'stats' => $this->jourMembreStats(),
+        ]);
+    }
+
+    /** Données du récap membres (JSON) — consommées par l'auto-refresh. */
+    public function jourMembreData(string $token): void
+    {
+        header('Content-Type: application/json; charset=utf-8');
+        if (!$this->tokenOk($token)) {
+            http_response_code(403);
+            echo '{"ok":false}';
+
+            return;
+        }
+
+        echo json_encode(['ok' => true] + $this->jourMembreStats());
+    }
+
+    /**
      * Agrégats du jour (Europe/Paris, bornes 00:00 → 23:59 locales).
      *
      * @return array<string,mixed>
@@ -136,6 +169,31 @@ final class KioskComptageController extends Controller
             'carte'        => round((float) ($split['CARTE'] ?? 0), 2),
             'top'          => $top,
             'computed_at'  => (new \DateTimeImmutable('now', new \DateTimeZone('Europe/Paris')))->format('H:i:s'),
+        ];
+    }
+
+    /**
+     * Version restreinte pour les membres : CA global et produits vendus
+     * (quantités), sans montants par produit ni bénéfice.
+     *
+     * @return array<string,mixed>
+     */
+    private function jourMembreStats(): array
+    {
+        $today = (new \DateTimeImmutable('today', new \DateTimeZone('Europe/Paris')))->format('Y-m-d');
+
+        $agg = Sale::aggregatesBetween($today, $today);
+        $topQty = array_map(
+            static fn (array $t): array => ['label' => (string) $t['label'], 'qty' => (int) $t['qty']],
+            Sale::topProductsBetween($today, $today, 5)
+        );
+
+        return [
+            'date'        => $today,
+            'ca'          => round($agg['ca'], 2),
+            'qty'         => $agg['qty'],
+            'top'         => $topQty,
+            'computed_at' => (new \DateTimeImmutable('now', new \DateTimeZone('Europe/Paris')))->format('H:i:s'),
         ];
     }
 

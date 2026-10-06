@@ -3,13 +3,21 @@
 declare(strict_types=1);
 
 /**
- * Page « Kiosques » (Système) : tous les liens kiosque centralisés.
+ * Page « Kiosques » (Système) : tous les liens kiosque centralisés, en
+ * deux catégories — Membres (à partager) et Admins (données financières).
  *
  * @var array<string,mixed> $user
- * @var list<array{emoji:string,label:string,desc:string,url:string,main?:bool}> $pages
+ * @var list<array{emoji:string,label:string,desc:string,url:string,main?:bool}> $memberPages
+ * @var list<array{emoji:string,label:string,desc:string,url:string,kiosk?:bool}> $adminPages
  */
 ?>
 <style>
+    .kq-section { margin-bottom: 1.6rem; }
+    .kq-section-title {
+        display: flex; align-items: center; gap: 0.5rem;
+        margin: 0 0 0.65rem; font-size: 1rem; font-weight: 900;
+    }
+    .kq-section-sub { margin: -0.3rem 0 0.8rem; font-size: 0.82rem; color: var(--muted, #8892a6); }
     .kq-card {
         display: flex; flex-direction: column; gap: 0.45rem;
         padding: 1rem 1.1rem; margin-bottom: 0.9rem;
@@ -18,6 +26,7 @@ declare(strict_types=1);
         border-radius: 14px;
     }
     .kq-card.is-main { border-color: rgba(72, 189, 211, 0.45); background: rgba(72, 189, 211, 0.06); }
+    .kq-card.is-admin { border-left: 4px solid rgba(97, 80, 170, 0.65); }
     .kq-head { display: flex; align-items: baseline; gap: 0.5rem; flex-wrap: wrap; }
     .kq-emoji { font-size: 1.25rem; }
     .kq-label { font-size: 1.02rem; font-weight: 900; }
@@ -42,41 +51,69 @@ declare(strict_types=1);
     <div>
         <p class="eyebrow">Système</p>
         <h1 class="page-title">Kiosques</h1>
-        <p class="muted">Tous les liens d'accès téléphone (sans connexion) au même endroit.</p>
+        <p class="muted">Tous les liens d'accès téléphone, sans connexion, en deux catégories.</p>
     </div>
 </div>
 
-<div class="card surface glass" style="padding: 0.95rem 1.1rem; margin-bottom: 1.2rem;">
+<div class="card surface glass" style="padding: 0.95rem 1.1rem; margin-bottom: 1.4rem;">
     <p class="kq-note">
-        Le <strong>lien kiosque</strong> donne un accès sans connexion aux pages ci-dessous.
-        L'authentification <strong>est le lien lui-même</strong> : ne le partage qu'aux membres du bureau.
-        Chaque action (comptage, pause, case cochée) exige l'identité du membre (prénom, nom, rôle)
-        et est tracée en son nom. La régénération du lien <strong>révoque tous les liens d'un coup</strong>.
+        L'authentification du kiosque <strong>est le lien lui-même</strong> : ne partage les liens
+        « Membres » qu'aux membres du bureau. Chaque action (comptage, pause, case cochée) exige
+        l'identité du membre (prénom, nom, rôle) et est tracée en son nom. Les liens « Admins »
+        donnent accès aux <strong>données financières</strong> — récap complet, analytics, bilan.
+        La régénération du lien <strong>révoque tous les liens d'un coup</strong>.
     </p>
     <form method="post" action="<?= e(url('/admin/kiosques/regenerate')) ?>"
-          data-confirm="Régénérer le lien kiosque ? TOUS les liens déjà partagés cesseront de fonctionner — il faudra redistribuer le nouveau."
+          data-confirm="Régénérer le lien kiosque ? TOUS les liens déjà partagés (membres et admins) cesseront de fonctionner — il faudra redistribuer les nouveaux."
           data-confirm-button="Régénérer">
         <?= csrf_field() ?>
         <button type="submit" class="btn btn-outline btn-sm">🔄 Régénérer le lien (révoquer tout)</button>
     </form>
 </div>
 
-<?php foreach ($pages as $p): ?>
-<div class="kq-card<?= !empty($p['main']) ? ' is-main' : '' ?>">
-    <div class="kq-head">
-        <span class="kq-emoji"><?= $p['emoji'] ?></span>
-        <span class="kq-label"><?= e($p['label']) ?></span>
-        <?php if (!empty($p['main'])): ?><span class="kq-badge">à partager</span><?php endif; ?>
+<section class="kq-section">
+    <h2 class="kq-section-title">👥 Membres — à partager</h2>
+    <p class="kq-section-sub">Outils de saisie et suivi léger : aucun bénéfice ni donnée financière sensible.</p>
+
+    <?php foreach ($memberPages as $p): ?>
+    <div class="kq-card<?= !empty($p['main']) ? ' is-main' : '' ?>">
+        <div class="kq-head">
+            <span class="kq-emoji"><?= $p['emoji'] ?></span>
+            <span class="kq-label"><?= e($p['label']) ?></span>
+            <?php if (!empty($p['main'])): ?><span class="kq-badge">à partager</span><?php endif; ?>
+        </div>
+        <p class="kq-desc"><?= e($p['desc']) ?></p>
+        <div class="kq-row">
+            <input type="text" readonly value="<?= e($p['url']) ?>" onclick="this.select()"
+                   aria-label="Lien <?= e($p['label']) ?>">
+            <button type="button" class="btn btn-outline btn-sm kq-copy" data-url="<?= e($p['url']) ?>">Copier</button>
+            <a class="btn btn-ghost btn-sm" href="<?= e($p['url']) ?>" target="_blank">Ouvrir ↗</a>
+        </div>
     </div>
-    <p class="kq-desc"><?= e($p['desc']) ?></p>
-    <div class="kq-row">
-        <input type="text" readonly value="<?= e($p['url']) ?>" onclick="this.select()"
-               aria-label="Lien <?= e($p['label']) ?>">
-        <button type="button" class="btn btn-outline btn-sm kq-copy" data-url="<?= e($p['url']) ?>">Copier</button>
-        <a class="btn btn-ghost btn-sm" href="<?= e($p['url']) ?>" target="_blank">Ouvrir ↗</a>
+    <?php endforeach; ?>
+</section>
+
+<section class="kq-section">
+    <h2 class="kq-section-title">🔐 Admins — pour ton téléphone</h2>
+    <p class="kq-section-sub">Données financières complètes. Les pages /admin demandent la connexion admin (mémorisée sur ton téléphone) ; les liens kiosque marchent sans connexion.</p>
+
+    <?php foreach ($adminPages as $p): ?>
+    <div class="kq-card is-admin">
+        <div class="kq-head">
+            <span class="kq-emoji"><?= $p['emoji'] ?></span>
+            <span class="kq-label"><?= e($p['label']) ?></span>
+            <?php if (empty($p['kiosk'])): ?><span class="kq-badge" style="color:#a78bfa;background:rgba(97,80,170,0.16)">connexion requise</span><?php endif; ?>
+        </div>
+        <p class="kq-desc"><?= e($p['desc']) ?></p>
+        <div class="kq-row">
+            <input type="text" readonly value="<?= e($p['url']) ?>" onclick="this.select()"
+                   aria-label="Lien <?= e($p['label']) ?>">
+            <button type="button" class="btn btn-outline btn-sm kq-copy" data-url="<?= e($p['url']) ?>">Copier</button>
+            <a class="btn btn-ghost btn-sm" href="<?= e($p['url']) ?>" target="_blank">Ouvrir ↗</a>
+        </div>
     </div>
-</div>
-<?php endforeach; ?>
+    <?php endforeach; ?>
+</section>
 
 <script>
 (function () {

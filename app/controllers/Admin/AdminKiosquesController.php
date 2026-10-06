@@ -21,11 +21,14 @@ final class AdminKiosquesController extends AdminBaseController
         $this->guardSystemOrPage('kiosques');
 
         $token = Kiosk::token();
-        $pages = [
+
+        // Liens à partager aux MEMBRES : saisie et suivi, sans données
+        // financières sensibles (le récap membres n'affiche que le CA).
+        $memberPages = [
             [
                 'emoji' => '🏠',
                 'label' => 'Hub kiosque — tout-en-un',
-                'desc'  => "LA page à partager aux membres : comptage caisse, comptage inventaire, liste de courses et récap du jour. L'identité (prénom, nom, rôle) y est obligatoire et tracée.",
+                'desc'  => "LA page à partager aux membres : comptage caisse, comptage inventaire, liste de courses et ventes du jour. L'identité (prénom, nom, rôle) y est obligatoire et tracée.",
                 'path'  => '/kiosque/comptage/',
                 'main'  => true,
             ],
@@ -49,26 +52,65 @@ final class AdminKiosquesController extends AdminBaseController
             ],
             [
                 'emoji' => '📊',
-                'label' => 'Récap du jour',
-                'desc'  => "CA, bénéfice et top produits du jour, auto-actualisé toutes les 60 s.",
-                'path'  => '/kiosque/comptage/jour/',
-            ],
-            [
-                'emoji' => '📈',
-                'label' => 'Réappro (téléphone)',
-                'desc'  => 'Réapprovisionnement complet, en lecture seule.',
-                'path'  => '/kiosque/reappro/',
+                'label' => 'Ventes du jour (membres)',
+                'desc'  => 'Récap limité : CA du jour et produits vendus, sans bénéfice ni paiements.',
+                'path'  => '/kiosque/comptage/jour-membre/',
             ],
         ];
-        foreach ($pages as &$p) {
+        foreach ($memberPages as &$p) {
             $p['url'] = Kiosk::url($p['path']);
         }
         unset($p);
 
+        // Liens ADMINS : données financières complètes, pour ton téléphone.
+        // Les pages /admin/* demandent la connexion admin (une seule fois
+        // par appareil) — les liens kiosque marchent sans connexion.
+        $adminPages = [
+            [
+                'emoji' => '📊',
+                'label' => 'Récap du jour — complet',
+                'desc'  => 'CA, bénéfice, liquide/carte, top produits du jour. Lien kiosque, sans connexion.',
+                'url'   => Kiosk::url('/kiosque/comptage/jour/'),
+                'kiosk' => true,
+            ],
+            [
+                'emoji' => '📈',
+                'label' => 'Analytics',
+                'desc'  => 'Tableaux de bord analytiques complets (CA, marges, heures, produits). Connexion admin requise.',
+                'url'   => url('/admin/analytics'),
+            ],
+            [
+                'emoji' => '🧮',
+                'label' => 'Dashboard compta',
+                'desc'  => "Vue d'ensemble de la période : CA, bénéfice, alertes, derniers imports. Connexion admin requise.",
+                'url'   => url('/admin/compta'),
+            ],
+            [
+                'emoji' => '📜',
+                'label' => 'Journal des ventes',
+                'desc'  => 'Toutes les ventes ligne par ligne, filtrables. Connexion admin requise.',
+                'url'   => url('/admin/compta/ventes'),
+            ],
+            [
+                'emoji' => '📅',
+                'label' => 'Bilan annuel',
+                'desc'  => 'Bilan mois par mois (CA, bénéfice, TVA). Connexion admin requise.',
+                'url'   => url('/admin/compta/annuel'),
+            ],
+            [
+                'emoji' => '📈',
+                'label' => 'Réappro (téléphone)',
+                'desc'  => 'Réapprovisionnement complet (coûts, packs, fournisseurs). Lien kiosque, sans connexion.',
+                'url'   => Kiosk::url('/kiosque/reappro/'),
+                'kiosk' => true,
+            ],
+        ];
+
         $this->renderAdmin('admin/kiosques/index', [
-            'title' => 'Kiosques',
-            'user'  => Auth::user(),
-            'pages' => $pages,
+            'title'       => 'Kiosques',
+            'user'        => Auth::user(),
+            'memberPages' => $memberPages,
+            'adminPages'  => $adminPages,
         ]);
     }
 
