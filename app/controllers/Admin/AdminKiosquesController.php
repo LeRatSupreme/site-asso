@@ -64,13 +64,36 @@ final class AdminKiosquesController extends AdminBaseController
 
         // Liens ADMINS : données financières complètes, pour ton téléphone.
         // Les pages /admin/* demandent la connexion admin (une seule fois
-        // par appareil) — les liens kiosque marchent sans connexion.
+        // par appareil) — les liens kiosque ADMIN utilisent le jeton admin
+        // dédié (détaché du jeton membres) et marchent sans connexion.
         $adminPages = [
+            [
+                'emoji' => '🖥️',
+                'label' => 'Hub admin kiosque',
+                'desc'  => "LE menu admin sur ton téléphone : bandeau jour/semaine/mois + tuiles vers toutes les pages financières. Lien kiosque dédié, sans connexion.",
+                'url'   => Kiosk::adminUrl('/kiosque/admin/'),
+                'kiosk' => true,
+                'main'  => true,
+            ],
             [
                 'emoji' => '📊',
                 'label' => 'Récap du jour — complet',
                 'desc'  => 'CA, bénéfice, liquide/carte, top produits du jour. Lien kiosque, sans connexion.',
-                'url'   => Kiosk::url('/kiosque/comptage/jour/'),
+                'url'   => Kiosk::adminUrl('/kiosque/comptage/jour/'),
+                'kiosk' => true,
+            ],
+            [
+                'emoji' => '📅',
+                'label' => '7 derniers jours',
+                'desc'  => 'Total de la semaine, détail jour par jour, top produits. Lien kiosque, sans connexion.',
+                'url'   => Kiosk::adminUrl('/kiosque/admin/semaine/'),
+                'kiosk' => true,
+            ],
+            [
+                'emoji' => '🗓️',
+                'label' => 'Mois en cours',
+                'desc'  => 'Total du mois vs mois précédent, top produits. Lien kiosque, sans connexion.',
+                'url'   => Kiosk::adminUrl('/kiosque/admin/mois/'),
                 'kiosk' => true,
             ],
             [
@@ -100,7 +123,7 @@ final class AdminKiosquesController extends AdminBaseController
             [
                 'emoji' => '📈',
                 'label' => 'Réappro (téléphone)',
-                'desc'  => 'Réapprovisionnement complet (coûts, packs, fournisseurs). Lien kiosque, sans connexion.',
+                'desc'  => 'Réapprovisionnement complet (coûts, packs, fournisseurs). Lien kiosque, sans connexion (jeton membres).',
                 'url'   => Kiosk::url('/kiosque/reappro/'),
                 'kiosk' => true,
             ],
@@ -115,16 +138,25 @@ final class AdminKiosquesController extends AdminBaseController
     }
 
     /**
-     * Régénère le jeton partagé : tous les liens kiosque existants cessent
-     * de fonctionner (il faut redistribuer le nouveau).
+     * Régénère un jeton kiosque : scope = « membres » (reappro_kiosk_token)
+     * ou « admins » (admin_kiosk_token). Les deux sont indépendants :
+     * régénérer l'un n'affecte pas l'autre.
      */
     public function regenerate(): void
     {
         $this->guardSystemOrPage('kiosques');
 
-        Setting::set('reappro_kiosk_token', bin2hex(random_bytes(20)));
-        $this->audit('kiosque.token.regenerate', 'setting', 'reappro_kiosk_token', ['regenerated' => true]);
-        $this->setFlash('success', 'Lien kiosque régénéré — tous les anciens liens ne fonctionnent plus, redistribue le nouveau.');
+        $scope = ($_POST['scope'] ?? '') === 'admins' ? 'admins' : 'membres';
+        $key   = $scope === 'admins' ? 'admin_kiosk_token' : 'reappro_kiosk_token';
+
+        Setting::set($key, bin2hex(random_bytes(20)));
+        $this->audit('kiosque.token.regenerate', 'setting', $key, ['scope' => $scope]);
+        $this->setFlash(
+            'success',
+            $scope === 'admins'
+                ? 'Lien ADMIN régénéré — tous les anciens liens financiers ne fonctionnent plus.'
+                : 'Lien MEMBRES régénéré — tous les anciens liens membres ne fonctionnent plus.'
+        );
 
         redirect(url('/admin/kiosques'));
     }
