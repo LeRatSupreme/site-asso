@@ -1191,6 +1191,19 @@ final class AdminComptaController extends AdminBaseController
         return $expected !== '' && hash_equals($expected, trim($token));
     }
 
+    /**
+     * Hub de retour selon le jeton de la liste : admin → hub admin,
+     * membres → hub membres.
+     */
+    private function listeHubUrl(string $token): string
+    {
+        $admin = trim((string) Setting::get('admin_kiosk_token', ''));
+
+        return $admin !== '' && hash_equals($admin, trim($token))
+            ? url('/kiosque/admin/' . trim($token))
+            : url('/kiosque/comptage/' . trim($token));
+    }
+
     private function listeStatePayload(): array
     {
         $checks = [];
@@ -1377,6 +1390,8 @@ final class AdminComptaController extends AdminBaseController
             'kiosk'       => $kiosk,
             'kioskUrl'    => $kioskUrl,
             'kioskToken'  => (string) $kioskToken,
+            // Retour vers le hub correspondant au jeton (admin ou membres).
+            'hubUrl'      => $kiosk ? $this->listeHubUrl((string) $kioskToken) : '',
             // Identité des connected (trace des cases cochées côté admin).
             'adminWho'    => (!$kiosk && $user !== null)
                 ? trim(trim(($user['prenom'] ?? '') . ' ' . ($user['nom'] ?? '')) . ' (' . ($user['role'] ?? '') . ')')
