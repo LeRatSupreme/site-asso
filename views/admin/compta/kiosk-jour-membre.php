@@ -121,7 +121,7 @@ $dateLabel = $jours[(int) $dt->format('N') - 1] . ' ' . $dt->format('j') . ' ' .
     </div>
 
     <div class="km-top-card">
-        <p class="km-top-title">🏆 Top produits du jour</p>
+        <p class="km-top-title">🏆 Produits vendus aujourd'hui (<?= count($stats['top']) ?>)</p>
         <ul class="km-top" id="kmTop">
             <?php foreach ($stats['top'] as $i => $t): ?>
             <li>

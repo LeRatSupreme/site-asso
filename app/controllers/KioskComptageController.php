@@ -355,7 +355,7 @@ final class KioskComptageController extends Controller
                 'qty'   => (int) $t['qty'],
                 'ca'    => round((float) $t['ca'], 2),
             ],
-            Sale::topProductsBetween($today, $today, 10)
+            Sale::topProductsBetween($today, $today, 500)
         );
 
         return [
