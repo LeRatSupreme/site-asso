@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Controllers\Admin;
 
 use App\Core\Compta\ComptaCalc;
+use App\Core\Compta\ReceiptStorage;
 use App\Models\Expense;
 
 /**
@@ -42,75 +43,22 @@ final class AdminExpenseController extends AdminBaseController
     //  Ajout / suppression
     // -----------------------------------------------------------------
 
-    // Justificatifs : PDF ou image, 5 Mo max, MIME réel vérifié (comme les
-    // médias). Stockés sous /assets/uploads/receipts/ avec un nom aléatoire.
-    private const RECEIPT_MAX_SIZE = 5 * 1024 * 1024;
-    private const RECEIPT_ALLOWED = [
-        'pdf'  => 'application/pdf',
-        'jpg'  => 'image/jpeg',
-        'jpeg' => 'image/jpeg',
-        'png'  => 'image/png',
-        'webp' => 'image/webp',
-    ];
-
     /**
-     * Valide et déplace le justificatif envoyé avec la dépense.
-     * Renvoie le chemin relatif (« uploads/receipts/xx.ext ») ou null si
-     * aucun fichier ; arrête la requête (flash + redirect) en cas d'erreur.
+     * Valide et déplace le justificatif envoyé avec la dépense (règles
+     * partagées avec le kiosque, voir ReceiptStorage). Renvoie le chemin
+     * relatif (« uploads/receipts/xx.ext ») ou null si aucun fichier ;
+     * arrête la requête (flash + redirect) en cas d'erreur.
      *
      * @param string $back Chemin de retour (cf. returnTo()).
      */
     private function storeReceipt(string $back): ?string
     {
-        $receipt = $_FILES['receipt'] ?? null;
-        if (!is_array($receipt) || (int) ($receipt['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
-            return null;
-        }
-
-        if ((int) ($receipt['error'] ?? 1) !== UPLOAD_ERR_OK) {
-            $this->setFlash('error', 'Échec de l\'envoi du justificatif (erreur ' . (int) ($receipt['error'] ?? 0) . ').');
+        try {
+            return ReceiptStorage::store();
+        } catch (\RuntimeException $e) {
+            $this->setFlash('error', $e->getMessage());
             redirect(url($back));
         }
-
-        if ((int) ($receipt['size'] ?? 0) > self::RECEIPT_MAX_SIZE) {
-            $this->setFlash('error', 'Justificatif trop volumineux (5 Mo maximum).');
-            redirect(url($back));
-        }
-
-        $ext = strtolower(pathinfo((string) ($receipt['name'] ?? ''), PATHINFO_EXTENSION));
-        if (!isset(self::RECEIPT_ALLOWED[$ext])) {
-            $this->setFlash('error', 'Justificatif : formats acceptés PDF, JPG, PNG ou WEBP.');
-            redirect(url($back));
-        }
-
-        // Validation MIME réelle : l'extension déclarée n'est jamais une preuve.
-        $detected = null;
-        if (function_exists('mime_content_type')) {
-            $detected = mime_content_type((string) $receipt['tmp_name']);
-        } elseif (function_exists('finfo_open')) {
-            $finfo = finfo_open(FILEINFO_MIME_TYPE);
-            if ($finfo !== false) {
-                $detected = finfo_file($finfo, (string) $receipt['tmp_name']);
-                finfo_close($finfo);
-            }
-        }
-        if ($detected !== self::RECEIPT_ALLOWED[$ext]) {
-            $this->setFlash('error', 'Le contenu du justificatif ne correspond pas à son extension.');
-            redirect(url($back));
-        }
-
-        $dir = AEIC_PUBLIC . '/assets/uploads/receipts';
-        if (!is_dir($dir)) {
-            @mkdir($dir, 0775, true);
-        }
-
-        $name = bin2hex(random_bytes(12)) . '.' . $ext;
-        if (!move_uploaded_file((string) $receipt['tmp_name'], $dir . '/' . $name)) {
-            $this->setFlash('error', 'Échec de l\'enregistrement du justificatif.');
-            redirect(url($back));
-        }
-
-        return 'uploads/receipts/' . $name;
     }
 
     /**
@@ -169,37 +117,15 @@ final class AdminExpenseController extends AdminBaseController
             redirect(url($back));
         }
 
-        $amountHt = null;
-        $amountTtc = null;
-        $vat = null;
-
-        if ($basis === 'ttc') {
-            // TTC fait foi.
-            $amountTtc = round($amount, 2);
-            if ($vatAmountInput > 0) {
-                $vat = round($vatAmountInput, 2);
-                $amountHt = round($amountTtc - $vat, 2);
-            } elseif ($rate !== null && $rate > 0) {
-                $amountHt = round($amountTtc / (1 + $rate / 100), 2);
-                $vat = round($amountTtc - $amountHt, 2);
-            } else {
-                $amountHt = $amountTtc;
-                $vat = 0.0;
-            }
-        } else {
-            // HT fait foi.
-            $amountHt = round($amount, 2);
-            if ($vatAmountInput > 0) {
-                $vat = round($vatAmountInput, 2);
-                $amountTtc = round($amountHt + $vat, 2);
-            } elseif ($rate !== null && $rate > 0) {
-                $vat = round($amountHt * $rate / 100, 2);
-                $amountTtc = round($amountHt + $vat, 2);
-            } else {
-                $amountTtc = $amountHt;
-                $vat = 0.0;
-            }
-        }
+        // HT/TTC/TVA déduits du montant unique : montant de TVA saisi
+        // prioritaire, sinon taux choisi, sinon la base fait foi (TVA = 0) —
+        // logique partagée avec le kiosque (Expense::computeAmounts()).
+        ['amount_ht' => $amountHt, 'amount_ttc' => $amountTtc, 'vat' => $vat] = Expense::computeAmounts(
+            $amount,
+            $basis,
+            $vatAmountInput > 0 ? $vatAmountInput : null,
+            $rate
+        );
 
         $receiptPath = $this->storeReceipt($back);
 

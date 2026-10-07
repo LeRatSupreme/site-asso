@@ -26,6 +26,56 @@ final class Expense extends Model
     public const CATEGORIES = ['MATIERE', 'MATERIEL', 'EVENEMENT', 'FRAIS', 'DIVERS'];
 
     /**
+     * Calcule le trio HT / TTC / TVA d'une dépense à partir d'un montant
+     * unique saisi dans une base explicite (« ttc » — défaut, les tickets
+     * indiquent le TTC — ou « ht »).
+     *
+     * Le montant de TVA saisi est prioritaire sur le taux ; sans l'un ni
+     * l'autre, la base saisie fait foi pour l'autre montant (TVA = 0).
+     * Logique partagée par l'admin (AdminExpenseController::save) et le
+     * kiosque (saisie express du livre comptable) — à garder en phase.
+     *
+     * @param float|null $vatAmount Montant de TVA saisi (prioritaire), null si absent.
+     * @param float|null $rate      Taux de TVA ∈ {20, 10, 5.5, 2.1, 0}, null si absent.
+     *
+     * @return array{amount_ht:?float, amount_ttc:?float, vat:?float}
+     */
+    public static function computeAmounts(float $amount, string $basis, ?float $vatAmount, ?float $rate): array
+    {
+        if ($basis === 'ht') {
+            // HT fait foi.
+            $amountHt = round($amount, 2);
+            if ($vatAmount !== null && $vatAmount > 0) {
+                $vat = round($vatAmount, 2);
+                $amountTtc = round($amountHt + $vat, 2);
+            } elseif ($rate !== null && $rate > 0) {
+                $vat = round($amountHt * $rate / 100, 2);
+                $amountTtc = round($amountHt + $vat, 2);
+            } else {
+                $amountTtc = $amountHt;
+                $vat = 0.0;
+            }
+
+            return ['amount_ht' => $amountHt, 'amount_ttc' => $amountTtc, 'vat' => $vat];
+        }
+
+        // TTC fait foi.
+        $amountTtc = round($amount, 2);
+        if ($vatAmount !== null && $vatAmount > 0) {
+            $vat = round($vatAmount, 2);
+            $amountHt = round($amountTtc - $vat, 2);
+        } elseif ($rate !== null && $rate > 0) {
+            $amountHt = round($amountTtc / (1 + $rate / 100), 2);
+            $vat = round($amountTtc - $amountHt, 2);
+        } else {
+            $amountHt = $amountTtc;
+            $vat = 0.0;
+        }
+
+        return ['amount_ht' => $amountHt, 'amount_ttc' => $amountTtc, 'vat' => $vat];
+    }
+
+    /**
      * Crée une dépense.
      *
      * @param array<string,mixed> $data spent_at (« YYYY-MM-DD »), category,

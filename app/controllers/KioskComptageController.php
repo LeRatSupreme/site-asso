@@ -6,10 +6,12 @@ namespace App\Controllers;
 
 use App\Core\Compta\CashLedger;
 use App\Core\Compta\ProductAutoSync;
+use App\Core\Compta\ReceiptStorage;
 use App\Core\Compta\StockPublic;
 use App\Core\Compta\SumUpCsvParser;
 use App\Core\Controller;
 use App\Models\AuditLog;
+use App\Models\Expense;
 use App\Models\InventoryCount;
 use App\Models\ProductDiscontinued;
 use App\Models\Setting;
@@ -18,9 +20,10 @@ use App\Models\Sale;
 /**
  * Comptage « kiosque » par lien secret (même jeton que Réappro/Liste) :
  * hub avec deux saisies — comptage de caisse et comptage inventaire à
- * l'aveugle. Mêmes mécaniques serveur que les pages admin (écarts
- * calculés côté serveur, historique complet), sans connexion : le jeton
- * secret EST l'authentification. Toutes les traces sont marquées
+ * l'aveugle — ainsi que la saisie express des dépenses depuis le livre
+ * comptable (jeton admin). Mêmes mécaniques serveur que les pages admin
+ * (écarts calculés côté serveur, historique complet), sans connexion : le
+ * jeton secret EST l'authentification. Toutes les traces sont marquées
  * « kiosque » (created_by / audit).
  */
 final class KioskComptageController extends Controller
@@ -150,8 +153,10 @@ final class KioskComptageController extends Controller
     }
 
     /**
-     * Livre comptable (partie ADMIN, lecture seule, adaptée téléphone) :
-     * Date | Objet | Débit | Crédit, lignes « ticket », équilibrage final.
+     * Livre comptable (partie ADMIN, adaptée téléphone) : Date | Objet |
+     * Débit | Crédit, lignes « ticket », équilibrage = solde de trésorerie
+     * (+ bénéfice net affiché séparément) — et onglet « Saisir une
+     * dépense » (express, 30 s, enregistré par ledgerDepenseSave()).
      */
     public function ledger(string $token): void
     {
@@ -166,17 +171,124 @@ final class KioskComptageController extends Controller
         $entries = $ledger->buildEntries($from, $to);
 
         $this->renderKiosk('admin/ledger/index', [
-            'title'       => 'Livre comptable',
-            'token'       => $token,
-            'kiosk'       => true,
-            'entries'     => $entries,
-            'from'        => $from,
-            'to'          => $to,
-            'preset'      => $preset,
-            'totalDebit'  => $entries['total_debit'],
-            'totalCredit' => $entries['total_credit'],
-            'balance'     => $entries['balance'],
+            'title'          => 'Livre comptable',
+            'token'          => $token,
+            'kiosk'          => true,
+            'entries'        => $entries,
+            'from'           => $from,
+            'to'             => $to,
+            'preset'         => $preset,
+            'totalDebit'     => $entries['total_debit'],
+            'totalCredit'    => $entries['total_credit'],
+            'balance'        => $entries['balance'],
+            'recentExpenses' => Expense::recent(8),
         ]);
+    }
+
+    /**
+     * Saisie express d'une dépense depuis le livre comptable kiosque :
+     * créer une trace immédiate (la ligne apparaît aussitôt dans le livre)
+     * pour bien la compléter plus tard côté admin. Photo du ticket
+     * optionnelle, catégorie forcée à DIVERS, identité obligatoire
+     * (pastille profil du layout kiosk). Pas de CSRF : le jeton admin EST
+     * l'authentification, comme les autres POST kiosque.
+     */
+    public function ledgerDepenseSave(string $token): void
+    {
+        if (!$this->adminTokenOk($token)) {
+            $this->deny();
+
+            return;
+        }
+
+        $back = url('/kiosque/admin/ledger/' . $token);
+
+        // Identité obligatoire (mêmes mécaniques que le comptage caisse).
+        $who = $this->whoFromPost();
+        if ($who === '') {
+            $this->setFlash('error', 'Indique qui tu es (prénom, nom et rôle) via la pastille en haut à droite avant d\'enregistrer.');
+            redirect($back);
+        }
+
+        $label = trim((string) ($_POST['label'] ?? ''));
+        $amount = parseFrenchFloat((string) ($_POST['amount'] ?? ''));
+        if ($label === '' || $amount <= 0) {
+            $this->setFlash('error', 'Libellé requis, avec un montant (> 0).');
+            redirect($back);
+        }
+
+        // Base du montant (« ttc » par défaut — les tickets indiquent le TTC).
+        $basis = ($_POST['amount_basis'] ?? '') === 'ht' ? 'ht' : 'ttc';
+        $vatAmountInput = parseFrenchFloat((string) ($_POST['vat_amount'] ?? ''));
+        $vatRaw = trim((string) ($_POST['vat_rate'] ?? ''));
+        $rate = $vatRaw !== '' ? parseFrenchFloat($vatRaw) : null;
+        if ($rate !== null && !in_array($rate, [20.0, 10.0, 5.5, 2.1, 0.0], true)) {
+            $rate = null;
+        }
+
+        // HT/TTC/TVA : exactement la même logique que l'admin (méthode partagée).
+        ['amount_ht' => $amountHt, 'amount_ttc' => $amountTtc, 'vat' => $vat] = Expense::computeAmounts(
+            $amount,
+            $basis,
+            $vatAmountInput > 0 ? $vatAmountInput : null,
+            $rate
+        );
+
+        // Photo du ticket optionnelle (mêmes règles de validation que l'admin).
+        try {
+            $receiptPath = ReceiptStorage::store();
+        } catch (\RuntimeException $e) {
+            $this->setFlash('error', $e->getMessage());
+            redirect($back);
+        }
+
+        // Catégorie validée comme côté admin ; le formulaire kiosque n'en
+        // propose pas (DIVERS), mais on reste robustes à un POST forgé.
+        $category = strtoupper(trim((string) ($_POST['category'] ?? '')));
+        if (!in_array($category, Expense::CATEGORIES, true)) {
+            $category = 'DIVERS';
+        }
+
+        // Date valide sinon aujourd'hui (saisie téléphone indulgente).
+        $spentAt = trim((string) ($_POST['spent_at'] ?? ''));
+        $d = \DateTimeImmutable::createFromFormat('Y-m-d', $spentAt);
+        if ($d === false || $d->format('Y-m-d') !== $spentAt) {
+            $spentAt = date('Y-m-d');
+        }
+
+        $id = Expense::create([
+            'spent_at'       => $spentAt,
+            'category'       => $category,
+            'label'          => $label,
+            'amount_ttc'     => $amountTtc,
+            'amount_ht'      => $amountHt,
+            'vat'            => $vat,
+            'invoice_number' => (string) ($_POST['invoice_number'] ?? ''),
+            'notes'          => '',
+            'receipt_path'   => $receiptPath,
+            'created_by'     => 'kiosque — ' . $who,
+        ]);
+
+        if ($id === '') {
+            $this->setFlash('error', 'Libellé requis, avec un montant (> 0).');
+            redirect($back);
+        }
+
+        AuditLog::log('compta.expense.create', null, 'expense', $id, [
+            'label'      => $label,
+            'category'   => $category,
+            'basis'      => $basis,
+            'vat_rate'   => $rate,
+            'amount_ht'  => $amountHt,
+            'amount_ttc' => $amountTtc,
+            'vat'        => $vat,
+            'receipt'    => $receiptPath,
+            'via'        => 'kiosque',
+            'who'        => $who,
+        ]);
+
+        $this->setFlash('success', 'Dépense enregistrée.');
+        redirect($back);
     }
 
     /**
