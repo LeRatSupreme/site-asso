@@ -5,6 +5,10 @@ declare(strict_types=1);
 /**
  * Dashboard Analytics Pro — filtres, KPI, graphiques, heatmap, tableau, insights.
  *
+ * Servie dans l'espace admin (connexion) ET en kiosque ADMIN (lien secret,
+ * sans connexion) : en mode kiosque, les liens admin sont neutralisés et
+ * une nav de retour est affichée en bas de page.
+ *
  * @var array<string,mixed> $filters
  * @var array<string,string> $periods
  * @var list<string> $categories
@@ -12,7 +16,17 @@ declare(strict_types=1);
  * @var array<string,mixed> $kpis
  * @var list<array<string,mixed>> $insights
  * @var string $json  Payload JSON injecté dans un <script>.
+ * @var bool $kiosk   Vrai si rendu dans le layout kiosque (défaut : false).
+ * @var string $token Jeton kiosque ADMIN (utilisé si $kiosk).
  */
+
+$kiosk = $kiosk ?? false;
+
+// Lien « Reset » : retour aux filtres par défaut, en conservant l'espace
+// (admin ou kiosque avec jeton dans le chemin).
+$resetUrl = $kiosk
+    ? url('/kiosque/admin/analytics/' . rawurlencode($token))
+    : url('/admin/analytics');
 
 $iconSvg = static function (string $name): string {
     $icons = [
@@ -98,7 +112,7 @@ $iconSvg = static function (string $name): string {
 
             <div class="af-actions">
                 <button type="submit" class="btn btn-primary">Appliquer</button>
-                <a class="btn btn-ghost" href="<?= e(url('/admin/analytics')) ?>">Reset</a>
+                <a class="btn btn-ghost" href="<?= e($resetUrl) ?>">Reset</a>
             </div>
         </div>
         <input type="hidden" name="period" id="period-hidden" value="<?= e($filters['period']) ?>">
@@ -107,7 +121,11 @@ $iconSvg = static function (string $name): string {
     <?php if (!$hasSales): ?>
         <p class="card-meta" style="margin-top:1rem">
             Aucune vente importée — les graphiques restent vides jusqu'au premier import
-            (<a href="<?= e(url('/admin/compta/import')) ?>">Importer un CSV SumUp</a>).
+            <?php if ($kiosk): ?>
+                (import d'un CSV SumUp : depuis l'espace admin sur PC).
+            <?php else: ?>
+                (<a href="<?= e(url('/admin/compta/import')) ?>">Importer un CSV SumUp</a>).
+            <?php endif; ?>
         </p>
     <?php endif; ?>
 
@@ -277,10 +295,21 @@ $iconSvg = static function (string $name): string {
 
 </div>
 
+<?php if ($kiosk): ?>
+<!-- Nav de bas de page (kiosque uniquement). -->
+<div class="kday-actions">
+    <a class="btn btn-ghost btn-sm" href="<?= e(url('/kiosque/admin/' . rawurlencode($token))) ?>">← Kiosque admin</a>
+    <a class="btn btn-ghost btn-sm" href="<?= e(url('/kiosque/comptage/jour/' . rawurlencode($token))) ?>">📊 Récap du jour</a>
+</div>
+<?php endif; ?>
+
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
 (function () {
     var data = <?= $json ?>;
+
+    // Mode kiosque : les liens vers l'espace admin sont désactivés.
+    var kiosk = <?= $kiosk ? 'true' : 'false' ?>;
 
     // ---------- Heatmap filter sync ----------
     var hmCat = document.getElementById('hm-cat');
@@ -311,6 +340,11 @@ $iconSvg = static function (string $name): string {
             pill.classList.add('is-active');
             periodHidden.value = pill.getAttribute('data-period');
             syncCustom();
+            // Application immédiate : la pastille soumet le formulaire,
+            // sauf « Personnalisé » qui affiche d'abord les champs de dates.
+            if (periodHidden.value !== 'custom') {
+                document.getElementById('analytics-filters').submit();
+            }
         });
     });
 
@@ -431,7 +465,7 @@ $iconSvg = static function (string $name): string {
                     tooltip: { callbacks: { label: function (c) { return money(c.raw); } } },
                 },
                 scales: { x: { beginAtZero: true, ticks: { callback: money } } },
-                onClick: function () { window.location.href = '<?= e(url('/admin/compta/produits')) ?>'; },
+                onClick: function () { if (!kiosk) window.location.href = '<?= e(url('/admin/compta/produits')) ?>'; },
             },
         });
     }
@@ -851,6 +885,12 @@ $iconSvg = static function (string $name): string {
 .insight-icon svg { width: 24px; height: 24px; display: block; }
 .insight-title { font-size: .85rem; font-weight: 700; margin: 0 0 .25rem; color: var(--primary, #48bdd3); }
 .insight-text { font-size: .85rem; margin: 0; color: var(--muted, #9fb3c8); }
+
+/* ---- Nav bas de page (kiosque) ---- */
+.kday-actions {
+    max-width: 40rem; margin: 0 auto 1rem;
+    display: flex; gap: 0.5rem; flex-wrap: wrap; justify-content: center;
+}
 
 /* ---- Tableau ---- */
 .table-card { padding: 1.25rem 1.4rem; }
