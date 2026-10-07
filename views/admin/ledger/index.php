@@ -117,6 +117,25 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
         font-size: 0.95rem; width: 100%;
     }
     .lg-quick input[type="file"] { font-size: 0.85rem; }
+    /* Capture photo du ticket : boutons caméra/fichier + aperçu compact. */
+    .lg-shot-actions { display: flex; flex-wrap: wrap; gap: 0.45rem; }
+    .lg-shot-preview {
+        display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem;
+        margin-top: 0.5rem;
+    }
+    /* Le display:flex ci-dessus écraserait l'attribut hidden sinon. */
+    .lg-shot-preview[hidden] { display: none; }
+    .lg-shot-preview img {
+        max-height: 120px; border-radius: 8px; display: block;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+    }
+    .lg-shot-chip {
+        padding: 0.35rem 0.7rem; border-radius: 999px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        background: rgba(255, 255, 255, 0.04);
+        font-size: 0.8rem; max-width: 100%;
+        overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
     .lg-recent-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
     .lg-recent-table th, .lg-recent-table td {
         padding: 0.45rem 0.5rem; text-align: left;
@@ -207,7 +226,19 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
 
             <div class="field">
                 <label for="lg-receipt">Photo du ticket <span class="muted">(optionnelle — sauvegardée avec la dépense)</span></label>
-                <input type="file" id="lg-receipt" name="receipt" accept="image/*" capture="environment">
+                <!-- Capture photo : deux boutons pilotent le même input file
+                     invisible (caméra vs galerie/PDF), aperçu vignette ou
+                     chip PDF retirable — cf. JS en bas de page. -->
+                <div class="lg-shot-actions">
+                    <button type="button" id="lg-shot-btn" class="btn btn-primary btn-sm">📷 Prendre une photo</button>
+                    <button type="button" id="lg-file-btn" class="btn btn-ghost btn-sm">🖼️ Choisir un fichier</button>
+                </div>
+                <input type="file" id="lg-receipt" name="receipt" accept="image/*,.pdf" style="display:none;">
+                <div id="lg-shot-preview" hidden>
+                    <img id="lg-shot-img" alt="Aperçu du ticket" hidden>
+                    <span id="lg-shot-chip" class="lg-shot-chip" hidden></span>
+                    <button type="button" id="lg-shot-clear" class="btn btn-ghost btn-sm">✕ Retirer</button>
+                </div>
             </div>
 
             <div class="form-actions">
@@ -264,7 +295,19 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
 
             <div class="field">
                 <label for="lg-receipt">Photo du ticket <span class="muted">(optionnel — sauvegardée avec la référence)</span></label>
-                <input type="file" id="lg-receipt" name="receipt" accept="image/*" capture="environment">
+                <!-- Capture photo : deux boutons pilotent le même input file
+                     invisible (caméra vs galerie/PDF), aperçu vignette ou
+                     chip PDF retirable — cf. JS en bas de page. -->
+                <div class="lg-shot-actions">
+                    <button type="button" id="lg-shot-btn" class="btn btn-primary btn-sm">📷 Prendre une photo</button>
+                    <button type="button" id="lg-file-btn" class="btn btn-ghost btn-sm">🖼️ Choisir un fichier</button>
+                </div>
+                <input type="file" id="lg-receipt" name="receipt" accept="image/*,.pdf" style="display:none;">
+                <div id="lg-shot-preview" hidden>
+                    <img id="lg-shot-img" alt="Aperçu du ticket" hidden>
+                    <span id="lg-shot-chip" class="lg-shot-chip" hidden></span>
+                    <button type="button" id="lg-shot-clear" class="btn btn-ghost btn-sm">✕ Retirer</button>
+                </div>
             </div>
 
             <div class="form-actions">
@@ -460,5 +503,74 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
             form.submit();
         });
     });
+})();
+
+// Capture photo du ticket (saisie express, admin ET kiosque) : deux boutons
+// pilotent le même input file invisible. Caméra = attribut capture posé à la
+// volée (iOS Safari l'ignore s'il est en dur au chargement) ; fichier =
+// capture retirée et PDF accepté. Aperçu : vignette (object URL révoqué à
+// chaque remplacement) ou chip « nom.pdf », avec bouton Retirer. Le
+// formulaire part ensuite normalement (multipart déjà en place).
+(function () {
+    var input = document.getElementById('lg-receipt');
+    var shotBtn = document.getElementById('lg-shot-btn');
+    var fileBtn = document.getElementById('lg-file-btn');
+    var preview = document.getElementById('lg-shot-preview');
+    var img = document.getElementById('lg-shot-img');
+    var chip = document.getElementById('lg-shot-chip');
+    var clearBtn = document.getElementById('lg-shot-clear');
+    if (!input || !shotBtn || !fileBtn || !preview || !img || !chip || !clearBtn) return;
+
+    var objectUrl = null;
+
+    function revoke() {
+        if (objectUrl) {
+            URL.revokeObjectURL(objectUrl);
+            objectUrl = null;
+        }
+    }
+
+    function showPreview(file) {
+        revoke();
+        if (file && file.type.indexOf('image/') === 0) {
+            objectUrl = URL.createObjectURL(file);
+            img.src = objectUrl;
+            img.hidden = false;
+            chip.hidden = true;
+        } else if (file) {
+            img.removeAttribute('src');
+            img.hidden = true;
+            chip.textContent = '📄 ' + file.name;
+            chip.hidden = false;
+        }
+        preview.hidden = false;
+    }
+
+    function reset() {
+        revoke();
+        input.value = '';
+        img.removeAttribute('src');
+        chip.textContent = '';
+        preview.hidden = true;
+    }
+
+    shotBtn.addEventListener('click', function () {
+        input.setAttribute('capture', 'environment');
+        input.setAttribute('accept', 'image/*');
+        input.click();
+    });
+
+    fileBtn.addEventListener('click', function () {
+        input.removeAttribute('capture');
+        input.setAttribute('accept', 'image/*,.pdf');
+        input.click();
+    });
+
+    input.addEventListener('change', function () {
+        if (input.files && input.files.length > 0) showPreview(input.files[0]);
+        else reset();
+    });
+
+    clearBtn.addEventListener('click', reset);
 })();
 </script>
