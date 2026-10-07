@@ -83,10 +83,10 @@ final class AdminKiosquesController extends AdminBaseController
                 'kiosk' => true,
             ],
             [
-                'emoji' => '📅',
-                'label' => 'Période analysée',
-                'desc'  => 'Une seule page pour 7 / 14 / 30 derniers jours et le mois en cours : menu de durée, détail jour par jour, top produits. Lien kiosque, sans connexion.',
-                'url'   => Kiosk::adminUrl('/kiosque/admin/periode/'),
+                'emoji' => '📈',
+                'label' => 'Analytique (kiosque)',
+                'desc'  => "Les mêmes tableaux de bord que sur PC : CA, bénéfice, top produits, heatmap des heures, détail par produit — sur ton téléphone. Lien kiosque, sans connexion.",
+                'url'   => Kiosk::adminUrl('/kiosque/admin/analytics/'),
                 'kiosk' => true,
             ],
             [

@@ -125,9 +125,9 @@ $mMoisMarge = $marge($mois['ca'], $mois['profit']);
         <span class="kiosk-emoji">🧾</span>
         <span class="kiosk-tile-title">Livre comptable</span>
     </a>
-    <a href="<?= e(url('/kiosque/admin/periode/' . rawurlencode($token))) ?>">
-        <span class="kiosk-emoji">📅</span>
-        <span class="kiosk-tile-title">Période analysée</span>
+    <a href="<?= e(url('/kiosque/admin/analytics/' . rawurlencode($token))) ?>">
+        <span class="kiosk-emoji">📈</span>
+        <span class="kiosk-tile-title">Analytique</span>
     </a>
     <a href="<?= e(url('/kiosque/liste/' . rawurlencode($token))) ?>">
         <span class="kiosk-emoji">🛒</span>
@@ -149,7 +149,7 @@ $mMoisMarge = $marge($mois['ca'], $mois['profit']);
 
 <p class="kah-foot">
     Outils en bas de grille : accès direct aux pages kiosque membres.<br>
-    Analytics, journal des ventes et dashboard complet : depuis
+    Journal des ventes et dashboard complet : depuis
     <a href="<?= e(url('/admin/compta')) ?>">l'espace admin</a> (connexion requise).
 </p>
 </div>

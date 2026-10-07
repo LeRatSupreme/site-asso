@@ -335,6 +335,9 @@ function aeic_register_routes(Router $router): void
     $router->get('/kiosque/admin/periode/{token}', [KioskComptageController::class, 'periode']);
     $router->get('/kiosque/admin/semaine/{token}', [KioskComptageController::class, 'semaine']);
     $router->get('/kiosque/admin/mois/{token}', [KioskComptageController::class, 'mois']);
+    // Dashboard Analytics en kiosque ADMIN : mêmes graphiques que sur PC,
+    // accès par jeton admin sans connexion.
+    $router->get('/kiosque/admin/analytics/{token}', [AdminAnalyticsController::class, 'kiosk']);
 
     // Suivi avancé : dépenses, budgets, achats, inventaire, pertes, événements, rapport annuel.
     $router->get('/admin/compta/depenses', [AdminExpenseController::class, 'index']);

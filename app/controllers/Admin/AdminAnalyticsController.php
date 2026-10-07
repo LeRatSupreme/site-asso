@@ -6,12 +6,15 @@ namespace App\Controllers\Admin;
 
 use App\Models\Analytics;
 use App\Models\Sale;
+use App\Models\Setting;
 
 /**
  * Dashboard Analytics Pro (Fonctionnalité 14, refonte).
  *
  * Tous les filtres sont passés en GET (partageables par URL) : période
  * rapide ou intervalle custom, granularité, catégorie, moyen de paiement.
+ * Le même dashboard est servi dans l'espace admin (connexion) et dans le
+ * kiosque ADMIN (lien secret à jeton, sans connexion).
  */
 final class AdminAnalyticsController extends AdminBaseController
 {
@@ -35,13 +38,45 @@ final class AdminAnalyticsController extends AdminBaseController
         // ADMIN + TRESORERIE (lecture seule d'agrégats compta).
         $this->guardCompta();
 
+        $this->renderAdmin('admin/analytics/index', $this->buildPage() + ['title' => 'Analytics']);
+    }
+
+    /**
+     * Version KIOSQUE du dashboard Analytics : accès par lien secret avec
+     * le JETON ADMIN (données financières complètes), sans connexion —
+     * le jeton EST l'authentification.
+     */
+    public function kiosk(string $token): void
+    {
+        if (!$this->adminTokenOk($token)) {
+            $this->deny();
+
+            return;
+        }
+
+        $this->renderKiosk('admin/analytics/index', $this->buildPage() + [
+            'title' => 'Analytique',
+            'kiosk' => true,
+            'token' => $token,
+        ]);
+    }
+
+    /**
+     * Construit toutes les données de la page (filtres GET, fenêtre de
+     * temps, agrégats, insights, payload JSON) — partagées entre les rendus
+     * admin et kiosque.
+     *
+     * @return array{filters:array<string,mixed>,periods:array<string,string>,categories:list<string>,hasSales:bool,kpis:array<string,mixed>,insights:list<array<string,mixed>>,json:string}
+     */
+    private function buildPage(): array
+    {
         // ---- Lecture des filtres GET (valeurs sûres) ----
-        $period     = $this->filter('period', '30d');
+        $period      = $this->filter('period', '30d');
         $granularity = $this->filter('granularity', '');
-        $category   = $this->filter('category', 'all');
-        $payment    = $this->filter('payment', 'all');
-        $fromInput  = $this->filter('from', '');
-        $toInput    = $this->filter('to', '');
+        $category    = $this->filter('category', 'all');
+        $payment     = $this->filter('payment', 'all');
+        $fromInput   = $this->filter('from', '');
+        $toInput     = $this->filter('to', '');
 
         [$from, $to] = $this->computeWindow($period, $fromInput, $toInput);
 
@@ -107,24 +142,41 @@ final class AdminAnalyticsController extends AdminBaseController
             ],
         ];
 
-        $categories = Sale::distinctCategories();
-
-        $this->renderAdmin('admin/analytics/index', [
-            'title'      => 'Analytics',
+        return [
             'filters'    => $filters,
             'periods'    => self::PERIODS,
-            'categories' => $categories,
+            'categories' => Sale::distinctCategories(),
             'hasSales'   => Sale::count() > 0,
             'kpis'       => $this->kpisWithDelta($kpis, $kpisPrev),
             'insights'   => $insights,
-            'payload'    => $payload,
-            'json'       => json_encode(
+            'json'       => (string) json_encode(
                 $payload,
                 JSON_NUMERIC_CHECK
                 | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
                 | JSON_UNESCAPED_UNICODE
             ),
-        ]);
+        ];
+    }
+
+    /**
+     * Jeton kiosque ADMIN (données financières complètes) : totalement
+     * indépendant du jeton membres — même logique que KioskComptageController.
+     */
+    private function adminTokenOk(string $token): bool
+    {
+        $expected = trim((string) Setting::get('admin_kiosk_token', ''));
+        $given    = trim($token);
+
+        return $expected !== '' && $given !== '' && hash_equals($expected, $given);
+    }
+
+    /**
+     * Réponse 403 pour un lien kiosque invalide ou révoqué.
+     */
+    private function deny(): void
+    {
+        http_response_code(403);
+        echo '<h1>Erreur 403 — Lien invalide ou révoqué.</h1>';
     }
 
     /**
