@@ -14,6 +14,7 @@ use App\Controllers\Admin\AdminEventController;
 use App\Controllers\Admin\AdminExpenseController;
 use App\Controllers\Admin\AdminGameController;
 use App\Controllers\Admin\AdminKiosquesController;
+use App\Controllers\Admin\AdminLedgerController;
 use App\Controllers\Admin\AdminLossController;
 use App\Controllers\Admin\AdminMembershipController;
 use App\Controllers\Admin\AdminMediaController;
@@ -250,6 +251,10 @@ function aeic_register_routes(Router $router): void
     // Kiosques — centralisation des liens téléphone (groupe Système).
     $router->get('/admin/kiosques', [AdminKiosquesController::class, 'index']);
     $router->post('/admin/kiosques/regenerate', [AdminKiosquesController::class, 'regenerate']);
+
+    // Livre comptable (groupe Système) + version kiosque admin.
+    $router->get('/admin/ledger', [AdminLedgerController::class, 'index']);
+    $router->get('/kiosque/admin/ledger/{token}', [KioskComptageController::class, 'ledger']);
     $router->get('/admin/wiki', [AdminController::class, 'wiki']);
     $router->post('/admin/settings/save', [AdminSettingController::class, 'save']);
     $router->post('/admin/settings/test-email', [AdminSettingController::class, 'testEmail']);

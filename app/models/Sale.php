@@ -357,6 +357,60 @@ final class Sale extends Model
     }
 
     /**
+     * CA agrégé PAR JOUR (livre comptable : une ligne de crédit par jour).
+     *
+     * @param string|null $fromDay Jour de début « YYYY-MM-DD » (inclus), ou null.
+     * @param string|null $toDay   Jour de fin « YYYY-MM-DD » (inclus), ou null.
+     *
+     * @return list<array{d:string, ca:float, qty:int, tx:int}> Trié par jour croissant.
+     */
+    public static function dailyRevenueBetween(?string $fromDay, ?string $toDay): array
+    {
+        $where = [];
+        $args = [];
+        if ($fromDay !== null && $fromDay !== '') {
+            $where[] = 'sold_at >= ?';
+            $args[] = $fromDay . ' 00:00:00';
+        }
+        if ($toDay !== null && $toDay !== '') {
+            $where[] = 'sold_at <= ?';
+            $args[] = $toDay . ' 23:59:59';
+        }
+        $whereSql = $where === [] ? '' : 'WHERE ' . implode(' AND ', $where);
+
+        $sql = 'SELECT DATE(sold_at) AS d,
+                       COALESCE(SUM(price_ttc), 0) AS ca,
+                       COALESCE(SUM(quantity), 0) AS qty,
+                       COUNT(*) AS tx
+                FROM sales
+                ' . $whereSql . '
+                GROUP BY DATE(sold_at)
+                ORDER BY d ASC';
+
+        try {
+            $stmt = self::pdo()->prepare($sql);
+            $stmt->execute($args);
+
+            /** @var list<array<string,mixed>> $rows */
+            $rows = $stmt->fetchAll();
+        } catch (\Throwable) {
+            return [];
+        }
+
+        $out = [];
+        foreach ($rows as $r) {
+            $out[] = [
+                'd'   => (string) $r['d'],
+                'ca'  => (float) $r['ca'],
+                'qty' => (int) $r['qty'],
+                'tx'  => (int) $r['tx'],
+            ];
+        }
+
+        return $out;
+    }
+
+    /**
      * Agrégats (CA, bénéfice, quantité) sur une plage de jours (bornes
      * incluses), ou sur tout l'historique si les bornes sont null.
      *

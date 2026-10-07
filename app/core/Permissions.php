@@ -216,6 +216,7 @@ final class Permissions
             'costs'      => 'Coûts de revient',
             'cash'       => 'Caisses',
             'kiosques'   => 'Kiosques (liens téléphone)',
+            'ledger'     => 'Livre comptable',
             'users'      => 'Utilisateurs',
             'notifications' => 'Notifications SMS',
             'settings'   => 'Paramètres',

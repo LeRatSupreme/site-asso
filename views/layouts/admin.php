@@ -116,6 +116,7 @@ $systemEntries = [
     'Utilisateurs'     => ['/admin/users', 'users'],
     'Caisses'          => ['/admin/caisses', 'cash'],
     'Kiosques'         => ['/admin/kiosques', 'kiosques'],
+    'Livre comptable'  => ['/admin/ledger', 'ledger'],
     'Inventaire'       => ['/admin/compta/inventaire', 'inventory'],
     'Coûts de revient' => ['/admin/compta/couts', 'costs'],
     'Notifications'    => ['/admin/notifications', 'notifications'],

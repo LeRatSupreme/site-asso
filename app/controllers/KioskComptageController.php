@@ -150,6 +150,36 @@ final class KioskComptageController extends Controller
     }
 
     /**
+     * Livre comptable (partie ADMIN, lecture seule, adaptée téléphone) :
+     * Date | Objet | Débit | Crédit, lignes « ticket », équilibrage final.
+     */
+    public function ledger(string $token): void
+    {
+        if (!$this->adminTokenOk($token)) {
+            $this->deny();
+
+            return;
+        }
+
+        $ledger = new \App\Controllers\Admin\AdminLedgerController();
+        [$from, $to, $preset] = $ledger->periodFromRequest();
+        $entries = $ledger->buildEntries($from, $to);
+
+        $this->renderKiosk('admin/ledger/index', [
+            'title'       => 'Livre comptable',
+            'token'       => $token,
+            'kiosk'       => true,
+            'entries'     => $entries,
+            'from'        => $from,
+            'to'          => $to,
+            'preset'      => $preset,
+            'totalDebit'  => $entries['total_debit'],
+            'totalCredit' => $entries['total_credit'],
+            'balance'     => $entries['balance'],
+        ]);
+    }
+
+    /**
      * HUB ADMIN kiosque : menu de tuiles avec données financières
      * complètes — totalement détaché du hub membres (jeton dédié).
      */
