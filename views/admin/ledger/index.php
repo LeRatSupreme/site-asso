@@ -359,7 +359,7 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
                 <?php if (($r['ticket'] ?? '') !== ''): ?>
                 <tr class="ledger-ticket">
                     <td></td>
-                    <td colspan="3"><span class="tk">└ Ticket <?= nl2br(e((string) $r['ticket'])) ?></span></td>
+                    <td colspan="3"><span class="tk"><?= ($r['kind'] ?? '') === 'sales' ? '└' : '└ Ticket' ?> <?= nl2br(e((string) $r['ticket'])) ?></span></td>
                 </tr>
                 <?php endif; ?>
                 <?php endforeach; ?>

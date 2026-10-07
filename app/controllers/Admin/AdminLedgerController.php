@@ -63,7 +63,8 @@ final class AdminLedgerController extends AdminBaseController
      * Assemble les écritures du livre : achats (une seule ligne par
      * jour + fournisseur, avec le gros total du jour), dépenses (débits,
      * avec ligne « ticket ») et ventes (crédits, récapitulées en une
-     * unique ligne de clôture placée en fin de livre).
+     * unique ligne de clôture placée en fin de livre, dont le « ticket »
+     * détaille la répartition liquide/carte).
      *
      * « balance » est un SOLDE DE TRÉSORERIE : ventes TTC − (achats +
      * dépenses) TTC de la période. Ce n'est pas le bénéfice — les achats
@@ -169,15 +170,23 @@ final class AdminLedgerController extends AdminBaseController
             return strcmp($b['kind'], $a['kind']);
         });
 
-        // Ligne de clôture des ventes, en toute fin de livre.
+        // Ligne de clôture des ventes, en toute fin de livre. Le « ticket »
+        // détaille la répartition du CA entre liquide et carte (montant +
+        // nombre de transactions par moyen) : la somme des deux tombe sur
+        // le crédit de la ligne.
         if ($salesTx > 0) {
+            $split = Sale::paymentSplitDetailBetween($from, $to);
             $rows[] = [
                 'date'  => $to,
                 'kind'  => 'sales',
                 'label' => 'Ventes cafétéria (' . $salesTx . ' transaction(s))',
                 'debit' => 0.0,
                 'credit' => round($salesCa, 2),
-                'ticket' => '',
+                'ticket' => 'Liquide : ' . formatPrice(round((float) $split['LIQUIDE']['ca'], 2))
+                    . ' — ' . (int) $split['LIQUIDE']['tx'] . ' transaction(s)'
+                    . "\n"
+                    . 'Carte : ' . formatPrice(round((float) $split['CARTE']['ca'], 2))
+                    . ' — ' . (int) $split['CARTE']['tx'] . ' transaction(s)',
             ];
         }
 

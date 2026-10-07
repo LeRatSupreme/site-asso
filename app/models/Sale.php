@@ -778,6 +778,69 @@ final class Sale extends Model
     }
 
     /**
+     * Répartition du CA ET du nombre de transactions par moyen de
+     * paiement (CARTE/LIQUIDE) sur une plage de jours (bornes
+     * incluses), ou sur tout l'historique si les bornes sont null.
+     *
+     * Variante de paymentSplitBetween() qui ajoute le décompte des
+     * transactions par moyen : utilisée par la ligne de clôture des
+     * ventes du livre comptable (détail liquide/carte).
+     *
+     * @param string|null $fromDay Jour de début « YYYY-MM-DD » (inclus), ou null.
+     * @param string|null $toDay   Jour de fin « YYYY-MM-DD » (inclus), ou null.
+     *
+     * @return array<string, array{ca: float, tx: int}>
+     *         ex: ['CARTE' => ['ca' => 123.4, 'tx' => 40], 'LIQUIDE' => ['ca' => 12.0, 'tx' => 5]]
+     */
+    public static function paymentSplitDetailBetween(?string $fromDay, ?string $toDay): array
+    {
+        $where = [];
+        $args = [];
+        if ($fromDay !== null && $fromDay !== '') {
+            $where[] = 'sold_at >= ?';
+            $args[] = $fromDay . ' 00:00:00';
+        }
+        if ($toDay !== null && $toDay !== '') {
+            $where[] = 'sold_at <= ?';
+            $args[] = $toDay . ' 23:59:59';
+        }
+        $whereSql = $where === [] ? '' : 'WHERE ' . implode(' AND ', $where);
+
+        $sql = 'SELECT payment_method,
+                       COALESCE(SUM(price_ttc), 0) AS ca,
+                       COUNT(*) AS tx
+                FROM sales
+                ' . $whereSql . '
+                GROUP BY payment_method';
+
+        try {
+            $stmt = self::pdo()->prepare($sql);
+            $stmt->execute($args);
+
+            /** @var list<array<string,mixed>> $rows */
+            $rows = $stmt->fetchAll();
+        } catch (\Throwable) {
+            return [
+                'CARTE'   => ['ca' => 0.0, 'tx' => 0],
+                'LIQUIDE' => ['ca' => 0.0, 'tx' => 0],
+            ];
+        }
+
+        $split = [
+            'CARTE'   => ['ca' => 0.0, 'tx' => 0],
+            'LIQUIDE' => ['ca' => 0.0, 'tx' => 0],
+        ];
+        foreach ($rows as $row) {
+            $split[(string) $row['payment_method']] = [
+                'ca' => (float) $row['ca'],
+                'tx' => (int) $row['tx'],
+            ];
+        }
+
+        return $split;
+    }
+
+    /**
      * Nombre de transactions distinctes (transaction_ref) sur une plage
      * de jours (bornes incluses), ou sur tout l'historique si null.
      *
