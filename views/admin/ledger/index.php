@@ -403,8 +403,8 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
 
 <script>
 // Onglets Saisie / Livre (mémorisés dans le hash de l'URL : #livre ouvre
-// directement le livre). Défaut côté serveur : saisie en admin, livre en
-// kiosque — les deux onglets existent dans les deux modes.
+// directement le livre, #saisie la saisie). Défaut serveur : saisie active,
+// dans les deux modes (admin et kiosque).
 (function () {
     var bar = document.querySelector('[data-ledger-tabs]');
     if (!bar) return;
