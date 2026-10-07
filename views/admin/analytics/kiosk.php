@@ -14,8 +14,9 @@ declare(strict_types=1);
  *   2. « Répartition » : donuts catégorie & paiements (centres texte) avec
  *      légendes HTML compactes SOUS chaque donut (la légende intégrée de
  *      Chart.js se superposait au graphique sur téléphone).
- *   3. « Heures »     : heatmap jour × heure (défilement horizontal).
- *   4. « Produits »   : tableau triable + totaux + export CSV.
+ *   3. « Heures »     : heatmap TRANSPOSÉE — heures en lignes (00h→23h),
+ *      jours en colonnes : tient dans 360px, détail au tap, zéro scroll-x.
+ *   4. « Produits »   : rangées-cartes triables (select) + totaux + export CSV.
  * PITFALL Chart.js : un canvas dans un onglet hidden a une taille nulle →
  * chaque graphique est initialisé EN RETARDÉ (lazy), à la première
  * activation de son onglet ; le premier onglet l'est immédiatement au
@@ -220,57 +221,48 @@ $iconSvg = static function (string $name): string {
         </div>
     </div>
 
-    <!-- ==================== Onglet 3 : Heures ==================== -->
+    <!-- ==================== Onglet 3 : Heures (heatmap transposée) ==================== -->
     <div class="compta-tabpane ka-pane" data-pane="heures" hidden>
         <section class="card surface glass ka-card">
             <div class="ka-chart-head">
                 <h2 class="ka-chart-title">Ventes par jour × heure</h2>
                 <span class="ka-sub">Intensité du CA — <?= e($filters['category'] === 'all' ? 'Toutes catégories' : $filters['category']) ?> · <?= e($filters['payment'] === 'all' ? 'Tous paiements' : $filters['payment']) ?></span>
             </div>
-            <div class="ka-heat-wrap">
-                <div class="ka-heat" id="ka-heatmap"></div>
-            </div>
-            <div class="ka-hm-legend">
-                <span class="ka-hm-legend-label">Faible</span>
-                <div class="ka-hm-legend-bar"></div>
-                <span class="ka-hm-legend-label">Fort</span>
+            <!-- Grille heures en lignes / jours en colonnes : tient dans 360px,
+                 détail d'une case au tap dans la ligne d'info (pas de tooltip
+                 flottant, inutilisable au doigt). -->
+            <div class="ka-ht" id="ka-heatmap"></div>
+            <p class="ka-ht-info" id="ka-ht-info">Touche une case pour le détail</p>
+            <div class="ka-ht-legend">
+                <span class="ka-ht-legend-label">Faible</span>
+                <div class="ka-ht-legend-bar"></div>
+                <span class="ka-ht-legend-label">Fort</span>
             </div>
         </section>
     </div>
 
-    <!-- ==================== Onglet 4 : Produits ==================== -->
+    <!-- ==================== Onglet 4 : Produits (rangées-cartes) ==================== -->
     <div class="compta-tabpane ka-pane" data-pane="produits" hidden>
         <section class="card surface glass ka-card">
             <div class="ka-chart-head">
                 <h2 class="ka-chart-title">Détail par produit</h2>
-                <button type="button" class="btn btn-ghost btn-sm" id="ka-export-csv">Exporter CSV</button>
             </div>
-            <div class="ka-table-wrap">
-                <table class="ka-table" id="ka-product-table">
-                    <thead>
-                        <tr>
-                            <th data-key="product"  data-type="str">Produit</th>
-                            <th data-key="category" data-type="str">Catégorie</th>
-                            <th data-key="qty"      data-type="num" class="num">Qté</th>
-                            <th data-key="ca"       data-type="num" class="num">CA</th>
-                            <th data-key="cost"     data-type="num" class="num">Coût moy.</th>
-                            <th data-key="profit"   data-type="num" class="num">Bénéfice</th>
-                            <th data-key="margin"   data-type="num" class="num">Marge %</th>
-                        </tr>
-                    </thead>
-                    <tbody id="ka-product-table-body"></tbody>
-                    <tfoot>
-                        <tr>
-                            <td colspan="2"><strong>Total</strong></td>
-                            <td class="num" id="ka-tot-qty"></td>
-                            <td class="num" id="ka-tot-ca"></td>
-                            <td class="num">—</td>
-                            <td class="num" id="ka-tot-profit"></td>
-                            <td class="num" id="ka-tot-margin"></td>
-                        </tr>
-                    </tfoot>
-                </table>
+            <!-- Barre d'outils compacte : tri + export CSV (pleine largeur,
+                 plus de tableau à 7 colonnes et de scroll horizontal). -->
+            <div class="ka-ptools">
+                <label class="ka-psort">
+                    <span>Trier par</span>
+                    <select id="ka-psort">
+                        <option value="ca" selected>CA</option>
+                        <option value="profit">Bénéfice</option>
+                        <option value="margin">Marge %</option>
+                        <option value="qty">Quantité</option>
+                    </select>
+                </label>
+                <button type="button" class="btn btn-ghost btn-sm" id="ka-export-csv">⬇ CSV</button>
             </div>
+            <p class="ka-ptotals" id="ka-ptotals"></p>
+            <div id="ka-product-cards"></div>
         </section>
     </div>
 
@@ -302,7 +294,6 @@ $iconSvg = static function (string $name): string {
     function money(v) { return Number(v).toFixed(2).replace('.', ',') + ' €'; }
     function pct(v)   { return Number(v).toFixed(1).replace('.', ',') + ' %'; }
     function esc(s)   { var d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
-    function setText(id, v) { var el = document.getElementById(id); if (el) { el.textContent = v; } }
 
     // ============================================================
     // Filtres compacts : pills à application immédiate, custom,
@@ -627,12 +618,17 @@ $iconSvg = static function (string $name): string {
     }
 
     // ============================================================
-    // Heatmap jour × heure (DOM pur : construite immédiatement).
+    // Heatmap TRANSPOSÉE (DOM pur, construite immédiatement) :
+    // heures en lignes (00h→23h, scroll vertical naturel), jours en
+    // colonnes — la grille tient dans 360px sans scroll horizontal.
+    // Le détail d'une case s'affiche au TAP dans la ligne d'info
+    // (les tooltips flottants sont inutilisables au doigt).
     // ============================================================
     function initHeatmap() {
         var heat = data.heatmap || [];
         var days = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
         var heatEl = document.getElementById('ka-heatmap');
+        var infoEl = document.getElementById('ka-ht-info');
         if (!heatEl) return;
 
         var max = 0;
@@ -643,95 +639,127 @@ $iconSvg = static function (string $name): string {
             }
         }
 
-        var html = '<div class="ka-hm-row ka-hm-head"><span class="ka-hm-label"></span>';
-        for (var hh = 0; hh < 24; hh++) { html += '<span class="ka-hm-hh">' + hh + 'h</span>'; }
+        // Cas trivial : aucune vente → message, pas de grille.
+        if (!(max > 0)) {
+            heatEl.innerHTML = '<p class="ka-ht-empty">Aucune vente sur la période</p>';
+            if (infoEl) { infoEl.hidden = true; }
+            return;
+        }
+
+        // Entêtes : coin vide + 7 jours abrégés.
+        var html = '<div class="ka-ht-row"><span class="ka-ht-hour"></span>';
+        for (var dd = 0; dd < 7; dd++) { html += '<span class="ka-ht-day">' + days[dd] + '</span>'; }
         html += '</div>';
 
-        for (var dd = 0; dd < 7; dd++) {
-            var dayTotal = 0;
-            for (var dh = 0; dh < 24; dh++) { dayTotal += Number(((heat[dd] || [])[dh]) || 0); }
-
-            html += '<div class="ka-hm-row">';
-            html += '<span class="ka-hm-label">' + days[dd] + '</span>';
-            for (var h2 = 0; h2 < 24; h2++) {
-                var val = Number(((heat[dd] || [])[h2]) || 0);
-                var alpha = max > 0 ? val / max : 0;
-                var tip = days[dd] + ' à ' + h2 + 'h\nCA : ' + money(val) + '\nTotal ' + days[dd] + ' : ' + money(dayTotal);
-                html += '<span class="ka-hm-cell" style="background:rgba(72,189,211,' + alpha.toFixed(3) + ')" data-tip="' + tip.replace(/"/g, '&quot;').replace(/\n/g, '&#10;') + '"></span>';
+        // 24 lignes horaires : libellé heure + 7 cellules (alpha = val / max).
+        for (var hh = 0; hh < 24; hh++) {
+            html += '<div class="ka-ht-row"><span class="ka-ht-hour">' + (hh < 10 ? '0' + hh : hh) + 'h</span>';
+            for (var d2 = 0; d2 < 7; d2++) {
+                var val = Number(((heat[d2] || [])[hh]) || 0);
+                var alpha = val / max;
+                html += '<button type="button" class="ka-ht-cell" data-d="' + d2 + '" data-h="' + hh + '" data-v="' + val + '"'
+                    + ' aria-label="' + days[d2] + ' ' + hh + 'h : ' + money(val) + '"'
+                    + ' style="background:rgba(72,189,211,' + alpha.toFixed(3) + ')"></button>';
             }
             html += '</div>';
         }
         heatEl.innerHTML = html;
 
-        // Tooltip flottant (identique à la vue desktop).
-        var hTip = document.createElement('div');
-        hTip.className = 'ka-hm-tooltip';
-        hTip.style.cssText = 'position:fixed;pointer-events:none;z-index:9999;background:#0c1d36;border:1px solid rgba(72,189,211,0.4);border-radius:8px;padding:0.6rem 0.85rem;font-size:0.78rem;color:#eaf2fb;box-shadow:0 8px 24px rgba(0,0,0,0.5);display:none;white-space:pre-line;line-height:1.5;';
-        document.body.appendChild(hTip);
-
-        heatEl.querySelectorAll('.ka-hm-cell').forEach(function (cell) {
-            cell.addEventListener('mouseenter', function () {
-                hTip.innerHTML = cell.getAttribute('data-tip').replace(/&#10;/g, '<br>');
-                hTip.style.display = 'block';
-            });
-            cell.addEventListener('mousemove', function (e) {
-                hTip.style.left = (e.clientX + 14) + 'px';
-                hTip.style.top = (e.clientY - 10) + 'px';
-            });
-            cell.addEventListener('mouseleave', function () {
-                hTip.style.display = 'none';
-            });
+        // Détail au TAP : un seul listener délégué sur la grille.
+        // Re-tap sur la même case → retour au texte par défaut.
+        var DEFAULT_INFO = 'Touche une case pour le détail';
+        var selected = null;
+        heatEl.addEventListener('click', function (e) {
+            var cell = e.target && e.target.closest ? e.target.closest('.ka-ht-cell') : null;
+            if (!cell) { return; }
+            var same = (selected === cell);
+            if (selected) { selected.classList.remove('is-sel'); selected = null; }
+            if (same) {
+                if (infoEl) { infoEl.textContent = DEFAULT_INFO; }
+                return;
+            }
+            cell.classList.add('is-sel');
+            selected = cell;
+            var day = Number(cell.getAttribute('data-d'));
+            var hour = Number(cell.getAttribute('data-h'));
+            var amount = Number(cell.getAttribute('data-v'));
+            if (infoEl) { infoEl.textContent = days[day] + ' ' + hour + 'h — ' + money(amount); }
         });
     }
 
     // ============================================================
-    // Tableau produits : tri au clic + totaux + export CSV
-    // (DOM pur : construit immédiatement).
+    // Produits : rangées-cartes pleine largeur (zéro scroll-x),
+    // tri par select (défaut CA décroissant) + totaux + export CSV.
+    // (DOM pur : construit immédiatement.)
     // ============================================================
     var rows = data.table || [];
-    var sortKey = 'ca', sortDir = -1, sortType = 'num';
+    var sortKey = 'ca';
 
-    function renderTable() {
-        var tbody = document.getElementById('ka-product-table-body');
-        if (!tbody) { return; }
+    // Bénéfice signé : texte « +12,30 € » / « −4,00 € » + classe couleur.
+    function profitParts(v) {
+        v = Number(v);
+        return {
+            cls: v >= 0 ? 'is-pos' : 'is-neg',
+            text: (v >= 0 ? '+' : '−') + money(Math.abs(v)),
+        };
+    }
+
+    function renderCards() {
+        var wrap = document.getElementById('ka-product-cards');
+        var totals = document.getElementById('ka-ptotals');
+        if (!wrap) { return; }
+
+        // Liste vide → message simple.
+        if (!rows.length) {
+            wrap.innerHTML = '<p class="ka-pempty">Aucune vente sur la période</p>';
+            if (totals) { totals.textContent = ''; }
+            return;
+        }
+
         var sorted = rows.slice().sort(function (a, b) {
-            var va = a[sortKey], vb = b[sortKey];
-            if (sortType === 'num') { return (Number(va) - Number(vb)) * sortDir; }
-            return String(va).localeCompare(String(vb)) * sortDir;
+            return Number(b[sortKey]) - Number(a[sortKey]);
         });
-
-        tbody.innerHTML = sorted.map(function (r) {
-            return '<tr>'
-                + '<td>' + esc(r.product) + '</td>'
-                + '<td>' + esc(r.category) + '</td>'
-                + '<td class="num">' + Number(r.qty) + '</td>'
-                + '<td class="num">' + money(r.ca) + '</td>'
-                + '<td class="num">' + money(r.cost) + '</td>'
-                + '<td class="num">' + money(r.profit) + '</td>'
-                + '<td class="num">' + pct(r.margin) + '</td>'
-                + '</tr>';
-        }).join('');
 
         var totQty = 0, totCa = 0, totProfit = 0;
         rows.forEach(function (r) { totQty += Number(r.qty); totCa += Number(r.ca); totProfit += Number(r.profit); });
-        setText('ka-tot-qty', totQty);
-        setText('ka-tot-ca', money(totCa));
-        setText('ka-tot-profit', money(totProfit));
-        setText('ka-tot-margin', totCa > 0 ? pct((totProfit / totCa) * 100) : '—');
+        if (totals) {
+            var tp = profitParts(totProfit);
+            totals.innerHTML = '<span>Total ' + totQty + ' u.</span>'
+                + '<span>CA <strong>' + money(totCa) + '</strong></span>'
+                + '<span class="ka-ptot-profit ' + tp.cls + '">Bénéfice ' + tp.text + '</span>'
+                + '<span>Marge ' + (totCa > 0 ? pct((totProfit / totCa) * 100) : '—') + '</span>';
+        }
+
+        wrap.innerHTML = sorted.map(function (r) {
+            var pp = profitParts(r.profit);
+            return '<div class="ka-pcard">'
+                + '<div class="ka-pcard-top">'
+                + '<span class="ka-pcard-name">' + esc(r.product) + '</span>'
+                + '<span class="ka-pcard-cat">' + esc(r.category) + '</span>'
+                + '</div>'
+                + '<div class="ka-pcard-meta"><span>×' + Number(r.qty) + '</span>'
+                + '<span>Coût moy. ' + money(r.cost) + '</span></div>'
+                + '<div class="ka-pcard-stats">'
+                + '<span class="ka-pcard-ca">CA : ' + money(r.ca) + '</span>'
+                + '<span class="ka-pcard-profit ' + pp.cls + '">Bénéfice : ' + pp.text + '</span>'
+                + '<span class="ka-pcard-margin">Marge ' + Math.round(Number(r.margin)) + ' %</span>'
+                + '</div>'
+                + '</div>';
+        }).join('');
     }
 
-    function initTable() {
-        document.querySelectorAll('#ka-product-table thead th').forEach(function (th) {
-            th.style.cursor = 'pointer';
-            th.addEventListener('click', function () {
-                var key = th.getAttribute('data-key');
-                var type = th.getAttribute('data-type') || 'str';
-                if (sortKey === key) { sortDir *= -1; } else { sortKey = key; sortType = type; sortDir = type === 'num' ? -1 : 1; }
-                renderTable();
+    function initProducts() {
+        // Tri : re-sert la liste au changement du select (toujours décroissant).
+        var sel = document.getElementById('ka-psort');
+        if (sel) {
+            sel.addEventListener('change', function () {
+                sortKey = sel.value;
+                renderCards();
             });
-        });
-        renderTable();
+        }
+        renderCards();
 
+        // Export CSV : mêmes colonnes que l'ancien tableau.
         var btnCsv = document.getElementById('ka-export-csv');
         if (btnCsv) {
             btnCsv.addEventListener('click', function () {
@@ -758,9 +786,9 @@ $iconSvg = static function (string $name): string {
         return /[;"\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
     }
 
-    // Heatmap + tableau : construits tout de suite (pas de canvas).
+    // Heatmap + cartes produits : construits tout de suite (pas de canvas).
     initHeatmap();
-    initTable();
+    initProducts();
 
     // Onglet initial : hash de l'URL (#repart, #heures, #produits),
     // sinon « Vue » (initialisé immédiatement — pane visible).
@@ -883,47 +911,39 @@ $iconSvg = static function (string $name): string {
 .ka-leg-pct { flex: 0 0 auto; font-size: 0.85rem; color: var(--muted, #9fb3c8); white-space: nowrap; }
 .ka-leg-empty { margin: 0; padding: 0.55rem 0; font-size: 1rem; color: var(--muted, #9fb3c8); text-align: center; }
 
-/* ---- Heatmap compacte (défilement horizontal DANS la carte :
-        jamais de débordement de page → pas de dézoom navigateur) ---- */
-.ka-heat-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-.ka-heat {
-    display: inline-grid;
-    grid-auto-rows: 20px;
-    gap: 2px;
-    min-width: 560px;
-    padding: 2px;
-}
-.ka-hm-row {
-    display: grid;
-    grid-template-columns: 34px repeat(24, 1fr);
-    gap: 2px;
-    align-items: center;
-}
-.ka-hm-head .ka-hm-label, .ka-hm-head .ka-hm-hh {
-    font-size: 0.55rem;
+/* ---- Heures : heatmap TRANSPOSÉE (heures en lignes, jours en colonnes).
+        Largeur maîtrisée : 40px (libellé) + 7 colonnes fluides → tient
+        dans 360px SANS scroll horizontal ; lecture verticale naturelle. ---- */
+.ka-ht { display: grid; grid-template-columns: 40px repeat(7, 1fr); gap: 2px; }
+.ka-ht-row { display: contents; }
+.ka-ht-day {
+    font-size: 0.62rem; font-weight: 700;
     color: var(--muted, #9fb3c8);
-    text-align: center;
-    font-weight: 600;
-    padding-bottom: 2px;
+    text-align: center; padding-bottom: 2px;
 }
-.ka-hm-label {
-    font-size: 0.62rem;
-    font-weight: 700;
-    color: var(--foreground);
-    text-align: right;
-    padding-right: 3px;
+.ka-ht-hour {
+    font-size: 0.62rem; font-weight: 600; line-height: 22px;
+    color: var(--muted, #9fb3c8);
+    text-align: right; padding-right: 3px;
 }
-.ka-hm-hh { font-size: 0.55rem; color: var(--muted, #9fb3c8); text-align: center; }
-.ka-hm-cell {
-    height: 20px;
-    border-radius: 3px;
+.ka-ht-cell {
+    height: 22px; padding: 0; border: none; border-radius: 4px;
     background: rgba(72, 189, 211, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.03);
-    cursor: default;
+    cursor: pointer;
 }
-.ka-hm-legend { display: flex; align-items: center; gap: 0.4rem; justify-content: flex-end; margin-top: 0.5rem; }
-.ka-hm-legend-label { font-size: 0.65rem; color: var(--muted, #9fb3c8); }
-.ka-hm-legend-bar {
+/* Retour visuel de la case touchée (info affichée sous la grille). */
+.ka-ht-cell.is-sel { outline: 2px solid #48bdd3; outline-offset: -2px; }
+.ka-ht-info {
+    min-height: 1.4em; /* réserve la place : pas de saut de layout au tap */
+    margin: 0.5rem 0 0;
+    font-size: 0.85rem;
+    color: var(--foreground);
+}
+.ka-ht-info[hidden] { display: none; }
+.ka-ht-empty { margin: 0; font-size: 0.9rem; color: var(--muted, #9fb3c8); }
+.ka-ht-legend { display: flex; align-items: center; gap: 0.4rem; justify-content: flex-end; margin-top: 0.5rem; }
+.ka-ht-legend-label { font-size: 0.65rem; color: var(--muted, #9fb3c8); }
+.ka-ht-legend-bar {
     width: 90px; height: 10px; border-radius: 5px;
     background: linear-gradient(90deg, rgba(72, 189, 211, 0.05), rgba(72, 189, 211, 1));
 }
@@ -942,14 +962,64 @@ $iconSvg = static function (string $name): string {
 .ka-insight-title { margin: 0 0 0.1rem; font-size: 0.78rem; font-weight: 700; }
 .ka-insight-text { margin: 0; font-size: 0.72rem; color: var(--muted, #9fb3c8); }
 
-/* ---- Tableau produits (défilement horizontal DANS la carte) ---- */
-.ka-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-.ka-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; min-width: 480px; }
-.ka-table th, .ka-table td { padding: 0.4rem 0.45rem; border-bottom: 1px solid rgba(255, 255, 255, 0.07); text-align: left; white-space: nowrap; }
-.ka-table th.num, .ka-table td.num { text-align: right; }
-.ka-table thead th { color: var(--muted, #9fb3c8); font-weight: 600; }
-.ka-table tfoot td { font-weight: 700; }
-.ka-table tbody tr:hover { background: rgba(255, 255, 255, 0.03); }
+/* ---- Produits : rangées-cartes pleine largeur (fin du tableau
+        scrollable — tout est visible sans défilement horizontal) ---- */
+.ka-ptools { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.5rem; }
+.ka-psort { display: flex; align-items: center; gap: 0.4rem; min-width: 0; }
+.ka-psort span {
+    font-size: 0.62rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.04em; color: var(--muted, #9fb3c8);
+}
+.ka-psort select {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: var(--foreground);
+    border-radius: 8px;
+    padding: 0.35rem 0.5rem;
+    font-size: 0.85rem;
+}
+.ka-ptotals {
+    display: flex; flex-wrap: wrap; gap: 0.3rem 0.9rem;
+    margin: 0 0 0.6rem; padding: 0.5rem 0.6rem;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+    border-radius: 10px;
+    font-size: 0.78rem; color: var(--muted, #9fb3c8);
+}
+.ka-ptot-profit.is-pos { color: #22c55e; }
+.ka-ptot-profit.is-neg { color: #ef4444; }
+.ka-pcard {
+    padding: 0.6rem 0.7rem;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.035);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    margin-bottom: 0.45rem;
+}
+.ka-pcard-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.5rem; }
+.ka-pcard-name {
+    flex: 1 1 auto; min-width: 0;
+    font-weight: 700; font-size: 0.92rem; line-height: 1.25;
+    /* Wrap sur 2 lignes max, ellipsis au-delà. */
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.ka-pcard-cat {
+    flex: 0 0 auto;
+    font-size: 0.62rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em;
+    color: #48bdd3;
+    background: rgba(72, 189, 211, 0.12);
+    border-radius: 999px;
+    padding: 0.18rem 0.55rem;
+}
+.ka-pcard-meta { display: flex; align-items: baseline; margin-top: 0.2rem; font-size: 0.78rem; color: var(--muted, #9fb3c8); }
+/* Séparateur « · » entre les méta-informations. */
+.ka-pcard-meta > * + *::before { content: '·'; margin-right: 0.45rem; color: rgba(159, 179, 200, 0.6); }
+.ka-pcard-stats { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.25rem 0.8rem; margin-top: 0.4rem; }
+.ka-pcard-ca { font-size: 1rem; font-weight: 800; color: #48bdd3; font-variant-numeric: tabular-nums; }
+.ka-pcard-profit { font-size: 0.85rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.ka-pcard-profit.is-pos { color: #22c55e; }
+.ka-pcard-profit.is-neg { color: #ef4444; }
+.ka-pcard-margin { font-size: 0.78rem; color: var(--muted, #9fb3c8); }
+.ka-pempty { margin: 0; font-size: 0.9rem; color: var(--muted, #9fb3c8); }
 
 /* ---- Divers ---- */
 .ka-nosales { margin: 0; font-size: 0.78rem; color: var(--muted, #9fb3c8); }
