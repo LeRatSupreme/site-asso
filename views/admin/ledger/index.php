@@ -169,6 +169,7 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
 // Même comportement que sur Analytics : toucher une date bascule
 // immédiatement sur « Personnalisé », et dès que les deux bornes sont
 // remplies la recherche s'applique toute seule (plus de bouton à cliquer).
+// Les préréglages (1 jour, 7 jours…) s'appliquent aussi au clic.
 (function () {
     var form = document.querySelector('.lg-form form, .card.surface.glass form');
     if (!form) return;
@@ -182,5 +183,11 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
     }
     du.addEventListener('change', onChange);
     au.addEventListener('change', onChange);
+    // Préréglages : application immédiate au clic.
+    Array.prototype.forEach.call(form.querySelectorAll('input[name="period"]'), function (radio) {
+        radio.addEventListener('change', function () {
+            form.submit();
+        });
+    });
 })();
 </script>
