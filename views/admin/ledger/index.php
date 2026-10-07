@@ -142,12 +142,12 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
 </div>
 
 <nav class="compta-tabs" data-ledger-tabs aria-label="Menus du livre comptable">
-    <button type="button" class="compta-tab<?= $kiosk ? '' : ' is-active' ?>" data-tab="saisie">Saisir une dépense</button>
-    <button type="button" class="compta-tab<?= $kiosk ? ' is-active' : '' ?>" data-tab="livre">Livre comptable</button>
+    <button type="button" class="compta-tab is-active" data-tab="saisie">Saisir une dépense</button>
+    <button type="button" class="compta-tab" data-tab="livre">Livre comptable</button>
 </nav>
 
 <!-- ==================== Menu 1 : saisie express ==================== -->
-<div class="compta-tabpane<?= $kiosk ? '' : ' is-active' ?>" data-pane="saisie"<?php if ($kiosk): ?> hidden<?php endif; ?>>
+<div class="compta-tabpane is-active" data-pane="saisie">
     <section class="card surface glass lg-quick">
         <h2 class="card-title">Dépense en 30 secondes</h2>
         <p class="muted">Nom, référence du ticket, montant, TVA, photo — la trace est aussitôt dans le livre, prête à être traitée.</p>
@@ -316,9 +316,9 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
 </div>
 
 <!-- ==================== Menu 2 : livre comptable ==================== -->
-<!-- Défaut côté serveur : saisie active en admin, livre actif en kiosque
-     (la page s'ouvre sur le livre, la saisie express est à un onglet). -->
-<div class="compta-tabpane<?= $kiosk ? ' is-active' : '' ?>" data-pane="livre"<?php if (!$kiosk): ?> hidden<?php endif; ?>>
+<!-- Défaut côté serveur : onglet « Saisir une dépense » actif à
+     l'ouverture (admin ET kiosque) ; #livre dans l'URL ouvre le livre. -->
+<div class="compta-tabpane" data-pane="livre" hidden>
     <div class="card surface glass" style="padding: 0.95rem 1.1rem; margin-bottom: 1.2rem;">
         <form id="lg-period-form" method="get" style="display: contents;">
             <div class="lg-seg">
