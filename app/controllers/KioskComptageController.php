@@ -10,6 +10,7 @@ use App\Core\Compta\ReceiptStorage;
 use App\Core\Compta\StockPublic;
 use App\Core\Compta\SumUpCsvParser;
 use App\Core\Controller;
+use App\Models\Analytics;
 use App\Models\AuditLog;
 use App\Models\Expense;
 use App\Models\InventoryCount;
@@ -487,18 +488,41 @@ final class KioskComptageController extends Controller
     }
 
     /**
-     * Agrégats du jour (Europe/Paris, bornes 00:00 → 23:59 locales).
+     * Agrégats du jour (Europe/Paris, bornes 00:00 → 23:59 locales) +
+     * enrichissements : panier moyen, comparaison avec hier, transactions
+     * par moyen de paiement, semaine en cours et CA par heure du jour.
+     * 7 requêtes légères (toutes indexées sur la date), pas plus.
      *
      * @return array<string,mixed>
      */
     private function jourStats(): array
     {
-        $today = (new \DateTimeImmutable('today', new \DateTimeZone('Europe/Paris')))->format('Y-m-d');
+        $paris = new \DateTimeZone('Europe/Paris');
+        $todayDt = new \DateTimeImmutable('today', $paris);
+        $today = $todayDt->format('Y-m-d');
+        $yesterday = $todayDt->modify('-1 day')->format('Y-m-d');
 
         $agg = Sale::aggregatesBetween($today, $today);
-        $split = Sale::paymentSplitBetween($today, $today);
-        $top = Sale::topProductsBetween($today, $today, 5);
+        $detail = Sale::paymentSplitDetailBetween($today, $today);
+        $top = Sale::topProductsBetween($today, $today, 10);
         $tx = Sale::transactionsBetween($today, $today);
+        $aggYesterday = Sale::aggregatesBetween($yesterday, $yesterday);
+        $week = \App\Core\Compta\ComptaCalc::last7DaysWindow($todayDt);
+        $aggWeek = Sale::aggregatesBetween($week['from'], $week['to']);
+
+        // CA par heure du jour : salesByDayHour() regroupe par jour de
+        // SEMAINE (0 = lundi) — sur une requête today→today, seule la
+        // ligne du jour courant est remplie. On garde uniquement les
+        // heures avec CA > 0, déjà triées par heure croissante (0→23).
+        $dayIndex = (int) $todayDt->format('N') - 1;
+        $hoursMatrix = Analytics::salesByDayHour($today, $today);
+        $todayHours = $hoursMatrix[$dayIndex] ?? array_fill(0, 24, 0.0);
+        $hours = [];
+        foreach ($todayHours as $h => $ca) {
+            if ((float) $ca > 0) {
+                $hours[] = ['h' => (int) $h, 'ca' => round((float) $ca, 2)];
+            }
+        }
 
         return [
             'date'         => $today,
@@ -507,10 +531,20 @@ final class KioskComptageController extends Controller
             'qty'          => $agg['qty'],
             'ca_products'  => round($agg['ca_products'], 2),
             'transactions' => $tx,
-            'liquide'      => round((float) ($split['LIQUIDE'] ?? 0), 2),
-            'carte'        => round((float) ($split['CARTE'] ?? 0), 2),
+            'liquide'      => round((float) ($detail['LIQUIDE']['ca'] ?? 0), 2),
+            'carte'        => round((float) ($detail['CARTE']['ca'] ?? 0), 2),
+            'liquide_tx'   => (int) ($detail['LIQUIDE']['tx'] ?? 0),
+            'carte_tx'     => (int) ($detail['CARTE']['tx'] ?? 0),
+            'yesterday_ca' => round($aggYesterday['ca'], 2),
+            'week'         => [
+                'from'   => $week['from'],
+                'to'     => $week['to'],
+                'ca'     => round($aggWeek['ca'], 2),
+                'profit' => round($aggWeek['profit'], 2),
+            ],
+            'hours'        => $hours,
             'top'          => $top,
-            'computed_at'  => (new \DateTimeImmutable('now', new \DateTimeZone('Europe/Paris')))->format('H:i:s'),
+            'computed_at'  => (new \DateTimeImmutable('now', $paris))->format('H:i:s'),
         ];
     }
 
