@@ -162,11 +162,11 @@ final class KioskComptageController extends Controller
         }
 
         $today = (new \DateTimeImmutable('today', new \DateTimeZone('Europe/Paris')))->format('Y-m-d');
+        $week = \App\Core\Compta\ComptaCalc::last7DaysWindow();
+        $month = \App\Core\Compta\ComptaCalc::monthToDateWindow();
         $aggToday = Sale::aggregatesBetween($today, $today);
-        $weekStart = (new \DateTimeImmutable('6 days ago', new \DateTimeZone('Europe/Paris')))->format('Y-m-d');
-        $aggWeek = Sale::aggregatesBetween($weekStart, $today);
-        $monthStart = (new \DateTimeImmutable('first day of this month', new \DateTimeZone('Europe/Paris')))->format('Y-m-d');
-        $aggMonth = Sale::aggregatesBetween($monthStart, $today);
+        $aggWeek = Sale::aggregatesBetween($week['from'], $week['to']);
+        $aggMonth = Sale::aggregatesBetween($month['from'], $month['to']);
 
         $this->renderKiosk('admin/compta/kiosk-admin-hub', [
             'title'   => 'Kiosque admin',
@@ -213,8 +213,9 @@ final class KioskComptageController extends Controller
         }
 
         $paris = new \DateTimeZone('Europe/Paris');
-        $from = new \DateTimeImmutable('first day of this month', $paris);
-        $to = new \DateTimeImmutable('today', $paris);
+        $window = \App\Core\Compta\ComptaCalc::monthToDateWindow();
+        $from = new \DateTimeImmutable($window['from'], $paris);
+        $to = new \DateTimeImmutable($window['to'], $paris);
         $prevFrom = $from->modify('-1 month');
         $prevTo = $from->modify('-1 day');
         $prev = Sale::aggregatesBetween($prevFrom->format('Y-m-d'), $prevTo->format('Y-m-d'));
