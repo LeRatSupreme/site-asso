@@ -133,6 +133,11 @@ usort($pickerList, 'strnatcasecmp');
                     <label for="supplier">Fournisseur <span class="muted">(optionnel, appliqué à toutes les lignes)</span></label>
                     <input type="text" id="supplier" name="supplier" placeholder="ex: Metro">
                 </div>
+                <div class="field">
+                    <label for="invoice_number">N° de facture <span class="muted">(optionnel, appliqué à toutes les lignes)</span></label>
+                    <input type="text" id="invoice_number" name="invoice_number" placeholder="ex: 3007 02 0090">
+                    <p class="field-help">Sert de référence dans le livre comptable (à la place du n° interne).</p>
+                </div>
             </div>
 
             <div class="field">
@@ -706,6 +711,7 @@ usort($pickerList, 'strnatcasecmp');
                     <th class="th-num">Total TTC</th>
                     <th>TVA</th>
                     <th>Fournisseur</th>
+                    <th>Facture</th>
                     <th>Actions</th>
                 </tr>
             </thead>
@@ -733,6 +739,7 @@ usort($pickerList, 'strnatcasecmp');
                             <?php endif; ?>
                         </td>
                         <td><?= e((string) ($r['supplier'] ?? '—')) ?></td>
+                        <td><?= e(trim((string) ($r['invoice_number'] ?? '')) !== '' ? (string) $r['invoice_number'] : '—') ?></td>
                         <td class="row-actions">
                             <form method="post" action="<?= e(url('/admin/compta/achats/' . rawurlencode((string) $r['id']) . '/delete')) ?>"
                                   data-confirm="Supprimer cet achat ?" data-preserve-scroll>
@@ -743,7 +750,7 @@ usort($pickerList, 'strnatcasecmp');
                     </tr>
                 <?php endforeach; ?>
                 <?php if ($rows === []): ?>
-                    <tr><td colspan="9" class="muted">Aucun achat sur la période sélectionnée.</td></tr>
+                    <tr><td colspan="10" class="muted">Aucun achat sur la période sélectionnée.</td></tr>
                 <?php endif; ?>
             </tbody>
             <?php if ($rows !== []): ?>
@@ -755,7 +762,7 @@ usort($pickerList, 'strnatcasecmp');
                         <th class="num"><?= e(formatPrice($stats['ht'], 3)) ?></th>
                         <th class="num"><?= e(formatPrice($stats['ttc'], 3)) ?></th>
                         <th class="num muted">dont TVA <?= e(formatPrice($stats['vat'], 3)) ?></th>
-                        <th colspan="2"></th>
+                        <th colspan="3"></th>
                     </tr>
                 </tfoot>
             <?php endif; ?>

@@ -413,6 +413,7 @@ CREATE TABLE IF NOT EXISTS purchases (
     id           VARCHAR(255) NOT NULL PRIMARY KEY,
     purchased_at DATE NOT NULL,
     supplier     VARCHAR(255) NULL,
+    invoice_number VARCHAR(255) NULL,
     product_key  VARCHAR(255) NOT NULL,
     quantity     INT NOT NULL DEFAULT 1,
     unit_cost    DECIMAL(10,3) NOT NULL DEFAULT 0,

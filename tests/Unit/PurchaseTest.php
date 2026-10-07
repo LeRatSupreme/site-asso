@@ -75,6 +75,7 @@ final class PurchaseTest extends TestCase
             'ALTER TABLE purchases MODIFY total_ht DECIMAL(10,3) NULL',
             'ALTER TABLE purchases MODIFY total_ttc DECIMAL(10,3) NOT NULL DEFAULT 0',
             'ALTER TABLE purchases ADD COLUMN no_stock TINYINT(1) NOT NULL DEFAULT 0 AFTER total_ht',
+            'ALTER TABLE purchases ADD COLUMN invoice_number VARCHAR(255) NULL AFTER supplier',
             'ALTER TABLE product_costs MODIFY cost_price DECIMAL(10,3) NOT NULL',
         ];
         foreach ($statements as $sql) {

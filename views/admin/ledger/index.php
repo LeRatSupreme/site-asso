@@ -164,3 +164,23 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
     <a class="btn btn-ghost btn-sm" href="<?= e(url('/kiosque/admin/' . rawurlencode($token))) ?>">← Kiosque admin</a>
 </p>
 <?php endif; ?>
+
+<script>
+// Même comportement que sur Analytics : toucher une date bascule
+// immédiatement sur « Personnalisé », et dès que les deux bornes sont
+// remplies la recherche s'applique toute seule (plus de bouton à cliquer).
+(function () {
+    var form = document.querySelector('.lg-form form, .card.surface.glass form');
+    if (!form) return;
+    var du = form.querySelector('input[name="du"]');
+    var au = form.querySelector('input[name="au"]');
+    var custom = form.querySelector('input[name="period"][value="custom"]');
+    if (!du || !au) return;
+    function onChange() {
+        if (custom) custom.checked = true;
+        if (du.value && au.value) form.submit();
+    }
+    du.addEventListener('change', onChange);
+    au.addEventListener('change', onChange);
+})();
+</script>
