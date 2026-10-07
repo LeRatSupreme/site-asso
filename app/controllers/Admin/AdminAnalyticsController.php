@@ -55,7 +55,7 @@ final class AdminAnalyticsController extends AdminBaseController
             return;
         }
 
-        $this->renderKiosk('admin/analytics/kiosk', $this->buildPage() + [
+        $this->renderKiosk('admin/analytics/kiosk', $this->buildPage('7d') + [
             'title' => 'Analytique',
             'kiosk' => true,
             'token' => $token,
@@ -69,10 +69,12 @@ final class AdminAnalyticsController extends AdminBaseController
      *
      * @return array{filters:array<string,mixed>,periods:array<string,string>,categories:list<string>,hasSales:bool,kpis:array<string,mixed>,insights:list<array<string,mixed>>,json:string}
      */
-    private function buildPage(): array
+    private function buildPage(string $defaultPeriod = '30d'): array
     {
         // ---- Lecture des filtres GET (valeurs sûres) ----
-        $period      = $this->filter('period', '30d');
+        // $defaultPeriod : le kiosque téléphone tombe sur « 7 derniers
+        // jours » par défaut, la page admin garde ses 30 jours.
+        $period      = $this->filter('period', $defaultPeriod);
         $granularity = $this->filter('granularity', '');
         $category    = $this->filter('category', 'all');
         $payment     = $this->filter('payment', 'all');
