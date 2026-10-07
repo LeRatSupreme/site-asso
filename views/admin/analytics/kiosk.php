@@ -11,7 +11,9 @@ declare(strict_types=1);
  * immédiate + deux selects), bandeau KPI 3×2, puis QUATRE onglets (classes
  * .compta-tabs du Livre comptable, navigation par hash #vue/#repart/…) :
  *   1. « Vue »        : trend CA/bénéfice + top produits + insights.
- *   2. « Répartition » : donuts catégorie & paiements (centres texte).
+ *   2. « Répartition » : donuts catégorie & paiements (centres texte) avec
+ *      légendes HTML compactes SOUS chaque donut (la légende intégrée de
+ *      Chart.js se superposait au graphique sur téléphone).
  *   3. « Heures »     : heatmap jour × heure (défilement horizontal).
  *   4. « Produits »   : tableau triable + totaux + export CSV.
  * PITFALL Chart.js : un canvas dans un onglet hidden a une taille nulle →
@@ -197,6 +199,8 @@ $iconSvg = static function (string $name): string {
                     <span class="ka-sub">CA</span>
                 </div>
                 <div class="ka-chart ka-chart-donut"><canvas id="ka-chart-category"></canvas></div>
+                <!-- Légende HTML (remplace la légende Chart.js, illisible sur téléphone). -->
+                <div class="ka-leg" id="ka-leg-category"></div>
             </section>
 
             <section class="card surface glass ka-card">
@@ -205,6 +209,7 @@ $iconSvg = static function (string $name): string {
                     <span class="ka-sub">CA · transactions</span>
                 </div>
                 <div class="ka-chart ka-chart-donut"><canvas id="ka-chart-payment"></canvas></div>
+                <div class="ka-leg" id="ka-leg-payment"></div>
             </section>
         </div>
     </div>
@@ -467,6 +472,50 @@ $iconSvg = static function (string $name): string {
     }
 
     // ---------- Onglet « Répartition » : donuts catégorie + paiements ----------
+    // Légendes HTML sous les donuts (la légende Canvas de Chart.js se
+    // superposait au graphique sur téléphone avec beaucoup d'items).
+    function renderCatLegend(bc, catTotal) {
+        var el = document.getElementById('ka-leg-category');
+        if (!el) return;
+        if (!(catTotal > 0)) {
+            el.innerHTML = '<p class="ka-leg-empty">Aucune vente sur la période</p>';
+            return;
+        }
+        var html = '';
+        (bc.labels || []).forEach(function (label, i) {
+            var v = Number((bc.ca || [])[i] || 0);
+            html += '<div class="ka-leg-row">'
+                + '<span class="ka-leg-dot" style="background:' + palette[i % palette.length] + '"></span>'
+                + '<span class="ka-leg-name">' + esc(label) + '</span>'
+                + '<span class="ka-leg-val">' + money(v) + '</span>'
+                + '<span class="ka-leg-pct">' + pct(v / catTotal * 100) + '</span>'
+                + '</div>';
+        });
+        el.innerHTML = html;
+    }
+
+    function renderPmLegend(pm, pmCa, pmTotal) {
+        var el = document.getElementById('ka-leg-payment');
+        if (!el) return;
+        var pmLabels = ['Carte', 'Liquide'];
+        var pmColors = [teal, amber];
+        if (!(pmTotal > 0)) {
+            el.innerHTML = '<p class="ka-leg-empty">Aucune vente sur la période</p>';
+            return;
+        }
+        var html = '';
+        pmLabels.forEach(function (label, i) {
+            var nb = Number((pm.by_count || {})[(i === 0 ? 'CARTE' : 'LIQUIDE')] || 0);
+            html += '<div class="ka-leg-row">'
+                + '<span class="ka-leg-dot" style="background:' + pmColors[i] + '"></span>'
+                + '<span class="ka-leg-name">' + label + '</span>'
+                + '<span class="ka-leg-val">' + money(pmCa[i]) + '</span>'
+                + '<span class="ka-leg-pct">' + nb + ' tr. · ' + Math.round(pmCa[i] / pmTotal * 100) + ' %</span>'
+                + '</div>';
+        });
+        el.innerHTML = html;
+    }
+
     function initRepartCharts() {
         var bc = data.byCategory || { labels: [], ca: [] };
         var catTotal = (bc.ca || []).reduce(function (a, b) { return a + Number(b); }, 0);
@@ -483,7 +532,9 @@ $iconSvg = static function (string $name): string {
                     maintainAspectRatio: false,
                     cutout: '64%',
                     plugins: {
-                        legend: { position: 'bottom', labels: { boxWidth: 12, padding: 10 } },
+                        // Légende désactivée : remplacée par la légende HTML
+                        // .ka-leg sous le donut (lisible sur téléphone).
+                        legend: { display: false },
                         tooltip: { callbacks: { label: function (c) { return c.label + ' : ' + money(c.raw); } } },
                     },
                 },
@@ -530,7 +581,9 @@ $iconSvg = static function (string $name): string {
                     maintainAspectRatio: false,
                     cutout: '58%',
                     plugins: {
-                        legend: { position: 'bottom', labels: { boxWidth: 12, padding: 10 } },
+                        // Légende désactivée : remplacée par la légende HTML
+                        // .ka-leg sous le donut (lisible sur téléphone).
+                        legend: { display: false },
                         tooltip: {
                             callbacks: {
                                 label: function (c) {
@@ -561,6 +614,10 @@ $iconSvg = static function (string $name): string {
                 }],
             });
         }
+
+        // Légendes HTML sous les donuts (les légendes Chart.js sont désactivées).
+        renderCatLegend(bc, catTotal);
+        renderPmLegend(pm, pmCa, pmTotal);
     }
 
     // ============================================================
@@ -792,9 +849,26 @@ $iconSvg = static function (string $name): string {
 .ka-chart { position: relative; }
 .ka-chart-trend { height: 220px; }
 .ka-chart-top { height: 260px; }
-.ka-chart-donut { height: 200px; }
+.ka-chart-donut { height: 180px; max-width: 200px; margin: 0 auto; }
 /* Donuts côte à côte si la largeur le permet, sinon empilés. */
 .ka-duo { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0.6rem; }
+
+/* ---- Légendes HTML des donuts (remplacent la légende Chart.js) ---- */
+.ka-leg { margin-top: 0.55rem; }
+.ka-leg-row {
+    display: flex; align-items: center; gap: 0.45rem;
+    min-width: 0;
+    padding: 0.28rem 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    font-size: 0.8rem;
+    line-height: 1.3;
+}
+.ka-leg-row:last-child { border-bottom: none; }
+.ka-leg-dot { flex: 0 0 auto; width: 10px; height: 10px; border-radius: 50%; }
+.ka-leg-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ka-leg-val { flex: 0 0 auto; font-weight: 700; font-variant-numeric: tabular-nums; }
+.ka-leg-pct { flex: 0 0 auto; font-size: 0.72rem; color: var(--muted, #9fb3c8); white-space: nowrap; }
+.ka-leg-empty { margin: 0; padding: 0.35rem 0; font-size: 0.8rem; color: var(--muted, #9fb3c8); text-align: center; }
 
 /* ---- Heatmap compacte (défilement horizontal dans la carte) ---- */
 .ka-heat-wrap { overflow-x: auto; }
