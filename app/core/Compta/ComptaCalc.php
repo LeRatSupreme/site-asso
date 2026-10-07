@@ -13,6 +13,43 @@ namespace App\Core\Compta;
  */
 final class ComptaCalc
 {
+    /** Fuseau de référence des fenêtres : l'asso opère à Paris. */
+    public const TZ = 'Europe/Paris';
+
+    /**
+     * Fenêtre « 7 derniers jours » (J-6 → J, bornes incluses) en heure
+     * de Paris. $today injectable pour les tests.
+     *
+     * @return array{from:string,to:string}
+     */
+    public static function last7DaysWindow(?\DateTimeImmutable $today = null): array
+    {
+        $tz = new \DateTimeZone(self::TZ);
+        $today = ($today ?? new \DateTimeImmutable('today', $tz))->setTimezone($tz);
+
+        return [
+            'from' => $today->modify('-6 days')->format('Y-m-d'),
+            'to'   => $today->format('Y-m-d'),
+        ];
+    }
+
+    /**
+     * Fenêtre « mois en cours » (1er du mois → J, bornes incluses) en
+     * heure de Paris. $today injectable pour les tests.
+     *
+     * @return array{from:string,to:string}
+     */
+    public static function monthToDateWindow(?\DateTimeImmutable $today = null): array
+    {
+        $tz = new \DateTimeZone(self::TZ);
+        $today = ($today ?? new \DateTimeImmutable('today', $tz))->setTimezone($tz);
+
+        return [
+            'from' => $today->modify('first day of this month')->setTime(0, 0)->format('Y-m-d'),
+            'to'   => $today->format('Y-m-d'),
+        ];
+    }
+
     /**
      * Options du sélecteur « 📅 Période » (pages Catégories, Dépenses,
      * Budgets, Achats) — mêmes bornes que la page Réappro.
