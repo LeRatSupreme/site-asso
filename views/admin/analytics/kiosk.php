@@ -836,8 +836,8 @@ $iconSvg = static function (string $name): string {
 .ka-kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.35rem; }
 @media (max-width: 360px) { .ka-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .ka-kpi { display: flex; flex-direction: column; gap: 0.08rem; padding: 0.5rem 0.6rem; }
-.ka-kpi-label { font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted, #9fb3c8); }
-.ka-kpi-value { font-size: 1.05rem; font-weight: 800; color: var(--primary, #48bdd3); line-height: 1.15; }
+.ka-kpi-label { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted, #9fb3c8); }
+.ka-kpi-value { font-size: 1.2rem; font-weight: 800; color: var(--primary, #48bdd3); line-height: 1.15; }
 .ka-kpi-sub { font-size: 0.62rem; color: var(--muted, #9fb3c8); }
 .ka-kpi-delta { font-size: 0.66rem; font-weight: 700; }
 .ka-kpi-delta.is-up { color: #22c55e; }
@@ -847,37 +847,45 @@ $iconSvg = static function (string $name): string {
 /* ---- Onglets : classes .compta-tabs de compta.css, juste resserrées ---- */
 .ka-tabs { margin-bottom: 0.2rem; }
 
-/* ---- Cartes + graphiques ---- */
+/* ---- Cartes + graphiques (tailles 1:1 lisibles sans zoomer) ---- */
 .ka-card { padding: 0.7rem 0.8rem; }
 .ka-chart-head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.5rem; }
-.ka-chart-title { margin: 0; font-size: 0.85rem; font-weight: 700; color: var(--primary, #48bdd3); }
+.ka-chart-title { margin: 0; font-size: 1rem; font-weight: 700; color: var(--primary, #48bdd3); }
 .ka-sub { font-size: 0.68rem; color: var(--muted, #9fb3c8); text-align: right; }
 .ka-chart { position: relative; }
-.ka-chart-trend { height: 220px; }
-.ka-chart-top { height: 260px; }
-.ka-chart-donut { height: 180px; max-width: 200px; margin: 0 auto; }
-/* Donuts côte à côte si la largeur le permet, sinon empilés. */
-.ka-duo { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0.6rem; }
+.ka-chart-trend { height: 260px; }
+.ka-chart-top { height: 300px; }
+.ka-chart-donut { height: 250px; max-width: 280px; margin: 0 auto; }
+/* Donuts empilés sur téléphone (assez larges pour être lus en 1:1),
+   côte à côte uniquement sur écran large. */
+.ka-duo { display: grid; grid-template-columns: 1fr; gap: 0.6rem; }
+@media (min-width: 640px) { .ka-duo { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); } }
 
-/* ---- Légendes HTML des donuts (remplacent la légende Chart.js) ---- */
+/* Garde locale : un pane masqué ne doit JAMAIS prendre de largeur
+   (compta.css a déjà .compta-tabpane[hidden], on redouble ici). */
+.ka-pane[hidden] { display: none; }
+
+/* ---- Légendes HTML des donuts (remplacent la légende Chart.js),
+        tailles 1:1 lisibles sans zoomer ---- */
 .ka-leg { margin-top: 0.55rem; }
 .ka-leg-row {
-    display: flex; align-items: center; gap: 0.45rem;
+    display: flex; align-items: center; gap: 0.5rem;
     min-width: 0;
-    padding: 0.28rem 0;
+    padding: 0.55rem 0;
     border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-    font-size: 0.8rem;
-    line-height: 1.3;
+    font-size: 1rem;
+    line-height: 1.35;
 }
 .ka-leg-row:last-child { border-bottom: none; }
-.ka-leg-dot { flex: 0 0 auto; width: 10px; height: 10px; border-radius: 50%; }
+.ka-leg-dot { flex: 0 0 auto; width: 12px; height: 12px; border-radius: 50%; }
 .ka-leg-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ka-leg-val { flex: 0 0 auto; font-weight: 700; font-variant-numeric: tabular-nums; }
-.ka-leg-pct { flex: 0 0 auto; font-size: 0.72rem; color: var(--muted, #9fb3c8); white-space: nowrap; }
-.ka-leg-empty { margin: 0; padding: 0.35rem 0; font-size: 0.8rem; color: var(--muted, #9fb3c8); text-align: center; }
+.ka-leg-val { flex: 0 0 auto; font-size: 1rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.ka-leg-pct { flex: 0 0 auto; font-size: 0.85rem; color: var(--muted, #9fb3c8); white-space: nowrap; }
+.ka-leg-empty { margin: 0; padding: 0.55rem 0; font-size: 1rem; color: var(--muted, #9fb3c8); text-align: center; }
 
-/* ---- Heatmap compacte (défilement horizontal dans la carte) ---- */
-.ka-heat-wrap { overflow-x: auto; }
+/* ---- Heatmap compacte (défilement horizontal DANS la carte :
+        jamais de débordement de page → pas de dézoom navigateur) ---- */
+.ka-heat-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 .ka-heat {
     display: inline-grid;
     grid-auto-rows: 20px;
@@ -934,8 +942,8 @@ $iconSvg = static function (string $name): string {
 .ka-insight-title { margin: 0 0 0.1rem; font-size: 0.78rem; font-weight: 700; }
 .ka-insight-text { margin: 0; font-size: 0.72rem; color: var(--muted, #9fb3c8); }
 
-/* ---- Tableau produits (défilement horizontal dans la carte) ---- */
-.ka-table-wrap { overflow-x: auto; }
+/* ---- Tableau produits (défilement horizontal DANS la carte) ---- */
+.ka-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 .ka-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; min-width: 480px; }
 .ka-table th, .ka-table td { padding: 0.4rem 0.45rem; border-bottom: 1px solid rgba(255, 255, 255, 0.07); text-align: left; white-space: nowrap; }
 .ka-table th.num, .ka-table td.num { text-align: right; }
