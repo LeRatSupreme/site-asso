@@ -207,9 +207,69 @@ final class KioskComptageController extends Controller
         ]);
     }
 
+    /** Durées proposées par le menu « Période analysée ». */
+    private const PERIODE_OPTIONS = ['7j', '14j', '30j', 'mois'];
+
     /**
-     * Récap des 7 DERNIERS JOURS (admin) : total, détail jour par jour,
-     * paiements, top produits.
+     * Récap de période unifié (admin) : une seule page pour 7 / 14 / 30
+     * derniers jours et le mois en cours — menu « Période analysée » avec
+     * bornes affichées et nombre de jours analysés (week-end inclus).
+     * Détail jour par jour sur toute durée ; comparaison mois précédent
+     * quand la période est le mois en cours.
+     */
+    public function periode(string $token): void
+    {
+        if (!$this->adminTokenOk($token)) {
+            $this->deny();
+
+            return;
+        }
+
+        $paris = new \DateTimeZone('Europe/Paris');
+        $p = (string) ($_GET['p'] ?? '7j');
+        if (!in_array($p, self::PERIODE_OPTIONS, true)) {
+            $p = '7j';
+        }
+
+        $today = new \DateTimeImmutable('today', $paris);
+        $isMois = $p === 'mois';
+        $prevCa = null;
+        $prevLabel = null;
+        if ($isMois) {
+            $window = \App\Core\Compta\ComptaCalc::monthToDateWindow();
+            $from = new \DateTimeImmutable($window['from'], $paris);
+            $to = new \DateTimeImmutable($window['to'], $paris);
+            $prevFrom = $from->modify('-1 month');
+            $prevTo = $from->modify('-1 day');
+            $prev = Sale::aggregatesBetween($prevFrom->format('Y-m-d'), $prevTo->format('Y-m-d'));
+            $prevCa = round($prev['ca'], 2);
+            $prevLabel = $prevFrom->format('m/Y');
+        } else {
+            $days = (int) substr($p, 0, -1);
+            $from = $today->modify('-' . ($days - 1) . ' days');
+            $to = $today;
+        }
+
+        $stats = $this->periodeStats($from->format('Y-m-d'), $to->format('Y-m-d'), true);
+        $stats['prev_ca'] = $prevCa;
+        $stats['prev_label'] = $prevLabel;
+
+        // Jours CALENDaires couverts (week-end inclus), comme sur le réappro.
+        $calDays = (int) $from->diff($to)->format('%a') + 1;
+
+        $this->renderKiosk('admin/compta/kiosk-admin-periode', [
+            'title'      => 'Période analysée',
+            'token'      => $token,
+            'p'          => $p,
+            'stats'      => $stats,
+            'calDays'    => $calDays,
+            'rangeLabel' => 'du ' . $from->format('d/m') . ' au ' . $to->format('d/m'),
+        ]);
+    }
+
+    /**
+     * Ancienne page « 7 derniers jours » : redirigée vers la période
+     * unifiée (les vieux liens et favoris continuent de marcher).
      */
     public function semaine(string $token): void
     {
@@ -219,20 +279,11 @@ final class KioskComptageController extends Controller
             return;
         }
 
-        $to = new \DateTimeImmutable('today', new \DateTimeZone('Europe/Paris'));
-        $from = $to->modify('-6 days');
-        $this->renderKiosk('admin/compta/kiosk-admin-periode', [
-            'title'      => '7 derniers jours',
-            'token'      => $token,
-            'mode'       => 'semaine',
-            'stats'      => $this->periodeStats($from->format('Y-m-d'), $to->format('Y-m-d'), true),
-            'rangeLabel' => 'du ' . $from->format('d/m') . ' au ' . $to->format('d/m'),
-        ]);
+        redirect(url('/kiosque/admin/periode/' . rawurlencode($token) . '?p=7j'));
     }
 
     /**
-     * Récap du MOIS EN COURS (admin) : total, comparaison mois précédent,
-     * paiements, top produits.
+     * Ancienne page « mois en cours » : redirigée vers la période unifiée.
      */
     public function mois(string $token): void
     {
@@ -242,25 +293,7 @@ final class KioskComptageController extends Controller
             return;
         }
 
-        $paris = new \DateTimeZone('Europe/Paris');
-        $window = \App\Core\Compta\ComptaCalc::monthToDateWindow();
-        $from = new \DateTimeImmutable($window['from'], $paris);
-        $to = new \DateTimeImmutable($window['to'], $paris);
-        $prevFrom = $from->modify('-1 month');
-        $prevTo = $from->modify('-1 day');
-        $prev = Sale::aggregatesBetween($prevFrom->format('Y-m-d'), $prevTo->format('Y-m-d'));
-
-        $stats = $this->periodeStats($from->format('Y-m-d'), $to->format('Y-m-d'), false);
-        $stats['prev_ca'] = round($prev['ca'], 2);
-        $stats['prev_label'] = $prevFrom->format('m/Y');
-
-        $this->renderKiosk('admin/compta/kiosk-admin-periode', [
-            'title'      => 'Mois en cours',
-            'token'      => $token,
-            'mode'       => 'mois',
-            'stats'      => $stats,
-            'rangeLabel' => 'du ' . $from->format('d/m') . ' au ' . $to->format('d/m'),
-        ]);
+        redirect(url('/kiosque/admin/periode/' . rawurlencode($token) . '?p=mois'));
     }
 
     /**

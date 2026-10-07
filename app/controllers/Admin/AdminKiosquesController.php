@@ -84,16 +84,9 @@ final class AdminKiosquesController extends AdminBaseController
             ],
             [
                 'emoji' => '📅',
-                'label' => '7 derniers jours',
-                'desc'  => 'Total de la semaine, détail jour par jour, top produits. Lien kiosque, sans connexion.',
-                'url'   => Kiosk::adminUrl('/kiosque/admin/semaine/'),
-                'kiosk' => true,
-            ],
-            [
-                'emoji' => '🗓️',
-                'label' => 'Mois en cours',
-                'desc'  => 'Total du mois vs mois précédent, top produits. Lien kiosque, sans connexion.',
-                'url'   => Kiosk::adminUrl('/kiosque/admin/mois/'),
+                'label' => 'Période analysée',
+                'desc'  => 'Une seule page pour 7 / 14 / 30 derniers jours et le mois en cours : menu de durée, détail jour par jour, top produits. Lien kiosque, sans connexion.',
+                'url'   => Kiosk::adminUrl('/kiosque/admin/periode/'),
                 'kiosk' => true,
             ],
             [

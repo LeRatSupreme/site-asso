@@ -3,16 +3,29 @@
 declare(strict_types=1);
 
 /**
- * Kiosque ADMIN — récap de période (7 derniers jours ou mois en cours) :
- * CA, bénéfice, paiements, détail jour par jour (semaine), comparaison
- * mois précédent (mois), top produits.
+ * Kiosque ADMIN — récap de période unifié : menu « Période analysée »
+ * (7 / 14 / 30 derniers jours ou mois en cours) avec bornes affichées et
+ * nombre de jours analysés (week-end inclus), comme sur le réappro.
+ * CA, bénéfice, paiements, détail jour par jour, comparaison mois
+ * précédent (mois), top produits.
  *
  * @var string $token
- * @var string $mode 'semaine'|'mois'
+ * @var string $p '7j'|'14j'|'30j'|'mois'
+ * @var int $calDays
  * @var string $rangeLabel
  * @var array<string,mixed> $stats
  */
-$isSemaine = $mode === 'semaine';
+$isMois = $p === 'mois';
+$options = [
+    '7j'   => '7 derniers jours',
+    '14j'  => '14 derniers jours',
+    '30j'  => '30 derniers jours',
+    'mois' => 'Mois en cours',
+];
+$optionLabel = $options[$p] ?? $options['7j'];
+$fmtFull = static fn (string $d): string => (new DateTimeImmutable($d))->format('d/m/Y');
+$from = (string) $stats['from'];
+$to = (string) $stats['to'];
 ?>
 <style>
     .kx-wrap { max-width: 44rem; margin: 0 auto; }
@@ -33,6 +46,28 @@ $isSemaine = $mode === 'semaine';
     }
     .kx-hero-sub { margin: 0.75rem 0 0; font-size: 0.88rem; color: var(--muted, #8892a6); }
     .kx-hero-sub strong { color: var(--foreground, inherit); }
+
+    /* Menu « Période analysée » (même modèle que le réappro). */
+    .kp-selector {
+        display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center;
+        padding: 0.85rem 1rem; margin-bottom: 0.7rem;
+        background: rgba(255, 255, 255, 0.035);
+        border: 1px solid rgba(255, 255, 255, 0.07);
+        border-radius: 16px;
+    }
+    .kp-selector form { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+    .kp-selector .field-label {
+        font-size: 0.75rem; font-weight: 800; text-transform: uppercase;
+        letter-spacing: 0.06em; color: var(--muted, #8892a6);
+    }
+    .kp-selector select {
+        padding: 0.45rem 0.55rem; border: 1px solid var(--border, rgba(255,255,255,0.15));
+        border-radius: 8px; background: rgba(255, 255, 255, 0.05); color: var(--foreground, inherit);
+        font-size: 0.9rem;
+    }
+    .kp-meta {
+        font-size: 0.78rem; color: var(--muted, #8892a6);
+    }
 
     .kx-pair {
         display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -107,18 +142,34 @@ $isSemaine = $mode === 'semaine';
 <div class="compta-head">
     <div>
         <p class="eyebrow">Comptabilité — accès admin</p>
-        <h1 class="page-title"><?= $isSemaine ? '7 derniers jours' : 'Mois en cours' ?></h1>
-        <p class="muted"><?= e($rangeLabel) ?>.</p>
+        <h1 class="page-title">Période analysée</h1>
+        <p class="muted"><?= e($optionLabel) ?> — <?= e($rangeLabel) ?>.</p>
     </div>
 </div>
 
 <div class="kx-wrap">
+    <div class="kp-selector">
+        <form method="get">
+            <label class="field-label" for="p">Couvrir pour</label>
+            <select name="p" id="p">
+                <?php foreach ($options as $k => $label): ?>
+                    <option value="<?= e($k) ?>" <?= $k === $p ? 'selected' : '' ?>><?= e($label) ?></option>
+                <?php endforeach; ?>
+            </select>
+            <button type="submit" class="btn btn-primary btn-sm">Appliquer</button>
+        </form>
+        <span class="kp-meta" title="Période analysée : bornes et nombre de jours calendaires (week-end inclus)">
+            <?= e($fmtFull($from)) ?> → <?= e($fmtFull($to)) ?>
+            · <?= (int) $calDays ?> j analysés (week-end inclus)
+        </span>
+    </div>
+
     <div class="kx-hero">
-        <p class="kx-hero-label">Chiffre d'affaires (TTC) — <?= $isSemaine ? '7 derniers jours' : 'mois en cours' ?></p>
+        <p class="kx-hero-label">Chiffre d'affaires (TTC) — <?= e($optionLabel) ?></p>
         <div class="kx-hero-value"><?= e(formatPrice((float) $stats['ca'])) ?></div>
         <p class="kx-hero-sub"><strong><?= (int) $stats['qty'] ?></strong> produits · <strong><?= (int) $stats['transactions'] ?></strong> transactions</p>
-        <?php if (!$isSemaine): ?>
-        <p class="kx-hero-sub"><?= e((float) $stats['prev_ca'] > 0 ? 'Mois précédent : ' . formatPrice((float) $stats['prev_ca']) : 'Premier mois avec des ventes') ?></p>
+        <?php if ($isMois): ?>
+        <p class="kx-hero-sub"><?= e((float) ($stats['prev_ca'] ?? 0) > 0 ? 'Mois précédent : ' . formatPrice((float) $stats['prev_ca']) : 'Premier mois avec des ventes') ?></p>
         <?php endif; ?>
     </div>
 
@@ -148,7 +199,6 @@ $isSemaine = $mode === 'semaine';
         </div>
     </div>
 
-    <?php if ($isSemaine): ?>
     <div class="kx-list-card">
         <p class="kx-card-label">📅 Détail jour par jour</p>
         <ul class="kx-days">
@@ -162,7 +212,6 @@ $isSemaine = $mode === 'semaine';
             <?php endforeach; ?>
         </ul>
     </div>
-    <?php endif; ?>
 
     <div class="kx-list-card">
         <p class="kx-card-label">🏆 Top produits</p>
@@ -188,3 +237,15 @@ $isSemaine = $mode === 'semaine';
         <a class="btn btn-ghost btn-sm" href="<?= e(url('/kiosque/comptage/jour/' . rawurlencode($token))) ?>">📊 Récap du jour</a>
     </div>
 </div>
+
+<script>
+// Le menu « Période analysée » applique dès le changement de durée
+// (le bouton Appliquer reste là par sécurité).
+(function () {
+    var sel = document.getElementById('p');
+    if (!sel) return;
+    sel.addEventListener('change', function () {
+        sel.form.submit();
+    });
+})();
+</script>

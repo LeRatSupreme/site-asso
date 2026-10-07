@@ -125,13 +125,9 @@ $mMoisMarge = $marge($mois['ca'], $mois['profit']);
         <span class="kiosk-emoji">🧾</span>
         <span class="kiosk-tile-title">Livre comptable</span>
     </a>
-    <a href="<?= e(url('/kiosque/admin/semaine/' . rawurlencode($token))) ?>">
+    <a href="<?= e(url('/kiosque/admin/periode/' . rawurlencode($token))) ?>">
         <span class="kiosk-emoji">📅</span>
-        <span class="kiosk-tile-title">7 jours</span>
-    </a>
-    <a href="<?= e(url('/kiosque/admin/mois/' . rawurlencode($token))) ?>">
-        <span class="kiosk-emoji">🗓️</span>
-        <span class="kiosk-tile-title">Mois</span>
+        <span class="kiosk-tile-title">Période analysée</span>
     </a>
     <a href="<?= e(url('/kiosque/liste/' . rawurlencode($token))) ?>">
         <span class="kiosk-emoji">🛒</span>
@@ -156,9 +152,4 @@ $mMoisMarge = $marge($mois['ca'], $mois['profit']);
     Analytics, journal des ventes et dashboard complet : depuis
     <a href="<?= e(url('/admin/compta')) ?>">l'espace admin</a> (connexion requise).
 </p>
-
-    <p class="kah-foot">
-        Analytics, journal des ventes et dashboard complet : depuis
-        <a href="<?= e(url('/admin/compta')) ?>">l'espace admin</a> (connexion requise).
-    </p>
 </div>
