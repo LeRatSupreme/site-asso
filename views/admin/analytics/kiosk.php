@@ -255,7 +255,8 @@ $iconSvg = static function (string $name): string {
                 <label class="ka-psort">
                     <span>Trier par</span>
                     <select id="ka-psort">
-                        <option value="ca" selected>CA</option>
+                        <option value="category" selected>Catégorie</option>
+                        <option value="ca">CA</option>
                         <option value="profit">Bénéfice</option>
                         <option value="margin">Marge %</option>
                         <option value="qty">Quantité</option>
@@ -696,11 +697,13 @@ $iconSvg = static function (string $name): string {
 
     // ============================================================
     // Produits : rangées-cartes pleine largeur (zéro scroll-x),
-    // tri par select (défaut CA décroissant) + totaux + export CSV.
-    // (DOM pur : construit immédiatement.)
+    // tri par select — DÉFAUT « Catégorie » (groupement : catégories
+    // ordonnées par CA total décroissant, produits par CA décroissant
+    // dans chaque catégorie), autres tris = liste plate avec chip.
+    // + totaux + export CSV. (DOM pur : construit immédiatement.)
     // ============================================================
     var rows = data.table || [];
-    var sortKey = 'ca';
+    var sortKey = 'category';
 
     // Bénéfice signé : texte « +12,30 € » / « −4,00 € » + classe couleur.
     function profitParts(v) {
@@ -709,6 +712,25 @@ $iconSvg = static function (string $name): string {
             cls: v >= 0 ? 'is-pos' : 'is-neg',
             text: (v >= 0 ? '+' : '−') + money(Math.abs(v)),
         };
+    }
+
+    // Une carte produit. withCat = chip catégorie (masquée en tri
+    // « Catégorie », redondante avec l'entête de section).
+    function cardHtml(r, withCat) {
+        var pp = profitParts(r.profit);
+        return '<div class="ka-pcard">'
+            + '<div class="ka-pcard-top">'
+            + '<span class="ka-pcard-name">' + esc(r.product) + '</span>'
+            + (withCat ? '<span class="ka-pcard-cat">' + esc(r.category) + '</span>' : '')
+            + '</div>'
+            + '<div class="ka-pcard-meta"><span>×' + Number(r.qty) + '</span>'
+            + '<span>Coût moy. ' + money(r.cost) + '</span></div>'
+            + '<div class="ka-pcard-stats">'
+            + '<span class="ka-pcard-ca">CA : ' + money(r.ca) + '</span>'
+            + '<span class="ka-pcard-profit ' + pp.cls + '">Bénéfice : ' + pp.text + '</span>'
+            + '<span class="ka-pcard-margin">Marge ' + Math.round(Number(r.margin)) + ' %</span>'
+            + '</div>'
+            + '</div>';
     }
 
     function renderCards() {
@@ -737,22 +759,37 @@ $iconSvg = static function (string $name): string {
                 + '<span>Marge ' + (totCa > 0 ? pct((totProfit / totCa) * 100) : '—') + '</span>';
         }
 
-        wrap.innerHTML = sorted.map(function (r) {
-            var pp = profitParts(r.profit);
-            return '<div class="ka-pcard">'
-                + '<div class="ka-pcard-top">'
-                + '<span class="ka-pcard-name">' + esc(r.product) + '</span>'
-                + '<span class="ka-pcard-cat">' + esc(r.category) + '</span>'
-                + '</div>'
-                + '<div class="ka-pcard-meta"><span>×' + Number(r.qty) + '</span>'
-                + '<span>Coût moy. ' + money(r.cost) + '</span></div>'
-                + '<div class="ka-pcard-stats">'
-                + '<span class="ka-pcard-ca">CA : ' + money(r.ca) + '</span>'
-                + '<span class="ka-pcard-profit ' + pp.cls + '">Bénéfice : ' + pp.text + '</span>'
-                + '<span class="ka-pcard-margin">Marge ' + Math.round(Number(r.margin)) + ' %</span>'
-                + '</div>'
-                + '</div>';
-        }).join('');
+        // Tri « Catégorie » = GROUPAGE : sections par catégorie (CA total
+        // décroissant), produits par CA décroissant dans chaque catégorie,
+        // sans chip redondante. Autres tris = liste plate avec chip.
+        if (sortKey === 'category') {
+            var byCat = {};
+            sorted.forEach(function (r) {
+                var key = String(r.category == null ? '—' : r.category);
+                (byCat[key] = byCat[key] || []).push(r);
+            });
+            var cats = Object.keys(byCat).map(function (name) {
+                // Produits de la catégorie triés par CA décroissant.
+                var products = byCat[name].slice().sort(function (a, b) {
+                    return Number(b.ca) - Number(a.ca);
+                });
+                var caTotal = products.reduce(function (a, r) { return a + Number(r.ca); }, 0);
+                return { name: name, caTotal: caTotal, products: products };
+            }).sort(function (a, b) { return b.caTotal - a.caTotal; });
+
+            wrap.innerHTML = cats.map(function (c) {
+                return '<div class="ka-psec">'
+                    + '<div class="ka-psec-head">'
+                    + '<span class="ka-psec-name">' + esc(c.name) + '</span>'
+                    + '<span class="ka-psec-meta">' + c.products.length + ' produits · ' + money(c.caTotal) + '</span>'
+                    + '</div>'
+                    + c.products.map(function (r) { return cardHtml(r, false); }).join('')
+                    + '</div>';
+            }).join('');
+            return;
+        }
+
+        wrap.innerHTML = sorted.map(function (r) { return cardHtml(r, true); }).join('');
     }
 
     function initProducts() {
@@ -1000,13 +1037,24 @@ $iconSvg = static function (string $name): string {
 }
 .ka-ptot-profit.is-pos { color: #22c55e; }
 .ka-ptot-profit.is-neg { color: #ef4444; }
+/* Sections du tri « Catégorie » : entête lisible + aération généreuse
+   entre sections (1rem), entête → première carte (0.5rem). */
+.ka-psec { margin-bottom: 1rem; }
+.ka-psec:last-child { margin-bottom: 0; }
+.ka-psec-head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem; min-width: 0; margin-bottom: 0.5rem; }
+.ka-psec-name { flex: 1 1 auto; min-width: 0; font-weight: 700; font-size: 0.95rem; line-height: 1.3; }
+.ka-psec-meta { flex: 0 0 auto; font-size: 0.72rem; color: var(--muted, #9fb3c8); white-space: nowrap; }
 .ka-pcard {
-    padding: 0.6rem 0.7rem;
+    padding: 0.7rem 0.8rem;
     border-radius: 12px;
     background: rgba(255, 255, 255, 0.035);
     border: 1px solid rgba(255, 255, 255, 0.07);
-    margin-bottom: 0.45rem;
+    margin-bottom: 0.7rem;
+    /* Aération interne : les 3 lignes de la carte respirent. */
+    display: flex; flex-direction: column; gap: 0.3rem;
+    line-height: 1.45;
 }
+.ka-pcard:last-child { margin-bottom: 0; }
 .ka-pcard-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.5rem; }
 .ka-pcard-name {
     flex: 1 1 auto; min-width: 0;
@@ -1024,12 +1072,12 @@ $iconSvg = static function (string $name): string {
     border-radius: 999px;
     padding: 0.18rem 0.55rem;
 }
-.ka-pcard-meta { display: flex; align-items: baseline; margin-top: 0.2rem; font-size: 0.78rem; color: var(--muted, #9fb3c8); }
+.ka-pcard-meta { display: flex; align-items: baseline; font-size: 0.78rem; color: var(--muted, #9fb3c8); }
 /* Séparateur « · » entre les méta-informations. */
 .ka-pcard-meta > * + *::before { content: '·'; margin-right: 0.45rem; color: rgba(159, 179, 200, 0.6); }
 /* Les enfants flex portant du texte ne peuvent jamais forcer la largeur. */
 .ka-pcard-stats > span, .ka-ptotals > span, .ka-pcard-meta > span { min-width: 0; }
-.ka-pcard-stats { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.25rem 0.8rem; margin-top: 0.4rem; }
+.ka-pcard-stats { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.6rem; }
 .ka-pcard-ca { font-size: 1rem; font-weight: 800; color: #48bdd3; font-variant-numeric: tabular-nums; }
 .ka-pcard-profit { font-size: 0.85rem; font-weight: 700; font-variant-numeric: tabular-nums; }
 .ka-pcard-profit.is-pos { color: #22c55e; }
