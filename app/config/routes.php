@@ -329,8 +329,10 @@ function aeic_register_routes(Router $router): void
     $router->get('/kiosque/comptage/jour-membre/{token}', [KioskComptageController::class, 'jourMembre']);
     $router->get('/kiosque/comptage/jour-membre/data/{token}', [KioskComptageController::class, 'jourMembreData']);
     // Partie ADMIN du kiosque (JETON ADMIN dédié, détachée des membres) :
-    // hub de tuiles + récaps semaine et mois.
+    // hub de tuiles + récap de période unifié (7/14/30 jours, mois).
+    // /semaine et /mois restent servis (redirections) pour les vieux liens.
     $router->get('/kiosque/admin/{token}', [KioskComptageController::class, 'adminHub']);
+    $router->get('/kiosque/admin/periode/{token}', [KioskComptageController::class, 'periode']);
     $router->get('/kiosque/admin/semaine/{token}', [KioskComptageController::class, 'semaine']);
     $router->get('/kiosque/admin/mois/{token}', [KioskComptageController::class, 'mois']);
 
