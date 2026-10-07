@@ -9,7 +9,6 @@ use App\Core\Compta\ComptaCalc;
 use App\Models\Expense;
 use App\Models\Purchase;
 use App\Models\Sale;
-
 /**
  * Livre comptable (groupe Système) : retranscription prête à recopier dans
  * le livret papier — Date | Objet | Débit | Crédit, avec pour chaque
@@ -38,6 +37,7 @@ final class AdminLedgerController extends AdminBaseController
             'totalDebit'  => $entries['total_debit'],
             'totalCredit' => $entries['total_credit'],
             'balance'     => $entries['balance'],
+            'recentExpenses' => Expense::recent(8),
         ]);
     }
 

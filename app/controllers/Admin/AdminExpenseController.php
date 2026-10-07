@@ -57,8 +57,10 @@ final class AdminExpenseController extends AdminBaseController
      * Valide et déplace le justificatif envoyé avec la dépense.
      * Renvoie le chemin relatif (« uploads/receipts/xx.ext ») ou null si
      * aucun fichier ; arrête la requête (flash + redirect) en cas d'erreur.
+     *
+     * @param string $back Chemin de retour (cf. returnTo()).
      */
-    private function storeReceipt(): ?string
+    private function storeReceipt(string $back): ?string
     {
         $receipt = $_FILES['receipt'] ?? null;
         if (!is_array($receipt) || (int) ($receipt['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
@@ -67,18 +69,18 @@ final class AdminExpenseController extends AdminBaseController
 
         if ((int) ($receipt['error'] ?? 1) !== UPLOAD_ERR_OK) {
             $this->setFlash('error', 'Échec de l\'envoi du justificatif (erreur ' . (int) ($receipt['error'] ?? 0) . ').');
-            redirect(url('/admin/compta/depenses'));
+            redirect(url($back));
         }
 
         if ((int) ($receipt['size'] ?? 0) > self::RECEIPT_MAX_SIZE) {
             $this->setFlash('error', 'Justificatif trop volumineux (5 Mo maximum).');
-            redirect(url('/admin/compta/depenses'));
+            redirect(url($back));
         }
 
         $ext = strtolower(pathinfo((string) ($receipt['name'] ?? ''), PATHINFO_EXTENSION));
         if (!isset(self::RECEIPT_ALLOWED[$ext])) {
             $this->setFlash('error', 'Justificatif : formats acceptés PDF, JPG, PNG ou WEBP.');
-            redirect(url('/admin/compta/depenses'));
+            redirect(url($back));
         }
 
         // Validation MIME réelle : l'extension déclarée n'est jamais une preuve.
@@ -94,7 +96,7 @@ final class AdminExpenseController extends AdminBaseController
         }
         if ($detected !== self::RECEIPT_ALLOWED[$ext]) {
             $this->setFlash('error', 'Le contenu du justificatif ne correspond pas à son extension.');
-            redirect(url('/admin/compta/depenses'));
+            redirect(url($back));
         }
 
         $dir = AEIC_PUBLIC . '/assets/uploads/receipts';
@@ -105,15 +107,32 @@ final class AdminExpenseController extends AdminBaseController
         $name = bin2hex(random_bytes(12)) . '.' . $ext;
         if (!move_uploaded_file((string) $receipt['tmp_name'], $dir . '/' . $name)) {
             $this->setFlash('error', 'Échec de l\'enregistrement du justificatif.');
-            redirect(url('/admin/compta/depenses'));
+            redirect(url($back));
         }
 
         return 'uploads/receipts/' . $name;
     }
 
+    /**
+     * Chemin de retour après enregistrement : par défaut le journal des
+     * dépenses, ou la page d'appel (ex. livre comptable) via le champ
+     * « return_to ». Seuls les chemins locaux sous /admin/ sont acceptés —
+     * jamais une URL arbitraire (open redirect).
+     */
+    private function returnTo(): string
+    {
+        $returnTo = (string) ($_POST['return_to'] ?? '');
+        if (str_starts_with($returnTo, '/admin/') && !str_starts_with($returnTo, '//')) {
+            return $returnTo;
+        }
+
+        return '/admin/compta/depenses';
+    }
+
     public function save(): void
     {
         $user = $this->guardCompta();
+        $back = $this->returnTo();
 
         $label = trim((string) ($_POST['label'] ?? ''));
         // Saisie souple : un seul montant, dans une base explicite.
@@ -147,7 +166,7 @@ final class AdminExpenseController extends AdminBaseController
 
         if ($label === '' || $amount <= 0) {
             $this->setFlash('error', 'Libellé requis, avec un montant (> 0).');
-            redirect(url('/admin/compta/depenses'));
+            redirect(url($back));
         }
 
         $amountHt = null;
@@ -182,7 +201,7 @@ final class AdminExpenseController extends AdminBaseController
             }
         }
 
-        $receiptPath = $this->storeReceipt();
+        $receiptPath = $this->storeReceipt($back);
 
         $category = strtoupper(trim((string) ($_POST['category'] ?? '')));
         if (!in_array($category, Expense::CATEGORIES, true)) {
@@ -204,7 +223,7 @@ final class AdminExpenseController extends AdminBaseController
 
         if ($id === '') {
             $this->setFlash('error', 'Libellé requis, avec un montant (> 0).');
-            redirect(url('/admin/compta/depenses'));
+            redirect(url($back));
         }
 
         $this->audit('compta.expense.create', 'expense', $id, [
@@ -218,7 +237,7 @@ final class AdminExpenseController extends AdminBaseController
             'receipt'    => $receiptPath,
         ]);
         $this->setFlash('success', 'Dépense enregistrée.');
-        redirect(url('/admin/compta/depenses'));
+        redirect(url($back));
     }
 
     public function delete(string $id): void
