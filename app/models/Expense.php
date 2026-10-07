@@ -76,6 +76,29 @@ final class Expense extends Model
     }
 
     /**
+     * Dernières dépenses saisies (toutes périodes), de la plus récente à
+     * la plus ancienne — aperçu « trace rapide » de la saisie express.
+     *
+     * @return list<array<string,mixed>>
+     */
+    public static function recent(int $limit = 8): array
+    {
+        $limit = max(1, (int) $limit);
+
+        try {
+            $stmt = self::pdo()->prepare(
+                'SELECT * FROM expenses ORDER BY created_at DESC, spent_at DESC, id DESC LIMIT ' . $limit
+            );
+            $stmt->execute();
+
+            /** @var list<array<string,mixed>> $r */
+            return $stmt->fetchAll();
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    /**
      * Supprime une dépense.
      */
     public static function delete(string $id): bool
