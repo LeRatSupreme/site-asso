@@ -3,18 +3,25 @@
 declare(strict_types=1);
 
 /**
- * Livre comptable — deux menus :
+ * Livre comptable — deux menus (admin ET kiosque) :
  *  1. « Saisir une dépense » : saisie express (30 s) — nom, référence du
  *     ticket, montant TTC/HT, TVA et photo du ticket ; la trace apparaît
- *     aussitôt dans les dernières dépenses et dans le livre.
+ *     aussitôt dans les dernières dépenses et dans le livre. En admin,
+ *     POST /admin/compta/depenses/save (CSRF + return_to) ; en kiosque,
+ *     POST /kiosque/admin/ledger/depense/{token} (jeton = auth, pas de
+ *     CSRF, identité obligatoire injectée par le layout kiosk).
  *  2. « Livre comptable » : Date | Objet | Débit | Crédit, avec lignes
  *     « ticket » (achats groupés par jour + fournisseur, référencés par
- *     leur n° de facture), les ventes en une ligne de clôture en fin de
- *     livre et l'équilibrage final (bénéfice/déficit).
+ *     leur n° de facture) et les ventes en une ligne de clôture en fin de
+ *     livre. L'« équilibrage » est un SOLDE DE TRÉSORERIE (encaissements
+ *     − décaissements de la période), PAS le bénéfice : les achats
+ *     incluent du stock pas encore vendu, les ventes du stock acheté
+ *     avant. Le bénéfice net (coût des produits vendus déduit) est
+ *     affiché sur sa propre ligne.
  * Adapté téléphone : le tableau tient en largeur (police compacte).
  *
  * @var array<string,mixed> $user
- * @var array{rows:list<array<string,mixed>>, total_debit:float, total_credit:float, balance:float} $entries
+ * @var array{rows:list<array<string,mixed>>, total_debit:float, total_credit:float, balance:float, sales_profit:float} $entries
  * @var list<array<string,mixed>> $recentExpenses
  * @var string $from
  * @var string $to
@@ -33,6 +40,10 @@ $presets = [
     'all' => 'Tout',
 ];
 $balancePos = (float) $entries['balance'] >= 0;
+// Bénéfice net de la période (coût des produits vendus déduit) — distinct
+// du solde de trésorerie ci-dessus.
+$salesProfit = round((float) ($entries['sales_profit'] ?? 0.0), 2);
+$salesProfitPos = $salesProfit >= 0;
 $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format('d/m/Y');
 ?>
 <style>
@@ -82,6 +93,9 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
     .ledger-balance td { background: <?= $balancePos ? 'rgba(74, 222, 128, 0.08)' : 'rgba(248, 113, 113, 0.08)' ?>; font-weight: 900; font-size: 1rem; }
     .ledger-balance .is-pos { color: #4ade80; }
     .ledger-balance .is-neg { color: #f87171; }
+    /* Ligne « bénéfice net » : même code couleur, un cran moins forte que
+       le solde de trésorerie pour bien les distinguer. */
+    .ledger-balance.lg-profit td { background: none; font-weight: 800; font-size: 0.78rem; }
     /* Saisie express */
     .lg-quick .field-row { display: flex; flex-wrap: wrap; gap: 0.9rem; }
     .lg-quick .field { flex: 1 1 180px; display: grid; gap: 0.35rem; }
@@ -127,17 +141,80 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
     </div>
 </div>
 
-<?php if (!$kiosk): ?>
 <nav class="compta-tabs" data-ledger-tabs aria-label="Menus du livre comptable">
-    <button type="button" class="compta-tab is-active" data-tab="saisie">Saisir une dépense</button>
-    <button type="button" class="compta-tab" data-tab="livre">Livre comptable</button>
+    <button type="button" class="compta-tab<?= $kiosk ? '' : ' is-active' ?>" data-tab="saisie">Saisir une dépense</button>
+    <button type="button" class="compta-tab<?= $kiosk ? ' is-active' : '' ?>" data-tab="livre">Livre comptable</button>
 </nav>
 
 <!-- ==================== Menu 1 : saisie express ==================== -->
-<div class="compta-tabpane is-active" data-pane="saisie">
+<div class="compta-tabpane<?= $kiosk ? '' : ' is-active' ?>" data-pane="saisie"<?php if ($kiosk): ?> hidden<?php endif; ?>>
     <section class="card surface glass lg-quick">
         <h2 class="card-title">Dépense en 30 secondes</h2>
         <p class="muted">Nom, référence du ticket, montant, TVA, photo — la trace est aussitôt dans le livre, prête à être traitée.</p>
+        <?php if ($kiosk): ?>
+        <!-- Kiosque : POST vers le contrôleur kiosque — pas de CSRF (le jeton
+             admin EST l'authentification), identité (prénom, nom, rôle)
+             ajoutée automatiquement à chaque formulaire par le layout kiosk.
+             Ordre des champs pensé téléphone : Date, Nom, Prix, TVA,
+             Référence, Photo. -->
+        <form method="post" action="<?= e(url('/kiosque/admin/ledger/depense/' . rawurlencode($token))) ?>" enctype="multipart/form-data">
+            <input type="hidden" name="category" value="DIVERS">
+
+            <div class="field-row">
+                <div class="field">
+                    <label for="lg-spent-at">Date</label>
+                    <input type="date" id="lg-spent-at" name="spent_at" value="<?= e(date('Y-m-d')) ?>" required>
+                </div>
+            </div>
+
+            <div class="field-row">
+                <div class="field" style="flex: 3 1 260px;">
+                    <label for="lg-label">Nom</label>
+                    <input type="text" id="lg-label" name="label" placeholder="ex: Verrou x4 — Leroy Merlin" required>
+                </div>
+            </div>
+
+            <div class="field-row">
+                <div class="field">
+                    <label for="lg-amount">Prix (€)</label>
+                    <input type="text" id="lg-amount" name="amount" inputmode="decimal" placeholder="ex: 36,60" required>
+                </div>
+                <div class="field">
+                    <label>Le montant saisi est…</label>
+                    <div class="chip-row" role="radiogroup" aria-label="Base du montant">
+                        <label class="chip"><input type="radio" name="amount_basis" value="ttc" checked><span>TTC</span></label>
+                        <label class="chip"><input type="radio" name="amount_basis" value="ht"><span>HT</span></label>
+                    </div>
+                </div>
+                <div class="field">
+                    <label for="lg-vat">TVA</label>
+                    <select id="lg-vat" name="vat_rate">
+                        <option value="">Aucune (0 %)</option>
+                        <option value="20">20 %</option>
+                        <option value="10">10 %</option>
+                        <option value="5.5">5,5 %</option>
+                        <option value="2.1">2,1 %</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="field-row">
+                <div class="field">
+                    <label for="lg-invoice">Référence du ticket</label>
+                    <input type="text" id="lg-invoice" name="invoice_number" placeholder="ex: 159-10007284" autocomplete="off">
+                </div>
+            </div>
+
+            <div class="field">
+                <label for="lg-receipt">Photo du ticket <span class="muted">(optionnelle — sauvegardée avec la dépense)</span></label>
+                <input type="file" id="lg-receipt" name="receipt" accept="image/*" capture="environment">
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">Enregistrer la dépense</button>
+            </div>
+        </form>
+        <?php else: ?>
         <form method="post" action="<?= e(url('/admin/compta/depenses/save')) ?>" enctype="multipart/form-data">
             <?= csrf_field() ?>
             <input type="hidden" name="return_to" value="/admin/ledger">
@@ -194,6 +271,7 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
                 <button type="submit" class="btn btn-primary">Enregistrer la dépense</button>
             </div>
         </form>
+        <?php endif; ?>
     </section>
 
     <section class="card surface glass">
@@ -227,19 +305,20 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
                 </tbody>
             </table>
         </div>
+        <?php if (!$kiosk): ?>
         <p class="muted" style="font-size:0.78rem; margin-top:0.6rem;">
             Le détail complet (avec catégorie, HT/TVA et suppression) vit dans
             <a href="<?= e(url('/admin/compta/depenses')) ?>">Opérations · Dépenses</a>.
         </p>
         <?php endif; ?>
+        <?php endif; ?>
     </section>
 </div>
 
 <!-- ==================== Menu 2 : livre comptable ==================== -->
-<div class="compta-tabpane" data-pane="livre" hidden>
-<?php else: ?>
-<div data-pane="livre">
-<?php endif; ?>
+<!-- Défaut côté serveur : saisie active en admin, livre actif en kiosque
+     (la page s'ouvre sur le livre, la saisie express est à un onglet). -->
+<div class="compta-tabpane<?= $kiosk ? ' is-active' : '' ?>" data-pane="livre"<?php if (!$kiosk): ?> hidden<?php endif; ?>>
     <div class="card surface glass" style="padding: 0.95rem 1.1rem; margin-bottom: 1.2rem;">
         <form id="lg-period-form" method="get" style="display: contents;">
             <div class="lg-seg">
@@ -295,13 +374,24 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
                     <td class="num"><?= e(formatPrice((float) $entries['total_credit'])) ?></td>
                 </tr>
                 <tr class="ledger-balance">
-                    <td colspan="2"><?= $balancePos ? 'ÉQUILIBRAGE — BÉNÉFICE' : 'ÉQUILIBRAGE — DÉFICIT' ?></td>
+                    <td colspan="2">ÉQUILIBRAGE — SOLDE</td>
                     <td colspan="2" class="num <?= $balancePos ? 'is-pos' : 'is-neg' ?>">
                         <?= ($balancePos ? '+ ' : '− ') . e(formatPrice(abs((float) $entries['balance']))) ?>
                     </td>
                 </tr>
+                <tr class="ledger-balance lg-profit">
+                    <td colspan="2">BÉNÉFICE NET — coût des produits vendus déduit</td>
+                    <td colspan="2" class="num <?= $salesProfitPos ? 'is-pos' : 'is-neg' ?>">
+                        <?= ($salesProfitPos ? '+ ' : '− ') . e(formatPrice(abs($salesProfit))) ?>
+                    </td>
+                </tr>
             </tfoot>
         </table>
+        <p class="muted" style="font-size: 0.78rem; margin-top: 0.7rem;">
+            Le solde compare les encaissements (ventes) aux décaissements (achats + dépenses) de la période :
+            c'est une trace de trésorerie, pas le bénéfice — les achats incluent du stock pas encore vendu,
+            et les ventes du stock acheté avant. Le bénéfice net, lui, déduit le coût réel des produits vendus.
+        </p>
     </div>
 </div>
 
@@ -313,7 +403,8 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
 
 <script>
 // Onglets Saisie / Livre (mémorisés dans le hash de l'URL : #livre ouvre
-// directement le livre). Le kiosque n'a pas de saisie : livre seul.
+// directement le livre). Défaut côté serveur : saisie en admin, livre en
+// kiosque — les deux onglets existent dans les deux modes.
 (function () {
     var bar = document.querySelector('[data-ledger-tabs]');
     if (!bar) return;

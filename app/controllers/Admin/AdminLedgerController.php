@@ -14,9 +14,12 @@ use App\Models\Sale;
  * le livret papier — Date | Objet | Débit | Crédit, avec pour chaque
  * dépense/achat une seconde ligne « ticket » (les achats du même jour chez
  * le même fournisseur sont fusionnés en une écriture au total du jour,
- * référencés par leur n° de facture), les ventes récapitulées en une
- * unique ligne de clôture en fin de livre, et l'équilibrage final
- * (bénéfice ou déficit) en pied de page.
+ * référencés par leur n° de facture) et les ventes récapitulées en une
+ * unique ligne de clôture en fin de livre. L'« équilibrage » de pied de
+ * page est un SOLDE DE TRÉSORERIE (encaissements − décaissements de la
+ * période), PAS le bénéfice : le bénéfice net (coût des produits vendus
+ * déduit, montants personnalisés exclus) est calculé séparément
+ * (Sale::aggregatesBetween()['profit']) et affiché sur sa propre ligne.
  */
 final class AdminLedgerController extends AdminBaseController
 {
@@ -62,7 +65,13 @@ final class AdminLedgerController extends AdminBaseController
      * avec ligne « ticket ») et ventes (crédits, récapitulées en une
      * unique ligne de clôture placée en fin de livre).
      *
-     * @return array{rows:list<array<string,mixed>>, total_debit:float, total_credit:float, balance:float}
+     * « balance » est un SOLDE DE TRÉSORERIE : ventes TTC − (achats +
+     * dépenses) TTC de la période. Ce n'est pas le bénéfice — les achats
+     * incluent du stock pas encore vendu, les ventes du stock acheté
+     * avant. Le bénéfice net (coût des produits vendus déduit) est
+     * renvoyé séparément dans « sales_profit ».
+     *
+     * @return array{rows:list<array<string,mixed>>, total_debit:float, total_credit:float, balance:float, sales_profit:float}
      */
     public function buildEntries(string $from, string $to): array
     {
@@ -183,7 +192,12 @@ final class AdminLedgerController extends AdminBaseController
             'rows' => $rows,
             'total_debit' => round($totalDebit, 2),
             'total_credit' => round($totalCredit, 2),
+            // Solde de trésorerie (encaissements − décaissements), pas le
+            // bénéfice : voir docblock de la classe.
             'balance' => round($totalCredit - $totalDebit, 2),
+            // Bénéfice net de la période (coût des produits vendus déduit,
+            // montants personnalisés exclus) — distinct du solde ci-dessus.
+            'sales_profit' => round((float) Sale::aggregatesBetween($from, $to)['profit'], 2),
         ];
     }
 

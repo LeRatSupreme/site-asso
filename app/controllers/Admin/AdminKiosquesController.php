@@ -92,7 +92,7 @@ final class AdminKiosquesController extends AdminBaseController
             [
                 'emoji' => '🧾',
                 'label' => 'Livre comptable',
-                'desc'  => 'Date | Objet | Débit | Crédit avec tickets et équilibrage — prêt à recopier dans le livret papier. Lien kiosque, sans connexion.',
+                'desc'  => 'Date | Objet | Débit | Crédit avec tickets et équilibrage — et saisie express des dépenses en 30 s depuis le téléphone. Lien kiosque, sans connexion.',
                 'url'   => Kiosk::adminUrl('/kiosque/admin/ledger/'),
                 'kiosk' => true,
             ],

@@ -338,6 +338,10 @@ function aeic_register_routes(Router $router): void
     // Dashboard Analytics en kiosque ADMIN : mêmes graphiques que sur PC,
     // accès par jeton admin sans connexion.
     $router->get('/kiosque/admin/analytics/{token}', [AdminAnalyticsController::class, 'kiosk']);
+    // Saisie express d'une dépense depuis le livre comptable kiosque (POST,
+    // identité obligatoire, photo optionnelle, sans CSRF : le jeton admin
+    // EST l'authentification — mêmes mécaniques que les autres POST kiosque).
+    $router->post('/kiosque/admin/ledger/depense/{token}', [KioskComptageController::class, 'ledgerDepenseSave']);
 
     // Suivi avancé : dépenses, budgets, achats, inventaire, pertes, événements, rapport annuel.
     $router->get('/admin/compta/depenses', [AdminExpenseController::class, 'index']);
