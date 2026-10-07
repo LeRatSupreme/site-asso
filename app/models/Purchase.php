@@ -38,6 +38,9 @@ final class Purchase extends Model
      *                                  (?float, optionnel — TTC exact
      *                                  quand le montant saisi était TTC ;
      *                                  sinon dérivé du HT), supplier,
+     *                                  invoice_number (?string, n° de
+     *                                  facture/ticket du fournisseur,
+     *                                  partagé par toute la course),
      *                                  notes, created_by, no_stock
      *                                  (true = achat « hors stock », hors
      *                                  inventaire)
@@ -78,6 +81,7 @@ final class Purchase extends Model
         }
 
         $supplier = ($data['supplier'] ?? '') !== '' ? (string) $data['supplier'] : null;
+        $invoiceNumber = ($data['invoice_number'] ?? '') !== '' ? trim((string) $data['invoice_number']) : null;
         $notes = ($data['notes'] ?? '') !== '' ? (string) $data['notes'] : null;
         $createdBy = ($data['created_by'] ?? '') !== '' ? (string) $data['created_by'] : null;
 
@@ -85,9 +89,9 @@ final class Purchase extends Model
 
         self::pdo()->prepare(
             'INSERT INTO purchases
-                (id, purchased_at, supplier, product_key, quantity, unit_cost, vat_rate, total_ttc, total_ht, no_stock, notes, created_by, created_at)
-             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,NOW())'
-        )->execute([$id, $purchasedAt, $supplier, $productKey, $quantity, $unitCost, $vatRate, $totalTtc, $totalHt, $noStock ? 1 : 0, $notes, $createdBy]);
+                (id, purchased_at, supplier, invoice_number, product_key, quantity, unit_cost, vat_rate, total_ttc, total_ht, no_stock, notes, created_by, created_at)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,NOW())'
+        )->execute([$id, $purchasedAt, $supplier, $invoiceNumber, $productKey, $quantity, $unitCost, $vatRate, $totalTtc, $totalHt, $noStock ? 1 : 0, $notes, $createdBy]);
 
         // L'achat entre physiquement en stock : la référence de stock
         // (utilisée par le réappro) suit le stock théorique de l'inventaire.

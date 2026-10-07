@@ -71,9 +71,9 @@ final class AdminStockController extends AdminBaseController
     /**
      * Enregistre une grille d'achats en un seul POST (une ligne par
      * produit — une course entière en une fois). Les champs communs
-     * (date, TVA, fournisseur, update_cost) s'appliquent à toutes les
-     * lignes ; les lignes totalement vides sont ignorées, les lignes
-     * invalides sont signalées dans le flash.
+     * (date, TVA, fournisseur, n° de facture, update_cost) s'appliquent
+     * à toutes les lignes ; les lignes totalement vides sont ignorées,
+     * les lignes invalides sont signalées dans le flash.
      */
     public function savePurchasesBulk(): void
     {
@@ -84,6 +84,7 @@ final class AdminStockController extends AdminBaseController
             $purchasedAt = date('Y-m-d');
         }
         $supplier = trim((string) ($_POST['supplier'] ?? ''));
+        $invoiceNumber = trim((string) ($_POST['invoice_number'] ?? ''));
         $notes = trim((string) ($_POST['notes'] ?? ''));
         $updateCost = isset($_POST['update_cost']);
 
@@ -132,6 +133,7 @@ final class AdminStockController extends AdminBaseController
                 'update_cost'  => $updateCost ? '1' : '',
                 'no_stock'     => $noStock,
                 'supplier'     => $supplier,
+                'invoice_number' => $invoiceNumber,
                 'notes'        => $notes,
             ], $user);
 
@@ -157,15 +159,16 @@ final class AdminStockController extends AdminBaseController
         // Audit agrégé unique : un seul evénement pour toute la grille
         // (les ids des achats/ lots restent consultables dans le journal).
         $this->audit('compta.purchase.create_bulk', 'purchase', null, [
-            'inserted'     => $inserted,
-            'products'     => count($products),
-            'ignored'      => count($errors),
-            'vat_rate'     => $vatRaw === '' ? null : parseFrenchFloat($vatRaw),
-            'amount_basis' => $basis,
-            'update_cost'  => $updateCost,
-            'no_stock'     => $noStockInserted,
-            'supplier'     => $supplier,
-            'purchased_at' => $purchasedAt,
+            'inserted'       => $inserted,
+            'products'       => count($products),
+            'ignored'        => count($errors),
+            'vat_rate'       => $vatRaw === '' ? null : parseFrenchFloat($vatRaw),
+            'amount_basis'   => $basis,
+            'update_cost'    => $updateCost,
+            'no_stock'       => $noStockInserted,
+            'supplier'       => $supplier,
+            'invoice_number' => $invoiceNumber !== '' ? $invoiceNumber : null,
+            'purchased_at'   => $purchasedAt,
         ]);
 
         // Synchro automatique de la carte limitée aux clés saisies :
@@ -195,6 +198,9 @@ final class AdminStockController extends AdminBaseController
         if ($noStockInserted > 0 && !$allNoStock) {
             $flash .= sprintf(' %d ligne(s) hors stock (stock inchangé).', $noStockInserted);
         }
+        if ($invoiceNumber !== '') {
+            $flash .= ' Facture : ' . $invoiceNumber . '.';
+        }
         if ($errors !== []) {
             $flash .= ' Lignes ignorées : ' . implode(' · ', $errors);
         }
@@ -220,8 +226,10 @@ final class AdminStockController extends AdminBaseController
      *                                  quantity, total_amount, vat_rate
      *                                  ('' = sans décomposition TVA),
      *                                  amount_basis ('ht'|'ttc'),
-     *                                  update_cost, supplier, notes,
-     *                                  no_stock (case « hors stock » :
+     *                                  update_cost, supplier,
+     *                                  invoice_number (n° de facture/ticket
+     *                                  du fournisseur, commun à la course),
+     *                                  notes, no_stock (case « hors stock » :
      *                                  compta sans stock)
      * @param array<string,mixed> $user Utilisateur courant (created_by).
      *
@@ -280,16 +288,17 @@ final class AdminStockController extends AdminBaseController
         $unitCost = round($totalHt / $quantity, 3);
 
         $id = Purchase::create([
-            'purchased_at' => $purchasedAt,
-            'product_key'  => $productKey,
-            'quantity'     => $quantity,
-            'total_ht'     => $totalHt,
-            'total_ttc'    => $isTtcBasis && $vatRate !== null ? $totalTtc : null,
-            'vat_rate'     => $vatRate,
-            'no_stock'     => !empty($data['no_stock']),
-            'supplier'     => trim((string) ($data['supplier'] ?? '')),
-            'notes'        => trim((string) ($data['notes'] ?? '')),
-            'created_by'   => $user['id'] ?? null,
+            'purchased_at'   => $purchasedAt,
+            'product_key'    => $productKey,
+            'quantity'       => $quantity,
+            'total_ht'       => $totalHt,
+            'total_ttc'      => $isTtcBasis && $vatRate !== null ? $totalTtc : null,
+            'vat_rate'       => $vatRate,
+            'no_stock'       => !empty($data['no_stock']),
+            'supplier'       => trim((string) ($data['supplier'] ?? '')),
+            'invoice_number' => trim((string) ($data['invoice_number'] ?? '')),
+            'notes'          => trim((string) ($data['notes'] ?? '')),
+            'created_by'     => $user['id'] ?? null,
         ]);
 
         if ($id === '') {

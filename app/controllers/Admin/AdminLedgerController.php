@@ -14,9 +14,10 @@ use App\Models\Sale;
  * Livre comptable (groupe Système) : retranscription prête à recopier dans
  * le livret papier — Date | Objet | Débit | Crédit, avec pour chaque
  * dépense/achat une seconde ligne « ticket » (les achats du même jour chez
- * le même fournisseur sont fusionnés en une écriture au total du jour),
- * les ventes récapitulées en une unique ligne de clôture en fin de livre,
- * et l'équilibrage final (bénéfice ou déficit) en pied de page.
+ * le même fournisseur sont fusionnés en une écriture au total du jour,
+ * référencés par leur n° de facture), les ventes récapitulées en une
+ * unique ligne de clôture en fin de livre, et l'équilibrage final
+ * (bénéfice ou déficit) en pied de page.
  */
 final class AdminLedgerController extends AdminBaseController
 {
@@ -70,7 +71,8 @@ final class AdminLedgerController extends AdminBaseController
         // ── Débits : ACHATS (une ligne par jour + fournisseur) ──────────
         // Tous les reçus d'un même jour chez le même fournisseur sont
         // fusionnés en une écriture unique portant le total : les reçus
-        // individuels restent listés en lignes « ticket ».
+        // individuels restent listés en lignes « ticket », référencés par
+        // le n° de facture quand il est renseigné (sinon n° interne).
         $purchaseGroups = [];
         foreach (Purchase::between($from, $to, 500) as $p) {
             $date = (string) $p['purchased_at'];
@@ -81,22 +83,44 @@ final class AdminLedgerController extends AdminBaseController
                     'date'     => $date,
                     'supplier' => $supplier,
                     'total'    => 0.0,
-                    'tickets'  => [],
+                    'purchases' => [],
                 ];
             }
             $purchaseGroups[$key]['total'] += (float) $p['total_ttc'];
-            $purchaseGroups[$key]['tickets'][] =
-                '#' . substr((string) $p['id'], -8)
-                . ' · ' . (string) $p['product_key'] . ' ×' . (int) $p['quantity'];
+            $purchaseGroups[$key]['purchases'][] = $p;
         }
         foreach ($purchaseGroups as $g) {
+            // Reçus du plus ancien au plus récent (la requête est DESC).
+            $ps = array_reverse($g['purchases']);
+            // Référence de chaque reçu : n° de facture partagé si toute la
+            // course en a un seul (cas standard), sinon référence par ligne.
+            $invoices = [];
+            foreach ($ps as $p) {
+                $inv = trim((string) ($p['invoice_number'] ?? ''));
+                if ($inv !== '' && !in_array($inv, $invoices, true)) {
+                    $invoices[] = $inv;
+                }
+            }
+            $tickets = [];
+            if (count($invoices) === 1) {
+                $tickets[] = 'facture ' . $invoices[0];
+                foreach ($ps as $p) {
+                    $tickets[] = (string) $p['product_key'] . ' ×' . (int) $p['quantity'];
+                }
+            } else {
+                foreach ($ps as $p) {
+                    $inv = trim((string) ($p['invoice_number'] ?? ''));
+                    $ref = $inv !== '' ? 'facture ' . $inv : '#' . substr((string) $p['id'], -8);
+                    $tickets[] = $ref . ' · ' . (string) $p['product_key'] . ' ×' . (int) $p['quantity'];
+                }
+            }
             $rows[] = [
                 'date'  => $g['date'],
                 'kind'  => 'purchase',
                 'label' => 'Achat — ' . $g['supplier'],
                 'debit' => round($g['total'], 2),
                 'credit' => 0.0,
-                'ticket' => implode("\n", array_reverse($g['tickets'])),
+                'ticket' => implode("\n", $tickets),
             ];
         }
 
