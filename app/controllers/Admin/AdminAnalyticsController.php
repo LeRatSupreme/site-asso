@@ -44,7 +44,8 @@ final class AdminAnalyticsController extends AdminBaseController
     /**
      * Version KIOSQUE du dashboard Analytics : accès par lien secret avec
      * le JETON ADMIN (données financières complètes), sans connexion —
-     * le jeton EST l'authentification.
+     * le jeton EST l'authentification. Rendu : vue compacte dédiée
+     * téléphone à onglets (la vue desktop reste intacte pour l'admin).
      */
     public function kiosk(string $token): void
     {
@@ -54,7 +55,7 @@ final class AdminAnalyticsController extends AdminBaseController
             return;
         }
 
-        $this->renderKiosk('admin/analytics/index', $this->buildPage() + [
+        $this->renderKiosk('admin/analytics/kiosk', $this->buildPage() + [
             'title' => 'Analytique',
             'kiosk' => true,
             'token' => $token,
