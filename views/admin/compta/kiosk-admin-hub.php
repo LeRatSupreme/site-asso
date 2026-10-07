@@ -121,6 +121,10 @@ $mMoisMarge = $marge($mois['ca'], $mois['profit']);
         <span class="kiosk-emoji">📊</span>
         <span class="kiosk-tile-title">Récap du jour</span>
     </a>
+    <a href="<?= e(url('/kiosque/admin/ledger/' . rawurlencode($token))) ?>">
+        <span class="kiosk-emoji">🧾</span>
+        <span class="kiosk-tile-title">Livre comptable</span>
+    </a>
     <a href="<?= e(url('/kiosque/admin/semaine/' . rawurlencode($token))) ?>">
         <span class="kiosk-emoji">📅</span>
         <span class="kiosk-tile-title">7 jours</span>
