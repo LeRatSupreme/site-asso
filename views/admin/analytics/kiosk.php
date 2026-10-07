@@ -14,8 +14,8 @@ declare(strict_types=1);
  *   2. « Répartition » : donuts catégorie & paiements (centres texte) avec
  *      légendes HTML compactes SOUS chaque donut (la légende intégrée de
  *      Chart.js se superposait au graphique sur téléphone).
- *   3. « Heures »     : heatmap TRANSPOSÉE — heures en lignes (00h→23h),
- *      jours en colonnes : tient dans 360px, détail au tap, zéro scroll-x.
+ *   3. « Heures »     : BARRES horizontales par heure (chips Semaine/jour) —
+ *      format immunisé contre la largeur : 34px + fluide + 74px, zéro scroll.
  *   4. « Produits »   : rangées-cartes triables (select) + totaux + export CSV.
  * PITFALL Chart.js : un canvas dans un onglet hidden a une taille nulle →
  * chaque graphique est initialisé EN RETARDÉ (lazy), à la première
@@ -221,23 +221,19 @@ $iconSvg = static function (string $name): string {
         </div>
     </div>
 
-    <!-- ==================== Onglet 3 : Heures (heatmap transposée) ==================== -->
+    <!-- ==================== Onglet 3 : Heures (barres adaptatives) ==================== -->
     <div class="compta-tabpane ka-pane" data-pane="heures" hidden>
         <section class="card surface glass ka-card">
             <div class="ka-chart-head">
-                <h2 class="ka-chart-title">Ventes par jour × heure</h2>
-                <span class="ka-sub">Intensité du CA — <?= e($filters['category'] === 'all' ? 'Toutes catégories' : $filters['category']) ?> · <?= e($filters['payment'] === 'all' ? 'Tous paiements' : $filters['payment']) ?></span>
+                <h2 class="ka-chart-title">Ventes par heure</h2>
+                <span class="ka-sub">CA — <?= e($filters['category'] === 'all' ? 'Toutes catégories' : $filters['category']) ?> · <?= e($filters['payment'] === 'all' ? 'Tous paiements' : $filters['payment']) ?></span>
             </div>
-            <!-- Grille heures en lignes / jours en colonnes : tient dans 360px,
-                 détail d'une case au tap dans la ligne d'info (pas de tooltip
-                 flottant, inutilisable au doigt). -->
-            <div class="ka-ht" id="ka-heatmap"></div>
-            <p class="ka-ht-info" id="ka-ht-info">Touche une case pour le détail</p>
-            <div class="ka-ht-legend">
-                <span class="ka-ht-legend-label">Faible</span>
-                <div class="ka-ht-legend-bar"></div>
-                <span class="ka-ht-legend-label">Fort</span>
-            </div>
+            <!-- Format BARRES (immunisé contre la largeur par construction :
+                    34px libellé + barre fluide + 74px montant) : chips
+                    Semaine/jour au-dessus, résumé du meilleur créneau. -->
+            <div class="ka-hb-chips" id="ka-hb-chips"></div>
+            <p class="ka-hb-summary" id="ka-hb-summary"></p>
+            <div class="ka-hb" id="ka-heatmap"></div>
         </section>
     </div>
 
@@ -618,73 +614,111 @@ $iconSvg = static function (string $name): string {
     }
 
     // ============================================================
-    // Heatmap TRANSPOSÉE (DOM pur, construite immédiatement) :
-    // heures en lignes (00h→23h, scroll vertical naturel), jours en
-    // colonnes — la grille tient dans 360px sans scroll horizontal.
-    // Le détail d'une case s'affiche au TAP dans la ligne d'info
-    // (les tooltips flottants sont inutilisables au doigt).
+    // Heures : BARRES horizontales (DOM pur, construit immédiatement).
+    // Chips « Semaine » + 7 jours ; Semaine = somme du CA par heure sur
+    // les 7 jours, un jour = les 24 valeurs du jour. Chaque ligne :
+    // libellé 34px + barre fluide (min-width:0) + montant 74px → ne peut
+    // pas déborder, quelle que soit la largeur de l'écran.
     // ============================================================
     function initHeatmap() {
         var heat = data.heatmap || [];
         var days = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
-        var heatEl = document.getElementById('ka-heatmap');
-        var infoEl = document.getElementById('ka-ht-info');
-        if (!heatEl) return;
+        var chipsEl = document.getElementById('ka-hb-chips');
+        var sumEl = document.getElementById('ka-hb-summary');
+        var listEl = document.getElementById('ka-heatmap');
+        if (!chipsEl || !listEl) { return; }
 
-        var max = 0;
-        for (var d = 0; d < 7; d++) {
+        var current = -1; // -1 = « Semaine », sinon index du jour (0..6)
+
+        // Somme du CA de chaque heure sur les 7 jours.
+        function hourSums() {
+            var sums = [];
             for (var h = 0; h < 24; h++) {
-                var v = Number(((heat[d] || [])[h]) || 0);
-                if (v > max) { max = v; }
+                var s = 0;
+                for (var d = 0; d < 7; d++) { s += Number(((heat[d] || [])[h]) || 0); }
+                sums.push(s);
             }
+            return sums;
         }
 
-        // Cas trivial : aucune vente → message, pas de grille.
-        if (!(max > 0)) {
-            heatEl.innerHTML = '<p class="ka-ht-empty">Aucune vente sur la période</p>';
-            if (infoEl) { infoEl.hidden = true; }
-            return;
+        // Les 24 valeurs d'un jour donné.
+        function dayValues(day) {
+            var vals = [];
+            for (var h = 0; h < 24; h++) { vals.push(Number(((heat[day] || [])[h]) || 0)); }
+            return vals;
         }
 
-        // Entêtes : coin vide + 7 jours abrégés.
-        var html = '<div class="ka-ht-row"><span class="ka-ht-hour"></span>';
-        for (var dd = 0; dd < 7; dd++) { html += '<span class="ka-ht-day">' + days[dd] + '</span>'; }
-        html += '</div>';
-
-        // 24 lignes horaires : libellé heure + 7 cellules (alpha = val / max).
-        for (var hh = 0; hh < 24; hh++) {
-            html += '<div class="ka-ht-row"><span class="ka-ht-hour">' + (hh < 10 ? '0' + hh : hh) + 'h</span>';
-            for (var d2 = 0; d2 < 7; d2++) {
-                var val = Number(((heat[d2] || [])[hh]) || 0);
-                var alpha = val / max;
-                html += '<button type="button" class="ka-ht-cell" data-d="' + d2 + '" data-h="' + hh + '" data-v="' + val + '"'
-                    + ' aria-label="' + days[d2] + ' ' + hh + 'h : ' + money(val) + '"'
-                    + ' style="background:rgba(72,189,211,' + alpha.toFixed(3) + ')"></button>';
+        // Meilleur créneau (jour × heure) de la plage affichée.
+        function bestSlot() {
+            var bd = -1, bh = -1, bv = 0;
+            var dFrom = current < 0 ? 0 : current;
+            var dTo = current < 0 ? 6 : current;
+            for (var d = dFrom; d <= dTo; d++) {
+                for (var h = 0; h < 24; h++) {
+                    var v = Number(((heat[d] || [])[h]) || 0);
+                    if (v > bv) { bv = v; bd = d; bh = h; }
+                }
             }
-            html += '</div>';
+            return bv > 0 ? { day: bd, hour: bh, value: bv } : null;
         }
-        heatEl.innerHTML = html;
 
-        // Détail au TAP : un seul listener délégué sur la grille.
-        // Re-tap sur la même case → retour au texte par défaut.
-        var DEFAULT_INFO = 'Touche une case pour le détail';
-        var selected = null;
-        heatEl.addEventListener('click', function (e) {
-            var cell = e.target && e.target.closest ? e.target.closest('.ka-ht-cell') : null;
-            if (!cell) { return; }
-            var same = (selected === cell);
-            if (selected) { selected.classList.remove('is-sel'); selected = null; }
-            if (same) {
-                if (infoEl) { infoEl.textContent = DEFAULT_INFO; }
+        function renderBars() {
+            var values = current < 0 ? hourSums() : dayValues(current);
+            var max = 0;
+            for (var h = 0; h < 24; h++) { if (values[h] > max) { max = values[h]; } }
+
+            // Aucune vente sur la plage → message, pas de barres.
+            if (!(max > 0)) {
+                listEl.innerHTML = '<p class="ka-hb-empty">Aucune vente sur la période</p>';
+                if (sumEl) { sumEl.textContent = 'Aucune vente sur la période'; }
                 return;
             }
-            cell.classList.add('is-sel');
-            selected = cell;
-            var day = Number(cell.getAttribute('data-d'));
-            var hour = Number(cell.getAttribute('data-h'));
-            var amount = Number(cell.getAttribute('data-v'));
-            if (infoEl) { infoEl.textContent = days[day] + ' ' + hour + 'h — ' + money(amount); }
+
+            // Résumé : meilleur créneau de la plage affichée.
+            var best = bestSlot();
+            if (sumEl) {
+                sumEl.innerHTML = 'Meilleur : <strong>'
+                    + days[best.day] + ' ' + best.hour + 'h — ' + money(best.value) + '</strong>';
+            }
+
+            var html = '';
+            for (var hh = 0; hh < 24; hh++) {
+                var v = values[hh];
+                var width = Math.max((v / max) * 100, 1); // min ~1% (≈2px) si > 0
+                html += '<div class="ka-hb-row">'
+                    + '<span class="ka-hb-hour">' + hh + 'h</span>'
+                    + '<span class="ka-hb-track">'
+                    + (v > 0
+                        ? '<span class="ka-hb-fill" style="width:' + width.toFixed(2) + '%"></span>'
+                        : '<span class="ka-hb-fill is-empty"></span>')
+                    + '</span>'
+                    + '<span class="ka-hb-val' + (v > 0 ? '' : ' is-zero') + '">' + (v > 0 ? money(v) : '—') + '</span>'
+                    + '</div>';
+            }
+            listEl.innerHTML = html;
+        }
+
+        // Chips : « Semaine » + les 7 jours (défaut : Semaine).
+        var chips = [{ label: 'Semaine', value: -1 }];
+        for (var d = 0; d < 7; d++) { chips.push({ label: days[d], value: d }); }
+        chipsEl.innerHTML = chips.map(function (c) {
+            return '<button type="button" class="ka-hb-chip' + (c.value === current ? ' is-active' : '') + '"'
+                + ' data-day="' + c.value + '">' + c.label + '</button>';
+        }).join('');
+
+        chipsEl.addEventListener('click', function (e) {
+            var chip = e.target && e.target.closest ? e.target.closest('.ka-hb-chip') : null;
+            if (!chip) { return; }
+            var day = Number(chip.getAttribute('data-day'));
+            if (day === current) { return; }
+            current = day;
+            chipsEl.querySelectorAll('.ka-hb-chip').forEach(function (c) {
+                c.classList.toggle('is-active', Number(c.getAttribute('data-day')) === current);
+            });
+            renderBars();
         });
+
+        renderBars();
     }
 
     // ============================================================
@@ -798,7 +832,11 @@ $iconSvg = static function (string $name): string {
 </script>
 
 <style>
-.ka-page { display: flex; flex-direction: column; gap: 0.6rem; }
+/* Racine de la vue : verrou final anti-débordement — même si un élément
+   échappait aux règles ci-dessus, AUCUN scroll horizontal n'est possible
+   (le navigateur mobile ne dézoome donc jamais la page). */
+.ka-page { display: flex; flex-direction: column; gap: 0.6rem; max-width: 100%; overflow-x: clip; }
+.ka-page canvas, .ka-page img { max-width: 100%; }
 
 /* ---- En-tête minimal ---- */
 .ka-title { margin: 0; font-size: 1.2rem; font-weight: 900; color: var(--foreground); }
@@ -879,14 +917,14 @@ $iconSvg = static function (string $name): string {
 .ka-card { padding: 0.7rem 0.8rem; }
 .ka-chart-head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.5rem; }
 .ka-chart-title { margin: 0; font-size: 1rem; font-weight: 700; color: var(--primary, #48bdd3); }
-.ka-sub { font-size: 0.68rem; color: var(--muted, #9fb3c8); text-align: right; }
+.ka-sub { font-size: 0.68rem; color: var(--muted, #9fb3c8); text-align: right; min-width: 0; }
 .ka-chart { position: relative; }
 .ka-chart-trend { height: 260px; }
 .ka-chart-top { height: 300px; }
 .ka-chart-donut { height: 250px; max-width: 280px; margin: 0 auto; }
 /* Donuts empilés sur téléphone (assez larges pour être lus en 1:1),
    côte à côte uniquement sur écran large. */
-.ka-duo { display: grid; grid-template-columns: 1fr; gap: 0.6rem; }
+.ka-duo { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.6rem; }
 @media (min-width: 640px) { .ka-duo { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); } }
 
 /* Garde locale : un pane masqué ne doit JAMAIS prendre de largeur
@@ -911,42 +949,45 @@ $iconSvg = static function (string $name): string {
 .ka-leg-pct { flex: 0 0 auto; font-size: 0.85rem; color: var(--muted, #9fb3c8); white-space: nowrap; }
 .ka-leg-empty { margin: 0; padding: 0.55rem 0; font-size: 1rem; color: var(--muted, #9fb3c8); text-align: center; }
 
-/* ---- Heures : heatmap TRANSPOSÉE (heures en lignes, jours en colonnes).
-        Largeur maîtrisée : 40px (libellé) + 7 colonnes fluides → tient
-        dans 360px SANS scroll horizontal ; lecture verticale naturelle. ---- */
-.ka-ht { display: grid; grid-template-columns: 40px repeat(7, 1fr); gap: 2px; }
-.ka-ht-row { display: contents; }
-.ka-ht-day {
-    font-size: 0.62rem; font-weight: 700;
+/* ---- Heures : BARRES horizontales adaptatives.
+        Par construction : 34px (libellé, fixe) + barre FLUIDE (min-width:0)
+        + 74px (montant, fixe) → tient dans n'importe quelle largeur,
+        même 320px, sans jamais déborder. ---- */
+.ka-hb-chips { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-bottom: 0.55rem; }
+.ka-hb-chip {
+    appearance: none; cursor: pointer; white-space: nowrap; font-family: inherit;
+    font-size: 0.72rem; font-weight: 700;
+    padding: 0.25rem 0.6rem;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.1);
     color: var(--muted, #9fb3c8);
-    text-align: center; padding-bottom: 2px;
+    transition: all 0.15s;
 }
-.ka-ht-hour {
-    font-size: 0.62rem; font-weight: 600; line-height: 22px;
-    color: var(--muted, #9fb3c8);
-    text-align: right; padding-right: 3px;
+.ka-hb-chip.is-active {
+    background: var(--primary, #48bdd3);
+    border-color: var(--primary, #48bdd3);
+    color: #08172d;
 }
-.ka-ht-cell {
-    height: 22px; padding: 0; border: none; border-radius: 4px;
-    background: rgba(72, 189, 211, 0.03);
-    cursor: pointer;
+.ka-hb-summary { margin: 0 0 0.6rem; font-size: 0.85rem; color: var(--muted, #9fb3c8); }
+.ka-hb-summary strong { color: var(--foreground); font-variant-numeric: tabular-nums; }
+.ka-hb-row { display: flex; align-items: center; gap: 0.5rem; height: 22px; margin-bottom: 3px; }
+.ka-hb-hour { flex: 0 0 34px; font-size: 0.72rem; color: var(--muted, #9fb3c8); }
+.ka-hb-track { flex: 1 1 auto; min-width: 0; height: 100%; display: flex; align-items: center; }
+.ka-hb-fill {
+    display: block; height: 14px; min-width: 2px;
+    border-radius: 3px;
+    background: #48bdd3;
 }
-/* Retour visuel de la case touchée (info affichée sous la grille). */
-.ka-ht-cell.is-sel { outline: 2px solid #48bdd3; outline-offset: -2px; }
-.ka-ht-info {
-    min-height: 1.4em; /* réserve la place : pas de saut de layout au tap */
-    margin: 0.5rem 0 0;
-    font-size: 0.85rem;
+.ka-hb-fill.is-empty { min-width: 0; width: 0; }
+.ka-hb-val {
+    flex: 0 0 74px; text-align: right;
+    font-size: 0.78rem;
+    font-variant-numeric: tabular-nums;
     color: var(--foreground);
 }
-.ka-ht-info[hidden] { display: none; }
-.ka-ht-empty { margin: 0; font-size: 0.9rem; color: var(--muted, #9fb3c8); }
-.ka-ht-legend { display: flex; align-items: center; gap: 0.4rem; justify-content: flex-end; margin-top: 0.5rem; }
-.ka-ht-legend-label { font-size: 0.65rem; color: var(--muted, #9fb3c8); }
-.ka-ht-legend-bar {
-    width: 90px; height: 10px; border-radius: 5px;
-    background: linear-gradient(90deg, rgba(72, 189, 211, 0.05), rgba(72, 189, 211, 1));
-}
+.ka-hb-val.is-zero { color: var(--muted, #9fb3c8); }
+.ka-hb-empty { margin: 0; font-size: 0.9rem; color: var(--muted, #9fb3c8); }
 
 /* ---- Insights compacts (empilés) ---- */
 .ka-insights { display: flex; flex-direction: column; gap: 0.4rem; }
@@ -999,8 +1040,10 @@ $iconSvg = static function (string $name): string {
 .ka-pcard-name {
     flex: 1 1 auto; min-width: 0;
     font-weight: 700; font-size: 0.92rem; line-height: 1.25;
-    /* Wrap sur 2 lignes max, ellipsis au-delà. */
+    /* Wrap sur 2 lignes max, ellipsis au-delà ; overflow-wrap pour les
+       mots très longs (URL, références) qui ne doivent jamais pousser. */
     display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    overflow-wrap: anywhere;
 }
 .ka-pcard-cat {
     flex: 0 0 auto;
@@ -1013,6 +1056,8 @@ $iconSvg = static function (string $name): string {
 .ka-pcard-meta { display: flex; align-items: baseline; margin-top: 0.2rem; font-size: 0.78rem; color: var(--muted, #9fb3c8); }
 /* Séparateur « · » entre les méta-informations. */
 .ka-pcard-meta > * + *::before { content: '·'; margin-right: 0.45rem; color: rgba(159, 179, 200, 0.6); }
+/* Les enfants flex portant du texte ne peuvent jamais forcer la largeur. */
+.ka-pcard-stats > span, .ka-ptotals > span, .ka-pcard-meta > span { min-width: 0; }
 .ka-pcard-stats { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.25rem 0.8rem; margin-top: 0.4rem; }
 .ka-pcard-ca { font-size: 1rem; font-weight: 800; color: #48bdd3; font-variant-numeric: tabular-nums; }
 .ka-pcard-profit { font-size: 0.85rem; font-weight: 700; font-variant-numeric: tabular-nums; }
