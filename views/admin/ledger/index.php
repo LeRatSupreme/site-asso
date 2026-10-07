@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 /**
  * Livre comptable — Date | Objet | Débit | Crédit, avec lignes « ticket »
- * pour chaque dépense/achat et équilibrage final (bénéfice/déficit).
+ * (achats groupés par jour + fournisseur : une écriture au total du jour,
+ * un reçu par ligne ticket), les ventes en une ligne de clôture en fin de
+ * livre et l'équilibrage final (bénéfice/déficit).
  * Adapté téléphone : le tableau tient en largeur (police compacte).
  *
  * @var array<string,mixed> $user
@@ -133,7 +135,7 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
             <?php if (($r['ticket'] ?? '') !== ''): ?>
             <tr class="ledger-ticket">
                 <td></td>
-                <td colspan="3"><span class="tk">└ Ticket <?= e((string) $r['ticket']) ?></span></td>
+                <td colspan="3"><span class="tk">└ Ticket <?= nl2br(e((string) $r['ticket'])) ?></span></td>
             </tr>
             <?php endif; ?>
             <?php endforeach; ?>

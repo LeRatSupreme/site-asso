@@ -13,8 +13,10 @@ use App\Models\Sale;
 /**
  * Livre comptable (groupe Système) : retranscription prête à recopier dans
  * le livret papier — Date | Objet | Débit | Crédit, avec pour chaque
- * dépense/achat une seconde ligne « ticket », et l'équilibrage final
- * (bénéfice ou déficit) en pied de page.
+ * dépense/achat une seconde ligne « ticket » (les achats du même jour chez
+ * le même fournisseur sont fusionnés en une écriture au total du jour),
+ * les ventes récapitulées en une unique ligne de clôture en fin de livre,
+ * et l'équilibrage final (bénéfice ou déficit) en pied de page.
  */
 final class AdminLedgerController extends AdminBaseController
 {
@@ -54,8 +56,10 @@ final class AdminLedgerController extends AdminBaseController
     }
 
     /**
-     * Assemble les écritures du livre : ventes (crédits, une ligne par
-     * jour), achats et dépenses (débits, avec ligne « ticket »).
+     * Assemble les écritures du livre : achats (une seule ligne par
+     * jour + fournisseur, avec le gros total du jour), dépenses (débits,
+     * avec ligne « ticket ») et ventes (crédits, récapitulées en une
+     * unique ligne de clôture placée en fin de livre).
      *
      * @return array{rows:list<array<string,mixed>>, total_debit:float, total_credit:float, balance:float}
      */
@@ -63,18 +67,36 @@ final class AdminLedgerController extends AdminBaseController
     {
         $rows = [];
 
-        // ── Débits : ACHATS (groupés par reçu = date + fournisseur) ─────
+        // ── Débits : ACHATS (une ligne par jour + fournisseur) ──────────
+        // Tous les reçus d'un même jour chez le même fournisseur sont
+        // fusionnés en une écriture unique portant le total : les reçus
+        // individuels restent listés en lignes « ticket ».
+        $purchaseGroups = [];
         foreach (Purchase::between($from, $to, 500) as $p) {
+            $date = (string) $p['purchased_at'];
+            $supplier = trim((string) ($p['supplier'] ?? '') !== '' ? $p['supplier'] : (string) $p['product_key']);
+            $key = $date . '|' . $supplier;
+            if (!isset($purchaseGroups[$key])) {
+                $purchaseGroups[$key] = [
+                    'date'     => $date,
+                    'supplier' => $supplier,
+                    'total'    => 0.0,
+                    'tickets'  => [],
+                ];
+            }
+            $purchaseGroups[$key]['total'] += (float) $p['total_ttc'];
+            $purchaseGroups[$key]['tickets'][] =
+                '#' . substr((string) $p['id'], -8)
+                . ' · ' . (string) $p['product_key'] . ' ×' . (int) $p['quantity'];
+        }
+        foreach ($purchaseGroups as $g) {
             $rows[] = [
-                'date'  => (string) $p['purchased_at'],
+                'date'  => $g['date'],
                 'kind'  => 'purchase',
-                'label' => 'Achat — ' . trim((string) ($p['supplier'] ?? '') !== '' ? $p['supplier'] : (string) $p['product_key']),
-                'debit' => (float) $p['total_ttc'],
+                'label' => 'Achat — ' . $g['supplier'],
+                'debit' => round($g['total'], 2),
                 'credit' => 0.0,
-                'ticket' => $this->ticketLine('#' . substr((string) $p['id'], -8), [
-                    (string) ($p['supplier'] ?? ''),
-                    (string) $p['product_key'] . ' ×' . (int) $p['quantity'],
-                ]),
+                'ticket' => implode("\n", array_reverse($g['tickets'])),
             ];
         }
 
@@ -95,16 +117,14 @@ final class AdminLedgerController extends AdminBaseController
             ];
         }
 
-        // ── Crédits : VENTES (une ligne par jour) ───────────────────────
+        // ── Crédits : VENTES (récapitulées en une seule ligne) ──────────
+        // Le total de la période est totalisé ici, la ligne de clôture
+        // est ajoutée après le tri, tout en fin de livre.
+        $salesCa = 0.0;
+        $salesTx = 0;
         foreach (Sale::dailyRevenueBetween($from, $to) as $s) {
-            $rows[] = [
-                'date'  => $s['d'],
-                'kind'  => 'sales',
-                'label' => 'Ventes cafétéria (' . $s['tx'] . ' transaction(s))',
-                'debit' => 0.0,
-                'credit' => round($s['ca'], 2),
-                'ticket' => '',
-            ];
+            $salesCa += (float) $s['ca'];
+            $salesTx += (int) $s['tx'];
         }
 
         // Tri chronologique ; à date égale, les débits avant les crédits.
@@ -115,6 +135,18 @@ final class AdminLedgerController extends AdminBaseController
 
             return strcmp($b['kind'], $a['kind']);
         });
+
+        // Ligne de clôture des ventes, en toute fin de livre.
+        if ($salesTx > 0) {
+            $rows[] = [
+                'date'  => $to,
+                'kind'  => 'sales',
+                'label' => 'Ventes cafétéria (' . $salesTx . ' transaction(s))',
+                'debit' => 0.0,
+                'credit' => round($salesCa, 2),
+                'ticket' => '',
+            ];
+        }
 
         $totalDebit = 0.0;
         $totalCredit = 0.0;
