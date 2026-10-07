@@ -43,8 +43,8 @@ $siteName = Setting::get('site_name', 'AEIC');
     $krUri = (string) (parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/');
     $krAdmin = trim((string) Setting::get('admin_kiosk_token', ''));
     $krMember = trim((string) Setting::get('reappro_kiosk_token', ''));
-    if (preg_match('#^/kiosque/(comptage/caisse|comptage/inventaire|comptage/jour|comptage/jour-membre|admin/semaine|admin/mois|liste|reappro)/([^/]+)$#', $krUri, $krM)) {
-        $krTok = trim($krM[2]);
+    if (preg_match('#^/kiosque/(comptage/(caisse|inventaire|jour|jour-membre)|admin/(periode|semaine|mois|analytics|ledger)|liste|reappro)/([^/]+)$#', $krUri, $krM)) {
+        $krTok = trim($krM[3]);
         if ($krAdmin !== '' && hash_equals($krAdmin, $krTok)) {
             $krBackUrl = url('/kiosque/admin/' . $krTok);
         } elseif ($krMember !== '' && hash_equals($krMember, $krTok)) {
