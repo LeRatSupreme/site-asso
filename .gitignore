@@ -28,6 +28,10 @@
 site_final.zip
 Rapport-ventes-*.csv
 
+# Factures privées scannées (jamais dans git)
+Facture/
+image_a_scan.jpg
+
 # OS / éditeurs
 .DS_Store
 Thumbs.db
