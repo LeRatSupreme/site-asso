@@ -20,10 +20,20 @@ namespace App\Core\Compta;
  * taux distinct utilisé → vat_rate global (rétrocompatibilité) ; taux
  * multiples → vat_rate null + avertissement « à répartir manuellement ».
  *
+ * OCR réel (photos téléphone) : InvoiceOcr renvoie DEUX passes séparées par
+ * InvoiceOcr::ALT_MARKER. Les lignes produits sont lues dans la première
+ * passe (psm 6, qui restitue le tableau) ; les en-têtes (n°, date, totaux,
+ * table TVA) sont cherchés dans tout le texte, la seconde passe rattrapant
+ * les champs tronqués par la première. Quand l'OCR éparpille une ligne en
+ * deux blocs (« tête » article+libellé puis « colonnes » PU colisage qté
+ * montant), les blocs sont réappariés par proximité, avec validation
+ * arithmétique (colisage×qté×PU ≈ montant) : une paire douteuse est rejetée
+ * avec avertissement, jamais inventée.
+ *
  * Classe purement statique, sans dépendance DB ni OCR : robuste aux erreurs
- * de reconnaissance (O/0 confondus, espaces insécables, puces de notes ①②…,
- * doubles espaces). Les lignes non reconnues sont simplement ignorées avec un
- * avertissement, jamais fatales.
+ * de reconnaissance (O/0 confondus, espaces insécables, virgules perdues,
+ * puces de notes ①②…, doubles espaces). Les lignes non reconnues sont
+ * simplement ignorées avec un avertissement, jamais fatales.
  */
 final class MetroInvoiceParser
 {
@@ -79,20 +89,25 @@ final class MetroInvoiceParser
         $text = str_replace(["\r\n", "\r"], "\n", $text);
         $text = preg_replace('/^\xEF\xBB\xBF/', '', $text) ?? $text;
 
-        $supplier = preg_match('/METRO/i', $text) === 1 ? 'METRO' : null;
-        if ($supplier === null) {
-            $warnings[] = 'Fournisseur METRO non détecté — vérifiez qu\'il s\'agit bien d\'une facture METRO.';
-        }
+        // Lignes produits : première passe OCR seulement (les deux passes
+        // décriraient chaque ligne deux fois).
+        $parts = preg_split('/^\s*-{3,}\s*OCR alt\s*-+.*$/m', $text) ?: [];
+        $linesText = $parts[0] ?? $text;
 
+        $supplier = self::detectSupplier($text, $warnings);
         $invoiceNumber = self::extractInvoiceNumber($text);
         $purchasedAt = self::extractDate($text);
         $vatRates = self::extractVatTable($text);
         $totalHt = self::extractTotalHt($text);
         // Total TTC : « Total à payer » prioritaire ; sinon somme de la
-        // table TVA si toutes ses lignes sont complètes ; sinon null.
-        $totalTtc = self::extractTotalTtc($text) ?? self::totalTtcFromVatTable($vatRates);
+        // table TVA si toutes ses lignes sont complètes ; sinon déduit du
+        // ratio HT×(1+taux) lorsqu'un montant cohérent existe dans le texte.
+        $ratio = $totalHt !== null ? self::totalTtcByRatio($text, $totalHt) : null;
+        $totalTtc = self::extractTotalTtc($text)
+            ?? self::totalTtcFromVatTable($vatRates)
+            ?? ($ratio['ttc'] ?? null);
 
-        $lines = self::extractLines($text, $vatRates, $warnings);
+        $lines = self::extractLines($linesText, $vatRates, $warnings);
         if ($lines === []) {
             $warnings[] = 'Aucune ligne produit reconnue — collez le texte manuellement.';
         }
@@ -100,6 +115,13 @@ final class MetroInvoiceParser
         // Taux de TVA global : un seul taux distinct utilisé → ce taux ;
         // plusieurs (ou aucun) → null + avertissement explicite.
         $vatRate = self::resolveGlobalVatRate($lines, $vatRates, $warnings);
+        if ($vatRate === null && $ratio !== null && $vatRates === []) {
+            $vatRate = $ratio['rate'];
+            $warnings[] = sprintf(
+                'TVA déduite du rapport TTC/HT (%s %%), table des taux illisible — à vérifier.',
+                self::formatRate($ratio['rate'])
+            );
+        }
 
         // Cohérence globale : Σ lignes vs Total H.T. (tolérance 2 centimes).
         if ($totalHt !== null && $lines !== []) {
@@ -147,95 +169,186 @@ final class MetroInvoiceParser
         ];
     }
 
-    /**
-     * Numéro de facture : ligne « N° FACTURE 0/0(087)0054/033871 (… ».
-     *
-     * Le mot FACTURE est exigé (une « facture : date » ou « facturée » ne
-     * matche pas : aucun N immédiatement avant, ou « é » bloquant). Les O/o/Q
-     * du token numérique sont normalisés en 0 (erreurs OCR), les marqueurs de
-     * note ①-⑳ collés au dernier chiffre sont retirés, et la référence
-     * entre parenthèses qui suit (chantier) est ignorée.
-     */
-    public static function extractInvoiceNumber(string $text): ?string
+    /** Fournisseur : nom METRO ou vocabulaire exclusif de ses factures. */
+    private static function detectSupplier(string $text, array &$warnings): ?string
     {
-        if (preg_match('/N\s*[\x{00B0}\x{00BA}o]?\s*F\s*A\s*C\s*T\s*U\s*R\s*E\s*([0-9OoQ\/().\- ]{6,40})/u', $text, $m) !== 1) {
-            return null;
+        if (preg_match('/METRO/i', $text) === 1
+            || preg_match('/Date facture|BRASSERIE|Colisage/i', $text) === 1
+        ) {
+            return 'METRO';
         }
 
-        $token = $m[1];
-        // Marqueurs de note ①-⑳ éventuellement collés au dernier chiffre.
-        $token = preg_replace('/[\x{2460}-\x{2473}]/u', '', $token) ?? $token;
-        // Confusions OCR classiques dans un token purement numérique.
-        $token = strtr(trim($token), ['O' => '0', 'o' => '0', 'Q' => '0']);
+        $warnings[] = 'Fournisseur METRO non détecté — vérifiez qu\'il s\'agit bien d\'une facture METRO.';
 
-        // On garde le premier bloc (le n°) : la suite « (054-052687) » est
-        // un autre identifiant, séparé par une espace.
-        if (preg_match('/^\d[\d\/().\-]{5,39}/', $token, $t) !== 1) {
-            return null;
-        }
-
-        return $t[0];
+        return null;
     }
 
     /**
-     * Date de facture « Date facture : 02-10-2026 » → ISO yyyy-mm-dd.
-     * Renvoie null si absente ou invalide (checkdate).
+     * Numéro de facture « 0/0(087)0054/033871 ».
+     *
+     * 1) Structure canonique cherchée ligne à ligne (les deux passes OCR),
+     *    en écartant les leurres (« Mise en attente rappelée et facturée… »,
+     *    « N° Client : 087… »). Le premier caractère est toujours ramené à
+     *    « 0 » (le format imprimé est 0/0…, l'OCR y lit parfois un chiffre) ;
+     *    un groupe série tronqué à 3 chiffres est conservé tel quel.
+     * 2) Repli : « N° FACTURE » suivi du numéro sur la même ligne (texte
+     *    collé, mise en forme différente).
+     * 3) Dernier repli : bloc « 4 chiffres/6 chiffres » hors lignes leurres
+     *    (n° partiellement perdu par l'OCR).
      */
-    public static function extractDate(string $text): ?string
+    public static function extractInvoiceNumber(string $text): ?string
     {
-        if (preg_match('/facture\s*:?\s*(\d{2})\s*[.\/\- ]\s*(\d{2})\s*[.\/\- ]\s*(\d{4})/i', $text, $m) === 1) {
-            $day = (int) $m[1];
-            $month = (int) $m[2];
-            $year = (int) $m[3];
-            if (checkdate($month, $day, $year)) {
-                return sprintf('%04d-%02d-%02d', $year, $month, $day);
+        foreach (explode("\n", $text) as $line) {
+            if (self::isDecoyNumberLine($line)) {
+                continue;
+            }
+            if (preg_match(
+                '/([0-9OoQ])\s*\/\s*([0OoQ])\s*[(O]\s*([0-9OoQ]{3,4})\s*\)?\s*([0-9OoQ]{3,4})\s*[\/ ]\s*([0-9OoQ]{6})/',
+                $line,
+                $m
+            ) === 1) {
+                return '0/0(' . self::ocrDigits($m[3]) . ')' . self::ocrDigits($m[4]) . '/' . self::ocrDigits($m[5]);
+            }
+        }
+
+        if (preg_match('/N\s*[\x{00B0}\x{00BA}o]?\s*F\s*A\s*C\s*T\s*U\s*R\s*E\s*([0-9OoQ\/().\- ]{6,40})/u', $text, $m) === 1) {
+            $token = preg_replace('/[\x{2460}-\x{2473}]/u', '', $m[1]) ?? $m[1];
+            $token = strtr(trim($token), ['O' => '0', 'o' => '0', 'Q' => '0']);
+            if (preg_match('/^\d[\d\/().\-]{5,39}/', $token, $t) === 1) {
+                return $t[0];
+            }
+        }
+
+        foreach (explode("\n", $text) as $line) {
+            if (self::isDecoyNumberLine($line)) {
+                continue;
+            }
+            if (preg_match('/\b(\d{4})\s*\/\s*(\d{6})\b/', $line, $m) === 1) {
+                return $m[1] . '/' . $m[2];
             }
         }
 
         return null;
     }
 
+    /** Ligne à ne jamais considérer comme porteuse du n° de facture. */
+    private static function isDecoyNumberLine(string $line): bool
+    {
+        return preg_match('/attente|facturée|N\s*[\x{00B0}\x{00BA}]?\s*Client/iu', $line) === 1;
+    }
+
+    /** Chiffres d'un token numérique : confusions OCR O/o/Q → 0. */
+    private static function ocrDigits(string $s): string
+    {
+        return strtr($s, ['O' => '0', 'o' => '0', 'Q' => '0']);
+    }
+
+    /**
+     * Date de facture « Date facture : 02-10-2026 » → ISO yyyy-mm-dd.
+     *
+     * Trois tentatives : libellé et date sur la même ligne ; fenêtre de
+     * caractères après le libellé (l'OCR les sépare parfois) ; première date
+     * valide du document, toutes passes OCR confondues. Null si aucune date
+     * valide (checkdate).
+     */
+    public static function extractDate(string $text): ?string
+    {
+        if (preg_match('/facture\s*:?\s*(\d{2})\s*[.\/\- ]\s*(\d{2})\s*[.\/\- ]\s*(\d{4})/i', $text, $m) === 1) {
+            $iso = self::toIsoDate((int) $m[1], (int) $m[2], (int) $m[3]);
+            if ($iso !== null) {
+                return $iso;
+            }
+        }
+
+        $pos = stripos($text, 'Date facture');
+        if ($pos !== false) {
+            $window = substr($text, $pos, 400);
+            if (preg_match_all('/(\d{2})\s*[.\/\-]\s*(\d{2})\s*[.\/\-]\s*(\d{4})/', $window, $ms, PREG_SET_ORDER) > 0) {
+                foreach ($ms as $m) {
+                    $iso = self::toIsoDate((int) $m[1], (int) $m[2], (int) $m[3]);
+                    if ($iso !== null) {
+                        return $iso;
+                    }
+                }
+            }
+        }
+
+        if (preg_match_all('/\b(\d{2})\s*[.\/\-]\s*(\d{2})\s*[.\/\-]\s*(\d{4})\b/', $text, $ms, PREG_SET_ORDER) > 0) {
+            foreach ($ms as $m) {
+                $iso = self::toIsoDate((int) $m[1], (int) $m[2], (int) $m[3]);
+                if ($iso !== null) {
+                    return $iso;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /** Jour/mois/année → ISO, null si la date n'existe pas (checkdate). */
+    private static function toIsoDate(int $day, int $month, int $year): ?string
+    {
+        if (!checkdate($month, $day, $year)) {
+            return null;
+        }
+
+        return sprintf('%04d-%02d-%02d', $year, $month, $day);
+    }
+
     /**
      * Table TVA imprimée sur la facture, ligne par ligne :
      *   153,57 B = 5,50% 8,45 162,02
-     *   11,75 D = 20,00% 2,35 14,10
+     *   4 179,84 B=  5, 50% 9, 89 189, 73   (OCR réel : junk en tête,
+     *   « = » collé ou absent, espaces dans les montants)
      *
-     * Les lettres METRO ne suivent pas le standard A=20/B=10/C=5,5/D=2,1 :
-     * ce tableau fait foi. La base HT est le nombre AVANT la lettre ; après
-     * « = x,y% » viennent le montant de TVA puis le TTC (colines optionnelles,
-     * photo coupée). Dédoublonné par lettre, ordre d'apparition conservé.
+     * La lettre et le taux sont repérés ensemble (lettre puis « x,y% », avec
+     * au plus trois caractères parasites entre les deux) ; la base HT est le
+     * dernier montant AVANT la lettre, la TVA et le TTC sont les montants
+     * APRÈS le taux. Ligne dédoublonnée par lettre, ordre d'apparition.
      *
      * @return list<array{letter:string,rate:float,base_ht:?float,
      *                    vat:?float,total_ttc:?float}>
      */
     private static function extractVatTable(string $text): array
     {
-        if (preg_match_all(
-            '/^[ \x{00a0}\x{202f}]*([ \d\x{00a0}\x{202f}]+[.,]\d{2})[ \x{00a0}\x{202f}]+([A-Z])[ \x{00a0}\x{202f}]*=[ \x{00a0}\x{202f}]*(\d{1,2})[.,](\d{1,2})[ \x{00a0}\x{202f}]*%'
-            . '(?:[ \x{00a0}\x{202f}]+([ \d\x{00a0}\x{202f}]+[.,]\d{2}))?(?:[ \x{00a0}\x{202f}]+([ \d\x{00a0}\x{202f}]+[.,]\d{2}))?[ \x{00a0}\x{202f}]*$/mu',
-            $text,
-            $ms,
-            PREG_SET_ORDER
-        ) === 0) {
-            return [];
-        }
-
         $rates = [];
         $seen = [];
-        foreach ($ms as $m) {
-            $letter = $m[2];
+
+        foreach (explode("\n", $text) as $raw) {
+            if (preg_match('/([A-Z])[^A-Z\d]{0,4}(\d{1,2})[.,]\s?(\d{1,2})\s*%/', $raw, $m, PREG_OFFSET_CAPTURE) !== 1) {
+                continue;
+            }
+
+            $letter = $m[1][0];
             if (isset($seen[$letter])) {
                 continue;
             }
+
+            $rate = round((float) ($m[2][0] . '.' . $m[3][0]), 1);
+            $before = substr($raw, 0, (int) $m[0][1]);
+            $after = substr($raw, (int) $m[0][1] + strlen((string) $m[0][0]));
+
+            $base = null;
+            if (preg_match_all('/(\d{1,6})[.,]\s?(\d{2})/', $before, $bs) > 0) {
+                $base = round(parseFrenchFloat((string) end($bs[0])), 2);
+            }
+
+            $vat = null;
+            $ttc = null;
+            if (preg_match_all('/(\d{1,6})[.,]\s?(\d{2})/', $after, $as) > 0) {
+                $vat = round(parseFrenchFloat((string) $as[0][0]), 2);
+                if (count($as[0]) > 1) {
+                    $ttc = round(parseFrenchFloat((string) $as[0][1]), 2);
+                }
+            }
+
             $seen[$letter] = true;
             $rates[] = [
-                'letter'     => $letter,
-                'rate'       => round((float) ($m[3] . '.' . $m[4]), 1),
-                // Le groupe 1 (nombre AVANT la lettre) est la base HT ;
-                // les deux nombres après le taux sont la TVA puis le TTC.
-                'base_ht'    => round(parseFrenchFloat($m[1]), 2),
-                'vat'        => ($m[5] ?? '') !== '' ? round(parseFrenchFloat($m[5]), 2) : null,
-                'total_ttc'  => ($m[6] ?? '') !== '' ? round(parseFrenchFloat($m[6]), 2) : null,
+                'letter'    => $letter,
+                'rate'      => $rate,
+                'base_ht'   => $base,
+                'vat'       => $vat,
+                'total_ttc' => $ttc,
             ];
         }
 
@@ -267,13 +380,39 @@ final class MetroInvoiceParser
     }
 
     /**
+     * Couple (TTC, taux) déduit du total HT : cherche dans le texte un
+     * montant égal à HT×(1+taux) pour les taux français courants. Utilisé
+     * quand ni « Total à payer » ni la table TVA ne sont lisibles.
+     *
+     * @return array{ttc:float,rate:float}|null
+     */
+    private static function totalTtcByRatio(string $text, float $totalHt): ?array
+    {
+        if (preg_match_all('/(\d{1,6})[.,]\s?(\d{2})\b/', $text, $ms) === 0) {
+            return null;
+        }
+
+        foreach ([5.5, 2.1, 10.0, 20.0] as $rate) {
+            $target = round($totalHt * (1 + $rate / 100), 2);
+            foreach ($ms[0] as $raw) {
+                $value = round(parseFrenchFloat((string) $raw), 2);
+                if (abs($value - $target) <= 0.02) {
+                    return ['ttc' => $value, 'rate' => $rate];
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Taux de TVA global du formulaire (un seul champ) :
+     *  - une lettre de ligne non résolue par la table → null + avertissement
+     *    (taux global dangereux : la facture est peut-être multi-taux) ;
      *  - un seul taux distinct utilisé par les lignes → ce taux (s'il est un
      *    taux français) — cas facture mono-taux, rétrocompatible ;
-     *  - plusieurs taux distincts → null + avertissement « TVA multiple »
-     *    listant les taux et leurs bases (à répartir manuellement) ;
-     *  - aucune lettre résolue mais table mono-taux → ce taux (photo où les
-     *    lettres de lignes sont perdues) ;
+     *  - plusieurs taux distincts → null + avertissement « TVA multiple » ;
+     *  - aucune lettre résolue mais table mono-taux → ce taux ;
      *  - lettres présentes mais table illisible → null + avertissement clair.
      *
      * @param list<array{label:string,ean:string,article:string,
@@ -287,18 +426,32 @@ final class MetroInvoiceParser
     {
         $usedRates = [];
         $letters = [];
+        $resolved = [];
         foreach ($lines as $line) {
             $letter = $line['vat_letter'];
-            if ($letter !== null) {
-                $letters[$letter] = true;
+            if ($letter === null) {
+                continue;
             }
+            $letters[$letter] = true;
             $rate = $line['vat_rate'];
-            if ($rate !== null && !in_array($rate, $usedRates, true)) {
-                $usedRates[] = $rate;
+            if ($rate !== null) {
+                $resolved[$letter] = true;
+                if (!in_array($rate, $usedRates, true)) {
+                    $usedRates[] = $rate;
+                }
             }
         }
 
-        // Taux multiples utilisés : pas de taux global possible.
+        $unresolved = array_diff_key($letters, $resolved);
+        if ($unresolved !== []) {
+            $warnings[] = sprintf(
+                'Lettres TVA « %s » non résolues par la table des taux — taux global à vérifier.',
+                implode(', ', array_keys($unresolved))
+            );
+
+            return null;
+        }
+
         if (count($usedRates) > 1) {
             $parts = [];
             foreach ($vatRates as $entry) {
@@ -316,7 +469,6 @@ final class MetroInvoiceParser
             return null;
         }
 
-        // Un seul taux utilisé : retenu s'il est un taux français.
         if (count($usedRates) === 1) {
             $rate = $usedRates[0];
             if (in_array($rate, self::VAT_RATES, true)) {
@@ -330,7 +482,6 @@ final class MetroInvoiceParser
             return null;
         }
 
-        // Aucune lettre résolue : une table mono-taux fait foi.
         if (count($vatRates) === 1) {
             $rate = $vatRates[0]['rate'];
             if (in_array($rate, self::VAT_RATES, true)) {
@@ -344,7 +495,6 @@ final class MetroInvoiceParser
             return null;
         }
 
-        // Des lettres existent mais aucune table : photo coupée typiquement.
         if ($letters !== []) {
             $warnings[] = sprintf(
                 'Lettres TVA lues (%s) mais table des taux illisible (table coupée sur la photo ?) — taux à saisir manuellement.',
@@ -367,13 +517,13 @@ final class MetroInvoiceParser
 
     /**
      * Total HT : « Total H.T. : 250,46 » ou « Montant hors T.V.A. : 250,46 »
-     * (premier des deux motifs trouvé).
+     * (premier des deux motifs trouvé ; tolère l'espace OCR après la virgule).
      */
     private static function extractTotalHt(string $text): ?float
     {
         foreach ([
-            '/Total\s*H\.?\s*T\.?\s*:?\s*([\d\s]+[.,]\d{2})/i',
-            '/Montant\s*hors\s*T\.?\s*V\.?\s*A\.?\s*:?\s*([\d\s]+[.,]\d{2})/i',
+            '/Total\s*H\.?\s*T\.?\s*:?\s*([\d\s]+[.,]\s?\d{2})/i',
+            '/Montant\s*hors\s*T\.?\s*V\.?\s*A\.?\s*:?\s*([\d\s]+[.,]\s?\d{2})/i',
         ] as $re) {
             if (preg_match($re, $text, $m) === 1) {
                 return round(parseFrenchFloat($m[1]), 2);
@@ -386,102 +536,180 @@ final class MetroInvoiceParser
     /** Total TTC : « Total à payer 264,24 » (tolère a/à et les deux points). */
     private static function extractTotalTtc(string $text): ?float
     {
-        if (preg_match('/Total\s*[\x{00E0}a]\s*payer\s*:?\s*([\d\s]+[.,]\d{2})/iu', $text, $m) === 1) {
+        if (preg_match('/Total\s*[\x{00E0}a]\s*payer\s*:?\s*([\d\s]+[.,]\s?\d{2})/iu', $text, $m) === 1) {
             return round(parseFrenchFloat($m[1]), 2);
         }
 
         return null;
     }
 
+    // ————————————————————————————————————————————————————————————
+    // Lignes produits
+    // ————————————————————————————————————————————————————————————
+
     /**
-     * Lignes produits : une ligne de facture par ligne de texte.
+     * Extrait les lignes produits d'une passe OCR (ou d'un texte collé).
      *
-     * Chaque ligne est normalisée (puces OCR retirées, espaces insécables et
-     * multiples réduits), filtrée (en-têtes, totaux, mentions légales), puis
-     * confrontée au motif STRICT « EAN article désignation PU colisage qté
-     * montant [B] [P] » ; en cas d'échec, un motif RELAXÉ tente de récupérer
-     * les lignes dégradées par l'OCR.
+     * Stratégie en trois familles de lignes, dans l'ordre :
+     *  1. ligne produit complète (strict puis relaxé) → émise ;
+     *  2. « colonnes » seules (PU colisage qté montant [lettre]) → appariées
+     *     à la tête produit voisine : la tête suivante si elle est immédiate
+     *     (blocs lus en ordre inverse par l'OCR), sinon la plus ancienne tête
+     *     en attente (colonnes regroupées en fin de tableau), sinon gardée en
+     *     réserve courte pour la prochaine tête ;
+     *  3. tête produit sans montants → mise en attente ; si un bloc de
+     *     colonnes orphelin la précède immédiatement, il s'y rattache.
      *
-     * La lettre TVA finale de chaque ligne est conservée (vat_letter) et
-     * convertie en taux via la table TVA lue sur la facture (vat_rate) ;
-     * une lettre absente de la table génère un avertissement (table coupée).
+     * Les têtes restées sans montants en fin de texte sont ignorées avec un
+     * avertissement récapitulatif (montants simplement illisibles sur la
+     * photo) ; une paire tête/colonnes arithmétiquement incohérente est
+     * rejetée avec avertissement plutôt qu'émission fausse.
      *
      * @param list<array{letter:string,rate:float,base_ht:?float,
      *                   vat:?float,total_ttc:?float}> $vatRates
-     * @param list<string> $warnings Avertissements accumulés (par référence).
+     * @param list<string> $warnings
      *
      * @return list<array{label:string,ean:string,article:string,
      *                    unit_price:?float,units:int,total:float,
      *                    vat_letter:?string,vat_rate:?float,notes:string}>
      */
-    private static function extractLines(string $text, array $vatRates, array &$warnings): array
+    private static function extractLines(string $linesText, array $vatRates, array &$warnings): array
     {
         $lines = [];
         $missingLetters = [];
+        /** @var list<array<string,mixed>> $pending têtes en attente de colonnes */
+        $pending = [];
+        /** @var list<array<string,mixed>> $orphan colonnes en attente de tête */
+        $orphan = [];
 
-        foreach (explode("\n", $text) as $raw) {
-            // Normalisation : insécables → espace, puces ①-⑳ retirées,
-            // espaces multiples réduits, trim.
-            $line = str_replace(["\u{00a0}", "\u{202f}"], ' ', $raw);
-            $line = preg_replace('/[\x{2460}-\x{2473}]/u', '', $line) ?? $line;
-            $line = trim((string) preg_replace('/ {2,}/', ' ', $line));
+        $all = explode("\n", $linesText);
+        $count = count($all);
 
-            if ($line === '' || self::isSkippable($line)) {
+        for ($i = 0; $i < $count; $i++) {
+            $line = self::normalizeLine($all[$i]);
+            if ($line === '') {
                 continue;
             }
 
-            $parsed = self::matchStrict($line) ?? self::matchRelaxed($line, $warnings);
-            if ($parsed === null) {
+            // 1) Ligne produit complète (colonnes sur la même ligne).
+            $parsed = self::matchStrict($line) ?? self::matchRelaxed($line);
+            if ($parsed !== null) {
+                $lines[] = self::finalizeLine($parsed, $vatRates, $missingLetters, $warnings);
                 continue;
             }
 
-            // Lettre TVA de la ligne → taux via la table lue sur la facture.
-            $vatLetter = $parsed['vat_letter'];
-            $vatRate = null;
-            if ($vatLetter !== null) {
-                foreach ($vatRates as $entry) {
-                    if ($entry['letter'] === $vatLetter) {
-                        $vatRate = $entry['rate'];
-                        break;
+            // 2) Colonnes seules : réappariement par proximité.
+            $cols = self::matchColumns($line);
+            if ($cols !== null) {
+                $ownLabel = preg_match_all('/\p{L}/u', (string) $cols['label']) >= 2
+                    && !self::isSkippable((string) $cols['label']);
+                if ($ownLabel && self::isSelfValidating($cols)) {
+                    // Colonnes complètes avec leur propre libellé tronqué :
+                    // la ligne produit est entière, le libellé a juste perdu
+                    // son début — émises telles quelles.
+                    $solo = self::standaloneFromColumns($cols);
+                    if ($solo !== null) {
+                        $lines[] = self::finalizeLine($solo, $vatRates, $missingLetters, $warnings);
+                    }
+                    continue;
+                }
+                if (self::hasHeadWithin($all, $i + 1, 2)) {
+                    // Blocs lus en ordre inverse : les colonnes précèdent
+                    // leur libellé — réservées pour la tête qui suit.
+                    $orphan[] = $cols;
+                    if (count($orphan) > 2) {
+                        array_shift($orphan);
+                    }
+                    continue;
+                }
+                if ($pending !== [] && !self::isSelfValidating($cols)) {
+                    $head = array_shift($pending);
+                    $merged = self::mergeHeadColumns($head, $cols, $warnings);
+                    if ($merged !== null) {
+                        $lines[] = self::finalizeLine($merged, $vatRates, $missingLetters, $warnings);
+                    }
+                    continue;
+                }
+                if (self::isSelfValidating($cols)) {
+                    $solo = self::standaloneFromColumns($cols);
+                    if ($solo !== null) {
+                        $lines[] = self::finalizeLine($solo, $vatRates, $missingLetters, $warnings);
+                    }
+                    continue;
+                }
+                $orphan[] = $cols;
+                if (count($orphan) > 2) {
+                    array_shift($orphan);
+                }
+                continue;
+            }
+
+            // 3) Tête produit sans colonnes.
+            $head = self::matchProductHead($line);
+            if ($head !== null) {
+                if ($orphan !== []) {
+                    $cols = array_pop($orphan);
+                    $merged = self::mergeHeadColumns($head, $cols, $warnings);
+                    if ($merged !== null) {
+                        $lines[] = self::finalizeLine($merged, $vatRates, $missingLetters, $warnings);
+                        continue;
                     }
                 }
-                if ($vatRate === null && !isset($missingLetters[$vatLetter])) {
-                    $missingLetters[$vatLetter] = true;
-                    $warnings[] = sprintf(
-                        'Lettre TVA "%s" sans taux lu (table coupée sur la photo ?) — taux de la ligne à compléter.',
-                        $vatLetter
-                    );
-                }
+                $pending[] = $head;
             }
+        }
 
-            // Cohérence ligne : colisage×qté×PU vs montant (tolérance 2 c).
-            $unitPrice = $parsed['unit_price'];
-            if ($parsed['colisage'] !== null && $parsed['qty'] !== null && $unitPrice !== null) {
-                $expected = round($parsed['colisage'] * $parsed['qty'] * $unitPrice, 2);
-                if (abs($expected - $parsed['total']) > 0.02) {
-                    $warnings[] = sprintf(
-                        'Ligne « %s » : somme incohérente (colisage×qté×PU = %.2f ≠ %.2f), à vérifier.',
-                        $parsed['label'],
-                        $expected,
-                        $parsed['total']
-                    );
-                }
+        // Têtes restées sans montants : montants illisibles sur la photo.
+        if ($pending !== []) {
+            $names = [];
+            foreach (array_slice($pending, 0, 3) as $head) {
+                $names[] = (string) $head['label'];
             }
-
-            $lines[] = [
-                'label'      => $parsed['label'],
-                'ean'        => $parsed['ean'],
-                'article'    => $parsed['article'],
-                'unit_price' => $unitPrice,
-                'units'      => $parsed['units'],
-                'total'      => $parsed['total'],
-                'vat_letter' => $vatLetter,
-                'vat_rate'   => $vatRate,
-                'notes'      => 'EAN ' . $parsed['ean'] . ' · art. ' . $parsed['article'],
-            ];
+            $warnings[] = sprintf(
+                '%d ligne(s) produit sans montant lisible (OCR) — ignorée(s) : %s.',
+                count($pending),
+                implode(', ', $names)
+            );
         }
 
         return $lines;
+    }
+
+    /**
+     * Normalisation d'une ligne OCR : insécables → espace, puces retirées,
+     * espaces multiples réduits, déchets de bordures (| « _ etc.) retirés.
+     */
+    private static function normalizeLine(string $raw): string
+    {
+        $line = str_replace(["\u{00a0}", "\u{202f}"], ' ', $raw);
+        $line = preg_replace('/[\x{2460}-\x{2473}]/u', '', $line) ?? $line;
+        $line = trim((string) preg_replace('/ {2,}/', ' ', $line));
+        $line = trim($line, " |\"'`°¨«»“”_");
+
+        return rtrim($line, " |.,");
+    }
+
+    /** Retire un court préfixe non numérique collé au n° d'article (« s000… »). */
+    private static function stripLeadingJunk(string $line): string
+    {
+        return (string) preg_replace('/^[^\d]{1,3}(?=\d)/', '', $line);
+    }
+
+    /** Une tête produit (article + libellé, sans colonnes) est-elle proche ? */
+    private static function hasHeadWithin(array $all, int $from, int $within): bool
+    {
+        $count = count($all);
+        for ($j = $from; $j < min($from + $within, $count); $j++) {
+            $line = self::normalizeLine($all[$j]);
+            if ($line === '' || self::isSkippable($line)) {
+                continue;
+            }
+            if (self::matchProductHead($line) !== null) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /** Une ligne à ignorer (en-tête, total, mention légale, certification) ? */
@@ -502,7 +730,7 @@ final class MetroInvoiceParser
     }
 
     /**
-     * Motif STRICT d'une ligne produit METRO :
+     * Motif STRICT d'une ligne produit METRO (texte propre, PDF ou bon OCR) :
      *   5449000340085 3162401 MINUTE MAID … 0,720 24 1 17,28 B [P]
      *
      * La lettre TVA finale est capturée (le marqueur promo « P » n'est JAMAIS
@@ -540,52 +768,42 @@ final class MetroInvoiceParser
     }
 
     /**
-     * Motif RELAXÉ pour les lignes dégradées par l'OCR : la ligne doit
-     * commencer par 8-14 chiffres. Le dernier montant décimal (2 décimales)
-     * fait foi pour le total ; un prix à 3 décimales avant lui donne le prix
-     * unitaire ; 1-2 entiers juste avant donnent colisage et quantité.
+     * Motif RELAXÉ d'une ligne produit complète, dégradée par l'OCR :
+     *   [EAN tronqué] article LIBELLÉ … [PU 3 déc.] [colisage qté] montant [lettre] [P]
      *
-     * Sans colisage/qté mais avec un prix > 0, la quantité est déduite
-     * (total ÷ PU) avec avertissement. Ligne inexploitable → null (+ warning
-     * si un libellé était pourtant présent).
-     *
-     * La lettre TVA finale isolée (« … 17,28 B » ou « … 17,28 B P ») est
-     * retirée avant le scan des montants et renvoyée à part ; « P » seul est
-     * un marqueur promo, jamais une lettre TVA.
-     *
-     * @param list<string> $warnings
+     * Tolère : article seul à partir de 4 chiffres (EAN perdu ou collé au
+     * libellé), espaces insérés dans les montants (« 50, 28 », « 0, 528 »),
+     * colisage illisible (quantité déduite du total et du PU, avertissement),
+     * lettre TVA suivie de déchets (« B P », « B RE », « BB p »).
      *
      * @return array{label:string,ean:string,article:string,unit_price:?float,
      *               colisage:?int,qty:?int,units:int,total:float,
      *               vat_letter:?string}|null
      */
-    private static function matchRelaxed(string $line, array &$warnings): ?array
+    private static function matchRelaxed(string $line): ?array
     {
-        if (preg_match('/^(\d{8,14})\s/', $line) !== 1) {
+        $line = self::stripLeadingJunk($line);
+        $vatLetter = self::stripTrailingVatLetter($line);
+        $line = $vatLetter['line'];
+
+        if (preg_match('/^(\d{4,14})(?:\s+(\d{5,14}))?\s+(\S.*)$/', $line, $m) !== 1) {
             return null;
         }
-
-        // Lettre TVA finale isolée (optionnellement suivie du promo « P »),
-        // retirée de la ligne pour ne pas polluer libellé ni montants.
-        $vatLetter = null;
-        if (preg_match('/\s([A-Z])(\s+P)?$/', $line, $lm, PREG_UNMATCHED_AS_NULL) === 1 && $lm[1] !== 'P') {
-            $vatLetter = $lm[1];
-            $line = rtrim(substr($line, 0, -strlen($lm[0])));
-        }
-
-        // Préfixe EAN + article : deux blocs numériques en tête de ligne.
-        if (preg_match('/^(\d{12,14})\s+(\d{5,8})\s+(.*)$/', $line, $m) !== 1) {
-            return null;
-        }
-        $ean = $m[1];
-        $article = $m[2];
+        $ean = (int) strlen($m[1]) >= 12 ? $m[1] : '';
+        $article = $m[2] ?? $m[1];
         $rest = $m[3];
 
-        // Dernier montant « X,YZ » de la ligne = total HT de la ligne.
-        if (preg_match_all('/(\d{1,6})[.,](\d{2})\b/', $rest, $amounts, PREG_OFFSET_CAPTURE) === 0) {
+        // Libellé plausibles : au moins 2 mots dont un de 3 lettres+, et pas
+        // une ligne de vocabulaire METRO (n° client, SIRET…).
+        $label = self::cleanLabel($rest);
+        if ($label === null) {
             return null;
         }
-        // Avec PREG_OFFSET_CAPTURE, chaque élément est [texte, offset].
+
+        // Dernier montant « X,YZ » (espace OCR tolérée) = total HT de la ligne.
+        if (preg_match_all('/(\d{1,6})[.,]\s?(\d{2})\b/', $rest, $amounts, PREG_OFFSET_CAPTURE) === 0) {
+            return null;
+        }
         $lastAmount = end($amounts[0]);
         $total = round(parseFrenchFloat((string) $lastAmount[0]), 2);
         $tailStart = (int) $lastAmount[1];
@@ -593,7 +811,7 @@ final class MetroInvoiceParser
 
         // Prix unitaire (3 décimales) le plus proche de la fin, avant le total.
         $unitPrice = null;
-        if (preg_match_all('/(\d{1,3})[.,](\d{3})\b/', $head, $prices, PREG_OFFSET_CAPTURE) > 0) {
+        if (preg_match_all('/(\d{1,3})[.,]\s?(\d{3})\b/', $head, $prices, PREG_OFFSET_CAPTURE) > 0) {
             $price = end($prices[0]);
             $unitPrice = round(parseFrenchFloat((string) $price[0]), 3);
             $tailStart = (int) $price[1];
@@ -611,27 +829,15 @@ final class MetroInvoiceParser
 
         $label = trim(substr($rest, 0, $tailStart));
         if ($label === '') {
-            // Rien entre l'article et les chiffres : ligne inexploitable.
             return null;
         }
 
-        // Quantité : colisage×qté fait foi ; sinon déduite du total et du PU.
         $units = ($colisage !== null && $qty !== null) ? $colisage * $qty : 0;
         if ($units < 1 && $unitPrice !== null && $unitPrice > 0) {
             $units = max(1, (int) round($total / $unitPrice));
-            $warnings[] = sprintf(
-                'Ligne « %s » : quantité déduite du total et du prix unitaire (%d), à vérifier.',
-                $label,
-                $units
-            );
         }
         if ($units < 1) {
-            $warnings[] = sprintf('Ligne « %s » ignorée : quantité illisible.', $label);
-
             return null;
-        }
-        if ($unitPrice === null) {
-            $warnings[] = sprintf('Ligne « %s » : prix unitaire illisible (OCR), à compléter.', $label);
         }
 
         return [
@@ -643,7 +849,503 @@ final class MetroInvoiceParser
             'qty'        => $qty,
             'units'      => $units,
             'total'      => $total,
+            'vat_letter' => $vatLetter['letter'],
+            'loose_units' => $units !== $colisage * $qty,
+        ];
+    }
+
+    /**
+     * Retire la lettre TVA finale d'une ligne (« … 17,28 B », « … 13,92 B P »,
+     * « … 15,21 B LE ») : lettre A-D seule en fin de ligne, éventuellement
+     * suivie du promo « P » ou de 1-2 déchets courts. Le « P » seul n'est
+     * jamais une lettre TVA.
+     *
+     * @return array{line:string,letter:?string}
+     */
+    private static function stripTrailingVatLetter(string $line): array
+    {
+        if (preg_match('/\s([A-D])[A-D]?(?:\s+\S{1,3}){0,2}\s*$/', $line, $lm) === 1) {
+            return [
+                'line'  => rtrim(substr($line, 0, -strlen($lm[0]))),
+                'letter' => $lm[1],
+            ];
+        }
+
+        return ['line' => $line, 'letter' => null];
+    }
+
+    /**
+     * Libellé plausible d'une ligne produit : au moins 2 mots dont un de
+     * 3 lettres ou plus ; sinon null (n° client, SIRET, junk OCR).
+     */
+    private static function cleanLabel(string $rest): ?string
+    {
+        if (preg_match('/Client|SIRET|Siret|T\.?\s*V\.?\s*A\.|Accises| Agrément/iu', $rest) === 1) {
+            return null;
+        }
+
+        // Lignes d'en-tête / pied de facture portant une date complète.
+        if (preg_match('/\d{2}[.\-\/]\s?\d{2}[.\-\/]\s?\d{4}/', $rest) === 1) {
+            return null;
+        }
+
+        $words = preg_split('/\s+/', trim($rest)) ?: [];
+        $long = 0;
+        foreach ($words as $word) {
+            if (preg_match_all('/\p{L}/u', $word) >= 3) {
+                $long++;
+            }
+        }
+        if (count($words) < 2 || $long < 1) {
+            return null;
+        }
+
+        return trim($rest);
+    }
+
+    /**
+     * Tête produit sans colonnes : « [EAN] article LIBELLÉ [PU 3 déc.] ».
+     * Le bloc « colonnes » correspondant est sur une ligne voisine.
+     *
+     * @return array{label:string,ean:string,article:string,unit_price:?float,
+     *               colisage:?int,qty:?int}|null
+     */
+    private static function matchProductHead(string $line): ?array
+    {
+        $line = self::stripLeadingJunk($line);
+        if (preg_match('/^(\d{4,14})(?:\s+(\d{5,14}))?\s+(\S.*)$/', $line, $m) !== 1) {
+            return null;
+        }
+
+        $label = self::cleanLabel($m[3]);
+        if ($label === null) {
+            return null;
+        }
+
+        // PU (3 décimales) éventuel en fin de tête, suivi ou non des deux
+        // entiers colisage/qté (« …PULCO … 0,574 12 1 »).
+        $unitPrice = null;
+        $colisage = null;
+        $qty = null;
+        if (preg_match('/\s(\d{1,3})[.,]\s?(\d{3})(?:\s+(\d{1,4})\s+(\d{1,4}))?$/', $label, $p) === 1) {
+            $unitPrice = round(parseFrenchFloat($p[1] . '.' . $p[2]), 3);
+            if (($p[3] ?? '') !== '' && ($p[4] ?? '') !== '') {
+                $colisage = (int) $p[3];
+                $qty = (int) $p[4];
+            }
+            $label = trim(substr($label, 0, -strlen($p[0])));
+        }
+
+        if (self::isSkippable($label)) {
+            $label = '(ligne OCR partielle)';
+        }
+
+        $ean = (int) strlen($m[1]) >= 12 ? $m[1] : '';
+        $article = $m[2] ?? $m[1];
+
+        return [
+            'label'      => $label,
+            'ean'        => $ean,
+            'article'    => $article,
+            'unit_price' => $unitPrice,
+            'colisage'   => $colisage,
+            'qty'        => $qty,
+        ];
+    }
+
+    /**
+     * Bloc « colonnes » d'une ligne produit, éventuellement précédé du
+     * libellé tronqué (au plus 6 mots) quand l'OCR a coupé la ligne :
+     *   … [PU] colisage qté montant [lettre] [P]
+     *
+     * Variantes tolérées : PU entier à 3 chiffres (« 720 » pour 0,720),
+     * montant entier (« 4566 » pour 45,66 — validé par PU×unités), colisage
+     * et quantité collés (« 6100 » = 6 × 1 + résidu), un ou deux déchets
+     * entre PU et montant. La lettre TVA est cherchée en toute fin.
+     *
+     * @return array{label:string,unit_price:?float,colisage:?int,qty:?int,
+     *               total:?float,vat_letter:?string,self:bool}|null
+     */
+    private static function matchColumns(string $line): ?array
+    {
+        // Lettre TVA finale (A-D, doublon OCR possible) + promo P éventuels.
+        $vatLetter = null;
+        if (preg_match('/\s([A-D])[A-D]?(?:\s+[Pp])?\s*$/', $line, $lm) === 1) {
+            $vatLetter = $lm[1];
+            $line = rtrim(substr($line, 0, -strlen($lm[0])));
+        }
+
+        $prefix = '(?:(?:\S+\s+){0,6}?)';
+        $pu = '(?:(\d{1,3})[.,]\s?(\d{3})\s+)?';
+        $forms = [
+            // PU décimal + colisage + qté + montant décimal (forme canonique).
+            ['/^' . $prefix . $pu . '(\d{1,4})\s+(\d{1,4})\s+(\d{1,6})[.,]\s?(\d{2})$/', 'dec_pu'],
+            // PU entier 3 chiffres (virgule perdue) + colisage + qté + montant.
+            ['/^' . $prefix . '(\d{3})(?![.,\d])\s+(\d{1,4})\s+(\d{1,4})\s+(\d{1,6})[.,]\s?(\d{2})$/', 'int_pu'],
+            // PU décimal + colisage + qté + montant ENTIER (virgule perdue).
+            ['/^' . $prefix . $pu . '(\d{1,4})\s+(\d{1,4})\s+(\d{3,4})$/', 'int_total'],
+            // PU décimal + colisage/qté collés (« 6100 ») + montant.
+            ['/^' . $prefix . $pu . '(\d{3,5})\s+(\d{1,6})[.,]\s?(\d{2})$/', 'merged'],
+            // PU décimal + 1-2 déchets + montant (colisage/qté illisibles).
+            ['/^' . $prefix . $pu . '(?:\S{1,3}\s+){0,2}(\d{1,6})[.,]\s?(\d{2})$/', 'loose'],
+            // Montant seul (bloc totalement dégradé).
+            ['/^' . $prefix . '(\d{1,6})[.,]\s?(\d{2})$/', 'total_only'],
+        ];
+
+        foreach ($forms as [$regex, $kind]) {
+            if (preg_match($regex, $line, $m, PREG_UNMATCHED_AS_NULL) !== 1) {
+                continue;
+            }
+
+            $labelPart = '';
+            $unitPrice = null;
+            $colisage = null;
+            $qty = null;
+            $total = null;
+            $mergedDigits = null;
+
+            switch ($kind) {
+                case 'dec_pu':
+                    // Groupes fixes : [pu1,pu2,col,qty,mont1,mont2], le PU
+                    // (indices 0-1) null quand absent.
+                    $nums = array_values(array_slice($m, 1));
+                    if ($nums[0] !== null && $nums[1] !== null) {
+                        $unitPrice = round(parseFrenchFloat($nums[0] . '.' . $nums[1]), 3);
+                        $colisage = (int) $nums[2];
+                        $qty = (int) $nums[3];
+                        $total = round(parseFrenchFloat($nums[4] . '.' . $nums[5]), 2);
+                        $labelPart = self::prefixBefore($line, $nums[0]);
+                    } else {
+                        $colisage = (int) $nums[2];
+                        $qty = (int) $nums[3];
+                        $total = round(parseFrenchFloat($nums[4] . '.' . $nums[5]), 2);
+                        $labelPart = self::prefixBefore($line, $nums[2]);
+                    }
+                    break;
+
+                case 'int_pu':
+                    $unitPrice = round(((int) $m[1]) / 1000, 3);
+                    $colisage = (int) $m[2];
+                    $qty = (int) $m[3];
+                    $total = round(parseFrenchFloat($m[4] . '.' . $m[5]), 2);
+                    $labelPart = self::prefixBefore($line, $m[1]);
+                    break;
+
+                case 'int_total':
+                    if ($m[1] !== null && $m[2] !== null) {
+                        $unitPrice = round(parseFrenchFloat($m[1] . '.' . $m[2]), 3);
+                    }
+                    $colisage = (int) $m[3];
+                    $qty = (int) $m[4];
+                    $total = round(((int) $m[5]) / 100, 2);
+                    $labelPart = self::prefixBefore($line, $m[1] ?? $m[3]);
+                    break;
+
+                case 'merged':
+                    $mergedDigits = $m[3];
+                    $total = round(parseFrenchFloat($m[4] . '.' . $m[5]), 2);
+                    if ($m[1] !== null && $m[2] !== null) {
+                        $unitPrice = round(parseFrenchFloat($m[1] . '.' . $m[2]), 3);
+                    }
+                    $labelPart = self::prefixBefore($line, $m[1] ?? $m[3]);
+                    break;
+
+                case 'loose':
+                    if ($m[1] !== null && $m[2] !== null) {
+                        $unitPrice = round(parseFrenchFloat($m[1] . '.' . $m[2]), 3);
+                    }
+                    $mont1 = $m[3] ?? '';
+                    $mont2 = $m[4] ?? '';
+                    $total = round(parseFrenchFloat($mont1 . '.' . $mont2), 2);
+                    $labelPart = self::prefixBefore($line, $mont1);
+                    break;
+
+                case 'total_only':
+                    $total = round(parseFrenchFloat($m[1] . '.' . $m[2]), 2);
+                    $labelPart = self::prefixBefore($line, $m[1]);
+                    break;
+            }
+
+            // Validation arithmétique + rejet des pseudo-colonnes absurdes.
+            if ($colisage !== null && $qty !== null && $unitPrice !== null && $total !== null) {
+                $expected = round($colisage * $qty * $unitPrice, 2);
+                if (abs($expected - $total) > max(0.02, $total * 0.01)) {
+                    // Colisage/qté collés ? (« 6100 » = 6×1 + résidu)
+                    if ($mergedDigits === null) {
+                        return null;
+                    }
+                    $split = self::splitMergedColisage($mergedDigits, $unitPrice, $total);
+                    if ($split === null) {
+                        return null;
+                    }
+                    [$colisage, $qty] = $split;
+                }
+            }
+            if ($colisage !== null && $qty !== null && $colisage * $qty > 9999) {
+                return null;
+            }
+
+            $self = $unitPrice !== null && $total !== null && (
+                ($colisage !== null && $qty !== null)
+                || ($colisage === null && $qty === null && $total / max($unitPrice, 0.001) >= 0.5
+                    && abs($total / max($unitPrice, 0.001) - round($total / max($unitPrice, 0.001))) < 0.05)
+            );
+
+            return [
+                'label'      => $labelPart,
+                'unit_price' => $unitPrice,
+                'colisage'   => $colisage,
+                'qty'        => $qty,
+                'total'      => $total,
+                'vat_letter' => $vatLetter,
+                'self'       => $self,
+            ];
+        }
+
+        return null;
+    }
+
+    /** Texte de la ligne avant l'occurrence de $needle (libellé tronqué). */
+    private static function prefixBefore(string $line, ?string $needle): string
+    {
+        $pos = $needle !== null && $needle !== '' ? strpos($line, $needle) : false;
+
+        return $pos !== false ? trim(substr($line, 0, $pos)) : '';
+    }
+
+    /**
+     * Colisage et quantité collés en un seul bloc (« 6100 ») : essaie les
+     * découpes 1-2 chiffres + 1-2 chiffres (résidu ≤ 2 chiffres ignoré) et
+     * valide par PU×colisage×qty ≈ montant.
+     *
+     * @return array{0:int,1:int}|null
+     */
+    private static function splitMergedColisage(string $digits, float $unitPrice, float $total): ?array
+    {
+        $len = strlen($digits);
+        for ($a = 1; $a <= 2; $a++) {
+            for ($b = 1; $b <= 2; $b++) {
+                if ($a + $b > $len) {
+                    continue;
+                }
+                $colisage = (int) substr($digits, 0, $a);
+                $qty = (int) substr($digits, $a, $b);
+                $rest = substr($digits, $a + $b);
+                if ($rest !== '' && strlen($rest) > 2) {
+                    continue;
+                }
+                $expected = round($colisage * $qty * $unitPrice, 2);
+                if (abs($expected - $total) <= max(0.02, $total * 0.01)) {
+                    return [$colisage, $qty];
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Colonne autonome émissible : PU + unités cohérentes (colisage×qté ou
+     * total÷PU entier plausible). Jamais un simple montant isolé.
+     *
+     * @param array{label:string,unit_price:?float,colisage:?int,qty:?int,
+     *              total:?float,vat_letter:?string,self:bool} $cols
+     *
+     * @return array{label:string,ean:string,article:string,unit_price:?float,
+     *               colisage:?int,qty:?int,units:int,total:float,
+     *               vat_letter:?string}|null
+     */
+    private static function standaloneFromColumns(array $cols): ?array
+    {
+        $total = $cols['total'];
+        $unitPrice = $cols['unit_price'];
+        if ($total === null || $unitPrice === null || $unitPrice <= 0) {
+            return null;
+        }
+
+        if ($cols['colisage'] !== null && $cols['qty'] !== null) {
+            $units = $cols['colisage'] * $cols['qty'];
+        } else {
+            $units = (int) round($total / $unitPrice);
+            if ($units < 1) {
+                return null;
+            }
+        }
+
+        $label = trim((string) $cols['label']);
+        if (preg_match_all('/\p{L}/u', $label) < 2) {
+            $label = '(ligne OCR partielle)';
+        }
+
+        return [
+            'label'      => $label,
+            'ean'        => '',
+            'article'    => '',
+            'unit_price' => $unitPrice,
+            'colisage'   => $cols['colisage'],
+            'qty'        => $cols['qty'],
+            'units'      => $units,
+            'total'      => $total,
+            'vat_letter' => $cols['vat_letter'],
+            'loose_units' => $cols['colisage'] === null || $cols['qty'] === null,
+        ];
+    }
+
+    /**
+     * Blocs « colonnes » auto-suffisants (vérifiables sans libellé) : ils ne
+     * sont appariés à une tête en attente que si l'arithmétique le confirme.
+     *
+     * @param array{label:string,unit_price:?float,colisage:?int,qty:?int,
+     *              total:?float,vat_letter:?string,self:bool} $cols
+     */
+    private static function isSelfValidating(array $cols): bool
+    {
+        return (bool) $cols['self'];
+    }
+
+    /**
+     * Associe une tête produit (article + libellé [+ PU]) à un bloc colonnes
+     * (PU [colisage qté] montant [lettre]). Les unités doivent être
+     * déterminables ; une incohérence arithmétique franche rejette la paire
+     * (avertissement) au lieu d'émettre un montant faux.
+     *
+     * @param array{label:string,ean:string,article:string,unit_price:?float,
+     *               colisage:?int,qty:?int} $head
+     * @param array{label:string,unit_price:?float,colisage:?int,qty:?int,
+     *              total:?float,vat_letter:?string,self:bool} $cols
+     * @param list<string> $warnings
+     *
+     * @return array{label:string,ean:string,article:string,unit_price:?float,
+     *               colisage:?int,qty:?int,units:int,total:float,
+     *               vat_letter:?string}|null
+     */
+    private static function mergeHeadColumns(array $head, array $cols, array &$warnings): ?array
+    {
+        $total = $cols['total'];
+        if ($total === null) {
+            $warnings[] = sprintf(
+                'Ligne « %s » ignorée : montant illisible (OCR).',
+                (string) $head['label']
+            );
+
+            return null;
+        }
+
+        $unitPrice = $head['unit_price'] ?? $cols['unit_price'];
+        $colisage = $head['colisage'] ?? $cols['colisage'];
+        $qty = $head['qty'] ?? $cols['qty'];
+
+        $units = ($colisage !== null && $qty !== null) ? $colisage * $qty : 0;
+        $deduced = false;
+        if ($units < 1 && $unitPrice !== null && $unitPrice > 0) {
+            $units = max(1, (int) round($total / $unitPrice));
+            $deduced = true;
+        }
+        if ($units < 1) {
+            $warnings[] = sprintf(
+                'Ligne « %s » ignorée : quantité illisible (OCR).',
+                (string) $head['label']
+            );
+
+            return null;
+        }
+
+        if ($colisage !== null && $qty !== null && $unitPrice !== null) {
+            $expected = round($colisage * $qty * $unitPrice, 2);
+            if (abs($expected - $total) > max(0.02, $total * 0.01)) {
+                $warnings[] = sprintf(
+                    'Ligne « %s » ignorée : colonnes incohérentes (colisage×qté×PU = %.2f ≠ %.2f).',
+                    (string) $head['label'],
+                    $expected,
+                    $total
+                );
+
+                return null;
+            }
+        }
+
+        return [
+            'label'      => (string) $head['label'],
+            'ean'        => (string) $head['ean'],
+            'article'    => (string) $head['article'],
+            'unit_price' => $unitPrice,
+            'colisage'   => $colisage,
+            'qty'        => $qty,
+            'units'      => $units,
+            'total'      => $total,
+            'vat_letter' => $cols['vat_letter'],
+            'loose_units' => $deduced,
+        ];
+    }
+
+    /**
+     * Transforme une ligne brute interne en structure finale : lettre TVA →
+     * taux via la table, avertissements quantité déduite / lettre sans taux,
+     * cohérence colisage×qté×PU vs montant.
+     *
+     * @param array{label:string,ean:string,article:string,unit_price:?float,
+     *               colisage:?int,qty:?int,units:int,total:float,
+     *               vat_letter:?string,loose_units?:bool} $parsed
+     * @param list<array{letter:string,rate:float,base_ht:?float,
+     *                   vat:?float,total_ttc:?float}> $vatRates
+     * @param array<string,bool> $missingLetters
+     * @param list<string> $warnings
+     *
+     * @return array{label:string,ean:string,article:string,unit_price:?float,
+     *               units:int,total:float,vat_letter:?string,vat_rate:?float,
+     *               notes:string}
+     */
+    private static function finalizeLine(array $parsed, array $vatRates, array &$missingLetters, array &$warnings): array
+    {
+        $vatLetter = $parsed['vat_letter'];
+        $vatRate = null;
+        if ($vatLetter !== null) {
+            foreach ($vatRates as $entry) {
+                if ($entry['letter'] === $vatLetter) {
+                    $vatRate = $entry['rate'];
+                    break;
+                }
+            }
+            if ($vatRate === null && !isset($missingLetters[$vatLetter])) {
+                $missingLetters[$vatLetter] = true;
+                $warnings[] = sprintf(
+                    'Lettre TVA "%s" sans taux lu (table coupée sur la photo ?) — taux de la ligne à compléter.',
+                    $vatLetter
+                );
+            }
+        }
+
+        if (!empty($parsed['loose_units'])) {
+            $warnings[] = sprintf(
+                'Ligne « %s » : quantité déduite du total et du prix unitaire (%d), à vérifier.',
+                (string) $parsed['label'],
+                (int) $parsed['units']
+            );
+        }
+
+        $unitPrice = $parsed['unit_price'];
+        if (($parsed['colisage'] ?? null) !== null && ($parsed['qty'] ?? null) !== null && $unitPrice !== null) {
+            $expected = round((int) $parsed['colisage'] * (int) $parsed['qty'] * $unitPrice, 2);
+            if (abs($expected - (float) $parsed['total']) > max(0.02, (float) $parsed['total'] * 0.01)) {
+                $warnings[] = sprintf(
+                    'Ligne « %s » : somme incohérente (colisage×qté×PU = %.2f ≠ %.2f), à vérifier.',
+                    (string) $parsed['label'],
+                    $expected,
+                    (float) $parsed['total']
+                );
+            }
+        }
+
+        return [
+            'label'      => (string) $parsed['label'],
+            'ean'        => (string) ($parsed['ean'] ?? ''),
+            'article'    => (string) ($parsed['article'] ?? ''),
+            'unit_price' => $unitPrice,
+            'units'      => (int) $parsed['units'],
+            'total'      => (float) $parsed['total'],
             'vat_letter' => $vatLetter,
+            'vat_rate'   => $vatRate,
+            'notes'      => 'EAN ' . ($parsed['ean'] ?? '') . ' · art. ' . ($parsed['article'] ?? ''),
         ];
     }
 }

@@ -162,12 +162,16 @@ final class TicketReceiptParser
         $text = str_replace(["\r\n", "\r"], "\n", $text);
         $text = preg_replace('/^\xEF\xBB\xBF/', '', $text) ?? $text;
 
+        // Lignes produits : première passe OCR seulement (voir MetroInvoiceParser).
+        $parts = preg_split('/^\s*-{3,}\s*OCR alt\s*-+.*$/m', $text) ?: [];
+        $linesText = $parts[0] ?? $text;
+
         $supplier = self::extractSupplier($text);
         $invoiceNumber = self::extractTicketNumber($text);
         $purchasedAt = self::extractDate($text);
         $totalTtc = self::extractTotalTtc($text, $warnings);
 
-        $lines = self::extractLines($text, $warnings);
+        $lines = self::extractLines($linesText, $warnings);
         if ($lines === []) {
             // Ticket tronqué (seule la partie paiement sur la photo) : cas
             // normal, informatif seulement.
@@ -312,8 +316,14 @@ final class TicketReceiptParser
      */
     private static function extractTotalTtc(string $text, array &$warnings): ?float
     {
+        // « MONTANT = 37,24 EUR » ; virgule parfois perdue par l'OCR
+        // (« MONTANT= 37 24 EUR ») — alors les deux derniers groupes sont
+        // euros puis centimes.
         if (preg_match('/MONTANT\s*[=:]\s*(\d+[.,]\d{2})/i', $text, $m) === 1) {
             return round(parseFrenchFloat($m[1]), 2);
+        }
+        if (preg_match('/MONTANT\s*[=:]\s*(\d{1,5})\s+(\d{2})\s*(?:EUR)?/i', $text, $m) === 1) {
+            return round((float) ($m[1] . '.' . $m[2]), 2);
         }
 
         $produitsOnly = null;
@@ -398,6 +408,13 @@ final class TicketReceiptParser
                 if (str_contains($up, $keyword)) {
                     continue 2;
                 }
+            }
+
+            // Chaînes de montants façon OCR de bande papier (« 03,21,46,92,92 »
+            // pour un téléphone) : au moins 3 montants décimaux = jamais un
+            // produit, c'est du bruit de paiement ou d'en-tête.
+            if (preg_match_all('/\d+[.,]\d{2}/u', $line) >= 3) {
+                continue;
             }
 
             // Prix final (lettre TVA A-E optionnelle) : « 0,89 C ».
