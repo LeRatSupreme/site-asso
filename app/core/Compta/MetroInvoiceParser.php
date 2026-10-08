@@ -11,7 +11,14 @@ namespace App\Core\Compta;
  * Sortie : la structure « invoice » normalisée consommée par le préremplissage
  * du formulaire d'achat (contrat JSON de POST /admin/compta/achats/scan) :
  *   supplier, invoice_number, purchased_at (ISO), vat_rate, amount_basis,
- *   total_ht, total_ttc, lines[], warnings[].
+ *   total_ht, total_ttc, vat_rates[], lines[], warnings[].
+ *
+ * TVA multi-taux : les lettres METRO ne suivent PAS le standard français
+ * (réel observé : B = 5,5 %, D = 20 %) — la table TVA imprimée sur la facture
+ * (« 153,57 B = 5,50% 8,45 162,02 ») fait foi et alimente vat_rates[] ; la
+ * lettre en fin de chaque ligne produit donne vat_letter / vat_rate. Un seul
+ * taux distinct utilisé → vat_rate global (rétrocompatibilité) ; taux
+ * multiples → vat_rate null + avertissement « à répartir manuellement ».
  *
  * Classe purement statique, sans dépendance DB ni OCR : robuste aux erreurs
  * de reconnaissance (O/0 confondus, espaces insécables, puces de notes ①②…,
@@ -56,8 +63,11 @@ final class MetroInvoiceParser
      * @return array{
      *     supplier:?string, invoice_number:?string, purchased_at:?string,
      *     vat_rate:?float, amount_basis:'ht', total_ht:?float, total_ttc:?float,
+     *     vat_rates:list<array{letter:string,rate:float,base_ht:?float,
+     *                          vat:?float,total_ttc:?float}>,
      *     lines:list<array{label:string,ean:string,article:string,
-     *                      unit_price:?float,units:int,total:float,notes:string}>,
+     *                      unit_price:?float,units:int,total:float,
+     *                      vat_letter:?string,vat_rate:?float,notes:string}>,
      *     warnings:list<string>
      * }
      */
@@ -76,14 +86,20 @@ final class MetroInvoiceParser
 
         $invoiceNumber = self::extractInvoiceNumber($text);
         $purchasedAt = self::extractDate($text);
-        $vatRate = self::extractVatRate($text, $warnings);
+        $vatRates = self::extractVatTable($text);
         $totalHt = self::extractTotalHt($text);
-        $totalTtc = self::extractTotalTtc($text);
+        // Total TTC : « Total à payer » prioritaire ; sinon somme de la
+        // table TVA si toutes ses lignes sont complètes ; sinon null.
+        $totalTtc = self::extractTotalTtc($text) ?? self::totalTtcFromVatTable($vatRates);
 
-        $lines = self::extractLines($text, $warnings);
+        $lines = self::extractLines($text, $vatRates, $warnings);
         if ($lines === []) {
             $warnings[] = 'Aucune ligne produit reconnue — collez le texte manuellement.';
         }
+
+        // Taux de TVA global : un seul taux distinct utilisé → ce taux ;
+        // plusieurs (ou aucun) → null + avertissement explicite.
+        $vatRate = self::resolveGlobalVatRate($lines, $vatRates, $warnings);
 
         // Cohérence globale : Σ lignes vs Total H.T. (tolérance 2 centimes).
         if ($totalHt !== null && $lines !== []) {
@@ -100,6 +116,23 @@ final class MetroInvoiceParser
             }
         }
 
+        // Cohérence table TVA : Σ bases HT vs Total H.T. (tolérance 2 c).
+        $sumBase = 0.0;
+        $hasBase = false;
+        foreach ($vatRates as $entry) {
+            if ($entry['base_ht'] !== null) {
+                $hasBase = true;
+                $sumBase += $entry['base_ht'];
+            }
+        }
+        if ($hasBase && $totalHt !== null && abs($sumBase - $totalHt) > 0.02) {
+            $warnings[] = sprintf(
+                'Somme des bases HT de la table TVA (%.2f €) différente du Total H.T. (%.2f €) — à vérifier.',
+                $sumBase,
+                $totalHt
+            );
+        }
+
         return [
             'supplier'       => $supplier,
             'invoice_number' => $invoiceNumber,
@@ -108,6 +141,7 @@ final class MetroInvoiceParser
             'amount_basis'   => 'ht',
             'total_ht'       => $totalHt,
             'total_ttc'      => $totalTtc,
+            'vat_rates'      => $vatRates,
             'lines'          => $lines,
             'warnings'       => $warnings,
         ];
@@ -162,26 +196,173 @@ final class MetroInvoiceParser
     }
 
     /**
-     * Taux de TVA : ligne « 250,46 B = 5,50% 13,78 264,24 » → 5.5.
-     * Non reconnu hors des taux français → null + avertissement.
+     * Table TVA imprimée sur la facture, ligne par ligne :
+     *   153,57 B = 5,50% 8,45 162,02
+     *   11,75 D = 20,00% 2,35 14,10
+     *
+     * Les lettres METRO ne suivent pas le standard A=20/B=10/C=5,5/D=2,1 :
+     * ce tableau fait foi. La base HT est le nombre AVANT la lettre ; après
+     * « = x,y% » viennent le montant de TVA puis le TTC (colines optionnelles,
+     * photo coupée). Dédoublonné par lettre, ordre d'apparition conservé.
+     *
+     * @return list<array{letter:string,rate:float,base_ht:?float,
+     *                    vat:?float,total_ttc:?float}>
      */
-    private static function extractVatRate(string $text, array &$warnings): ?float
+    private static function extractVatTable(string $text): array
     {
-        if (preg_match('/B\s*=\s*(\d{1,2})\s*[.,]\s*(\d{1,2})/i', $text, $m) !== 1) {
+        if (preg_match_all(
+            '/^[ \x{00a0}\x{202f}]*([ \d\x{00a0}\x{202f}]+[.,]\d{2})[ \x{00a0}\x{202f}]+([A-Z])[ \x{00a0}\x{202f}]*=[ \x{00a0}\x{202f}]*(\d{1,2})[.,](\d{1,2})[ \x{00a0}\x{202f}]*%'
+            . '(?:[ \x{00a0}\x{202f}]+([ \d\x{00a0}\x{202f}]+[.,]\d{2}))?(?:[ \x{00a0}\x{202f}]+([ \d\x{00a0}\x{202f}]+[.,]\d{2}))?[ \x{00a0}\x{202f}]*$/mu',
+            $text,
+            $ms,
+            PREG_SET_ORDER
+        ) === 0) {
+            return [];
+        }
+
+        $rates = [];
+        $seen = [];
+        foreach ($ms as $m) {
+            $letter = $m[2];
+            if (isset($seen[$letter])) {
+                continue;
+            }
+            $seen[$letter] = true;
+            $rates[] = [
+                'letter'     => $letter,
+                'rate'       => round((float) ($m[3] . '.' . $m[4]), 1),
+                // Le groupe 1 (nombre AVANT la lettre) est la base HT ;
+                // les deux nombres après le taux sont la TVA puis le TTC.
+                'base_ht'    => round(parseFrenchFloat($m[1]), 2),
+                'vat'        => ($m[5] ?? '') !== '' ? round(parseFrenchFloat($m[5]), 2) : null,
+                'total_ttc'  => ($m[6] ?? '') !== '' ? round(parseFrenchFloat($m[6]), 2) : null,
+            ];
+        }
+
+        return $rates;
+    }
+
+    /**
+     * Total TTC de secours : si « Total à payer » est illisible mais que la
+     * table TVA est complète (chaque ligne a un TTC), la somme fait foi.
+     *
+     * @param list<array{letter:string,rate:float,base_ht:?float,
+     *                   vat:?float,total_ttc:?float}> $vatRates
+     */
+    private static function totalTtcFromVatTable(array $vatRates): ?float
+    {
+        if ($vatRates === []) {
             return null;
         }
 
-        $rate = round((float) ($m[1] . '.' . $m[2]), 1);
-        if (in_array($rate, self::VAT_RATES, true)) {
-            return $rate;
+        $sum = 0.0;
+        foreach ($vatRates as $entry) {
+            if ($entry['total_ttc'] === null) {
+                return null;
+            }
+            $sum += $entry['total_ttc'];
         }
 
-        $warnings[] = sprintf(
-            'Taux de TVA lu « %s %% » non reconnu (taux français : 20, 10, 5,5, 2,1 ou 0) — à vérifier.',
-            number_format($rate, 1, ',', ' ')
-        );
+        return round($sum, 2);
+    }
+
+    /**
+     * Taux de TVA global du formulaire (un seul champ) :
+     *  - un seul taux distinct utilisé par les lignes → ce taux (s'il est un
+     *    taux français) — cas facture mono-taux, rétrocompatible ;
+     *  - plusieurs taux distincts → null + avertissement « TVA multiple »
+     *    listant les taux et leurs bases (à répartir manuellement) ;
+     *  - aucune lettre résolue mais table mono-taux → ce taux (photo où les
+     *    lettres de lignes sont perdues) ;
+     *  - lettres présentes mais table illisible → null + avertissement clair.
+     *
+     * @param list<array{label:string,ean:string,article:string,
+     *                    unit_price:?float,units:int,total:float,
+     *                    vat_letter:?string,vat_rate:?float,notes:string}> $lines
+     * @param list<array{letter:string,rate:float,base_ht:?float,
+     *                   vat:?float,total_ttc:?float}> $vatRates
+     * @param list<string> $warnings
+     */
+    private static function resolveGlobalVatRate(array $lines, array $vatRates, array &$warnings): ?float
+    {
+        $usedRates = [];
+        $letters = [];
+        foreach ($lines as $line) {
+            $letter = $line['vat_letter'];
+            if ($letter !== null) {
+                $letters[$letter] = true;
+            }
+            $rate = $line['vat_rate'];
+            if ($rate !== null && !in_array($rate, $usedRates, true)) {
+                $usedRates[] = $rate;
+            }
+        }
+
+        // Taux multiples utilisés : pas de taux global possible.
+        if (count($usedRates) > 1) {
+            $parts = [];
+            foreach ($vatRates as $entry) {
+                if (!in_array($entry['rate'], $usedRates, true)) {
+                    continue;
+                }
+                $rateTxt = self::formatRate($entry['rate']);
+                $baseTxt = $entry['base_ht'] !== null
+                    ? sprintf(' (base %s)', number_format($entry['base_ht'], 2, ',', ' '))
+                    : '';
+                $parts[] = $rateTxt . ' %' . $baseTxt;
+            }
+            $warnings[] = 'TVA multiple : ' . implode(' + ', $parts) . ' — à répartir manuellement.';
+
+            return null;
+        }
+
+        // Un seul taux utilisé : retenu s'il est un taux français.
+        if (count($usedRates) === 1) {
+            $rate = $usedRates[0];
+            if (in_array($rate, self::VAT_RATES, true)) {
+                return $rate;
+            }
+            $warnings[] = sprintf(
+                'Taux de TVA lu « %s %% » non reconnu (taux français : 20, 10, 5,5, 2,1 ou 0) — à vérifier.',
+                number_format($rate, 1, ',', ' ')
+            );
+
+            return null;
+        }
+
+        // Aucune lettre résolue : une table mono-taux fait foi.
+        if (count($vatRates) === 1) {
+            $rate = $vatRates[0]['rate'];
+            if (in_array($rate, self::VAT_RATES, true)) {
+                return $rate;
+            }
+            $warnings[] = sprintf(
+                'Taux de TVA lu « %s %% » non reconnu (taux français : 20, 10, 5,5, 2,1 ou 0) — à vérifier.',
+                number_format($rate, 1, ',', ' ')
+            );
+
+            return null;
+        }
+
+        // Des lettres existent mais aucune table : photo coupée typiquement.
+        if ($letters !== []) {
+            $warnings[] = sprintf(
+                'Lettres TVA lues (%s) mais table des taux illisible (table coupée sur la photo ?) — taux à saisir manuellement.',
+                implode(', ', array_keys($letters))
+            );
+        }
 
         return null;
+    }
+
+    /** Taux formaté « à la française » : 5,5 / 20 / 0 (sans décimale inutile). */
+    private static function formatRate(float $rate): string
+    {
+        // Comparaison floue : (int) 20.0 = 20 et 20.0 === 20.0, mais la
+        // stricte égalité float/int renverrait « 20,0 » pour 20.0.
+        return (float) (int) $rate === $rate
+            ? number_format($rate, 0, ',', ' ')
+            : number_format($rate, 1, ',', ' ');
     }
 
     /**
@@ -221,14 +402,22 @@ final class MetroInvoiceParser
      * montant [B] [P] » ; en cas d'échec, un motif RELAXÉ tente de récupérer
      * les lignes dégradées par l'OCR.
      *
+     * La lettre TVA finale de chaque ligne est conservée (vat_letter) et
+     * convertie en taux via la table TVA lue sur la facture (vat_rate) ;
+     * une lettre absente de la table génère un avertissement (table coupée).
+     *
+     * @param list<array{letter:string,rate:float,base_ht:?float,
+     *                   vat:?float,total_ttc:?float}> $vatRates
      * @param list<string> $warnings Avertissements accumulés (par référence).
      *
      * @return list<array{label:string,ean:string,article:string,
-     *                    unit_price:?float,units:int,total:float,notes:string}>
+     *                    unit_price:?float,units:int,total:float,
+     *                    vat_letter:?string,vat_rate:?float,notes:string}>
      */
-    private static function extractLines(string $text, array &$warnings): array
+    private static function extractLines(string $text, array $vatRates, array &$warnings): array
     {
         $lines = [];
+        $missingLetters = [];
 
         foreach (explode("\n", $text) as $raw) {
             // Normalisation : insécables → espace, puces ①-⑳ retirées,
@@ -244,6 +433,25 @@ final class MetroInvoiceParser
             $parsed = self::matchStrict($line) ?? self::matchRelaxed($line, $warnings);
             if ($parsed === null) {
                 continue;
+            }
+
+            // Lettre TVA de la ligne → taux via la table lue sur la facture.
+            $vatLetter = $parsed['vat_letter'];
+            $vatRate = null;
+            if ($vatLetter !== null) {
+                foreach ($vatRates as $entry) {
+                    if ($entry['letter'] === $vatLetter) {
+                        $vatRate = $entry['rate'];
+                        break;
+                    }
+                }
+                if ($vatRate === null && !isset($missingLetters[$vatLetter])) {
+                    $missingLetters[$vatLetter] = true;
+                    $warnings[] = sprintf(
+                        'Lettre TVA "%s" sans taux lu (table coupée sur la photo ?) — taux de la ligne à compléter.',
+                        $vatLetter
+                    );
+                }
             }
 
             // Cohérence ligne : colisage×qté×PU vs montant (tolérance 2 c).
@@ -267,6 +475,8 @@ final class MetroInvoiceParser
                 'unit_price' => $unitPrice,
                 'units'      => $parsed['units'],
                 'total'      => $parsed['total'],
+                'vat_letter' => $vatLetter,
+                'vat_rate'   => $vatRate,
                 'notes'      => 'EAN ' . $parsed['ean'] . ' · art. ' . $parsed['article'],
             ];
         }
@@ -295,13 +505,17 @@ final class MetroInvoiceParser
      * Motif STRICT d'une ligne produit METRO :
      *   5449000340085 3162401 MINUTE MAID … 0,720 24 1 17,28 B [P]
      *
+     * La lettre TVA finale est capturée (le marqueur promo « P » n'est JAMAIS
+     * une lettre TVA : ligne finissant par « 13,92 P » → lettre null).
+     *
      * @return array{label:string,ean:string,article:string,unit_price:?float,
-     *               colisage:int,qty:int,units:int,total:float}|null
+     *               colisage:int,qty:int,units:int,total:float,
+     *               vat_letter:?string}|null
      */
     private static function matchStrict(string $line): ?array
     {
         if (preg_match(
-            '/^(\d{12,14})\s+(\d{5,8})\s+(.+?)\s+(\d{1,3}[.,]\d{3})\s+(\d{1,4})\s+(\d{1,4})\s+(\d{1,6}[.,]\d{2})(?:\s+[A-Z])?(?:\s+P)?$/',
+            '/^(\d{12,14})\s+(\d{5,8})\s+(.+?)\s+(\d{1,3}[.,]\d{3})\s+(\d{1,4})\s+(\d{1,4})\s+(\d{1,6}[.,]\d{2})(?:\s+([A-Z]))?(?:\s+P)?$/',
             $line,
             $m
         ) !== 1) {
@@ -310,6 +524,7 @@ final class MetroInvoiceParser
 
         $colisage = (int) $m[5];
         $qty = (int) $m[6];
+        $vatLetter = ($m[8] ?? '') !== '' && $m[8] !== 'P' ? $m[8] : null;
 
         return [
             'ean'        => $m[1],
@@ -320,6 +535,7 @@ final class MetroInvoiceParser
             'qty'        => $qty,
             'units'      => $colisage * $qty,
             'total'      => round(parseFrenchFloat($m[7]), 2),
+            'vat_letter' => $vatLetter,
         ];
     }
 
@@ -333,15 +549,28 @@ final class MetroInvoiceParser
      * (total ÷ PU) avec avertissement. Ligne inexploitable → null (+ warning
      * si un libellé était pourtant présent).
      *
+     * La lettre TVA finale isolée (« … 17,28 B » ou « … 17,28 B P ») est
+     * retirée avant le scan des montants et renvoyée à part ; « P » seul est
+     * un marqueur promo, jamais une lettre TVA.
+     *
      * @param list<string> $warnings
      *
      * @return array{label:string,ean:string,article:string,unit_price:?float,
-     *               colisage:?int,qty:?int,units:int,total:float}|null
+     *               colisage:?int,qty:?int,units:int,total:float,
+     *               vat_letter:?string}|null
      */
     private static function matchRelaxed(string $line, array &$warnings): ?array
     {
         if (preg_match('/^(\d{8,14})\s/', $line) !== 1) {
             return null;
+        }
+
+        // Lettre TVA finale isolée (optionnellement suivie du promo « P »),
+        // retirée de la ligne pour ne pas polluer libellé ni montants.
+        $vatLetter = null;
+        if (preg_match('/\s([A-Z])(\s+P)?$/', $line, $lm, PREG_UNMATCHED_AS_NULL) === 1 && $lm[1] !== 'P') {
+            $vatLetter = $lm[1];
+            $line = rtrim(substr($line, 0, -strlen($lm[0])));
         }
 
         // Préfixe EAN + article : deux blocs numériques en tête de ligne.
@@ -414,6 +643,7 @@ final class MetroInvoiceParser
             'qty'        => $qty,
             'units'      => $units,
             'total'      => $total,
+            'vat_letter' => $vatLetter,
         ];
     }
 }
