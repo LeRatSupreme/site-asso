@@ -17,8 +17,12 @@
    - invoiceToRows  : facture scannée -> lignes de la grille ;
    - applyInvoiceState : fusion pure d'une facture dans l'état du
      formulaire (en-tête + grille) ;
+   - applyInvoiceToExpense : fusion pure d'un ticket scanné dans
+     l'état du formulaire de DÉPENSE (préremplissage non destructif) ;
+   - serializeExpenseNotes / expenseNotesFromInvoice : détail des
+     produits détectés -> champ `notes` (« Détail tickets : … ») ;
    - scanUpload / scanParseText : envoi du fichier ou du texte OCR à
-     l'endpoint /admin/compta/achats/scan (JSON {ok, invoice}).
+     l'endpoint de scan (JSON {ok, invoice}).
    ========================================================= */
 (function (global) {
     'use strict';
@@ -285,6 +289,161 @@
         };
     }
 
+    /* ------------------------------------------------------------
+       Ticket scanné -> formulaire de DÉPENSE (fonctions pures,
+       testées par tests/js/compta-saisie.test.js). Utilisées par la
+       saisie express du livre comptable et par la page Dépenses.
+       ------------------------------------------------------------ */
+
+    /**
+     * Fusion pure d'un ticket analysé dans l'état du formulaire de
+     * dépense. Préremplissage NON destructif : seuls les champs VIDES
+     * reprennent la valeur du ticket ; un champ déjà renseigné garde
+     * sa valeur et est signalé dans `skipped` (le pavé « Informations
+     * extraites » de la vue affiche alors la valeur du ticket).
+     *
+     * @param {Object} state État courant du formulaire :
+     *   {spent_at, label, amount, basis, vat_rate, vat_amount,
+     *    invoice_number} — chaînes ('' = vide, vat_rate '' = aucune).
+     * @param {Object} invoice Ticket analysé (invoice de la réponse
+     *   du scan) ; null/undefined autorisé.
+     * @returns {{spent_at:string, label:string, amount:string,
+     *   basis:string, vat_rate:?string, vat_amount:string,
+     *   invoice_number:string, filled:bool,
+     *   skipped:list<{field:string, reason:string}>}}
+     *   basis n'accepte que « ht » / « ttc » (défaut : état courant,
+     *   sinon « ttc ») ; amount est au format français (« 37,24 ») ;
+     *   vat_amount (TVA multi-taux) = Σ vat_rates[].vat à 2 décimales.
+     */
+    function applyInvoiceToExpense(state, invoice) {
+        var cur = state && typeof state === 'object' ? state : {};
+        var inv = invoice && typeof invoice === 'object' ? invoice : {};
+        var skipped = [];
+        var filled = false;
+
+        /** Champ texte : conserve si déjà renseigné, sinon prend le
+            ticket ; extract ''/invalide -> état courant conservé. */
+        function pickText(field, current, extracted) {
+            var from = cleanStr(extracted);
+            if (from === '') return cleanStr(current);
+            if (cleanStr(current) !== '') {
+                skipped.push({
+                    field: field,
+                    reason: 'déjà renseigné (« ' + cleanStr(current) + ' ») — ticket : « ' + from + ' »'
+                });
+                return cleanStr(current);
+            }
+            filled = true;
+            return from;
+        }
+
+        /** Montant numérique du ticket -> chaîne française, ou null. */
+        function ticketAmount(v) {
+            var n = typeof v === 'number' ? v : parseFloat(cleanStr(v).replace(',', '.'));
+            return isFinite(n) && n > 0 ? n.toFixed(2).replace('.', ',') : null;
+        }
+
+        // Base des montants : celle du ticket si valide (chips, pas un
+        // contenu saisi — pas de logique « skipped »), sinon l'état courant.
+        var basis = (inv.amount_basis === 'ht' || inv.amount_basis === 'ttc')
+            ? inv.amount_basis
+            : (cur.basis === 'ht' ? 'ht' : 'ttc');
+        if (basis !== cur.basis && cleanStr(cur.basis) !== '') filled = true;
+
+        // Montant : TTC du ticket si base TTC, HT sinon ; absent -> ''.
+        var amount = pickText('amount', cur.amount,
+            ticketAmount(basis === 'ttc' ? inv.total_ttc : inv.total_ht));
+
+        // Taux unique seulement : null en multi-taux (vat_amount prend
+        // alors le relais) ; « '' » (Aucune) compte comme vide.
+        var vatRate = normVatRate(inv.vat_rate);
+        if (vatRate !== null && cleanStr(cur.vat_rate) !== '') {
+            skipped.push({
+                field: 'vat_rate',
+                reason: 'déjà renseigné (« ' + cleanStr(cur.vat_rate) + ' ») — ticket : « ' + vatRate + ' »'
+            });
+            vatRate = cleanStr(cur.vat_rate);
+        } else if (vatRate !== null) {
+            filled = true;
+        } else {
+            vatRate = normVatRate(cur.vat_rate);
+        }
+
+        // TVA multi-taux : somme des TVA détaillées (2 décimales),
+        // injectée dans le champ `vat_amount` (lu par save()).
+        var rates = Array.isArray(inv.vat_rates) ? inv.vat_rates : [];
+        var vatAmount = '';
+        if (normVatRate(inv.vat_rate) === null && rates.length >= 2) {
+            var sum = 0;
+            for (var i = 0; i < rates.length; i++) {
+                var v = rates[i] && typeof rates[i].vat === 'number' ? rates[i].vat : parseFloat(cleanStr(rates[i] && rates[i].vat).replace(',', '.'));
+                if (isFinite(v)) sum += v;
+            }
+            vatAmount = (Math.round(sum * 100) / 100).toFixed(2).replace('.', ',');
+        }
+        if (vatAmount !== '' && cleanStr(cur.vat_amount) !== '') {
+            skipped.push({
+                field: 'vat_amount',
+                reason: 'déjà renseigné (« ' + cleanStr(cur.vat_amount) + ' ») — ticket : « ' + vatAmount + ' »'
+            });
+            vatAmount = cleanStr(cur.vat_amount);
+        } else if (vatAmount !== '') {
+            filled = true;
+        }
+
+        // Date : seul le format aaaa-mm-jj (input[type=date]) est repris.
+        var spentAt = cleanStr(inv.purchased_at);
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(spentAt)) spentAt = null;
+
+        return {
+            spent_at: pickText('spent_at', cur.spent_at, spentAt),
+            label: pickText('label', cur.label, cleanStr(inv.supplier)),
+            amount: amount,
+            basis: basis,
+            vat_rate: vatRate,
+            vat_amount: vatAmount,
+            invoice_number: pickText('invoice_number', cur.invoice_number, cleanStr(inv.invoice_number)),
+            filled: filled,
+            skipped: skipped
+        };
+    }
+
+    /**
+     * Détail des produits détectés -> champ `notes` de la dépense :
+     * « Détail tickets : 24 × RED BULL (59,16 €) · 3 × NUTELLA (8,07 €) ».
+     * rows = [{key, qty, total}] (format d'invoiceToRows — key est
+     * aussi accepté sous le nom label) ; les lignes sans libellé sont
+     * ignorées, un total absent/invalide donne une ligne sans
+     * parenthèses ; [] -> '' (aucune note injectée).
+     */
+    function serializeExpenseNotes(rows) {
+        var list = Array.isArray(rows) ? rows : [];
+        var parts = [];
+        for (var i = 0; i < list.length; i++) {
+            var r = list[i] || {};
+            var key = cleanStr(r.key !== undefined ? r.key : r.label);
+            if (key === '') continue;
+            var qty = parseInt(r.qty, 10);
+            if (!isFinite(qty) || qty < 1) qty = 1;
+            var piece = qty + ' \u00d7 ' + key;
+            var n = typeof r.total === 'number'
+                ? r.total
+                : parseFloat(cleanStr(r.total).replace(',', '.'));
+            if (isFinite(n) && n > 0) piece += ' (' + n.toFixed(2).replace('.', ',') + ' \u20ac)';
+            parts.push(piece);
+        }
+        return parts.length > 0 ? 'D\u00e9tail tickets : ' + parts.join(' \u00b7 ') : '';
+    }
+
+    /**
+     * Compose invoiceToRows + serializeExpenseNotes : le détail des
+     * lignes d'un ticket scanné, prêt pour le champ `notes` ('' si le
+     * ticket n'a aucune ligne exploitable).
+     */
+    function expenseNotesFromInvoice(invoice) {
+        return serializeExpenseNotes(invoiceToRows(invoice));
+    }
+
     var ComptaSaisie = {
         normKey: normKey,
         parseAmount: parseAmount,
@@ -295,6 +454,9 @@
         findDuplicateLine: findDuplicateLine,
         invoiceToRows: invoiceToRows,
         applyInvoiceState: applyInvoiceState,
+        applyInvoiceToExpense: applyInvoiceToExpense,
+        serializeExpenseNotes: serializeExpenseNotes,
+        expenseNotesFromInvoice: expenseNotesFromInvoice,
         scanUpload: scanUpload,
         scanParseText: scanParseText
     };

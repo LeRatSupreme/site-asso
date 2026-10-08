@@ -176,12 +176,121 @@ final class MetroInvoiceParserTest extends TestCase
     }
 
     /**
-     * Contenu de la fixture (transcription réelle de la facture METRO).
+     * Facture réelle multi-taux (fixture facture_3) : les lettres METRO ne
+     * suivent PAS le standard (B = 5,5 %, D = 20 %) — la table TVA imprimée
+     * fait foi.
      */
-    private function fixture(): string
+    public function test_facture_multi_taux_deux_lettres(): void
     {
-        $content = file_get_contents(__DIR__ . '/../Fixtures/metro_invoice.txt');
-        self::assertNotFalse($content, 'Fixture tests/Fixtures/metro_invoice.txt introuvable.');
+        $r = MetroInvoiceParser::parse($this->fixture('metro_invoice_mixed_vat.txt'));
+
+        // En-tête : le n° de la facture courante, pas le « Mise en attente
+        // rappelée et facturée 0/0(087)0051/010203 » (leurre).
+        self::assertSame('METRO', $r['supplier']);
+        self::assertSame('0/0(087)0051/013502', $r['invoice_number']);
+        self::assertSame('2026-06-03', $r['purchased_at']);
+        self::assertSame(165.32, $r['total_ht']);
+        self::assertSame('ht', $r['amount_basis']);
+
+        // 11 lignes produits (PRIX AU KG, totaux *** et mentions ignorés).
+        self::assertCount(11, $r['lines']);
+
+        // Table TVA : 2 entrées, ordre d'apparition, colonnes complètes.
+        self::assertCount(2, $r['vat_rates']);
+        self::assertSame([
+            'letter'    => 'B',
+            'rate'      => 5.5,
+            'base_ht'   => 153.57,
+            'vat'       => 8.45,
+            'total_ttc' => 162.02,
+        ], $r['vat_rates'][0]);
+        self::assertSame([
+            'letter'    => 'D',
+            'rate'      => 20.0,
+            'base_ht'   => 11.75,
+            'vat'       => 2.35,
+            'total_ttc' => 14.10,
+        ], $r['vat_rates'][1]);
+
+        // Taux global impossible (2 taux) : null + avertissement explicite.
+        self::assertNull($r['vat_rate']);
+        $multiple = false;
+        foreach ($r['warnings'] as $warning) {
+            if (str_contains($warning, 'TVA multiple')) {
+                $multiple = true;
+                self::assertStringContainsString('5,5 % (base 153,57)', $warning);
+                self::assertStringContainsString('20 % (base 11,75)', $warning);
+                self::assertStringContainsString('à répartir manuellement', $warning);
+            }
+        }
+        self::assertTrue($multiple, 'Un avertissement « TVA multiple » est attendu.');
+
+        // Lettre de ligne → taux via la table (B = 5,5 %, D = 20 % chez METRO).
+        $oasis = $this->lineByLabel($r['lines'], 'OASIS TROPICAL');
+        self::assertNotNull($oasis);
+        self::assertSame('B', $oasis['vat_letter']);
+        self::assertSame(5.5, $oasis['vat_rate']);
+        self::assertSame(6, $oasis['units']);
+
+        $mpro = $this->lineByLabel($r['lines'], 'MPRO');
+        self::assertNotNull($mpro);
+        self::assertSame('D', $mpro['vat_letter']);
+        self::assertSame(20.0, $mpro['vat_rate']);
+        self::assertSame(6.05, $mpro['total']);
+
+        // Total TTC : « Total à payer » prioritaire.
+        self::assertSame(176.12, $r['total_ttc']);
+    }
+
+    /**
+     * Facture mono-taux (fixture historique) : vat_rate global rétrocompatible
+     * et table TVA lue en une entrée complète (base HT, TVA, TTC).
+     */
+    public function test_facture_mono_taux_avec_table_complete(): void
+    {
+        $r = MetroInvoiceParser::parse($this->fixture());
+
+        self::assertSame(5.5, $r['vat_rate']);
+        self::assertSame([
+            [
+                'letter'    => 'B',
+                'rate'      => 5.5,
+                'base_ht'   => 250.46,
+                'vat'       => 13.78,
+                'total_ttc' => 264.24,
+            ],
+        ], $r['vat_rates']);
+        self::assertSame(264.24, $r['total_ttc']);
+    }
+
+    /**
+     * Lignes portant des lettres TVA mais table illisible (photo coupée) :
+     * chaque lettre est signalée et le taux global reste null.
+     */
+    public function test_lettres_tva_sans_table_genere_warnings(): void
+    {
+        $r = MetroInvoiceParser::parse(
+            "METRO\n5449000340085 3162401 MINUTE MAID 0,720 24 1 17,28 B\n"
+            . "5449000032607 2023125 COCA COLA 0,634 24 1 15,21 D\n"
+        );
+
+        self::assertCount(2, $r['lines']);
+        self::assertNull($r['vat_rate']);
+        self::assertSame([], $r['vat_rates']);
+
+        $warnings = implode(' | ', $r['warnings']);
+        self::assertStringContainsString('Lettre TVA "B" sans taux lu', $warnings);
+        self::assertStringContainsString('Lettre TVA "D" sans taux lu', $warnings);
+        self::assertStringContainsString('table coupée sur la photo', $warnings);
+    }
+
+    /**
+     * Contenu d'une fixture (transcription réelle d'une facture METRO).
+     */
+    private function fixture(string $name = 'metro_invoice.txt'): string
+    {
+        $content = file_get_contents(__DIR__ . '/../Fixtures/' . $name);
+        self::assertNotFalse($content, 'Fixture tests/Fixtures/' . $name . ' introuvable.');
 
         return $content;
     }

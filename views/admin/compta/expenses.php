@@ -97,10 +97,34 @@ foreach ($byCategory as $c) {
 </div>
 
 <!-- ==================== Onglet : Saisir une dépense ==================== -->
+<style>
+    /* Scan automatique du ticket : pavés « Informations extraites du
+       ticket » et « Détail des produits » — style sobre, réutilise
+       .muted, .btn, .form-actions, .field-help. */
+    .exp-scan-info, .exp-scan-lines {
+        margin: 0.9rem 0 0.2rem; padding: 0.8rem 0.9rem;
+        border: 1px dashed rgba(255, 255, 255, 0.2); border-radius: 10px;
+        background: rgba(255, 255, 255, 0.03);
+    }
+    .exp-scan-info[hidden], .exp-scan-lines[hidden] { display: none; }
+    .exp-scan-title { font-weight: 800; font-size: 0.9rem; margin: 0 0 0.45rem; }
+    .exp-scan-info p { margin: 0.18rem 0; font-size: 0.86rem; }
+    .exp-scan-skip { color: var(--muted, #8892a6); font-size: 0.78rem; }
+    .exp-scan-warnings { margin: 0.45rem 0 0; padding-left: 1.1rem; }
+    .exp-scan-row { display: flex; gap: 0.4rem; align-items: center; margin: 0.3rem 0; }
+    .exp-scan-row input {
+        padding: 0.4rem 0.55rem; border: 1px solid var(--border, rgba(255,255,255,0.15));
+        border-radius: 8px; background: rgba(255, 255, 255, 0.05); color: var(--foreground, inherit);
+        font-size: 0.88rem; min-width: 0;
+    }
+    .exp-scan-row .exp-scan-key { flex: 3 1 150px; }
+    .exp-scan-row .exp-scan-qty { flex: 0 0 74px; }
+    .exp-scan-row .exp-scan-total { flex: 1 1 90px; }
+</style>
 <div class="compta-tabpane" data-pane="saisie" hidden>
     <section class="card surface glass">
         <h2 class="card-title">Ajouter une dépense</h2>
-        <form method="post" action="<?= e(url('/admin/compta/depenses/save')) ?>" enctype="multipart/form-data">
+        <form method="post" action="<?= e(url('/admin/compta/depenses/save')) ?>" enctype="multipart/form-data" data-scan-url="<?= e(url('/admin/compta/depenses/scan')) ?>">
             <?= csrf_field() ?>
 
             <div class="field-row">
@@ -172,6 +196,34 @@ foreach ($byCategory as $c) {
             <div class="field">
                 <label for="receipt">Justificatif (ticket de caisse) <span class="muted">(optionnel — PDF, JPG, PNG ou WEBP · 5 Mo max)</span></label>
                 <input type="file" id="receipt" name="receipt" accept=".pdf,.jpg,.jpeg,.png,.webp">
+                <!-- Scan automatique : occupation (texte simple, pas de
+                     spinner) puis message discret en cas d'échec réseau —
+                     le justificatif reste utilisable dans tous les cas. -->
+                <p class="muted" id="receipt-scan-status" hidden style="margin:0.45rem 0 0; font-size:0.82rem;"></p>
+            </div>
+
+            <!-- ── Scan automatique du ticket : pavés remplis par le JS
+                 ci-dessous. « Informations extraites du ticket » récapitule
+                 l'analyse (préremplissage non destructif déjà fait à
+                 réception) ; « Détail des produits » est éditable et part
+                 dans le champ `notes` à l'enregistrement. -->
+            <div id="receipt-extracted" class="exp-scan-info" hidden>
+                <p class="exp-scan-title">Informations extraites du ticket</p>
+                <div id="receipt-extracted-list"></div>
+                <ul id="receipt-extracted-warnings" class="field-help exp-scan-warnings" hidden></ul>
+                <p class="muted" id="receipt-extracted-vatmix" hidden style="margin:0.45rem 0 0; font-size:0.8rem;"></p>
+                <div class="form-actions">
+                    <button type="button" id="receipt-extracted-apply" class="btn btn-primary btn-sm">Utiliser ces infos</button>
+                    <button type="button" id="receipt-extracted-ignore" class="btn btn-ghost btn-sm">Ignorer</button>
+                </div>
+            </div>
+            <div id="receipt-extracted-lines" class="exp-scan-lines" hidden>
+                <p class="exp-scan-title">Détail des produits détectés</p>
+                <div id="receipt-extracted-rows"></div>
+                <div class="form-actions">
+                    <button type="button" id="receipt-extracted-row-add" class="btn btn-ghost btn-sm">+ Ligne</button>
+                </div>
+                <p class="muted" id="receipt-extracted-total" style="margin:0.3rem 0 0; font-size:0.8rem;"></p>
             </div>
 
             <div class="form-actions">
@@ -233,6 +285,390 @@ foreach ($byCategory as $c) {
                 input.addEventListener('change', recalc);
             });
             recalc();
+        })();
+        </script>
+
+        <!-- Helpers purs du scan de ticket (scanUpload, invoiceToRows,
+             applyInvoiceToExpense, serializeExpenseNotes) : partagés avec
+             la saisie d'achats et le livre comptable, testés
+             automatiquement. Chargé AVANT le script inline du scan. -->
+        <script src="<?= e(rootAssetVersioned('/assets/js/compta-saisie.js')) ?>"></script>
+        <script>
+        // ── Scan automatique du ticket ──
+        // À l'image choisie dans #receipt (change) : analyse serveur
+        // immédiate sans bouton, préremplissage NON destructif des
+        // champs vides (applyInvoiceToExpense, pur et testé — les
+        // recalculs TVA live sont déclenchés par les events input/change
+        // dispatchés après remplissage), puis pavé « Informations
+        // extraites du ticket » (tout le reste, dont ce qui n'a pas pu
+        // être appliqué) et pavé « Détail des produits » éditable ->
+        // notes. PDF ou fichier non image : justificatif seulement.
+        (function () {
+            var form = document.querySelector('form[data-scan-url]');
+            var input = document.getElementById('receipt');
+            if (!form || !input || !window.ComptaSaisie) return;
+            var H = window.ComptaSaisie;
+
+            // Requêtes scopées au formulaire (la vue fusionnée «
+            // Opérations » réutilise certains ids dans d'autres onglets).
+            var spentAtEl = form.querySelector('#spent_at');
+            var labelEl = form.querySelector('#label');
+            var amountEl = form.querySelector('#amount');
+            var invoiceEl = form.querySelector('#invoice_number');
+            var vatEl = form.querySelector('#vat_rate');
+            var vatOverride = form.querySelector('#vat_amount');
+            var statusEl = document.getElementById('receipt-scan-status');
+            var infoBox = document.getElementById('receipt-extracted');
+            var infoList = document.getElementById('receipt-extracted-list');
+            var infoWarn = document.getElementById('receipt-extracted-warnings');
+            var vatMixEl = document.getElementById('receipt-extracted-vatmix');
+            var applyBtn = document.getElementById('receipt-extracted-apply');
+            var ignoreBtn = document.getElementById('receipt-extracted-ignore');
+            var linesBox = document.getElementById('receipt-extracted-lines');
+            var rowsBox = document.getElementById('receipt-extracted-rows');
+            var rowAddBtn = document.getElementById('receipt-extracted-row-add');
+            var totalEl = document.getElementById('receipt-extracted-total');
+            if (!spentAtEl || !labelEl || !amountEl || !vatEl || !infoBox || !infoList) return;
+
+            var basisInputs = form.querySelectorAll('input[name="amount_basis"]');
+            var csrfInput = form.querySelector('input[name="_csrf"]');
+            var scanUrl = form.getAttribute('data-scan-url');
+            var lastInvoice = null;
+
+            function basis() {
+                for (var i = 0; i < basisInputs.length; i++) {
+                    if (basisInputs[i].checked) return basisInputs[i].value;
+                }
+                return 'ttc';
+            }
+
+            function setBasis(v) {
+                Array.prototype.forEach.call(basisInputs, function (r) { r.checked = r.value === v; });
+            }
+
+            function fr2(n) { return n.toFixed(2).replace('.', ','); }
+
+            function status(msg) {
+                if (!statusEl) return;
+                statusEl.textContent = msg || '';
+                statusEl.hidden = !msg;
+            }
+
+            function fire(el, type) {
+                el.dispatchEvent(new Event(type, { bubbles: true }));
+            }
+
+            function setField(el, value) {
+                if (!el || el.value === value) return;
+                el.value = value;
+                fire(el, 'input');
+                fire(el, 'change');
+            }
+
+            // État courant du formulaire, format attendu par
+            // H.applyInvoiceToExpense (chaînes, '' = vide).
+            function currentState() {
+                return {
+                    spent_at: spentAtEl.value,
+                    label: labelEl.value,
+                    amount: amountEl.value,
+                    basis: basis(),
+                    vat_rate: vatEl.value,
+                    vat_amount: vatOverride ? vatOverride.value : '',
+                    invoice_number: invoiceEl ? invoiceEl.value : ''
+                };
+            }
+
+            // Applique l'état fusionné au DOM : les champs « skipped »
+            // ont déjà leur valeur courante (rien à faire) ; les events
+            // input/change déclenchent le recalcul TVA live du script
+            // existant (#vat-preview, #ht-preview, #ttc-preview).
+            function applyResult(res) {
+                setField(spentAtEl, res.spent_at);
+                setField(labelEl, res.label);
+                setField(amountEl, res.amount);
+                if (res.basis !== basis()) {
+                    setBasis(res.basis);
+                    Array.prototype.forEach.call(basisInputs, function (r) { fire(r, 'change'); });
+                }
+                if (res.vat_rate !== null && res.vat_rate !== '' && parseFloat(vatEl.value) !== parseFloat(res.vat_rate)) {
+                    Array.prototype.forEach.call(vatEl.options, function (opt) {
+                        if (parseFloat(opt.value) === parseFloat(res.vat_rate)) vatEl.value = opt.value;
+                    });
+                    fire(vatEl, 'change');
+                }
+                // TVA multi-taux : le champ #vat_amount existe ici (dans
+                // <details>) — on le remplit, le recalcul live le prend.
+                if (vatOverride && res.vat_amount !== '') setField(vatOverride, res.vat_amount);
+            }
+
+            function addInfoLine(label, value) {
+                var p = document.createElement('p');
+                var b = document.createElement('strong');
+                b.textContent = label + ' : ';
+                p.appendChild(b);
+                p.appendChild(document.createTextNode(value));
+                infoList.appendChild(p);
+            }
+
+            function fmtDate(d) {
+                if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return d;
+                return d.slice(8, 10) + '/' + d.slice(5, 7) + '/' + d.slice(0, 4);
+            }
+
+            function fmtMoney(v) {
+                var n = typeof v === 'number' ? v : parseFloat(String(v == null ? '' : v).replace(',', '.'));
+                return isFinite(n) ? fr2(n) + ' €' : null;
+            }
+
+            // Pavé « Informations extraites du ticket » : TOUT ce que le
+            // ticket contient, y compris ce qui n'a pas pu être appliqué.
+            function renderInfo(invoice, res) {
+                infoList.textContent = '';
+                var inv = invoice || {};
+
+                var supplier = String(inv.supplier == null ? '' : inv.supplier).trim();
+                addInfoLine('Fournisseur', supplier !== '' ? supplier : 'non détecté');
+
+                var date = String(inv.purchased_at == null ? '' : inv.purchased_at).trim();
+                addInfoLine('Date', date !== '' ? fmtDate(date) : 'non détectée');
+
+                var ttc = fmtMoney(inv.total_ttc);
+                var ht = fmtMoney(inv.total_ht);
+                addInfoLine('Montant TTC', ttc !== null ? ttc + (ht !== null ? ' (HT ' + ht + ')' : '') : 'non détecté');
+
+                var rates = Array.isArray(inv.vat_rates) ? inv.vat_rates : [];
+                var vatTxt;
+                if (inv.vat_rate !== null && inv.vat_rate !== undefined && inv.vat_rate !== '') {
+                    vatTxt = String(inv.vat_rate).replace('.', ',') + ' %';
+                    var vatSum = 0;
+                    var hasVat = false;
+                    for (var i = 0; i < rates.length; i++) {
+                        var v = rates[i] && typeof rates[i].vat === 'number' ? rates[i].vat : parseFloat(String(rates[i] && rates[i].vat).replace(',', '.'));
+                        if (isFinite(v)) { vatSum += v; hasVat = true; }
+                    }
+                    if (hasVat) vatTxt += ' — TVA ' + fr2(vatSum) + ' €';
+                } else if (rates.length >= 2) {
+                    vatTxt = 'multi-taux (détail ci-dessous)';
+                } else {
+                    vatTxt = 'non détectée';
+                }
+                addInfoLine('TVA', vatTxt);
+
+                var num = String(inv.invoice_number == null ? '' : inv.invoice_number).trim();
+                addInfoLine('Référence ticket', num !== '' ? num : 'non détectée');
+
+                // Champs laissés tels quel (déjà remplis par
+                // l'utilisateur) : la valeur extraite reste affichée ici.
+                Array.prototype.forEach.call(res.skipped, function (s) {
+                    var p = document.createElement('p');
+                    p.className = 'exp-scan-skip';
+                    p.textContent = s.field + ' : ' + s.reason;
+                    infoList.appendChild(p);
+                });
+
+                infoWarn.textContent = '';
+                var warnings = Array.isArray(inv.warnings) ? inv.warnings : [];
+                if (warnings.length > 0) {
+                    Array.prototype.forEach.call(warnings, function (w) {
+                        var li = document.createElement('li');
+                        li.textContent = String(w == null ? '' : w);
+                        infoWarn.appendChild(li);
+                    });
+                    infoWarn.hidden = false;
+                } else {
+                    infoWarn.hidden = true;
+                }
+
+                // TVA mixte : note explicative (le montant total est déjà
+                // dans #vat_amount, le recalcul live l'affiche).
+                if (rates.length >= 2 && res.vat_amount !== '') {
+                    var labels = [];
+                    Array.prototype.forEach.call(rates, function (r) {
+                        if (r && r.rate !== null && r.rate !== undefined) labels.push(String(r.rate).replace('.', ',') + ' %');
+                    });
+                    vatMixEl.textContent = 'TVA mixte (' + labels.join(' + ') + ') : montant TVA total enregistré (' + res.vat_amount + ' €).';
+                    vatMixEl.hidden = false;
+                } else {
+                    vatMixEl.textContent = '';
+                    vatMixEl.hidden = true;
+                }
+
+                infoBox.hidden = false;
+            }
+
+            /* ── Pavé « Détail des produits » : liste éditable -> notes ── */
+
+            function addLineRow(r) {
+                var div = document.createElement('div');
+                div.className = 'exp-scan-row';
+
+                var key = document.createElement('input');
+                key.type = 'text';
+                key.className = 'exp-scan-key';
+                key.placeholder = 'Produit';
+                key.setAttribute('aria-label', 'Produit');
+                key.value = (r && r.key) || '';
+
+                var qty = document.createElement('input');
+                qty.type = 'number';
+                qty.className = 'exp-scan-qty';
+                qty.min = '1';
+                qty.step = '1';
+                qty.value = r && r.qty ? String(r.qty) : '1';
+                qty.setAttribute('aria-label', 'Quantité');
+
+                var total = document.createElement('input');
+                total.type = 'text';
+                total.className = 'exp-scan-total';
+                total.inputMode = 'decimal';
+                total.placeholder = 'Montant (€)';
+                total.setAttribute('aria-label', 'Montant');
+                total.value = (r && r.total) || '';
+                total.addEventListener('input', updateLinesTotal);
+
+                var del = document.createElement('button');
+                del.type = 'button';
+                del.className = 'btn btn-ghost btn-sm';
+                del.textContent = '×';
+                del.setAttribute('aria-label', 'Retirer la ligne');
+                del.addEventListener('click', function () {
+                    div.remove();
+                    updateLinesTotal();
+                });
+
+                div.appendChild(key);
+                div.appendChild(qty);
+                div.appendChild(total);
+                div.appendChild(del);
+                rowsBox.appendChild(div);
+            }
+
+            // Lignes du pavé -> [{key, qty, total}] pour
+            // serializeExpenseNotes (lignes sans nom ignorées).
+            function readLineRows() {
+                var out = [];
+                Array.prototype.forEach.call(rowsBox.querySelectorAll('.exp-scan-row'), function (div) {
+                    var key = div.querySelector('.exp-scan-key').value.trim();
+                    if (key === '') return;
+                    out.push({
+                        key: key,
+                        qty: parseInt(div.querySelector('.exp-scan-qty').value, 10) || 1,
+                        total: div.querySelector('.exp-scan-total').value
+                    });
+                });
+                return out;
+            }
+
+            // Total de contrôle : Σ montants + écart vs montant saisi.
+            function updateLinesTotal() {
+                if (!totalEl) return;
+                var sum = 0;
+                var count = 0;
+                Array.prototype.forEach.call(readLineRows(), function (r) {
+                    var n = H.parseAmount(r.total);
+                    if (isFinite(n) && n > 0) { sum += n; count++; }
+                });
+                if (count === 0) { totalEl.textContent = ''; return; }
+                var text = 'Total lignes : ' + fr2(sum) + ' € (' + count + ' ligne' + (count > 1 ? 's' : '') + ')';
+                var amount = H.parseAmount(amountEl.value);
+                if (isFinite(amount) && amount > 0) {
+                    var diff = sum - amount;
+                    text += ' · montant saisi : ' + fr2(amount) + ' € · écart : ' + (diff >= 0 ? '+' : '\u2212') + fr2(Math.abs(diff)) + ' €';
+                }
+                totalEl.textContent = text;
+            }
+
+            function renderRows(invoice) {
+                var rows = H.invoiceToRows(invoice);
+                rowsBox.textContent = '';
+                if (rows.length === 0) { linesBox.hidden = true; return; }
+                Array.prototype.forEach.call(rows, function (r) { addLineRow(r); });
+                linesBox.hidden = false;
+                updateLinesTotal();
+            }
+
+            function hideScan() {
+                lastInvoice = null;
+                infoBox.hidden = true;
+                if (linesBox) linesBox.hidden = true;
+            }
+
+            // Réception d'une analyse : préremplissage non destructif
+            // immédiat (champs vides seulement), puis pavés.
+            function handleInvoice(invoice) {
+                lastInvoice = invoice;
+                var res = H.applyInvoiceToExpense(currentState(), invoice);
+                applyResult(res);
+                renderInfo(invoice, res);
+                if (linesBox) renderRows(invoice);
+            }
+
+            input.addEventListener('change', function () {
+                var file = input.files && input.files[0];
+                if (!file || file.type.indexOf('image/') !== 0) {
+                    // PDF ou sélection vidée : justificatif seulement.
+                    hideScan();
+                    status('');
+                    return;
+                }
+                status('Analyse du ticket…');
+                H.scanUpload(file, csrfInput ? csrfInput.value : '', scanUrl).then(function (json) {
+                    status('');
+                    handleInvoice(json && json.invoice ? json.invoice : null);
+                }, function (err) {
+                    status('Analyse automatique indisponible' + (err && err.message ? ' : ' + err.message : '') + ' — le justificatif reste utilisable, complète les champs à la main.');
+                });
+            });
+
+            // « Utiliser ces infos » : écrase volontairement TOUS les
+            // champs avec les valeurs du ticket (fusion depuis un état
+            // vide = aucune valeur « déjà renseignée » à protéger).
+            if (applyBtn) {
+                applyBtn.addEventListener('click', function () {
+                    if (!lastInvoice) return;
+                    applyResult(H.applyInvoiceToExpense({
+                        spent_at: '', label: '', amount: '', basis: basis(),
+                        vat_rate: '', vat_amount: '', invoice_number: ''
+                    }, lastInvoice));
+                    updateLinesTotal();
+                    status('Champs remplis avec les informations extraites — vérifie avant d\u2019enregistrer.');
+                });
+            }
+
+            // « Ignorer » : referme seulement le pavé — le préremplissage
+            // des champs vides, déjà appliqué, reste en place.
+            if (ignoreBtn) {
+                ignoreBtn.addEventListener('click', function () {
+                    infoBox.hidden = true;
+                });
+            }
+
+            if (rowAddBtn) {
+                rowAddBtn.addEventListener('click', function () {
+                    addLineRow(null);
+                    updateLinesTotal();
+                });
+            }
+
+            // Sérialisation du détail dans un input hidden `notes` au
+            // moment du submit. Pavé vidé -> pas de notes injectées.
+            form.addEventListener('submit', function () {
+                if (!linesBox || linesBox.hidden) return;
+                var data = H.serializeExpenseNotes(readLineRows());
+                var existing = form.querySelector('input[name="notes"]');
+                if (data === '') {
+                    if (existing) existing.remove();
+                    return;
+                }
+                if (!existing) {
+                    existing = document.createElement('input');
+                    existing.type = 'hidden';
+                    existing.name = 'notes';
+                    form.appendChild(existing);
+                }
+                existing.value = data;
+            });
         })();
         </script>
     </section>

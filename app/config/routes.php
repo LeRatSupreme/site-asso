@@ -346,6 +346,11 @@ function aeic_register_routes(Router $router): void
     // Suivi avancé : dépenses, budgets, achats, inventaire, pertes, événements, rapport annuel.
     $router->get('/admin/compta/depenses', [AdminExpenseController::class, 'index']);
     $router->post('/admin/compta/depenses/save', [AdminExpenseController::class, 'save']);
+    // Scan d'un ticket de caisse (OCR image/PDF ou texte collé) : renvoie
+    // les données extraites en JSON pour préremplir la dépense (même
+    // contrat que le scan d'achat, clé kind = 'metro' | 'ticket').
+    // Déclarée AVANT /depenses/{id}/delete : le routeur matche par ordre.
+    $router->post('/admin/compta/depenses/scan', [AdminExpenseController::class, 'scanTicket']);
     $router->post('/admin/compta/depenses/{id}/delete', [AdminExpenseController::class, 'delete']);
     $router->get('/admin/compta/budgets', [AdminBudgetController::class, 'index']);
     $router->post('/admin/compta/budgets/save', [AdminBudgetController::class, 'save']);

@@ -40,6 +40,25 @@ final class AdminExpenseController extends AdminBaseController
     }
 
     // -----------------------------------------------------------------
+    //  Scan d'un ticket (préremplissage du formulaire de dépense)
+    // -----------------------------------------------------------------
+
+    /**
+     * Scan d'un ticket de caisse (JSON, préremplissage du formulaire de
+     * dépense) : délégation au mécanisme partagé avec le scan d'achat
+     * (AdminBaseController::handleInvoiceScan — texte collé 200 000
+     * caractères max ou upload jpg/jpeg/png/webp/pdf ≤ 10 Mo avec MIME
+     * réel finfo, OCR InvoiceOcr). Le document est interprété par
+     * InvoiceParser : METRO → facture, sinon ticket thermique (kind).
+     * Réponses JSON identiques à celles du scan d'achat.
+     */
+    public function scanTicket(): void
+    {
+        $this->guardCompta();
+        $this->handleInvoiceScan('compta.expense.scan', 'expense');
+    }
+
+    // -----------------------------------------------------------------
     //  Ajout / suppression
     // -----------------------------------------------------------------
 

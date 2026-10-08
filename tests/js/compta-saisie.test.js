@@ -283,6 +283,188 @@ t('applyInvoiceState : taux à la française « 5,5 » canonisé', function () {
     assert.strictEqual(st.vat_rate, '5.5');
 });
 
+/* ------------------------------------------------------------------ *
+ * applyInvoiceToExpense — ticket scanné -> formulaire de dépense
+ * (préremplissage non destructif)
+ * ------------------------------------------------------------------ */
+
+/** État « formulaire de dépense vide » (sélecteur TVA sur Aucune). */
+function emptyExpenseState() {
+    return {
+        spent_at: '', label: '', amount: '', basis: 'ttc',
+        vat_rate: '', vat_amount: '', invoice_number: ''
+    };
+}
+
+t('applyInvoiceToExpense : formulaire vide -> tout est prérempli (base TTC)', function () {
+    const res = H.applyInvoiceToExpense(emptyExpenseState(), {
+        supplier: 'Leroy Merlin', invoice_number: '159-10007284',
+        purchased_at: '2026-08-31', amount_basis: 'ttc',
+        vat_rate: 20, total_ht: 31.07, total_ttc: 37.24,
+        vat_rates: [], lines: []
+    });
+    assert.strictEqual(res.spent_at, '2026-08-31');
+    assert.strictEqual(res.label, 'Leroy Merlin');
+    assert.strictEqual(res.amount, '37,24', 'Base TTC : le montant vient du total_ttc, au format français.');
+    assert.strictEqual(res.basis, 'ttc');
+    assert.strictEqual(res.vat_rate, '20', 'Taux canonisé en chaîne pour le select.');
+    assert.strictEqual(res.vat_amount, '', 'Taux unique : pas de vat_amount.');
+    assert.strictEqual(res.invoice_number, '159-10007284');
+    assert.strictEqual(res.filled, true);
+    assert.deepStrictEqual(res.skipped, []);
+});
+
+t('applyInvoiceToExpense : base HT -> montant repris de total_ht', function () {
+    const res = H.applyInvoiceToExpense(emptyExpenseState(), {
+        supplier: 'METRO', purchased_at: '2026-08-31', amount_basis: 'ht',
+        vat_rate: 5.5, total_ht: 250.46, total_ttc: 264.24, lines: []
+    });
+    assert.strictEqual(res.amount, '250,46');
+    assert.strictEqual(res.basis, 'ht');
+    assert.strictEqual(res.vat_rate, '5.5');
+});
+
+t('applyInvoiceToExpense : champs déjà remplis -> conservés et signalés dans skipped', function () {
+    const res = H.applyInvoiceToExpense({
+        spent_at: '2026-10-08', label: 'Ma dépense', amount: '30',
+        basis: 'ttc', vat_rate: '5.5', vat_amount: '', invoice_number: 'REF'
+    }, {
+        supplier: 'METRO', invoice_number: '159-10007284',
+        purchased_at: '2026-08-31', amount_basis: 'ttc',
+        vat_rate: 20, total_ht: 31.07, total_ttc: 37.24, lines: []
+    });
+    assert.strictEqual(res.spent_at, '2026-10-08', 'Rien n\u2019est écrasé.');
+    assert.strictEqual(res.label, 'Ma dépense');
+    assert.strictEqual(res.amount, '30');
+    assert.strictEqual(res.vat_rate, '5.5');
+    assert.strictEqual(res.invoice_number, 'REF');
+    assert.strictEqual(res.filled, false, 'Aucun champ vide à remplir.');
+    assert.deepStrictEqual(
+        res.skipped.map(function (s) { return s.field; }).sort(),
+        ['amount', 'invoice_number', 'label', 'spent_at', 'vat_rate']
+    );
+    assert.ok(res.skipped.every(function (s) {
+        return typeof s.reason === 'string' && s.reason.indexOf('déjà renseigné') !== -1;
+    }), 'Chaque champ écarté porte sa raison (avec la valeur du ticket).');
+});
+
+t('applyInvoiceToExpense : multi-taux (vat_rate null) -> vat_amount = somme des TVA', function () {
+    const res = H.applyInvoiceToExpense(emptyExpenseState(), {
+        supplier: 'METRO', purchased_at: '2026-08-31', amount_basis: 'ttc',
+        vat_rate: null, total_ht: 100, total_ttc: 125.5,
+        vat_rates: [
+            { letter: 'A', rate: 5.5, base_ht: 50, vat: 2.75, total_ttc: 52.75 },
+            { letter: 'B', rate: 20, base_ht: 50, vat: 10, total_ttc: 60 }
+        ],
+        lines: []
+    });
+    assert.strictEqual(res.vat_rate, null, 'Multi-taux : pas de taux unique.');
+    assert.strictEqual(res.vat_amount, '12,75', 'Somme des TVA détaillées, 2 décimales, virgule française.');
+    assert.strictEqual(res.amount, '125,50');
+    assert.strictEqual(res.filled, true);
+});
+
+t('applyInvoiceToExpense : multi-taux mais vat_amount déjà saisi -> conservé + skipped', function () {
+    const res = H.applyInvoiceToExpense({
+        spent_at: '', label: '', amount: '', basis: 'ttc',
+        vat_rate: '', vat_amount: '12,70', invoice_number: ''
+    }, {
+        supplier: 'METRO', amount_basis: 'ttc', vat_rate: null,
+        total_ttc: 125.5,
+        vat_rates: [
+            { letter: 'A', rate: 5.5, vat: 2.75 },
+            { letter: 'B', rate: 20, vat: 10 }
+        ],
+        lines: []
+    });
+    assert.strictEqual(res.vat_amount, '12,70');
+    assert.deepStrictEqual(
+        res.skipped.map(function (s) { return s.field; }),
+        ['vat_amount']
+    );
+});
+
+t('applyInvoiceToExpense : ticket null/vide -> état intact, rien de rempli', function () {
+    const state = {
+        spent_at: '2026-10-01', label: 'Verrou x4', amount: '36,60',
+        basis: 'ttc', vat_rate: '20', vat_amount: '', invoice_number: 'A1'
+    };
+    const resNull = H.applyInvoiceToExpense(state, null);
+    assert.deepStrictEqual(
+        [resNull.spent_at, resNull.label, resNull.amount, resNull.basis,
+         resNull.vat_rate, resNull.vat_amount, resNull.invoice_number],
+        ['2026-10-01', 'Verrou x4', '36,60', 'ttc', '20', '', 'A1'],
+        'Facture absente : chaque champ garde sa valeur courante.'
+    );
+    assert.strictEqual(resNull.filled, false);
+    assert.deepStrictEqual(resNull.skipped, []);
+    const resEmpty = H.applyInvoiceToExpense(emptyExpenseState(), { lines: [] });
+    assert.strictEqual(resEmpty.filled, false, 'Facture sans données exploitables : rien n\u2019est prérempli.');
+});
+
+t('applyInvoiceToExpense : date mal formée ou montants absents ignorés', function () {
+    const res = H.applyInvoiceToExpense(emptyExpenseState(), {
+        supplier: 'METRO', purchased_at: '31/08/2026',
+        amount_basis: 'ttc', total_ttc: null, total_ht: null, lines: []
+    });
+    assert.strictEqual(res.spent_at, '', 'Seul aaaa-mm-jj est accepté (input[type=date]).');
+    assert.strictEqual(res.amount, '', 'Pas de total exploitable : le montant reste vide.');
+    assert.strictEqual(res.label, 'METRO');
+});
+
+/* ------------------------------------------------------------------ *
+ * serializeExpenseNotes / expenseNotesFromInvoice — détail produits
+ * -> champ notes
+ * ------------------------------------------------------------------ */
+
+t('serializeExpenseNotes : format exact « Détail tickets : … »', function () {
+    assert.strictEqual(
+        H.serializeExpenseNotes([
+            { key: 'RED BULL', qty: 24, total: '59,16' },
+            { key: 'NUTELLA', qty: 3, total: '8,07' }
+        ]),
+        'Détail tickets : 24 × RED BULL (59,16 €) · 3 × NUTELLA (8,07 €)'
+    );
+});
+
+t('serializeExpenseNotes : total au format nombre -> normalisé en français', function () {
+    assert.strictEqual(
+        H.serializeExpenseNotes([{ key: 'Café', qty: 2, total: 7.2 }]),
+        'Détail tickets : 2 × Café (7,20 €)'
+    );
+});
+
+t('serializeExpenseNotes : lignes sans nom ignorées, total absent sans parenthèses', function () {
+    assert.strictEqual(H.serializeExpenseNotes([]), '');
+    assert.strictEqual(H.serializeExpenseNotes(null), '');
+    assert.strictEqual(
+        H.serializeExpenseNotes([
+            { key: '', qty: 2, total: '5,00' },
+            { key: 'Stylo', qty: 2, total: '' },
+            { key: '  ', qty: 1, total: 3 }
+        ]),
+        'Détail tickets : 2 × Stylo',
+        'Sans libellé -> ignorée ; sans total -> ligne nue ; qty < 1 -> 1.'
+    );
+});
+
+t('expenseNotesFromInvoice : compose invoiceToRows + serializeExpenseNotes', function () {
+    const invoice = {
+        supplier: 'METRO',
+        lines: [
+            { label: 'RED BULL', units: 24, total: 59.16 },
+            { label: 'NUTELLA', units: 3, total: 8.07 },
+            { label: '', units: 2, total: 4 }
+        ]
+    };
+    assert.strictEqual(
+        H.expenseNotesFromInvoice(invoice),
+        'Détail tickets : 24 × RED BULL (59,16 €) · 3 × NUTELLA (8,07 €)'
+    );
+    assert.strictEqual(H.expenseNotesFromInvoice(null), '');
+    assert.strictEqual(H.expenseNotesFromInvoice({ lines: [] }), '');
+});
+
 /* ------------------------------------------------------------------ */
 
 if (failures.length > 0) {
