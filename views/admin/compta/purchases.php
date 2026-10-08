@@ -160,6 +160,34 @@ usort($pickerList, 'strnatcasecmp');
                 </div>
             </div>
 
+            <!-- ── 1bis) Scanner une facture : OCR serveur puis analyse ──
+                 Le bouton déplie le panneau ; « Extraire » envoie le fichier
+                 (ou PDF) à l'endpoint de scan, « Analyser » lui renvoie le
+                 texte (corrigé à la main) et préremplit le formulaire.
+                 data-scan-url : même construction d'URL que le formulaire. -->
+            <div class="pa-paste" data-purchase-scan data-scan-url="<?= e(url('/admin/compta/achats/scan')) ?>">
+                <button type="button" class="btn btn-ghost btn-sm" id="purchase-scan-toggle"
+                        aria-expanded="false" aria-controls="purchase-scan-panel">📷 Scanner une facture</button>
+                <div id="purchase-scan-panel" hidden>
+                    <div class="field">
+                        <label for="purchase-scan-file">Fichier facture <span class="muted">(JPG, PNG, WebP ou PDF — 10 Mo max)</span></label>
+                        <input type="file" id="purchase-scan-file"
+                               accept="image/jpeg,image/png,image/webp,application/pdf,.jpg,.jpeg,.png,.webp,.pdf">
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-primary btn-sm" id="purchase-scan-extract">Extraire le texte</button>
+                    </div>
+                    <textarea id="purchase-scan-text" rows="8" spellcheck="false"
+                              placeholder="Le texte extrait de la facture apparaîtra ici — corrigez les erreurs de reconnaissance avant d'analyser."></textarea>
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-primary btn-sm" id="purchase-scan-analyze">Analyser le texte et préremplir</button>
+                        <span class="muted pa-paste-status" id="purchase-scan-status"></span>
+                    </div>
+                    <ul class="field-help" id="purchase-scan-warnings" hidden></ul>
+                </div>
+                <p class="field-help">Photo ou PDF de facture METRO → le texte est extrait puis analysé. Vérifiez toujours les lignes avant d'enregistrer.</p>
+            </div>
+
             <!-- ── 2) Ajouter un produit connu : recherche + clic ── -->
             <div class="combobox pa-picker">
                 <input type="text" id="pa-search" class="combobox-input" placeholder="🔍 Ou ajoute un produit connu… (tape, puis Entrée ou clic)"
@@ -471,6 +499,33 @@ usort($pickerList, 'strnatcasecmp');
                 updateTotals();
             }
 
+            // La grille contient-elle déjà une saisie (produit ou montant) ?
+            // (scan : demande confirmation avant d'écraser la saisie en cours)
+            function gridHasContent() {
+                return rows().some(function (tr) {
+                    if (tr.querySelector('[name="product_key[]"]').value.trim() !== '') return true;
+                    var a = parseAmount(tr.querySelector('[name="total_amount[]"]').value);
+                    return isFinite(a) && a > 0;
+                });
+            }
+
+            // Réinitialise la grille à une seule ligne vide (mêmes gestes
+            // que le bouton « × » sur la dernière ligne).
+            function resetGridRows() {
+                var all = rows();
+                for (var i = all.length - 1; i > 0; i--) all[i].remove();
+                var tr = all[0];
+                tr.querySelectorAll('input[type="text"], input[type="number"]').forEach(function (el) {
+                    el.value = el.name === 'quantity[]' ? '1' : '';
+                });
+                var cb = tr.querySelector('.line-no-stock');
+                if (cb) cb.checked = false;
+                var warn = tr.querySelector('.pa-warn');
+                if (warn) { warn.textContent = ''; warn.hidden = true; }
+                var hint = tr.querySelector('.line-unit');
+                if (hint) { hint.textContent = ''; hint.hidden = true; }
+            }
+
             // ── Sélecteur de produits connus : tape, flèches, Entrée ──
             var searchInput = document.getElementById('pa-search');
             var resultList = document.getElementById('pa-results');
@@ -595,6 +650,163 @@ usort($pickerList, 'strnatcasecmp');
                         pasteArea.focus();
                     });
                 }
+            }
+
+            // ── Scanner une facture : OCR serveur puis analyse ──
+            // Requêtes via les helpers partagés H.scanUpload /
+            // H.scanParseText ; préremplissage via H.applyInvoiceState
+            // (pur, testé) + le même mécanisme de grille que le collage
+            // (firstEmptyRow + fillRow). Jeton CSRF : champ `_csrf` du
+            // formulaire (csrf_field()), accepté aussi en en-tête par
+            // Csrf::checkRequest.
+            var scanRoot = document.querySelector('[data-purchase-scan]');
+            if (scanRoot) {
+                var scanToggle = document.getElementById('purchase-scan-toggle');
+                var scanPanel = document.getElementById('purchase-scan-panel');
+                var scanFile = document.getElementById('purchase-scan-file');
+                var scanExtract = document.getElementById('purchase-scan-extract');
+                var scanText = document.getElementById('purchase-scan-text');
+                var scanAnalyze = document.getElementById('purchase-scan-analyze');
+                var scanStatus = document.getElementById('purchase-scan-status');
+                var scanWarnings = document.getElementById('purchase-scan-warnings');
+                var scanUrl = scanRoot.getAttribute('data-scan-url') || '';
+                var csrfInput = form.querySelector('input[name="_csrf"]');
+                var supplierEl = document.getElementById('supplier');
+                var invoiceNumberEl = document.getElementById('invoice_number');
+                var purchasedAtEl = document.getElementById('purchased_at');
+
+                function scanSetStatus(msg) { scanStatus.textContent = msg; }
+
+                // Warnings serveur : liste à puces remplie via
+                // textContent uniquement (jamais innerHTML).
+                function scanSetWarnings(list) {
+                    scanWarnings.textContent = '';
+                    if (!list || !list.length) { scanWarnings.hidden = true; return; }
+                    Array.prototype.forEach.call(list, function (w) {
+                        var li = document.createElement('li');
+                        li.textContent = String(w == null ? '' : w);
+                        scanWarnings.appendChild(li);
+                    });
+                    scanWarnings.hidden = false;
+                }
+
+                function scanBusy(busy) {
+                    scanExtract.disabled = busy;
+                    scanAnalyze.disabled = busy;
+                }
+
+                function scanFail(err) {
+                    scanSetStatus(err && err.message ? err.message : 'Erreur réseau : l\u2019analyse de la facture a échoué.');
+                }
+
+                function scanToken() { return csrfInput ? csrfInput.value : ''; }
+
+                // Préremplit le formulaire depuis une facture analysée :
+                // en-tête (fournisseur, n°, date, TVA, base HT/TTC) puis
+                // grille. Ne touche qu'aux valeurs des champs existants.
+                function applyInvoice(invoice) {
+                    var st = H.applyInvoiceState({
+                        supplier: supplierEl ? supplierEl.value : '',
+                        invoice_number: invoiceNumberEl ? invoiceNumberEl.value : '',
+                        purchased_at: purchasedAtEl ? purchasedAtEl.value : '',
+                        vat_rate: rateEl.value,
+                        amount_basis: basis(),
+                        rows: []
+                    }, invoice);
+                    var rowsData = st.rows;
+
+                    if (rowsData.length > 0 && gridHasContent() &&
+                        !window.confirm('La grille contient déjà des lignes : les remplacer par l\u2019analyse de la facture ?')) {
+                        scanSetStatus('Préremplissage annulé — la grille n\u2019a pas été modifiée.');
+                        return;
+                    }
+
+                    if (supplierEl) supplierEl.value = st.supplier;
+                    if (invoiceNumberEl) invoiceNumberEl.value = st.invoice_number;
+                    if (purchasedAtEl && st.purchased_at !== '') purchasedAtEl.value = st.purchased_at;
+                    if (st.vat_rate !== null) {
+                        Array.prototype.forEach.call(rateEl.options, function (opt) {
+                            if (parseFloat(opt.value) === parseFloat(st.vat_rate)) rateEl.value = opt.value;
+                        });
+                    }
+                    if (st.amount_basis !== basis()) {
+                        Array.prototype.forEach.call(basisInputs, function (input) {
+                            input.checked = input.value === st.amount_basis;
+                        });
+                    }
+
+                    if (rowsData.length === 0) {
+                        recalcAll();
+                        scanSetStatus('Aucune ligne reconnue — vérifiez/corrigez le texte puis ré-analysez.');
+                        return;
+                    }
+
+                    resetGridRows();
+                    Array.prototype.forEach.call(rowsData, function (r) {
+                        var tr = firstEmptyRow() || (rows().length < MAX_LINES ? addLine(false) : null);
+                        if (!tr) return;
+                        fillRow(tr, r.key, r.qty, r.total);
+                        // Champ notes par ligne : absent de la grille
+                        // actuelle, câblé seulement s'il existe un jour.
+                        var notesInput = tr.querySelector('[name="notes[]"]');
+                        if (notesInput && r.notes) notesInput.value = r.notes;
+                    });
+                    // Mêmes mises à jour d'UI que l'import du collage :
+                    // numérotation, doublons, totaux, indices /unité
+                    // (recalcAll reflète aussi le taux et la base posés
+                    // ci-dessus, posés sans événement « change »).
+                    refreshIdx(); refreshDups(); recalcAll();
+                    scanSetStatus(rowsData.length + ' ligne' + (rowsData.length > 1 ? 's' : '') + ' préremplie' + (rowsData.length > 1 ? 's' : '') + ' — vérifiez puis enregistrez.');
+                }
+
+                scanToggle.addEventListener('click', function () {
+                    var open = scanPanel.hidden;
+                    scanPanel.hidden = !open;
+                    scanToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+                    if (open) scanFile.focus();
+                });
+
+                scanExtract.addEventListener('click', function () {
+                    var file = scanFile.files && scanFile.files[0];
+                    if (!file) {
+                        scanSetStatus('Choisissez d\u2019abord un fichier (photo ou PDF de la facture).');
+                        return;
+                    }
+                    if (file.size > 10 * 1024 * 1024) {
+                        scanSetStatus('Fichier trop lourd (10 Mo maximum) : photographiez ou compressez la facture.');
+                        return;
+                    }
+                    scanBusy(true);
+                    scanSetWarnings(null);
+                    scanSetStatus('Extraction du texte en cours…');
+                    H.scanUpload(file, scanToken(), scanUrl).then(function (json) {
+                        scanBusy(false);
+                        scanText.value = String(json.text == null ? '' : json.text);
+                        scanSetWarnings(json.invoice && Array.isArray(json.invoice.warnings) ? json.invoice.warnings : null);
+                        scanSetStatus('Texte extrait : vérifiez/corrigez-le puis cliquez « Analyser le texte et préremplir ».');
+                    }, function (err) {
+                        scanBusy(false);
+                        scanFail(err);
+                    });
+                });
+
+                scanAnalyze.addEventListener('click', function () {
+                    var text = scanText.value.trim();
+                    if (text === '') {
+                        scanSetStatus('Aucun texte à analyser : extrayez-le d\u2019abord (ou collez-le) dans la zone ci-dessus.');
+                        return;
+                    }
+                    scanBusy(true);
+                    scanSetStatus('Analyse du texte en cours…');
+                    H.scanParseText(text, scanToken(), scanUrl).then(function (json) {
+                        scanBusy(false);
+                        scanSetWarnings(json.invoice && Array.isArray(json.invoice.warnings) ? json.invoice.warnings : null);
+                        applyInvoice(json.invoice);
+                    }, function (err) {
+                        scanBusy(false);
+                        scanFail(err);
+                    });
+                });
             }
 
             // Grille prête : quelques lignes vides pour saisir direct.

@@ -7,6 +7,8 @@ namespace App\Controllers\Admin;
 use App\Core\Auth;
 use App\Core\Compta\AliasSuggester;
 use App\Core\Compta\ComptaCalc;
+use App\Core\Compta\InvoiceOcr;
+use App\Core\Compta\MetroInvoiceParser;
 use App\Core\Compta\ProductAutoSync;
 use App\Core\Compta\ProductLifecycle;
 use App\Core\Compta\Kiosk;
@@ -67,6 +69,21 @@ final class AdminStockController extends AdminBaseController
 
     /** Taux de TVA autorisés pour les achats. */
     private const VAT_RATES = [20.0, 10.0, 5.5, 2.1, 0.0];
+
+    /** Taille maximale d'une facture envoyée au scan (10 Mo). */
+    private const SCAN_MAX_SIZE = 10 * 1024 * 1024;
+
+    /** Extensions acceptées pour le scan → MIME réel attendu (finfo). */
+    private const SCAN_ALLOWED_MIMES = [
+        'jpg'  => 'image/jpeg',
+        'jpeg' => 'image/jpeg',
+        'png'  => 'image/png',
+        'webp' => 'image/webp',
+        'pdf'  => 'application/pdf',
+    ];
+
+    /** Longueur maximale du texte de facture collé (champ « text »). */
+    private const SCAN_MAX_TEXT_LENGTH = 200000;
 
     /**
      * Enregistre une grille d'achats en un seul POST (une ligne par
@@ -395,9 +412,126 @@ final class AdminStockController extends AdminBaseController
         redirect(url('/admin/compta/achats'));
     }
 
-    // -----------------------------------------------------------------
-    //  Inventaire (groupe « Système » ou attribution individuelle)
-    // -----------------------------------------------------------------
+    /**
+     * Scan d'une facture fournisseur METRO (JSON, préremplissage du
+     * formulaire d'achat). Deux sources acceptées :
+     *  - champ POST « text » : texte de facture collé (200 000 caractères max) ;
+     *  - upload multipart « file » : photo ou PDF (10 Mo max, extension ET
+     *    MIME réels vérifiés), texte extrait par OCR (Tesseract/Poppler).
+     *
+     * Réponse 200 : {ok:true, source:'file'|'text', text:..., invoice:{...}}
+     * (structure « invoice » définie par MetroInvoiceParser — contrat partagé
+     * avec le frontend). Erreurs : 400 (requête invalide), 413 (trop
+     * volumineux), 500 (OCR indisponible ou en échec) sous forme
+     * {ok:false, error:'message lisible'}.
+     *
+     * Lecture seule : aucun achat n'est créé ici, le formulaire reste
+     * modifiable avant enregistrement (POST /admin/compta/achats/save-bulk).
+     */
+    public function scanInvoice(): void
+    {
+        $this->guardCompta();
+
+        // Source 1 : texte collé directement (prioritaire sur le fichier).
+        $text = (string) ($_POST['text'] ?? '');
+        if (trim($text) !== '') {
+            if (mb_strlen($text) > self::SCAN_MAX_TEXT_LENGTH) {
+                $this->json(['ok' => false, 'error' => 'Texte trop long (200 000 caractères maximum).'], 400);
+            }
+            $source = 'text';
+            $audit = [
+                'source' => 'text',
+                'taille' => strlen($text),
+                'sha256' => hash('sha256', $text),
+            ];
+        } else {
+            // Source 2 : fichier envoyé (photo/PDF de la facture).
+            $file = $_FILES['file'] ?? null;
+            if (!is_array($file) || (int) ($file['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+                $this->json([
+                    'ok'    => false,
+                    'error' => 'Aucune facture reçue : envoyez un fichier (champ « file ») ou du texte (champ « text »).',
+                ], 400);
+            }
+            if ((int) ($file['error'] ?? 1) !== UPLOAD_ERR_OK) {
+                $this->json([
+                    'ok'    => false,
+                    'error' => "Échec de l'envoi du fichier (erreur " . (int) $file['error'] . ").",
+                ], 400);
+            }
+            if ((int) ($file['size'] ?? 0) > self::SCAN_MAX_SIZE) {
+                $this->json(['ok' => false, 'error' => 'Fichier trop volumineux (10 Mo maximum).'], 413);
+            }
+
+            $ext = strtolower(pathinfo((string) ($file['name'] ?? ''), PATHINFO_EXTENSION));
+            if (!isset(self::SCAN_ALLOWED_MIMES[$ext])) {
+                $this->json([
+                    'ok'    => false,
+                    'error' => 'Format non accepté : image JPG, PNG, WEBP ou PDF attendu.',
+                ], 400);
+            }
+
+            // Validation MIME réelle : l'extension déclarée n'est jamais une preuve.
+            $mime = self::detectUploadMime((string) $file['tmp_name']);
+            if ($mime !== self::SCAN_ALLOWED_MIMES[$ext]) {
+                $this->json([
+                    'ok'    => false,
+                    'error' => 'Le contenu du fichier ne correspond pas à son extension (JPG, PNG, WEBP ou PDF attendu).',
+                ], 400);
+            }
+
+            $tmpPath = (string) $file['tmp_name'];
+            $audit = [
+                'source' => 'file',
+                'nom'    => (string) ($file['name'] ?? ''),
+                'taille' => (int) ($file['size'] ?? 0),
+                'mime'   => $mime,
+                'sha256' => hash('sha256', (string) @file_get_contents($tmpPath)),
+            ];
+
+            try {
+                $text = InvoiceOcr::extractText($tmpPath, $mime);
+            } catch (\RuntimeException $e) {
+                // Outil absent ou OCR en échec : message FR déjà lisible.
+                $this->json(['ok' => false, 'error' => $e->getMessage()], 500);
+            }
+            $source = 'file';
+        }
+
+        $invoice = MetroInvoiceParser::parse($text);
+
+        $audit['lignes_extraites'] = count($invoice['lines']);
+        $audit['fournisseur'] = $invoice['supplier'];
+        $audit['facture'] = $invoice['invoice_number'];
+        $this->audit('compta.purchase.scan', 'purchase', null, $audit);
+
+        $this->json([
+            'ok'      => true,
+            'source'  => $source,
+            'text'    => $text,
+            'invoice' => $invoice,
+        ]);
+    }
+
+    /**
+     * MIME réel d'un fichier envoyé, via finfo (extension Fileinfo), avec
+     * repli mime_content_type — même logique que ReceiptStorage.
+     */
+    private static function detectUploadMime(string $path): ?string
+    {
+        if (function_exists('finfo_open')) {
+            $finfo = finfo_open(FILEINFO_MIME_TYPE);
+            if ($finfo !== false) {
+                $mime = finfo_file($finfo, $path);
+                finfo_close($finfo);
+                if (is_string($mime) && $mime !== '') {
+                    return $mime;
+                }
+            }
+        }
+
+        return function_exists('mime_content_type') ? (mime_content_type($path) ?: null) : null;
+    }
 
     public function inventory(): void
     {

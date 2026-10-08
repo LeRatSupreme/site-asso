@@ -351,6 +351,9 @@ function aeic_register_routes(Router $router): void
     $router->post('/admin/compta/budgets/save', [AdminBudgetController::class, 'save']);
     $router->get('/admin/compta/achats', [AdminStockController::class, 'purchases']);
     $router->post('/admin/compta/achats/save-bulk', [AdminStockController::class, 'savePurchasesBulk']);
+    // Scan d'une facture fournisseur METRO (OCR image/PDF ou texte collé) :
+    // renvoie les données extraites en JSON pour préremplir la grille d'achat.
+    $router->post('/admin/compta/achats/scan', [AdminStockController::class, 'scanInvoice']);
     $router->post('/admin/compta/achats/{id}/delete', [AdminStockController::class, 'deletePurchase']);
     $router->get('/admin/compta/inventaire', [AdminStockController::class, 'inventory']);
     $router->post('/admin/compta/inventaire/save', [AdminStockController::class, 'saveCount']);

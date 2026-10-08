@@ -188,6 +188,101 @@ t('findDuplicateLine : limite documentée M&M’s', function () {
     assert.strictEqual(H.findDuplicateLine(['MMS', 'MMS'], 1), 1);
 });
 
+/* ------------------------------------------------------------------ *
+ * invoiceToRows — facture scannée -> lignes de la grille
+ * ------------------------------------------------------------------ */
+
+t('invoiceToRows : facture METRO à 3 lignes -> format du collage', function () {
+    const invoice = {
+        supplier: 'METRO',
+        invoice_number: '3007 02 0090',
+        purchased_at: '2026-10-02',
+        vat_rate: 5.5,
+        amount_basis: 'ht',
+        total_ht: 250.46,
+        total_ttc: 264.24,
+        lines: [
+            { label: 'MINUTE MAID POMME 1L', ean: '5449000000099', article: '2040110',
+              unit_price: 0.72, units: 24, total: 17.28, notes: 'EAN 5449000000099 · art. 2040110' },
+            { label: 'COCA COLA 33CL', ean: '5449000000996', article: '2040041',
+              unit_price: 0.45, units: 24, total: 10.8, notes: 'EAN 5449000000996 · art. 2040041' },
+            { label: 'EAU MINERALE 50CL', ean: '3057640257546', article: '2040999',
+              unit_price: 0.2, units: 48, total: 9.6 }
+        ],
+        warnings: ['Taux de TVA non trouvé — 5,5 % appliqué.']
+    };
+    assert.deepStrictEqual(H.invoiceToRows(invoice), [
+        { key: 'MINUTE MAID POMME 1L', qty: 24, total: '17,28', notes: 'EAN 5449000000099 · art. 2040110' },
+        { key: 'COCA COLA 33CL', qty: 24, total: '10,80', notes: 'EAN 5449000000996 · art. 2040041' },
+        { key: 'EAU MINERALE 50CL', qty: 48, total: '9,60', notes: 'EAN 3057640257546 · art. 2040999' }
+    ], 'Sans champ notes, « EAN … · art. … » est reconstitué depuis ean/article.');
+});
+
+t('invoiceToRows : sans lignes (ou lines absente) -> []', function () {
+    assert.deepStrictEqual(H.invoiceToRows({ supplier: 'METRO', lines: [] }), []);
+    assert.deepStrictEqual(H.invoiceToRows({ supplier: 'METRO' }), []);
+    assert.deepStrictEqual(H.invoiceToRows(null), []);
+});
+
+t('invoiceToRows : lignes sans libellé ignorées, qté et montant assainis', function () {
+    assert.deepStrictEqual(H.invoiceToRows({ lines: [
+        { units: 5, total: 12.3 },
+        { label: 'Bonbons', units: 0, total: 0 },
+        { label: 'Chips', units: '6', total: '8,90' }
+    ] }), [
+        { key: 'Bonbons', qty: 1, total: '', notes: '' },
+        { key: 'Chips', qty: 6, total: '8,90', notes: '' }
+    ], 'Qté < 1 -> 1 ; total nul/invalide -> chaîne vide ; libellé manquant -> ligne ignorée.');
+});
+
+/* ------------------------------------------------------------------ *
+ * applyInvoiceState — fusion pure facture -> état du formulaire
+ * ------------------------------------------------------------------ */
+
+t('applyInvoiceState : la facture remplit en-tête et lignes', function () {
+    const st = H.applyInvoiceState({
+        supplier: '', invoice_number: '', purchased_at: '2026-10-08',
+        vat_rate: '5.5', amount_basis: 'ht', rows: []
+    }, {
+        supplier: 'METRO', invoice_number: '3007 02 0090', purchased_at: '2026-10-02',
+        vat_rate: 5.5, amount_basis: 'ht',
+        lines: [{ label: 'Coca 33cl', units: 24, total: 10.8 }]
+    });
+    assert.strictEqual(st.supplier, 'METRO');
+    assert.strictEqual(st.invoice_number, '3007 02 0090');
+    assert.strictEqual(st.purchased_at, '2026-10-02');
+    assert.strictEqual(st.vat_rate, '5.5', 'Taux canonisé en chaîne pour le select.');
+    assert.strictEqual(st.amount_basis, 'ht');
+    assert.deepStrictEqual(st.rows, [{ key: 'Coca 33cl', qty: 24, total: '10,80', notes: '' }]);
+});
+
+t('applyInvoiceState : champs null -> état courant conservé', function () {
+    const st = H.applyInvoiceState({
+        supplier: 'Metro CASH', invoice_number: 'A1', purchased_at: '2026-10-01',
+        vat_rate: '20', amount_basis: 'ttc', rows: []
+    }, { supplier: null, invoice_number: null, purchased_at: null, vat_rate: null, lines: [] });
+    assert.strictEqual(st.supplier, 'Metro CASH');
+    assert.strictEqual(st.invoice_number, 'A1');
+    assert.strictEqual(st.purchased_at, '2026-10-01');
+    assert.strictEqual(st.vat_rate, '20');
+    assert.strictEqual(st.amount_basis, 'ttc');
+    assert.deepStrictEqual(st.rows, []);
+});
+
+t('applyInvoiceState : date ou taux invalides ignorés', function () {
+    const st = H.applyInvoiceState(null, {
+        purchased_at: '02/10/2026', vat_rate: 'abc', supplier: 'METRO', lines: []
+    });
+    assert.strictEqual(st.purchased_at, '', 'Seul le format aaaa-mm-jj est accepté (input[type=date]).');
+    assert.strictEqual(st.vat_rate, null);
+    assert.strictEqual(st.supplier, 'METRO');
+});
+
+t('applyInvoiceState : taux à la française « 5,5 » canonisé', function () {
+    const st = H.applyInvoiceState({}, { vat_rate: '5,5', lines: [] });
+    assert.strictEqual(st.vat_rate, '5.5');
+});
+
 /* ------------------------------------------------------------------ */
 
 if (failures.length > 0) {
