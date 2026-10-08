@@ -35,9 +35,7 @@ final class InvoiceParser
      */
     public static function parse(string $text): array
     {
-        if (preg_match('/METRO/i', $text) === 1
-            && preg_match('/FACTURE|BRASSERIE|Colisage|D[ée]signation/i', $text) === 1
-        ) {
+        if (self::looksLikeMetro($text)) {
             $invoice = MetroInvoiceParser::parse($text);
             $invoice['kind'] = 'metro';
 
@@ -45,5 +43,23 @@ final class InvoiceParser
         }
 
         return TicketReceiptParser::parse($text);
+    }
+
+    /**
+     * Texte qui ressemble à une facture METRO : logo METRO + vocabulaire
+     * spécifique, ou (photo très dégradée où le logo est perdu) le couple
+     * « Date facture : » + structure de tableau METRO (Colisage, Désignation,
+     * BRASSERIE) qui n'existe pas sur un ticket de caisse.
+     */
+    private static function looksLikeMetro(string $text): bool
+    {
+        if (preg_match('/METRO/i', $text) === 1
+            && preg_match('/FACTURE|BRASSERIE|Colisage|D[ée]signation/i', $text) === 1
+        ) {
+            return true;
+        }
+
+        return preg_match('/facture\s*:/i', $text) === 1
+            && preg_match('/Colisage|BRASSERIE|D[ée]signation|0\s*\/\s*0\s*[(O]/', $text) === 1;
     }
 }

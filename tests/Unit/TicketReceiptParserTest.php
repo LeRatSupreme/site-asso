@@ -142,6 +142,25 @@ TXT;
         self::assertSame('LEROY MERLIN', $r['supplier']);
         self::assertSame('123', $r['invoice_number']);
     }
+    /**
+     * PHOTO RÉELLE (ticket Auchan photo dégradée, OCR psm 6 + 2e passe) :
+     * seule la partie paiement est visible — montant lu, numéro récupéré
+     * depuis la 2e passe OCR (« 1Cket : 67647 » y est redevenu « Ticket »),
+     * ligne parasite du téléphone écartée.
+     */
+    public function test_ocr_reel_photo_auchan(): void
+    {
+        $r = TicketReceiptParser::parse($this->fixture('ticket_ocr_psm6_auchan.txt'));
+
+        self::assertSame('ticket', $r['kind']);
+        self::assertSame('AUCHAN', $r['supplier']);
+        self::assertSame('67647', $r['invoice_number']);
+        self::assertSame('2026-08-31', $r['purchased_at']);
+        self::assertSame(37.24, $r['total_ttc'], '« MONTANT= 37,24 EUR » fait foi.');
+        self::assertSame([], $r['lines'], 'Partie produits non visible sur la photo.');
+        self::assertNull($r['total_ht']);
+        self::assertNull($r['vat_rate']);
+    }
 
     /**
      * Contenu d'une fixture.

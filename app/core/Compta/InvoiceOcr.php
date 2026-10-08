@@ -31,6 +31,14 @@ final class InvoiceOcr
     private const COMMAND_TIMEOUT_S = 90;
 
     /**
+     * Séparateur inséré entre les deux passes OCR d'une photo : les parseurs
+     * lisent les LIGNES produits dans la première passe (psm 6) et cherchent
+     * les en-têtes (n°, date, totaux) dans tout le texte, la seconde passe
+     * (psm par défaut) rattrapant les champs perdus par l'une ou l'autre.
+     */
+    public const ALT_MARKER = '----- OCR alt -----';
+
+    /**
      * Extrait le texte d'une facture (PDF ou image).
      *
      * @param string $filePath Chemin réel du fichier (tmp upload ou copie).
@@ -47,7 +55,7 @@ final class InvoiceOcr
 
         return str_starts_with($mime, 'application/pdf')
             ? self::extractFromPdf($filePath)
-            : self::ocrImage($filePath);
+            : self::extractFromImage($filePath);
     }
 
     /** Texte d'un PDF : couche texte d'abord, OCR page par page sinon. */
@@ -92,7 +100,7 @@ final class InvoiceOcr
     }
 
     /** OCR d'une image (PNG/JPG/WEBP) en français via Tesseract. */
-    private static function ocrImage(string $filePath): string
+    private static function ocrImage(string $filePath, string $psm = ''): string
     {
         if (!self::hasBinary('tesseract')) {
             throw new \RuntimeException(
@@ -100,13 +108,28 @@ final class InvoiceOcr
             );
         }
 
-        [$code, $output] = self::run('tesseract ' . escapeshellarg($filePath) . ' stdout -l fra');
+        [$code, $output] = self::run('tesseract ' . escapeshellarg($filePath) . ' stdout -l fra' . $psm);
         $text = implode("\n", $output);
         if ($code !== 0) {
             throw new \RuntimeException("Échec de l'OCR (tesseract) : " . mb_substr(trim($text), 0, 200));
         }
 
         return $text;
+    }
+
+    /**
+     * OCR d'une photo : deux passes (psm 6 « bloc uniforme » puis psm par
+     * défaut), séparées par le marqueur ALT_MARKER. Sur les vraies photos
+     * téléphone, le psm 6 restitue les lignes du tableau produit que le psm
+     * par défaut éparpille, mais peut tronquer un en-tête (n°, année) que la
+     * seconde passe relit correctement.
+     */
+    private static function extractFromImage(string $filePath): string
+    {
+        $psm6 = self::ocrImage($filePath, ' --psm 6');
+        $default = self::ocrImage($filePath);
+
+        return $psm6 . "\n" . self::ALT_MARKER . "\n" . $default;
     }
 
     /**
@@ -120,6 +143,11 @@ final class InvoiceOcr
         $full = $command . ' 2>&1';
         if (PHP_OS_FAMILY !== 'Windows' && self::hasBinary('timeout')) {
             $full = 'timeout ' . self::COMMAND_TIMEOUT_S . ' ' . $full;
+        }
+        // Tesseract multi-thread se fige sur certains VPS (OpenMP) : une
+        // seule thread OpenMP, sans impact notable sur la vitesse.
+        if (PHP_OS_FAMILY !== 'Windows') {
+            $full = 'OMP_THREAD_LIMIT=1 ' . $full;
         }
 
         $output = [];

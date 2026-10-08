@@ -57,4 +57,30 @@ final class InvoiceParserTest extends TestCase
         self::assertSame('ticket', $r['kind']);
         self::assertSame([], $r['lines']);
     }
+
+    /**
+     * PHOTO RÉELLE dégradée : le logo METRO est illisible sur la photo
+     * (facture_3), le vocabulaire exclusif (« Date facture : », « Colisage »)
+     * suffit à l'aiguillage METRO — sinon la date jj-mm-aaaa serait perdue
+     * (le parseur ticket ne lit que jj/mm/aaaa).
+     */
+    public function test_facture_metro_logo_illisible_aiguillee_en_metro(): void
+    {
+        $text = (string) file_get_contents(__DIR__ . '/../Fixtures/metro_ocr_psm6_facture_3.txt');
+        $r = InvoiceParser::parse($text);
+
+        self::assertSame('metro', $r['kind']);
+        self::assertSame('METRO', $r['supplier']);
+        self::assertSame('2026-06-03', $r['purchased_at']);
+    }
+
+    /** La photo Auchan dégradée reste aiguillée en ticket de caisse. */
+    public function test_ticket_auchan_photo_degradee_renvoie_kind_ticket(): void
+    {
+        $text = (string) file_get_contents(__DIR__ . '/../Fixtures/ticket_ocr_psm6_auchan.txt');
+        $r = InvoiceParser::parse($text);
+
+        self::assertSame('ticket', $r['kind']);
+        self::assertSame(37.24, $r['total_ttc']);
+    }
 }

@@ -285,6 +285,123 @@ final class MetroInvoiceParserTest extends TestCase
     }
 
     /**
+     * PHOTO RÉELLE (facture_2, OCR Tesseract psm 6 + 2e passe) : le tableau
+     * est bien lu, une ligne sur huit perdue (montant illisible), en-têtes
+     * complets y compris le n° légèrement corrompu par l'OCR.
+     */
+    public function test_ocr_reel_photo_facture_2(): void
+    {
+        $r = MetroInvoiceParser::parse($this->fixture('metro_ocr_psm6_facture_2.txt'));
+
+        self::assertSame('METRO', $r['supplier']);
+        self::assertSame('0/0(087)0054/020883', $r['invoice_number']);
+        self::assertSame('2026-09-01', $r['purchased_at']);
+        self::assertSame(5.5, $r['vat_rate']);
+        self::assertSame(179.84, $r['total_ht']);
+        self::assertSame(189.73, $r['total_ttc']);
+
+        // 7 lignes sur 8 (RED BULL PEACH : montant illisible sur la photo).
+        self::assertCount(7, $r['lines']);
+        $ice = $this->lineByLabel($r['lines'], 'RED BULL ICE');
+        self::assertNotNull($ice);
+        self::assertSame(48, $ice['units']);
+        self::assertSame(50.28, $ice['total']);
+
+        $sum = 0.0;
+        foreach ($r['lines'] as $line) {
+            $sum += (float) $line['total'];
+        }
+        self::assertEqualsWithDelta(150.26, $sum, 0.001);
+        self::assertTrue($this->hasWarning($r['warnings'], 'des lignes ont pu être manquées'));
+    }
+
+    /**
+     * PHOTO RÉELLE (facture_1, photo sombre, tableau éclaté) : 15 lignes sur
+     * 20 récupérées par réappariement tête/colonnes, lettres B et D lues,
+     * table TVA coupée → taux null + avertissements, n° de facture complété
+     * par la 2e passe OCR, Total H.T. tronqué sur la photo → null.
+     */
+    public function test_ocr_reel_photo_facture_1(): void
+    {
+        $r = MetroInvoiceParser::parse($this->fixture('metro_ocr_psm6_facture_1.txt'));
+
+        self::assertSame('METRO', $r['supplier']);
+        self::assertSame('0/0(087)0054/032004', $r['invoice_number']);
+        self::assertSame('2026-09-18', $r['purchased_at']);
+        self::assertNull($r['total_ht']);
+        self::assertNull($r['total_ttc']);
+        self::assertNull($r['vat_rate']);
+
+        self::assertCount(15, $r['lines']);
+        $ultra = $this->lineByLabel($r['lines'], 'D M OM');
+        self::assertNotNull($ultra, 'MONSTER ULTRA : montant entier « 4566 » validé par PU×colisage×qté.');
+        self::assertSame(36, $ultra['units']);
+        self::assertSame(45.66, $ultra['total']);
+
+        $letters = [];
+        foreach ($r['lines'] as $line) {
+            if ($line['vat_letter'] !== null) {
+                $letters[$line['vat_letter']] = true;
+            }
+        }
+        self::assertSame(['B' => true, 'D' => true], $letters, 'Lettres B et D lues sur les lignes.');
+
+        $sum = 0.0;
+        foreach ($r['lines'] as $line) {
+            $sum += (float) $line['total'];
+        }
+        self::assertEqualsWithDelta(227.20, $sum, 0.001);
+    }
+
+    /**
+     * PHOTO RÉELLE (image_a_scan, ticket METRO scanné) : 9 lignes sur 13,
+     * n° et date récupérés (la date par la 2e passe OCR), totaux HT/TTC
+     * exacts et taux 5,5 % confirmé par la table TVA partiellement lue.
+     */
+    public function test_ocr_reel_photo_image_a_scan(): void
+    {
+        $r = MetroInvoiceParser::parse($this->fixture('metro_ocr_psm6_image_a_scan.txt'));
+
+        self::assertSame('METRO', $r['supplier']);
+        self::assertSame('0/0(087)0054/033871', $r['invoice_number']);
+        self::assertSame('2026-10-02', $r['purchased_at']);
+        self::assertSame(5.5, $r['vat_rate']);
+        self::assertSame(250.46, $r['total_ht']);
+        self::assertSame(264.24, $r['total_ttc']);
+
+        self::assertCount(9, $r['lines']);
+        $nutella = $this->lineByLabel($r['lines'], 'NUTELLA');
+        self::assertNotNull($nutella);
+        self::assertSame(3, $nutella['units']);
+        self::assertSame(8.07, $nutella['total']);
+
+        $sum = 0.0;
+        foreach ($r['lines'] as $line) {
+            $sum += (float) $line['total'];
+        }
+        self::assertEqualsWithDelta(118.60, $sum, 0.001);
+        self::assertTrue($this->hasWarning($r['warnings'], 'des lignes ont pu être manquées'));
+    }
+
+    /**
+     * PHOTO RÉELLE (facture_3, photo très dégradée) : en-têtes sauvés (date,
+     * n° partiel, TTC via « Total à payer »), TVA mixte B/D non résoluble
+     * (table illisible) → null + avertissements, quelques lignes seulement.
+     */
+    public function test_ocr_reel_photo_facture_3(): void
+    {
+        $r = MetroInvoiceParser::parse($this->fixture('metro_ocr_psm6_facture_3.txt'));
+
+        self::assertSame('METRO', $r['supplier']);
+        self::assertSame('2026-06-03', $r['purchased_at']);
+        self::assertSame(176.12, $r['total_ttc']);
+        self::assertStringContainsString('005/013502', (string) $r['invoice_number']);
+        self::assertNull($r['vat_rate']);
+        self::assertTrue($this->hasWarning($r['warnings'], 'non résolues par la table des taux'));
+        self::assertGreaterThanOrEqual(4, count($r['lines']));
+    }
+
+    /**
      * Contenu d'une fixture (transcription réelle d'une facture METRO).
      */
     private function fixture(string $name = 'metro_invoice.txt'): string
@@ -311,5 +428,17 @@ final class MetroInvoiceParserTest extends TestCase
         }
 
         return null;
+    }
+
+    /** Un avertissement contenant ce fragment est-il présent ? */
+    private function hasWarning(array $warnings, string $fragment): bool
+    {
+        foreach ($warnings as $warning) {
+            if (str_contains($warning, $fragment)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }
