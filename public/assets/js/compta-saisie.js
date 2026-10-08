@@ -13,7 +13,12 @@
    - parsePasteLine : collage « Nom ; Qté ; Montant » (tabs Excel) ;
    - splitVat       : décomposition HT/TTC selon la base et le taux ;
    - unitHint       : libellé « ≈ HT · TTC € /u » d'une ligne ;
-   - findDuplicateLine : ligne en double dans la commande en cours.
+   - findDuplicateLine : ligne en double dans la commande en cours ;
+   - invoiceToRows  : facture scannée -> lignes de la grille ;
+   - applyInvoiceState : fusion pure d'une facture dans l'état du
+     formulaire (en-tête + grille) ;
+   - scanUpload / scanParseText : envoi du fichier ou du texte OCR à
+     l'endpoint /admin/compta/achats/scan (JSON {ok, invoice}).
    ========================================================= */
 (function (global) {
     'use strict';
@@ -133,6 +138,153 @@
         return -1;
     }
 
+    /* ------------------------------------------------------------
+       Scan de facture : OCR serveur puis analyse du texte renvoyé.
+       ------------------------------------------------------------ */
+
+    /** Endpoint par défaut de l'API « scan de facture » (contrôle :
+        routes POST /admin/compta/achats/scan, contrôleur Achats). */
+    var SCAN_ENDPOINT = '/admin/compta/achats/scan';
+
+    /**
+     * POST commun aux deux appels du scan. Le jeton CSRF part à la
+     * fois en champ `_csrf` du FormData et en en-tête `X-CSRF-Token` :
+     * Csrf::checkRequest (app/core/Csrf.php) accepte l'un ou l'autre,
+     * le Router l'exige pour toute requête POST. Réponse attendue :
+     * {ok:true,...} ; en cas d'erreur (JSON {ok:false,error} ou HTTP
+     * non-JSON), la promesse est rejetée avec un message en français.
+     */
+    function scanRequest(body, csrfToken, endpoint) {
+        return fetch(endpoint || SCAN_ENDPOINT, {
+            method: 'POST',
+            headers: { 'X-CSRF-Token': String(csrfToken || '') },
+            credentials: 'same-origin',
+            body: body
+        }).then(function (res) {
+            return res.json().catch(function () { return null; }).then(function (json) {
+                if (res.ok && json && json.ok === true) return json;
+                throw new Error(json && json.error
+                    ? String(json.error)
+                    : 'Erreur ' + res.status + ' : l\u2019analyse de la facture a échoué.');
+            });
+        });
+    }
+
+    /**
+     * Envoie un fichier (photo/PDF de facture, 10 Mo max côté serveur)
+     * au endpoint de scan en multipart (champ `file`). Renvoie le JSON
+     * du serveur {ok, source, text, invoice} ; rejette avec le message
+     * français du serveur sinon. `endpoint` optionnel (URL rendue par
+     * la vue via url(), pour respecter un éventuel sous-chemin).
+     */
+    function scanUpload(file, csrfToken, endpoint) {
+        var fd = new FormData();
+        fd.append('file', file, (file && file.name) || 'facture');
+        fd.append('_csrf', String(csrfToken || ''));
+        return scanRequest(fd, csrfToken, endpoint);
+    }
+
+    /**
+     * Envoie le texte OCR (édité par l'utilisateur) au même endpoint
+     * (champ `text`). Même contrat que scanUpload.
+     */
+    function scanParseText(text, csrfToken, endpoint) {
+        var fd = new FormData();
+        fd.append('text', String(text == null ? '' : text));
+        fd.append('_csrf', String(csrfToken || ''));
+        return scanRequest(fd, csrfToken, endpoint);
+    }
+
+    /* ------------------------------------------------------------
+       Facture analysée -> état du formulaire (fonctions pures,
+       testées par tests/js/compta-saisie.test.js).
+       ------------------------------------------------------------ */
+
+    /** Champ texte nettoyé : null/undefined -> '', sinon trim(). */
+    function cleanStr(v) {
+        return String(v == null ? '' : v).trim();
+    }
+
+    /** Taux de TVA canonisé en chaîne (« 5.5 ») ou null si absent/invalide. */
+    function normVatRate(v) {
+        if (v === null || v === undefined || v === '') return null;
+        var n = typeof v === 'number' ? v : parseFloat(cleanStr(v).replace(',', '.'));
+        return isFinite(n) ? String(n) : null;
+    }
+
+    /** Notes d'une ligne : champ `notes` s'il existe, sinon
+        « EAN … · art. … » reconstitué ('' si rien des deux). */
+    function lineNotes(line) {
+        var notes = cleanStr(line && line.notes);
+        if (notes !== '') return notes;
+        var parts = [];
+        var ean = cleanStr(line && line.ean);
+        var art = cleanStr(line && line.article);
+        if (ean !== '') parts.push('EAN ' + ean);
+        if (art !== '') parts.push('art. ' + art);
+        return parts.join(' · ');
+    }
+
+    /**
+     * Lignes d'une facture analysée -> lignes de la grille, dans le
+     * même format que le collage (parsePasteLine) :
+     * [{key, qty, total, notes}]
+     * - key   : libellé produit — les lignes sans libellé sont ignorées ;
+     * - qty   : unités (entier, < 1 ou absent -> 1) ;
+     * - total : montant au format français (« 17,28 »), '' si absent ;
+     * - notes : « EAN … · art. … » (ou le champ notes du serveur).
+     */
+    function invoiceToRows(invoice) {
+        var lines = invoice && Array.isArray(invoice.lines) ? invoice.lines : [];
+        var rows = [];
+        for (var i = 0; i < lines.length; i++) {
+            var line = lines[i] || {};
+            var key = cleanStr(line.label);
+            if (key === '') continue;
+            var qty = parseInt(line.units, 10);
+            if (!isFinite(qty) || qty < 1) qty = 1;
+            var total = '';
+            var n = typeof line.total === 'number'
+                ? line.total
+                : parseFloat(cleanStr(line.total).replace(',', '.'));
+            if (isFinite(n) && n > 0) total = n.toFixed(2).replace('.', ',');
+            rows.push({ key: key, qty: qty, total: total, notes: lineNotes(line) });
+        }
+        return rows;
+    }
+
+    /**
+     * Fusion pure d'une facture analysée dans l'état courant du
+     * formulaire. Renvoie un NOUVEL état
+     * {supplier, invoice_number, purchased_at, vat_rate, amount_basis,
+     * rows} : les champs null/invalides de la facture laissent l'état
+     * courant inchangé ; vat_rate est canonisé (« 5.5 ») pour être
+     * confronté aux options du select ; purchased_at n'est repris qu'au
+     * format date HTML (aaaa-mm-jj, input[type=date]) ; amount_basis
+     * n'accepte que « ht » / « ttc » ; rows = invoiceToRows(invoice).
+     */
+    function applyInvoiceState(state, invoice) {
+        var cur = state && typeof state === 'object' ? state : {};
+        var inv = invoice && typeof invoice === 'object' ? invoice : {};
+
+        var purchasedAt = cleanStr(inv.purchased_at);
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(purchasedAt)) purchasedAt = cleanStr(cur.purchased_at);
+
+        var vat = normVatRate(inv.vat_rate);
+        if (vat === null) vat = normVatRate(cur.vat_rate);
+
+        return {
+            supplier: cleanStr(inv.supplier) !== '' ? cleanStr(inv.supplier) : cleanStr(cur.supplier),
+            invoice_number: cleanStr(inv.invoice_number) !== '' ? cleanStr(inv.invoice_number) : cleanStr(cur.invoice_number),
+            purchased_at: purchasedAt,
+            vat_rate: vat,
+            amount_basis: (inv.amount_basis === 'ht' || inv.amount_basis === 'ttc')
+                ? inv.amount_basis
+                : (cur.amount_basis === 'ttc' ? 'ttc' : 'ht'),
+            rows: invoiceToRows(inv)
+        };
+    }
+
     var ComptaSaisie = {
         normKey: normKey,
         parseAmount: parseAmount,
@@ -140,7 +292,11 @@
         splitVat: splitVat,
         unitHint: unitHint,
         parsePasteLine: parsePasteLine,
-        findDuplicateLine: findDuplicateLine
+        findDuplicateLine: findDuplicateLine,
+        invoiceToRows: invoiceToRows,
+        applyInvoiceState: applyInvoiceState,
+        scanUpload: scanUpload,
+        scanParseText: scanParseText
     };
 
     /* Navigateur : global partagé avec les scripts inline des vues. */
