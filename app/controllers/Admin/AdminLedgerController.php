@@ -44,8 +44,10 @@ final class AdminLedgerController extends AdminBaseController
             'recentExpenses' => Expense::recent(8),
             // Suggestions produit (datalist) pour l'enregistrement d'un
             // achat depuis le livre — même fusion que la liste de picking
-            // de la page Achats, en version simplifiée.
-            'purchaseProductKeys' => $this->purchaseProductKeys(),
+            // de la page Achats, en version simplifiée. Méthode statique
+            // publique : réutilisée telle quelle par le livre kiosque
+            // (KioskComptageController::ledger).
+            'purchaseProductKeys' => self::purchaseProductKeys(),
         ]);
     }
 
@@ -54,10 +56,11 @@ final class AdminLedgerController extends AdminBaseController
      * le livre comptable : produits vendus (SumUp) + noms de la carte
      * admin, fusion dédupliquée puis triée naturellement (même esprit que
      * la liste de picking de la page Achats — vue purchases.php).
+     * Statique publique : partagée avec la version kiosque du livre.
      *
      * @return list<string>
      */
-    private function purchaseProductKeys(): array
+    public static function purchaseProductKeys(): array
     {
         $keys = [];
         foreach (Sale::distinctProducts() as $key) {

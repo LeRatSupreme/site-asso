@@ -5,8 +5,7 @@ declare(strict_types=1);
 namespace App\Controllers\Admin;
 
 use App\Core\Auth;
-use App\Core\Compta\InvoiceOcr;
-use App\Core\Compta\InvoiceParser;
+use App\Core\Compta\InvoiceScan;
 use App\Core\Controller;
 use App\Core\Middleware;
 use App\Core\Permissions;
@@ -26,21 +25,6 @@ use App\Core\Permissions;
  */
 abstract class AdminBaseController extends Controller
 {
-    /** Taille maximale d'un document envoyé au scan (10 Mo). */
-    protected const SCAN_MAX_SIZE = 10 * 1024 * 1024;
-
-    /** Extensions acceptées pour le scan → MIME réel attendu (finfo). */
-    protected const SCAN_ALLOWED_MIMES = [
-        'jpg'  => 'image/jpeg',
-        'jpeg' => 'image/jpeg',
-        'png'  => 'image/png',
-        'webp' => 'image/webp',
-        'pdf'  => 'application/pdf',
-    ];
-
-    /** Taille maximale d'un texte de document collé (200 000 caractères). */
-    protected const SCAN_MAX_TEXT_LENGTH = 200000;
-
     /**
      * Vérifie l'accès administrateur et renvoie l'utilisateur connecté.
      *
@@ -171,22 +155,13 @@ abstract class AdminBaseController extends Controller
 
     /**
      * Point d'entrée partagé des scanneurs d'achat et de dépense :
-     * extrait le texte d'un document (facture fournisseur ou ticket de
-     * caisse) et renvoie l'« invoice » en JSON pour préremplir le
-     * formulaire correspondant. Deux sources acceptées :
-     *  - champ POST « text » : texte du document collé (200 000 caractères max) ;
-     *  - upload multipart « file » : photo ou PDF (10 Mo max, extension ET
-     *    MIME réels vérifiés), texte extrait par OCR (Tesseract/Poppler).
-     *
-     * Le document est interprété par InvoiceParser (aiguillage METRO /
-     * ticket de caisse, clé kind dans la réponse). Réponse 200 :
+     * délégation au service partagé InvoiceScan::run() (texte collé ou
+     * upload OCR — utilisé aussi par le livre comptable kiosque),
+     * puis audit et réponse JSON côté admin. Réponse 200 :
      * {ok:true, source:'file'|'text', text:..., invoice:{...}} (contrat
      * partagé avec le frontend). Erreurs : 400 (requête invalide), 413
      * (trop volumineux), 500 (OCR indisponible ou en échec) sous forme
      * {ok:false, error:'message lisible'}.
-     *
-     * Lecture seule : rien n'est enregistré ici, le formulaire reste
-     * modifiable avant validation.
      *
      * @param string $auditAction Action d'audit (« compta.purchase.scan »
      *                            ou « compta.expense.scan »).
@@ -195,74 +170,14 @@ abstract class AdminBaseController extends Controller
      */
     protected function handleInvoiceScan(string $auditAction, string $entityType): void
     {
-        // Source 1 : texte collé directement (prioritaire sur le fichier).
-        $text = (string) ($_POST['text'] ?? '');
-        if (trim($text) !== '') {
-            if (mb_strlen($text) > self::SCAN_MAX_TEXT_LENGTH) {
-                $this->json(['ok' => false, 'error' => 'Texte trop long (200 000 caractères maximum).'], 400);
-            }
-            $source = 'text';
-            $audit = [
-                'source' => 'text',
-                'taille' => strlen($text),
-                'sha256' => hash('sha256', $text),
-            ];
-        } else {
-            // Source 2 : fichier envoyé (photo/PDF du document).
-            $file = $_FILES['file'] ?? null;
-            if (!is_array($file) || (int) ($file['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
-                $this->json([
-                    'ok'    => false,
-                    'error' => 'Aucun document reçu : envoyez un fichier (champ « file ») ou du texte (champ « text »).',
-                ], 400);
-            }
-            if ((int) ($file['error'] ?? 1) !== UPLOAD_ERR_OK) {
-                $this->json([
-                    'ok'    => false,
-                    'error' => "Échec de l'envoi du fichier (erreur " . (int) $file['error'] . ").",
-                ], 400);
-            }
-            if ((int) ($file['size'] ?? 0) > self::SCAN_MAX_SIZE) {
-                $this->json(['ok' => false, 'error' => 'Fichier trop volumineux (10 Mo maximum).'], 413);
-            }
-
-            $ext = strtolower(pathinfo((string) ($file['name'] ?? ''), PATHINFO_EXTENSION));
-            if (!isset(self::SCAN_ALLOWED_MIMES[$ext])) {
-                $this->json([
-                    'ok'    => false,
-                    'error' => 'Format non accepté : image JPG, PNG, WEBP ou PDF attendu.',
-                ], 400);
-            }
-
-            // Validation MIME réelle : l'extension déclarée n'est jamais une preuve.
-            $mime = self::detectUploadMime((string) $file['tmp_name']);
-            if ($mime !== self::SCAN_ALLOWED_MIMES[$ext]) {
-                $this->json([
-                    'ok'    => false,
-                    'error' => 'Le contenu du fichier ne correspond pas à son extension (JPG, PNG, WEBP ou PDF attendu).',
-                ], 400);
-            }
-
-            $tmpPath = (string) $file['tmp_name'];
-            $audit = [
-                'source' => 'file',
-                'nom'    => (string) ($file['name'] ?? ''),
-                'taille' => (int) ($file['size'] ?? 0),
-                'mime'   => $mime,
-                'sha256' => hash('sha256', (string) @file_get_contents($tmpPath)),
-            ];
-
-            try {
-                $text = InvoiceOcr::extractText($tmpPath, $mime);
-            } catch (\RuntimeException $e) {
-                // Outil absent ou OCR en échec : message FR déjà lisible.
-                $this->json(['ok' => false, 'error' => $e->getMessage()], 500);
-            }
-            $source = 'file';
+        $res = InvoiceScan::run();
+        if (($res['ok'] ?? false) !== true) {
+            $this->json(['ok' => false, 'error' => (string) $res['error']], (int) $res['status']);
         }
 
-        $invoice = InvoiceParser::parse($text);
+        $invoice = $res['invoice'];
 
+        $audit = $res['audit'];
         $audit['lignes_extraites'] = count($invoice['lines']);
         $audit['fournisseur'] = $invoice['supplier'];
         $audit['facture'] = $invoice['invoice_number'];
@@ -270,29 +185,9 @@ abstract class AdminBaseController extends Controller
 
         $this->json([
             'ok'      => true,
-            'source'  => $source,
-            'text'    => $text,
+            'source'  => $res['source'],
+            'text'    => $res['text'],
             'invoice' => $invoice,
         ]);
-    }
-
-    /**
-     * MIME réel d'un fichier envoyé, via finfo (extension Fileinfo), avec
-     * repli mime_content_type — même logique que ReceiptStorage.
-     */
-    protected static function detectUploadMime(string $path): ?string
-    {
-        if (function_exists('finfo_open')) {
-            $finfo = finfo_open(FILEINFO_MIME_TYPE);
-            if ($finfo !== false) {
-                $mime = finfo_file($finfo, $path);
-                finfo_close($finfo);
-                if (is_string($mime) && $mime !== '') {
-                    return $mime;
-                }
-            }
-        }
-
-        return function_exists('mime_content_type') ? (mime_content_type($path) ?: null) : null;
     }
 }

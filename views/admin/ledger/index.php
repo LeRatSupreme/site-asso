@@ -10,6 +10,10 @@ declare(strict_types=1);
  *     POST /admin/compta/depenses/save (CSRF + return_to) ; en kiosque,
  *     POST /kiosque/admin/ledger/depense/{token} (jeton = auth, pas de
  *     CSRF, identité obligatoire injectée par le layout kiosk).
+ *     LES DEUX branches câblent le scan automatique du ticket (analyse
+ *     serveur + préremplissage + détail produits + création d'achats) :
+ *     endpoints miroirs /admin/compta/depenses/scan (admin) et
+ *     /kiosque/admin/ledger/scan/{token} (kiosque).
  *  2. « Livre comptable » : Date | Objet | Débit | Crédit, avec lignes
  *     « ticket » (achats groupés par jour + fournisseur, référencés par
  *     leur n° de facture) et les ventes en une ligne de clôture en fin de
@@ -29,8 +33,8 @@ declare(strict_types=1);
  * @var bool   $kiosk
  * @var string $token
  * @var list<string> $purchaseProductKeys Clés produits connues (datalist
- *      des achats créés depuis le scan — injectée par le contrôleur ;
- *      absente tant que le backend ne la passe pas : `?? []`).
+ *      des achats créés depuis le scan — injectée par le contrôleur,
+ *      admin ET kiosque ; `?? []` par robustesse).
  */
 $presets = [
     '1d'  => '1 jour',
@@ -162,6 +166,21 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
     .lg-scan-skip { color: var(--muted, #8892a6); font-size: 0.78rem; }
     .lg-scan-warnings { margin: 0.45rem 0 0; padding-left: 1.1rem; }
     .lg-scan-row { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; margin: 0.3rem 0; }
+    /* Ligne d'en-têtes du pavé « Détail des produits » : mêmes flex que
+       les .lg-scan-row (mêmes largeurs) — libellés discrets au-dessus des
+       champs (Produit · Qté · Montant · TVA · PU), lisible sur téléphone. */
+    .lg-scan-head {
+        display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: flex-end;
+        margin: 0.45rem 0 0.1rem;
+    }
+    .lg-scan-head span {
+        font-size: 0.68rem; color: var(--muted, #8892a6);
+        text-transform: uppercase; letter-spacing: 0.05em;
+    }
+    .lg-scan-head .lg-scan-key { flex: 3 1 150px; }
+    .lg-scan-head .lg-scan-qty { flex: 0 0 74px; }
+    .lg-scan-head .lg-scan-total { flex: 1 1 90px; }
+    .lg-scan-head .lg-scan-vat { min-width: 3rem; text-align: right; }
     .lg-scan-row input {
         padding: 0.4rem 0.55rem; border: 1px solid var(--border, rgba(255,255,255,0.15));
         border-radius: 8px; background: rgba(255, 255, 255, 0.05); color: var(--foreground, inherit);
@@ -227,8 +246,12 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
              admin EST l'authentification), identité (prénom, nom, rôle)
              ajoutée automatiquement à chaque formulaire par le layout kiosk.
              Ordre des champs pensé téléphone : Date, Nom, Prix, TVA,
-             Référence, Photo. -->
-        <form method="post" action="<?= e(url('/kiosque/admin/ledger/depense/' . rawurlencode($token))) ?>" enctype="multipart/form-data">
+             Référence, Photo.
+             data-scan-url / data-purchase-products : mêmes attributs que la
+             branche admin — le JS du bas câble le scan automatique du
+             ticket dans LES DEUX branches (endpoints miroirs, auth par
+             jeton dans l'URL côté kiosque). -->
+        <form method="post" action="<?= e(url('/kiosque/admin/ledger/depense/' . rawurlencode($token))) ?>" enctype="multipart/form-data" data-scan-url="<?= e(url('/kiosque/admin/ledger/scan/' . rawurlencode($token))) ?>" data-purchase-products="<?= e(json_encode($purchaseProductKeys ?? [], JSON_UNESCAPED_UNICODE)) ?>">
             <input type="hidden" name="category" value="DIVERS">
 
             <div class="field-row">
@@ -291,7 +314,65 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
                     <span id="lg-shot-chip" class="lg-shot-chip" hidden></span>
                     <button type="button" id="lg-shot-clear" class="btn btn-ghost btn-sm">✕ Retirer</button>
                 </div>
+                <!-- Scan automatique : occupation (texte simple, pas de
+                     spinner) puis message discret en cas d'échec réseau —
+                     la photo reste utilisable dans tous les cas. -->
+                <p class="muted" id="lg-scan-status" hidden style="margin:0.45rem 0 0; font-size:0.82rem;"></p>
             </div>
+
+            <!-- ── Scan automatique du ticket : pavés remplis par le JS
+                 en bas de page (mêmes ids que la branche admin — une seule
+                 branche est rendue). « Informations extraites » récapitule
+                 l'analyse (préremplissage non destructif déjà fait à
+                 réception) ; « Détail des produits » est éditable et part
+                 dans le champ `notes` à l'enregistrement. -->
+            <div id="lg-scan-info" class="lg-scan-info" hidden>
+                <p class="lg-scan-title">Informations extraites</p>
+                <div class="lg-scan-info-list" id="lg-scan-info-list"></div>
+                <ul class="lg-scan-warnings field-help" id="lg-scan-info-warnings" hidden></ul>
+                <p class="muted" id="lg-scan-vatmix" hidden style="margin:0.45rem 0 0; font-size:0.8rem;"></p>
+                <div class="form-actions">
+                    <button type="button" id="lg-scan-apply" class="btn btn-primary btn-sm">Utiliser ces infos</button>
+                    <button type="button" id="lg-scan-ignore" class="btn btn-ghost btn-sm">Ignorer</button>
+                </div>
+            </div>
+            <div id="lg-scan-lines" class="lg-scan-lines" hidden>
+                <p class="lg-scan-title">Détail des produits</p>
+                <!-- En-têtes des colonnes (lisible sur téléphone) : mêmes
+                     largeurs flex que les .lg-scan-row ci-dessous. -->
+                <div class="lg-scan-head" aria-hidden="true">
+                    <span class="lg-scan-key">Produit</span>
+                    <span class="lg-scan-qty">Qté</span>
+                    <span class="lg-scan-total">Montant (€)</span>
+                    <span class="lg-scan-vat">TVA</span>
+                    <span class="lg-scan-unit">PU</span>
+                </div>
+                <div id="lg-scan-rows"></div>
+                <div class="form-actions">
+                    <button type="button" id="lg-scan-row-add" class="btn btn-ghost btn-sm">+ Ligne</button>
+                </div>
+                <p class="muted" id="lg-scan-total" style="margin:0.3rem 0 0; font-size:0.8rem;"></p>
+            </div>
+
+            <!-- ── Achats à créer depuis les lignes du scan (stock + coût
+                 de revient) : JAMAIS sans la case cochée ni sans
+                 confirmation explicite — cf. JS en bas. Case désactivée
+                 tant qu'aucun ticket n'a été scanné (ou aucune ligne
+                 exploitable) ; le datalist des produits connus est
+                 rempli par le JS depuis data-purchase-products (liste
+                 injectée par le contrôleur). data-save-bulk-url pointe
+                 vers l'endpoint kiosque (auth par jeton). -->
+            <div id="lg-purchase-box" class="lg-scan-purchase" data-save-bulk-url="<?= e(url('/kiosque/admin/ledger/purchases/' . rawurlencode($token))) ?>">
+                <p class="lg-scan-title">🛒 Achats à créer (stock + coût de revient)</p>
+                <label class="lg-purchase-toggle">
+                    <input type="checkbox" id="lg-create-purchases">
+                    <span>Créer aussi ces achats <span class="muted">(stock + coût de revient — confirmation demandée)</span></span>
+                </label>
+                <p class="muted" id="lg-purchase-warn" hidden style="margin:0.35rem 0 0; font-size:0.8rem;"></p>
+                <p class="muted" id="lg-purchase-summary" hidden style="margin:0.35rem 0 0; font-size:0.82rem;"></p>
+                <p id="lg-purchase-status" hidden style="margin:0.35rem 0 0; font-size:0.82rem;"></p>
+            </div>
+            <datalist id="lg-purchase-products"></datalist>
 
             <div class="form-actions">
                 <button type="submit" class="btn btn-primary">Enregistrer la dépense</button>
@@ -299,9 +380,9 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
         </form>
         <?php else: ?>
         <!-- data-scan-url : endpoint d'analyse du ticket (même contrat que
-             /admin/compta/achats/scan) — le JS du bas câble le scan
-             automatique à l'image choisie dans #lg-receipt. Absent de la
-             version kiosque : pas de scan là-bas (endpoint différent). -->
+             /kiosque/admin/ledger/scan/{token}) — le JS du bas câble le
+             scan automatique à l'image choisie dans #lg-receipt, en admin
+             comme en kiosque (branches miroirs). -->
         <form method="post" action="<?= e(url('/admin/compta/depenses/save')) ?>" enctype="multipart/form-data" data-scan-url="<?= e(url('/admin/compta/depenses/scan')) ?>" data-purchase-products="<?= e(json_encode($purchaseProductKeys ?? [], JSON_UNESCAPED_UNICODE)) ?>">
             <?= csrf_field() ?>
             <input type="hidden" name="return_to" value="/admin/ledger">
@@ -387,6 +468,15 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
             </div>
             <div id="lg-scan-lines" class="lg-scan-lines" hidden>
                 <p class="lg-scan-title">Détail des produits</p>
+                <!-- En-têtes des colonnes (lisible sur téléphone) : mêmes
+                     largeurs flex que les .lg-scan-row ci-dessous. -->
+                <div class="lg-scan-head" aria-hidden="true">
+                    <span class="lg-scan-key">Produit</span>
+                    <span class="lg-scan-qty">Qté</span>
+                    <span class="lg-scan-total">Montant (€)</span>
+                    <span class="lg-scan-vat">TVA</span>
+                    <span class="lg-scan-unit">PU</span>
+                </div>
                 <div id="lg-scan-rows"></div>
                 <div class="form-actions">
                     <button type="button" id="lg-scan-row-add" class="btn btn-ghost btn-sm">+ Ligne</button>
@@ -545,13 +635,14 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
 <p style="text-align:center; font-size:0.78rem; color: var(--muted, #8892a6); margin: 0.9rem 0 1rem;">
     <a class="btn btn-ghost btn-sm" href="<?= e(url('/kiosque/admin/' . rawurlencode($token))) ?>">← Kiosque admin</a>
 </p>
-<?php else: ?>
-<!-- Helpers purs du scan de ticket (scanUpload, invoiceToRows,
-     applyInvoiceToExpense, serializeExpenseNotes) : partagés avec la
-     saisie d'achats, testés automatiquement. Chargé AVANT le script
-     inline, seulement en admin (pas de scan côté kiosque). -->
-<script src="<?= e(rootAssetVersioned('/assets/js/compta-saisie.js')) ?>"></script>
 <?php endif; ?>
+<!-- Helpers purs du scan de ticket (scanUpload, invoiceToRows,
+     applyInvoiceToExpense, serializeExpenseNotes, buildPurchaseBulkPayload)
+     : partagés avec la saisie d'achats, testés automatiquement. Chargé
+     AVANT le script inline, en admin ET en kiosque (le scan du ticket est
+     câblé dans les deux branches ; en kiosque, sans CSRF : le jeton de
+     l'URL EST l'authentification). -->
+<script src="<?= e(rootAssetVersioned('/assets/js/compta-saisie.js')) ?>"></script>
 
 <script>
 // Onglets Saisie / Livre (mémorisés dans le hash de l'URL : #livre ouvre
@@ -683,14 +774,18 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
     clearBtn.addEventListener('click', reset);
 })();
 
-// ── Scan automatique du ticket (ADMIN uniquement) ──
-// Le formulaire kiosque n'a pas de data-scan-url : ce bloc sort
-// immédiatement là-bas. À l'image choisie dans #lg-receipt (change) :
-// analyse serveur immédiate sans bouton, préremplissage NON destructif
-// des champs vides (applyInvoiceToExpense, pur et testé), puis pavé
-// « Informations extraites » (tout le reste, dont ce qui n'a pas pu
-// être appliqué) et pavé « Détail des produits » éditable -> notes.
-// PDF ou fichier non image : justificatif seulement, pas d'analyse.
+// ── Scan automatique du ticket (ADMIN ET KIOSQUE) ──
+// Le formulaire porte data-scan-url dans les deux branches (endpoint
+// miroir en kiosque, auth par jeton dans l'URL). À l'image choisie dans
+// #lg-receipt (change) : analyse serveur immédiate sans bouton,
+// préremplissage NON destructif des champs vides (applyInvoiceToExpense,
+// pur et testé), puis pavé « Informations extraites » (tout le reste,
+// dont ce qui n'a pas pu être appliqué) et pavé « Détail des produits »
+// éditable -> notes. PDF ou fichier non image : justificatif seulement,
+// pas d'analyse.
+// CSRF : présent en admin (champ _csrf du formulaire), ABSENT en kiosque
+// (le jeton de l'URL EST l'authentification) — null transmis aux helpers,
+// ni champ ni en-tête X-CSRF-Token ne partent alors dans les fetch.
 (function () {
     var form = document.querySelector('form[data-scan-url]');
     var input = document.getElementById('lg-receipt');
@@ -724,7 +819,10 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
     if (!spentAtEl || !labelEl || !amountEl || !invoiceEl || !vatEl || !infoBox || !infoList) return;
 
     var basisInputs = form.querySelectorAll('input[name="amount_basis"]');
+    // Champ _csrf : présent en admin seulement — null en kiosque (les
+    // helpers ComptaSaisie tolèrent null : ni champ ni en-tête envoyés).
     var csrfInput = form.querySelector('input[name="_csrf"]');
+    var csrfToken = csrfInput ? csrfInput.value : null;
     var scanUrl = form.getAttribute('data-scan-url');
     var lastInvoice = null;
 
@@ -1101,7 +1199,7 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
             return;
         }
         status('Analyse du ticket…');
-        H.scanUpload(file, csrfInput ? csrfInput.value : '', scanUrl).then(function (json) {
+        H.scanUpload(file, csrfToken, scanUrl).then(function (json) {
             status('');
             handleInvoice(json && json.invoice ? json.invoice : null);
         }, function (err) {
@@ -1298,12 +1396,14 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
             purchaseSubmitBtn.textContent = 'Création des achats…';
         }
 
-        // (c) POST save-bulk (FormData + CSRF champ et en-tête) ; en
-        // cas d'échec : erreur affichée, submit ABANDONNÉ — la dépense
-        // n'est pas enregistrée, l'utilisateur corrige et renvoie.
+        // (c) POST save-bulk (FormData ; champ _csrf + en-tête X-CSRF-Token
+        // en admin SEULEMENT — en kiosque, ni l'un ni l'autre : le jeton de
+        // l'URL EST l'authentification). En cas d'échec : erreur affichée,
+        // submit ABANDONNÉ — la dépense n'est pas enregistrée, l'utilisateur
+        // corrige et renvoie.
         var fd = new FormData();
         fd.append('as_json', '1');
-        fd.append('_csrf', csrfInput ? csrfInput.value : '');
+        if (csrfToken !== null) fd.append('_csrf', csrfToken);
         fd.append('purchased_at', bulk.purchased_at);
         fd.append('supplier', bulk.supplier);
         fd.append('invoice_number', bulk.invoice_number);
@@ -1342,7 +1442,7 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
 
         fetch(saveBulkUrl, {
             method: 'POST',
-            headers: { 'X-CSRF-Token': String(csrfInput ? csrfInput.value : '') },
+            headers: csrfToken !== null ? { 'X-CSRF-Token': String(csrfToken) } : {},
             credentials: 'same-origin',
             body: fd
         }).then(function (res) {

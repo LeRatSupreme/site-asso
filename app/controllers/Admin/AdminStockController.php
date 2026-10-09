@@ -10,6 +10,7 @@ use App\Core\Compta\ComptaCalc;
 use App\Core\Compta\ProductAutoSync;
 use App\Core\Compta\ProductLifecycle;
 use App\Core\Compta\Kiosk;
+use App\Core\Compta\PurchaseSaver;
 use App\Core\Compta\StockPublic;
 use App\Models\InventoryCount;
 use App\Models\ProductCost;
@@ -65,9 +66,6 @@ final class AdminStockController extends AdminBaseController
         ]);
     }
 
-    /** Taux de TVA autorisés pour les achats. */
-    private const VAT_RATES = [20.0, 10.0, 5.5, 2.1, 0.0];
-
     /**
      * Enregistre une grille d'achats en un seul POST (une ligne par
      * produit — une course entière en une fois). Les champs communs
@@ -86,6 +84,11 @@ final class AdminStockController extends AdminBaseController
      * aligné sur « product_key[] » (factures à TVA mixte, ex. METRO
      * boissons 5,5 % + droguerie 20 %) ; une case vide du tableau
      * retombe sur le taux d'en-tête ('' = montant « déjà TTC »).
+     *
+     * Le métier (validation + création + lot de coût + synchro carte +
+     * cache public) vit dans PurchaseSaver::save — partagé avec le livre
+     * comptable kiosque ; ce contrôleur garde la garde, la lecture du
+     * POST, l'audit, le flash et la redirection.
      */
     public function savePurchasesBulk(): void
     {
@@ -131,259 +134,63 @@ final class AdminStockController extends AdminBaseController
         $quantities = is_array($_POST['quantity'] ?? null) ? $_POST['quantity'] : [];
         $amounts = is_array($_POST['total_amount'] ?? null) ? $_POST['total_amount'] : [];
 
-        $inserted = 0;
-        $noStockInserted = 0;
-        $products = [];
-        $errors = [];
+        // Lignes alignées pour le service (mêmes brutes que le POST :
+        // la résolution taux de ligne vs en-tête vit dans le service).
         $count = max(count($keys), count($quantities), count($amounts));
-
+        $lines = [];
         for ($i = 0; $i < $count; $i++) {
-            $key = trim((string) ($keys[$i] ?? ''));
-            $amountRaw = trim((string) ($amounts[$i] ?? ''));
-            // Case « hors stock » de la ligne N (renumérotée au submit).
-            $noStock = (($noStockFlags[$i] ?? null) === '1' || ($noStockFlags[$i] ?? null) === 1);
-
-            // Ligne totalement vide (jamais remplie) : ignorée sans bruit.
-            if ($key === '' && $amountRaw === '') {
-                continue;
-            }
-
-            $reason = $this->createOne([
-                'purchased_at' => $purchasedAt,
-                'product_key'  => $key,
-                'quantity'     => (string) ($quantities[$i] ?? ''),
-                'total_amount' => $amountRaw,
-                'vat_rate'     => self::lineVatRaw($lineVatRates, $i, $vatRaw),
-                'amount_basis' => $basis,
-                'update_cost'  => $updateCost ? '1' : '',
-                'no_stock'     => $noStock,
-                'supplier'     => $supplier,
-                'invoice_number' => $invoiceNumber,
-                'notes'        => $notes,
-            ], $user);
-
-            if ($reason === '') {
-                $inserted++;
-                if ($noStock) {
-                    $noStockInserted++;
-                }
-                $products[$key] = true;
-            } else {
-                $errors[] = ($key !== '' ? $key : '(sans nom)') . ' : ' . $reason;
-            }
+            $lines[] = [
+                'key'       => trim((string) ($keys[$i] ?? '')),
+                'qty'       => (string) ($quantities[$i] ?? ''),
+                'total_raw' => trim((string) ($amounts[$i] ?? '')),
+                'vat_raw'   => $lineVatRates !== null ? (string) ($lineVatRates[$i] ?? '') : '',
+                'no_stock'  => (($noStockFlags[$i] ?? null) === '1' || ($noStockFlags[$i] ?? null) === 1),
+            ];
         }
 
-        if ($inserted === 0) {
-            $flash = $errors === []
-                ? 'Aucun achat saisi.'
-                : 'Aucun achat enregistré — ' . implode(' · ', $errors);
+        $res = PurchaseSaver::save([
+            'purchased_at'   => $purchasedAt,
+            'supplier'       => $supplier,
+            'invoice_number' => $invoiceNumber,
+            'notes'          => $notes,
+            'amount_basis'   => $basis,
+            'update_cost'    => $updateCost,
+            'vat_raw'        => $vatRaw,
+            'vat_per_line'   => $lineVatRates !== null,
+            'created_by'     => $user['id'] ?? null,
+        ], $lines);
+
+        if ($res['inserted'] === 0) {
             if ($asJson) {
                 // Même message agrégé que le flash, en JSON (400).
-                $this->json(['ok' => false, 'error' => $flash], 400);
+                $this->json(['ok' => false, 'error' => $res['message']], 400);
             }
-            $this->setFlash('error', $flash);
+            $this->setFlash('error', $res['message']);
             redirect(url('/admin/compta/achats'));
         }
 
         // Audit agrégé unique : un seul evénement pour toute la grille
         // (les ids des achats/ lots restent consultables dans le journal).
         $this->audit('compta.purchase.create_bulk', 'purchase', null, [
-            'inserted'       => $inserted,
-            'products'       => count($products),
-            'ignored'        => count($errors),
+            'inserted'       => $res['inserted'],
+            'products'       => $res['products'],
+            'ignored'        => count($res['errors']),
             'vat_rate'       => $vatRaw === '' ? null : parseFrenchFloat($vatRaw),
             'vat_per_line'   => $lineVatRates !== null,
             'amount_basis'   => $basis,
             'update_cost'    => $updateCost,
-            'no_stock'       => $noStockInserted,
+            'no_stock'       => $res['no_stock'],
             'supplier'       => $supplier,
             'invoice_number' => $invoiceNumber !== '' ? $invoiceNumber : null,
             'purchased_at'   => $purchasedAt,
         ]);
 
-        // Synchro automatique de la carte limitée aux clés saisies :
-        // un achat sur un produit sans fiche crée la fiche. Jamais bloquant.
-        $sync = ['created' => []];
-        try {
-            $sync = ProductAutoSync::ensureKeys(array_keys($products));
-        } catch (\Throwable) {
-            // Le stock ne doit jamais casser à cause de la synchro carte.
-        }
-
-        // Les achats font bouger le théorique : la carte publique suit.
-        StockPublic::invalidate();
-
-        // Message adapté : « stock mis à jour » seulement si au moins une
-        // ligne est réellement entrée en stock.
-        $allNoStock = $noStockInserted === $inserted;
-        $flash = sprintf(
-            '%d achat%s enregistré%s pour %d produit%s — %s',
-            $inserted,
-            $inserted > 1 ? 's' : '',
-            $inserted > 1 ? 's' : '',
-            count($products),
-            count($products) > 1 ? 's' : '',
-            $allNoStock ? 'stock inchangé (hors stock).' : 'stock mis à jour.'
-        );
-        if ($noStockInserted > 0 && !$allNoStock) {
-            $flash .= sprintf(' %d ligne(s) hors stock (stock inchangé).', $noStockInserted);
-        }
-        if ($invoiceNumber !== '') {
-            $flash .= ' Facture : ' . $invoiceNumber . '.';
-        }
-        if ($errors !== []) {
-            $flash .= ' Lignes ignorées : ' . implode(' · ', $errors);
-        }
-        if ($sync['created'] !== []) {
-            $flash .= ' Carte mise à jour automatiquement : ' . implode(', ', $sync['created']) . '.';
-        }
         if ($asJson) {
             // Même message que le flash, en JSON (200).
-            $this->json(['ok' => true, 'inserted' => $inserted, 'message' => $flash]);
+            $this->json(['ok' => true, 'inserted' => $res['inserted'], 'message' => $res['message']]);
         }
-        $this->setFlash('success', $flash);
+        $this->setFlash('success', $res['message']);
         redirect(url('/admin/compta/achats'));
-    }
-
-    /**
-     * Taux de TVA BRUT d'une ligne du lot : la valeur du tableau
-     * « vat_rate[] » quand elle est renseignée, sinon le taux d'en-tête
-     * ('' = pas de décomposition TVA — montant « déjà TTC »). La
-     * validation du taux (∈ VAT_RATES) reste dans createOne() : un taux
-     * hors liste remonte comme erreur de la ligne.
-     *
-     * Méthode pure (aucun accès POST/DB) : testée unitairement.
-     *
-     * @param array<int,mixed>|null $lineRates Tableau vat_rate[] du POST
-     *                                        (null = pas de tableau :
-     *                                        taux d'en-tête partout).
-     * @param int    $index     Indice de la ligne (aligné sur product_key[]).
-     * @param string $headerRaw Taux d'en-tête brut ('' = aucun).
-     */
-    protected static function lineVatRaw(?array $lineRates, int $index, string $headerRaw): string
-    {
-        if ($lineRates === null) {
-            return $headerRaw;
-        }
-
-        $raw = trim((string) ($lineRates[$index] ?? ''));
-
-        return $raw !== '' ? $raw : $headerRaw;
-    }
-
-    /**
-     * Crée UN achat (et son lot de coût optionnel) à partir d'un jeu de
-     * champs — cœur partagé de la saisie en lot.
-     *
-     * Sémantique du montant : la saisie fait foi, dans la base choisie.
-     * « amount_basis » = « ht » (défaut) : le montant est HT, le TTC est
-     * calculé avec le taux ; « ttc » : le montant est déjà TTC (ticket de
-     * caisse), le HT est déduit du taux (TTC / (1 + taux/100)) et la TVA
-     * apparaît décomposée. Sans taux (''), le montant est pris tel quel
-     * (HT = TTC — comportement historique).
-     *
-     * @param array<string,mixed> $data purchased_at, product_key,
-     *                                  quantity, total_amount, vat_rate
-     *                                  ('' = sans décomposition TVA),
-     *                                  amount_basis ('ht'|'ttc'),
-     *                                  update_cost, supplier,
-     *                                  invoice_number (n° de facture/ticket
-     *                                  du fournisseur, commun à la course),
-     *                                  notes, no_stock (case « hors stock » :
-     *                                  compta sans stock)
-     * @param array<string,mixed> $user Utilisateur courant (created_by).
-     *
-     * @return string '' si l'achat est créé, sinon le motif d'erreur
-     *                (affiché ligne par ligne dans le flash).
-     */
-    private function createOne(array $data, array $user): string
-    {
-        $purchasedAt = trim((string) ($data['purchased_at'] ?? ''));
-        if ($purchasedAt === '') {
-            $purchasedAt = date('Y-m-d');
-        }
-        $productKey = trim((string) ($data['product_key'] ?? ''));
-        $quantity = (int) ($data['quantity'] ?? 0);
-        $totalAmount = parseFrenchFloat((string) ($data['total_amount'] ?? ''));
-
-        // '' = montant saisi sans TVA (HT = TTC), sinon taux en %.
-        $vatRaw = trim((string) ($data['vat_rate'] ?? ''));
-        $vatRate = null;
-        if ($vatRaw !== '') {
-            $candidate = parseFrenchFloat($vatRaw);
-            if (!in_array($candidate, self::VAT_RATES, true)) {
-                return 'Taux de TVA invalide (taux français : 20, 10, 5,5, 2,1 ou 0).';
-            }
-            $vatRate = $candidate;
-        }
-
-        // Base du montant saisi : HT (TVA à ajouter) ou TTC (TVA incluse).
-        $isTtcBasis = ($data['amount_basis'] ?? 'ht') === 'ttc';
-
-        if ($productKey === '') {
-            return 'produit manquant';
-        }
-        if ($quantity < 1) {
-            return 'quantité invalide';
-        }
-        if ($totalAmount <= 0.0) {
-            return 'montant invalide';
-        }
-
-        // Le montant saisi fait foi, dans sa base ; l'autre côté est déduit.
-        $total = round($totalAmount, 3);
-        if ($vatRate === null) {
-            $totalHt = $total;
-            $totalTtc = $total;
-        } elseif ($isTtcBasis) {
-            $totalTtc = $total;
-            $totalHt = round($total / (1 + $vatRate / 100), 3);
-        } else {
-            $totalHt = $total;
-            $totalTtc = round($total * (1 + $vatRate / 100), 3);
-        }
-
-        // Coût unitaire dérivé (HT) : sert au lot de coût de revient et
-        // à l'audit.
-        $unitCost = round($totalHt / $quantity, 3);
-
-        $id = Purchase::create([
-            'purchased_at'   => $purchasedAt,
-            'product_key'    => $productKey,
-            'quantity'       => $quantity,
-            'total_ht'       => $totalHt,
-            'total_ttc'      => $isTtcBasis && $vatRate !== null ? $totalTtc : null,
-            'vat_rate'       => $vatRate,
-            'no_stock'       => !empty($data['no_stock']),
-            'supplier'       => trim((string) ($data['supplier'] ?? '')),
-            'invoice_number' => trim((string) ($data['invoice_number'] ?? '')),
-            'notes'          => trim((string) ($data['notes'] ?? '')),
-            'created_by'     => $user['id'] ?? null,
-        ]);
-
-        if ($id === '') {
-            return 'création impossible';
-        }
-
-        // Option (cochée par défaut) : l'achat crée un nouveau lot de coût
-        // de revient à ce prix — chaque achat à un prix différent ouvre un
-        // nouveau lot daté, le bénéfice suit les vrais coûts d'achat.
-        if (!empty($data['update_cost'])) {
-            // Coût de revient en TTC pour bénéfices cohérents avec ventes TTC :
-            // les prix de vente sont TTC, le coût doit l'être aussi.
-            $costTtc = round($totalTtc / $quantity, 3);
-            ProductCost::create([
-                'product_key' => $productKey,
-                'cost_price'  => $costTtc,
-                'valid_from'  => $purchasedAt,
-                'supplier'    => trim((string) ($data['supplier'] ?? '')),
-                // Lie le lot à l'achat : sa suppression en cascade
-                // (deletePurchase) saura exactement quel lot retirer.
-                'purchase_id' => $id,
-            ]);
-        }
-
-        return '';
     }
 
     /**
