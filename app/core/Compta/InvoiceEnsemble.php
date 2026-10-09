@@ -352,6 +352,18 @@ final class InvoiceEnsemble
         $reconstructed = self::reconstruct($headers, $winners);
         $invoice = MetroInvoiceParser::parse($reconstructed);
 
+        // 7 bis) Le re-parse peut recoller un fragment au libellé quand
+        // les colonnes manquent au gagnant (PU « 2,080 » sans colisage :
+        // « OASIS TROPICAL 2,080 12,48 B » -> libellé « OASIS TROPICAL
+        // 2,080 ») : les libellés finaux passent par le même nettoyage
+        // que les gagnants.
+        foreach ($invoice['lines'] as $li => $l) {
+            $cleaned = self::cleanLineLabel((string) ($l['label'] ?? ''));
+            if (trim($cleaned) !== '') {
+                $invoice['lines'][$li]['label'] = $cleaned;
+            }
+        }
+
         return [
             'text'     => self::concatTexts($variants),
             'invoice'  => $invoice,
