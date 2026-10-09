@@ -72,6 +72,7 @@ final class InvoiceEnsemble
         'msc', 'asc', 'ecoc', 'consigne', 'douane', 'agrement',
         'to', 'de', 'du', 'le', 'la', 'les', 'et', 'en', 'aux', 'sur',
         'par', 'ne', 'me', 'te', 'se', 'ce', 'sa', 'son', 'nos', 'des',
+        'au', 'pu',
     ];
 
     /**
@@ -775,16 +776,31 @@ final class InvoiceEnsemble
                     $numeric = (string) ($c['ean_key'] ?? '') === ''
                         && self::sameMoneyOrNull($ref['unit_price'] ?? null, $c['unit_price'] ?? null)
                         && self::sameUnitsLoose($ref, $c);
+                    // Variante sans EAN à unités MULTIPLES entières des
+                    // unités lues de la cible (colisage 72 lu pour 24) :
+                    // même produit, colisage mal découpé.
+                    $numeric = $numeric || ((string) ($c['ean_key'] ?? '') === ''
+                        && self::sameMoneyOrNull($ref['unit_price'] ?? null, $c['unit_price'] ?? null)
+                        && self::unitsIntegerMultiple($ref, $c));
                     // Source à EAN ancré (lecture minoritaire au même
                     // montant) : rattachée si son libellé recoupe celui de
-                    // la cible — RED BULL BOITE dans le groupe RED BULL
-                    // ZERO / PRIX AU KG, jamais dans un produit étranger.
-                    $byLabel = $subEans[$si] !== ''
+                    // N'IMPORTE QUELLE lecture de la cible — RE COCA SANS
+                    // SUCRES dans le groupe COCA SANS SUCRES / OASIS
+                    // réapparié, jamais dans un produit étranger.
+                    $byLabel = false;
+                    if ($subEans[$si] !== ''
                         && $refEan === ''
                         && count($subgroups[$target]) >= 2
-                        && self::contentOverlap((string) $ref['label'], (string) $c['label'])
                         && self::sameMoneyOrNull($ref['unit_price'] ?? null, $c['unit_price'] ?? null)
-                        && self::sameUnitsLoose($ref, $c);
+                        && self::sameUnitsLoose($ref, $c)
+                    ) {
+                        foreach ($subgroups[$target] as $m) {
+                            if (self::contentOverlap((string) $m['label'], (string) $c['label'])) {
+                                $byLabel = true;
+                                break;
+                            }
+                        }
+                    }
                     if ($numeric || $byLabel) {
                         $subgroups[$target][] = $c;
                         $subgroups[$si] = [];
@@ -825,6 +841,24 @@ final class InvoiceEnsemble
         }
 
         return self::sameUnitsOrNull($a, $b);
+    }
+
+    /**
+     * Unités de l'un multiple ENTIER des unités de l'autre (colisage mal
+     * découpé : « 72 » lu pour « 24 » — 24×3) : même ligne au même montant
+     * et au même PU, pas un produit distinct.
+     */
+    private static function unitsIntegerMultiple(array $a, array $b): bool
+    {
+        $ua = (int) ($a['units'] ?? 0);
+        $ub = (int) ($b['units'] ?? 0);
+        if ($ua < 1 || $ub < 1 || $ua === $ub) {
+            return false;
+        }
+        $big = max($ua, $ub);
+        $small = min($ua, $ub);
+
+        return $big % $small === 0 && $big / $small <= 12;
     }
 
     /** Arithmétique colisage×qté×PU ≈ montant validée (tolérance parseur) ? */
