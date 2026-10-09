@@ -1063,21 +1063,26 @@ final class MetroInvoiceParser
             $line = rtrim(substr($line, 0, -strlen($lm[0])));
         }
 
-        $prefix = '(?:(?:\S+\s+){0,6}?)';
+        $prefix = '(?:(?:\S+\s+){0,10}?)';
         $pu = '(?:(\d{1,3})[.,]\s?(\d{3})\s+)?';
+        // Déchets OCR en toute fin de ligne après le montant (« 30, 44 É »,
+        // « 7,12. à ») : jusqu'à deux résidus courts non numériques.
+        $tail = '(?:\s+\S{1,2}){0,2}';
         $forms = [
+            // PU entier 3-4 chiffres (virgule perdue : « 1268 » pour 1,268)
+            // + colisage + qté + montant — AVANT dec_pu : sans cet ordre,
+            // « 1268 12 2 30,44 » serait lu colisage 1268 (PU absent).
+            ['/^' . $prefix . '(\d{3,4})(?:[.,])?(?![.,\d])\s+(\d{1,4})\s+(\d{1,4})\s+(\d{1,6})[.,]\s?(\d{2})' . $tail . '$/', 'int_pu'],
             // PU décimal + colisage + qté + montant décimal (forme canonique).
-            ['/^' . $prefix . $pu . '(\d{1,4})\s+(\d{1,4})\s+(\d{1,6})[.,]\s?(\d{2})$/', 'dec_pu'],
-            // PU entier 3 chiffres (virgule perdue) + colisage + qté + montant.
-            ['/^' . $prefix . '(\d{3})(?![.,\d])\s+(\d{1,4})\s+(\d{1,4})\s+(\d{1,6})[.,]\s?(\d{2})$/', 'int_pu'],
+            ['/^' . $prefix . $pu . '(\d{1,4})\s+(\d{1,4})\s+(\d{1,6})[.,]\s?(\d{2})' . $tail . '$/', 'dec_pu'],
             // PU décimal + colisage + qté + montant ENTIER (virgule perdue).
-            ['/^' . $prefix . $pu . '(\d{1,4})\s+(\d{1,4})\s+(\d{3,4})$/', 'int_total'],
+            ['/^' . $prefix . $pu . '(\d{1,4})\s+(\d{1,4})\s+(\d{3,4})' . $tail . '$/', 'int_total'],
             // PU décimal + colisage/qté collés (« 6100 ») + montant.
-            ['/^' . $prefix . $pu . '(\d{3,5})\s+(\d{1,6})[.,]\s?(\d{2})$/', 'merged'],
+            ['/^' . $prefix . $pu . '(\d{3,5})\s+(\d{1,6})[.,]\s?(\d{2})' . $tail . '$/', 'merged'],
             // PU décimal + 1-2 déchets + montant (colisage/qté illisibles).
-            ['/^' . $prefix . $pu . '(?:\S{1,3}\s+){0,2}(\d{1,6})[.,]\s?(\d{2})$/', 'loose'],
+            ['/^' . $prefix . $pu . '(?:\S{1,3}\s+){0,2}(\d{1,6})[.,]\s?(\d{2})' . $tail . '$/', 'loose'],
             // Montant seul (bloc totalement dégradé).
-            ['/^' . $prefix . '(\d{1,6})[.,]\s?(\d{2})$/', 'total_only'],
+            ['/^' . $prefix . '(\d{1,6})[.,]\s?(\d{2})' . $tail . '$/', 'total_only'],
         ];
 
         foreach ($forms as [$regex, $kind]) {
@@ -1155,16 +1160,19 @@ final class MetroInvoiceParser
             }
 
             // Validation arithmétique + rejet des pseudo-colonnes absurdes.
+            // Une forme structurellement plausible mais arithmétiquement
+            // fausse (PU « 380 » découpé dans « 2, 380 ») tente la forme
+            // suivante au lieu d'abandonner toute la ligne.
             if ($colisage !== null && $qty !== null && $unitPrice !== null && $total !== null) {
                 $expected = round($colisage * $qty * $unitPrice, 2);
                 if (abs($expected - $total) > max(0.02, $total * 0.01)) {
                     // Colisage/qté collés ? (« 6100 » = 6×1 + résidu)
                     if ($mergedDigits === null) {
-                        return null;
+                        continue;
                     }
                     $split = self::splitMergedColisage($mergedDigits, $unitPrice, $total);
                     if ($split === null) {
-                        return null;
+                        continue;
                     }
                     [$colisage, $qty] = $split;
                 }

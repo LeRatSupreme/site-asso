@@ -277,6 +277,69 @@ final class InvoiceEnsembleTest extends TestCase
         self::assertSame('9002490290283', $summer['ean']);
     }
 
+    /**
+     * MAUVAIS APPARIEMENT tête/colonnes (réel, photo facture_1) : une
+     * variante lit la tête RED BULL (EAN valide) avec les colonnes de la
+     * ligne suivante (AGITATEUR, 3,47 €). Le PU d'un produit étant fixe,
+     * l'EAN lu à deux montants est démoté sur la lecture minoritaire :
+     * RED BULL reste à 24,98 € avec son EAN, AGITATEUR garde sa ligne —
+     * pas de troisième ligne fantôme à 3,47 €.
+     */
+    public function test_ean_misapparie_est_demote_et_les_lignes_restent_propres(): void
+    {
+        $v0 = "METRO\nN° FACTURE 0/0(087)0054/032004\nDate facture : 18-09-2026\n"
+            . "9002490205997 2022838 RED BULL BOITE 25CL 3,470 1 1 3,47 D\n"
+            . "9002490205997 2022838 RED BULL BOITE 25CL 1,041 24 1 24,98 B\n"
+            . "Total H.T. : 28,45\n";
+        $v1 = "METRO\nN° FACTURE 0/0(087)0054/032004\nDate facture : 18-09-2026\n"
+            . "DOMAGITATEUR BOIS 11CM 3,470 1 1 3,47 D\n"
+            . "9002490205997 2022838 RED BULL BOITE 25CL 1,041 24 1 24,98 B\n"
+            . "Total H.T. : 28,45\n";
+
+        $r = InvoiceEnsemble::consolidate([
+            ['name' => 'v0', 'text' => $v0],
+            ['name' => 'v1', 'text' => $v1],
+        ]);
+
+        self::assertSame(2, $r['groups'], 'Deux produits = deux lignes, le mispair ne crée rien.');
+        $redBull = $this->lineByLabel($r['invoice']['lines'], 'RED BULL');
+        $agitateur = $this->lineByLabel($r['invoice']['lines'], 'DOMAGITATEUR');
+        self::assertNotNull($redBull);
+        self::assertNotNull($agitateur, 'AGITATEUR ne doit pas être écrasé par le mispair RED BULL.');
+        self::assertSame(24.98, $redBull['total']);
+        self::assertSame('9002490205997', $redBull['ean']);
+        self::assertSame(3.47, $agitateur['total']);
+        self::assertSame(1, $agitateur['units']);
+    }
+
+    /**
+     * EAN TRONQUÉ par l'OCR (12 chiffres lus, bench image_a_scan) : la
+     * réparation par insertion d'un chiffre, confirmée par l'EAN valide lu
+     * sur une autre lecture de la même ligne, regroupe les deux lectures
+     * (montants légèrement différents 15,50/15,90, même PU) en UNE ligne
+     * au montant majoritaire.
+     */
+    public function test_ean_tronque_repare_par_insertion_fusionne_les_lectures(): void
+    {
+        $v0 = "METRO\nN° FACTURE 0/0(087)0054/033871\nDate facture : 02-10-2026\n"
+            . "5000112617979 1858984 COCA SANS SUCRES 30X33CL OS 0,530 30 1 15,90 B\n"
+            . "Total H.T. : 15,90\n";
+        $v1 = "METRO\nN° FACTURE 0/0(087)0054/033871\nDate facture : 02-10-2026\n"
+            . "500112617979 1858984 COCA SANS SUCRES 30X330L 08 0,530 29 1 15,50 B\n"
+            . "Total H.T. : 15,90\n";
+
+        $r = InvoiceEnsemble::consolidate([
+            ['name' => 'v0', 'text' => $v0],
+            ['name' => 'v1', 'text' => $v1],
+        ]);
+
+        self::assertSame(1, $r['groups'], 'Même produit (EAN réparé 5000112617979, même PU) = une seule ligne.');
+        $line = $r['invoice']['lines'][0];
+        self::assertSame(15.90, $line['total'], 'La lecture au meilleur score (15,90) fait foi.');
+        self::assertSame('5000112617979', $line['ean']);
+        self::assertSame(30, $line['units']);
+    }
+
     // ————————————————————————————————————————————————————————————
     // Rien d'inventé : fragments et déchets OCR abandonnés
     // ————————————————————————————————————————————————————————————

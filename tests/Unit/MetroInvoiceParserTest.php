@@ -407,6 +407,36 @@ final class MetroInvoiceParserTest extends TestCase
     }
 
     /**
+     * Lignes dégradées relevées sur les vraies photos (bench OCR) : PU
+     * entier à 4 chiffres dont la virgule est perdue (« 1268 » = 1,268),
+     * déchets OCR après le montant (« 30, 44 É ») et bloc produit à plus
+     * de six mots parasites avant les colonnes — extraites sans inventer
+     * les montants (validation arithmétique 12 × 2 × 1,268 ≈ 30,44).
+     */
+    public function test_lignes_ocr_pu_quatre_chiffres_dechets_et_prefixe_long(): void
+    {
+        $text = "METRO\n"
+            . "Date facture : 03-06-2026\n"
+            . "06 05284 3 JONSTER ULTRA ZEROMBTE 50CL 1268 12 2 30, 44 É\n"
+            . "pu Ut Base Cut SE GENE OIL E 0.477 30 1 14,31 B P\n"
+            . "Total H.T. : 44,75\n";
+
+        $r = MetroInvoiceParser::parse($text);
+
+        $ultra = $this->lineByLabel($r['lines'], '06 05284 3 JONSTER');
+        self::assertNotNull($ultra, 'PU « 1268 » (virgule perdue) + déchet « É » : la ligne doit être extraite.');
+        self::assertSame(24, $ultra['units'], 'Colisage 12 × qté 2, PAS colisage 1268.');
+        self::assertSame(1.268, $ultra['unit_price']);
+        self::assertSame(30.44, $ultra['total']);
+
+        $coca = $this->lineByLabel($r['lines'], 'pu Ut Base');
+        self::assertNotNull($coca, 'Bloc à 8 mots parasites avant les colonnes : la ligne doit être extraite.');
+        self::assertSame(30, $coca['units']);
+        self::assertSame(14.31, $coca['total']);
+        self::assertSame('B', $coca['vat_letter']);
+    }
+
+    /**
      * Contenu d'une fixture (transcription réelle d'une facture METRO).
      */
     private function fixture(string $name = 'metro_invoice.txt'): string

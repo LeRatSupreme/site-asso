@@ -53,6 +53,26 @@ final class InvoiceEnsemble
     private const MONEY_EPSILON = 0.02;
 
     /**
+     * Tolérance (€) sur les prix unitaires : même produit lu deux fois.
+     * Un même EAN lu avec deux PU différents est un mauvais appariement
+     * tête/colonnes (le PU d'un produit est fixe sur une facture).
+     */
+    private const PU_EPSILON = 0.005;
+
+    /**
+     * Jetons de vocabulaire NON produit (adresses, en-têtes, mentions) :
+     * exclus de l'identité de libellé — « Nanterre Cedex 62100 CALAIS »
+     * n'est pas un libellé produit, jamais un groupe fantôme.
+     */
+    private const NON_PRODUCT_TOKENS = [
+        'metro', 'france', 'cedex', 'nanterre', 'calais', 'paris', 'lyon',
+        'marseille', 'toulouse', 'bordeaux', 'lille', 'nantes', 'tel', 'fax',
+        'page', 'client', 'total', 'facture', 'date', 'prix', 'kg', 'litre',
+        'colisage', 'designation', 'numero', 'siret', 'siren', 'ape', 'eur',
+        'msc', 'asc', 'ecoc', 'consigne', 'douane', 'agrement',
+    ];
+
+    /**
      * Tolérance arithmétique d'une ligne, IDENTIQUE à celle du parseur
      * METRO (matchColumns / finalizeLine) : ±2 c. ou ±1 % du montant —
      * une ligne que le parseur accepte (24×2×1,233 = 59,184 ≈ 59,16) ne
@@ -245,6 +265,23 @@ final class InvoiceEnsemble
         }
         $validatedTotal = array_sum($validatedPerVariant);
 
+        // 2 bis) Démotion des EAN mal appariés : un EAN lu avec DEUX
+        // montants (ou deux PU) est le symptôme d'une tête produit réappariée
+        // avec les colonnes d'une autre ligne (le PU d'un produit est fixe).
+        // L'EAN n'est conservé que sur sa lecture majoritaire ; ailleurs il
+        // est retiré du candidat (plus de bonus, plus de groupement par EAN)
+        // mais le candidat reste — son montant peut être le bon.
+        $candidates = self::demoteConflictingEans($candidates);
+        foreach ($candidates as $ci => $c) {
+            if (!empty($c['demoted'])) {
+                $candidates[$ci]['score'] -= (int) ($c['ean_bonus'] ?? 0);
+                if ($candidates[$ci]['score'] < 4 && $validatedPerVariant[(int) $c['variant']] > 0) {
+                    $validatedPerVariant[(int) $c['variant']]--;
+                    $validatedTotal--;
+                }
+            }
+        }
+
         // Bonus collectif : une variante dont Σ candidats ≈ Total H.T. lu
         // est une lecture complète — tous ses candidats gagnent +1.
         foreach ($variants as $vi => $v) {
@@ -285,6 +322,12 @@ final class InvoiceEnsemble
                 $winners[] = $winner;
             }
         }
+
+        // 4 bis) Fusion des lectures décalées du même produit : même EAN
+        // ancré ET même PU, montants voisins mais hors epsilon (« 15,50 »
+        // lu pour « 15,90 », chiffre OCR erroné) → la lecture majoritaire
+        // (meilleur score) fait foi, l'autre est abandonnée.
+        $winners = self::mergeSameProductWinners($winners);
 
         // 5) Ordre final : vote majoritaire des positions (Copeland).
         $winners = self::orderWinners($winners);
@@ -356,11 +399,13 @@ final class InvoiceEnsemble
             $score += 2;
         }
 
-        // EAN : valide, réparé, ou illisible (aucune invention).
+        // EAN : valide, réparé (chiffre erroné ou chiffre perdu), ou
+        // illisible (aucune invention).
         $ean = (string) ($c['ean'] ?? '');
         if ($ean !== '' && Ean13::isValid($ean)) {
             $score += 2;
             $eanKey = $ean;
+            $c['ean_bonus'] = 2;
         } elseif (preg_match('/^\d{13}$/', $ean) === 1) {
             $fixes = Ean13::repairOneDigit($ean);
             $confirmed = array_values(array_intersect($fixes, $knownEans));
@@ -374,6 +419,25 @@ final class InvoiceEnsemble
                 $score += 1;
                 $c['ean'] = $fix;
                 $c['repaired'] = true;
+                $c['ean_bonus'] = 1;
+                $eanKey = $fix;
+            }
+        } elseif (preg_match('/^\d{12}$/', $ean) === 1) {
+            // Chiffre PERDU par l'OCR : réparation par insertion, retenue
+            // seulement unique ou confirmée par un EAN valide lu ailleurs.
+            $fixes = Ean13::repairMissingDigit($ean);
+            $confirmed = array_values(array_intersect($fixes, $knownEans));
+            $fix = null;
+            if (count($confirmed) === 1) {
+                $fix = $confirmed[0];
+            } elseif (count($fixes) === 1) {
+                $fix = $fixes[0];
+            }
+            if ($fix !== null) {
+                $score += 1;
+                $c['ean'] = $fix;
+                $c['repaired'] = true;
+                $c['ean_bonus'] = 1;
                 $eanKey = $fix;
             }
         }
@@ -385,76 +449,328 @@ final class InvoiceEnsemble
     }
 
     /**
-     * Regroupe les candidats (toutes variantes confondues) : même EAN de
-     * clé valide, sinon même montant ET libellés similaires à ≥ 80 %.
-     * Deux EAN-13 différents (même non valides) interdisent la fusion par
-     * libellé (produits distincts : RED BULL ICE vs PEACH à montants
-     * identiques). Les candidats sans identité (colonnes orphelines à
-     * libellé générique) ne créent jamais de groupe : ils rejoignent un
-     * groupe au montant et au PU identiques, ou sont abandonnés — jamais
-     * émis comme ligne inconnue.
+     * Démotion des EAN vus à plusieurs montants/PU : le même EAN-13 lu avec
+     * deux montants différents signifie qu'une tête produit a été réappariée
+     * avec les colonnes d'une ligne voisine. L'EAN n'est conservé que sur la
+     * lecture majoritaire (même PU lu ailleurs > plus d'unités > première
+     * vue) ; les autres candidats perdent leur EAN (flag « demoted »).
+     *
+     * @param list<array<string,mixed>> $candidates
+     * @return list<array<string,mixed>>
+     */
+    private static function demoteConflictingEans(array $candidates): array
+    {
+        /** @var array<string, array<string, array{n:int, units:int, pus:array<string,int> }>> $byEan ean => moneyKey => stats */
+        $byEan = [];
+        foreach ($candidates as $ci => $c) {
+            $eanKey = (string) ($c['ean_key'] ?? '');
+            if ($eanKey === '') {
+                continue;
+            }
+            $moneyKey = number_format(round((float) $c['total'], 2), 2, '.', '');
+            $pu = isset($c['unit_price']) ? (float) $c['unit_price'] : null;
+            $puKey = $pu !== null ? number_format(round($pu, 3), 3, '.', '') : '?';
+            $cell = &$byEan[$eanKey][$moneyKey];
+            $cell ??= ['n' => 0, 'units' => 0, 'pus' => []];
+            $cell['n']++;
+            $cell['units'] += max(1, (int) ($c['units'] ?? 0));
+            $cell['pus'][$puKey] = ($cell['pus'][$puKey] ?? 0) + 1;
+            unset($cell);
+        }
+
+        foreach ($byEan as $eanKeyInt => $moneyStats) {
+            // NB : PHP convertit les clés numériques en entiers — comparaisons
+            // strictes EAN imposées en chaîne (cf. repairOneDigit()).
+            $eanKey = (string) $eanKeyInt;
+            if (count($moneyStats) < 2) {
+                continue; // EAN lu à un seul montant : aucune suspicion.
+            }
+            // Même PU partout : produit identique lu avec un montant erroné
+            // (chiffre OCR) — pas un mauvais appariement ; la fusion des
+            // gagnants (même EAN + même PU) refermera la doublure.
+            $pus = [];
+            foreach ($moneyStats as $stats) {
+                foreach ($stats['pus'] as $puKey => $n) {
+                    if ($puKey !== '?') {
+                        $pus[$puKey] = true;
+                    }
+                }
+            }
+            if (count($pus) <= 1) {
+                continue;
+            }
+            // Lecture conservée : PU majoritaire parmi les candidats de
+            // l'EAN, puis plus d'unités cumulées, puis première rencontrée.
+            $bestMoney = null;
+            $bestScore = null;
+            foreach ($moneyStats as $moneyKey => $stats) {
+                $puMajority = 0;
+                foreach ($stats['pus'] as $n) {
+                    $puMajority = max($puMajority, $n);
+                }
+                $score = [$puMajority, $stats['units']];
+                if ($bestScore === null || $score > $bestScore) {
+                    $bestScore = $score;
+                    $bestMoney = $moneyKey;
+                }
+            }
+            foreach ($candidates as $ci => $c) {
+                $candEan = (string) ($c['ean_key'] ?? '');
+                if ($candEan !== $eanKey || $eanKey === '') {
+                    continue;
+                }
+                $moneyKey = number_format(round((float) $c['total'], 2), 2, '.', '');
+                if (!isset($byEan[$eanKey][$moneyKey])) {
+                    continue;
+                }
+                if ($moneyKey === $bestMoney) {
+                    continue;
+                }
+                $candidates[$ci]['demoted'] = true;
+                $candidates[$ci]['ean_key'] = '';
+            }
+        }
+
+        return $candidates;
+    }
+
+    /**
+     * Regroupe les candidats (toutes variantes confondues) en CLUSTERS par
+     * montant (±0,02) — sur une facture, deux lignes ont presque toujours
+     * des totaux différents — puis en sous-groupes au sein de chaque
+     * cluster : même EAN ancré, sinon libellés similaires. Les candidats
+     * sans identité (fragments, adresses) se rattachent numériquement au
+     * sous-groupe majoritaire ou sont abandonnés — jamais émis seuls.
      *
      * @param list<array<string,mixed>> $candidates
      * @return list<list<array<string,mixed>>>
      */
     private static function groupCandidates(array $candidates): array
     {
-        /** @var list<list<array<string,mixed>>> $groups */
-        $groups = [];
-        /** @var list<string> $groupEans clé EAN (ou '') par groupe */
-        $groupEans = [];
-
+        /** @var array<string, list<array<string,mixed>>> $clusters montant => candidats */
+        $clusters = [];
         foreach ($candidates as $c) {
-            // Fragment : libellé sans véritable identité produit (aucun ou
-            // un seul jeton alphabétique — débris de colonnes OCR type
-            // « MMERSAGRUM 250| 1,233 24 »). Il ne crée jamais de groupe
-            // propre : rattachement numérique à une ligne existante (même
-            // montant, même PU, mêmes unités) ou abandon — jamais une ligne
-            // fantôme émise sur la seule foi d'un montant isolé.
-            $generic = self::isGenericCandidate($c) || self::countAlphaTokens((string) $c['label']) < 2;
-            $matched = false;
+            $key = number_format(round((float) $c['total'], 2), 2, '.', '');
+            $clusters[$key][] = $c;
+        }
 
-            foreach ($groups as $gi => $members) {
-                $ref = $members[0];
-                if ($generic) {
-                    // Rattachement purement numérique (backfill de colonnes).
-                    if (self::sameMoney((float) $ref['total'], (float) $c['total'])
-                        && self::sameMoneyOrNull($ref['unit_price'] ?? null, $c['unit_price'] ?? null)
-                        && self::sameUnitsOrNull($ref, $c)
-                    ) {
-                        $groups[$gi][] = $c;
-                        $matched = true;
-                    }
-                    continue;
-                }
-
-                $refEan = (string) ($groupEans[$gi] ?? '');
-                $candEan = (string) ($c['ean_key'] ?? '');
-                if ($refEan !== '' && $candEan !== '') {
-                    if ($refEan === $candEan) {
-                        $groups[$gi][] = $c;
-                        $matched = true;
-                    }
-                    continue; // EAN de clés différentes : jamais fusionnés
-                }
-                if (self::sameMoney((float) $ref['total'], (float) $c['total'])
-                    && self::sameUnitsOrNull($ref, $c)
-                    && self::differentHardEans($ref, $c) === false
-                    && (self::labelSimilarity((string) $ref['label'], (string) $c['label']) >= self::LABEL_SIMILARITY
-                        || self::labelContained((string) $ref['label'], (string) $c['label']))
-                ) {
-                    $groups[$gi][] = $c;
-                    $matched = true;
-                }
-            }
-
-            if (!$matched && !$generic) {
-                $groups[] = [$c];
-                $groupEans[] = (string) ($c['ean_key'] ?? '');
+        $groups = [];
+        foreach ($clusters as $clusterCandidates) {
+            foreach (self::splitCluster($clusterCandidates) as $subgroup) {
+                $groups[] = $subgroup;
             }
         }
 
         return $groups;
+    }
+
+    /**
+     * Sous-groupes d'un même montant : EAN ancré identique, sinon libellés
+     * similaires (≥ 80 %, ou contenu), sinon rattachement au sous-groupe
+     * majoritaire. Un candidat isolé à article explicite distinct (MINUTE
+     * MAID contre COCACOLA CHERRY au même montant sur une vraie photo) et
+     * arithmétiquement validé reste une ligne propre.
+     *
+     * @param list<array<string,mixed>> $cands candidats du même montant
+     * @return list<list<array<string,mixed>>>
+     */
+    private static function splitCluster(array $cands): array
+    {
+        /** @var list<list<array<string,mixed>>> $subgroups */
+        $subgroups = [];
+        /** @var list<string> $subEans EAN ancré par sous-groupe ('' = aucun) */
+        $subEans = [];
+        /** @var list<array<string,mixed>> $loose candidats en attente de rattachement */
+        $loose = [];
+
+        foreach ($cands as $c) {
+            $eanKey = (string) ($c['ean_key'] ?? '');
+            $matched = false;
+
+            if (!$generic = self::isGenericCandidate($c)) {
+                foreach ($subgroups as $si => $members) {
+                    $refEan = $subEans[$si];
+                    if ($eanKey !== '' && $refEan !== '') {
+                        if ($refEan === $eanKey) {
+                            $subgroups[$si][] = $c;
+                            $matched = true;
+                        }
+
+                        continue; // EAN ancrés différents : produits distincts
+                    }
+                    if ($refEan !== '' || $eanKey !== '') {
+                        // Un EAN ancré ne fusionne avec un sans-EAN que si
+                        // les libellés concordent (jamais au seul montant).
+                        if (self::sameMoney((float) $members[0]['total'], (float) $c['total'])
+                            && self::sameUnitsOrNull($members[0], $c)
+                            && (self::labelSimilarity((string) $members[0]['label'], (string) $c['label']) >= self::LABEL_SIMILARITY
+                                || self::labelContained((string) $members[0]['label'], (string) $c['label']))
+                        ) {
+                            $subgroups[$si][] = $c;
+                            $matched = true;
+                        }
+
+                        continue;
+                    }
+                    if (self::sameUnitsOrNull($members[0], $c)
+                        && self::differentHardEans($members[0], $c) === false
+                        && (self::labelSimilarity((string) $members[0]['label'], (string) $c['label']) >= self::LABEL_SIMILARITY
+                            || self::labelContained((string) $members[0]['label'], (string) $c['label']))
+                    ) {
+                        $subgroups[$si][] = $c;
+                        $matched = true;
+                    }
+                }
+
+                if (!$matched) {
+                    // Candidat à identité propre sans groupe : sous-groupe
+                    // neuf — sauf fragment sans identité réelle.
+                    if ($eanKey !== '' || self::countContentTokens((string) $c['label']) >= 2) {
+                        $subgroups[] = [$c];
+                        $subEans[] = $eanKey;
+                        $matched = true;
+                    }
+                }
+            }
+
+            if (!$matched) {
+                $loose[] = $c;
+            }
+        }
+
+        // Rattachement des candidats sans identité (fragments, adresses,
+        // EAN démoté en queue) et repêchage des identités isolées.
+        $stillLoose = [];
+        foreach ($loose as $c) {
+            $attached = false;
+            // Candidat isolé à article explicite distinct et arithmétique
+            // validée (« MINUTE MAID 16,80 » contre « COCACOLA CHERRY
+            // 16,80 » sur une vraie photo) : ligne propre, pas un doublon.
+            $article = (string) ($c['article'] ?? '');
+            if ((string) ($c['ean_key'] ?? '') === ''
+                && preg_match('/^\d{4,}$/', $article) === 1
+                && self::countContentTokens((string) $c['label']) >= 2
+                && self::isArithmeticallyValid($c)
+                && $subgroups !== []
+            ) {
+                $conflict = false;
+                foreach ($subgroups as $members) {
+                    foreach ($members as $m) {
+                        if ((string) ($m['article'] ?? '') === $article
+                            || self::contentOverlap((string) $m['label'], (string) $c['label'])
+                        ) {
+                            $conflict = true;
+                            break 2;
+                        }
+                    }
+                }
+                if (!$conflict) {
+                    // Article et libellé inconnus de tous les sous-groupes
+                    // du montant : produit réellement distinct.
+                    $subgroups[] = [$c];
+                    $subEans[] = '';
+                    $attached = true;
+                }
+            }
+            if (!$attached) {
+                $stillLoose[] = $c;
+            }
+        }
+
+        // Rattachement numérique (backfill de colonnes) au sous-groupe
+        // majoritaire compatible (même PU, unités compatibles).
+        foreach ($stillLoose as $c) {
+            $best = null;
+            $bestCount = 0;
+            foreach ($subgroups as $si => $members) {
+                $ref = $members[0];
+                if (self::sameMoneyOrNull($ref['unit_price'] ?? null, $c['unit_price'] ?? null)
+                    && self::sameUnitsOrNull($ref, $c)
+                    && count($members) >= $bestCount
+                ) {
+                    $best = $si;
+                    $bestCount = count($members);
+                }
+            }
+            if ($best !== null) {
+                $subgroups[$best][] = $c;
+            } elseif ((string) ($c['ean_key'] ?? '') === ''
+                && self::countContentTokens((string) $c['label']) >= 1
+                && self::isArithmeticallyValid($c)
+            ) {
+                // Aucun sous-groupe au même montant : lecture isolée d'une
+                // vraie ligne (« FRAAAU FA NS en D » = MONSTER MANGO 33,90,
+                // seule lecture de cette ligne sur la photo) — émise si elle
+                // a une identité minimale et une arithmétique valide.
+                $subgroups[] = [$c];
+                $subEans[] = '';
+            }
+        }
+
+        // Sous-groupes singleton sans EAN ancré : rattachés au plus grand
+        // sous-groupe compatible (même lecture dégradée d'une ligne déjà
+        // émise), pour ne jamais dupliquer une ligne au même montant. La
+        // cible privilégiée est un sous-groupe dont le gagnant n'est pas
+        // démoté (un EAN retiré signale justement un mauvais appariement).
+        if (count($subgroups) > 1) {
+            $target = null;
+            foreach ($subgroups as $si => $members) {
+                if ($subEans[$si] !== '' || count($members) < 2) {
+                    continue;
+                }
+                if ($target === null || count($members) > count($subgroups[$target])) {
+                    $target = $si;
+                }
+            }
+            if ($target === null) {
+                foreach ($subgroups as $si => $members) {
+                    if (empty($members[0]['demoted'])
+                        && self::countContentTokens((string) $members[0]['label']) > 0
+                    ) {
+                        $target = $si;
+                        break;
+                    }
+                }
+            }
+            if ($target !== null) {
+                foreach ($subgroups as $si => $members) {
+                    if ($si === $target || $subEans[$si] !== '' || count($members) > 1) {
+                        continue;
+                    }
+                    $ref = $subgroups[$target][0];
+                    $c = $members[0];
+                    if (self::sameMoneyOrNull($ref['unit_price'] ?? null, $c['unit_price'] ?? null)
+                        && self::sameUnitsOrNull($ref, $c)
+                    ) {
+                        $subgroups[$target][] = $c;
+                        $subgroups[$si] = [];
+                    }
+                }
+                $subgroups = array_values(array_filter($subgroups, static fn ($m): bool => $m !== []));
+            }
+        }
+
+        return $subgroups;
+    }
+
+    /** Arithmétique colisage×qté×PU ≈ montant validée (tolérance parseur) ? */
+    private static function isArithmeticallyValid(array $c): bool
+    {
+        $colisage = isset($c['colisage']) ? (int) $c['colisage'] : null;
+        $qty = isset($c['qty']) ? (int) $c['qty'] : null;
+        $pu = isset($c['unit_price']) ? (float) $c['unit_price'] : null;
+        if ($colisage === null || $qty === null || $pu === null) {
+            return false;
+        }
+        $total = (float) $c['total'];
+
+        return abs(round($colisage * $qty * $pu, 2) - $total) <= self::amountTolerance($total);
+    }
+
+    /** Au moins un jeton de contenu produit commun entre deux libellés ? */
+    private static function contentOverlap(string $a, string $b): bool
+    {
+        return array_intersect(self::contentTokens($a), self::contentTokens($b)) !== [];
     }
 
     /**
@@ -503,6 +819,32 @@ final class InvoiceEnsemble
     }
 
     /**
+     * Jetons de CONTENU produit d'un libellé : jetons alphabétiques hors
+     * vocabulaire non produit (adresses, en-têtes, mentions). « Nanterre
+     * Cedex 62100 CALAIS » → aucun : jamais une identité de ligne.
+     *
+     * @return list<string>
+     */
+    private static function contentTokens(string $label): array
+    {
+        $content = [];
+        foreach (self::labelTokens($label) as $token) {
+            if (in_array($token, self::NON_PRODUCT_TOKENS, true)) {
+                continue;
+            }
+            $content[] = $token;
+        }
+
+        return $content;
+    }
+
+    /** Nombre de jetons de contenu produit d'un libellé. */
+    private static function countContentTokens(string $label): int
+    {
+        return count(self::contentTokens($label));
+    }
+
+    /**
      * Unités comparables : les deux connues (≥ 1) doivent être égales —
      * un fragment à colisage×qté lu ne rejoint pas une ligne d'un autre
      * format (« 24 » vs « 48 » = deux lignes différentes au même montant).
@@ -536,15 +878,17 @@ final class InvoiceEnsemble
 
         return $label === '' || $label === self::GENERIC_LABEL
             || (string) ($c['ean'] ?? '') === '' && (string) ($c['article'] ?? '') === ''
-            && preg_match_all('/\p{L}/u', $label) < 2;
+            && preg_match_all('/\p{L}/u', $label) < 2
+            || ((string) ($c['ean'] ?? '') === '' && self::countContentTokens($label) === 0);
     }
 
     /**
-     * Meilleur candidat d'un groupe : score maximal, à égalité celui du
-     * texte le plus validé, à égalité le premier vu (variante la plus
-     * proche de l'originale). Les champs manquants sont complétés par les
-     * autres membres du groupe (lecture complémentaire de la MÊME ligne,
-     * jamais d'invention).
+     * Meilleur candidat d'un groupe : score maximal (arithmétique + EAN),
+     * à égalité le candidat NON démoté (un EAN retiré signale un mauvais
+     * appariement), à égalité le libellé le plus riche en jetons de contenu
+     * produit, à égalité le texte le plus validé, à égalité le premier vu.
+     * Les champs manquants sont complétés par les autres membres du groupe
+     * (lecture complémentaire de la MÊME ligne, jamais d'invention).
      *
      * @param list<array<string,mixed>> $members
      * @param list<int> $validatedPerVariant
@@ -553,15 +897,17 @@ final class InvoiceEnsemble
     private static function pickWinner(array $members, array $validatedPerVariant): ?array
     {
         $winner = null;
-        $bestScore = -1;
-        $bestVariantRank = PHP_INT_MAX;
+        $best = null;
         foreach ($members as $m) {
-            $score = (int) $m['score'];
-            $rank = $validatedPerVariant[(int) $m['variant']] ?? 0;
-            if ($score > $bestScore || ($score === $bestScore && $rank > $bestVariantRank)) {
+            $rank = [
+                'score'    => (int) $m['score'],
+                'clean'    => empty($m['demoted']) ? 1 : 0,
+                'content'  => self::countContentTokens((string) $m['label']),
+                'variant'  => $validatedPerVariant[(int) $m['variant']] ?? 0,
+            ];
+            if ($best === null || $rank > $best) {
                 $winner = $m;
-                $bestScore = $score;
-                $bestVariantRank = $rank;
+                $best = $rank;
             }
         }
 
@@ -642,6 +988,47 @@ final class InvoiceEnsemble
         }
 
         return $line;
+    }
+
+    /**
+     * Fusionne les gagnants qui décrivent le MÊME produit lu avec un
+     * montant légèrement différent (un chiffre OCR erroné : « 15,50 » pour
+     * « 15,90 ») : même EAN ancré ET même PU. La lecture la mieux notée
+     * (plus de candidats, meilleur score) fait foi ; l'autre est abandonnée.
+     *
+     * @param list<array<string,mixed>> $winners
+     * @return list<array<string,mixed>>
+     */
+    private static function mergeSameProductWinners(array $winners): array
+    {
+        $out = [];
+        foreach ($winners as $w) {
+            $eanKey = (string) ($w['ean_key'] ?? '');
+            $pu = isset($w['unit_price']) ? (float) $w['unit_price'] : null;
+            $merged = false;
+            if ($eanKey !== '' && $pu !== null) {
+                foreach ($out as $oi => $o) {
+                    if ((string) ($o['ean_key'] ?? '') !== $eanKey
+                        || !isset($o['unit_price'])
+                        || abs((float) $o['unit_price'] - $pu) > self::PU_EPSILON
+                        || self::sameMoney((float) $o['total'], (float) $w['total'])
+                    ) {
+                        continue;
+                    }
+                    // La lecture au meilleur score reste, l'autre disparaît.
+                    if ((int) $w['score'] > (int) $o['score']) {
+                        $out[$oi] = $w;
+                    }
+                    $merged = true;
+                    break;
+                }
+            }
+            if (!$merged) {
+                $out[] = $w;
+            }
+        }
+
+        return array_values($out);
     }
 
     /**
