@@ -925,7 +925,7 @@ final class InvoiceEnsemble
      */
     private static function cleanLineLabel(string $label): string
     {
-        $s = trim((string) preg_replace('/["«»|\\\\_\/]+/u', ' ', $label));
+        $s = trim((string) preg_replace('/["“”«»‘’|\\\\_\/]+/u', ' ', $label));
         $tokens = array_values(array_filter(array_map('trim', explode(' ', (string) preg_replace('/\s+/u', ' ', $s))), static fn (string $t): bool => $t !== ''));
         if ($tokens === []) {
             return '';
@@ -986,6 +986,19 @@ final class InvoiceEnsemble
         $lastKept = array_key_last($kept);
         if ($lastKept !== null && (int) preg_match_all('/\p{L}/u', (string) $kept[$lastKept]) === 1
             && (int) preg_match_all('/\p{N}/u', (string) $kept[$lastKept]) === 0
+        ) {
+            unset($kept[$lastKept]);
+        }
+
+        // 5) Prix en QUEUE contaminé par l'OCR (« 2,080 » lu « 2,08O »,
+        // un O pour un zéro) : un jeton FINAL à séparateur décimal et
+        // UNE lettre au plus est un montant, pas une taille — les tailles
+        // réelles ne portent ni virgule ni point (50CL, 8X125G, T10) et
+        // « 1,25L » est toujours suivi de PET/BTE, jamais en bout.
+        $lastKept = array_key_last($kept);
+        if ($lastKept !== null && preg_match('/[,.;:]/', (string) $kept[$lastKept]) === 1
+            && (int) preg_match_all('/\p{L}/u', (string) $kept[$lastKept]) <= 1
+            && (int) preg_match_all('/\p{N}/u', (string) $kept[$lastKept]) >= 1
         ) {
             unset($kept[$lastKept]);
         }
