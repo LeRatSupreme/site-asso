@@ -811,13 +811,15 @@ final class InvoiceEnsemble
         }
 
         // Cluster réduit à UN singleton sans aucune identité fiable (pas
-        // d'EAN ancré, arithmétique invérifiable ou unités déduites) :
-        // déchet de réappariement (« PULCO … » collé au montant 4,16,
-        // « RED BULL … | 5 » sans PU) — jamais émis comme ligne.
+        // d'EAN ancré, arithmétique invérifiable même en déduisant les
+        // unités du PU, ou unités absurdes) : déchet de réappariement
+        // (« PULCO … » collé au montant 4,16, « RED BULL … | 5 » sans PU,
+        // colisage 8970) — jamais émis comme ligne. Une lecture isolée
+        // cohérente avec son PU (« UE COCA 0,630 24 » = 15,12) survit.
         if (count($subgroups) === 1 && count($subgroups[0]) === 1) {
             $c = $subgroups[0][0];
             if ((string) ($c['ean_key'] ?? '') === ''
-                && (!self::isArithmeticallyValid($c) || !empty($c['loose_units']))
+                && (!self::isArithmeticallyValidDeducible($c) || (int) ($c['units'] ?? 0) > 999)
             ) {
                 return [];
             }
@@ -873,6 +875,28 @@ final class InvoiceEnsemble
         $total = (float) $c['total'];
 
         return abs(round($colisage * $qty * $pu, 2) - $total) <= self::amountTolerance($total);
+    }
+
+    /**
+     * Cohérence arithmétique vérifiable MÊME sans colisage lu : des unités
+     * déduites du total et du PU (total ÷ PU entier plausible) suffisent —
+     * « UE COCA 0,630 24 = 15,12 » est une vraie ligne ; « PULCO 2,380 × ?
+     * = 4,16 » ne correspond à aucun nombre entier d'unités.
+     */
+    private static function isArithmeticallyValidDeducible(array $c): bool
+    {
+        if (self::isArithmeticallyValid($c)) {
+            return true;
+        }
+        $pu = isset($c['unit_price']) ? (float) $c['unit_price'] : null;
+        if ($pu === null || $pu <= 0) {
+            return false;
+        }
+        $total = (float) $c['total'];
+        $units = (int) round($total / $pu);
+
+        return $units >= 1
+            && abs(round($units * $pu, 2) - $total) <= self::amountTolerance($total);
     }
 
     /** Au moins un jeton de contenu produit commun entre deux libellés ? */
