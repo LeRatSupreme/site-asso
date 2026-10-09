@@ -906,6 +906,136 @@ final class InvoiceEnsemble
     }
 
     /**
+     * Nettoyage cosmétique du libellé d'une ligne fusionnée : sur une
+     * photo de biais, l'OCR colle au nom du produit des débris des
+     * colonnes voisines (EAN « 06 05284 3 », n° d'article « 1944 »,
+     * prix « 2,080 », ponctuation parasite « RED\BULL », « THERE 593" »).
+     * Règles — aucune lettre de mot-produit n'est inventée :
+     *  - les jetons purement numériques/ponctuation (« 9 », « 593" »,
+     *    « 1,233 ») disparaissent (les tailles réelles portent des
+     *    lettres : 2L, 33CL, 8X125G, T10) ;
+     *  - en TÊTE, les petits mots (1-2 lettres) et les mots courts
+     *    immédiatement suivis d'un jeton numérique retiré sont des
+     *    débris (« OA DS 1868885 », « THERE 593" », « RE COCA ») ;
+     *  - en QUEUE, un petit mot de 3 lettres max collé à un jeton
+     *    numérique retiré disparaît (« BOITE 50CI il, 413 ») ;
+     *  - la ponctuation parasite entre les mots devient une espace.
+     * Un libellé déjà propre ressort identique ; un libellé que le
+     * nettoyage viderait est conservé tel quel (prudence).
+     */
+    private static function cleanLineLabel(string $label): string
+    {
+        $s = trim((string) preg_replace('/["«»|\\\\_\/]+/u', ' ', $label));
+        $tokens = array_values(array_filter(array_map('trim', explode(' ', (string) preg_replace('/\s+/u', ' ', $s))), static fn (string $t): bool => $t !== ''));
+        if ($tokens === []) {
+            return '';
+        }
+
+        // 1) Jetons purement numériques/ponctuation (« 9 », « 593" »,
+        // « 1,233 »), mémorisés pour les règles de tête et de queue
+        // (« suivi d'un jeton numérique retiré »). Les lettres isolées
+        // ne sont retirées qu'en bout de ligne (règle 4) : « NUTELLA B
+        // READY » garde son « B » — c'est le nom du produit.
+        $isNumeric = static fn (string $t): bool => $t !== '' && preg_match('/^[\p{N}\p{P}]+$/u', $t) === 1;
+        $dropped = [];
+        $kept = [];
+        foreach ($tokens as $i => $t) {
+            if ($isNumeric($t)) {
+                $dropped[$i] = true;
+            } else {
+                $kept[$i] = $t;
+            }
+        }
+        if ($kept === []) {
+            return trim(implode(' ', $tokens)); // que des chiffres : montant/colisage, pas un libellé
+        }
+
+        // 2) Tête : jusqu'au premier mot (3+ lettres NON collé à un
+        // chiffre retiré — « THERE 593" » a « THERE » pour débris),
+        // retire petits mots et mots courts suivis d'un numérique.
+        $firstWord = null;
+        foreach ($kept as $i => $t) {
+            $solid = preg_match('/^\p{L}{3,}$/u', $t) === 1;
+            $nextDropped = isset($tokens[$i + 1]) && isset($dropped[$i + 1]);
+            if ($solid && !($nextDropped && mb_strlen($t) <= 6)) {
+                $firstWord = $i;
+                break;
+            }
+        }
+        foreach ($kept as $i => $t) {
+            if ($firstWord !== null && $i >= $firstWord) {
+                break;
+            }
+            $nextDropped = isset($tokens[$i + 1]) && isset($dropped[$i + 1]);
+            if (mb_strlen($t) <= 2 || ($nextDropped && mb_strlen($t) <= 6)) {
+                unset($kept[$i]);
+            }
+        }
+
+        // 3) Queue : un petit mot (3 lettres max) collé à un numérique
+        // retiré en bout de ligne (« 50CI il, 413 » -> « 50CI »).
+        $lastKept = array_key_last($kept);
+        if ($lastKept !== null && mb_strlen((string) $kept[$lastKept]) <= 3
+            && isset($tokens[$lastKept + 1]) && isset($dropped[$lastKept + 1])
+        ) {
+            unset($kept[$lastKept]);
+        }
+
+        // 4) Lettre isolée FINALE : taux de TVA (« … 29,58 B ») ou
+        // débris de colonne — jamais la fin d'une désignation réelle.
+        $lastKept = array_key_last($kept);
+        if ($lastKept !== null && (int) preg_match_all('/\p{L}/u', (string) $kept[$lastKept]) === 1
+            && (int) preg_match_all('/\p{N}/u', (string) $kept[$lastKept]) === 0
+        ) {
+            unset($kept[$lastKept]);
+        }
+
+        $out = trim(implode(' ', $kept));
+        if ($out !== '') {
+            $out = trim((string) preg_replace('/\s+/u', ' ', $out));
+        }
+
+        return $out !== '' ? $out : trim((string) preg_replace('/\s+/u', ' ', $label));
+    }
+
+    /**
+     * Qualité de LECTURE d'un libellé (croissant) : (1) proportion de
+     * mots tout en MAJUSCULES (les désignations METRO sont imprimées
+     * en capitales — les « Arc HdBen Lost Hole » en casse mélangée
+     * sont des erreurs d'OCR), (2) nombre de mots de contenu (une
+     * désignation réelle est multi-mots — un token unique fusionné
+     * type « MMERSAGRUM » ou « EVBOITE » reste une lecture dégradée),
+     * (3) proportion de lettres (débris chiffres/ponctuation), (4)
+     * nombre de mots portant des lettres. Sert à choisir le libellé
+     * du groupe parmi toutes les lectures : le gagnant du score porte
+     * les nombres, pas forcément le nom le mieux lu.
+     *
+     * @return list<int>
+     */
+    private static function labelQualityRank(string $label): array
+    {
+        $clean = self::cleanLineLabel($label);
+        $letters = (int) preg_match_all('/\p{L}/u', $clean);
+        $nonSpace = (int) preg_match_all('/\S/u', $clean);
+        $alpha = $nonSpace > 0 ? (int) round(100 * $letters / $nonSpace) : 0;
+
+        $upper = 0;
+        $letterWords = 0;
+        foreach (preg_split('/\s+/u', $clean) ?: [] as $tok) {
+            if ((int) preg_match_all('/\p{L}/u', $tok) < 1) {
+                continue;
+            }
+            $letterWords++;
+            if (mb_strtoupper($tok, 'UTF-8') === $tok) {
+                $upper++;
+            }
+        }
+        $caps = $letterWords > 0 ? (int) round(100 * $upper / $letterWords) : 0;
+
+        return [$caps, count(self::contentTokens($clean)), $alpha, $letterWords];
+    }
+
+    /**
      * L'un des deux libellés contient-il l'autre (mêmes jetons alphabétiques
      * présents, au moins deux) ? « OASIS TROPICAL 2L » est contenu dans la
      * lecture dégradée « 9 OASIS TROPICAL 2L 2,080 » : même ligne — alors
@@ -1070,6 +1200,41 @@ final class InvoiceEnsemble
         }
         if (self::isGenericCandidate($line)) {
             return null; // aucune identité lisible : ligne non émise
+        }
+
+        // Libellé du GROUPE : le gagnant porte les nombres (score
+        // arithmétique/EAN), pas forcément le nom le mieux LU — sur une
+        // photo de biais, la variante qui valide les colonnes peut être
+        // précisément celle au libellé écrasé. On ne remplace le
+        // libellé du gagnant que s'il est manifestement MAL LU (un
+        // seul mot de contenu = token fusionné type « MMERSAGRUM », ou
+        // casse mélangée = salade OCR type « Arc HdBen Lost Hole ») :
+        // un gagnant au libellé sain reste seul juge (un membre au
+        // libellé "meilleur" peut être le mauvais produit apparié).
+        // Égalité parfaite : le libellé du gagnant reste (stabilité).
+        $winnerRank = self::labelQualityRank((string) ($line['label'] ?? ''));
+        $winnerWeak = $winnerRank[1] <= 1 || $winnerRank[0] < 60;
+        if ($winnerWeak) {
+            $bestLabel = (string) ($line['label'] ?? '');
+            foreach ($members as $m) {
+                $candidate = (string) ($m['label'] ?? '');
+                if ($candidate === '' || self::isGenericCandidate($m)) {
+                    continue;
+                }
+                if (self::labelQualityRank($candidate) > $winnerRank) {
+                    $winnerRank = self::labelQualityRank($candidate);
+                    $bestLabel = $candidate;
+                }
+            }
+            $cleaned = self::cleanLineLabel($bestLabel);
+            if (trim($cleaned) !== '') {
+                $line['label'] = $cleaned;
+            }
+        } else {
+            $cleaned = self::cleanLineLabel((string) ($line['label'] ?? ''));
+            if (trim($cleaned) !== '') {
+                $line['label'] = $cleaned;
+            }
         }
 
         // Compléments : EAN valide > EAN brut lu ; article, lettre TVA,

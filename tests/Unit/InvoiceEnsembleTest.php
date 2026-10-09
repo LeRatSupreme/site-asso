@@ -104,6 +104,52 @@ final class InvoiceEnsembleTest extends TestCase
     }
 
     /**
+     * LIBELLÉ DU GROUPE (photo de biais, facture_3) : la variante qui
+     * gagne au score (colonnes valides) peut avoir un libellé écrasé.
+     * Un gagnant MAL LU (token fusionné « EVBOITE » ou salade OCR en
+     * casse mélangée « oure CHURES Arc HdBen ») cède la place au
+     * libellé le mieux lu des membres ; un gagnant au libellé sain
+     * (multi-mots, capitales) reste seul juge — même face à un membre
+     * au libellé plausible (mauvais produit apparié). Et le libellé
+     * retenu est nettoyé des débris de colonnes (« 9 OASIS TROPICAL
+     * 2,080 » -> « OASIS TROPICAL », lettre TVA finale retirée,
+     * « NUTELLA B READY T10 » conserve son « B »).
+     */
+    public function test_libelle_du_groupe_prend_la_meilleure_lecture(): void
+    {
+        $v0 = "METRO\nN° FACTURE 0/0(087)0054/033871\nDate facture : 02-10-2026\n"
+            . "5060517889869 1234567 oure CHURES Arc HdBen Lost Hole Sel 0,850 20 1 16,95 B\n"
+            . "Total H.T. : 16,95\n";
+        $v1 = "METRO\nN° FACTURE 0/0(087)0054/033871\nDate facture : 02-10-2026\n"
+            . "5060517889869 1234567 MONSTER MANGO LOCO BOITE 50CL 0,850 20 1 16,95 B\n"
+            . "Total H.T. : 16,95\n";
+
+        // Gagnant en salade (casse mélangée) : la lecture en capitales
+        // d'un membre prend le dessus.
+        $r = InvoiceEnsemble::consolidate([
+            ['name' => 'v0', 'text' => $v0],
+            ['name' => 'v1', 'text' => $v1],
+        ]);
+        self::assertSame(1, $r['groups']);
+        self::assertSame('MONSTER MANGO LOCO BOITE 50CL', $r['invoice']['lines'][0]['label']);
+
+        // Gagnant au token fusionné (un seul mot de contenu) : même
+        // comportement, avec nettoyage de la lettre TVA finale.
+        $v0Fused = "METRO\nN° FACTURE 0/0(087)0054/033871\nDate facture : 02-10-2026\n"
+            . "3124488194017 1234567 EVBOITE 250 1239. 24 1 12,48 B\n"
+            . "Total H.T. : 12,48\n";
+        $v1Clean = "METRO\nN° FACTURE 0/0(087)0054/033871\nDate facture : 02-10-2026\n"
+            . "3124488194017 1234567 9 OASIS TROPICAL 2,080 0,520 24 1 12,48 B\n"
+            . "Total H.T. : 12,48\n";
+        $r2 = InvoiceEnsemble::consolidate([
+            ['name' => 'v0', 'text' => $v0Fused],
+            ['name' => 'v1', 'text' => $v1Clean],
+        ]);
+        self::assertSame(1, $r2['groups']);
+        self::assertSame('OASIS TROPICAL', $r2['invoice']['lines'][0]['label'], 'Débris de tête/chiffres/lettre TVA nettoyés.');
+    }
+
+    /**
      * PHOTO RÉELLE (facture_2) : RED BULL PEACH n'a ses colonnes lisibles
      * que dans la passe psm par défaut — deux variantes (psm 6 seule, alt
      * seule) fusionnées = 8/8 lignes et Σ lignes = Total H.T. exact.

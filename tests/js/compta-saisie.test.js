@@ -334,6 +334,31 @@ t('applyInvoiceToExpense : base HT -> montant repris de total_ht', function () {
     assert.strictEqual(res.amount, '250,46');
     assert.strictEqual(res.basis, 'ht');
     assert.strictEqual(res.vat_rate, '5.5');
+    assert.strictEqual(res.amount_source, 'ht', 'La source du montant est explicitée.');
+});
+
+t('applyInvoiceToExpense : totaux non lus -> montant = somme des lignes (source lines)', function () {
+    const res = H.applyInvoiceToExpense(emptyExpenseState(), {
+        supplier: 'METRO', purchased_at: '2026-09-18', amount_basis: null,
+        vat_rate: null, total_ht: null, total_ttc: null,
+        lines: [
+            { label: 'RED BULL BOITE 25CL', total: 24.98 },
+            { label: 'AGITATEUR BOIS 11CM', total: '3,47' },
+            { label: 'Ligne sans montant', total: null }
+        ]
+    });
+    assert.strictEqual(res.amount, '28,45', 'Σ des montants de lignes (nombre ou chaîne française).');
+    assert.strictEqual(res.amount_source, 'lines', 'Estimation signalée : à vérifier avant enregistrement.');
+    assert.strictEqual(res.basis, 'ht', 'Les montants de lignes d\u2019une facture sont HT.');
+});
+
+t('applyInvoiceToExpense : totaux ni lignes -> montant vide, pas de fausse source', function () {
+    const res = H.applyInvoiceToExpense(emptyExpenseState(), {
+        supplier: 'METRO', purchased_at: '2026-09-18', amount_basis: null,
+        total_ht: null, total_ttc: null, lines: [{ label: 'X', total: null }]
+    });
+    assert.strictEqual(res.amount, '');
+    assert.strictEqual(res.amount_source, '');
 });
 
 t('applyInvoiceToExpense : champs déjà remplis -> conservés et signalés dans skipped', function () {
