@@ -503,16 +503,33 @@ final class InvoiceEnsemble
             // l'EAN, puis plus d'unités cumulées, puis première rencontrée.
             $bestMoney = null;
             $bestScore = null;
+            $puMajorityTop = 0;
+            $puMajorityCount = 0;
             foreach ($moneyStats as $moneyKey => $stats) {
                 $puMajority = 0;
                 foreach ($stats['pus'] as $n) {
                     $puMajority = max($puMajority, $n);
+                }
+                if ($puMajority > $puMajorityTop) {
+                    $puMajorityTop = $puMajority;
+                    $puMajorityCount = 1;
+                } elseif ($puMajority === $puMajorityTop) {
+                    $puMajorityCount++;
                 }
                 $score = [$puMajority, $stats['units']];
                 if ($bestScore === null || $score > $bestScore) {
                     $bestScore = $score;
                     $bestMoney = $moneyKey;
                 }
+            }
+            $keepMoney = $bestMoney;
+            if ($puMajorityCount === count($moneyStats) && count($moneyStats) >= 3) {
+                // EAN éparpillé sur TROIS montants ou plus sans aucune
+                // lecture majoritaire (RED BULL lu à 2,49 / 3,47 / 21,12 /
+                // 24,98 par des réappariements) : identifiant bruité de
+                // bout en bout — démoté PARTOUT ; les candidats restent
+                // (leur montant et leur libellé peuvent être les bons).
+                $keepMoney = null;
             }
             foreach ($candidates as $ci => $c) {
                 $candEan = (string) ($c['ean_key'] ?? '');
@@ -624,8 +641,12 @@ final class InvoiceEnsemble
 
                 if (!$matched) {
                     // Candidat à identité propre sans groupe : sous-groupe
-                    // neuf — sauf fragment sans identité réelle.
-                    if ($eanKey !== '' || self::countContentTokens((string) $c['label']) >= 2) {
+                    // neuf — sauf fragment sans identité réelle (un EAN seul
+                    // ne suffit pas : « PU To AU LITRE: 2, 836 » porte un
+                    // EAN parasite sans aucun libellé produit).
+                    if (($eanKey !== '' || self::countContentTokens((string) $c['label']) >= 2)
+                        && self::countContentTokens((string) $c['label']) >= 1
+                    ) {
                         $subgroups[] = [$c];
                         $subEans[] = $eanKey;
                         $matched = true;
@@ -707,15 +728,16 @@ final class InvoiceEnsemble
             }
         }
 
-        // Sous-groupes singleton sans EAN ancré : rattachés au plus grand
-        // sous-groupe compatible (même lecture dégradée d'une ligne déjà
-        // émise), pour ne jamais dupliquer une ligne au même montant. La
-        // cible privilégiée est un sous-groupe dont le gagnant n'est pas
-        // démoté (un EAN retiré signale justement un mauvais appariement).
+        // Sous-groupes singleton sans EAN ancré : rattachés au sous-groupe
+        // le plus fourni (majorité des lectures, EAN ancré ou non), sinon
+        // au singleton le plus riche non démoté. Rattachement NUMÉRIQUE
+        // (montant + PU + unités) : des libellés dégradés n'ont pas à se
+        // ressembler pour être la même ligne (« SCHMNEPPES » ≈
+        // « SCHNEPPES » sous le seuil de similarité).
         if (count($subgroups) > 1) {
             $target = null;
             foreach ($subgroups as $si => $members) {
-                if ($subEans[$si] !== '' || count($members) < 2) {
+                if (count($members) < 2) {
                     continue;
                 }
                 if ($target === null || count($members) > count($subgroups[$target])) {
@@ -723,12 +745,18 @@ final class InvoiceEnsemble
                 }
             }
             if ($target === null) {
+                $bestRank = null;
                 foreach ($subgroups as $si => $members) {
-                    if (empty($members[0]['demoted'])
-                        && self::countContentTokens((string) $members[0]['label']) > 0
-                    ) {
+                    if (count($members) > 1 || !empty($members[0]['demoted'])) {
+                        continue;
+                    }
+                    $rank = [
+                        self::countContentTokens((string) $members[0]['label']),
+                        empty($members[0]['ean_key']) ? 0 : 1,
+                    ];
+                    if ($bestRank === null || $rank > $bestRank) {
+                        $bestRank = $rank;
                         $target = $si;
-                        break;
                     }
                 }
             }
@@ -740,7 +768,7 @@ final class InvoiceEnsemble
                     $ref = $subgroups[$target][0];
                     $c = $members[0];
                     if (self::sameMoneyOrNull($ref['unit_price'] ?? null, $c['unit_price'] ?? null)
-                        && self::sameUnitsOrNull($ref, $c)
+                        && self::sameUnitsLoose($ref, $c)
                     ) {
                         $subgroups[$target][] = $c;
                         $subgroups[$si] = [];
@@ -750,7 +778,38 @@ final class InvoiceEnsemble
             }
         }
 
+        // Cluster réduit à UN singleton sans aucune identité fiable (pas
+        // d'EAN ancré, pas d'article exploitable, arithmétique invérifiable
+        // ou unités déduites) : déchet de réappariement (« PULCO … » collé
+        // au montant 4,16 d'une autre ligne) — jamais émis comme ligne.
+        if (count($subgroups) === 1 && count($subgroups[0]) === 1) {
+            $c = $subgroups[0][0];
+            if ((string) ($c['ean_key'] ?? '') === ''
+                && preg_match('/^\d{4,}$/', (string) ($c['article'] ?? '')) !== 1
+                && (!self::isArithmeticallyValid($c) || !empty($c['loose_units']))
+            ) {
+                return [];
+            }
+        }
+
         return $subgroups;
+    }
+
+    /** Arithmétique colisage×qté×PU ≈ montant validée (tolérance parseur) ? */
+    /**
+     * Unités comparables pour le RATTACHEMENT numérique : comme
+     * sameUnitsOrNull, mais des unités DÉDUITES (loose_units — calculées
+     * depuis le total et le PU quand l'OCR n'a pas lu le colisage) ne font
+     * pas autorité : « ORANGINA 24 (déduit) » rejoint « ORANGINA 24 (lu) »
+     * même si la déduction a dérapé.
+     */
+    private static function sameUnitsLoose(array $a, array $b): bool
+    {
+        if (!empty($a['loose_units']) || !empty($b['loose_units'])) {
+            return true;
+        }
+
+        return self::sameUnitsOrNull($a, $b);
     }
 
     /** Arithmétique colisage×qté×PU ≈ montant validée (tolérance parseur) ? */
