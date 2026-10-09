@@ -70,6 +70,8 @@ final class InvoiceEnsemble
         'page', 'client', 'total', 'facture', 'date', 'prix', 'kg', 'litre',
         'colisage', 'designation', 'numero', 'siret', 'siren', 'ape', 'eur',
         'msc', 'asc', 'ecoc', 'consigne', 'douane', 'agrement',
+        'to', 'de', 'du', 'le', 'la', 'les', 'et', 'en', 'aux', 'sur',
+        'par', 'ne', 'me', 'te', 'se', 'ce', 'sa', 'son', 'nos', 'des',
     ];
 
     /**
@@ -747,11 +749,12 @@ final class InvoiceEnsemble
             if ($target === null) {
                 $bestRank = null;
                 foreach ($subgroups as $si => $members) {
-                    if (count($members) > 1 || !empty($members[0]['demoted'])) {
+                    if (count($members) > 1) {
                         continue;
                     }
                     $rank = [
                         self::countContentTokens((string) $members[0]['label']),
+                        empty($members[0]['demoted']) ? 1 : 0,
                         empty($members[0]['ean_key']) ? 0 : 1,
                     ];
                     if ($bestRank === null || $rank > $bestRank) {
@@ -761,15 +764,28 @@ final class InvoiceEnsemble
                 }
             }
             if ($target !== null) {
+                $ref = $subgroups[$target][0];
+                $refEan = $subEans[$target];
                 foreach ($subgroups as $si => $members) {
-                    if ($si === $target || $subEans[$si] !== '' || count($members) > 1) {
+                    if ($si === $target || count($members) > 1) {
                         continue;
                     }
-                    $ref = $subgroups[$target][0];
                     $c = $members[0];
-                    if (self::sameMoneyOrNull($ref['unit_price'] ?? null, $c['unit_price'] ?? null)
-                        && self::sameUnitsLoose($ref, $c)
-                    ) {
+                    // Source sans EAN ancré : rattachement numérique.
+                    $numeric = (string) ($c['ean_key'] ?? '') === ''
+                        && self::sameMoneyOrNull($ref['unit_price'] ?? null, $c['unit_price'] ?? null)
+                        && self::sameUnitsLoose($ref, $c);
+                    // Source à EAN ancré (lecture minoritaire au même
+                    // montant) : rattachée si son libellé recoupe celui de
+                    // la cible — RED BULL BOITE dans le groupe RED BULL
+                    // ZERO / PRIX AU KG, jamais dans un produit étranger.
+                    $byLabel = $subEans[$si] !== ''
+                        && $refEan === ''
+                        && count($subgroups[$target]) >= 2
+                        && self::contentOverlap((string) $ref['label'], (string) $c['label'])
+                        && self::sameMoneyOrNull($ref['unit_price'] ?? null, $c['unit_price'] ?? null)
+                        && self::sameUnitsLoose($ref, $c);
+                    if ($numeric || $byLabel) {
                         $subgroups[$target][] = $c;
                         $subgroups[$si] = [];
                     }
@@ -779,13 +795,12 @@ final class InvoiceEnsemble
         }
 
         // Cluster réduit à UN singleton sans aucune identité fiable (pas
-        // d'EAN ancré, pas d'article exploitable, arithmétique invérifiable
-        // ou unités déduites) : déchet de réappariement (« PULCO … » collé
-        // au montant 4,16 d'une autre ligne) — jamais émis comme ligne.
+        // d'EAN ancré, arithmétique invérifiable ou unités déduites) :
+        // déchet de réappariement (« PULCO … » collé au montant 4,16,
+        // « RED BULL … | 5 » sans PU) — jamais émis comme ligne.
         if (count($subgroups) === 1 && count($subgroups[0]) === 1) {
             $c = $subgroups[0][0];
             if ((string) ($c['ean_key'] ?? '') === ''
-                && preg_match('/^\d{4,}$/', (string) ($c['article'] ?? '')) !== 1
                 && (!self::isArithmeticallyValid($c) || !empty($c['loose_units']))
             ) {
                 return [];
@@ -958,8 +973,18 @@ final class InvoiceEnsemble
         $winner = null;
         $best = null;
         foreach ($members as $m) {
+            // Bonus de libellé majoritaire : un candidat partageant ses
+            // jetons de contenu avec au moins deux autres lectures du
+            // groupe est la lecture conforme du groupe (une variante
+            // en-tête-cohérente mais au libellé d'adresse ne gagne pas).
+            $majority = 0;
+            foreach ($members as $m2) {
+                if (self::contentOverlap((string) $m['label'], (string) $m2['label'])) {
+                    $majority++;
+                }
+            }
             $rank = [
-                'score'    => (int) $m['score'],
+                'score'    => (int) $m['score'] + ($majority >= 2 ? 1 : 0),
                 'clean'    => empty($m['demoted']) ? 1 : 0,
                 'content'  => self::countContentTokens((string) $m['label']),
                 'variant'  => $validatedPerVariant[(int) $m['variant']] ?? 0,
