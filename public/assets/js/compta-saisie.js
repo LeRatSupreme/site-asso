@@ -14,13 +14,18 @@
    - splitVat       : décomposition HT/TTC selon la base et le taux ;
    - unitHint       : libellé « ≈ HT · TTC € /u » d'une ligne ;
    - findDuplicateLine : ligne en double dans la commande en cours ;
-   - invoiceToRows  : facture scannée -> lignes de la grille ;
+   - invoiceToRows  : facture scannée -> lignes de la grille (avec le
+     taux de TVA de chaque ligne quand la facture en porte un) ;
    - applyInvoiceState : fusion pure d'une facture dans l'état du
      formulaire (en-tête + grille) ;
    - applyInvoiceToExpense : fusion pure d'un ticket scanné dans
      l'état du formulaire de DÉPENSE (préremplissage non destructif) ;
    - serializeExpenseNotes / expenseNotesFromInvoice : détail des
      produits détectés -> champ `notes` (« Détail tickets : … ») ;
+   - buildPurchaseBulkPayload : grille du scan du livre comptable ->
+     charge utile du POST /admin/compta/achats/save-bulk (contrat
+     as_json=1) — achats (stock + coût de revient) créés depuis le
+     ticket, avec rejet motivé des lignes invalides ;
    - scanUpload / scanParseText : envoi du fichier ou du texte OCR à
      l'endpoint de scan (JSON {ok, invoice}).
    ========================================================= */
@@ -232,11 +237,14 @@
     /**
      * Lignes d'une facture analysée -> lignes de la grille, dans le
      * même format que le collage (parsePasteLine) :
-     * [{key, qty, total, notes}]
-     * - key   : libellé produit — les lignes sans libellé sont ignorées ;
-     * - qty   : unités (entier, < 1 ou absent -> 1) ;
-     * - total : montant au format français (« 17,28 »), '' si absent ;
-     * - notes : « EAN … · art. … » (ou le champ notes du serveur).
+     * [{key, qty, total, notes, vat_rate}]
+     * - key      : libellé produit — les lignes sans libellé sont ignorées ;
+     * - qty      : unités (entier, < 1 ou absent -> 1) ;
+     * - total    : montant au format français (« 17,28 »), '' si absent ;
+     * - notes    : « EAN … · art. … » (ou le champ notes du serveur) ;
+     * - vat_rate : taux de TVA DE LA LIGNE canonisé (« 5.5 ») si la
+     *   facture en porte un (line.vat_rate), sinon null (héritera de
+     *   l'en-tête).
      */
     function invoiceToRows(invoice) {
         var lines = invoice && Array.isArray(invoice.lines) ? invoice.lines : [];
@@ -252,7 +260,7 @@
                 ? line.total
                 : parseFloat(cleanStr(line.total).replace(',', '.'));
             if (isFinite(n) && n > 0) total = n.toFixed(2).replace('.', ',');
-            rows.push({ key: key, qty: qty, total: total, notes: lineNotes(line) });
+            rows.push({ key: key, qty: qty, total: total, notes: lineNotes(line), vat_rate: normVatRate(line.vat_rate) });
         }
         return rows;
     }
@@ -444,6 +452,102 @@
         return serializeExpenseNotes(invoiceToRows(invoice));
     }
 
+    /* ------------------------------------------------------------
+        Livre comptable : scan -> ACHATS (stock + coût de revient).
+        POST /admin/compta/achats/save-bulk, contrat as_json=1.
+        ------------------------------------------------------------ */
+
+    /** Booléen de case à cocher tolérant (true, 1, '1'). */
+    function isTruthyFlag(v) {
+        return v === true || v === 1 || v === '1';
+    }
+
+    /**
+     * Construit la charge utile d'une création d'achats en lot à partir
+     * de l'en-tête de la facture scannée et des lignes du pavé « Détail
+     * des produits » (livre comptable). L'objet renvoyé est PLAT, prêt
+     * à être recopié dans un FormData — NE PAS y poster la propriété
+     * `rejected`, réservée à l'affichage des lignes refusées.
+     *
+     * @param {Object} header En-tête commun à toutes les lignes :
+     *   {purchased_at, supplier, invoice_number,
+     *    amount_basis ('ht'|'ttc'), vat_rate (taux global ou null),
+     *    update_cost (bool)}.
+     * @param {Object[]} rows Lignes de la grille :
+     *   [{key, qty, total, vat_rate (null|5.5|'5,5'|…), no_stock (bool)}].
+     *
+     * @returns {Object}
+     *   - purchased_at / supplier / invoice_number : chaînes trimées ;
+     *   - amount_basis : 'ht' | 'ttc' (défaut 'ht') ;
+     *   - vat_rate : taux GLOBAL canonisé (« 5.5 ») — CLÉ ABSENTE si
+     *     null (TVA mixte : seules les lignes portent un taux) ;
+     *   - update_cost : '1' — CLÉ ABSENTE si false (le contrôleur teste
+     *     la présence du champ, pas sa valeur) ;
+     *   - product_key / quantity / total_amount / vat_rate_lines :
+     *     tableaux PARALLÈLES des lignes valides (total à 2 décimales
+     *     en chaîne, quantity entier ; vat_rate_lines est posté sous le
+     *     nom `vat_rate[]` — '' = la ligne hérite du taux d'en-tête) ;
+     *   - no_stock_indexes : indexes (0-based) des lignes « hors stock »,
+     *     à poster sous `no_stock[N]=1` (format indexé lu par
+     *     AdminStockController::savePurchasesBulk, aligné sur
+     *     product_key[N]) ;
+     *   - rejected : [{index, key, reason}] des lignes rejetées —
+     *     produit manquant (key vide), quantité invalide (qty < 1 ou
+     *     non entière), montant invalide (<= 0 ou illisible).
+     */
+    function buildPurchaseBulkPayload(header, rows) {
+        var h = header && typeof header === 'object' ? header : {};
+        var list = Array.isArray(rows) ? rows : [];
+
+        var payload = {
+            purchased_at: cleanStr(h.purchased_at),
+            supplier: cleanStr(h.supplier),
+            invoice_number: cleanStr(h.invoice_number),
+            amount_basis: h.amount_basis === 'ttc' ? 'ttc' : 'ht',
+            product_key: [],
+            quantity: [],
+            total_amount: [],
+            vat_rate_lines: [],
+            no_stock_indexes: []
+        };
+        var globalVat = normVatRate(h.vat_rate);
+        if (globalVat !== null) payload.vat_rate = globalVat;
+        if (isTruthyFlag(h.update_cost)) payload.update_cost = '1';
+
+        var rejected = [];
+        for (var i = 0; i < list.length; i++) {
+            var r = list[i] || {};
+            var key = cleanStr(r.key !== undefined ? r.key : r.label);
+            var qty = parseInt(r.qty, 10);
+            var total = typeof r.total === 'number' ? r.total : parseAmount(r.total);
+
+            // Lignes invalides : rejetées avec raison, hors des tableaux —
+            // les motifs reprennent les libellés du contrôleur PHP.
+            if (key === '') {
+                rejected.push({ index: i, key: '', reason: 'produit manquant' });
+                continue;
+            }
+            if (!isFinite(qty) || qty < 1) {
+                rejected.push({ index: i, key: key, reason: 'quantité invalide' });
+                continue;
+            }
+            if (!isFinite(total) || total <= 0) {
+                rejected.push({ index: i, key: key, reason: 'montant invalide' });
+                continue;
+            }
+
+            payload.product_key.push(key);
+            payload.quantity.push(qty);
+            payload.total_amount.push(total.toFixed(2));
+            payload.vat_rate_lines.push(normVatRate(r.vat_rate) || '');
+            if (isTruthyFlag(r.no_stock)) {
+                payload.no_stock_indexes.push(payload.product_key.length - 1);
+            }
+        }
+        payload.rejected = rejected;
+        return payload;
+    }
+
     var ComptaSaisie = {
         normKey: normKey,
         parseAmount: parseAmount,
@@ -457,6 +561,7 @@
         applyInvoiceToExpense: applyInvoiceToExpense,
         serializeExpenseNotes: serializeExpenseNotes,
         expenseNotesFromInvoice: expenseNotesFromInvoice,
+        buildPurchaseBulkPayload: buildPurchaseBulkPayload,
         scanUpload: scanUpload,
         scanParseText: scanParseText
     };

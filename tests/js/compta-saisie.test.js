@@ -212,10 +212,10 @@ t('invoiceToRows : facture METRO à 3 lignes -> format du collage', function () 
         warnings: ['Taux de TVA non trouvé — 5,5 % appliqué.']
     };
     assert.deepStrictEqual(H.invoiceToRows(invoice), [
-        { key: 'MINUTE MAID POMME 1L', qty: 24, total: '17,28', notes: 'EAN 5449000000099 · art. 2040110' },
-        { key: 'COCA COLA 33CL', qty: 24, total: '10,80', notes: 'EAN 5449000000996 · art. 2040041' },
-        { key: 'EAU MINERALE 50CL', qty: 48, total: '9,60', notes: 'EAN 3057640257546 · art. 2040999' }
-    ], 'Sans champ notes, « EAN … · art. … » est reconstitué depuis ean/article.');
+        { key: 'MINUTE MAID POMME 1L', qty: 24, total: '17,28', notes: 'EAN 5449000000099 · art. 2040110', vat_rate: null },
+        { key: 'COCA COLA 33CL', qty: 24, total: '10,80', notes: 'EAN 5449000000996 · art. 2040041', vat_rate: null },
+        { key: 'EAU MINERALE 50CL', qty: 48, total: '9,60', notes: 'EAN 3057640257546 · art. 2040999', vat_rate: null }
+    ], 'Sans champ notes, « EAN … · art. … » est reconstitué depuis ean/article ; sans taux par ligne, vat_rate est null.');
 });
 
 t('invoiceToRows : sans lignes (ou lines absente) -> []', function () {
@@ -230,9 +230,21 @@ t('invoiceToRows : lignes sans libellé ignorées, qté et montant assainis', fu
         { label: 'Bonbons', units: 0, total: 0 },
         { label: 'Chips', units: '6', total: '8,90' }
     ] }), [
-        { key: 'Bonbons', qty: 1, total: '', notes: '' },
-        { key: 'Chips', qty: 6, total: '8,90', notes: '' }
+        { key: 'Bonbons', qty: 1, total: '', notes: '', vat_rate: null },
+        { key: 'Chips', qty: 6, total: '8,90', notes: '', vat_rate: null }
     ], 'Qté < 1 -> 1 ; total nul/invalide -> chaîne vide ; libellé manquant -> ligne ignorée.');
+});
+
+t('invoiceToRows : taux par ligne (line.vat_rate) canonisé, sinon null', function () {
+    const rows = H.invoiceToRows({ lines: [
+        { label: 'Soda', units: 2, total: 3, vat_rate: 20 },
+        { label: 'Pain', units: 1, total: 1.2, vat_rate: '5,5' },
+        { label: 'Sac', units: 1, total: 0.1 },
+        { label: 'Presse', units: 1, total: 2, vat_rate: 'abc' }
+    ] });
+    assert.deepStrictEqual(rows.map(function (r) { return r.vat_rate; }),
+        ['20', '5.5', null, null],
+        'Taux de la ligne canonisé (« 5,5 » -> « 5.5 ») ; absent ou invalide -> null (héritera de l\u2019en-tête).');
 });
 
 /* ------------------------------------------------------------------ *
@@ -253,7 +265,7 @@ t('applyInvoiceState : la facture remplit en-tête et lignes', function () {
     assert.strictEqual(st.purchased_at, '2026-10-02');
     assert.strictEqual(st.vat_rate, '5.5', 'Taux canonisé en chaîne pour le select.');
     assert.strictEqual(st.amount_basis, 'ht');
-    assert.deepStrictEqual(st.rows, [{ key: 'Coca 33cl', qty: 24, total: '10,80', notes: '' }]);
+    assert.deepStrictEqual(st.rows, [{ key: 'Coca 33cl', qty: 24, total: '10,80', notes: '', vat_rate: null }]);
 });
 
 t('applyInvoiceState : champs null -> état courant conservé', function () {
@@ -463,6 +475,106 @@ t('expenseNotesFromInvoice : compose invoiceToRows + serializeExpenseNotes', fun
     );
     assert.strictEqual(H.expenseNotesFromInvoice(null), '');
     assert.strictEqual(H.expenseNotesFromInvoice({ lines: [] }), '');
+});
+
+/* ------------------------------------------------------------------ *
+ * buildPurchaseBulkPayload — achats (stock + coût de revient) depuis
+ * le scan du livre comptable, POST save-bulk (contrat as_json=1)
+ * ------------------------------------------------------------------ */
+
+/** En-tête typique d'un ticket scanné mono-taux. */
+function bulkHeader(overrides) {
+    return Object.assign({
+        purchased_at: '2026-10-09', supplier: 'METRO', invoice_number: '3007 02 0090',
+        amount_basis: 'ht', vat_rate: 5.5, update_cost: true
+    }, overrides || {});
+}
+
+t('buildPurchaseBulkPayload : mono-taux — taux global + vat_rate[] par ligne', function () {
+    const p = H.buildPurchaseBulkPayload(bulkHeader(), [
+        { key: 'MINUTE MAID 1L', qty: 24, total: '17,28', vat_rate: null, no_stock: false },
+        { key: 'EAU 50CL', qty: '48', total: 9.6, vat_rate: 5.5, no_stock: true }
+    ]);
+    assert.strictEqual(p.purchased_at, '2026-10-09');
+    assert.strictEqual(p.supplier, 'METRO');
+    assert.strictEqual(p.invoice_number, '3007 02 0090');
+    assert.strictEqual(p.amount_basis, 'ht');
+    assert.strictEqual(p.vat_rate, '5.5', 'Taux global canonisé en chaîne.');
+    assert.strictEqual(p.update_cost, '1');
+    assert.deepStrictEqual(p.product_key, ['MINUTE MAID 1L', 'EAU 50CL']);
+    assert.deepStrictEqual(p.quantity, [24, 48], 'Quantités entières.');
+    assert.deepStrictEqual(p.total_amount, ['17.28', '9.60'], 'Montants TOTAUX de ligne, 2 décimales, en chaîne.');
+    assert.deepStrictEqual(p.vat_rate_lines, ['', '5.5'], 'vat_rate[] PAR LIGNE, même longueur que product_key[] ; ligne sans taux -> \u2018\u2019 (hérite du global).');
+    assert.deepStrictEqual(p.no_stock_indexes, [1], 'Indexes 0-based des lignes « hors stock » (postées no_stock[1]=1).');
+    assert.deepStrictEqual(p.rejected, []);
+});
+
+t('buildPurchaseBulkPayload : TVA mixte — global null -> clé absente, taux par ligne seuls', function () {
+    const p = H.buildPurchaseBulkPayload(bulkHeader({ vat_rate: null, amount_basis: 'ttc' }), [
+        { key: 'Soda', qty: 2, total: '3,00', vat_rate: 20, no_stock: false },
+        { key: 'Pain', qty: 1, total: '1,20', vat_rate: '5,5', no_stock: false },
+        { key: 'Sac', qty: 1, total: '0,10', vat_rate: null, no_stock: true }
+    ]);
+    assert.ok(!('vat_rate' in p), 'Taux global null : la clé vat_rate ne doit PAS être mise.');
+    assert.deepStrictEqual(p.vat_rate_lines, ['20', '5.5', ''], '« 5,5 » canonisé ; ligne sans taux -> \u2018\u2019 (hérite de l\u2019en-tête).');
+    assert.strictEqual(p.amount_basis, 'ttc');
+    assert.deepStrictEqual(p.no_stock_indexes, [2]);
+});
+
+t('buildPurchaseBulkPayload : lignes invalides rejetées avec raison', function () {
+    const p = H.buildPurchaseBulkPayload(bulkHeader(), [
+        { key: '   ', qty: 3, total: '5,00' },
+        { key: 'Coca', qty: 0, total: '5,00' },
+        { key: 'Fanta', qty: 2, total: 'abc' },
+        { key: 'Eau', qty: '', total: '4,00' },
+        { key: 'Chips', qty: 2, total: 0 },
+        { key: 'Eau', qty: 2, total: '4,00' }
+    ]);
+    assert.deepStrictEqual(p.rejected, [
+        { index: 0, key: '', reason: 'produit manquant' },
+        { index: 1, key: 'Coca', reason: 'quantité invalide' },
+        { index: 2, key: 'Fanta', reason: 'montant invalide' },
+        { index: 3, key: 'Eau', reason: 'quantité invalide' },
+        { index: 4, key: 'Chips', reason: 'montant invalide' }
+    ], 'Chaque rejet porte l\u2019index d\u2019origine, la clé et la raison.');
+    assert.deepStrictEqual(p.product_key, ['Eau'], 'Seules les lignes valides alimentent les tableaux.');
+    assert.deepStrictEqual(p.quantity, [2]);
+    assert.deepStrictEqual(p.total_amount, ['4.00']);
+    assert.deepStrictEqual(p.vat_rate_lines, ['']);
+});
+
+t('buildPurchaseBulkPayload : arrondis à 2 décimales et quantités entières', function () {
+    const p = H.buildPurchaseBulkPayload(bulkHeader(), [
+        { key: 'A', qty: '07', total: 59.156 },
+        { key: 'B', qty: 2.9, total: '10,804' },
+        { key: 'C', qty: 1, total: '1 234,5' }
+    ]);
+    assert.deepStrictEqual(p.quantity, [7, 2, 1], '« 07 » -> 7 ; 2,9 tronqué à l\u2019entier (la grille impose step=1).');
+    assert.deepStrictEqual(p.total_amount, ['59.16', '10.80', '1234.50'], 'Totaux à 2 décimales, format montant français accepté en entrée.');
+});
+
+t('buildPurchaseBulkPayload : en-tête trimé, update_cost false -> clé absente', function () {
+    const p = H.buildPurchaseBulkPayload(bulkHeader({
+        purchased_at: ' 2026-10-09 ', supplier: ' Metro ', invoice_number: ' A1 ',
+        amount_basis: 'xyz', vat_rate: '', update_cost: false
+    }), [{ key: 'A', qty: 1, total: '2' }]);
+    assert.strictEqual(p.purchased_at, '2026-10-09');
+    assert.strictEqual(p.supplier, 'Metro');
+    assert.strictEqual(p.invoice_number, 'A1');
+    assert.strictEqual(p.amount_basis, 'ht', 'Base invalide -> ht (défaut).');
+    assert.ok(!('update_cost' in p), 'update_cost false : clé absente — le contrôleur teste isset(), « 0 » vaudrait vrai.');
+    assert.ok(!('vat_rate' in p), 'Taux global vide -> traité comme null : clé absente.');
+});
+
+t('buildPurchaseBulkPayload : aucune ligne valide -> tableaux vides, rien de rejeté', function () {
+    const p = H.buildPurchaseBulkPayload(bulkHeader(), []);
+    assert.deepStrictEqual(p.product_key, []);
+    assert.deepStrictEqual(p.quantity, []);
+    assert.deepStrictEqual(p.total_amount, []);
+    assert.deepStrictEqual(p.vat_rate_lines, []);
+    assert.deepStrictEqual(p.no_stock_indexes, []);
+    assert.deepStrictEqual(p.rejected, []);
+    assert.strictEqual(p.vat_rate, '5.5', 'L\u2019en-tête reste posté même sans ligne.');
 });
 
 /* ------------------------------------------------------------------ */

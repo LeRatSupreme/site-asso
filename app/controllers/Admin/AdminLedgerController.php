@@ -7,6 +7,7 @@ namespace App\Controllers\Admin;
 use App\Core\Auth;
 use App\Core\Compta\ComptaCalc;
 use App\Models\Expense;
+use App\Models\Product;
 use App\Models\Purchase;
 use App\Models\Sale;
 /**
@@ -41,7 +42,41 @@ final class AdminLedgerController extends AdminBaseController
             'totalCredit' => $entries['total_credit'],
             'balance'     => $entries['balance'],
             'recentExpenses' => Expense::recent(8),
+            // Suggestions produit (datalist) pour l'enregistrement d'un
+            // achat depuis le livre — même fusion que la liste de picking
+            // de la page Achats, en version simplifiée.
+            'purchaseProductKeys' => $this->purchaseProductKeys(),
         ]);
+    }
+
+    /**
+     * Clés produits proposées à l'autocomplétion des achats saisis depuis
+     * le livre comptable : produits vendus (SumUp) + noms de la carte
+     * admin, fusion dédupliquée puis triée naturellement (même esprit que
+     * la liste de picking de la page Achats — vue purchases.php).
+     *
+     * @return list<string>
+     */
+    private function purchaseProductKeys(): array
+    {
+        $keys = [];
+        foreach (Sale::distinctProducts() as $key) {
+            $key = trim((string) $key);
+            if ($key !== '') {
+                $keys[] = $key;
+            }
+        }
+        foreach (Product::allForAdmin() as $row) {
+            $name = trim((string) ($row['name'] ?? ''));
+            if ($name !== '') {
+                $keys[] = $name;
+            }
+        }
+
+        $keys = array_values(array_unique($keys));
+        usort($keys, 'strnatcasecmp');
+
+        return $keys;
     }
 
 
