@@ -28,6 +28,9 @@ declare(strict_types=1);
  * @var string $preset
  * @var bool   $kiosk
  * @var string $token
+ * @var list<string> $purchaseProductKeys Clés produits connues (datalist
+ *      des achats créés depuis le scan — injectée par le contrôleur ;
+ *      absente tant que le backend ne la passe pas : `?? []`).
  */
 $presets = [
     '1d'  => '1 jour',
@@ -158,7 +161,7 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
     .lg-scan-info-list p { margin: 0.18rem 0; font-size: 0.86rem; }
     .lg-scan-skip { color: var(--muted, #8892a6); font-size: 0.78rem; }
     .lg-scan-warnings { margin: 0.45rem 0 0; padding-left: 1.1rem; }
-    .lg-scan-row { display: flex; gap: 0.4rem; align-items: center; margin: 0.3rem 0; }
+    .lg-scan-row { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; margin: 0.3rem 0; }
     .lg-scan-row input {
         padding: 0.4rem 0.55rem; border: 1px solid var(--border, rgba(255,255,255,0.15));
         border-radius: 8px; background: rgba(255, 255, 255, 0.05); color: var(--foreground, inherit);
@@ -167,6 +170,32 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
     .lg-scan-row .lg-scan-key { flex: 3 1 150px; }
     .lg-scan-row .lg-scan-qty { flex: 0 0 74px; }
     .lg-scan-row .lg-scan-total { flex: 1 1 90px; }
+    .lg-scan-row .lg-scan-vat, .lg-scan-row .lg-scan-unit {
+        font-size: 0.74rem; color: var(--muted, #8892a6); white-space: nowrap;
+    }
+    .lg-scan-row .lg-scan-vat { min-width: 3rem; text-align: right; }
+    /* Le display:inline-flex ci-dessous écraserait l'attribut hidden sinon. */
+    .lg-scan-row .lg-scan-vat[hidden], .lg-scan-row .lg-scan-unit[hidden] { display: none; }
+    .lg-scan-row .lg-scan-nostock {
+        display: inline-flex; align-items: center; gap: 0.25rem;
+        font-size: 0.74rem; color: var(--muted, #8892a6);
+        cursor: pointer; white-space: nowrap;
+    }
+    .lg-scan-row .lg-scan-nostock input { width: 0.95rem; height: 0.95rem; padding: 0; }
+    /* Achats à créer depuis le scan (stock + coût de revient) : section
+       sous le détail des produits — case de confirmation + résumé live. */
+    .lg-scan-purchase {
+        margin: 0.7rem 0 0.2rem; padding: 0.8rem 0.9rem;
+        border: 1px dashed rgba(255, 255, 255, 0.2); border-radius: 10px;
+        background: rgba(255, 255, 255, 0.03);
+    }
+    .lg-scan-purchase[hidden] { display: none; }
+    .lg-purchase-toggle {
+        display: flex; align-items: center; gap: 0.5rem;
+        font-size: 0.88rem; cursor: pointer;
+    }
+    .lg-purchase-toggle input { width: 1.05rem; height: 1.05rem; }
+    .lg-purchase-toggle input:disabled { cursor: not-allowed; }
     @media (max-width: 520px) {
         .ledger-table { font-size: 0.8rem; min-width: 380px; }
         .ledger-table th, .ledger-table td { padding: 0.42rem 0.4rem; }
@@ -273,7 +302,7 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
              /admin/compta/achats/scan) — le JS du bas câble le scan
              automatique à l'image choisie dans #lg-receipt. Absent de la
              version kiosque : pas de scan là-bas (endpoint différent). -->
-        <form method="post" action="<?= e(url('/admin/compta/depenses/save')) ?>" enctype="multipart/form-data" data-scan-url="<?= e(url('/admin/compta/depenses/scan')) ?>">
+        <form method="post" action="<?= e(url('/admin/compta/depenses/save')) ?>" enctype="multipart/form-data" data-scan-url="<?= e(url('/admin/compta/depenses/scan')) ?>" data-purchase-products="<?= e(json_encode($purchaseProductKeys ?? [], JSON_UNESCAPED_UNICODE)) ?>">
             <?= csrf_field() ?>
             <input type="hidden" name="return_to" value="/admin/ledger">
             <input type="hidden" name="category" value="DIVERS">
@@ -364,6 +393,25 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
                 </div>
                 <p class="muted" id="lg-scan-total" style="margin:0.3rem 0 0; font-size:0.8rem;"></p>
             </div>
+
+            <!-- ── Achats à créer depuis les lignes du scan (stock + coût
+                 de revient) : JAMAIS sans la case cochée ni sans
+                 confirmation explicite — cf. JS en bas. Case désactivée
+                 tant qu'aucun ticket n'a été scanné (ou aucune ligne
+                 exploitable) ; le datalist des produits connus est
+                 rempli par le JS depuis data-purchase-products (liste
+                 injectée par le contrôleur). -->
+            <div id="lg-purchase-box" class="lg-scan-purchase" data-save-bulk-url="<?= e(url('/admin/compta/achats/save-bulk')) ?>">
+                <p class="lg-scan-title">🛒 Achats à créer (stock + coût de revient)</p>
+                <label class="lg-purchase-toggle">
+                    <input type="checkbox" id="lg-create-purchases">
+                    <span>Créer aussi ces achats <span class="muted">(stock + coût de revient — confirmation demandée)</span></span>
+                </label>
+                <p class="muted" id="lg-purchase-warn" hidden style="margin:0.35rem 0 0; font-size:0.8rem;"></p>
+                <p class="muted" id="lg-purchase-summary" hidden style="margin:0.35rem 0 0; font-size:0.82rem;"></p>
+                <p id="lg-purchase-status" hidden style="margin:0.35rem 0 0; font-size:0.82rem;"></p>
+            </div>
+            <datalist id="lg-purchase-products"></datalist>
 
             <div class="form-actions">
                 <button type="submit" class="btn btn-primary">Enregistrer la dépense</button>
@@ -665,6 +713,14 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
     var rowsBox = document.getElementById('lg-scan-rows');
     var rowAddBtn = document.getElementById('lg-scan-row-add');
     var totalEl = document.getElementById('lg-scan-total');
+    // Section « Achats à créer » : case de confirmation, avertissement,
+    // résumé live, message d'erreur, endpoint du POST save-bulk.
+    var purchaseBox = document.getElementById('lg-purchase-box');
+    var createCb = document.getElementById('lg-create-purchases');
+    var purchaseWarn = document.getElementById('lg-purchase-warn');
+    var purchaseSummary = document.getElementById('lg-purchase-summary');
+    var purchaseStatus = document.getElementById('lg-purchase-status');
+    var saveBulkUrl = purchaseBox ? (purchaseBox.getAttribute('data-save-bulk-url') || '') : '';
     if (!spentAtEl || !labelEl || !amountEl || !invoiceEl || !vatEl || !infoBox || !infoList) return;
 
     var basisInputs = form.querySelectorAll('input[name="amount_basis"]');
@@ -857,7 +913,13 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
         key.className = 'lg-scan-key';
         key.placeholder = 'Produit';
         key.setAttribute('aria-label', 'Produit');
+        // Autocomplétion sur les produits connus (datalist rempli au
+        // chargement depuis data-purchase-products) — mêmes noms que
+        // les ventes pour alimenter le bon stock.
+        key.setAttribute('list', 'lg-purchase-products');
+        key.setAttribute('autocomplete', 'off');
         key.value = (r && r.key) || '';
+        key.addEventListener('input', updateLinesTotal);
 
         var qty = document.createElement('input');
         qty.type = 'number';
@@ -866,6 +928,7 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
         qty.step = '1';
         qty.value = r && r.qty ? String(r.qty) : '1';
         qty.setAttribute('aria-label', 'Quantité');
+        qty.addEventListener('input', updateLinesTotal);
 
         var total = document.createElement('input');
         total.type = 'text';
@@ -875,6 +938,37 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
         total.setAttribute('aria-label', 'Montant');
         total.value = (r && r.total) || '';
         total.addEventListener('input', updateLinesTotal);
+
+        // Taux de TVA DE LA LIGNE (lecture seule, ex « 5,5 % ») — tel
+        // que détecté dans la facture ; le brut reste en dataset pour le
+        // payload des achats (vat_rate[]).
+        var rawVat = r && r.vat_rate !== null && r.vat_rate !== undefined ? String(r.vat_rate) : '';
+        var vat = document.createElement('span');
+        vat.className = 'lg-scan-vat';
+        if (rawVat !== '') {
+            vat.textContent = rawVat.replace('.', ',') + ' %';
+        } else {
+            vat.hidden = true;
+        }
+
+        // Coût unitaire dérivé (montant ÷ quantité), rempli par
+        // updateLinesTotal — aide au contrôle avant création.
+        var unit = document.createElement('span');
+        unit.className = 'lg-scan-unit';
+        unit.hidden = true;
+
+        // Case « hors stock » de la ligne : cochée, l'achat restera
+        // comptabilisé mais n'entrera pas en stock. SANS attribut name :
+        // cette case ne doit jamais partir avec la dépense.
+        var nsLabel = document.createElement('label');
+        nsLabel.className = 'lg-scan-nostock';
+        nsLabel.title = 'Cochée : l\u2019achat sera comptabilisé mais n\u2019entrera pas en stock.';
+        var ns = document.createElement('input');
+        ns.type = 'checkbox';
+        ns.className = 'lg-scan-nostock-input';
+        ns.addEventListener('change', updateLinesTotal);
+        nsLabel.appendChild(ns);
+        nsLabel.appendChild(document.createTextNode('hors stock'));
 
         var del = document.createElement('button');
         del.type = 'button';
@@ -889,7 +983,11 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
         div.appendChild(key);
         div.appendChild(qty);
         div.appendChild(total);
+        div.appendChild(vat);
+        div.appendChild(unit);
+        div.appendChild(nsLabel);
         div.appendChild(del);
+        div.dataset.vatRate = rawVat;
         rowsBox.appendChild(div);
     }
 
@@ -908,23 +1006,65 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
         return out;
     }
 
-    // Total de contrôle : Σ montants + écart vs montant saisi.
+    // Lignes du pavé -> [{key, qty, total, vat_rate, no_stock}] pour les
+    // ACHATS : toutes les lignes non totalement vides (y compris
+    // invalides — buildPurchaseBulkPayload explique chaque rejet),
+    // taux de TVA brut de la facture et case « hors stock » inclus.
+    function readPurchaseRows() {
+        var out = [];
+        Array.prototype.forEach.call(rowsBox.querySelectorAll('.lg-scan-row'), function (div) {
+            var key = div.querySelector('.lg-scan-key').value.trim();
+            var total = div.querySelector('.lg-scan-total').value.trim();
+            if (key === '' && total === '') return; // jamais remplie
+            var ns = div.querySelector('.lg-scan-nostock-input');
+            out.push({
+                key: key,
+                qty: parseInt(div.querySelector('.lg-scan-qty').value, 10),
+                total: total,
+                vat_rate: div.dataset.vatRate ? div.dataset.vatRate : null,
+                no_stock: !!(ns && ns.checked)
+            });
+        });
+        return out;
+    }
+
+    // Total de contrôle : Σ montants + écart vs montant saisi, coût
+    // unitaire dérivé par ligne (montant ÷ quantité), puis état de la
+    // section « Achats à créer » (case + résumé).
     function updateLinesTotal() {
-        if (!totalEl) return;
         var sum = 0;
         var count = 0;
-        Array.prototype.forEach.call(readLineRows(), function (r) {
-            var n = H.parseAmount(r.total);
-            if (isFinite(n) && n > 0) { sum += n; count++; }
+        Array.prototype.forEach.call(rowsBox.querySelectorAll('.lg-scan-row'), function (div) {
+            var key = div.querySelector('.lg-scan-key').value.trim();
+            var qty = parseInt(div.querySelector('.lg-scan-qty').value, 10);
+            var n = H.parseAmount(div.querySelector('.lg-scan-total').value);
+            var unit = div.querySelector('.lg-scan-unit');
+            if (key !== '' && isFinite(qty) && qty >= 1 && isFinite(n) && n > 0) {
+                sum += n;
+                count++;
+                if (unit) {
+                    unit.textContent = '≈ ' + fr2(n / qty) + ' €/u';
+                    unit.hidden = false;
+                }
+            } else if (unit) {
+                unit.textContent = '';
+                unit.hidden = true;
+            }
         });
-        if (count === 0) { totalEl.textContent = ''; return; }
-        var text = 'Total lignes : ' + fr2(sum) + ' € (' + count + ' ligne' + (count > 1 ? 's' : '') + ')';
-        var amount = H.parseAmount(amountEl.value);
-        if (isFinite(amount) && amount > 0) {
-            var diff = sum - amount;
-            text += ' · montant saisi : ' + fr2(amount) + ' € · écart : ' + (diff >= 0 ? '+' : '\u2212') + fr2(Math.abs(diff)) + ' €';
+        if (totalEl) {
+            if (count === 0) {
+                totalEl.textContent = '';
+            } else {
+                var text = 'Total lignes : ' + fr2(sum) + ' € (' + count + ' ligne' + (count > 1 ? 's' : '') + ')';
+                var amount = H.parseAmount(amountEl.value);
+                if (isFinite(amount) && amount > 0) {
+                    var diff = sum - amount;
+                    text += ' · montant saisi : ' + fr2(amount) + ' € · écart : ' + (diff >= 0 ? '+' : '\u2212') + fr2(Math.abs(diff)) + ' €';
+                }
+                totalEl.textContent = text;
+            }
         }
-        totalEl.textContent = text;
+        updatePurchaseSummary();
     }
 
     function renderRows(invoice) {
@@ -1018,5 +1158,214 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
         }
         existing.value = data;
     });
+
+    /* ── Achats à créer depuis le scan (stock + coût de revient) ──
+       La grille éditée ci-dessus est la source : « Créer aussi ces
+       achats » cochée + confirmation explicite = POST save-bulk
+       (contrat as_json=1) AVANT la dépense ; en cas d'échec, le submit
+       est abandonné (dépense non enregistrée, erreur affichée). */
+    var purchaseSubmitBtn = form.querySelector('button[type="submit"]');
+    var purchaseBusy = false;
+
+    // Datalist des produits connus : rempli depuis data-purchase-products
+    // (JSON injecté par le contrôleur ; [] tant que la variable de vue
+    // n'existe pas encore) — robuste à l'absence de la variable.
+    (function fillPurchaseDatalist() {
+        var dl = document.getElementById('lg-purchase-products');
+        if (!dl) return;
+        var keys = [];
+        try { keys = JSON.parse(form.getAttribute('data-purchase-products') || '[]'); } catch (e) { keys = []; }
+        if (!Array.isArray(keys)) keys = [];
+        Array.prototype.forEach.call(keys, function (k) {
+            if (typeof k !== 'string' || k.trim() === '') return;
+            var opt = document.createElement('option');
+            opt.value = k;
+            dl.appendChild(opt);
+        });
+    })();
+
+    // Case active seulement avec un scan affiché et ≥ 1 ligne
+    // exploitable ; résumé live (N lignes, Σ montants).
+    function updatePurchaseSummary() {
+        if (!createCb || !purchaseWarn) return;
+        var scanned = !!(linesBox && !linesBox.hidden && saveBulkUrl !== '');
+        var valid = 0;
+        var sum = 0;
+        Array.prototype.forEach.call(readPurchaseRows(), function (r) {
+            var n = H.parseAmount(r.total);
+            if (r.key !== '' && isFinite(r.qty) && r.qty >= 1 && isFinite(n) && n > 0) {
+                valid++;
+                sum += n;
+            }
+        });
+        var can = scanned && valid > 0;
+        createCb.disabled = !can;
+        if (!can && createCb.checked) createCb.checked = false; // jamais d'achat sans lignes contrôlables
+        if (!scanned) {
+            purchaseWarn.textContent = 'Aucun ticket scanné : photographie d\u2019abord la facture pour remplir les lignes.';
+            purchaseWarn.hidden = false;
+        } else if (valid === 0) {
+            purchaseWarn.textContent = 'Aucune ligne exploitable : complète produit, quantité et montant sur au moins une ligne.';
+            purchaseWarn.hidden = false;
+        } else {
+            purchaseWarn.textContent = '';
+            purchaseWarn.hidden = true;
+        }
+        if (purchaseSummary) {
+            if (valid > 0) {
+                purchaseSummary.textContent = valid + ' achat' + (valid > 1 ? 's' : '') + ' prêt' + (valid > 1 ? 's' : '')
+                    + ' — Σ ' + fr2(sum) + ' € · coût unitaire dérivé = montant ÷ quantité (affiché sur chaque ligne).';
+                purchaseSummary.hidden = false;
+            } else {
+                purchaseSummary.textContent = '';
+                purchaseSummary.hidden = true;
+            }
+        }
+    }
+
+    function purchaseError(msg) {
+        if (!purchaseStatus) { window.alert(msg); return; }
+        purchaseStatus.textContent = msg;
+        purchaseStatus.style.color = '#f87171';
+        purchaseStatus.hidden = false;
+    }
+
+    function purchaseClearError() {
+        if (!purchaseStatus) return;
+        purchaseStatus.textContent = '';
+        purchaseStatus.style.color = '';
+        purchaseStatus.hidden = true;
+    }
+
+    // Soumission : sans la case cochée, la dépense part normalement
+    // (le listener ci-dessus n'a qu'à injecter `notes`). Cochée : les
+    // achats partent D'ABORD — validation, confirmation, POST save-bulk
+    // — et la dépense n'est envoyée qu'après {ok:true}.
+    form.addEventListener('submit', function (ev) {
+        if (!createCb || !createCb.checked || saveBulkUrl === '') return;
+        ev.preventDefault();
+        if (purchaseBusy) return;
+
+        // (a) Validation client : dépense complète + lignes exploitables.
+        var problems = [];
+        if (spentAtEl.value.trim() === '') problems.push('date de la dépense manquante');
+        if (labelEl.value.trim() === '') problems.push('nom de la dépense manquant');
+        var depAmount = H.parseAmount(amountEl.value);
+        if (!isFinite(depAmount) || depAmount <= 0) problems.push('montant de la dépense invalide');
+
+        // En-tête des achats : la dépense fait foi (date, libellé comme
+        // fournisseur, référence, base HT/TTC, taux global du select).
+        var bulk = H.buildPurchaseBulkPayload({
+            purchased_at: spentAtEl.value.trim(),
+            supplier: labelEl.value,
+            invoice_number: invoiceEl.value,
+            amount_basis: basis(),
+            vat_rate: vatEl.value === '' ? null : vatEl.value,
+            update_cost: true
+        }, readPurchaseRows());
+        Array.prototype.forEach.call(bulk.rejected, function (r) {
+            problems.push('ligne ' + (r.index + 1) + (r.key !== '' ? ' (« ' + r.key + ' »)' : '') + ' : ' + r.reason);
+        });
+        if (bulk.product_key.length === 0) problems.push('aucune ligne d\u2019achat valide');
+        if (problems.length > 0) {
+            purchaseError('Achats non créés — corrige : ' + problems.join(' · ') + '. La dépense n\u2019a pas été enregistrée.');
+            return;
+        }
+
+        // (b) Confirmation OBLIGATOIRE : récapitulatif avec les lignes.
+        var sum = 0;
+        Array.prototype.forEach.call(bulk.total_amount, function (a) { sum += parseFloat(a); });
+        var MAX_CONFIRM = 12;
+        var lines = [];
+        Array.prototype.forEach.call(bulk.product_key, function (k, i) {
+            if (lines.length >= MAX_CONFIRM) return;
+            lines.push('- ' + k + ' × ' + bulk.quantity[i] + ' = ' + bulk.total_amount[i].replace('.', ',') + ' €'
+                + (bulk.no_stock_indexes.indexOf(i) !== -1 ? ' (hors stock)' : ''));
+        });
+        if (bulk.product_key.length > MAX_CONFIRM) {
+            lines.push('- … (' + (bulk.product_key.length - MAX_CONFIRM) + ' autre(s) ligne(s))');
+        }
+        if (!window.confirm('Créer ' + bulk.product_key.length + ' achat(s) pour ' + fr2(sum)
+            + ' € + enregistrer la dépense ? Vérifiez les lignes :\n' + lines.join('\n'))) {
+            return; // refusée : RIEN n'est envoyé (ni achats, ni dépense)
+        }
+
+        // (d) Anti double-clic pendant le POST.
+        purchaseBusy = true;
+        var oldBtnText = purchaseSubmitBtn ? purchaseSubmitBtn.textContent : '';
+        if (purchaseSubmitBtn) {
+            purchaseSubmitBtn.disabled = true;
+            purchaseSubmitBtn.textContent = 'Création des achats…';
+        }
+
+        // (c) POST save-bulk (FormData + CSRF champ et en-tête) ; en
+        // cas d'échec : erreur affichée, submit ABANDONNÉ — la dépense
+        // n'est pas enregistrée, l'utilisateur corrige et renvoie.
+        var fd = new FormData();
+        fd.append('as_json', '1');
+        fd.append('_csrf', csrfInput ? csrfInput.value : '');
+        fd.append('purchased_at', bulk.purchased_at);
+        fd.append('supplier', bulk.supplier);
+        fd.append('invoice_number', bulk.invoice_number);
+        fd.append('amount_basis', bulk.amount_basis);
+        if (bulk.update_cost !== undefined) fd.append('update_cost', bulk.update_cost);
+        // Taux de TVA sur le fil : PHP ne peut pas recevoir « vat_rate »
+        // (scalaire) ET « vat_rate[] » (tableau) dans le même POST — le
+        // tableau écrase silencieusement le scalaire. Donc :
+        //  - au moins une ligne porte son propre taux -> mode PAR LIGNE :
+        //    vat_rate[] pour TOUTES les lignes, les trous reprennent le
+        //    taux global (en mode tableau le backend force l'en-tête à
+        //    '' : sans ce report, une ligne sans taux perdrait sa TVA) ;
+        //  - sinon (taux global seul) -> vat_rate scalaire, les lignes
+        //    héritent côté serveur (comportement historique de la page
+        //    Achats).
+        var hasLineVat = bulk.vat_rate_lines.some(function (v) { return v !== ''; });
+        if (hasLineVat) {
+            Array.prototype.forEach.call(bulk.vat_rate_lines, function (v) {
+                fd.append('vat_rate[]', v === '' ? (bulk.vat_rate || '') : v);
+            });
+        } else if (Object.prototype.hasOwnProperty.call(bulk, 'vat_rate')) {
+            fd.append('vat_rate', bulk.vat_rate);
+        }
+        Array.prototype.forEach.call(bulk.product_key, function (k) { fd.append('product_key[]', k); });
+        Array.prototype.forEach.call(bulk.quantity, function (q) { fd.append('quantity[]', String(q)); });
+        Array.prototype.forEach.call(bulk.total_amount, function (a) { fd.append('total_amount[]', a); });
+        Array.prototype.forEach.call(bulk.no_stock_indexes, function (i) { fd.append('no_stock[' + i + ']', '1'); });
+
+        function release() {
+            purchaseBusy = false;
+            if (purchaseSubmitBtn) {
+                purchaseSubmitBtn.disabled = false;
+                purchaseSubmitBtn.textContent = oldBtnText;
+            }
+        }
+
+        fetch(saveBulkUrl, {
+            method: 'POST',
+            headers: { 'X-CSRF-Token': String(csrfInput ? csrfInput.value : '') },
+            credentials: 'same-origin',
+            body: fd
+        }).then(function (res) {
+            return res.json().catch(function () { return null; }).then(function (json) {
+                if (res.ok && json && json.ok === true) return json;
+                throw new Error(json && json.error
+                    ? String(json.error)
+                    : 'Erreur ' + res.status + ' : la création des achats a échoué.');
+            });
+        }).then(function () {
+            release();
+            purchaseClearError();
+            form.submit(); // achats créés : la dépense part à son tour (redirection + flash)
+        }, function (err) {
+            release();
+            purchaseError('Achats non créés — dépense NON enregistrée : '
+                + (err && err.message ? err.message : 'erreur réseau.')
+                + ' Vérifie la page Achats avant de renvoyer pour ne pas créer deux fois.');
+        });
+    });
+
+    // État initial de la section (case désactivée + avertissement tant
+    // qu'aucun scan n'a produit de lignes exploitables).
+    updatePurchaseSummary();
 })();
 </script>

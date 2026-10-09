@@ -74,10 +74,26 @@ final class AdminStockController extends AdminBaseController
      * (date, TVA, fournisseur, n° de facture, update_cost) s'appliquent
      * à toutes les lignes ; les lignes totalement vides sont ignorées,
      * les lignes invalides sont signalées dans le flash.
+     *
+     * Deux réponses possibles :
+     *  - standard (page Achats) : redirection PRG + flash ;
+     *  - JSON (champ « as_json » = « 1 », ex. préremplissage depuis le
+     *    livre comptable après un scan de facture) : même traitement,
+     *    même message, mais réponse {ok, inserted|error} sans redirection.
+     *
+     * Taux de TVA : soit un taux unique d'en-tête (« vat_rate », page
+     * Achats), soit un taux PAR LIGNE via le tableau « vat_rate[] »
+     * aligné sur « product_key[] » (factures à TVA mixte, ex. METRO
+     * boissons 5,5 % + droguerie 20 %) ; une case vide du tableau
+     * retombe sur le taux d'en-tête ('' = montant « déjà TTC »).
      */
     public function savePurchasesBulk(): void
     {
         $user = $this->guardCompta();
+
+        // Mode JSON (fetch) : réponds {ok,...} au lieu de rediriger.
+        // Sans ce champ : comportement historique strictement inchangé.
+        $asJson = trim((string) ($_POST['as_json'] ?? '')) === '1';
 
         $purchasedAt = trim((string) ($_POST['purchased_at'] ?? ''));
         if ($purchasedAt === '') {
@@ -88,14 +104,23 @@ final class AdminStockController extends AdminBaseController
         $notes = trim((string) ($_POST['notes'] ?? ''));
         $updateCost = isset($_POST['update_cost']);
 
+        // Taux de TVA : chaîne (en-tête unique) OU tableau vat_rate[] —
+        // en tableau, l'en-tête est vide : les cases vides de la ligne
+        // signifient « déjà TTC » (pas de décomposition).
+        $vatInput = $_POST['vat_rate'] ?? '';
+
         // '' = montants saisis déjà TTC (pas de TVA à calculer), sinon taux en %.
-        $vatRaw = trim((string) ($_POST['vat_rate'] ?? ''));
+        $vatRaw = is_array($vatInput) ? '' : trim((string) $vatInput);
 
         // Base des montants saisis : « ht » (TVA à ajouter, défaut) ou
         // « ttc » (TVA déjà incluse — HT déduit du taux choisi).
         $basis = (string) ($_POST['amount_basis'] ?? 'ht') === 'ttc' ? 'ttc' : 'ht';
 
         $keys = is_array($_POST['product_key'] ?? null) ? $_POST['product_key'] : [];
+
+        // Taux par ligne (facture à TVA mixte) : null si le POST n'a pas
+        // de tableau vat_rate[] (taux d'en-tête pour toutes les lignes).
+        $lineVatRates = is_array($vatInput) ? $vatInput : null;
 
         // Case « hors stock » par ligne : cochée, la ligne reste un achat
         // réel (compta, lot de coût) mais n'entre pas en stock. Les noms
@@ -128,7 +153,7 @@ final class AdminStockController extends AdminBaseController
                 'product_key'  => $key,
                 'quantity'     => (string) ($quantities[$i] ?? ''),
                 'total_amount' => $amountRaw,
-                'vat_rate'     => $vatRaw,
+                'vat_rate'     => self::lineVatRaw($lineVatRates, $i, $vatRaw),
                 'amount_basis' => $basis,
                 'update_cost'  => $updateCost ? '1' : '',
                 'no_stock'     => $noStock,
@@ -152,6 +177,10 @@ final class AdminStockController extends AdminBaseController
             $flash = $errors === []
                 ? 'Aucun achat saisi.'
                 : 'Aucun achat enregistré — ' . implode(' · ', $errors);
+            if ($asJson) {
+                // Même message agrégé que le flash, en JSON (400).
+                $this->json(['ok' => false, 'error' => $flash], 400);
+            }
             $this->setFlash('error', $flash);
             redirect(url('/admin/compta/achats'));
         }
@@ -163,6 +192,7 @@ final class AdminStockController extends AdminBaseController
             'products'       => count($products),
             'ignored'        => count($errors),
             'vat_rate'       => $vatRaw === '' ? null : parseFrenchFloat($vatRaw),
+            'vat_per_line'   => $lineVatRates !== null,
             'amount_basis'   => $basis,
             'update_cost'    => $updateCost,
             'no_stock'       => $noStockInserted,
@@ -207,8 +237,38 @@ final class AdminStockController extends AdminBaseController
         if ($sync['created'] !== []) {
             $flash .= ' Carte mise à jour automatiquement : ' . implode(', ', $sync['created']) . '.';
         }
+        if ($asJson) {
+            // Même message que le flash, en JSON (200).
+            $this->json(['ok' => true, 'inserted' => $inserted, 'message' => $flash]);
+        }
         $this->setFlash('success', $flash);
         redirect(url('/admin/compta/achats'));
+    }
+
+    /**
+     * Taux de TVA BRUT d'une ligne du lot : la valeur du tableau
+     * « vat_rate[] » quand elle est renseignée, sinon le taux d'en-tête
+     * ('' = pas de décomposition TVA — montant « déjà TTC »). La
+     * validation du taux (∈ VAT_RATES) reste dans createOne() : un taux
+     * hors liste remonte comme erreur de la ligne.
+     *
+     * Méthode pure (aucun accès POST/DB) : testée unitairement.
+     *
+     * @param array<int,mixed>|null $lineRates Tableau vat_rate[] du POST
+     *                                        (null = pas de tableau :
+     *                                        taux d'en-tête partout).
+     * @param int    $index     Indice de la ligne (aligné sur product_key[]).
+     * @param string $headerRaw Taux d'en-tête brut ('' = aucun).
+     */
+    protected static function lineVatRaw(?array $lineRates, int $index, string $headerRaw): string
+    {
+        if ($lineRates === null) {
+            return $headerRaw;
+        }
+
+        $raw = trim((string) ($lineRates[$index] ?? ''));
+
+        return $raw !== '' ? $raw : $headerRaw;
     }
 
     /**
