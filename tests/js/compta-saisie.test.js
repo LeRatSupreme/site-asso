@@ -579,32 +579,48 @@ t('buildPurchaseBulkPayload : aucune ligne valide -> tableaux vides, rien de rej
 
 /* ------------------------------------------------------------------ *
  * downscaleImageSpec — spécification PURE de la compression photo
- * (canvas côté navigateur : max 2200 px côté long, JPEG qualité 0,9)
+ * (canvas côté navigateur : au-delà de 3000 px de côté long OU de
+ * 4 Mo, JPEG qualité 0,9 — le bench réel a validé l'OCR à ~2900 px)
  * ------------------------------------------------------------------ */
 
 t('downscaleImageSpec : photo au-dessus de la limite -> recompression', function () {
     const spec = H.downscaleImageSpec(5 * 1024 * 1024, 4000, 3000);
     assert.strictEqual(spec.skip, false, '4000 px de large : il faut recompresser.');
-    assert.strictEqual(spec.maxSide, 2200);
+    assert.strictEqual(spec.maxSide, 3000);
     assert.strictEqual(spec.quality, 0.9);
     assert.strictEqual(spec.mime, 'image/jpeg');
-    assert.strictEqual(spec.targetW, 2200, 'Côté long ramené à 2200 px.');
-    assert.strictEqual(spec.targetH, 1650, 'Proportions conservées (3000 × 0,55).');
+    assert.strictEqual(spec.targetW, 3000, 'Côté long ramené à 3000 px.');
+    assert.strictEqual(spec.targetH, 2250, 'Proportions conservées (3000 × 0,75).');
     assert.strictEqual(spec.fileSize, 5 * 1024 * 1024, 'Poids d\u2019origine conservé (informatif).');
 });
 
 t('downscaleImageSpec : portrait — le côté long est la HAUTEUR', function () {
     const spec = H.downscaleImageSpec(4e6, 3024, 4032);
     assert.strictEqual(spec.skip, false);
-    assert.strictEqual(spec.targetW, 1650);
-    assert.strictEqual(spec.targetH, 2200);
+    assert.strictEqual(spec.targetW, 2250);
+    assert.strictEqual(spec.targetH, 3000);
+});
+
+t('downscaleImageSpec : photo nette mais trop LOURDE -> réencodage sans redimensionnement', function () {
+    const spec = H.downscaleImageSpec(5 * 1024 * 1024, 2000, 1500);
+    assert.strictEqual(spec.skip, false, '2,5× le poids visé : recompression nécessaire (erreur 1 sinon).');
+    assert.strictEqual(spec.targetW, 2000, 'Dimensions conservées (côté long sous 3000 px).');
+    assert.strictEqual(spec.targetH, 1500);
+    assert.strictEqual(spec.quality, 0.9);
 });
 
 t('downscaleImageSpec : photo déjà sous la limite -> fichier original', function () {
     const spec = H.downscaleImageSpec(800000, 2200, 1650);
-    assert.strictEqual(spec.skip, true, '2200 px exactement : pas de recompression (<=).');
+    assert.strictEqual(spec.skip, true, 'Sous 3000 px ET sous 4 Mo : pas de recompression.');
     assert.strictEqual(spec.targetW, 2200, 'Dimensions d\u2019origine intactes.');
     assert.strictEqual(spec.targetH, 1650);
+});
+
+t('downscaleImageSpec : vraie photo de téléphone (2880 px, ~2 Mo) -> fichier original', function () {
+    const spec = H.downscaleImageSpec(2.2 * 1024 * 1024, 2160, 2880);
+    assert.strictEqual(spec.skip, true, 'Le bench réel a validé ces photos telles quelles.');
+    assert.strictEqual(spec.targetW, 2160);
+    assert.strictEqual(spec.targetH, 2880);
 });
 
 t('downscaleImageSpec : petites dimensions -> fichier original', function () {
@@ -629,12 +645,12 @@ t('downscaleImageSpec : taille de fichier inexploitable -> 0, sans crash', funct
 });
 
 t('downscaleImageSpec : gros dépassement arrondi au pixel près', function () {
-    // 12000 × 16000 (scan haute définition) -> 1650 × 2200
+    // 12000 × 16000 (scan haute définition) -> 2250 × 3000
     const spec = H.downscaleImageSpec(9e6, 12000, 16000);
     assert.strictEqual(spec.skip, false);
-    assert.strictEqual(spec.targetW, 1650);
-    assert.strictEqual(spec.targetH, 2200);
-    assert.ok(Math.max(spec.targetW, spec.targetH) <= 2200, 'Jamais au-dessus de la limite après arrondi.');
+    assert.strictEqual(spec.targetW, 2250);
+    assert.strictEqual(spec.targetH, 3000);
+    assert.ok(Math.max(spec.targetW, spec.targetH) <= 3000, 'Jamais au-dessus de la limite après arrondi.');
 });
 
 /* ------------------------------------------------------------------ *

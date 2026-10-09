@@ -89,7 +89,7 @@ final class InvoiceScan
             return [
                 'ok'     => false,
                 'status' => 400,
-                'error'  => "Échec de l'envoi du fichier (erreur " . (int) $file['error'] . ").",
+                'error'  => self::uploadErrorMessage((int) $file['error']),
             ];
         }
         if ((int) ($file['size'] ?? 0) > self::MAX_SIZE) {
@@ -116,6 +116,15 @@ final class InvoiceScan
         }
 
         $tmpPath = (string) $file['tmp_name'];
+
+        // L'OCR ensembliste d'une photo mobilise plusieurs passes
+        // Tesseract (jusqu'à ~8 × quelques secondes) : l'apache du VPS
+        // tourne à 30 s de max_execution_time par défaut, trop juste
+        // pour un scan chargé. Sans effet sous CLI (limites retirées).
+        if (function_exists('set_time_limit')) {
+            @set_time_limit(240);
+        }
+
         $audit = [
             'source' => 'file',
             'nom'    => (string) ($file['name'] ?? ''),
@@ -167,6 +176,29 @@ final class InvoiceScan
             'invoice' => $invoice,
             'audit'   => $audit,
         ];
+    }
+
+    /**
+     * Message français lisible pour un code d'erreur d'upload PHP. Le
+     * code 1 (UPLOAD_ERR_INI_SIZE — photo plus lourde que
+     * upload_max_filesize) est de loin le plus fréquent sur le scan de
+     * photos de téléphone : il porte l'explication et la parade, pas un
+     * « erreur 1 » opaque.
+     */
+    public static function uploadErrorMessage(int $code): string
+    {
+        return match ($code) {
+            UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE => sprintf(
+                "Échec de l'envoi : la photo dépasse la taille maximale autorisée par le serveur (erreur %d)."
+                . " Reprenez la photo en cadrant la facture de plus près, ou compressez-la avant l'envoi.",
+                $code
+            ),
+            UPLOAD_ERR_PARTIAL => "Échec de l'envoi : fichier reçu incomplet (connexion interrompue ?), réessayez.",
+            UPLOAD_ERR_NO_TMP_DIR => "Échec de l'envoi : dossier temporaire du serveur introuvable (erreur 6).",
+            UPLOAD_ERR_CANT_WRITE => "Échec de l'envoi : écriture sur le disque impossible (erreur 7).",
+            UPLOAD_ERR_EXTENSION => "Échec de l'envoi : une extension PHP a stoppé l'upload (erreur 8).",
+            default => sprintf("Échec de l'envoi du fichier (erreur %d).", $code),
+        };
     }
 
     /**

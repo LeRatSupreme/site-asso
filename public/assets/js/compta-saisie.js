@@ -26,9 +26,10 @@
      charge utile du POST /admin/compta/achats/save-bulk (contrat
      as_json=1) — achats (stock + coût de revient) créés depuis le
      ticket, avec rejet motivé des lignes invalides ;
-   - downscaleImageSpec / downscaleImage : compression locale d'une
-     photo avant l'upload (canvas, max 2200 px, JPEG 0,9 ; échec ->
-     fichier original) ;
+    - downscaleImageSpec / downscaleImage : compression locale d'une
+      photo avant l'upload (canvas ; au-delà de 3000 px de côté long
+      OU de 4 Mo, JPEG 0,9 puis replis qualité/échelle ; échec ->
+      fichier original) ;
    - scanUpload / scanParseText : envoi du fichier ou du texte OCR à
      l'endpoint de scan (JSON {ok, invoice}).
    ========================================================= */
@@ -158,20 +159,35 @@
         routes POST /admin/compta/achats/scan, contrôleur Achats). */
     var SCAN_ENDPOINT = '/admin/compta/achats/scan';
 
-    /** Côté long maximal d'une photo recompressée avant upload (px). */
-    var DOWNSCALE_MAX_SIDE = 2200;
+    /**
+     * Côté long maximal d'une photo recompressée avant upload (px). Les
+     * vraies photos de téléphone font ~2900 px de côté long et le bench
+     * réel a validé le pipeline OCR à cette résolution : on ne descend
+     * plus à 2200 px, seulement au-delà de 3000 px.
+     */
+    var DOWNSCALE_MAX_SIDE = 3000;
 
     /** Qualité JPEG de la recompression canvas (0-1). */
     var DOWNSCALE_QUALITY = 0.9;
 
     /**
+     * Poids d'upload visé pour une photo recompressée (octets). Le PHP
+     * du serveur est réglé à 12M et l'app limite à 10 Mo : viser 4 Mo
+     * garde une marge large tout en évitant l'« erreur 1 » historique
+     * (upload_max_filesize à 2 M sur des photos de 2 Mo et plus).
+     */
+    var DOWNSCALE_TARGET_BYTES = 4 * 1024 * 1024;
+
+    /**
      * Spécification PURE du redimensionnement d'une photo avant upload
      * (testée côté Node ; la partie canvas — downscaleImage — ne l'est
-     * pas). Une photo dont le côté long dépasse 2200 px est mise à
-     * l'échelle en conservant les proportions (qualité 0,9, JPEG) : le
-     * poids part de plusieurs Mo à ~1 Mo et l'OCR y gagne (résolution
-     * utile ~300 DPI). Dimensions illisibles (0/NaN) -> fichier original
-     * (skip) — prudence, jamais de perte.
+     * pas). Une photo est recompressée (JPEG, proportions conservées)
+     * si son côté long dépasse 3000 px OU si elle pèse plus de 4 Mo —
+     * une photo de 2,5 Mo toute à fait nette mais trop lourde pour le
+     * serveur doit passer par le canvas, pas par l'« erreur 1 ». Une
+     * photo sous les deux limites part telle quelle (zéro perte, OCR
+     * fidèle au bench). Dimensions illisibles (0/NaN) -> fichier
+     * original (skip) — prudence, jamais de perte.
      *
      * @param {number} fileSize Poids du fichier (octets, informatif).
      * @param {number} w Largeur naturelle (px).
@@ -195,8 +211,10 @@
         };
         if (width < 1 || height < 1) return spec;          // dimensions inconnues
         var longSide = Math.max(width, height);
-        if (longSide <= DOWNSCALE_MAX_SIDE) return spec;   // déjà sous la limite
-        var scale = DOWNSCALE_MAX_SIDE / longSide;
+        var tooBig = !isNaN(size) && size > DOWNSCALE_TARGET_BYTES;
+        if (longSide <= DOWNSCALE_MAX_SIDE && !tooBig) return spec; // rien à faire
+        var cap = Math.min(DOWNSCALE_MAX_SIDE, longSide);
+        var scale = cap / longSide;
         spec.skip = false;
         spec.targetW = Math.max(1, Math.round(width * scale));
         spec.targetH = Math.max(1, Math.round(height * scale));
@@ -204,11 +222,34 @@
     }
 
     /**
+     * Encode la photo dans un canvas aux dimensions/qualité données et
+     * résout avec le Blob JPEG produit (null si le canvas échoue).
+     */
+    function encodeToBlob(img, targetW, targetH, quality) {
+        return new Promise(function (resolve) {
+            try {
+                var canvas = document.createElement('canvas');
+                canvas.width = targetW;
+                canvas.height = targetH;
+                var ctx = canvas.getContext('2d');
+                if (!ctx) return resolve(null);
+                ctx.drawImage(img, 0, 0, targetW, targetH);
+                canvas.toBlob(function (blob) { resolve(blob || null); }, 'image/jpeg', quality);
+            } catch (e) {
+                resolve(null);
+            }
+        });
+    }
+
+    /**
      * Partie CANVAS du redimensionnement (non testable sous Node) :
      * résout une Promise avec un Blob JPEG recompressé, ou avec le
      * fichier ORIGINAL si tout ne se passe pas comme prévu (fichier non
      * image, canvas indisponible, erreur de décodage, blob null) —
-     * l'upload ne doit jamais échouer à cause de la compression.
+     * l'upload ne doit jamais échouer à cause de la compression. Si le
+     * premier encodage dépasse encore le poids visé (photo très
+     * détaillée), deux replis sont tentés (qualité 0,72, puis côté long
+     * 2200 px) ; le plus léger des blobs obtenus est envoyé.
      */
     function downscaleImage(file) {
         if (!file || String(file.type || '').indexOf('image/') !== 0) {
@@ -222,6 +263,7 @@
             var url = URL.createObjectURL(file);
             var img = new Image();
             var settled = false;
+            var best = null;
             var done = function (out) {
                 if (settled) return;
                 settled = true;
@@ -229,19 +271,34 @@
                 resolve(out || file);
             };
             img.onload = function () {
-                try {
-                    var spec = downscaleImageSpec(file.size, img.naturalWidth, img.naturalHeight);
-                    if (spec.skip) return done(file);
-                    var canvas = document.createElement('canvas');
-                    canvas.width = spec.targetW;
-                    canvas.height = spec.targetH;
-                    var ctx = canvas.getContext('2d');
-                    if (!ctx) return done(file);
-                    ctx.drawImage(img, 0, 0, spec.targetW, spec.targetH);
-                    canvas.toBlob(function (blob) { done(blob || file); }, spec.mime, spec.quality);
-                } catch (e) {
-                    done(file);
-                }
+                var spec = downscaleImageSpec(file.size, img.naturalWidth, img.naturalHeight);
+                if (spec.skip) return done(file);
+                var side = Math.max(spec.targetW, spec.targetH);
+                var fallback = Math.min(1, 2200 / side);
+                var steps = [
+                    { w: spec.targetW, h: spec.targetH, q: DOWNSCALE_QUALITY },
+                    { w: spec.targetW, h: spec.targetH, q: 0.72 },
+                    {
+                        w: Math.max(1, Math.round(spec.targetW * fallback)),
+                        h: Math.max(1, Math.round(spec.targetH * fallback)),
+                        q: 0.8
+                    }
+                ];
+                var i = 0;
+                var step = function () {
+                    if (i >= steps.length) return done(best);
+                    var s = steps[i++];
+                    encodeToBlob(img, s.w, s.h, s.q)
+                        .then(function (blob) {
+                            if (blob && (!best || blob.size < best.size)) best = blob;
+                            if (best && best.size <= DOWNSCALE_TARGET_BYTES) {
+                                return done(best);
+                            }
+                            step();
+                        })
+                        .catch(step);
+                };
+                step();
             };
             img.onerror = function () { done(file); };
             img.src = url;
