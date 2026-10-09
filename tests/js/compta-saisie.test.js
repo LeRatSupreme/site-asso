@@ -577,11 +577,112 @@ t('buildPurchaseBulkPayload : aucune ligne valide -> tableaux vides, rien de rej
     assert.strictEqual(p.vat_rate, '5.5', 'L\u2019en-tête reste posté même sans ligne.');
 });
 
+/* ------------------------------------------------------------------ *
+ * scanUpload / scanParseText — CSRF OPTIONNEL (POST kiosque sans
+ * session : null = ni champ _csrf, ni en-tête X-CSRF-Token ; le jeton
+ * admin de l'URL EST l'authentification). fetch et FormData sont
+ * stubbés : les assertions tournent dans le harnais Node.
+ * ------------------------------------------------------------------ */
+
+/** Tests asynchrones (promesses) : exécutés après les tests synchrones. */
+const asyncTests = [];
+
+/** Mini-harnais asynchrone : même convention d'échec que t(). */
+function ta(name, fn) {
+    asyncTests.push({ name: name, fn: fn });
+}
+
+/** FormData factice : enregistre les champs appended (k, v). */
+function FakeFormData() { this.fields = []; }
+FakeFormData.prototype.append = function (k, v) { this.fields.push([k, v]); };
+
+/** fetch factice : capture (url, init), répond {ok:true, json:{ok:true}}. */
+function stubFetch(captured) {
+    return function (url, init) {
+        captured.url = url;
+        captured.init = init;
+        return Promise.resolve({
+            ok: true,
+            json: function () { return Promise.resolve({ ok: true, invoice: null }); }
+        });
+    };
+}
+
+/** Installe les stubs, rend leur restauration (finally). */
+function withStubs(captured, fn) {
+    const origFetch = global.fetch;
+    const origFormData = global.FormData;
+    global.fetch = stubFetch(captured);
+    global.FormData = FakeFormData;
+    return Promise.resolve().then(fn).finally(function () {
+        global.fetch = origFetch;
+        global.FormData = origFormData;
+    });
+}
+
+function fieldNames(fd) {
+    return fd.fields.map(function (f) { return f[0]; });
+}
+
+ta('scanUpload : csrf null -> ni champ _csrf ni en-tête X-CSRF-Token', function () {
+    const captured = {};
+    return withStubs(captured, function () {
+        return H.scanUpload({ name: 'ticket.jpg' }, null, '/kiosque/admin/ledger/scan/TOKEN').then(function () {
+            const headers = captured.init.headers || {};
+            assert.ok(!Object.prototype.hasOwnProperty.call(headers, 'X-CSRF-Token'),
+                'Pas d\u2019en-tête X-CSRF-Token sans CSRF (kiosque).');
+            assert.deepStrictEqual(fieldNames(captured.init.body), ['file'],
+                'Seul le fichier part : PAS de champ _csrf.');
+            assert.strictEqual(captured.url, '/kiosque/admin/ledger/scan/TOKEN',
+                'L\u2019endpoint passé est utilisé tel quel.');
+            assert.strictEqual(captured.init.method, 'POST');
+        });
+    });
+});
+
+ta('scanUpload : csrf fourni -> champ _csrf ET en-tête X-CSRF-Token (admin inchangé)', function () {
+    const captured = {};
+    return withStubs(captured, function () {
+        return H.scanUpload({ name: 'ticket.jpg' }, 'TOK', '/admin/compta/depenses/scan').then(function () {
+            const headers = captured.init.headers || {};
+            assert.strictEqual(headers['X-CSRF-Token'], 'TOK', 'En-tête présent côté admin.');
+            assert.deepStrictEqual(fieldNames(captured.init.body), ['file', '_csrf'],
+                'Le champ _csrf part avec la valeur du formulaire.');
+        });
+    });
+});
+
+ta('scanParseText : csrf null -> texte seul, sans trace de CSRF', function () {
+    const captured = {};
+    return withStubs(captured, function () {
+        return H.scanParseText('METRO\n2 x Coca', null, '/kiosque/admin/ledger/scan/TOKEN').then(function () {
+            const headers = captured.init.headers || {};
+            assert.ok(!Object.prototype.hasOwnProperty.call(headers, 'X-CSRF-Token'));
+            assert.deepStrictEqual(fieldNames(captured.init.body), ['text']);
+            assert.strictEqual(captured.init.body.fields[0][1], 'METRO\n2 x Coca');
+        });
+    });
+});
+
 /* ------------------------------------------------------------------ */
 
-if (failures.length > 0) {
-    console.error('JS ÉCHEC : ' + failures.length + ' test(s) en échec, ' + passed + ' OK');
-    console.error(failures.join('\n'));
-    process.exit(1);
-}
-console.log('JS OK : ' + passed + ' tests de la grille de saisie.');
+/* Exécution SÉQUENTIELLE des tests asynchrones : les stubs globaux
+ * (fetch/FormData) d'un test ne doivent jamais chevaucher ceux d'un
+ * autre (une exécution en parallèle ferait gagner le dernier stub). */
+asyncTests.reduce(function (chain, c) {
+    return chain.then(function () {
+        return Promise.resolve().then(c.fn).then(
+            function () { passed++; },
+            function (e) {
+                failures.push('  ✗ ' + c.name + ' : ' + (e && e.message ? e.message : e));
+            }
+        );
+    });
+}, Promise.resolve()).then(function () {
+    if (failures.length > 0) {
+        console.error('JS ÉCHEC : ' + failures.length + ' test(s) en échec, ' + passed + ' OK');
+        console.error(failures.join('\n'));
+        process.exit(1);
+    }
+    console.log('JS OK : ' + passed + ' tests de la grille de saisie.');
+});

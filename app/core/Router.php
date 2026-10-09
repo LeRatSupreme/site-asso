@@ -125,8 +125,14 @@ final class Router
     {
         $method = strtoupper($method);
 
-        // Toute requête POST doit présenter un token CSRF valide.
-        if ($method === 'POST' && !Csrf::checkRequest()) {
+        // Toute requête POST doit présenter un token CSRF valide — SAUF les
+        // routes /kiosque/* : l'authentification y est le jeton secret PORTÉ
+        // PAR L'URL (impossible à deviner, jamais envoyé automatiquement par
+        // un navigateur cross-origin : une attaque CSRF ne peut pas le
+        // forger). Ces pages sont pensées sans session (téléphone, lien
+        // partagé) ; les POST kiosque sont donc affranchis du CSRF de
+        // session — le jeton admin/membres EST l'authentification.
+        if ($method === 'POST' && !str_starts_with($path, '/kiosque/') && !Csrf::checkRequest()) {
             http_response_code(403);
             echo '<h1>Erreur 403 — jeton CSRF invalide.</h1>';
 

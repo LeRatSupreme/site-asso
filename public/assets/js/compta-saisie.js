@@ -156,17 +156,28 @@
     var SCAN_ENDPOINT = '/admin/compta/achats/scan';
 
     /**
+     * Jeton CSRF disponible ? null/undefined/'' = absent — c'est le cas
+     * des POST kiosque (auth par jeton dans l'URL, pas de session) : ni
+     * champ `_csrf`, ni en-tête X-CSRF-Token ne doivent alors partir.
+     */
+    function hasCsrf(csrfToken) {
+        return csrfToken !== null && csrfToken !== undefined && String(csrfToken) !== '';
+    }
+
+    /**
      * POST commun aux deux appels du scan. Le jeton CSRF part à la
      * fois en champ `_csrf` du FormData et en en-tête `X-CSRF-Token` :
-     * Csrf::checkRequest (app/core/Csrf.php) accepte l'un ou l'autre,
-     * le Router l'exige pour toute requête POST. Réponse attendue :
-     * {ok:true,...} ; en cas d'erreur (JSON {ok:false,error} ou HTTP
-     * non-JSON), la promesse est rejetée avec un message en français.
+     * Csrf::checkRequest (app/core/Csrf.php) accepte l'un ou l'autre.
+     * ABSENT (null/'') en kiosque : aucune trace de CSRF dans la
+     * requête. Réponse attendue : {ok:true,...} ; en cas d'erreur (JSON
+     * {ok:false,error} ou HTTP non-JSON), la promesse est rejetée avec
+     * un message en français.
      */
     function scanRequest(body, csrfToken, endpoint) {
+        var headers = hasCsrf(csrfToken) ? { 'X-CSRF-Token': String(csrfToken) } : {};
         return fetch(endpoint || SCAN_ENDPOINT, {
             method: 'POST',
-            headers: { 'X-CSRF-Token': String(csrfToken || '') },
+            headers: headers,
             credentials: 'same-origin',
             body: body
         }).then(function (res) {
@@ -185,22 +196,25 @@
      * du serveur {ok, source, text, invoice} ; rejette avec le message
      * français du serveur sinon. `endpoint` optionnel (URL rendue par
      * la vue via url(), pour respecter un éventuel sous-chemin).
+     * `csrfToken` optionnel : null (POST kiosque sans session) = pas de
+     * champ `_csrf` dans le FormData.
      */
     function scanUpload(file, csrfToken, endpoint) {
         var fd = new FormData();
         fd.append('file', file, (file && file.name) || 'facture');
-        fd.append('_csrf', String(csrfToken || ''));
+        if (hasCsrf(csrfToken)) fd.append('_csrf', String(csrfToken));
         return scanRequest(fd, csrfToken, endpoint);
     }
 
     /**
      * Envoie le texte OCR (édité par l'utilisateur) au même endpoint
-     * (champ `text`). Même contrat que scanUpload.
+     * (champ `text`). Même contrat que scanUpload (csrfToken null = pas
+     * de champ `_csrf`).
      */
     function scanParseText(text, csrfToken, endpoint) {
         var fd = new FormData();
         fd.append('text', String(text == null ? '' : text));
-        fd.append('_csrf', String(csrfToken || ''));
+        if (hasCsrf(csrfToken)) fd.append('_csrf', String(csrfToken));
         return scanRequest(fd, csrfToken, endpoint);
     }
 

@@ -342,6 +342,14 @@ function aeic_register_routes(Router $router): void
     // identité obligatoire, photo optionnelle, sans CSRF : le jeton admin
     // EST l'authentification — mêmes mécaniques que les autres POST kiosque).
     $router->post('/kiosque/admin/ledger/depense/{token}', [KioskComptageController::class, 'ledgerDepenseSave']);
+    // Scan d'un ticket depuis le livre comptable kiosque (JSON) : même
+    // contrat que les scans admin (OCR image/PDF ou texte collé), sans
+    // CSRF — le jeton admin EST l'authentification.
+    $router->post('/kiosque/admin/ledger/scan/{token}', [KioskComptageController::class, 'ledgerScan']);
+    // Création d'achats en lot depuis le livre comptable kiosque (JSON,
+    // contrat as_json=1 — mêmes champs que /admin/compta/achats/save-bulk),
+    // sans CSRF : le jeton admin EST l'authentification.
+    $router->post('/kiosque/admin/ledger/purchases/{token}', [KioskComptageController::class, 'ledgerPurchasesSave']);
 
     // Suivi avancé : dépenses, budgets, achats, inventaire, pertes, événements, rapport annuel.
     $router->get('/admin/compta/depenses', [AdminExpenseController::class, 'index']);

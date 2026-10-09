@@ -4,28 +4,25 @@ declare(strict_types=1);
 
 namespace Tests\Unit;
 
-use App\Controllers\Admin\AdminStockController;
+use App\Core\Compta\PurchaseSaver;
 use PHPUnit\Framework\TestCase;
-use ReflectionMethod;
 
 /**
  * Tests de la résolution du taux de TVA par ligne du POST en lot
- * (AdminStockController::savePurchasesBulk) — méthode pure lineVatRaw(),
- * aucun accès base : factures à TVA mixte (ex. METRO boissons 5,5 % +
- * droguerie 20 %) via le tableau vat_rate[] aligné sur product_key[],
- * et rétrocompatibilité du taux d'en-tête unique (page Achats).
+ * (PurchaseSaver::save, service partagé par la page Achats admin et le
+ * livre comptable kiosque) — méthode pure lineVatRaw(), aucun accès
+ * base : factures à TVA mixte (ex. METRO boissons 5,5 % + droguerie
+ * 20 %) via le tableau vat_rate[] aligné sur product_key[], et
+ * rétrocompatibilité du taux d'en-tête unique (page Achats).
  */
 final class PurchaseBulkVatTest extends TestCase
 {
     /**
-     * Appelle lineVatRaw() (protégée, statique, pure) par réflexion.
+     * Appelle PurchaseSaver::lineVatRaw() (publique, statique, pure).
      */
     private static function call(?array $lineRates, int $index, string $headerRaw): string
     {
-        $method = new ReflectionMethod(AdminStockController::class, 'lineVatRaw');
-        $method->setAccessible(true);
-
-        $result = $method->invoke(null, $lineRates, $index, $headerRaw);
+        $result = PurchaseSaver::lineVatRaw($lineRates, $index, $headerRaw);
         self::assertIsString($result);
 
         return $result;
@@ -75,7 +72,7 @@ final class PurchaseBulkVatTest extends TestCase
 
     /**
      * Les valeurs du tableau sont trimées (saisie « 5,5 » avec espace…)
-     * avant d'être passées à createOne() qui valide ∈ VAT_RATES.
+     * avant d'être passées à la validation ∈ VAT_RATES.
      */
     public function test_valeurs_trimees(): void
     {
