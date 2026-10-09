@@ -88,6 +88,35 @@ final class Ean13
         return $fixes;
     }
 
+    /**
+     * Réparations d'un EAN-13 TRONQUÉ (12 chiffres lus, un chiffre perdu
+     * par l'OCR) par insertion d'UN chiffre : renvoie les EAN de clé valide
+     * accessibles en insérant un chiffre (0-9) à l'une des treize
+     * positions. Comme pour repairOneDigit(), il y a en général plusieurs
+     * réparations : l'appelant ne retient qu'une réparation unique ou
+     * confirmée par un EAN valide lu ailleurs.
+     *
+     * @return list<string>
+     */
+    public static function repairMissingDigit(string $ean): array
+    {
+        if (self::isValid($ean) || preg_match('/^\d{12}$/', $ean) !== 1) {
+            return [];
+        }
+
+        $fixes = [];
+        for ($pos = 0; $pos <= 12; $pos++) {
+            for ($digit = 0; $digit <= 9; $digit++) {
+                $candidate = substr($ean, 0, $pos) . (string) $digit . substr($ean, $pos);
+                if (self::isValid($candidate) && !in_array($candidate, $fixes, true)) {
+                    $fixes[] = $candidate;
+                }
+            }
+        }
+
+        return $fixes;
+    }
+
     /** Clé de contrôle calculée pour une base de 12 chiffres (poids 1/3). */
     private static function computedCheckDigit(string $base12): int
     {
