@@ -315,7 +315,10 @@ final class MetroInvoiceParser
         $seen = [];
 
         foreach (explode("\n", $text) as $raw) {
-            if (preg_match('/([A-Z])[^A-Z\d]{0,4}(\d{1,2})[.,]\s?(\d{1,2})\s*%/', $raw, $m, PREG_OFFSET_CAPTURE) !== 1) {
+            // La lettre et le taux sont repérés ensemble ; jusqu'à six
+            // caractères parasites peuvent séparer la lettre du taux
+            // (« B=  5, 50% », « B  =  5,50% » avec espaces doublées).
+            if (preg_match('/([A-Z])[^A-Z\d]{0,6}(\d{1,2})[.,]\s?(\d{1,2})\s*%/', $raw, $m, PREG_OFFSET_CAPTURE) !== 1) {
                 continue;
             }
 
@@ -543,6 +546,49 @@ final class MetroInvoiceParser
         return null;
     }
 
+    /**
+     * Candidats BRUTS de lignes produits d'un texte (une passe OCR) : même
+     * mécanique de lecture que parse() (lignes strictes, relaxées, têtes
+     * réappariées avec leurs colonnes) SANS finalisation — chaque candidat
+     * porte encore colisage/qty séparés (pour la validation arithmétique de
+     * l'ensemble) et l'index de la ligne émettrice (« pos »). Réservé à
+     * InvoiceEnsemble : ne remplace jamais parse(), dont le contrat est
+     * inchangé.
+     *
+     * @return list<array<string,mixed>> candidats {label,ean,article,
+     *         unit_price,colisage,qty,units,total,vat_letter,loose_units?,pos}
+     */
+    public static function extractCandidates(string $linesText): array
+    {
+        $warnings = [];
+
+        return self::extractLines($linesText, [], $warnings, true);
+    }
+
+    /**
+     * Émission d'une ligne reconnue : finale (contrat parse(), historique)
+     * ou brute (ensemble : ajout du seul index de position).
+     *
+     * @param array<string,mixed> $parsed
+     * @return array<string,mixed>
+     */
+    private static function emitLine(
+        array $parsed,
+        int $pos,
+        bool $raw,
+        array $vatRates,
+        array &$missingLetters,
+        array &$warnings
+    ): array {
+        if ($raw) {
+            $parsed['pos'] = $pos;
+
+            return $parsed;
+        }
+
+        return self::finalizeLine($parsed, $vatRates, $missingLetters, $warnings);
+    }
+
     // ————————————————————————————————————————————————————————————
     // Lignes produits
     // ————————————————————————————————————————————————————————————
@@ -568,12 +614,16 @@ final class MetroInvoiceParser
      * @param list<array{letter:string,rate:float,base_ht:?float,
      *                   vat:?float,total_ttc:?float}> $vatRates
      * @param list<string> $warnings
+     * @param bool $raw true = candidats BRUTS (sans finalisation : pas de
+     *                  résolution lettre→taux ni avertissements, index de la
+     *                  ligne émettrice ajouté sous « pos ») — mode réservé à
+     *                  InvoiceEnsemble ; false = comportement historique.
      *
      * @return list<array{label:string,ean:string,article:string,
      *                    unit_price:?float,units:int,total:float,
      *                    vat_letter:?string,vat_rate:?float,notes:string}>
      */
-    private static function extractLines(string $linesText, array $vatRates, array &$warnings): array
+    private static function extractLines(string $linesText, array $vatRates, array &$warnings, bool $raw = false): array
     {
         $lines = [];
         $missingLetters = [];
@@ -594,7 +644,7 @@ final class MetroInvoiceParser
             // 1) Ligne produit complète (colonnes sur la même ligne).
             $parsed = self::matchStrict($line) ?? self::matchRelaxed($line);
             if ($parsed !== null) {
-                $lines[] = self::finalizeLine($parsed, $vatRates, $missingLetters, $warnings);
+                $lines[] = self::emitLine($parsed, $i, $raw, $vatRates, $missingLetters, $warnings);
                 continue;
             }
 
@@ -609,9 +659,21 @@ final class MetroInvoiceParser
                     // son début — émises telles quelles.
                     $solo = self::standaloneFromColumns($cols);
                     if ($solo !== null) {
-                        $lines[] = self::finalizeLine($solo, $vatRates, $missingLetters, $warnings);
+                        $lines[] = self::emitLine($solo, $i, $raw, $vatRates, $missingLetters, $warnings);
                     }
                     continue;
+                }
+                if (self::isSelfValidating($cols) && $pending !== []) {
+                    // Colonnes auto-suffisantes : la bonne tête est peut-
+                    // être EN ATTENTE juste avant (l'OCR a lu la tête puis
+                    // les colonnes en deux blocs) — on ne l'associe que si
+                    // le prix unitaire ne se contredit pas, avant tout
+                    // autre appariement (jamais de mauvaise paire).
+                    $merged = self::mergeSelfValidatingWithPending($pending, $cols, $warnings);
+                    if ($merged !== null) {
+                        $lines[] = self::emitLine($merged, $i, $raw, $vatRates, $missingLetters, $warnings);
+                        continue;
+                    }
                 }
                 if (self::hasHeadWithin($all, $i + 1, 2)) {
                     // Blocs lus en ordre inverse : les colonnes précèdent
@@ -622,18 +684,28 @@ final class MetroInvoiceParser
                     }
                     continue;
                 }
-                if ($pending !== [] && !self::isSelfValidating($cols)) {
-                    $head = array_shift($pending);
-                    $merged = self::mergeHeadColumns($head, $cols, $warnings);
-                    if ($merged !== null) {
-                        $lines[] = self::finalizeLine($merged, $vatRates, $missingLetters, $warnings);
+                if ($pending !== []) {
+                    if (!self::isSelfValidating($cols)) {
+                        // Historique : la plus ancienne tête en attente.
+                        $head = array_shift($pending);
+                        $merged = self::mergeHeadColumns($head, $cols, $warnings);
+                        if ($merged !== null) {
+                            $lines[] = self::emitLine($merged, $i, $raw, $vatRates, $missingLetters, $warnings);
+                        }
+                        continue;
                     }
-                    continue;
+                    // Auto-suffisantes à libellé perdu : dernière chance
+                    // avec une tête en attente (voir ci-dessus).
+                    $merged = self::mergeSelfValidatingWithPending($pending, $cols, $warnings);
+                    if ($merged !== null) {
+                        $lines[] = self::emitLine($merged, $i, $raw, $vatRates, $missingLetters, $warnings);
+                        continue;
+                    }
                 }
                 if (self::isSelfValidating($cols)) {
                     $solo = self::standaloneFromColumns($cols);
                     if ($solo !== null) {
-                        $lines[] = self::finalizeLine($solo, $vatRates, $missingLetters, $warnings);
+                        $lines[] = self::emitLine($solo, $i, $raw, $vatRates, $missingLetters, $warnings);
                     }
                     continue;
                 }
@@ -651,7 +723,7 @@ final class MetroInvoiceParser
                     $cols = array_pop($orphan);
                     $merged = self::mergeHeadColumns($head, $cols, $warnings);
                     if ($merged !== null) {
-                        $lines[] = self::finalizeLine($merged, $vatRates, $missingLetters, $warnings);
+                        $lines[] = self::emitLine($merged, $i, $raw, $vatRates, $missingLetters, $warnings);
                         continue;
                     }
                 }
@@ -660,7 +732,9 @@ final class MetroInvoiceParser
         }
 
         // Têtes restées sans montants : montants illisibles sur la photo.
-        if ($pending !== []) {
+        // (Silencieux en mode brut : le récapitulatif n'a de sens que pour
+        // un texte final, pas pour des candidats à fusionner.)
+        if ($pending !== [] && !$raw) {
             $names = [];
             foreach (array_slice($pending, 0, 3) as $head) {
                 $names[] = (string) $head['label'];
@@ -811,17 +885,31 @@ final class MetroInvoiceParser
 
         // Prix unitaire (3 décimales) le plus proche de la fin, avant le total.
         $unitPrice = null;
+        $colisage = null;
+        $qty = null;
+        $amountStart = $tailStart;
         if (preg_match_all('/(\d{1,3})[.,]\s?(\d{3})\b/', $head, $prices, PREG_OFFSET_CAPTURE) > 0) {
             $price = end($prices[0]);
             $unitPrice = round(parseFrenchFloat((string) $price[0]), 3);
             $tailStart = (int) $price[1];
+            // Colisage + quantité ENTRE le prix unitaire et le montant
+            // (lecture canonique « LIBELLÉ PU col qté montant ») : l'OCR y
+            // insère parfois des parasites qui font échouer le motif strict.
+            if ($amountStart > $tailStart) {
+                $middle = substr($rest, $tailStart + strlen((string) $price[0]), $amountStart - $tailStart - strlen((string) $price[0]));
+                if (preg_match('/^\s*(\d{1,4})\s+(\d{1,4})\s*$/', $middle, $mid) === 1) {
+                    $colisage = (int) $mid[1];
+                    $qty = (int) $mid[2];
+                }
+            }
             $head = substr($head, 0, $tailStart);
         }
 
-        // Colisage + quantité : 1-2 entiers juste avant le prix (ou le montant).
-        $colisage = null;
-        $qty = null;
-        if (preg_match('/(\d{1,4})\s+(\d{1,4})\s+$/', $head, $q, PREG_OFFSET_CAPTURE) === 1) {
+        // Colisage + quantité : 1-2 entiers juste avant le prix (ou le montant),
+        // lorsque les colonnes précèdent le prix (« LIBELLÉ col qté PU montant »).
+        if ($colisage === null && $qty === null
+            && preg_match('/(\d{1,4})\s+(\d{1,4})\s+$/', $head, $q, PREG_OFFSET_CAPTURE) === 1
+        ) {
             $colisage = (int) $q[1][0];
             $qty = (int) $q[2][0];
             $tailStart = min($tailStart, (int) $q[0][1]);
@@ -1276,6 +1364,41 @@ final class MetroInvoiceParser
             'vat_letter' => $cols['vat_letter'],
             'loose_units' => $deduced,
         ];
+    }
+
+    /**
+     * Associe des colonnes auto-suffisantes (PU + montants cohérents) à la
+     * tête en attente QUI NE SE CONTREDIT PAS : tête sans prix unitaire lu
+     * (les colonnes font foi) ou tête dont le PU est identique à celui des
+     * colonnes. La première tête compatible (la plus ancienne) est extraite
+     * de la file et fusionnée ; aucune compatible → null (l'appelant émet
+     * les colonnes seules). Évite d'émettre « (ligne OCR partielle) » quand
+     * le libellé réel attend juste derrière ses montants.
+     *
+     * @param list<array<string,mixed>> $pending têtes en attente (modifiée)
+     * @param array{label:string,unit_price:?float,colisage:?int,qty:?int,
+     *              total:?float,vat_letter:?string,self:bool} $cols
+     * @param list<string> $warnings
+     *
+     * @return array<string,mixed>|null
+     */
+    private static function mergeSelfValidatingWithPending(array &$pending, array $cols, array &$warnings): ?array
+    {
+        $colsPu = $cols['unit_price'];
+        foreach ($pending as $pi => $head) {
+            $headPu = isset($head['unit_price']) ? $head['unit_price'] : null;
+            if ($headPu !== null && $colsPu !== null
+                && abs((float) $headPu - (float) $colsPu) > 0.005
+            ) {
+                continue; // prix unitaires contradictoires : pas la bonne tête
+            }
+            unset($pending[$pi]);
+            $pending = array_values($pending);
+
+            return self::mergeHeadColumns($head, $cols, $warnings);
+        }
+
+        return null;
     }
 
     /**

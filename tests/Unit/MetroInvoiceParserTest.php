@@ -82,13 +82,18 @@ final class MetroInvoiceParserTest extends TestCase
 
         $r = MetroInvoiceParser::parse($degraded);
 
-        // Aucun fatal, la quasi-totalité des lignes est récupérée.
-        self::assertGreaterThanOrEqual(11, count($r['lines']));
-        self::assertNotSame([], $r['warnings'], 'Des avertissements sont attendus sur une variante dégradée.');
+        // TOUTES les lignes sont récupérées (colisage relibéré entre le PU
+        // et le montant, lettres TVA tolérantes), sans aucun avertissement.
+        self::assertCount(13, $r['lines']);
         foreach ($r['lines'] as $line) {
             self::assertGreaterThanOrEqual(1, $line['units']);
             self::assertGreaterThan(0.0, $line['total']);
         }
+        $sum = 0.0;
+        foreach ($r['lines'] as $line) {
+            $sum += (float) $line['total'];
+        }
+        self::assertEqualsWithDelta(250.46, $sum, 0.001);
     }
 
     public function test_texte_sans_facture_renvoie_lignes_vides_et_warnings(): void
