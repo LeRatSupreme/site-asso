@@ -500,7 +500,10 @@
      *   skipped:list<{field:string, reason:string}>}}
      *   basis n'accepte que « ht » / « ttc » (défaut : état courant,
      *   sinon « ttc ») ; amount est au format français (« 37,24 ») ;
-     *   vat_amount (TVA multi-taux) = Σ vat_rates[].vat à 2 décimales.
+     *   vat_amount (TVA multi-taux) = Σ vat_rates[].vat à 2 décimales ;
+     *   amount_source (« ttc »/« ht »/« lines ») dit d'où vient le
+     *   montant — « lines » = Σ des lignes produits, totaux non lus
+     *   sur la photo (estimation HT à faire vérifier).
      */
     function applyInvoiceToExpense(state, invoice) {
         var cur = state && typeof state === 'object' ? state : {};
@@ -540,6 +543,28 @@
         // Montant : TTC du ticket si base TTC, HT sinon ; absent -> ''.
         var amount = pickText('amount', cur.amount,
             ticketAmount(basis === 'ttc' ? inv.total_ttc : inv.total_ht));
+        var amountSource = amount !== '' ? basis : '';
+
+        // Repli montant : totaux non lus sur la photo (bloc TVA non
+        // photographié, ticket déchiré) mais lignes produits présentes ->
+        // SOMME DES LIGNES (des montants de lignes sont HT) comme
+        // estimation, signalée par amount_source = 'lines'. Mieux qu'un
+        // champ vide à ressaisir : l'utilisateur corrige si besoin.
+        if (amount === '' && Array.isArray(inv.lines) && inv.lines.length > 0) {
+            var sum = 0;
+            for (var li = 0; li < inv.lines.length; li++) {
+                var lt = inv.lines[li] && inv.lines[li].total;
+                var ln = typeof lt === 'number' ? lt : parseFloat(cleanStr(lt).replace(',', '.'));
+                if (isFinite(ln) && ln > 0) sum += ln;
+            }
+            var sumStr = sum > 0 ? (Math.round(sum * 100) / 100).toFixed(2).replace('.', ',') : null;
+            if (sumStr !== null) {
+                amount = sumStr;
+                amountSource = 'lines';
+                basis = 'ht';
+                filled = true;
+            }
+        }
 
         // Taux unique seulement : null en multi-taux (vat_amount prend
         // alors le relais) ; « '' » (Aucune) compte comme vide.
@@ -587,6 +612,7 @@
             label: pickText('label', cur.label, cleanStr(inv.supplier)),
             amount: amount,
             basis: basis,
+            amount_source: amountSource,
             vat_rate: vatRate,
             vat_amount: vatAmount,
             invoice_number: pickText('invoice_number', cur.invoice_number, cleanStr(inv.invoice_number)),

@@ -335,6 +335,13 @@ foreach ($byCategory as $c) {
             var scanUrl = form.getAttribute('data-scan-url');
             var lastInvoice = null;
 
+            // Date par défaut du serveur (aujourd'hui) : ce n'est pas
+            // une saisie de l'utilisateur. Tant qu'elle n'a pas été
+            // modifiée, elle compte comme VIDE pour le préremplissage
+            // — la date lue sur le ticket la remplace au lieu d'être
+            // écartée comme « déjà renseignée ».
+            var defaultSpentAt = spentAtEl.value;
+
             function basis() {
                 for (var i = 0; i < basisInputs.length; i++) {
                     if (basisInputs[i].checked) return basisInputs[i].value;
@@ -366,10 +373,11 @@ foreach ($byCategory as $c) {
             }
 
             // État courant du formulaire, format attendu par
-            // H.applyInvoiceToExpense (chaînes, '' = vide).
+            // H.applyInvoiceToExpense (chaînes, '' = vide). La date
+            // encore égale au défaut du serveur est vue comme vide.
             function currentState() {
                 return {
-                    spent_at: spentAtEl.value,
+                    spent_at: spentAtEl.value !== defaultSpentAt ? spentAtEl.value : '',
                     label: labelEl.value,
                     amount: amountEl.value,
                     basis: basis(),
@@ -436,6 +444,15 @@ foreach ($byCategory as $c) {
                 var ttc = fmtMoney(inv.total_ttc);
                 var ht = fmtMoney(inv.total_ht);
                 addInfoLine('Montant TTC', ttc !== null ? ttc + (ht !== null ? ' (HT ' + ht + ')' : '') : 'non détecté');
+
+                // Montant estimé par Σ des lignes (totaux non lus) :
+                // signalé clairement — à vérifier avant enregistrement.
+                if (res.amount_source === 'lines') {
+                    var p = document.createElement('p');
+                    p.className = 'exp-scan-skip';
+                    p.textContent = 'Montant = somme des lignes détectées (' + res.amount + ' € HT, totaux non lus sur la photo) — vérifie avant d\u2019enregistrer.';
+                    infoList.appendChild(p);
+                }
 
                 var rates = Array.isArray(inv.vat_rates) ? inv.vat_rates : [];
                 var vatTxt;
