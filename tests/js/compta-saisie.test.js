@@ -578,6 +578,66 @@ t('buildPurchaseBulkPayload : aucune ligne valide -> tableaux vides, rien de rej
 });
 
 /* ------------------------------------------------------------------ *
+ * downscaleImageSpec — spécification PURE de la compression photo
+ * (canvas côté navigateur : max 2200 px côté long, JPEG qualité 0,9)
+ * ------------------------------------------------------------------ */
+
+t('downscaleImageSpec : photo au-dessus de la limite -> recompression', function () {
+    const spec = H.downscaleImageSpec(5 * 1024 * 1024, 4000, 3000);
+    assert.strictEqual(spec.skip, false, '4000 px de large : il faut recompresser.');
+    assert.strictEqual(spec.maxSide, 2200);
+    assert.strictEqual(spec.quality, 0.9);
+    assert.strictEqual(spec.mime, 'image/jpeg');
+    assert.strictEqual(spec.targetW, 2200, 'Côté long ramené à 2200 px.');
+    assert.strictEqual(spec.targetH, 1650, 'Proportions conservées (3000 × 0,55).');
+    assert.strictEqual(spec.fileSize, 5 * 1024 * 1024, 'Poids d\u2019origine conservé (informatif).');
+});
+
+t('downscaleImageSpec : portrait — le côté long est la HAUTEUR', function () {
+    const spec = H.downscaleImageSpec(4e6, 3024, 4032);
+    assert.strictEqual(spec.skip, false);
+    assert.strictEqual(spec.targetW, 1650);
+    assert.strictEqual(spec.targetH, 2200);
+});
+
+t('downscaleImageSpec : photo déjà sous la limite -> fichier original', function () {
+    const spec = H.downscaleImageSpec(800000, 2200, 1650);
+    assert.strictEqual(spec.skip, true, '2200 px exactement : pas de recompression (<=).');
+    assert.strictEqual(spec.targetW, 2200, 'Dimensions d\u2019origine intactes.');
+    assert.strictEqual(spec.targetH, 1650);
+});
+
+t('downscaleImageSpec : petites dimensions -> fichier original', function () {
+    const spec = H.downscaleImageSpec(120000, 800, 600);
+    assert.strictEqual(spec.skip, true);
+    assert.strictEqual(spec.targetW, 800);
+    assert.strictEqual(spec.targetH, 600);
+});
+
+t('downscaleImageSpec : dimensions illisibles -> fichier original (prudence)', function () {
+    for (const dims of [[0, 0], [4000, 0], [0, 3000], [NaN, NaN]]) {
+        const spec = H.downscaleImageSpec(1000, dims[0], dims[1]);
+        assert.strictEqual(spec.skip, true, 'Dimensions ' + dims + ' : jamais de perte.');
+        assert.strictEqual(spec.targetW, Number.isFinite(dims[0]) && dims[0] > 0 ? dims[0] : 0);
+    }
+});
+
+t('downscaleImageSpec : taille de fichier inexploitable -> 0, sans crash', function () {
+    assert.strictEqual(H.downscaleImageSpec(undefined, 4000, 3000).fileSize, 0);
+    assert.strictEqual(H.downscaleImageSpec('abc', 4000, 3000).fileSize, 0);
+    assert.strictEqual(H.downscaleImageSpec('4096', 4000, 3000).fileSize, 4096, 'Chaîne numérique acceptée.');
+});
+
+t('downscaleImageSpec : gros dépassement arrondi au pixel près', function () {
+    // 12000 × 16000 (scan haute définition) -> 1650 × 2200
+    const spec = H.downscaleImageSpec(9e6, 12000, 16000);
+    assert.strictEqual(spec.skip, false);
+    assert.strictEqual(spec.targetW, 1650);
+    assert.strictEqual(spec.targetH, 2200);
+    assert.ok(Math.max(spec.targetW, spec.targetH) <= 2200, 'Jamais au-dessus de la limite après arrondi.');
+});
+
+/* ------------------------------------------------------------------ *
  * scanUpload / scanParseText — CSRF OPTIONNEL (POST kiosque sans
  * session : null = ni champ _csrf, ni en-tête X-CSRF-Token ; le jeton
  * admin de l'URL EST l'authentification). fetch et FormData sont

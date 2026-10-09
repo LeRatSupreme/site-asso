@@ -26,6 +26,9 @@
      charge utile du POST /admin/compta/achats/save-bulk (contrat
      as_json=1) — achats (stock + coût de revient) créés depuis le
      ticket, avec rejet motivé des lignes invalides ;
+   - downscaleImageSpec / downscaleImage : compression locale d'une
+     photo avant l'upload (canvas, max 2200 px, JPEG 0,9 ; échec ->
+     fichier original) ;
    - scanUpload / scanParseText : envoi du fichier ou du texte OCR à
      l'endpoint de scan (JSON {ok, invoice}).
    ========================================================= */
@@ -148,12 +151,102 @@
     }
 
     /* ------------------------------------------------------------
-       Scan de facture : OCR serveur puis analyse du texte renvoyé.
+       Scan de facture : compression photo (canvas) puis OCR serveur.
        ------------------------------------------------------------ */
 
     /** Endpoint par défaut de l'API « scan de facture » (contrôle :
         routes POST /admin/compta/achats/scan, contrôleur Achats). */
     var SCAN_ENDPOINT = '/admin/compta/achats/scan';
+
+    /** Côté long maximal d'une photo recompressée avant upload (px). */
+    var DOWNSCALE_MAX_SIDE = 2200;
+
+    /** Qualité JPEG de la recompression canvas (0-1). */
+    var DOWNSCALE_QUALITY = 0.9;
+
+    /**
+     * Spécification PURE du redimensionnement d'une photo avant upload
+     * (testée côté Node ; la partie canvas — downscaleImage — ne l'est
+     * pas). Une photo dont le côté long dépasse 2200 px est mise à
+     * l'échelle en conservant les proportions (qualité 0,9, JPEG) : le
+     * poids part de plusieurs Mo à ~1 Mo et l'OCR y gagne (résolution
+     * utile ~300 DPI). Dimensions illisibles (0/NaN) -> fichier original
+     * (skip) — prudence, jamais de perte.
+     *
+     * @param {number} fileSize Poids du fichier (octets, informatif).
+     * @param {number} w Largeur naturelle (px).
+     * @param {number} h Hauteur naturelle (px).
+     * @returns {{skip:boolean, maxSide:number, quality:number,
+     *            mime:string, targetW:number, targetH:number,
+     *            fileSize:number}} skip=true : envoyer le fichier original.
+     */
+    function downscaleImageSpec(fileSize, w, h) {
+        var size = parseInt(fileSize, 10);
+        var width = parseInt(w, 10) || 0;
+        var height = parseInt(h, 10) || 0;
+        var spec = {
+            skip: true,
+            maxSide: DOWNSCALE_MAX_SIDE,
+            quality: DOWNSCALE_QUALITY,
+            mime: 'image/jpeg',
+            targetW: width > 0 ? width : 0,
+            targetH: height > 0 ? height : 0,
+            fileSize: isNaN(size) ? 0 : size
+        };
+        if (width < 1 || height < 1) return spec;          // dimensions inconnues
+        var longSide = Math.max(width, height);
+        if (longSide <= DOWNSCALE_MAX_SIDE) return spec;   // déjà sous la limite
+        var scale = DOWNSCALE_MAX_SIDE / longSide;
+        spec.skip = false;
+        spec.targetW = Math.max(1, Math.round(width * scale));
+        spec.targetH = Math.max(1, Math.round(height * scale));
+        return spec;
+    }
+
+    /**
+     * Partie CANVAS du redimensionnement (non testable sous Node) :
+     * résout une Promise avec un Blob JPEG recompressé, ou avec le
+     * fichier ORIGINAL si tout ne se passe pas comme prévu (fichier non
+     * image, canvas indisponible, erreur de décodage, blob null) —
+     * l'upload ne doit jamais échouer à cause de la compression.
+     */
+    function downscaleImage(file) {
+        if (!file || String(file.type || '').indexOf('image/') !== 0) {
+            return Promise.resolve(file);
+        }
+        if (typeof document === 'undefined' || typeof window === 'undefined'
+            || typeof URL === 'undefined' || !URL.createObjectURL) {
+            return Promise.resolve(file);
+        }
+        return new Promise(function (resolve) {
+            var url = URL.createObjectURL(file);
+            var img = new Image();
+            var settled = false;
+            var done = function (out) {
+                if (settled) return;
+                settled = true;
+                URL.revokeObjectURL(url);
+                resolve(out || file);
+            };
+            img.onload = function () {
+                try {
+                    var spec = downscaleImageSpec(file.size, img.naturalWidth, img.naturalHeight);
+                    if (spec.skip) return done(file);
+                    var canvas = document.createElement('canvas');
+                    canvas.width = spec.targetW;
+                    canvas.height = spec.targetH;
+                    var ctx = canvas.getContext('2d');
+                    if (!ctx) return done(file);
+                    ctx.drawImage(img, 0, 0, spec.targetW, spec.targetH);
+                    canvas.toBlob(function (blob) { done(blob || file); }, spec.mime, spec.quality);
+                } catch (e) {
+                    done(file);
+                }
+            };
+            img.onerror = function () { done(file); };
+            img.src = url;
+        });
+    }
 
     /**
      * Jeton CSRF disponible ? null/undefined/'' = absent — c'est le cas
@@ -192,18 +285,33 @@
 
     /**
      * Envoie un fichier (photo/PDF de facture, 10 Mo max côté serveur)
-     * au endpoint de scan en multipart (champ `file`). Renvoie le JSON
-     * du serveur {ok, source, text, invoice} ; rejette avec le message
-     * français du serveur sinon. `endpoint` optionnel (URL rendue par
-     * la vue via url(), pour respecter un éventuel sous-chemin).
-     * `csrfToken` optionnel : null (POST kiosque sans session) = pas de
-     * champ `_csrf` dans le FormData.
+     * au endpoint de scan en multipart (champ `file`). Une PHOTO est
+     * d'abord recompressée en local (canvas : côté long ramené à
+     * 2200 px, JPEG qualité 0,9 — upload ~3× plus rapide, OCR plus
+     * fiable) ; tout échec de la compression renvoie le fichier original,
+     * et les PDF ne sont jamais touchés. Le nom suit la recompression
+     * (extension .jpg) pour que le contrôle extension/MIME du serveur
+     * reste cohérent. Renvoie le JSON du serveur {ok, source, text,
+     * invoice} ; rejette avec le message français du serveur sinon.
+     * `endpoint` optionnel (URL rendue par la vue via url(), pour
+     * respecter un éventuel sous-chemin). `csrfToken` optionnel : null
+     * (POST kiosque sans session) = pas de champ `_csrf` dans le FormData.
      */
     function scanUpload(file, csrfToken, endpoint) {
-        var fd = new FormData();
-        fd.append('file', file, (file && file.name) || 'facture');
-        if (hasCsrf(csrfToken)) fd.append('_csrf', String(csrfToken));
-        return scanRequest(fd, csrfToken, endpoint);
+        return downscaleImage(file)
+            .catch(function () { return file; })
+            .then(function (sendFile) {
+                var name = (file && file.name) || 'facture';
+                if (sendFile && sendFile !== file && sendFile.type === 'image/jpeg') {
+                    // Blob recompressé = JPEG : l'extension doit suivre,
+                    // sinon le serveur refuse (extension ≠ MIME réel).
+                    name = String(name).replace(/\.(jpe?g|png|webp|gif|bmp|heic|heif)$/i, '') + '.jpg';
+                }
+                var fd = new FormData();
+                fd.append('file', sendFile, name);
+                if (hasCsrf(csrfToken)) fd.append('_csrf', String(csrfToken));
+                return scanRequest(fd, csrfToken, endpoint);
+            });
     }
 
     /**
@@ -576,6 +684,8 @@
         serializeExpenseNotes: serializeExpenseNotes,
         expenseNotesFromInvoice: expenseNotesFromInvoice,
         buildPurchaseBulkPayload: buildPurchaseBulkPayload,
+        downscaleImageSpec: downscaleImageSpec,
+        downscaleImage: downscaleImage,
         scanUpload: scanUpload,
         scanParseText: scanParseText
     };

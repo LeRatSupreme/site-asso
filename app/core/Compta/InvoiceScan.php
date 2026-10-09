@@ -16,7 +16,10 @@ namespace App\Core\Compta;
  *    MIME réels vérifiés), texte extrait par OCR (Tesseract/Poppler).
  *
  * Le document est interprété par InvoiceParser (aiguillage METRO / ticket
- * de caisse, clé kind dans la réponse). Lecture seule : rien n'est
+ * de caisse, clé kind dans la réponse). Pour les PHOTOS, quand ImageMagick
+ * est disponible, l'OCR est ensembliste : plusieurs variantes de
+ * prétraitement sont OCRisées puis fusionnées par InvoiceEnsemble (PDF et
+ * texte collé : comportement direct inchangé). Lecture seule : rien n'est
  * enregistré ici, le formulaire reste modifiable avant validation.
  *
  * L'audit reste à la charge du contrôleur appelant (mécanismes
@@ -122,7 +125,36 @@ final class InvoiceScan
         ];
 
         try {
-            $text = InvoiceOcr::extractText($tmpPath, $mime);
+            if (str_starts_with($mime, 'application/pdf') || !InvoiceOcr::hasImageMagick()) {
+                // PDF : couche texte puis OCR page par page — inchangé.
+                // Image sans ImageMagick : OCR historique de la photo seule.
+                $text = InvoiceOcr::extractText($tmpPath, $mime);
+                $invoice = InvoiceParser::parse($text);
+            } else {
+                // Image avec ImageMagick : OCR ensembliste — variantes de
+                // prétraitement (originale, seuillage, redressement) × deux
+                // modes Tesseract, fusionnées par InvoiceEnsemble. La
+                // variante « dernier recours » (upscale) n'est OCRisée que
+                // si la fusion a donné trop peu de lignes validées.
+                $texts = InvoiceOcr::extractImageTexts($tmpPath);
+                $result = InvoiceEnsemble::consolidate($texts);
+                if (InvoiceEnsemble::needsLastResort($result)) {
+                    $extra = InvoiceOcr::extractLastResortText($tmpPath);
+                    if ($extra !== null) {
+                        $texts[] = $extra;
+                        $result = InvoiceEnsemble::consolidate($texts);
+                    }
+                }
+                $text = $result['text'];
+                $invoice = $result['invoice'];
+                if ((int) $result['variants'] >= 2) {
+                    $invoice['warnings'][] = sprintf(
+                        "Extraction consolidée sur %d variantes de l'image (OCR ensembliste) — %d ligne(s) fusionnée(s).",
+                        (int) $result['variants'],
+                        (int) $result['groups']
+                    );
+                }
+            }
         } catch (\RuntimeException $e) {
             // Outil absent ou OCR en échec : message FR déjà lisible.
             return ['ok' => false, 'status' => 500, 'error' => $e->getMessage()];
@@ -132,7 +164,7 @@ final class InvoiceScan
             'ok'      => true,
             'source'  => 'file',
             'text'    => $text,
-            'invoice' => InvoiceParser::parse($text),
+            'invoice' => $invoice,
             'audit'   => $audit,
         ];
     }

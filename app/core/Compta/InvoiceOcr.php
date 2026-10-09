@@ -11,13 +11,19 @@ namespace App\Core\Compta;
  * Aucune dépendance PHP externe : on encadre les binaires système.
  *  - PDF textuel  : pdftotext -layout (rapide, fidèle) ;
  *  - PDF scanné   : pdftoppm -r 200 puis Tesseract page par page (max 5) ;
- *  - Image        : Tesseract directement (français).
+ *  - Image        : Tesseract directement (français), en ENSEMBLE quand
+ *                   ImageMagick est disponible : plusieurs variantes de
+ *                   prétraitement (originale, contraste/seuillage,
+ *                   redressement, upscale de dernier recours) sont OCRisées
+ *                   puis fusionnées par InvoiceEnsemble — chaque variante
+ *                   rattrape ce que les autres perdent sur de vraies photos.
  *
  * Les binaires absents (poste Windows de dev, VPS non équipé) lèvent une
  * RuntimeException avec un message d'installation en français — jamais de
- * fatal. Tous les chemins passés au shell sont échappés (escapeshellarg) ;
- * les fichiers temporaires sont créés par nous (nom aléatoire) et supprimés
- * en finally.
+ * fatal. ImageMagick absent → une seule variante (comportement historique,
+ * repli silencieux). Tous les chemins passés au shell sont échappés
+ * (escapeshellarg) ; les fichiers temporaires sont créés par nous (nom
+ * aléatoire) et supprimés en finally ; chaque commande est bornée (timeout).
  */
 final class InvoiceOcr
 {
@@ -37,6 +43,13 @@ final class InvoiceOcr
      * (psm par défaut) rattrapant les champs perdus par l'une ou l'autre.
      */
     public const ALT_MARKER = '----- OCR alt -----';
+
+    /**
+     * Séparateur entre les textes des différentes variantes de prétraitement
+     * dans le texte consolidé (InvoiceEnsemble) : distinct du marqueur ALT,
+     * que les parseurs ne coupent jamais.
+     */
+    public const VARIANT_MARKER = '----- OCR variante %s -----';
 
     /**
      * Extrait le texte d'une facture (PDF ou image).
@@ -124,12 +137,147 @@ final class InvoiceOcr
      * par défaut éparpille, mais peut tronquer un en-tête (n°, année) que la
      * seconde passe relit correctement.
      */
-    private static function extractFromImage(string $filePath): string
+    public static function ocrTwoPasses(string $filePath): string
     {
         $psm6 = self::ocrImage($filePath, ' --psm 6');
         $default = self::ocrImage($filePath);
 
         return $psm6 . "\n" . self::ALT_MARKER . "\n" . $default;
+    }
+
+    /** OCR d'une image (une seule photo, deux passes) — historique. */
+    private static function extractFromImage(string $filePath): string
+    {
+        return self::ocrTwoPasses($filePath);
+    }
+
+    // ————————————————————————————————————————————————————————————
+    // Ensemble : variantes de prétraitement image (ImageMagick)
+    // ————————————————————————————————————————————————————————————
+
+    /**
+     * ImageMagick est-il utilisable ? Sous Windows, seul « magick » est
+     * accepté : « convert » y désigne souvent l'outil de conversion de
+     * fichiers de Windows (System32), jamais ImageMagick.
+     */
+    public static function hasImageMagick(): bool
+    {
+        return self::imageMagickBinary() !== null;
+    }
+
+    /** Binaire ImageMagick trouvé (« magick » sinon « convert »), null sinon. */
+    private static function imageMagickBinary(): ?string
+    {
+        static $cached = null;
+        static $resolved = false;
+        if ($resolved) {
+            return $cached;
+        }
+        $resolved = true;
+
+        if (self::hasBinary('magick')) {
+            return $cached = 'magick';
+        }
+        if (PHP_OS_FAMILY !== 'Windows' && self::hasBinary('convert')) {
+            return $cached = 'convert';
+        }
+
+        return $cached = null;
+    }
+
+    /**
+     * OCR ENSEMBLISTE d'une photo : variante originale (v0) toujours, plus —
+     * si ImageMagick est disponible — les variantes v1 (niveaux de gris +
+     * contraste + seuillage 55 %) et v2 (redressement + netteté). Chaque
+     * variante subit les deux passes Tesseract (voir ocrTwoPasses) ; une
+     * variante que le prétraitement ou l'OCR met en échec est simplement
+     * absente du résultat (repli silencieux sur les suivantes). La variante
+     * v3 « dernier recours » (upscale 150 % + seuillage 65 %) est à demander
+     * séparément (extractLastResortText), quand la fusion déçoit.
+     *
+     * @return list<array{name:string, text:string}> (au minimum v0)
+     */
+    public static function extractImageTexts(string $filePath): array
+    {
+        $texts = [['name' => 'v0', 'text' => self::ocrTwoPasses($filePath)]];
+
+        $bin = self::imageMagickBinary();
+        if ($bin === null) {
+            return $texts; // pas d'ImageMagick : comportement historique
+        }
+
+        $dir = sys_get_temp_dir() . '/aeic-ocr-' . bin2hex(random_bytes(8));
+        if (!@mkdir($dir, 0700, true) && !is_dir($dir)) {
+            return $texts; // préparation impossible : v0 seul, sans bruit
+        }
+
+        try {
+            $recipes = [
+                // v1 : contraste maximal puis binarisation douce (ombres).
+                ['v1', ' -colorspace Gray -normalize -threshold 55%'],
+                // v2 : redressement de la photo + netteté (flou/biais).
+                ['v2', ' -deskew 40% -colorspace Gray -normalize -sharpen 0x1'],
+            ];
+            foreach ($recipes as [$name, $filters]) {
+                $variant = $dir . '/' . $name . '.png';
+                [$code] = self::run(
+                    $bin . ' ' . escapeshellarg($filePath) . $filters . ' ' . escapeshellarg($variant)
+                );
+                if ($code !== 0 || !is_file($variant) || filesize($variant) === 0) {
+                    continue; // prétraitement en échec : variante ignorée
+                }
+                try {
+                    $texts[] = ['name' => $name, 'text' => self::ocrTwoPasses($variant)];
+                } catch (\RuntimeException) {
+                    // Variante illisible pour Tesseract : suivante.
+                }
+            }
+        } finally {
+            self::removeDirectory($dir);
+        }
+
+        return $texts;
+    }
+
+    /**
+     * Variante « dernier recours » v3 : upscale 150 % + niveaux de gris +
+     * seuillage plus ferme (65 %) — réservée aux photos dont la fusion a
+     * donné trop peu de lignes validées (voir InvoiceEnsemble::
+     * needsLastResort). null si ImageMagick est absent ou si la variante
+     * échoue : l'appelant garde le résultat déjà consolidé.
+     *
+     * @return array{name:string, text:string}|null
+     */
+    public static function extractLastResortText(string $filePath): ?array
+    {
+        $bin = self::imageMagickBinary();
+        if ($bin === null) {
+            return null;
+        }
+
+        $dir = sys_get_temp_dir() . '/aeic-ocr-' . bin2hex(random_bytes(8));
+        if (!@mkdir($dir, 0700, true) && !is_dir($dir)) {
+            return null;
+        }
+
+        try {
+            $variant = $dir . '/v3.png';
+            [$code] = self::run(
+                $bin . ' ' . escapeshellarg($filePath)
+                . ' -resize 150% -colorspace Gray -normalize -threshold 65% '
+                . escapeshellarg($variant)
+            );
+            if ($code !== 0 || !is_file($variant) || filesize($variant) === 0) {
+                return null;
+            }
+            try {
+                return ['name' => 'v3', 'text' => self::ocrTwoPasses($variant)];
+            } catch (\RuntimeException) {
+                return null;
+            }
+        } finally {
+            self::removeDirectory($dir);
+        }
     }
 
     /**
