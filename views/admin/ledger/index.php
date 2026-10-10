@@ -1018,6 +1018,12 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
         key.setAttribute('list', 'lg-purchase-products');
         key.setAttribute('autocomplete', 'off');
         key.value = (r && r.key) || '';
+        // Produit reconnu dans la base : le libellé OCR brut de la
+        // facture reste consultable en info-bulle (contrôle avant
+        // création des achats).
+        if (r && r.raw_label) {
+            key.title = 'Libellé facture : ' + r.raw_label;
+        }
         key.addEventListener('input', updateLinesTotal);
 
         var qty = document.createElement('input');

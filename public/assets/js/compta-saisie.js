@@ -416,22 +416,34 @@
     /**
      * Lignes d'une facture analysée -> lignes de la grille, dans le
      * même format que le collage (parsePasteLine) :
-     * [{key, qty, total, notes, vat_rate}]
-     * - key      : libellé produit — les lignes sans libellé sont ignorées ;
-     * - qty      : unités (entier, < 1 ou absent -> 1) ;
-     * - total    : montant au format français (« 17,28 »), '' si absent ;
-     * - notes    : « EAN … · art. … » (ou le champ notes du serveur) ;
-     * - vat_rate : taux de TVA DE LA LIGNE canonisé (« 5.5 ») si la
-     *   facture en porte un (line.vat_rate), sinon null (héritera de
-     *   l'en-tête).
+     * [{key, raw_label, qty, total, notes, vat_rate}]
+     * - key       : PRODUIT RECONNU dans le catalogue (line.product,
+     *               injecté par le serveur — fiches/alias/clés SumUp),
+     *               à défaut libellé OCR brut ; lignes sans libellé
+     *               ignorées ;
+     * - raw_label : libellé OCR brut quand il diffère du produit reconnu
+     *               ('' sinon) — info-bulle de contrôle avant achat ;
+     * - qty       : unités (entier, < 1 ou absent -> 1) ;
+     * - total     : montant au format français (« 17,28 »), '' si absent ;
+     * - notes     : « EAN … · art. … » (ou le champ notes du serveur),
+     *               précédé du libellé facture quand un produit a été
+     *               reconnu ;
+     * - vat_rate  : taux de TVA DE LA LIGNE canonisé (« 5.5 ») si la
+     *               facture en porte un (line.vat_rate), sinon null (héritera de
+     *               l'en-tête).
      */
     function invoiceToRows(invoice) {
         var lines = invoice && Array.isArray(invoice.lines) ? invoice.lines : [];
         var rows = [];
         for (var i = 0; i < lines.length; i++) {
             var line = lines[i] || {};
-            var key = cleanStr(line.label);
-            if (key === '') continue;
+            var label = cleanStr(line.label);
+            if (label === '') continue;
+            // Produit reconnu côté serveur dans la base (fiches produits,
+            // alias de ventes, clés SumUp) : prioritaire au libellé OCR.
+            var key = cleanStr(line.product);
+            var matched = key !== '' && key !== label;
+            if (!matched) key = label;
             var qty = parseInt(line.units, 10);
             if (!isFinite(qty) || qty < 1) qty = 1;
             var total = '';
@@ -439,7 +451,18 @@
                 ? line.total
                 : parseFloat(cleanStr(line.total).replace(',', '.'));
             if (isFinite(n) && n > 0) total = n.toFixed(2).replace('.', ',');
-            rows.push({ key: key, qty: qty, total: total, notes: lineNotes(line), vat_rate: normVatRate(line.vat_rate) });
+            var notes = lineNotes(line);
+            if (matched) {
+                notes = 'libellé facture : ' + label + (notes !== '' ? ' · ' + notes : '');
+            }
+            rows.push({
+                key: key,
+                raw_label: matched ? label : '',
+                qty: qty,
+                total: total,
+                notes: notes,
+                vat_rate: normVatRate(line.vat_rate)
+            });
         }
         return rows;
     }
