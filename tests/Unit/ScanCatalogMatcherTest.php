@@ -111,13 +111,24 @@ final class ScanCatalogMatcherTest extends TestCase
         self::assertSame('crunch Snak Barres', self::m('CRUNCH SNACK BARRES 30 GRS'));
     }
 
-    public function testEgaliteParfaiteRefuseePuisInclusionTranche(): void
+    public function testEgaliteParfaiteDepartageeParLaDistanceDesCles(): void
     {
         // Deux fiches doublons matchent 3 mots exacts chacune
-        // (SURFIZZ/FRUITS/GAINE vs SURFIZZ/FRUIT~/GRAINE~) : ambigu, on
-        // refuse le palier mots-clés — l'inclusion désambiguïse
-        // (« surfizzfruitsgaine » est contenu dans le libellé).
+        // (SURFIZZ/FRUITS/GAINE vs SURFIZZ/FRUIT~/GRAINE~) : égalité
+        // parfaite — la distance des clés normalisées tranche, la clé
+        // la plus proche du libellé gagne (celle de l'historique
+        // d'achats).
         self::assertSame('Surfizz Fruits gaine', self::m('SURFIZZ FRUITS GAINE 2KG'));
+    }
+
+    public function testConfusionOcrChiffreUnPourLettreI(): void
+    {
+        // Cas réel du scan.pdf : Tesseract lit « SURF1ZZ » (1 au lieu
+        // du I). Le token est écarté (chiffre), mais FRUITS+GAINE
+        // mettent les deux fiches doublons à égalité 2-2 — et le
+        // départage par distance absorbe la confusion : « surfizz… »
+        // reste plus proche du libellé que « surfizzfruitgraine ».
+        self::assertSame('Surfizz Fruits gaine', self::m('SURF1ZZ FRUITS GAINE 2KG'));
     }
 
     public function testMotsVidesEtUnitesIgnores(): void

@@ -264,6 +264,11 @@ final class ScanCatalogMatcher
      * EN/FR) dans chaque entrée. Gagnant unique exigé : strictement
      * plus de mots matchés que le suivant, ou autant mais une couverture
      * de l'entrée strictement meilleure ; au moins 2 mots matchés.
+     * En cas d'égalité PARFAITE (doublons de fiches décrivant le même
+     * produit, ex. deux « Surfizz »), départage par la distance des
+     * clés normalisées au libellé — la plus proche gagne (elle absorbe
+     * les confusions OCR I/1 : « SURF1ZZ » ~ « surfizz »), à distance
+     * égale on refuse de choisir.
      *
      * @param array<array{key:string, name:string, tokens:list<string>}> $catalog
      */
@@ -276,7 +281,7 @@ final class ScanCatalogMatcher
             return null;
         }
 
-        $best = null;   // [name, matched, coverage]
+        $best = null;   // [name, matched, coverage, key]
         $second = null;
         foreach ($catalog as $cand) {
             if ($cand['tokens'] === []) {
@@ -306,7 +311,7 @@ final class ScanCatalogMatcher
                 }
             }
 
-            $score = [$cand['name'], $matched, $candMatched / count($cand['tokens'])];
+            $score = [$cand['name'], $matched, $candMatched / count($cand['tokens']), $cand['key']];
             if ($best === null || self::scoreBetter($score, $best)) {
                 $second = $best;
                 $best = $score;
@@ -319,17 +324,39 @@ final class ScanCatalogMatcher
             return null;
         }
 
-        // Égalité parfaite au sommet : ambigu, on ne choisit pas.
+        // Égalité parfaite au sommet : départage par la distance des
+        // clés normalisées au libellé complet (tolérant aux confusions
+        // OCR chiffre/lettre), refus si la distance ne départage pas.
         if ($second !== null && $second[1] === $best[1] && $second[2] === $best[2]) {
-            return null;
+            $labelNorm = self::spaceless($label);
+            $dBest = self::keyDistance($best[3], $labelNorm);
+            $dSecond = self::keyDistance($second[3], $labelNorm);
+            if ($dBest === $dSecond) {
+                return null;
+            }
+
+            return $dSecond < $dBest ? $second[0] : $best[0];
         }
 
         return $best[0];
     }
 
     /**
-     * @param array{0:string,1:int,2:float} $a
-     * @param array{0:string,1:int,2:float} $b
+     * Distance normalisée (0 à 1) entre une clé de catalogue et le
+     * libellé : Levenshtein rapporté à la longueur du plus long des
+     * deux. Les clés normalisées sont ASCII ; sert uniquement au
+     * départage des ex æquo parfaits.
+     */
+    private static function keyDistance(string $key, string $labelNorm): float
+    {
+        $max = max(strlen($key), strlen($labelNorm));
+
+        return $max === 0 ? 1.0 : levenshtein($key, $labelNorm) / $max;
+    }
+
+    /**
+     * @param array{0:string,1:int,2:float,3:string} $a
+     * @param array{0:string,1:int,2:float,3:string} $b
      */
     private static function scoreBetter(array $a, array $b): bool
     {
