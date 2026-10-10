@@ -33,6 +33,9 @@ final class InvoiceOcr
     /** Nombre maximal de pages rastérisées pour un PDF scanné. */
     private const PDF_MAX_PAGES = 5;
 
+    /** Pages d'un PDF passées à l'OCR ensembliste (lignes + totaux y sont). */
+    private const PDF_ENSEMBLE_PAGES = 2;
+
     /** Durée maximale d'un appel OCR (préfixe « timeout » sous Linux). */
     private const COMMAND_TIMEOUT_S = 90;
 
@@ -165,6 +168,18 @@ final class InvoiceOcr
         return self::imageMagickBinary() !== null;
     }
 
+    /** Poppler (rastérisation et couche texte des PDF) est-il installé ? */
+    public static function hasPoppler(): bool
+    {
+        return self::hasBinary('pdftoppm') && self::hasBinary('pdftotext');
+    }
+
+    /** Tesseract (OCR) est-il installé ? */
+    public static function hasOcr(): bool
+    {
+        return self::hasBinary('tesseract');
+    }
+
     /** Binaire ImageMagick trouvé (« magick » sinon « convert »), null sinon. */
     private static function imageMagickBinary(): ?string
     {
@@ -237,6 +252,59 @@ final class InvoiceOcr
         }
 
         return $texts;
+    }
+
+    /**
+     * OCR ENSEMBLISTE d'un PDF : rastérisation 300 dpi (les métro-factures
+     * sont des tableaux à colonnes que pdftotext désaligne — lignes éclatées
+     * en blocs séparés) puis, pour chaque page, les variantes de
+     * extractImageTexts (prétraitements × deux passes Tesseract). Toutes
+     * les variantes de toutes les pages sont renvoyées ensemble : la
+     * fusion InvoiceEnsemble rattrape ce qu'une page perd. Les premières
+     * pages portent les lignes et les totaux ; au-delà de
+     * PDF_ENSEMBLE_PAGES le coût OCR explose pour un gain nul.
+     *
+     * @return list<array{name:string, text:string}> (au minimum la v0 de la page 1)
+     */
+    public static function extractPdfVariants(string $filePath): array
+    {
+        if (!function_exists('exec')) {
+            throw new \RuntimeException('La fonction exec() est désactivée sur ce serveur : OCR indisponible.');
+        }
+        if (!self::hasBinary('pdftoppm') || !self::hasBinary('tesseract')) {
+            throw new \RuntimeException(
+                'OCR indisponible sur ce serveur (installez tesseract-ocr tesseract-ocr-fra poppler-utils).'
+            );
+        }
+
+        $dir = sys_get_temp_dir() . '/aeic-ocr-' . bin2hex(random_bytes(8));
+        if (!@mkdir($dir, 0700, true) && !is_dir($dir)) {
+            throw new \RuntimeException('Impossible de préparer le dossier temporaire OCR.');
+        }
+
+        try {
+            self::run('pdftoppm -png -r 300 ' . escapeshellarg($filePath) . ' ' . escapeshellarg($dir . '/scan'));
+
+            $pages = glob($dir . '/scan-*.png') ?: [];
+            sort($pages, SORT_NATURAL);
+            if ($pages === []) {
+                throw new \RuntimeException('PDF illisible : aucune page n\'a pu être extraite (fichier corrompu ?).');
+            }
+
+            $variants = [];
+            foreach (array_slice($pages, 0, self::PDF_ENSEMBLE_PAGES) as $pi => $page) {
+                foreach (self::extractImageTexts($page) as $v) {
+                    $variants[] = [
+                        'name' => 'p' . ($pi + 1) . '-' . $v['name'],
+                        'text' => $v['text'],
+                    ];
+                }
+            }
+
+            return $variants;
+        } finally {
+            self::removeDirectory($dir);
+        }
     }
 
     /**
