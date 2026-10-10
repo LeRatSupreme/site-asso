@@ -879,6 +879,10 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
         setField(spentAtEl, res.spent_at);
         setField(labelEl, res.label);
         setField(amountEl, res.amount);
+        // Référence du ticket : le n° extrait remplit le champ vide
+        // (le non-destructif est déjà géré par applyInvoiceToExpense,
+        // qui liste le champ en « skipped » s'il est déjà renseigné).
+        setField(invoiceEl, res.invoice_number);
         if (res.basis !== basis()) {
             setBasis(res.basis);
             Array.prototype.forEach.call(basisInputs, function (r) { fire(r, 'change'); });
