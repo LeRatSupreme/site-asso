@@ -6,6 +6,7 @@ namespace App\Controllers\Admin;
 
 use App\Core\Auth;
 use App\Core\Compta\InvoiceScan;
+use App\Core\Compta\ScanCatalogMatcher;
 use App\Core\Controller;
 use App\Core\Middleware;
 use App\Core\Permissions;
@@ -176,6 +177,13 @@ abstract class AdminBaseController extends Controller
         }
 
         $invoice = $res['invoice'];
+
+        // Produits reconnus dans le catalogue (fiches, alias de ventes,
+        // clés SumUp) : chaque ligne reçoit « product » en plus du
+        // libellé OCR brut « label » — les grilles de saisie
+        // pré-remplissent alors la clé d'achat/stock. Panne de base :
+        // enrichissement silencieusement sauté, le scan reste utilisable.
+        $invoice['lines'] = ScanCatalogMatcher::enrichLines($invoice['lines']);
 
         $audit = $res['audit'];
         $audit['lignes_extraites'] = count($invoice['lines']);

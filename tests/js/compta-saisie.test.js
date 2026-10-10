@@ -212,9 +212,9 @@ t('invoiceToRows : facture METRO à 3 lignes -> format du collage', function () 
         warnings: ['Taux de TVA non trouvé — 5,5 % appliqué.']
     };
     assert.deepStrictEqual(H.invoiceToRows(invoice), [
-        { key: 'MINUTE MAID POMME 1L', qty: 24, total: '17,28', notes: 'EAN 5449000000099 · art. 2040110', vat_rate: null },
-        { key: 'COCA COLA 33CL', qty: 24, total: '10,80', notes: 'EAN 5449000000996 · art. 2040041', vat_rate: null },
-        { key: 'EAU MINERALE 50CL', qty: 48, total: '9,60', notes: 'EAN 3057640257546 · art. 2040999', vat_rate: null }
+        { key: 'MINUTE MAID POMME 1L', raw_label: '', qty: 24, total: '17,28', notes: 'EAN 5449000000099 · art. 2040110', vat_rate: null },
+        { key: 'COCA COLA 33CL', raw_label: '', qty: 24, total: '10,80', notes: 'EAN 5449000000996 · art. 2040041', vat_rate: null },
+        { key: 'EAU MINERALE 50CL', raw_label: '', qty: 48, total: '9,60', notes: 'EAN 3057640257546 · art. 2040999', vat_rate: null }
     ], 'Sans champ notes, « EAN … · art. … » est reconstitué depuis ean/article ; sans taux par ligne, vat_rate est null.');
 });
 
@@ -230,8 +230,8 @@ t('invoiceToRows : lignes sans libellé ignorées, qté et montant assainis', fu
         { label: 'Bonbons', units: 0, total: 0 },
         { label: 'Chips', units: '6', total: '8,90' }
     ] }), [
-        { key: 'Bonbons', qty: 1, total: '', notes: '', vat_rate: null },
-        { key: 'Chips', qty: 6, total: '8,90', notes: '', vat_rate: null }
+        { key: 'Bonbons', raw_label: '', qty: 1, total: '', notes: '', vat_rate: null },
+        { key: 'Chips', raw_label: '', qty: 6, total: '8,90', notes: '', vat_rate: null }
     ], 'Qté < 1 -> 1 ; total nul/invalide -> chaîne vide ; libellé manquant -> ligne ignorée.');
 });
 
@@ -245,6 +245,30 @@ t('invoiceToRows : taux par ligne (line.vat_rate) canonisé, sinon null', functi
     assert.deepStrictEqual(rows.map(function (r) { return r.vat_rate; }),
         ['20', '5.5', null, null],
         'Taux de la ligne canonisé (« 5,5 » -> « 5.5 ») ; absent ou invalide -> null (héritera de l\u2019en-tête).');
+});
+
+t('invoiceToRows : produit reconnu (line.product) prioritaire, libellé brut conservé', function () {
+    const rows = H.invoiceToRows({ lines: [
+        // Produit reconnu par le serveur dans le catalogue (fiches +
+        // alias) : c'est lui, la clé d'achat/stock ; le libellé OCR
+        // reste en raw_label et ouvre les notes.
+        { label: 'RED BULL WHITE BOITE 25CL', product: 'Red Bull Blanche', units: 24, total: 29.58, vat_rate: 5.5 },
+        // Reconnu identique au libellé : aucune substitution.
+        { label: 'KitKat', product: 'KitKat', units: 36, total: 19.99 },
+        // Inconnu (product null) : libellé OCR brut comme avant.
+        { label: 'TETE DE MORT 400 GRS', product: null, units: 1, total: 5.6, ean: '3215470516952' }
+    ] });
+    assert.deepStrictEqual(rows[0], {
+        key: 'Red Bull Blanche', raw_label: 'RED BULL WHITE BOITE 25CL', qty: 24, total: '29,58',
+        notes: 'libellé facture : RED BULL WHITE BOITE 25CL', vat_rate: '5.5'
+    }, 'Clé = produit reconnu ; raw_label + note « libellé facture » conservés pour contrôle.');
+    assert.deepStrictEqual(rows[1], {
+        key: 'KitKat', raw_label: '', qty: 36, total: '19,99', notes: '', vat_rate: null
+    }, 'Produit == libellé : pas de raw_label ni de note superflus.');
+    assert.deepStrictEqual(rows[2], {
+        key: 'TETE DE MORT 400 GRS', raw_label: '', qty: 1, total: '5,60',
+        notes: 'EAN 3215470516952', vat_rate: null
+    }, 'Sans reconnaissance : comportement historique intact.');
 });
 
 /* ------------------------------------------------------------------ *
@@ -265,7 +289,7 @@ t('applyInvoiceState : la facture remplit en-tête et lignes', function () {
     assert.strictEqual(st.purchased_at, '2026-10-02');
     assert.strictEqual(st.vat_rate, '5.5', 'Taux canonisé en chaîne pour le select.');
     assert.strictEqual(st.amount_basis, 'ht');
-    assert.deepStrictEqual(st.rows, [{ key: 'Coca 33cl', qty: 24, total: '10,80', notes: '', vat_rate: null }]);
+    assert.deepStrictEqual(st.rows, [{ key: 'Coca 33cl', raw_label: '', qty: 24, total: '10,80', notes: '', vat_rate: null }]);
 });
 
 t('applyInvoiceState : champs null -> état courant conservé', function () {

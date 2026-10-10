@@ -9,6 +9,7 @@ use App\Core\Compta\InvoiceScan;
 use App\Core\Compta\ProductAutoSync;
 use App\Core\Compta\PurchaseSaver;
 use App\Core\Compta\ReceiptStorage;
+use App\Core\Compta\ScanCatalogMatcher;
 use App\Core\Compta\StockPublic;
 use App\Core\Compta\SumUpCsvParser;
 use App\Core\Controller;
@@ -328,6 +329,12 @@ final class KioskComptageController extends Controller
         }
 
         $invoice = $res['invoice'];
+
+        // Produits reconnus dans le catalogue (fiches, alias de ventes,
+        // clés SumUp) : même enrichissement que les scans admin — chaque
+        // ligne reçoit « product » en plus du libellé brut « label ».
+        // Panne de base : silencieusement sauté, le scan reste utilisable.
+        $invoice['lines'] = ScanCatalogMatcher::enrichLines($invoice['lines']);
 
         // Même base de journal que les scans admin (source, taille,
         // sha256, lignes extraites, fournisseur, facture) + marque kiosque.

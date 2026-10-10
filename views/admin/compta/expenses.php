@@ -526,6 +526,11 @@ foreach ($byCategory as $c) {
                 key.placeholder = 'Produit';
                 key.setAttribute('aria-label', 'Produit');
                 key.value = (r && r.key) || '';
+                // Produit reconnu dans la base : le libellé OCR brut de
+                // la facture reste consultable en info-bulle.
+                if (r && r.raw_label) {
+                    key.title = 'Libellé facture : ' + r.raw_label;
+                }
 
                 var qty = document.createElement('input');
                 qty.type = 'number';
