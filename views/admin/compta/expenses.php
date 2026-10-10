@@ -623,8 +623,11 @@ foreach ($byCategory as $c) {
 
             input.addEventListener('change', function () {
                 var file = input.files && input.files[0];
-                if (!file || file.type.indexOf('image/') !== 0) {
-                    // PDF ou sélection vidée : justificatif seulement.
+                // PDF accepté au scan : le serveur rastérise les pages puis
+                // OCRise (fusion ensembliste). Autre non-image : juste le
+                // justificatif.
+                var isPdf = !!file && (file.type === 'application/pdf' || /\.pdf$/i.test(String(file.name || '')));
+                if (!file || (String(file.type || '').indexOf('image/') !== 0 && !isPdf)) {
                     hideScan();
                     status('');
                     return;

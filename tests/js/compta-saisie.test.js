@@ -693,9 +693,9 @@ function ta(name, fn) {
     asyncTests.push({ name: name, fn: fn });
 }
 
-/** FormData factice : enregistre les champs appended (k, v). */
+/** FormData factice : enregistre les champs appended (k, v, nom de fichier). */
 function FakeFormData() { this.fields = []; }
-FakeFormData.prototype.append = function (k, v) { this.fields.push([k, v]); };
+FakeFormData.prototype.append = function (k, v) { this.fields.push([k, v, arguments[2]]); };
 
 /** fetch factice : capture (url, init), répond {ok:true, json:{ok:true}}. */
 function stubFetch(captured) {
@@ -737,6 +737,20 @@ ta('scanUpload : csrf null -> ni champ _csrf ni en-tête X-CSRF-Token', function
             assert.strictEqual(captured.url, '/kiosque/admin/ledger/scan/TOKEN',
                 'L\u2019endpoint passé est utilisé tel quel.');
             assert.strictEqual(captured.init.method, 'POST');
+        });
+    });
+});
+
+ta('scanUpload : PDF parti tel quel (ni recompression ni renommage .jpg)', function () {
+    const captured = {};
+    const pdf = { name: 'scan.pdf', type: 'application/pdf' };
+    return withStubs(captured, function () {
+        return H.scanUpload(pdf, 'TOK', '/admin/compta/depenses/scan').then(function () {
+            const fileField = captured.init.body.fields.filter(function (f) { return f[0] === 'file'; })[0];
+            assert.ok(fileField, 'Le champ file part bien.');
+            assert.strictEqual(fileField[1], pdf, 'Le PDF original est envoyé intact (pas de canvas).');
+            assert.strictEqual(fileField[2], 'scan.pdf',
+                'Le nom garde son extension .pdf : le contrôle extension/MIME du serveur reste cohérent.');
         });
     });
 });

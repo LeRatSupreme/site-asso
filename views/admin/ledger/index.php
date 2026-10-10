@@ -776,13 +776,14 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
 
 // ── Scan automatique du ticket (ADMIN ET KIOSQUE) ──
 // Le formulaire porte data-scan-url dans les deux branches (endpoint
-// miroir en kiosque, auth par jeton dans l'URL). À l'image choisie dans
-// #lg-receipt (change) : analyse serveur immédiate sans bouton,
-// préremplissage NON destructif des champs vides (applyInvoiceToExpense,
-// pur et testé), puis pavé « Informations extraites » (tout le reste,
-// dont ce qui n'a pas pu être appliqué) et pavé « Détail des produits »
-// éditable -> notes. PDF ou fichier non image : justificatif seulement,
-// pas d'analyse.
+// miroir en kiosque, auth par jeton dans l'URL). À l'image ou au PDF
+// choisi dans #lg-receipt (change) : analyse serveur immédiate sans
+// bouton, préremplissage NON destructif des champs vides
+// (applyInvoiceToExpense, pur et testé), puis pavé « Informations
+// extraites » (tout le reste, dont ce qui n'a pas pu être appliqué) et
+// pavé « Détail des produits » éditable -> notes. PDF : le serveur
+// rastérise et OCRise comme une photo. Autre fichier non image :
+// justificatif seulement, pas d'analyse.
 // CSRF : présent en admin (champ _csrf du formulaire), ABSENT en kiosque
 // (le jeton de l'URL EST l'authentification) — null transmis aux helpers,
 // ni champ ni en-tête X-CSRF-Token ne partent alors dans les fetch.
@@ -1192,8 +1193,10 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
 
     input.addEventListener('change', function () {
         var file = input.files && input.files[0];
-        if (!file || file.type.indexOf('image/') !== 0) {
-            // PDF ou sélection vidée : justificatif seulement.
+        // PDF accepté au scan : le serveur rastérise les pages puis OCRise
+        // (fusion ensembliste). Autre fichier non image : justificatif seul.
+        var isPdf = !!file && (file.type === 'application/pdf' || /\.pdf$/i.test(String(file.name || '')));
+        if (!file || (String(file.type || '').indexOf('image/') !== 0 && !isPdf)) {
             hideScan();
             status('');
             return;

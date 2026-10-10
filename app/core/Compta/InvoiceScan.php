@@ -16,11 +16,11 @@ namespace App\Core\Compta;
  *    MIME réels vérifiés), texte extrait par OCR (Tesseract/Poppler).
  *
  * Le document est interprété par InvoiceParser (aiguillage METRO / ticket
- * de caisse, clé kind dans la réponse). Pour les PHOTOS, quand ImageMagick
- * est disponible, l'OCR est ensembliste : plusieurs variantes de
- * prétraitement sont OCRisées puis fusionnées par InvoiceEnsemble (PDF et
- * texte collé : comportement direct inchangé). Lecture seule : rien n'est
- * enregistré ici, le formulaire reste modifiable avant validation.
+ * de caisse, clé kind dans la réponse). Pour les PHOTOS et les PDF, quand
+ * les outils le permettent, l'OCR est ensembliste : plusieurs variantes
+ * de prétraitement sont OCRisées puis fusionnées par InvoiceEnsemble
+ * (texte collé : comportement direct inchangé). Lecture seule : rien
+ * n'est enregistré ici, le formulaire reste modifiable avant validation.
  *
  * L'audit reste à la charge du contrôleur appelant (mécanismes
  * différents : Auth::id() côté admin, AuditLog sans utilisateur côté
@@ -134,8 +134,29 @@ final class InvoiceScan
         ];
 
         try {
-            if (str_starts_with($mime, 'application/pdf') || !InvoiceOcr::hasImageMagick()) {
-                // PDF : couche texte puis OCR page par page — inchangé.
+            if (str_starts_with($mime, 'application/pdf')) {
+                // PDF : OCR ENSEMBLISTE page par page (rastérisation 300 dpi
+                // + variantes de prétraitement + fusion InvoiceEnsemble).
+                // La couche texte pdftotext, jadis prioritaire, désaligne
+                // les tableaux METRO : colonnes éclatées en blocs séparés,
+                // lignes perdues. Repli historique si les outils manquent.
+                if (InvoiceOcr::hasPoppler() && InvoiceOcr::hasOcr()) {
+                    $texts = InvoiceOcr::extractPdfVariants($tmpPath);
+                    $result = InvoiceEnsemble::consolidate($texts);
+                    $text = $result['text'];
+                    $invoice = $result['invoice'];
+                    if ((int) $result['variants'] >= 2) {
+                        $invoice['warnings'][] = sprintf(
+                            'Extraction consolidée sur %d variantes OCR du PDF — %d ligne(s) fusionnée(s).',
+                            (int) $result['variants'],
+                            (int) $result['groups']
+                        );
+                    }
+                } else {
+                    $text = InvoiceOcr::extractText($tmpPath, $mime);
+                    $invoice = InvoiceParser::parse($text);
+                }
+            } elseif (!InvoiceOcr::hasImageMagick()) {
                 // Image sans ImageMagick : OCR historique de la photo seule.
                 $text = InvoiceOcr::extractText($tmpPath, $mime);
                 $invoice = InvoiceParser::parse($text);
