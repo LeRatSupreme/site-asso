@@ -395,6 +395,9 @@ foreach ($byCategory as $c) {
                 setField(spentAtEl, res.spent_at);
                 setField(labelEl, res.label);
                 setField(amountEl, res.amount);
+                // Référence du ticket : le n° extrait remplit le champ
+                // vide (non-destructif géré par applyInvoiceToExpense).
+                if (invoiceEl) setField(invoiceEl, res.invoice_number);
                 if (res.basis !== basis()) {
                     setBasis(res.basis);
                     Array.prototype.forEach.call(basisInputs, function (r) { fire(r, 'change'); });
