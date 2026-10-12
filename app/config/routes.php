@@ -283,6 +283,9 @@ function aeic_register_routes(Router $router): void
     $router->post('/admin/compta/couts/{id}/close', [AdminComptaController::class, 'closeCost']);
     $router->post('/admin/compta/couts/{id}/delete', [AdminComptaController::class, 'deleteCost']);
     $router->get('/admin/compta/aliases', [AdminComptaController::class, 'aliases']);
+    // Page dédiée au seul formulaire d'ajout (saisie rapide d'une
+    // appellation libellé facture -> nom court).
+    $router->get('/admin/compta/aliases/new', [AdminComptaController::class, 'aliasNew']);
     $router->post('/admin/compta/aliases/save', [AdminComptaController::class, 'saveAlias']);
     $router->post('/admin/compta/aliases/bulk', [AdminComptaController::class, 'aliasesBulk']);
     $router->post('/admin/compta/aliases/{id}/delete', [AdminComptaController::class, 'deleteAlias']);

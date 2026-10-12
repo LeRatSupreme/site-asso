@@ -828,10 +828,42 @@ final class AdminComptaController extends AdminBaseController
     {
         $user = $this->guardCompta();
 
-        // Catégories suggérées : d'abord les catégories existantes de la
-        // carte (page Catégories de la cafétéria), puis « Événement », puis
-        // les valeurs déjà rencontrées dans les alias et les ventes pour
-        // rester compatibles avec l'historique.
+        $this->renderAdmin('admin/compta/aliases', [
+            'title'      => 'Mapping des libellés',
+            'user'       => $user,
+            'aliases'    => ProductAlias::all(),
+            'unmapped'   => Sale::unmappedDescriptions(),
+            'categories' => self::aliasCategories(),
+        ]);
+    }
+
+    /**
+     * Page dédiée « Ajouter une appellation » : le formulaire seul,
+     * pour saisir vite un lien libellé facture/CSV -> nom court
+     * (ex. « MONSTER PIPELINE PUNCH » -> « Monster rose »). La liste
+     * et l'édition restent dans la page Mapping des libellés.
+     */
+    public function aliasNew(): void
+    {
+        $user = $this->guardCompta();
+
+        $this->renderAdmin('admin/compta/alias_new', [
+            'title'      => 'Ajouter une appellation',
+            'user'       => $user,
+            'categories' => self::aliasCategories(),
+        ]);
+    }
+
+    /**
+     * Catégories suggérées des alias : d'abord les catégories
+     * existantes de la carte (page Catégories de la cafétéria), puis
+     * « Événement », puis les valeurs déjà rencontrées dans les alias
+     * et les ventes pour rester compatibles avec l'historique.
+     *
+     * @return list<string>
+     */
+    private static function aliasCategories(): array
+    {
         $categories = [];
         foreach (ProductCategory::allForAdmin() as $cat) {
             $name = trim((string) ($cat['name'] ?? ''));
@@ -839,20 +871,13 @@ final class AdminComptaController extends AdminBaseController
                 $categories[] = $name;
             }
         }
-        $categories = array_values(array_unique(array_merge(
+
+        return array_values(array_unique(array_merge(
             $categories,
             ['Événement'],
             ProductAlias::distinctCategories(),
             Sale::distinctCategories()
         )));
-
-        $this->renderAdmin('admin/compta/aliases', [
-            'title'      => 'Mapping des libellés',
-            'user'       => $user,
-            'aliases'    => ProductAlias::all(),
-            'unmapped'   => Sale::unmappedDescriptions(),
-            'categories' => $categories,
-        ]);
     }
 
     public function saveAlias(): void
@@ -882,7 +907,12 @@ final class AdminComptaController extends AdminBaseController
             $this->setFlash('success', 'Libellé rattaché au produit.' . ($categorized > 0 ? sprintf(' %d vente(s) catégorisée(s).', $categorized) : ''));
         }
 
-        redirect(url('/admin/compta/aliases'));
+        // Page dédiée : retour au formulaire (ajout en série), sinon à
+        // la liste du Mapping des libellés (comportement historique).
+        $back = trim((string) ($_POST['stay'] ?? '')) === '1'
+            ? '/admin/compta/aliases/new'
+            : '/admin/compta/aliases';
+        redirect(url($back));
     }
 
     /**

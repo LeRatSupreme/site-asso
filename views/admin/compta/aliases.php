@@ -15,35 +15,11 @@ declare(strict_types=1);
 </datalist>
 <div class="compta-grid">
     <div class="card surface glass">
-        <h2 class="card-title">Ajouter une appellation</h2>
-        <p class="muted">Retient une fois pour toutes le lien entre un <strong>libellé long</strong> et le <strong>nom court</strong> utilisé par l'asso : « MONSTER PIPELINE PUNCH » → « Monster rose ». Les appellations servent aux imports CSV SumUp <em>et</em> aux factures scannées (METRO…) : au prochain scan du même libellé, le nom court est proposé directement. Les corrections faites à l'enregistrement d'achats scannés sont aussi retenues ici automatiquement.</p>
-        <form method="post" action="<?= e(url('/admin/compta/aliases/save')) ?>" class="alias-form">
-            <?= csrf_field() ?>
-            <div class="alias-row">
-                <div>
-                    <input type="text" name="raw_description" placeholder="ex : MONSTER PIPELINE PUNCH 24X0,5L" required>
-                    <span class="muted">libellé facture / CSV</span>
-                </div>
-                <div>
-                    <input type="text" name="product_key" placeholder="ex : Monster rose" required>
-                    <span class="muted">nom court (produit)</span>
-                </div>
-                <div>
-                    <input type="text" name="category" placeholder="ex: <?= e($categories[0] ?? 'Catégorie') ?>" list="alias-categories">
-                    <span class="muted">catégorie (optionnel)</span>
-                </div>
-                <div>
-                    <button type="submit" class="btn btn-primary btn-sm">Ajouter</button>
-                </div>
-            </div>
-        </form>
-    </div>
-
-    <div class="card surface glass">
         <h2 class="card-title">File « à classer »</h2>
         <p class="muted">Libellés CSV rencontrés non encore rattachés à un produit canonique. Rattachez-les une fois pour toutes : ils seront résolus automatiquement aux prochains imports. Les catégories proposées sont celles de la page Catégories (cafétéria).</p>
         <p class="admin-actions">
-            <a class="btn btn-primary" href="<?= e(url('/admin/compta/aliases/auto')) ?>">Auto-détecter les doublons</a>
+            <a class="btn btn-primary" href="<?= e(url('/admin/compta/aliases/new')) ?>">＋ Ajouter une appellation</a>
+            <a class="btn btn-outline" href="<?= e(url('/admin/compta/aliases/auto')) ?>">Auto-détecter les doublons</a>
         </p>
         <?php if ($unmapped === []): ?>
             <p class="muted">Aucun libellé à classer. </p>
