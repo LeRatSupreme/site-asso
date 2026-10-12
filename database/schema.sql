@@ -312,6 +312,18 @@ CREATE TABLE IF NOT EXISTS product_aliases (
     KEY idx_alias_product (product_key)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- File « libellés factures non rattachés » : libellés OCR de scans
+-- qu'aucun produit du catalogue ne reconnaît, à rattacher depuis la
+-- page « Ajouter une appellation ».
+CREATE TABLE IF NOT EXISTS scan_labels (
+    id          VARCHAR(32)  NOT NULL PRIMARY KEY,
+    label       VARCHAR(255) NOT NULL,
+    occurrences INT NOT NULL DEFAULT 1,
+    first_seen  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_seen   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uniq_scan_label (label)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- Coûts de revient par lot daté (cost_price en TTC : comparable aux
 -- prix de vente TTC, pour des bénéfices cohérents).
 -- purchase_id : achat (purchases.id) à l'origine du lot — NULL pour les

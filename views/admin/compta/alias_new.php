@@ -9,6 +9,7 @@ declare(strict_types=1);
  * Mapping des libellés).
  *
  * @var list<string> $categories
+ * @var list<array<string,mixed>> $pending
  */
 ?>
 <div class="compta-head">
@@ -58,5 +59,32 @@ declare(strict_types=1);
                 <a class="btn btn-ghost" href="<?= e(url('/admin/compta/aliases')) ?>">Voir toutes les appellations</a>
             </div>
         </form>
+    </section>
+
+    <section class="card surface glass">
+        <h2 class="card-title">Libellés factures non rattachés</h2>
+        <p class="muted">Libellés détectés par les scans de factures (METRO…) mais inconnus du catalogue — ex. « EVIEN 50CL » qui devrait être « Eau ». Rattache-les ici : au prochain scan du même libellé, le nom court sera proposé directement. Les libellés déjà résolus disparaissent de la file tout seuls.</p>
+        <?php if (($pending ?? []) === []): ?>
+            <p class="muted">Aucun libellé en attente : tous les libellés scannés sont reconnus.</p>
+        <?php endif; ?>
+        <?php foreach (($pending ?? []) as $row): ?>
+            <?php $label = (string) $row['label']; ?>
+            <form method="post" action="<?= e(url('/admin/compta/aliases/save')) ?>" class="alias-form">
+                <?= csrf_field() ?>
+                <input type="hidden" name="stay" value="1">
+                <div class="alias-row">
+                    <div>
+                        <code><?= e($label) ?></code>
+                        <span class="muted">(<?= (int) $row['occurrences'] ?> fois)</span>
+                    </div>
+                    <div>
+                        <input type="hidden" name="raw_description" value="<?= e($label) ?>">
+                        <input type="text" name="product_key" placeholder="ex : Eau" required autocomplete="off">
+                        <input type="text" name="category" placeholder="ex : <?= e($categories[0] ?? 'Catégorie') ?>" list="alias-categories" autocomplete="off">
+                        <button type="submit" class="btn btn-primary btn-sm">Rattacher</button>
+                    </div>
+                </div>
+            </form>
+        <?php endforeach; ?>
     </section>
 </div>
