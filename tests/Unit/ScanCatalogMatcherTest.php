@@ -233,4 +233,26 @@ final class ScanCatalogMatcherTest extends TestCase
         self::assertSame($lines, $out);
         self::assertArrayNotHasKey('product', $out[0]);
     }
+
+    // ————————————————————————————————————————————————————————————
+    // Appellations apprises aux achats (PurchaseSaver → product_aliases)
+    // ————————————————————————————————————————————————————————————
+
+    public function testAppellationApriseReconnueAuScanSuivant(): void
+    {
+        // Alias appris : libellé facture METRO corrigé à la main en
+        // « Monster rose » lors d'un enregistrement d'achats scanné —
+        // le scan suivant du même libellé doit proposer le nom court.
+        $catalog = ScanCatalogMatcher::catalogFrom([], [
+            ['raw_description' => 'MONSTER PIPELINE PUNCH 24X0,5L', 'product_key' => 'Monster rose'],
+        ], []);
+
+        // Même libellé exact (même colisage) : palier 1.
+        self::assertSame('Monster rose', self::m('MONSTER PIPELINE PUNCH 24X0,5L', $catalog));
+        // Variante d'écriture (casse) : palier 1 toujours.
+        self::assertSame('Monster rose', self::m('monster pipeline punch 24x0,5l', $catalog));
+        // Libellé sans le colisage : rattaché quand même (mots-clés /
+        // inclusion sur l'entrée d'alias).
+        self::assertSame('Monster rose', self::m('MONSTER PIPELINE PUNCH', $catalog));
+    }
 }

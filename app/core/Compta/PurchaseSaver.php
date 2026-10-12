@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Core\Compta;
 
+use App\Models\ProductAlias;
 use App\Models\ProductCost;
 
 /**
@@ -20,6 +21,13 @@ use App\Models\ProductCost;
  * (StockPublic). La redirection, le flash et l'audit restent à la
  * charge du contrôleur appelant (mécanismes différents : session admin
  * vs jeton kiosque).
+ *
+ * Apprentissage des appellations : quand une ligne issue d'un scan
+ * porte son libellé facture brut (« MONSTER PIPELINE PUNCH 24X0,5L »)
+ * et que la clé saisie/corrigée est différente (« Monster rose »),
+ * l'alias est retenu (product_aliases) — au prochain scan du même
+ * libellé, ScanCatalogMatcher proposera directement le nom court.
+ * Jamais bloquant pour l'enregistrement.
  *
  * Comportement STRICTEMENT identique à l'ancienne implémentation inline
  * du contrôleur admin : mêmes validations, mêmes arrondis (3 décimales),
@@ -47,18 +55,21 @@ final class PurchaseSaver
      *   - created_by     : auteur ('' / null = aucun) — id utilisateur en
      *     admin, trace « kiosque … » en kiosque.
      * @param list<array<string,mixed>> $lines Lignes alignées :
-     *   [{key, qty, total_raw, vat_raw, no_stock}] — key = libellé produit,
-     *   qty = quantité (entier), total_raw = montant saisi BRUT
-     *   (« 18,60 »), vat_raw = taux BRUT de la ligne ('' = hérite),
-     *   no_stock = achat comptabilisé mais hors stock.
+     *   [{key, qty, total_raw, vat_raw, no_stock, raw_label}] — key =
+     *   libellé produit, qty = quantité (entier), total_raw = montant
+     *   saisi BRUT (« 18,60 »), vat_raw = taux BRUT de la ligne
+     *   ('' = hérite), no_stock = achat comptabilisé mais hors stock,
+     *   raw_label = libellé FACTURE d'origine de la ligne (scan) quand
+     *   il diffère de la clé — base de l'apprentissage d'alias.
      *
-     * @return array{inserted:int, errors:list<string>, message:string, products:int, no_stock:int}
+     * @return array{inserted:int, errors:list<string>, message:string, products:int, no_stock:int, aliases:int}
      *   inserted = nombre d'achats réellement créés ; errors = motifs
      *   d'ignorance ligne par ligne (« clé : raison ») ; message = texte
      *   FR complet (flash admin / JSON kiosque) : erreur agrégée si rien
      *   n'a été créé, récapitulatif sinon ; products = clés produit
      *   DISTINCTES créées ; no_stock = lignes « hors stock » créées
-     *   (les deux derniers alimentent l'audit des contrôleurs).
+     *   (les deux derniers alimentent l'audit des contrôleurs) ;
+     *   aliases = appellations retenues (libellé facture -> clé).
      */
     public static function save(array $header, array $lines): array
     {
@@ -90,6 +101,7 @@ final class PurchaseSaver
         $noStockInserted = 0;
         $products = [];
         $errors = [];
+        $toLearn = [];
 
         foreach (array_values($lines) as $i => $line) {
             $line = is_array($line) ? $line : [];
@@ -124,6 +136,13 @@ final class PurchaseSaver
                     $noStockInserted++;
                 }
                 $products[$key] = true;
+
+                // Apprentissage : libellé facture d'origine (scan) vs clé
+                // retenue — dédupliqué par libellé normalisé.
+                $learn = self::aliasToLearn((string) ($line['raw_label'] ?? ''), $key);
+                if ($learn !== []) {
+                    $toLearn[self::spaceless($learn['raw_description'])] = $learn;
+                }
             } else {
                 $errors[] = ($key !== '' ? $key : '(sans nom)') . ' : ' . $reason;
             }
@@ -134,7 +153,28 @@ final class PurchaseSaver
                 ? 'Aucun achat saisi.'
                 : 'Aucun achat enregistré — ' . implode(' · ', $errors);
 
-            return ['inserted' => 0, 'errors' => $errors, 'message' => $message, 'products' => 0, 'no_stock' => 0];
+            return ['inserted' => 0, 'errors' => $errors, 'message' => $message, 'products' => 0, 'no_stock' => 0, 'aliases' => 0];
+        }
+
+        // Retient les appellations apprises (une par libellé, sans
+        // écraser un alias existant pointant déjà vers la même clé).
+        // Jamais bloquant : l'apprentissage ne doit pas faire échouer
+        // l'enregistrement des achats.
+        $aliasesLearned = 0;
+        $aliasDetails = [];
+        foreach ($toLearn as $learn) {
+            try {
+                $existing = ProductAlias::findByRaw($learn['raw_description']);
+                if ($existing !== null && (string) $existing['product_key'] === $learn['product_key']) {
+                    continue;
+                }
+                if (ProductAlias::save($learn) !== '') {
+                    $aliasesLearned++;
+                    $aliasDetails[] = $learn;
+                }
+            } catch (\Throwable) {
+                // Alias secondaire : on passe.
+            }
         }
 
         // Synchro automatique de la carte limitée aux clés saisies :
@@ -173,6 +213,22 @@ final class PurchaseSaver
         if ($sync['created'] !== []) {
             $message .= ' Carte mise à jour automatiquement : ' . implode(', ', $sync['created']) . '.';
         }
+        if ($aliasesLearned > 0) {
+            $shown = array_slice($aliasDetails, 0, 3);
+            $pairs = array_map(
+                static fn (array $a): string => '« ' . $a['raw_description'] . ' » → « ' . $a['product_key'] . ' »',
+                $shown
+            );
+            $message .= sprintf(
+                ' %d appellation%s retenue%s : %s%s — visible%s dans le Mapping libellés.',
+                $aliasesLearned,
+                $aliasesLearned > 1 ? 's' : '',
+                $aliasesLearned > 1 ? 's' : '',
+                implode(' · ', $pairs),
+                count($aliasDetails) > 3 ? '…' : '',
+                $aliasesLearned > 1 ? 's' : ''
+            );
+        }
 
         return [
             'inserted' => $inserted,
@@ -180,7 +236,45 @@ final class PurchaseSaver
             'message'  => $message,
             'products' => count($products),
             'no_stock' => $noStockInserted,
+            'aliases'  => $aliasesLearned,
         ];
+    }
+
+    /**
+     * Appellation à retenir pour une ligne d'achat issue d'un scan :
+     * renvoie le couple [raw_description => libellé facture,
+     * product_key => clé retenue] quand le libellé d'origine est
+     * renseigné ET différent de la clé (comparaison normalisée :
+     * casse, accents, séparateurs et espaces ignorés — même règle que
+     * ScanCatalogMatcher), [] sinon (pas de libellé, clé inchangée ou
+     * simple variante d'écriture de la même clé).
+     *
+     * Méthode pure (aucun accès POST/DB) : testée unitairement.
+     *
+     * @return array{raw_description:string, product_key:string}|array<never>
+     */
+    public static function aliasToLearn(string $rawLabel, string $productKey): array
+    {
+        $raw = trim($rawLabel);
+        $key = trim($productKey);
+        if ($raw === '' || $key === '') {
+            return [];
+        }
+
+        return self::spaceless($raw) !== self::spaceless($key)
+            ? ['raw_description' => $raw, 'product_key' => $key]
+            : [];
+    }
+
+    /**
+     * Clé normalisée sans espaces (« MONSTER PIPELINE PUNCH » =
+     * « Monster pipeline punch ») — même repliement que
+     * ScanCatalogMatcher::spaceless (AliasSuggester::normalizeKey
+     * + retrait des espaces).
+     */
+    private static function spaceless(string $value): string
+    {
+        return str_replace(' ', '', AliasSuggester::normalizeKey($value));
     }
 
     /**

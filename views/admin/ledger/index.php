@@ -1022,11 +1022,15 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
         key.setAttribute('list', 'lg-purchase-products');
         key.setAttribute('autocomplete', 'off');
         key.value = (r && r.key) || '';
-        // Produit reconnu dans la base : le libellé OCR brut de la
-        // facture reste consultable en info-bulle (contrôle avant
-        // création des achats).
-        if (r && r.raw_label) {
-            key.title = 'Libellé facture : ' + r.raw_label;
+        // Produit venu d'un scan : le libellé FACTURE d'origine reste
+        // mémorisé sur la ligne (info-bulle de contrôle + apprentissage
+        // de l'appellation si le nom est corrigé à la main). Lignes
+        // reconnues : libellé brut ; lignes non reconnues : le libellé
+        // OCR initial vaut clé de départ.
+        var rawLabel = (r && (String(r.raw_label || '').trim() || String(r.key || '').trim())) || '';
+        div.dataset.rawLabel = rawLabel;
+        if (rawLabel !== '' && rawLabel !== String((r && r.key) || '').trim()) {
+            key.title = 'Libellé facture : ' + rawLabel;
         }
         key.addEventListener('input', updateLinesTotal);
 
@@ -1131,7 +1135,8 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
                 qty: parseInt(div.querySelector('.lg-scan-qty').value, 10),
                 total: total,
                 vat_rate: div.dataset.vatRate ? div.dataset.vatRate : null,
-                no_stock: !!(ns && ns.checked)
+                no_stock: !!(ns && ns.checked),
+                raw_label: div.dataset.rawLabel || ''
             });
         });
         return out;
@@ -1443,6 +1448,11 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
         Array.prototype.forEach.call(bulk.product_key, function (k) { fd.append('product_key[]', k); });
         Array.prototype.forEach.call(bulk.quantity, function (q) { fd.append('quantity[]', String(q)); });
         Array.prototype.forEach.call(bulk.total_amount, function (a) { fd.append('total_amount[]', a); });
+        // Libellés facture d'origine (apprentissage des appellations) :
+        // tableau parallèle, '' = rien à retenir pour la ligne.
+        if (Array.isArray(bulk.raw_label_lines)) {
+            Array.prototype.forEach.call(bulk.raw_label_lines, function (l) { fd.append('raw_label[]', l); });
+        }
         Array.prototype.forEach.call(bulk.no_stock_indexes, function (i) { fd.append('no_stock[' + i + ']', '1'); });
 
         function release() {

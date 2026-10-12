@@ -621,9 +621,27 @@ t('buildPurchaseBulkPayload : aucune ligne valide -> tableaux vides, rien de rej
     assert.deepStrictEqual(p.quantity, []);
     assert.deepStrictEqual(p.total_amount, []);
     assert.deepStrictEqual(p.vat_rate_lines, []);
+    assert.deepStrictEqual(p.raw_label_lines, []);
     assert.deepStrictEqual(p.no_stock_indexes, []);
     assert.deepStrictEqual(p.rejected, []);
     assert.strictEqual(p.vat_rate, '5.5', 'L\u2019en-tête reste posté même sans ligne.');
+});
+
+t('buildPurchaseBulkPayload : raw_label[] parallèle — libellé facture des lignes scannées', function () {
+    const p = H.buildPurchaseBulkPayload(bulkHeader(), [
+        { key: 'Monster rose', qty: 24, total: '25,14', vat_rate: null, no_stock: false, raw_label: 'MONSTER PIPELINE PUNCH 24X0,5L' },
+        { key: 'Coca 33cl', qty: 2, total: '4,00', vat_rate: null, no_stock: false }
+    ]);
+    assert.deepStrictEqual(p.raw_label_lines, ['MONSTER PIPELINE PUNCH 24X0,5L', ''],
+        'Ligne scannée -> libellé facture d\u2019origine ; ligne manuelle -> \'\' (rien à apprendre).');
+});
+
+t('buildPurchaseBulkPayload : lignes rejetées ne portent pas de raw_label', function () {
+    const p = H.buildPurchaseBulkPayload(bulkHeader(), [
+        { key: 'X', qty: 0, total: '5,00', raw_label: 'X FACTURE' },
+        { key: 'Y', qty: 1, total: '5,00', raw_label: 'Y FACTURE' }
+    ]);
+    assert.deepStrictEqual(p.raw_label_lines, ['Y FACTURE'], 'Tableaux parallèles : seules les lignes valides comptent.');
 });
 
 /* ------------------------------------------------------------------ *
