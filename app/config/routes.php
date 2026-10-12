@@ -287,6 +287,8 @@ function aeic_register_routes(Router $router): void
     // appellation libellé facture -> nom court).
     $router->get('/admin/compta/aliases/new', [AdminComptaController::class, 'aliasNew']);
     $router->post('/admin/compta/aliases/save', [AdminComptaController::class, 'saveAlias']);
+    // Saisie en série : grille multi-lignes de la page dédiée.
+    $router->post('/admin/compta/aliases/save-bulk', [AdminComptaController::class, 'saveAliasBulk']);
     $router->post('/admin/compta/aliases/bulk', [AdminComptaController::class, 'aliasesBulk']);
     $router->post('/admin/compta/aliases/{id}/delete', [AdminComptaController::class, 'deleteAlias']);
     $router->get('/admin/compta/aliases/auto', [AdminComptaController::class, 'aliasesAuto']);

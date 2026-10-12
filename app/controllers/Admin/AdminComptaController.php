@@ -852,6 +852,7 @@ final class AdminComptaController extends AdminBaseController
             'title'      => 'Ajouter une appellation',
             'user'       => $user,
             'categories' => self::aliasCategories(),
+            'products'   => Sale::distinctProducts(),
             'pending'    => ScanLabel::pending(),
         ]);
     }
@@ -917,6 +918,62 @@ final class AdminComptaController extends AdminBaseController
             ? '/admin/compta/aliases/new'
             : '/admin/compta/aliases';
         redirect(url($back));
+    }
+
+    /**
+     * Enregistrement en série de la page « Ajouter une appellation » :
+     * grille multi-lignes (raw_description[], product_key[],
+     * category[] en parallèle). Les lignes incomplètes sont ignorées,
+     * les autres suivent le même chemin que saveAlias() (catégorie
+     * propagée aux ventes, catégorie créée dans la carte, purge de la
+     * file des libellés scans).
+     */
+    public function saveAliasBulk(): void
+    {
+        $this->guardCompta();
+
+        $raws = $_POST['raw_description'] ?? [];
+        $keys = $_POST['product_key'] ?? [];
+        $cats = $_POST['category'] ?? [];
+        if (!is_array($raws) || !is_array($keys)) {
+            $raws = [];
+            $keys = [];
+        }
+        if (!is_array($cats)) {
+            $cats = [];
+        }
+
+        $done = 0;
+        foreach ($raws as $i => $raw) {
+            $raw = trim((string) $raw);
+            $productKey = trim((string) ($keys[$i] ?? ''));
+            $category = trim((string) ($cats[$i] ?? ''));
+            if ($raw === '' || $productKey === '') {
+                continue; // ligne vide ou incomplète
+            }
+
+            ProductAlias::save([
+                'raw_description' => $raw,
+                'product_key'     => $productKey,
+                'category'        => $category,
+            ]);
+            Sale::applyAliasCategory($raw, $category !== '' ? $category : null);
+            if ($category !== '') {
+                ProductCategory::ensure($category, Auth::id());
+            }
+            ScanLabel::deleteByLabel($raw);
+            $done++;
+        }
+
+        $this->audit('compta.alias.bulk', 'product_alias', null, ['count' => $done]);
+        $this->setFlash(
+            $done > 0 ? 'success' : 'error',
+            $done > 0
+                ? sprintf('%d appellation(s) enregistrée(s).', $done)
+                : 'Aucune ligne complète : libellé et nom court sont requis.'
+        );
+
+        redirect(url('/admin/compta/aliases/new'));
     }
 
     /**
