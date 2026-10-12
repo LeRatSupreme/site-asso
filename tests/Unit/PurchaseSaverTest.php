@@ -165,4 +165,47 @@ final class PurchaseSaverTest extends TestCase
         self::assertSame([], PurchaseSaver::aliasToLearn('   ', 'Monster rose'));
         self::assertSame([], PurchaseSaver::aliasToLearn('LIBELLE FACTURE', ''));
     }
+
+    /**
+     * Chemin de justificatif accepté : uniquement un fichier déposé par
+     * ReceiptStorage (uploads/receipts/ + nom hexadécimal + extension
+     * sûre). Tout le reste — chemin arbitraire, traversée ../, URL,
+     * extension exécutable — est rejeté (null). Le POST n'est jamais
+     * une source de confiance pour un chemin de fichier.
+     */
+    public function test_receipt_path_or_null_accepte_chemin_receipt_storage(): void
+    {
+        self::assertSame(
+            'uploads/receipts/b31021e2dd5060d9e29d0454.pdf',
+            PurchaseSaver::receiptPathOrNull('uploads/receipts/b31021e2dd5060d9e29d0454.pdf')
+        );
+        self::assertSame(
+            'uploads/receipts/abcdef0123456789abcdef01.jpg',
+            PurchaseSaver::receiptPathOrNull('  uploads/receipts/abcdef0123456789abcdef01.jpg  ')
+        );
+    }
+
+    /**
+     * Valeurs refusées : vide, chemin hors receipts, traversée, URL,
+     * nom non hexadécimal, extension dangereuse ou absente.
+     */
+    public function test_receipt_path_or_null_rejete_chemins_non_fiables(): void
+    {
+        $rejected = [
+            '',
+            '   ',
+            'uploads/receipts/../../.env',
+            '../config.env',
+            'https://exemple.fr/ticket.pdf',
+            '/etc/passwd',
+            'uploads/tickets/b31021e2dd5060d9e29d0454.pdf',
+            'uploads/receipts/ticket.pdf',
+            'uploads/receipts/b31021e2dd5060d9e29d0454.php',
+            'uploads/receipts/b31021e2dd5060d9e29d0454',
+            null,
+        ];
+        foreach ($rejected as $value) {
+            self::assertNull(PurchaseSaver::receiptPathOrNull($value), var_export($value, true));
+        }
+    }
 }

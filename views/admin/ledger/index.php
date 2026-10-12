@@ -511,9 +511,9 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
     </section>
 
     <section class="card surface glass">
-        <h2 class="card-title">Dernières dépenses saisies</h2>
-        <?php if ($recentExpenses === []): ?>
-            <p class="muted">Aucune dépense enregistrée pour le moment.</p>
+        <h2 class="card-title">Derniers tickets &amp; dépenses</h2>
+        <?php if ($recentPurchases === [] && $recentExpenses === []): ?>
+            <p class="muted">Aucune dépense ni achat enregistré pour le moment.</p>
         <?php else: ?>
         <div class="lg-table-wrap">
             <table class="lg-recent-table">
@@ -521,6 +521,23 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
                     <tr><th>Date</th><th>Nom</th><th>Référence</th><th class="num">Montant</th><th>Photo</th></tr>
                 </thead>
                 <tbody>
+                    <?php foreach ($recentPurchases as $x): ?>
+                    <tr>
+                        <td><?= e($fmtDate((string) $x['date'])) ?></td>
+                        <td>Achat — <?= e((string) $x['supplier']) ?> <span class="muted">(<?= (int) $x['lines'] ?> ligne(s), stock &amp; coûts)</span></td>
+                        <td><?= e((string) ($x['invoice'] ?? '—')) ?></td>
+                        <td class="num"><?= e(formatPrice((float) $x['total_ttc'])) ?></td>
+                        <td>
+                            <?php if (!empty($x['receipt_path'])): ?>
+                                <a href="<?= e(asset((string) $x['receipt_path'])) ?>" target="_blank" rel="noopener" title="Voir la photo du ticket">
+                                    <img class="ledger-thumb" src="<?= e(asset((string) $x['receipt_path'])) ?>" alt="Ticket <?= e((string) $x['supplier']) ?>">
+                                </a>
+                            <?php else: ?>
+                                <span class="muted">—</span>
+                            <?php endif; ?>
+                        </td>
+                    </tr>
+                    <?php endforeach; ?>
                     <?php foreach ($recentExpenses as $x): ?>
                     <tr>
                         <td><?= e($fmtDate((string) $x['spent_at'])) ?></td>
@@ -826,6 +843,8 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
     var csrfToken = csrfInput ? csrfInput.value : null;
     var scanUrl = form.getAttribute('data-scan-url');
     var lastInvoice = null;
+    // Justificatif du dernier scan (chemin renvoyé par le serveur).
+    var lastReceiptPath = '';
 
     function basis() {
         for (var i = 0; i < basisInputs.length; i++) {
@@ -1198,8 +1217,11 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
 
     // Réception d'une analyse : préremplissage non destructif immédiat
     // (champs vides seulement), puis affichage des pavés.
-    function handleInvoice(invoice) {
+    function handleInvoice(invoice, receiptPath) {
         lastInvoice = invoice;
+        // Justificatif conservé par le serveur au scan : joint aux
+        // achats créés depuis ce ticket (photo du livre comptable).
+        lastReceiptPath = receiptPath || '';
         var res = H.applyInvoiceToExpense(currentState(), invoice);
         applyResult(res);
         renderInfo(invoice, res);
@@ -1219,7 +1241,7 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
         status('Analyse du ticket…');
         H.scanUpload(file, csrfToken, scanUrl).then(function (json) {
             status('');
-            handleInvoice(json && json.invoice ? json.invoice : null);
+            handleInvoice(json && json.invoice ? json.invoice : null, json && json.receipt_path);
         }, function (err) {
             status('Analyse automatique indisponible' + (err && err.message ? ' : ' + err.message : '') + ' — la photo reste utilisable, complète les champs à la main.');
         });
@@ -1375,6 +1397,7 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
             purchased_at: spentAtEl.value.trim(),
             supplier: labelEl.value,
             invoice_number: invoiceEl.value,
+            receipt_path: lastReceiptPath,
             amount_basis: basis(),
             vat_rate: vatEl.value === '' ? null : vatEl.value,
             update_cost: true

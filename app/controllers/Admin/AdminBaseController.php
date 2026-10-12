@@ -6,6 +6,7 @@ namespace App\Controllers\Admin;
 
 use App\Core\Auth;
 use App\Core\Compta\InvoiceScan;
+use App\Core\Compta\ReceiptStorage;
 use App\Core\Compta\ScanCatalogMatcher;
 use App\Core\Controller;
 use App\Core\Middleware;
@@ -189,6 +190,19 @@ abstract class AdminBaseController extends Controller
         // « Ajouter une appellation » (jamais bloquant).
         \App\Models\ScanLabel::recordUnmatched($invoice['lines']);
 
+        // Justificatif conservé quand le scan vient d'un fichier : le
+        // chemin est renvoyé au frontend, qui le joindra aux achats
+        // créés depuis cette facture (photo du livre comptable).
+        // Optionnel : un scan sans justificatif stocké reste valable.
+        $receiptPath = null;
+        if (($res['source'] ?? '') === 'file' && is_array($_FILES['file'] ?? null)) {
+            try {
+                $receiptPath = ReceiptStorage::storeFrom($_FILES['file']);
+            } catch (\Throwable) {
+                $receiptPath = null;
+            }
+        }
+
         $audit = $res['audit'];
         $audit['lignes_extraites'] = count($invoice['lines']);
         $audit['fournisseur'] = $invoice['supplier'];
@@ -196,10 +210,11 @@ abstract class AdminBaseController extends Controller
         $this->audit($auditAction, $entityType, null, $audit);
 
         $this->json([
-            'ok'      => true,
-            'source'  => $res['source'],
-            'text'    => $res['text'],
-            'invoice' => $invoice,
+            'ok'           => true,
+            'source'       => $res['source'],
+            'text'         => $res['text'],
+            'invoice'      => $invoice,
+            'receipt_path' => $receiptPath,
         ]);
     }
 }

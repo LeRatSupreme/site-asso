@@ -84,14 +84,17 @@ final class Purchase extends Model
         $invoiceNumber = ($data['invoice_number'] ?? '') !== '' ? trim((string) $data['invoice_number']) : null;
         $notes = ($data['notes'] ?? '') !== '' ? (string) $data['notes'] : null;
         $createdBy = ($data['created_by'] ?? '') !== '' ? (string) $data['created_by'] : null;
+        // Justificatif stocké au scan : chemin contrôlé par
+        // PurchaseSaver::receiptPathOrNull (jamais de POST brut).
+        $receiptPath = \App\Core\Compta\PurchaseSaver::receiptPathOrNull($data['receipt_path'] ?? null);
 
         $id = 'purchase_' . bin2hex(random_bytes(10));
 
         self::pdo()->prepare(
             'INSERT INTO purchases
-                (id, purchased_at, supplier, invoice_number, product_key, quantity, unit_cost, vat_rate, total_ttc, total_ht, no_stock, notes, created_by, created_at)
-             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,NOW())'
-        )->execute([$id, $purchasedAt, $supplier, $invoiceNumber, $productKey, $quantity, $unitCost, $vatRate, $totalTtc, $totalHt, $noStock ? 1 : 0, $notes, $createdBy]);
+                (id, purchased_at, supplier, invoice_number, product_key, quantity, unit_cost, vat_rate, total_ttc, total_ht, no_stock, notes, created_by, receipt_path, created_at)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,NOW())'
+        )->execute([$id, $purchasedAt, $supplier, $invoiceNumber, $productKey, $quantity, $unitCost, $vatRate, $totalTtc, $totalHt, $noStock ? 1 : 0, $notes, $createdBy, $receiptPath]);
 
         // L'achat entre physiquement en stock : la référence de stock
         // (utilisée par le réappro) suit le stock théorique de l'inventaire.
