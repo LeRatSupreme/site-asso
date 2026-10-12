@@ -66,9 +66,10 @@ $sections = [
         'Dashboard SumUp' => '/admin/sumup',
     ],
     'Produits & coûts' => [
-        'Produits'         => '/admin/compta/produits',
-        'Catégories'       => '/admin/compta/categories',
-        'Mapping libellés' => '/admin/compta/aliases',
+        'Produits'               => '/admin/compta/produits',
+        'Catégories'             => '/admin/compta/categories',
+        'Ajouter une appellation' => '/admin/compta/aliases/new',
+        'Mapping libellés'       => '/admin/compta/aliases',
     ],
 ];
 
