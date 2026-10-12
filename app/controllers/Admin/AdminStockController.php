@@ -163,6 +163,9 @@ final class AdminStockController extends AdminBaseController
             'vat_raw'        => $vatRaw,
             'vat_per_line'   => $lineVatRates !== null,
             'created_by'     => $user['id'] ?? null,
+            // Justificatif conservé au scan (optionnel — contrôlé par
+            // PurchaseSaver, toute valeur arbitraire est ignorée).
+            'receipt_path'   => trim((string) ($_POST['receipt_path'] ?? '')),
         ], $lines);
 
         if ($res['inserted'] === 0) {

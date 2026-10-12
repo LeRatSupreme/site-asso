@@ -54,6 +54,9 @@ final class PurchaseSaver
      *     (facture à TVA mixte) ; une case vide retombe sur vat_raw ;
      *   - created_by     : auteur ('' / null = aucun) — id utilisateur en
      *     admin, trace « kiosque … » en kiosque.
+     *   - receipt_path   : justificatif stocké au scan (optionnel) —
+     *     chemin relatif sous /assets renvoyé par ReceiptStorage,
+     *     contrôlé par receiptPathOrNull (toute autre valeur ignorée).
      * @param list<array<string,mixed>> $lines Lignes alignées :
      *   [{key, qty, total_raw, vat_raw, no_stock, raw_label}] — key =
      *   libellé produit, qty = quantité (entier), total_raw = montant
@@ -86,6 +89,7 @@ final class PurchaseSaver
         $vatRaw = trim((string) ($header['vat_raw'] ?? ''));
         $vatPerLine = (bool) ($header['vat_per_line'] ?? false);
         $createdBy = $header['created_by'] ?? null;
+        $receiptPath = self::receiptPathOrNull($header['receipt_path'] ?? null);
 
         // Base des montants saisis : « ht » (TVA à ajouter, défaut) ou
         // « ttc » (TVA déjà incluse — HT déduit du taux choisi).
@@ -128,6 +132,7 @@ final class PurchaseSaver
                 'invoice_number' => $invoiceNumber,
                 'notes'          => $notes,
                 'created_by'     => $createdBy,
+                'receipt_path'   => $receiptPath,
             ]);
 
             if ($reason === '') {
@@ -278,6 +283,26 @@ final class PurchaseSaver
     }
 
     /**
+     * Chemin de justificatif accepté pour un achat (méthode pure,
+     * testée) : uniquement un fichier stocké par ReceiptStorage sous
+     * « uploads/receipts/ » (nom hexadécimal aléatoire + extension
+     * sûre). Tout autre valeur (chemin arbitraire, ../, URL…) est
+     * rejetée — null. Le POST utilisateur n'est jamais une source
+     * de confiance pour un chemin de fichier.
+     */
+    public static function receiptPathOrNull(mixed $value): ?string
+    {
+        $path = trim((string) ($value ?? ''));
+        if ($path === '') {
+            return null;
+        }
+
+        return preg_match('#^uploads/receipts/[a-f0-9]{24}\.(pdf|jpe?g|png|webp)$#', $path) === 1
+            ? $path
+            : null;
+    }
+
+    /**
      * Taux de TVA BRUT d'une ligne du lot : la valeur du tableau
      * « vat_rate[] » quand elle est renseignée, sinon le taux d'en-tête
      * ('' = pas de décomposition TVA — montant « déjà TTC »). La
@@ -391,6 +416,7 @@ final class PurchaseSaver
             'invoice_number' => trim((string) ($data['invoice_number'] ?? '')),
             'notes'          => trim((string) ($data['notes'] ?? '')),
             'created_by'     => $data['created_by'] ?? null,
+            'receipt_path'   => self::receiptPathOrNull($data['receipt_path'] ?? null),
         ]);
 
         if ($id === '') {

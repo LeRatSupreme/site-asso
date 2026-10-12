@@ -187,6 +187,9 @@ final class KioskComptageController extends Controller
             'totalCredit'    => $entries['total_credit'],
             'balance'        => $entries['balance'],
             'recentExpenses' => Expense::recent(8),
+            // Dernières courses en achats (avec justificatif conservé) —
+            // même regroupement que la version admin du livre.
+            'recentPurchases' => \App\Controllers\Admin\AdminLedgerController::recentPurchaseGroups(8),
             // Suggestions produit (datalist) pour les achats créés depuis
             // le scan — même fusion que la version admin du livre.
             'purchaseProductKeys' => \App\Controllers\Admin\AdminLedgerController::purchaseProductKeys(),
@@ -342,6 +345,19 @@ final class KioskComptageController extends Controller
         // scans admin.
         ScanLabel::recordUnmatched($invoice['lines']);
 
+        // Justificatif conservé quand le scan vient d'un fichier : le
+        // chemin est renvoyé au frontend, qui le joindra aux achats
+        // créés depuis cette facture (photo du livre comptable).
+        // Optionnel : un scan sans justificatif stocké reste valable.
+        $receiptPath = null;
+        if (($res['source'] ?? '') === 'file' && is_array($_FILES['file'] ?? null)) {
+            try {
+                $receiptPath = ReceiptStorage::storeFrom($_FILES['file']);
+            } catch (\Throwable) {
+                $receiptPath = null;
+            }
+        }
+
         // Même base de journal que les scans admin (source, taille,
         // sha256, lignes extraites, fournisseur, facture) + marque kiosque.
         $audit = $res['audit'];
@@ -352,10 +368,11 @@ final class KioskComptageController extends Controller
         AuditLog::log('kiosque.expense.scan', null, 'expense', null, $audit);
 
         $this->json([
-            'ok'      => true,
-            'source'  => $res['source'],
-            'text'    => $res['text'],
-            'invoice' => $invoice,
+            'ok'           => true,
+            'source'       => $res['source'],
+            'text'         => $res['text'],
+            'invoice'      => $invoice,
+            'receipt_path' => $receiptPath,
         ]);
     }
 
@@ -430,6 +447,8 @@ final class KioskComptageController extends Controller
             'vat_raw'        => $vatRaw,
             'vat_per_line'   => $vatPerLine,
             'created_by'     => $who !== '' ? 'kiosque — ' . $who : 'kiosque',
+            // Justificatif conservé au scan (contrôlé par PurchaseSaver).
+            'receipt_path'   => trim((string) ($_POST['receipt_path'] ?? '')),
         ], $lines);
 
         if ($res['inserted'] === 0) {

@@ -547,6 +547,7 @@ t('buildPurchaseBulkPayload : mono-taux — taux global + vat_rate[] par ligne',
     assert.strictEqual(p.purchased_at, '2026-10-09');
     assert.strictEqual(p.supplier, 'METRO');
     assert.strictEqual(p.invoice_number, '3007 02 0090');
+    assert.strictEqual(p.receipt_path, '', 'Justificatif absent du header -> chaîne vide (ignoré côté serveur).');
     assert.strictEqual(p.amount_basis, 'ht');
     assert.strictEqual(p.vat_rate, '5.5', 'Taux global canonisé en chaîne.');
     assert.strictEqual(p.update_cost, '1');
@@ -556,6 +557,13 @@ t('buildPurchaseBulkPayload : mono-taux — taux global + vat_rate[] par ligne',
     assert.deepStrictEqual(p.vat_rate_lines, ['', '5.5'], 'vat_rate[] PAR LIGNE, même longueur que product_key[] ; ligne sans taux -> \u2018\u2019 (hérite du global).');
     assert.deepStrictEqual(p.no_stock_indexes, [1], 'Indexes 0-based des lignes « hors stock » (postées no_stock[1]=1).');
     assert.deepStrictEqual(p.rejected, []);
+});
+
+t('buildPurchaseBulkPayload : justificatif du scan (receipt_path) transmis trimé au POST', function () {
+    const p = H.buildPurchaseBulkPayload(bulkHeader({ receipt_path: '  uploads/receipts/b31021e2dd5060d9e29d0454.pdf  ' }), [
+        { key: 'Eau', qty: 2, total: '4,00', vat_rate: null, no_stock: false }
+    ]);
+    assert.strictEqual(p.receipt_path, 'uploads/receipts/b31021e2dd5060d9e29d0454.pdf');
 });
 
 t('buildPurchaseBulkPayload : TVA mixte — global null -> clé absente, taux par ligne seuls', function () {

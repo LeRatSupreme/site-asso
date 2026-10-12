@@ -698,7 +698,7 @@
      * `rejected`, réservée à l'affichage des lignes refusées.
      *
      * @param {Object} header En-tête commun à toutes les lignes :
-     *   {purchased_at, supplier, invoice_number,
+     *   {purchased_at, supplier, invoice_number, receipt_path,
      *    amount_basis ('ht'|'ttc'), vat_rate (taux global ou null),
      *    update_cost (bool)}.
      * @param {Object[]} rows Lignes de la grille :
@@ -708,6 +708,8 @@
      *
      * @returns {Object}
      *   - purchased_at / supplier / invoice_number : chaînes trimées ;
+     *   - receipt_path : justificatif conservé au scan (chaîne trimée,
+     *     '' si la saisie n'en a pas — ignoré côté serveur) ;
      *   - amount_basis : 'ht' | 'ttc' (défaut 'ht') ;
      *   - vat_rate : taux GLOBAL canonisé (« 5.5 ») — CLÉ ABSENTE si
      *     null (TVA mixte : seules les lignes portent un taux) ;
@@ -737,6 +739,7 @@
             purchased_at: cleanStr(h.purchased_at),
             supplier: cleanStr(h.supplier),
             invoice_number: cleanStr(h.invoice_number),
+            receipt_path: cleanStr(h.receipt_path),
             amount_basis: h.amount_basis === 'ttc' ? 'ttc' : 'ht',
             product_key: [],
             quantity: [],

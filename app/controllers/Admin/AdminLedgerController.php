@@ -42,6 +42,11 @@ final class AdminLedgerController extends AdminBaseController
             'totalCredit' => $entries['total_credit'],
             'balance'     => $entries['balance'],
             'recentExpenses' => Expense::recent(8),
+            // Dernières courses enregistrées en ACHATS (stock + coûts) :
+            // une ligne par jour + fournisseur, avec le justificatif du
+            // scan quand il a été conservé. Statique publique : partagée
+            // avec la version kiosque du livre (KioskComptageController).
+            'recentPurchases' => self::recentPurchaseGroups(8),
             // Suggestions produit (datalist) pour l'enregistrement d'un
             // achat depuis le livre — même fusion que la liste de picking
             // de la page Achats, en version simplifiée. Méthode statique
@@ -62,8 +67,7 @@ final class AdminLedgerController extends AdminBaseController
      */
     public static function purchaseProductKeys(): array
     {
-        $keys = [];
-        foreach (Sale::distinctProducts() as $key) {
+        $keys = [];        foreach (Sale::distinctProducts() as $key) {
             $key = trim((string) $key);
             if ($key !== '') {
                 $keys[] = $key;
@@ -82,6 +86,54 @@ final class AdminLedgerController extends AdminBaseController
         return $keys;
     }
 
+    /**
+     * Dernières courses enregistrées en ACHATS (page Achats ou livre
+     * comptable), groupées par jour + fournisseur comme dans le livre :
+     * total TTC, n° de facture partagé, justificatif du scan conservé
+     * (premier trouvé dans le groupe) et nombre de lignes. Statique
+     * publique : partagée avec la version kiosque du livre.
+     *
+     * @return list<array<string,mixed>>
+     */
+    public static function recentPurchaseGroups(int $limit = 8): array
+    {
+        $groups = [];
+        try {
+            foreach (Purchase::recent(200) as $p) {
+                $date = (string) $p['purchased_at'];
+                $supplier = trim((string) ($p['supplier'] ?? '')) !== ''
+                    ? (string) $p['supplier']
+                    : '(fournisseur inconnu)';
+                $key = $date . '|' . $supplier;
+                if (!isset($groups[$key])) {
+                    $groups[$key] = [
+                        'date'          => $date,
+                        'supplier'      => $supplier,
+                        'total_ttc'     => 0.0,
+                        'invoice'       => null,
+                        'receipt_path'  => null,
+                        'lines'         => 0,
+                    ];
+                }
+                $groups[$key]['total_ttc'] += (float) $p['total_ttc'];
+                $groups[$key]['lines']++;
+                $invoice = trim((string) ($p['invoice_number'] ?? ''));
+                if ($invoice !== '' && $groups[$key]['invoice'] === null) {
+                    $groups[$key]['invoice'] = $invoice;
+                }
+                $receipt = trim((string) ($p['receipt_path'] ?? ''));
+                if ($receipt !== '' && $groups[$key]['receipt_path'] === null) {
+                    $groups[$key]['receipt_path'] = $receipt;
+                }
+            }
+        } catch (\Throwable) {
+            return [];
+        }
+
+        // La requête est déjà DESC (plus récent d'abord) : l'ordre
+        // d'insertion des groupes suit.
+        return array_slice(array_values($groups), 0, max(1, $limit));
+    }
 
     /**
      * @return array{0:string,1:string,2:string}

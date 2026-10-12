@@ -105,6 +105,9 @@ usort($pickerList, 'strnatcasecmp');
 
         <form method="post" action="<?= e(url('/admin/compta/achats/save-bulk')) ?>" data-purchase-form>
             <?= csrf_field() ?>
+            <!-- Justificatif conservé au scan (rempli par le JS) : la
+                 photo accompagne les achats dans le livre comptable. -->
+            <input type="hidden" name="receipt_path" id="purchase-receipt-path" value="">
 
             <div class="field-row">
                 <div class="field">
@@ -809,6 +812,10 @@ usort($pickerList, 'strnatcasecmp');
                     H.scanUpload(file, scanToken(), scanUrl).then(function (json) {
                         scanBusy(false);
                         scanText.value = String(json.text == null ? '' : json.text);
+                        // Justificatif conservé par le serveur : il sera
+                        // joint aux achats enregistrés (photo du livre).
+                        var rcpt = document.getElementById('purchase-receipt-path');
+                        if (rcpt) rcpt.value = String(json.receipt_path == null ? '' : json.receipt_path);
                         scanSetWarnings(json.invoice && Array.isArray(json.invoice.warnings) ? json.invoice.warnings : null);
                         scanSetStatus('Texte extrait : vérifiez/corrigez-le puis cliquez « Analyser le texte et préremplir ».');
                     }, function (err) {
