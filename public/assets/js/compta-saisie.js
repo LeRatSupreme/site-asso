@@ -702,7 +702,9 @@
      *    amount_basis ('ht'|'ttc'), vat_rate (taux global ou null),
      *    update_cost (bool)}.
      * @param {Object[]} rows Lignes de la grille :
-     *   [{key, qty, total, vat_rate (null|5.5|'5,5'|…), no_stock (bool)}].
+     *   [{key, qty, total, vat_rate (null|5.5|'5,5'|…), no_stock (bool),
+     *     raw_label (string, optionnel — libellé FACTURE d'origine de la
+     *     ligne scannée, '' si saisie manuelle)}].
      *
      * @returns {Object}
      *   - purchased_at / supplier / invoice_number : chaînes trimées ;
@@ -711,10 +713,14 @@
      *     null (TVA mixte : seules les lignes portent un taux) ;
      *   - update_cost : '1' — CLÉ ABSENTE si false (le contrôleur teste
      *     la présence du champ, pas sa valeur) ;
-     *   - product_key / quantity / total_amount / vat_rate_lines :
-     *     tableaux PARALLÈLES des lignes valides (total à 2 décimales
-     *     en chaîne, quantity entier ; vat_rate_lines est posté sous le
-     *     nom `vat_rate[]` — '' = la ligne hérite du taux d'en-tête) ;
+     *   - product_key / quantity / total_amount / vat_rate_lines /
+     *     raw_label_lines : tableaux PARALLÈLES des lignes valides
+     *     (total à 2 décimales en chaîne, quantity entier ;
+     *     vat_rate_lines est posté sous le nom `vat_rate[]` — '' = la
+     *     ligne hérite du taux d'en-tête ; raw_label_lines est posté
+     *     sous le nom `raw_label[]` — '' = pas d'appellation à
+     *     retenir, le serveur ignore les libellés vides ou identiques
+     *     à la clé) ;
      *   - no_stock_indexes : indexes (0-based) des lignes « hors stock »,
      *     à poster sous `no_stock[N]=1` (format indexé lu par
      *     AdminStockController::savePurchasesBulk, aligné sur
@@ -736,6 +742,7 @@
             quantity: [],
             total_amount: [],
             vat_rate_lines: [],
+            raw_label_lines: [],
             no_stock_indexes: []
         };
         var globalVat = normVatRate(h.vat_rate);
@@ -768,6 +775,7 @@
             payload.quantity.push(qty);
             payload.total_amount.push(total.toFixed(2));
             payload.vat_rate_lines.push(normVatRate(r.vat_rate) || '');
+            payload.raw_label_lines.push(cleanStr(r.raw_label));
             if (isTruthyFlag(r.no_stock)) {
                 payload.no_stock_indexes.push(payload.product_key.length - 1);
             }

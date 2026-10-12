@@ -443,6 +443,7 @@ usort($pickerList, 'strnatcasecmp');
                         // Dernière ligne : on la vide au lieu de la retirer.
                         tr.querySelectorAll('input[type="text"], input[type="number"]').forEach(function (el) { el.value = el.name === 'quantity[]' ? '1' : ''; });
                         tr.querySelector('.line-no-stock').checked = false;
+                        clearRawLabel(tr);
                         updateRow(tr); updateTotals(); refreshDups();
                         return;
                     }
@@ -456,7 +457,7 @@ usort($pickerList, 'strnatcasecmp');
                 tr.className = 'pa-row';
                 tr.innerHTML =
                     '<span class="pa-idx">0</span>' +
-                    '<div class="pa-prod"><input type="text" name="product_key[]" list="purchase-products" placeholder="ex: Coca 33cl" autocomplete="off"><div class="pa-warn" hidden></div></div>' +
+                    '<div class="pa-prod"><input type="hidden" name="raw_label[]" value=""><input type="text" name="product_key[]" list="purchase-products" placeholder="ex: Coca 33cl" autocomplete="off"><div class="pa-warn" hidden></div></div>' +
                     '<div class="pa-qty">' +
                         '<button type="button" class="pa-step" data-step="-1" aria-label="Moins un">−</button>' +
                         '<input type="number" name="quantity[]" value="1" min="1" step="1" inputmode="numeric">' +
@@ -489,11 +490,33 @@ usort($pickerList, 'strnatcasecmp');
                 return null;
             }
 
+            // Efface la trace de libellé facture d'une ligne (retirée
+            // ou vidée) : plus de clé, plus rien à apprendre.
+            function clearRawLabel(tr) {
+                var hidden = tr.querySelector('[name="raw_label[]"]');
+                if (hidden) hidden.value = '';
+                var input = tr.querySelector('[name="product_key[]"]');
+                if (input) input.removeAttribute('title');
+            }
+
             // Remplit une ligne (picker ou import) : nom, qté, montant.
-            function fillRow(tr, name, qty, amount) {
+            // rawLabel (scan) : libellé FACTURE d'origine, conservé en
+            // champ caché — si le nom est corrigé, l'appellation
+            // « libellé → nom court » sera retenue à l'enregistrement.
+            function fillRow(tr, name, qty, amount, rawLabel) {
                 tr.querySelector('[name="product_key[]"]').value = name;
                 tr.querySelector('[name="quantity[]"]').value = String(qty || 1);
                 tr.querySelector('[name="total_amount[]"]').value = amount || '';
+                var hidden = tr.querySelector('[name="raw_label[]"]');
+                if (hidden) hidden.value = rawLabel || '';
+                var input = tr.querySelector('[name="product_key[]"]');
+                if (input) {
+                    if (rawLabel && normKey(rawLabel) !== normKey(name)) {
+                        input.title = 'Libellé facture : ' + rawLabel;
+                    } else {
+                        input.removeAttribute('title');
+                    }
+                }
                 updateRow(tr);
                 checkDup(tr);
                 updateTotals();
@@ -518,6 +541,7 @@ usort($pickerList, 'strnatcasecmp');
                 tr.querySelectorAll('input[type="text"], input[type="number"]').forEach(function (el) {
                     el.value = el.name === 'quantity[]' ? '1' : '';
                 });
+                clearRawLabel(tr);
                 var cb = tr.querySelector('.line-no-stock');
                 if (cb) cb.checked = false;
                 var warn = tr.querySelector('.pa-warn');
@@ -745,7 +769,10 @@ usort($pickerList, 'strnatcasecmp');
                     Array.prototype.forEach.call(rowsData, function (r) {
                         var tr = firstEmptyRow() || (rows().length < MAX_LINES ? addLine(false) : null);
                         if (!tr) return;
-                        fillRow(tr, r.key, r.qty, r.total);
+                        // Libellé facture d'origine : produit reconnu ->
+                        // libellé brut ; produit inconnu -> le libellé
+                        // OCR initial (clé de départ de la ligne).
+                        fillRow(tr, r.key, r.qty, r.total, r.raw_label || r.key);
                         // Champ notes par ligne : absent de la grille
                         // actuelle, câblé seulement s'il existe un jour.
                         var notesInput = tr.querySelector('[name="notes[]"]');

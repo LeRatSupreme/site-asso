@@ -134,6 +134,10 @@ final class AdminStockController extends AdminBaseController
         $quantities = is_array($_POST['quantity'] ?? null) ? $_POST['quantity'] : [];
         $amounts = is_array($_POST['total_amount'] ?? null) ? $_POST['total_amount'] : [];
 
+        // Libellé facture d'origine de chaque ligne (scan) : sert à
+        // retenir l'appellation libellé -> clé (PurchaseSaver).
+        $rawLabels = is_array($_POST['raw_label'] ?? null) ? $_POST['raw_label'] : [];
+
         // Lignes alignées pour le service (mêmes brutes que le POST :
         // la résolution taux de ligne vs en-tête vit dans le service).
         $count = max(count($keys), count($quantities), count($amounts));
@@ -145,6 +149,7 @@ final class AdminStockController extends AdminBaseController
                 'total_raw' => trim((string) ($amounts[$i] ?? '')),
                 'vat_raw'   => $lineVatRates !== null ? (string) ($lineVatRates[$i] ?? '') : '',
                 'no_stock'  => (($noStockFlags[$i] ?? null) === '1' || ($noStockFlags[$i] ?? null) === 1),
+                'raw_label' => trim((string) ($rawLabels[$i] ?? '')),
             ];
         }
 
@@ -180,6 +185,7 @@ final class AdminStockController extends AdminBaseController
             'amount_basis'   => $basis,
             'update_cost'    => $updateCost,
             'no_stock'       => $res['no_stock'],
+            'aliases_learned' => $res['aliases'] ?? 0,
             'supplier'       => $supplier,
             'invoice_number' => $invoiceNumber !== '' ? $invoiceNumber : null,
             'purchased_at'   => $purchasedAt,

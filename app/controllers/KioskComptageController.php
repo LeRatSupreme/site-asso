@@ -395,6 +395,7 @@ final class KioskComptageController extends Controller
         $quantities = is_array($_POST['quantity'] ?? null) ? $_POST['quantity'] : [];
         $amounts = is_array($_POST['total_amount'] ?? null) ? $_POST['total_amount'] : [];
         $noStockFlags = is_array($_POST['no_stock'] ?? null) ? $_POST['no_stock'] : [];
+        $rawLabels = is_array($_POST['raw_label'] ?? null) ? $_POST['raw_label'] : [];
 
         $count = max(count($keys), count($quantities), count($amounts));
         $lines = [];
@@ -405,6 +406,7 @@ final class KioskComptageController extends Controller
                 'total_raw' => trim((string) ($amounts[$i] ?? '')),
                 'vat_raw'   => $vatPerLine ? (string) ($vatInput[$i] ?? '') : '',
                 'no_stock'  => (($noStockFlags[$i] ?? null) === '1' || ($noStockFlags[$i] ?? null) === 1),
+                'raw_label' => trim((string) ($rawLabels[$i] ?? '')),
             ];
         }
 
@@ -437,6 +439,7 @@ final class KioskComptageController extends Controller
             'amount_basis'   => $basis,
             'update_cost'    => $updateCost,
             'no_stock'       => $res['no_stock'],
+            'aliases_learned' => $res['aliases'] ?? 0,
             'supplier'       => $supplier,
             'invoice_number' => $invoiceNumber !== '' ? $invoiceNumber : null,
             'purchased_at'   => $purchasedAt,

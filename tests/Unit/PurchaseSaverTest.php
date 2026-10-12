@@ -124,4 +124,45 @@ final class PurchaseSaverTest extends TestCase
         self::assertSame(0, $res['inserted']);
         self::assertSame(['(sans nom) : produit manquant'], $res['errors']);
     }
+
+    /**
+     * Appellation à retenir : un libellé facture d'origine (scan)
+     * différent de la clé retenue donne le couple à enregistrer dans
+     * product_aliases (« MONSTER PIPELINE PUNCH 24X0,5L » corrigé en
+     * « Monster rose »). Méthode pure, aucun accès base.
+     */
+    public function test_alias_to_learn_retenu_quand_le_libelle_differe(): void
+    {
+        self::assertSame(
+            ['raw_description' => 'MONSTER PIPELINE PUNCH 24X0,5L', 'product_key' => 'Monster rose'],
+            PurchaseSaver::aliasToLearn('MONSTER PIPELINE PUNCH 24X0,5L', 'Monster rose')
+        );
+        // Espaces bornes ignorés : le libellé est trimé.
+        self::assertSame(
+            ['raw_description' => 'LIBELLE FACTURE', 'product_key' => 'Clef'],
+            PurchaseSaver::aliasToLearn('  LIBELLE FACTURE ', 'Clef')
+        );
+    }
+
+    /**
+     * Rien à apprendre quand le libellé facture n'est qu'une variante
+     * d'écriture de la clé (casse, accents, séparateurs, espaces) :
+     * la même règle de normalisation que ScanCatalogMatcher.
+     */
+    public function test_alias_to_learn_ignore_variantes_decriture_de_la_meme_cle(): void
+    {
+        self::assertSame([], PurchaseSaver::aliasToLearn('Monster  Rose', 'monster rose'));
+        self::assertSame([], PurchaseSaver::aliasToLearn('MONSTER PIPELINE/PUNCH', 'Monster Pipeline Punch'));
+    }
+
+    /**
+     * Rien à apprendre sans libellé facture (saisie manuelle, collage,
+     * picker) ou sans clé : alias vide.
+     */
+    public function test_alias_to_learn_ignore_libelle_ou_cle_vide(): void
+    {
+        self::assertSame([], PurchaseSaver::aliasToLearn('', 'Monster rose'));
+        self::assertSame([], PurchaseSaver::aliasToLearn('   ', 'Monster rose'));
+        self::assertSame([], PurchaseSaver::aliasToLearn('LIBELLE FACTURE', ''));
+    }
 }
