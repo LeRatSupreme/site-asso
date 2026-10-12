@@ -25,6 +25,7 @@ use App\Models\ProductInfinite;
 use App\Models\ProductPack;
 use App\Models\Sale;
 use App\Models\SaleAdjustment;
+use App\Models\ScanLabel;
 use App\Models\Setting;
 use App\Models\ShoppingCheck;
 
@@ -851,6 +852,7 @@ final class AdminComptaController extends AdminBaseController
             'title'      => 'Ajouter une appellation',
             'user'       => $user,
             'categories' => self::aliasCategories(),
+            'pending'    => ScanLabel::pending(),
         ]);
     }
 
@@ -904,6 +906,8 @@ final class AdminComptaController extends AdminBaseController
                 'raw'           => $data['raw_description'] ?? null,
                 'sales_updated' => $categorized,
             ]);
+            // File « à classer » : le libellé vient d'être résolu.
+            ScanLabel::deleteByLabel((string) ($data['raw_description'] ?? ''));
             $this->setFlash('success', 'Libellé rattaché au produit.' . ($categorized > 0 ? sprintf(' %d vente(s) catégorisée(s).', $categorized) : ''));
         }
 

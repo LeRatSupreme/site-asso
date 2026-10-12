@@ -18,6 +18,7 @@ use App\Models\AuditLog;
 use App\Models\Expense;
 use App\Models\InventoryCount;
 use App\Models\ProductDiscontinued;
+use App\Models\ScanLabel;
 use App\Models\Setting;
 use App\Models\Sale;
 
@@ -335,6 +336,11 @@ final class KioskComptageController extends Controller
         // ligne reçoit « product » en plus du libellé brut « label ».
         // Panne de base : silencieusement sauté, le scan reste utilisable.
         $invoice['lines'] = ScanCatalogMatcher::enrichLines($invoice['lines']);
+
+        // Libellés non reconnus -> file « à classer » de la page
+        // « Ajouter une appellation » (jamais bloquant), comme les
+        // scans admin.
+        ScanLabel::recordUnmatched($invoice['lines']);
 
         // Même base de journal que les scans admin (source, taille,
         // sha256, lignes extraites, fournisseur, facture) + marque kiosque.
