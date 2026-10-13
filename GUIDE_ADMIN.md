@@ -327,6 +327,9 @@ Filtre **📅 Période** (7 jours → Tout, ou dates personnalisées) sur les ac
 - **Réappro** te dit *ce qu'il faudrait* commander (calculé depuis les ventes)
 - **Achats** enregistre *ce qui a réellement été commandé* (date, produit, quantité, prix)
 
+#### TVA
+Le taux d'en-tête s'applique à toute la commande ; pour une **facture à TVA mixte** (ex. Metro : boissons 5,5 % + droguerie 20 %), change le taux **de chaque ligne concernée** avec le sélecteur « TVA » de la ligne — les indices /u et les totaux HT/TVA se recalculent ligne par ligne.
+
 #### Inventaire
 Le **stock théorique** = dernier comptage + achats − ventes (depuis la date du comptage).
 Tu comptes physiquement le rayon, tu saisis le nombre réel, et le site calcule l'**écart** :

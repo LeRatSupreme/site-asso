@@ -115,7 +115,7 @@ usort($pickerList, 'strnatcasecmp');
                     <input type="date" id="purchased_at" name="purchased_at" value="<?= e(date('Y-m-d')) ?>" required>
                 </div>
                 <div class="field">
-                    <label for="vat_rate">Taux de TVA (toutes les lignes)</label>
+                    <label for="vat_rate">Taux de TVA <span class="muted">(par défaut)</span></label>
                     <select id="vat_rate" name="vat_rate">
                         <option value="20">TVA 20 %</option>
                         <option value="10">TVA 10 %</option>
@@ -123,6 +123,7 @@ usort($pickerList, 'strnatcasecmp');
                         <option value="2.1">TVA 2,1 %</option>
                         <option value="0">Sans TVA (0 %)</option>
                     </select>
+                    <p class="field-help">Facture à TVA mixte (ex. Metro : boissons 5,5 % + droguerie 20 %) ? Garde le taux dominant ici et change le taux <strong>de chaque ligne concernée</strong> dans la grille (sélecteur « TVA »).</p>
                 </div>
                 <div class="field">
                     <label>Les montants saisis sont…</label>
@@ -207,7 +208,7 @@ usort($pickerList, 'strnatcasecmp');
                     <span>Produit</span>
                     <span>Qté</span>
                     <span>Montant total (€)</span>
-                    <span>≈ / unité · stock</span>
+                    <span>≈ / unité · TVA · stock</span>
                     <span></span>
                 </div>
                 <div id="purchases-lines"></div>
@@ -237,6 +238,7 @@ usort($pickerList, 'strnatcasecmp');
                 Au clavier : <strong>Produit → Entrée → Qté → Entrée → Montant → Entrée</strong> enchaîne les lignes (une ligne vide s'ajoute toute seule) ; <strong>Ctrl+Entrée</strong> enregistre.
                 Choisis des noms existants (mêmes noms que dans les ventes) pour alimenter le bon stock théorique ; les lignes vides sont ignorées.
                 Coche « hors stock » pour une ligne qui ne doit pas alimenter le stock (conso bureau, fournitures, essais…) : l'achat reste comptabilisé.
+                Facture à TVA mixte : le sélecteur <strong>« TVA »</strong> de chaque ligne remplace le taux par défaut (les indices /u et les totaux suivent).
             </p>
         </form>
         <!-- Helpers purs (normalisation, collage, HT/TTC, doublons) :
@@ -298,11 +300,33 @@ usort($pickerList, 'strnatcasecmp');
                 return isFinite(r) ? r : 0;
             }
 
+            // Taux effectif d'une ligne : son sélecteur « TVA » s'il
+            // dévie du défaut, sinon le taux d'en-tête (factures à TVA
+            // mixte : quelques lignes à 20 % dans une facture à 5,5 %).
+            function rowRate(tr) {
+                var sel = tr.querySelector('.line-vat');
+                var r = sel && sel.value !== '' ? parseFloat(sel.value) : NaN;
+                if (isFinite(r)) return r;
+                return rate();
+            }
+
+            // Pose le taux d'une ligne (scan : taux lu sur la facture).
+            // Valeur absente/inconnue du sélecteur : retour au défaut.
+            function setLineVat(tr, vat) {
+                var sel = tr.querySelector('.line-vat');
+                if (!sel) return;
+                var v = vat === null || vat === undefined ? '' : String(vat);
+                sel.value = v;
+                if (v !== '' && sel.value !== v) sel.value = '';
+                var wrap = tr.querySelector('.pa-vat');
+                if (wrap) wrap.classList.toggle('is-custom', sel.value !== '');
+            }
+
             function updateRow(tr) {
                 var a = parseAmount(tr.querySelector('[name="total_amount[]"]').value);
                 var q = parseInt(tr.querySelector('[name="quantity[]"]').value, 10);
                 var hint = tr.querySelector('.line-unit');
-                var text = H.unitHint(a, q, rate(), basis());
+                var text = H.unitHint(a, q, rowRate(tr), basis());
                 if (text === '') {
                     hint.hidden = true;
                     hint.textContent = '';
@@ -313,20 +337,26 @@ usort($pickerList, 'strnatcasecmp');
             }
 
             function updateTotals() {
-                var sum = 0, filled = 0;
+                var sum = 0, filled = 0, ht = 0, ttc = 0;
                 Array.prototype.forEach.call(rows(), function (tr) {
                     var a = parseAmount(tr.querySelector('[name="total_amount[]"]').value);
                     if (tr.querySelector('[name="product_key[]"]').value.trim() !== '' || (isFinite(a) && a > 0)) filled++;
-                    if (isFinite(a) && a > 0) sum += a;
+                    if (isFinite(a) && a > 0) {
+                        sum += a;
+                        // Décomposition ligne par ligne : chaque ligne
+                        // utilise SON taux (TVA mixte exacte au centime).
+                        var s = H.splitVat(a, rowRate(tr), basis());
+                        ht += s.ht;
+                        ttc += s.ttc;
+                    }
                 });
                 var isTtc = basis() === 'ttc';
-                var s = H.splitVat(sum, rate(), basis());
                 countEl.textContent = filled + ' ligne' + (filled > 1 ? 's' : '');
                 totalEl.textContent = fmt3(sum);
                 totalBasisEl.textContent = isTtc ? 'TTC' : 'HT';
                 totalOtherEl.textContent = sum <= 0 ? '' : (isTtc
-                    ? 'dont ' + fmt3(s.ht) + ' HT · ' + fmt3(s.ttc - s.ht) + ' TVA'
-                    : 'soit ' + fmt3(s.ttc) + ' TTC');
+                    ? 'dont ' + fmt3(ht) + ' HT · ' + fmt3(ttc - ht) + ' TVA'
+                    : 'soit ' + fmt3(ttc) + ' TTC');
             }
 
             function refreshIdx() {
@@ -440,12 +470,24 @@ usort($pickerList, 'strnatcasecmp');
                     }
                 });
 
+                // Taux de TVA de la ligne (facture mixte) : recalcule
+                // l'indice /u et les totaux, marque la déviation.
+                var vatSelect = tr.querySelector('.line-vat');
+                if (vatSelect) {
+                    vatSelect.addEventListener('change', function () {
+                        var wrap = tr.querySelector('.pa-vat');
+                        if (wrap) wrap.classList.toggle('is-custom', vatSelect.value !== '');
+                        updateRow(tr); updateTotals();
+                    });
+                }
+
                 tr.querySelector('.pa-remove').addEventListener('click', function () {
                     var all = rows();
                     if (all.length <= 1) {
                         // Dernière ligne : on la vide au lieu de la retirer.
                         tr.querySelectorAll('input[type="text"], input[type="number"]').forEach(function (el) { el.value = el.name === 'quantity[]' ? '1' : ''; });
                         tr.querySelector('.line-no-stock').checked = false;
+                        setLineVat(tr, null);
                         clearRawLabel(tr);
                         updateRow(tr); updateTotals(); refreshDups();
                         return;
@@ -469,6 +511,14 @@ usort($pickerList, 'strnatcasecmp');
                     '<div class="pa-amount"><input type="text" name="total_amount[]" placeholder="ex: 18,60" inputmode="decimal"></div>' +
                     '<div class="pa-meta">' +
                         '<span class="muted line-unit" hidden></span>' +
+                        '<label class="pa-vat" title="Taux de TVA de CETTE ligne — facture à TVA mixte (ex. Metro : boissons 5,5 % + droguerie 20 %). « défaut » = le taux d\'en-tête.">TVA <select name="vat_rate[]" class="line-vat">' +
+                            '<option value="">défaut</option>' +
+                            '<option value="5.5">5,5 %</option>' +
+                            '<option value="20">20 %</option>' +
+                            '<option value="10">10 %</option>' +
+                            '<option value="2.1">2,1 %</option>' +
+                            '<option value="0">0 %</option>' +
+                        '</select></label>' +
                         '<label class="pa-nostock" title="Cochée : n\'alimente pas le stock théorique (conso bureau, essais…)"><input type="checkbox" class="line-no-stock" name="no_stock[]" value="1"> hors stock</label>' +
                     '</div>' +
                     '<button type="button" class="pa-remove" aria-label="Retirer la ligne" title="Retirer la ligne">×</button>';
@@ -506,7 +556,9 @@ usort($pickerList, 'strnatcasecmp');
             // rawLabel (scan) : libellé FACTURE d'origine, conservé en
             // champ caché — si le nom est corrigé, l'appellation
             // « libellé → nom court » sera retenue à l'enregistrement.
-            function fillRow(tr, name, qty, amount, rawLabel) {
+            // vat (scan) : taux de TVA de la ligne lu sur la facture
+            // (mixte) — posé sur le sélecteur « TVA » de la ligne.
+            function fillRow(tr, name, qty, amount, rawLabel, vat) {
                 tr.querySelector('[name="product_key[]"]').value = name;
                 tr.querySelector('[name="quantity[]"]').value = String(qty || 1);
                 tr.querySelector('[name="total_amount[]"]').value = amount || '';
@@ -520,6 +572,7 @@ usort($pickerList, 'strnatcasecmp');
                         input.removeAttribute('title');
                     }
                 }
+                if (vat !== undefined) setLineVat(tr, vat);
                 updateRow(tr);
                 checkDup(tr);
                 updateTotals();
@@ -547,6 +600,7 @@ usort($pickerList, 'strnatcasecmp');
                 clearRawLabel(tr);
                 var cb = tr.querySelector('.line-no-stock');
                 if (cb) cb.checked = false;
+                setLineVat(tr, null);
                 var warn = tr.querySelector('.pa-warn');
                 if (warn) { warn.textContent = ''; warn.hidden = true; }
                 var hint = tr.querySelector('.line-unit');
@@ -775,7 +829,7 @@ usort($pickerList, 'strnatcasecmp');
                         // Libellé facture d'origine : produit reconnu ->
                         // libellé brut ; produit inconnu -> le libellé
                         // OCR initial (clé de départ de la ligne).
-                        fillRow(tr, r.key, r.qty, r.total, r.raw_label || r.key);
+                        fillRow(tr, r.key, r.qty, r.total, r.raw_label || r.key, r.vat_rate);
                         // Champ notes par ligne : absent de la grille
                         // actuelle, câblé seulement s'il existe un jour.
                         var notesInput = tr.querySelector('[name="notes[]"]');
@@ -865,12 +919,20 @@ usort($pickerList, 'strnatcasecmp');
 
             // Cases non cochées non postées + lignes supprimées : on
             // renumérote no_stock[i] dans l'ordre des lignes juste avant
-            // l'envoi, pour rester aligné avec product_key[i].
+            // l'envoi, pour rester aligné avec product_key[i]. Même
+            // principe pour la TVA par ligne : poster vat_rate[] fait
+            // passer $_POST['vat_rate'] en TABLEAU (le taux d'en-tête
+            // scalaire est perdu) — chaque cellule vide « défaut » est
+            // donc résolue vers le taux d'en-tête AVANT l'envoi, pour
+            // que chaque ligne porte un taux explicite aligné sur
+            // product_key[i] (jamais « déjà TTC » par accident).
             form.addEventListener('submit', function () {
                 var all = rows();
                 Array.prototype.forEach.call(all, function (tr, i) {
                     var cb = tr.querySelector('.line-no-stock');
                     if (cb) cb.name = 'no_stock[' + i + ']';
+                    var sel = tr.querySelector('.line-vat');
+                    if (sel && sel.value === '') sel.value = rateEl.value;
                 });
             });
         })();
