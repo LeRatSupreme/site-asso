@@ -1433,6 +1433,40 @@ final class Sale extends Model
     }
 
     /**
+     * Catégorie de vente de chaque produit : MAX(category) sur ses ventes
+     * classées (même règle que le tri par rayon du comptage kiosque). Un
+     * produit sans aucune vente classée est absent du map — l'appelant
+     * décide du libellé de repli (« Divers », « Non classé »…).
+     *
+     * @return array<string,string> Clé produit en minuscules → catégorie.
+     */
+    public static function categoryByProduct(): array
+    {
+        try {
+            $rows = self::pdo()->query(
+                "SELECT COALESCE(NULLIF(TRIM(product_key), ''), TRIM(description)) AS k,
+                        MAX(COALESCE(category, '')) AS cat
+                 FROM sales
+                 WHERE category IS NOT NULL AND category <> ''
+                 GROUP BY k"
+            )->fetchAll();
+        } catch (\Throwable) {
+            return [];
+        }
+
+        $map = [];
+        foreach ($rows as $r) {
+            $k = strtolower(trim((string) $r['k']));
+            $cat = trim((string) $r['cat']);
+            if ($k !== '' && $cat !== '') {
+                $map[$k] = $cat;
+            }
+        }
+
+        return $map;
+    }
+
+    /**
      * Ventilation HT/TVA/TTC par taux de TVA (année obligatoire, mois optionnel).
      *
      * @return list<array<string,mixed>>

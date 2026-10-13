@@ -333,6 +333,8 @@ Tu comptes physiquement le rayon, tu saisis le nombre réel, et le site calcule 
 - Écart négatif → **pertes, casses, offerts** ou erreurs de saisie
 - Écart nul → nickel 🔥
 
+Le bloc **Valeur du stock — par catégorie** ventile la valeur (Σ stock × coût de revient) par rayon : une ligne par catégorie (Boissons, Snacks…, même classement que les ventes), avec les produits **sans coût saisi** et le stock **hors vente (en pause)** signalés par catégorie, et la ligne **Total** en synthèse.
+
 > 💡 Fais un inventaire **régulièrement** : en fin de semaine ou en fin de mois, avant de commander. Chaque comptage devient la nouvelle référence de stock.
 ### J. Bilan annuel
 

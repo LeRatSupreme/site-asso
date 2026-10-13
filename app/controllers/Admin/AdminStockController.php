@@ -372,6 +372,16 @@ final class AdminStockController extends AdminBaseController
         // estimé, signalé dans l'interface). Les produits « en pause »
         // (plus en vente pour l'instant) ont un stock physique réel mais
         // sorti de la vente : valorisés à part.
+        // Catégorie d'un produit = celle de ses ventes (même map que le
+        // tri par rayon du comptage kiosque), « Non classé » sinon : la
+        // valeur du stock est ventilée par catégorie dans l'interface.
+        $catByKey = Sale::categoryByProduct();
+        $catOf = static function (string $key) use ($catByKey): string {
+            $cat = $catByKey[strtolower(trim($key))] ?? '';
+
+            return $cat !== '' ? $cat : 'Non classé';
+        };
+
         $stockValue = 0.0;
         $stockUnits = 0;
         $valuedLines = 0;
@@ -379,19 +389,43 @@ final class AdminStockController extends AdminBaseController
         $pausedValue = 0.0;
         $pausedUnits = 0;
 
+        // Ventilation par catégorie : mêmes règles que les totaux (une
+        // ligne par catégorie rencontrée, pauses dans la même ligne que
+        // le rayon du produit).
+        $byCategory = [];
+        $catBucket = static function (string $cat) use (&$byCategory): void {
+            if (!isset($byCategory[$cat])) {
+                $byCategory[$cat] = [
+                    'name'        => $cat,
+                    'value'       => 0.0,
+                    'units'       => 0,
+                    'valued'      => 0,
+                    'noCost'      => 0,
+                    'pausedValue' => 0.0,
+                    'pausedUnits' => 0,
+                ];
+            }
+        };
+
         foreach ($rows as $r) {
             $stock = $r['theoretical'];
             if ($stock === null || (int) $stock <= 0) {
                 continue;
             }
+            $cat = $catOf((string) $r['key']);
+            $catBucket($cat);
             $stockUnits += (int) $stock;
+            $byCategory[$cat]['units'] += (int) $stock;
             $cost = ProductCost::costAt((string) $r['key'], date('Y-m-d'));
             if ($cost === null) {
                 $noCostLines++;
+                $byCategory[$cat]['noCost']++;
                 continue;
             }
             $stockValue += (int) $stock * (float) $cost;
             $valuedLines++;
+            $byCategory[$cat]['value'] += (int) $stock * (float) $cost;
+            $byCategory[$cat]['valued']++;
         }
 
         foreach ($discontinuedRows as $d) {
@@ -399,11 +433,33 @@ final class AdminStockController extends AdminBaseController
             if ($stock === null || (int) $stock <= 0) {
                 continue;
             }
+            $cat = $catOf((string) $d['key']);
+            $catBucket($cat);
             $pausedUnits += (int) $stock;
+            $byCategory[$cat]['pausedUnits'] += (int) $stock;
             $cost = ProductCost::costAt((string) $d['key'], date('Y-m-d'));
             if ($cost !== null) {
                 $pausedValue += (int) $stock * (float) $cost;
+                $byCategory[$cat]['pausedValue'] += (int) $stock * (float) $cost;
             }
+        }
+
+        // Ordre d'affichage : valeur décroissante puis unités, « Non
+        // classé » toujours en dernier.
+        uasort($byCategory, static function (array $a, array $b): int {
+            if ($a['value'] !== $b['value']) {
+                return $b['value'] <=> $a['value'];
+            }
+            if ($a['units'] !== $b['units']) {
+                return $b['units'] <=> $a['units'];
+            }
+
+            return strcasecmp((string) $a['name'], (string) $b['name']);
+        });
+        if (isset($byCategory['Non classé'])) {
+            $uncategorized = $byCategory['Non classé'];
+            unset($byCategory['Non classé']);
+            $byCategory['Non classé'] = $uncategorized;
         }
 
         $this->renderAdmin('admin/compta/inventory', [
@@ -421,6 +477,7 @@ final class AdminStockController extends AdminBaseController
             'noCostLines'      => $noCostLines,
             'pausedValue'      => round($pausedValue, 2),
             'pausedUnits'      => $pausedUnits,
+            'stockByCategory'  => $byCategory,
             'sweep'            => $sweep,
         ]);
     }

@@ -89,6 +89,40 @@ final class ComptaConsistencyTest extends IntegrationTestCase
         self::assertStringContainsString('sans coût saisi', $body, 'Les produits sans coût saisi ne sont pas signalés.');
     }
 
+    public function test_inventaire_separe_la_valeur_du_stock_par_categorie(): void
+    {
+        // Deux produits classés par leurs ventes : « coca » (Boissons,
+        // coût 2,50 € × 10 u. = 25,00 €) et « chips » (Snacks, sans coût
+        // saisi). La ventilation doit afficher une ligne par catégorie et
+        // le total global doit rester la somme des lignes.
+        $this->insertSale('s_cat_b', 'TCATB1', '2026-09-10 10:00:00', '1.50', 'coca', 'Boissons');
+        $this->insertSale('s_cat_s', 'TCATS1', '2026-09-10 11:00:00', '1.00', 'chips', 'Snacks');
+
+        $this->insertCount('inv_cat_1', '2026-09-20 10:00:00', 'coca', 10);
+        $this->insertCount('inv_cat_2', '2026-09-20 10:05:00', 'chips', 4);
+
+        $this->pdo->prepare(
+            'INSERT INTO product_costs (id, product_key, cost_price, valid_from) VALUES (?,?,?,?)'
+        )->execute(['pc_cat_1', 'coca', '2.500', '2026-01-01']);
+
+        $r = $this->request('GET', '/admin/compta/inventaire', [], [], $this->rootId);
+        self::assertSame(200, (int) ($r['code'] ?? 0), 'La page Inventaire doit répondre.');
+        $body = (string) ($r['body'] ?? '');
+
+        // Une ligne par catégorie, le rayon « Boissons » portant la valeur.
+        self::assertStringContainsString('Boissons', $body, 'La catégorie « Boissons » doit ventiler la valeur du stock.');
+        self::assertStringContainsString('Snacks', $body, 'La catégorie « Snacks » doit ventiler la valeur du stock.');
+        self::assertStringContainsString('25,00', $body, 'La valeur de la ligne « Boissons » est erronée (10 × 2,50 € attendus).');
+        self::assertStringContainsString('14 u.', $body, 'Le total d\'unités est erroné (10 + 4 attendus).');
+
+        // Le rayon « Snacks » signale son produit sans coût saisi.
+        self::assertMatchesRegularExpression(
+            '/Snacks.*?sans coût saisi/s',
+            $body,
+            'Le coût manquant doit apparaître sur la ligne de la catégorie concernée.'
+        );
+    }
+
     public function test_cycle_automatique_pause_et_reprise_selon_stock(): void
     {
         // A) Pause AUTOMATIQUE + stock reconstitué → remise en vente.
