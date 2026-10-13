@@ -13,9 +13,10 @@ use App\Models\Sale;
 /**
  * Livre comptable (groupe Système) : retranscription prête à recopier dans
  * le livret papier — Date | Objet | Débit | Crédit, avec pour chaque
- * dépense/achat une seconde ligne « ticket » (les achats du même jour chez
- * le même fournisseur sont fusionnés en une écriture au total du jour,
- * référencés par leur n° de facture) et les ventes récapitulées en une
+ * dépense/achat une seconde ligne « ticket » (les achats du même jour
+ * chez le même fournisseur, sinon portant le même n° de facture/ticket,
+ * sont fusionnés en une écriture au total du jour, référencés par leur
+ * n° de facture) et les ventes récapitulées en une
  * unique ligne de clôture en fin de livre. L'« équilibrage » de pied de
  * page est un SOLDE DE TRÉSORERIE (encaissements − décaissements de la
  * période), PAS le bénéfice : le bénéfice net (coût des produits vendus
@@ -43,9 +44,10 @@ final class AdminLedgerController extends AdminBaseController
             'balance'     => $entries['balance'],
             'recentExpenses' => Expense::recent(8),
             // Dernières courses enregistrées en ACHATS (stock + coûts) :
-            // une ligne par jour + fournisseur, avec le justificatif du
-            // scan quand il a été conservé. Statique publique : partagée
-            // avec la version kiosque du livre (KioskComptageController).
+            // une ligne par jour + référence (fournisseur, sinon n° de
+            // facture partagé), avec le justificatif du scan quand il a
+            // été conservé. Statique publique : partagée avec la version
+            // kiosque du livre (KioskComptageController).
             'recentPurchases' => self::recentPurchaseGroups(8),
             // Suggestions produit (datalist) pour l'enregistrement d'un
             // achat depuis le livre — même fusion que la liste de picking
@@ -87,11 +89,37 @@ final class AdminLedgerController extends AdminBaseController
     }
 
     /**
+     * Référence de regroupement d'un achat dans le livre comptable et la
+     * liste « Derniers tickets » : le fournisseur quand il est renseigné,
+     * sinon le n° de facture/ticket partagé (une course scannée sans
+     * fournisseur reste fusionnée en une écriture), sinon la clé produit
+     * (repli historique). Méthode pure (aucun accès POST/DB) : testée
+     * unitairement.
+     */
+    public static function purchaseGroupRef(string $supplier, string $invoice, string $productKey): string
+    {
+        $supplier = trim($supplier);
+        if ($supplier !== '') {
+            return $supplier;
+        }
+
+        $invoice = trim($invoice);
+        if ($invoice !== '') {
+            return $invoice;
+        }
+
+        return trim($productKey);
+    }
+
+    /**
      * Dernières courses enregistrées en ACHATS (page Achats ou livre
-     * comptable), groupées par jour + fournisseur comme dans le livre :
-     * total TTC, n° de facture partagé, justificatif du scan conservé
-     * (premier trouvé dans le groupe) et nombre de lignes. Statique
-     * publique : partagée avec la version kiosque du livre.
+     * comptable), groupées comme dans le livre : même jour + même
+     * fournisseur, sinon même jour + même n° de facture partagé (une
+     * course saisie sans fournisseur reste une seule ligne) — voir
+     * purchaseGroupRef(). Rend par groupe : total TTC, n° de facture
+     * partagé, justificatif du scan conservé (premier trouvé dans le
+     * groupe) et nombre de lignes. Statique publique : partagée avec la
+     * version kiosque du livre.
      *
      * @return list<array<string,mixed>>
      */
@@ -101,14 +129,16 @@ final class AdminLedgerController extends AdminBaseController
         try {
             foreach (Purchase::recent(200) as $p) {
                 $date = (string) $p['purchased_at'];
-                $supplier = trim((string) ($p['supplier'] ?? '')) !== ''
-                    ? (string) $p['supplier']
-                    : '(fournisseur inconnu)';
-                $key = $date . '|' . $supplier;
+                $ref = self::purchaseGroupRef(
+                    (string) ($p['supplier'] ?? ''),
+                    (string) ($p['invoice_number'] ?? ''),
+                    (string) ($p['product_key'] ?? '')
+                );
+                $key = $date . '|' . $ref;
                 if (!isset($groups[$key])) {
                     $groups[$key] = [
                         'date'          => $date,
-                        'supplier'      => $supplier,
+                        'supplier'      => $ref,
                         'total_ttc'     => 0.0,
                         'invoice'       => null,
                         'receipt_path'  => null,
@@ -151,10 +181,11 @@ final class AdminLedgerController extends AdminBaseController
 
     /**
      * Assemble les écritures du livre : achats (une seule ligne par
-     * jour + fournisseur, avec le gros total du jour), dépenses (débits,
-     * avec ligne « ticket ») et ventes (crédits, récapitulées en une
-     * unique ligne de clôture placée en fin de livre, dont le « ticket »
-     * détaille la répartition liquide/carte).
+     * jour + fournisseur, sinon par jour + n° de facture partagé, avec
+     * le gros total du jour), dépenses (débits, avec ligne « ticket »)
+     * et ventes (crédits, récapitulées en une unique ligne de clôture
+     * placée en fin de livre, dont le « ticket » détaille la répartition
+     * liquide/carte).
      *
      * « balance » est un SOLDE DE TRÉSORERIE : ventes TTC − (achats +
      * dépenses) TTC de la période. Ce n'est pas le bénéfice — les achats
@@ -168,20 +199,27 @@ final class AdminLedgerController extends AdminBaseController
     {
         $rows = [];
 
-        // ── Débits : ACHATS (une ligne par jour + fournisseur) ──────────
-        // Tous les reçus d'un même jour chez le même fournisseur sont
-        // fusionnés en une écriture unique portant le total : les reçus
-        // individuels restent listés en lignes « ticket », référencés par
-        // le n° de facture quand il est renseigné (sinon n° interne).
+        // ── Débits : ACHATS (une ligne par jour + référence) ───────────
+        // Tous les reçus d'un même jour chez le même fournisseur — ou
+        // portant le même n° de facture/ticket quand le fournisseur
+        // n'a pas été saisi (course scannée sans champ rempli) — sont
+        // fusionnés en une écriture unique portant le total (voir
+        // purchaseGroupRef()) ; les reçus individuels restent listés
+        // en lignes « ticket », référencés par le n° de facture quand
+        // il est renseigné (sinon n° interne).
         $purchaseGroups = [];
         foreach (Purchase::between($from, $to, 500) as $p) {
             $date = (string) $p['purchased_at'];
-            $supplier = trim((string) ($p['supplier'] ?? '') !== '' ? $p['supplier'] : (string) $p['product_key']);
-            $key = $date . '|' . $supplier;
+            $ref = self::purchaseGroupRef(
+                (string) ($p['supplier'] ?? ''),
+                (string) ($p['invoice_number'] ?? ''),
+                (string) ($p['product_key'] ?? '')
+            );
+            $key = $date . '|' . $ref;
             if (!isset($purchaseGroups[$key])) {
                 $purchaseGroups[$key] = [
                     'date'     => $date,
-                    'supplier' => $supplier,
+                    'supplier' => $ref,
                     'total'    => 0.0,
                     'purchases' => [],
                 ];
