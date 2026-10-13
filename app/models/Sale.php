@@ -1369,6 +1369,57 @@ final class Sale extends Model
     }
 
     /**
+     * Reclasse les ventes selon les règles de variantes par prix
+     * (cf. App\Core\Compta\PriceVariants).
+     *
+     * Post-traitement d'import (CSV manuel et synchro API cron), à
+     * lancer APRÈS syncAliasCategories() pour que les clés canoniques du
+     * mapping soient déjà posées. Pour chaque règle, les ventes dont la
+     * clé effective (product_key, sinon description) vaut la clé de
+     * base — exactement, en minuscules — et dont le prix TTC est dans
+     * la tolérance ± 0,005 € reçoivent la clé et la catégorie de la
+     * variante (ex. « cafe » à 0,70 € → « cafe allonge », « Spécial »).
+     * Les montants personnalisés (is_custom_amount) sont exclus.
+     *
+     * Le reclassement est IDEMPOTENT : une ligne renommée porte la clé
+     * de la variante et ne rematche plus la clé de base.
+     *
+     * La `description` n'est JAMAIS modifiée : elle fait partie de la
+     * clé unique anti-doublon des ventes (la modifier ferait réinsérer
+     * les lignes au réimport, doublant le CA). Conséquence assumée :
+     * les ventes renommées restent déduites du stock de la clé de base
+     * via `description` dans soldQtySince() (le café allongé consomme
+     * bien les dosettes du stock « cafe »), et seule la ventilation
+     * CA/produit bascule sur la variante.
+     *
+     * @return int Nombre total de lignes reclassées.
+     */
+    public static function applyPriceVariants(): int
+    {
+        $total = 0;
+
+        foreach (\App\Core\Compta\PriceVariants::RULES as $rule) {
+            try {
+                $stmt = self::pdo()->prepare(
+                    "UPDATE sales
+                     SET product_key = ?, category = ?
+                     WHERE LOWER(COALESCE(NULLIF(TRIM(product_key), ''), TRIM(description))) = ?
+                       AND ABS(price_ttc - ?) < 0.005
+                       AND is_custom_amount = 0"
+                );
+                $stmt->execute([$rule['variant'], $rule['category'], $rule['key'], $rule['price']]);
+
+                $total += (int) $stmt->rowCount();
+            } catch (\Throwable) {
+                // Règle suivante : un reclassement ne doit jamais casser
+                // un import (même silence que syncAliasCategories()).
+            }
+        }
+
+        return $total;
+    }
+
+    /**
      * Renomme une catégorie sur toutes les ventes (renommage effectué dans
      * la page Catégories de la cafétéria).
      */
