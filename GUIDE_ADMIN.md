@@ -242,6 +242,11 @@ SumUp enregistre parfois le même produit sous des noms différents (Bueno, Buen
 - Vérifie → **Appliquer**
 - La **catégorie** proposée est celle des **Catégories** existantes (cafétéria) ; la modifier met à jour les ventes correspondantes, et renommer une catégorie dans **Catégories** se propage partout (alias + ventes)
 
+#### Variantes par prix (café allongé)
+Certains produits sont vendus sous le même nom SumUp mais à des prix différents : le **café** existe à **0,50 €** (normal, 1 dosette) et **0,70 €** (allongé, 2 dosettes). À l'import, les ventes à 0,70 € sont donc classées automatiquement sur un produit séparé **« cafe allonge »** (catégorie Spécial).
+- Le **coût de revient** de « cafe allonge » se règle sur la page **Coûts de revient** (2 dosettes = 2× le coût d'un café normal)
+- Besoin de revenir à un produit unique ? Utilise l'**outil de fusion de clés** de l'inventaire pour refusionner les deux produits
+
 ### C. Coûts de revient
 **Admin → Comptabilité → Coûts de revient** :
 

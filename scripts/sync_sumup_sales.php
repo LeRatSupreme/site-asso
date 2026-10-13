@@ -58,9 +58,14 @@ try {
     $stats = $sync->sync($since, $limit, $dryRun);
 
     // Nouvelles lignes insérées : on y reporte les catégories du mapping
-    // des libellés (silencieux en cas d'échec SQL, jamais bloquant).
+    // des libellés (silencieux en cas d'échec SQL, jamais bloquant), puis
+    // on y applique les variantes par prix (ex. « cafe » à 0,70 € →
+    // « cafe allonge ») — après le mapping pour que les clés canoniques
+    // soient déjà posées.
+    $renamed = 0;
     if (!$dryRun && $stats['inserted'] > 0) {
         Sale::syncAliasCategories();
+        $renamed = Sale::applyPriceVariants();
 
         // Les ventes insérées déduisent le théorique : la carte publique suit.
         StockPublic::invalidate();
@@ -75,6 +80,12 @@ try {
         . $stats['ignored'] . ' ignorée(s)'
         . ($stats['batch_id'] !== null ? ', lot ' . $stats['batch_id'] : '')
         . " (fenêtre " . $hours . " h)\n";
+
+    // Variantes par prix : une ligne récapitulative seulement en cas de
+    // reclassement (le cron tourne chaque minute, inutile de polluer le log).
+    if ($renamed > 0) {
+        echo '[' . $logTs . '] variantes par prix : ' . $renamed . " ligne(s) reclassée(s)\n";
+    }
 } catch (Throwable $e) {
     fwrite(STDERR, '[' . $logTs . '] ERREUR synchro SumUp : ' . $e->getMessage() . "\n");
     $exitCode = 1;

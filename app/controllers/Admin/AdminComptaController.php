@@ -268,6 +268,15 @@ final class AdminComptaController extends AdminBaseController
         //       (la méthode avale elle-même les erreurs SQL).
         Sale::syncAliasCategories();
 
+        // ── Variantes par prix : les lignes fraîchement importées dont
+        //       le prix révèle une variante (ex. « cafe » à 0,70 € =
+        //       allongé 2 dosettes) reçoivent leur clé canonique. Après
+        //       le mapping d'alias, et seulement si l'import a inséré —
+        //       non bloquant (la méthode avale elle-même les erreurs SQL).
+        if ($result['inserted'] > 0) {
+            Sale::applyPriceVariants();
+        }
+
         // Les ventes importées déduisent le théorique : la carte publique suit.
         StockPublic::invalidate();
 
