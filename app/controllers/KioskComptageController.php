@@ -840,23 +840,9 @@ final class KioskComptageController extends Controller
         $parser = new SumUpCsvParser();
 
         // Catégorie de chaque clé produit (la plus fréquente dans les ventes)
-        // pour trier la liste par rayon.
-        $catByKey = [];
-        try {
-            $catRows = InventoryCount::connection()->query(
-                "SELECT COALESCE(NULLIF(TRIM(product_key), ''), TRIM(description)) AS k,
-                        MAX(COALESCE(category, '')) AS cat
-                 FROM sales
-                 WHERE category IS NOT NULL AND category <> ''
-                 GROUP BY k"
-            )->fetchAll();
-            foreach ($catRows as $row) {
-                $catByKey[strtolower(trim((string) $row['k']))] = trim((string) $row['cat']);
-            }
-        } catch (\Throwable $e) {
-            // Pas de catégories disponibles : tri alphabétique simple.
-            error_log('[kiosque] catégories indisponibles : ' . $e->getMessage());
-        }
+        // pour trier la liste par rayon — même map que la page Inventaire
+        // admin (ventilation de la valeur du stock par catégorie).
+        $catByKey = Sale::categoryByProduct();
 
         $active = [];
         $paused = [];

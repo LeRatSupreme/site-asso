@@ -16,6 +16,8 @@ declare(strict_types=1);
  * @var int   $noCostLines  Produits en stock sans coût saisi (hors total).
  * @var float $pausedValue  Valeur du stock des produits « en pause » (hors vente).
  * @var int   $pausedUnits  Unités en stock des produits « en pause ».
+ * @var array<string, array{name:string,value:float,units:int,valued:int,noCost:int,pausedValue:float,pausedUnits:int}> $stockByCategory
+ *            Ventilation des métriques ci-dessus par catégorie (rayon), triée par valeur décroissante.
  * @var array{resumed:list<string>, paused:list<string>} $sweep Changements automatiques appliqués au chargement.
  */
 ?>
@@ -107,53 +109,101 @@ declare(strict_types=1);
     <h2 class="card-title">Comptage</h2>
 
     <?php if ($rows !== [] || $discontinuedRows !== []): ?>
+    <?php
+        // Catégories avec au moins une ligne affichable (stock valorisé,
+        // sans coût ou en pause) : les rayons vides ne polluent pas le tableau.
+        $hasNoCostCol = $noCostLines > 0;
+        $hasPausedCol = $pausedValue > 0.0 || $pausedUnits > 0;
+    ?>
     <style>
-        .stock-total-row {
-            display: flex; align-items: stretch; flex-wrap: wrap;
-            gap: 0.6rem 1.4rem; margin: 0.25rem 0 1rem;
-            padding: 0.8rem 1.1rem;
-            background: rgba(72, 189, 211, 0.07);
-            border: 1px solid rgba(72, 189, 211, 0.25);
-            border-radius: 12px;
-        }
-        .stock-total-item { display: flex; flex-direction: column; justify-content: center; gap: 0.15rem; }
+        .stock-total-row { margin: 0.25rem 0 0.6rem; }
         .stock-total-label {
             font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.08em;
             font-weight: 800; color: var(--muted, #8892a6);
         }
-        .stock-total-value { font-size: 1.5rem; font-weight: 900; color: var(--primary, #48bdd3); line-height: 1.1; }
-        .stock-total-sub { font-size: 0.78rem; color: var(--muted, #8892a6); }
-        .stock-total-sep { width: 1px; align-self: stretch; background: rgba(255, 255, 255, 0.12); }
-        @media (max-width: 640px) { .stock-total-sep { display: none; } }
+        .table-stock-cat { margin: 0; }
+        .table-stock-cat td, .table-stock-cat th { padding: 0.45rem 0.6rem; font-size: 0.86rem; }
+        .table-stock-cat th { font-size: 0.72rem; }
+        .table-stock-cat tfoot td {
+            border-top: 2px solid rgba(72, 189, 211, 0.35);
+            background: rgba(72, 189, 211, 0.07);
+            font-weight: 800;
+        }
+        .stock-cat-value { font-weight: 800; color: var(--primary, #48bdd3); white-space: nowrap; }
+        .table-stock-cat tfoot .stock-cat-value { font-size: 1.05rem; font-weight: 900; }
+        .stock-cat-sub { display: block; font-size: 0.72rem; color: var(--muted, #8892a6); font-weight: 500; }
+        .stock-cat-warn { color: var(--accent-warning, #f59e0b); font-weight: 700; }
     </style>
     <div class="stock-total-row">
-        <div class="stock-total-item"
-             title="Σ (stock théorique × coût de revient du lot en cours, même source que la page Réappro). Produits jamais comptés ou à stock nul/négatif exclus.">
-            <span class="stock-total-label">Valeur du stock</span>
-            <strong class="stock-total-value"><?= e(formatPrice($stockValue)) ?></strong>
+        <p class="stock-total-label"
+           title="Σ (stock théorique × coût de revient du lot en cours, même source que la page Réappro). Produits jamais comptés ou à stock nul/négatif exclus.">Valeur du stock — par catégorie</p>
+        <div class="table-wrap">
+            <table class="table table-stock-cat">
+                <thead>
+                    <tr>
+                        <th>Catégorie</th>
+                        <th class="th-num">Valeur</th>
+                        <th class="th-num">En stock</th>
+                        <?php if ($hasNoCostCol): ?><th>Coût manquant</th><?php endif; ?>
+                        <?php if ($hasPausedCol): ?><th>Hors vente (en pause)</th><?php endif; ?>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($stockByCategory as $c): ?>
+                        <tr>
+                            <td><strong><?= e((string) $c['name']) ?></strong></td>
+                            <td class="num stock-cat-value"><?= e(formatPrice($c['value'])) ?></td>
+                            <td class="num">
+                                <?= (int) $c['units'] ?> u.
+                                <span class="stock-cat-sub"><?= (int) $c['valued'] ?> produit<?= (int) $c['valued'] > 1 ? 's' : '' ?> valorisé<?= (int) $c['valued'] > 1 ? 's' : '' ?></span>
+                            </td>
+                            <?php if ($hasNoCostCol): ?>
+                                <td>
+                                    <?php if ((int) $c['noCost'] > 0): ?>
+                                        <span class="stock-cat-warn"><?= (int) $c['noCost'] ?> produit<?= (int) $c['noCost'] > 1 ? 's' : '' ?></span>
+                                        <span class="stock-cat-sub">sans coût saisi — hors total</span>
+                                    <?php else: ?>
+                                        <span class="muted">—</span>
+                                    <?php endif; ?>
+                                </td>
+                            <?php endif; ?>
+                            <?php if ($hasPausedCol): ?>
+                                <td>
+                                    <?php if ($c['pausedValue'] > 0.0 || (int) $c['pausedUnits'] > 0): ?>
+                                        <?= e(formatPrice($c['pausedValue'])) ?>
+                                        <span class="stock-cat-sub"><?= (int) $c['pausedUnits'] ?> u. — non comptés dans la valeur principale</span>
+                                    <?php else: ?>
+                                        <span class="muted">—</span>
+                                    <?php endif; ?>
+                                </td>
+                            <?php endif; ?>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <td>Total</td>
+                        <td class="num stock-cat-value"><?= e(formatPrice($stockValue)) ?></td>
+                        <td class="num">
+                            <?= $stockUnits ?> u.
+                            <span class="stock-cat-sub"><?= $valuedLines ?> produit<?= $valuedLines > 1 ? 's' : '' ?> valorisé<?= $valuedLines > 1 ? 's' : '' ?></span>
+                        </td>
+                        <?php if ($hasNoCostCol): ?>
+                            <td>
+                                <span class="stock-cat-warn"><?= $noCostLines ?> produit<?= $noCostLines > 1 ? 's' : '' ?></span>
+                                <span class="stock-cat-sub">sans coût saisi (page Coûts de revient)</span>
+                            </td>
+                        <?php endif; ?>
+                        <?php if ($hasPausedCol): ?>
+                            <td>
+                                <?= e(formatPrice($pausedValue)) ?>
+                                <span class="stock-cat-sub"><?= $pausedUnits ?> u. — non comptés dans la valeur principale</span>
+                            </td>
+                        <?php endif; ?>
+                    </tr>
+                </tfoot>
+            </table>
         </div>
-        <div class="stock-total-sep" aria-hidden="true"></div>
-        <div class="stock-total-item">
-            <span class="stock-total-label">En stock</span>
-            <strong class="stock-total-value"><?= $stockUnits ?> u.</strong>
-            <span class="stock-total-sub"><?= $valuedLines ?> produit<?= $valuedLines > 1 ? 's' : '' ?> valorisé<?= $valuedLines > 1 ? 's' : '' ?></span>
-        </div>
-        <?php if ($noCostLines > 0): ?>
-        <div class="stock-total-sep" aria-hidden="true"></div>
-        <div class="stock-total-item">
-            <span class="stock-total-label">Coût manquant</span>
-            <strong class="stock-total-value" style="color: var(--accent-warning, #f59e0b); font-size: 1.15rem;"><?= $noCostLines ?> produit<?= $noCostLines > 1 ? 's' : '' ?></strong>
-            <span class="stock-total-sub">sans coût saisi — hors total (page Coûts de revient)</span>
-        </div>
-        <?php endif; ?>
-        <?php if ($pausedValue > 0.0 || $pausedUnits > 0): ?>
-        <div class="stock-total-sep" aria-hidden="true"></div>
-        <div class="stock-total-item">
-            <span class="stock-total-label">Hors vente (en pause)</span>
-            <strong class="stock-total-value" style="font-size: 1.15rem;"><?= e(formatPrice($pausedValue)) ?></strong>
-            <span class="stock-total-sub"><?= $pausedUnits ?> u. — non comptés dans la valeur principale</span>
-        </div>
-        <?php endif; ?>
     </div>
     <?php endif; ?>
 
