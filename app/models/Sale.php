@@ -1484,10 +1484,21 @@ final class Sale extends Model
     }
 
     /**
-     * Catégorie de vente de chaque produit : MAX(category) sur ses ventes
-     * classées (même règle que le tri par rayon du comptage kiosque). Un
-     * produit sans aucune vente classée est absent du map — l'appelant
-     * décide du libellé de repli (« Divers », « Non classé »…).
+     * Catégorie de vente de chaque produit (même règle que le tri par
+     * rayon du comptage kiosque). Règle de priorité — la première source
+     * qui répond gagne :
+     *  1. les VENTES du produit : MAX(category) sur ses ventes classées ;
+     *  2. l'alias canonique : ligne de `product_aliases` dont
+     *     `product_key` = clé du produit ;
+     *  3. l'alias par libellé brut : ligne dont `raw_description` = clé ;
+     *  4. rien : la clé est absente du map, l'appelant décide du libellé
+     *     de repli (« Divers », « Non classé »…).
+     *
+     * Les niveaux 2 et 3 comblent le cas des produits ACHETÉS mais JAMAIS
+     * VENDUS (donc sans aucune vente classée) : leur rayon est déjà connu
+     * par le mapping des libellés, il ne faut pas les reléguer en « Non
+     * classé » dans la ventilation du stock par catégorie (page Inventaire
+     * comme comptage kiosque, qui partagent cette méthode).
      *
      * @return array<string,string> Clé produit en minuscules → catégorie.
      */
@@ -1501,16 +1512,76 @@ final class Sale extends Model
                  WHERE category IS NOT NULL AND category <> ''
                  GROUP BY k"
             )->fetchAll();
+
+            // Repli alias : par clé canonique d'abord, puis par libellé
+            // brut (l'ordre des requêtes matérialise la priorité).
+            $aliasKeyRows = self::pdo()->query(
+                "SELECT TRIM(product_key) AS k, MAX(COALESCE(category, '')) AS cat
+                 FROM product_aliases
+                 WHERE product_key IS NOT NULL AND TRIM(product_key) <> ''
+                   AND category IS NOT NULL AND category <> ''
+                 GROUP BY k"
+            )->fetchAll();
+            $aliasRawRows = self::pdo()->query(
+                "SELECT TRIM(raw_description) AS d, MAX(COALESCE(category, '')) AS cat
+                 FROM product_aliases
+                 WHERE raw_description IS NOT NULL AND TRIM(raw_description) <> ''
+                   AND category IS NOT NULL AND category <> ''
+                 GROUP BY d"
+            )->fetchAll();
         } catch (\Throwable) {
             return [];
         }
 
-        $map = [];
-        foreach ($rows as $r) {
-            $k = strtolower(trim((string) $r['k']));
-            $cat = trim((string) $r['cat']);
-            if ($k !== '' && $cat !== '') {
-                $map[$k] = $cat;
+        $toMap = static function (array $rows, string $keyCol): array {
+            $out = [];
+            foreach ($rows as $r) {
+                $k = strtolower(trim((string) $r[$keyCol]));
+                $cat = trim((string) $r['cat']);
+                if ($k !== '' && $cat !== '') {
+                    $out[$k] = $cat;
+                }
+            }
+
+            return $out;
+        };
+
+        return self::completeCategoriesFromAliases(
+            $toMap($rows, 'k'),
+            $toMap($aliasKeyRows, 'k'),
+            $toMap($aliasRawRows, 'd')
+        );
+    }
+
+    /**
+     * Complète un map clé → catégorie avec les catégories du mapping des
+     * libellés (product_aliases). Méthode PURE : aucun accès base, aucun
+     * effet de bord — testée sans DB dans tests/Unit.
+     *
+     * Seules les clés ABSENTES du map sont comblées : la catégorie issue
+     * des ventes reste toujours prioritaire. L'alias par clé canonique
+     * est consulté avant l'alias par libellé brut ; au sein d'un même
+     * niveau, la première catégorie rencontrée gagne (le MAX(category)
+     * côté SQL rend cet ordre déterministe).
+     *
+     * @param array<string,string> $map        Clé (minuscules) → catégorie (ventes).
+     * @param array<string,string> $aliasByKey Clé canonique (minuscules) → catégorie.
+     * @param array<string,string> $aliasByRaw Libellé brut (minuscules) → catégorie.
+     *
+     * @return array<string,string> Nouveau map complété (l'original est inchangé).
+     */
+    public static function completeCategoriesFromAliases(array $map, array $aliasByKey, array $aliasByRaw): array
+    {
+        foreach ([$aliasByKey, $aliasByRaw] as $aliases) {
+            foreach ($aliases as $k => $cat) {
+                $k = strtolower(trim((string) $k));
+                $cat = trim((string) $cat);
+                if ($k === '' || $cat === '') {
+                    continue;
+                }
+                if (!isset($map[$k])) {
+                    $map[$k] = $cat;
+                }
             }
         }
 
