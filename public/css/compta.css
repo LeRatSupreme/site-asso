@@ -1098,6 +1098,30 @@ details.howto p {
 .pa-nostock input { accent-color: var(--primary); cursor: pointer; }
 .pa-nostock:has(input:checked) { color: var(--accent-warning, #f59e0b); }
 
+/* TVA par ligne (facture à taux mixte) : « défaut » = taux d'en-tête ;
+   une déviation est signalée en couleur primaire. */
+.pa-vat {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    white-space: nowrap;
+    color: var(--muted);
+    font-weight: 700;
+}
+.pa-vat select {
+    padding: 0.16rem 0.28rem;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--foreground);
+    font-family: inherit;
+    font-size: 0.76rem;
+    cursor: pointer;
+}
+.pa-vat select:focus { outline: none; border-color: var(--primary); }
+.pa-vat.is-custom { color: var(--primary); }
+.pa-vat.is-custom select { border-color: var(--primary); }
+
 .pa-remove {
     width: 1.8rem;
     height: 1.8rem;
