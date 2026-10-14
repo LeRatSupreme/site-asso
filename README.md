@@ -12,7 +12,8 @@ stocks & inventaire, réapprovisionnement, budgets, cafétéria, contenus,
 utilisateurs & attributions de pages, wiki).
 
 
-> Référence : [`site_apres/ARCHITECTURE.md`](../site_apres/ARCHITECTURE.md) (cahier des charges complet).
+> L'architecture du site est documentée dans le **wiki intégré** de l'espace
+> admin (*Admin → Tableau de bord → Wiki*, `/admin/wiki`).
 
 ---
 
@@ -42,10 +43,10 @@ site_final/
 │   │   ├── Compta/                  # Services comptabilité & SumUp (ComptaCalc,
 │   │   │                            # CashLedger, SumUpCsvParser, SumUpSalesSync…)
 │   │   └── Backup/                  # Sauvegarde / export de la base
-│   ├── controllers/                 # 15 contrôleurs publics : Home, Event, Page,
+│   ├── controllers/                 # 17 contrôleurs publics : Home, Event, Page,
 │   │                                # Poll, Registration, Student, Auth…
-│   │   └── Admin/                   # 24 contrôleurs admin (un par module)
-│   ├── models/                      # Model (base PDO) + ~45 modèles : Event, Sale,
+│   │   └── Admin/                   # 27 contrôleurs admin (un par module + base)
+│   ├── models/                      # Model (base PDO) + ~52 modèles : Event, Sale,
 │   │                                # User, Product, ProductAlias, CashCount…
 │   └── translations/                # Libellés FR (messages, contenu éditorial)
 ├── views/                           # Pages publiques : home, events, polls, pages,
@@ -58,7 +59,7 @@ site_final/
 ├── database/
 │   ├── schema.sql                   # Toutes les tables
 │   ├── seed.sql                     # Settings, admin, équipe, pages, events
-│   └── migrations/                  # 38 migrations 2026_*.sql (appliquées à la main)
+│   └── migrations/                  # 51 migrations 2026_*.sql (appliquées à la main)
 ├── scripts/                         # Cron / CLI : sync_sumup_sales.php (API SumUp),
 │                                    # send_event_reminders.php, backup.sh…
 ├── tests/                           # PHPUnit : Unit/ + Integration/
@@ -79,45 +80,48 @@ site_final/
 ## 🚀 Déploiement sur le VPS
 
 Stack en place : Apache 2.4 + PHP 8.3 (module) + MariaDB 10.11 sur Ubuntu 24.04.
-DocumentRoot : `/var/www/aeic/public`. Domaine : `https://asso.aremond.ovh/`.
+Le dépôt est cloné sur le VPS dans `/home/ubuntu/AEIC` ; le DocumentRoot Apache
+pointe vers son sous-dossier `public/` (`DocumentRoot /home/ubuntu/AEIC/public`).
+Domaine : `https://asso.aremond.ovh/`.
 
-### 1. Copier le projet
+### 1. Déployer une mise à jour (flux git)
+
+Le site est déployé **par git** — jamais par copie de fichiers (scp) :
 
 ```bash
-# Depuis votre machine
-scp -r site_final/* utilisateur@VPS:/tmp/aeic-dist/
+# Depuis ta machine : committer puis pousser la branche de travail
+git push origin experiments
 
-# Sur le VPS
-sudo mkdir -p /var/www/aeic
-sudo cp -r /tmp/aeic-dist/* /var/www/aeic/
-sudo chown -R www-data:www-data /var/www/aeic
+# Puis sur le VPS :
+ssh ubuntu@51.254.129.80 "cd ~/AEIC && git pull --ff-only origin experiments"
 ```
 
-### 2. Configurer l'environnement
+> Le workflow complet (commit + push après chaque modification, puis pull
+> `--ff-only` sur le VPS) est décrit dans `AGENTS.md`.
+
+### 2. Environnement (`config.env` sur le VPS)
+
+Le fichier `config.env` réel vit **sur le VPS**, hors git
+(`/home/ubuntu/AEIC/config.env`) :
 
 ```bash
-cd /var/www/aeic
-sudo cp config.env.example config.env
-sudo nano config.env   # renseigner DB_PASS, APP_URL, APP_ENV=prod, APP_DEBUG=false
-sudo chown www-data:www-data config.env
+cd ~/AEIC
+cp config.env.example config.env   # première installation seulement
+nano config.env   # renseigner DB_PASS, APP_URL, APP_ENV=prod, APP_DEBUG=false
+sudo chown ubuntu:www-data config.env
 sudo chmod 640 config.env
 ```
 
-### 3. Installer Composer (si tests/dev) et les dépendances
+### 3. Première installation : dépendances, base, compte admin
 
 ```bash
-sudo apt install composer   # si absent
+# Dépendances (Composer) — si absent : sudo apt install composer
 composer install --no-dev --optimize-autoloader
+
+# Base : importer le schéma + le seed
+mysql -u aeic -p aeic < database/schema.sql
+mysql -u aeic -p aeic < database/seed.sql
 ```
-
-### 4. Créer la base et importer le schéma + le seed
-
-```bash
-mysql -u aeic -p aeic < /var/www/aeic/database/schema.sql
-mysql -u aeic -p aeic < /var/www/aeic/database/seed.sql
-```
-
-### 5. Activer le compte admin par défaut
 
 Le seed contient un **hash placeholder non valide** (sécurité). Générez le vrai hash
 pour `changeme123`, puis mettez-le en base :
@@ -128,18 +132,15 @@ mysql -u aeic -p aeic -e "UPDATE users SET password='<HASH>' WHERE email='admin@
 ```
 **Changez ce mot de passe immédiatement après la première connexion.**
 
-### 6. Permissions uploads + rechargement Apache
-
+Permissions uploads + rechargement Apache :
 ```bash
-sudo mkdir -p /var/www/aeic/public/assets/uploads
-sudo chown -R www-data:www-data /var/www/aeic/public/assets/uploads
+sudo mkdir -p /home/ubuntu/AEIC/public/assets/uploads
+sudo chown -R www-data:www-data /home/ubuntu/AEIC/public/assets/uploads
 sudo systemctl reload apache2
 ```
 
-### 7. (Apache) S'assurer que `public/` est le DocumentRoot
-
-La directive clé : `DocumentRoot /var/www/aeic/public` et, pour le routing,
-`FallbackResource /index.php` (mod_dir) ou un `.htaccess` de réécriture.
+Pour le routing : `public/` est le DocumentRoot avec `FallbackResource /index.php`
+(mod_dir) ou un `.htaccess` de réécriture.
 
 ---
 
@@ -202,7 +203,7 @@ Puis :
 ```bash
 ./vendor/bin/phpunit --testsuite Integration
 ```
-Couverture : inscription (RGPD, doublons, mot de passe), connexion, inscriptionaux événements (unicité), commande cafétéria (total serveur, stock, produit
+Couverture : connexion, inscription aux événements (unicité), commande cafétéria (total serveur, stock, produit
 indisponible), import comptable SumUp (déduplication), et logique SMTP du Mailer.
 
 ---
@@ -226,20 +227,23 @@ indisponible), import comptable SumUp (déduplication), et logique SMTP du Maile
 - **Phase 4 ✅** Espace élève (dashboard, profil, inscriptions aux événements avec variantes,
   commandes cafétéria avec panier, workflow de statut, stock atomique).
 - **Phase 5 ✅** Espace admin (dashboard, CRUD événements/pages/équipe/médias/paramètres,
-  gestion cafétéria + caisse POS, gestion utilisateurs & rôles, mode maintenance).
+  gestion cafétéria & commandes, gestion utilisateurs & rôles, mode maintenance).
 - **Phase 6 ✅** Socle pro (SEO/OG/JSON-LD/sitemap, perf gzip/cache, a11y,
   e-mails transactionnels + mot de passe oublié).
 - **Phase 7 ✅** Sécurité avancée (2FA TOTP obligatoire ADMIN/Trésorerie +
   codes de récupération, en-têtes CSP/HSTS, sauvegarde/restauration, monitoring).
-- Phase 8+ — E2E, comptabilité, standards entreprise...
+- Phase 8+ — E2E, standards entreprise...
 
-Voir le §26 de `ARCHITECTURE.md` pour le plan complet.
+La documentation de référence vit dans le wiki intégré (admin → Wiki, `/admin/wiki`).
 ---
 
 ## 🔐 Authentification & RGPD (Phase 3)
 
-- **Inscription** (`/register`) : validation serveur (prénom, nom, e-mail valide, mot de passe     ≥ 8 car. avec lettre + chiffre, confirmation), unicité de l'e-mail, hash bcrypt,
-  **consentement RGPD obligatoire** (journalisé dans `consents`).
+- **Inscription** (`/register`) : validation serveur (prénom, nom, e-mail valide,
+  unicité de l'e-mail), **consentement RGPD obligatoire** (journalisé dans `consents`).
+  Aucun mot de passe n'est saisi à l'inscription : un mot de passe initial de
+  **12 caractères** est **généré** puis **envoyé par e-mail** (hash bcrypt en base).
+  La politique générale des mots de passe est de **12 caractères minimum**.
 - **Connexion** (`/login`) : message d'erreur générique (l'e-mail n'est jamais révélé),
   **limitation des tentatives** (5 essais / 10 min par IP via `RateLimiter`),
   refus des comptes désactivés, régénération de l'ID de session.- **Déconnexion** (`/logout`) : destruction de session + retour accueil.
@@ -280,7 +284,9 @@ sélection des **variantes obligatoires**, désinscription possible. Doublon imp
   `CANCELLED` depuis les états non terminaux) via `OrderWorkflow`.
 ---
 
-## 🎮 Zone jeuxMenu des jeux (`/jeux`) : statistiques personnelles, pseudo de joueur (classement),
+## 🎮 Zone jeux
+
+Menu des jeux (`/jeux`) : statistiques personnelles, pseudo de joueur (classement),
 et 5 jeux jouables sur mobile comme au clavier.
 
 
@@ -318,7 +324,10 @@ Routes protégées par le rôle **ADMIN** (`/admin/*`) — layout dédié, `noin
   publication, **liste des inscrits** par événement.
 
 - **Cafétéria** : CRUD **produits** (`/admin/cafeteria`) et **catégories**,
-  **commandes** (`/admin/cafeteria/commandes`) avec changement de statut (workflow).
+  **commandes** (`/admin/cafeteria/commandes`) avec changement de statut
+  (workflow — statuts affichés en français : En attente, Confirmée,
+  En préparation, Prête, Livrée, Annulée ; e-mail « commande prête » envoyé
+  au passage à Prête).
 
 - **Pages CMS** (`/admin/pages`) : CRUD pages (contenu HTML, SEO meta, publication).
 
@@ -400,11 +409,12 @@ aucun token/secret à stocker) :
    Un bouton teal **« Payer en ligne (SumUp) »** ouvre le lien dans un nouvel onglet.
 3. **Cafétéria (espace élève)** : un bouton **« Payer ma commande (SumUp) »**
    apparaît sous le panier (optionnel — les commandes restent réglées au comptoir).
-4. **Caisse (POS) admin** : un bouton **« Encaisser par SumUp »** ouvre le lien
-   par défaut (à côté de la validation comptant).
-5. **Dashboard SumUp** (`/admin/sumup`) : synthèse mensuelle (carte vs espèces,
+4. **Dashboard SumUp** (`/admin/sumup`) : synthèse mensuelle (carte vs espèces,
    nombre de transactions) **fondée sur les ventes déjà importées** dans la
    comptabilité (rapports SumUp). Aucun appel réseau à SumUp.
+
+> L'ancienne caisse POS admin (« Encaisser par SumUp ») a été retirée :
+> l'encaissement se fait sur les caisses SumUp physiques / kiosques.
 
 > Aucun identifiant de compte SumUp n'est stocké : seule une URL publique de
 > paiement est utilisée.
@@ -431,7 +441,7 @@ asso.aremond.ovh.  IN  TXT  "v=spf1 mx a -all"
 DKIM dépend du prestataire SMTP. **Brevo** fournit une clé publique à publier
 sous la forme :
 ```
-brevo._domainkey.aso.aremond.ovh.  IN  TXT  "v=DKIM1; p=<clé-fournie-par-brevo>"
+brevo._domainkey.asso.aremond.ovh.  IN  TXT  "v=DKIM1; p=<clé-fournie-par-brevo>"
 ```
 
 Récupérez la clé et le sélecteur dans le dashboard Brevo (ou de votre
@@ -440,11 +450,11 @@ fournisseur SMTP) et publiez-les tels quels.
 Commencez en mode **observatoire** (aucun impact, collecte des rapports) :
 
 ```
-_dmarc.aso.aremond.ovh.  IN  TXT  "v=DMARC1; p=none; rua=mailto:tresorerie@aeic.fr"
+_dmarc.asso.aremond.ovh.  IN  TXT  "v=DMARC1; p=none; rua=mailto:tresorerie@aeic.fr"
 ```
 Après quelques semaines de rapports sans anomalie, passez en mode **quarantaine** :
 ```
-_dmarc.aso.aremond.ovh.  IN  TXT  "v=DMARC1; p=quarantine; pct=100; rua=mailto:tresorerie@aeic.fr"
+_dmarc.asso.aremond.ovh.  IN  TXT  "v=DMARC1; p=quarantine; pct=100; rua=mailto:tresorerie@aeic.fr"
 ```
 
 > Remplacez `tresorerie@aeic.fr` par l'adresse qui recevra les rapports DMARC.

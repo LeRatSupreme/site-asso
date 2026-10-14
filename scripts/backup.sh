@@ -11,7 +11,7 @@
 #  Rotation : on conserve les 14 derniers jours de sauvegardes.
 #
 #  Cron recommandé (chaque nuit à 3h) :
-#      0 3 * * *  /var/www/aeic/scripts/backup.sh >> /var/www/aeic/logs/backup.log 2>&1
+#      0 3 * * *  /home/ubuntu/AEIC/scripts/backup.sh >> /home/ubuntu/AEIC/logs/backup.log 2>&1
 # =====================================================================
 set -euo pipefail
 

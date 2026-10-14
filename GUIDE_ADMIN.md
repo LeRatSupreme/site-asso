@@ -22,6 +22,7 @@
 14. [Les paramètres du site](#14--les-paramètres-du-site)
 15. [Check-in QR codes aux événements](#15--check-in-qr-codes-aux-événements)
 16. [Conseils & bonnes pratiques](#16--conseils--bonnes-pratiques)
+17. [Modules récents (livre comptable, caisses, kiosques, SMS, scan)](#17--modules-récents)
 
 ---
 
@@ -41,13 +42,17 @@
 ### Rôles
 | Rôle | Accès |
 |------|-------|
-| **ADMIN** | Tout l'espace d'administration |
-| **TRESORERIE** | Uniquement la comptabilité (dashboard, import, coûts, réappro) |
-| **EVENEMENTS** | Gestion des événements, inscriptions et check-in |
-| **COMMUNICATION** | Pages, équipe, sondages, promotions, médias |
+| **FONDATEUR** (SUPERADMIN) | Rôle réservé au fondateur : accès système et tout l'espace d'administration, sans condition |
+| **ADMIN** | Tout l'espace d'administration — sauf le groupe **Système** (Utilisateurs, Paramètres…), réservé aux ADMIN listés dans `SYSTEM_ADMINS` (voir §17) |
+| **TRESORERIE** | Comptabilité complète : dashboard, import, achats, pertes, réappro, budgets, exports — plus contenus, événements, cafétéria et jeux. L'inventaire ne lui est **pas** ouvert (réservé aux admins) |
+| **COMMUNICATION** | Pages, équipe, sondages, promotions, médias (+ événements et cafétéria) |
 | **CAFETERIA** | Produits et catégories de la cafétéria |
-| **JEUX** | Gestion des jeux (Wordle, énigmes, classements) |
+| **JEUX** | Gestion des jeux (Wordle, énigmes, classements) (+ cafétéria) |
 | **ELEVE** | Aucun accès à l'admin |
+
+> ℹ️ Le rôle **EVENEMENTS** existe dans le code mais n'est **pas assignable** avec la
+> matrice de permissions actuelle : la gestion des événements est en pratique ouverte
+> aux rôles COMMUNICATION et TRESORERIE. La page Utilisateurs ne propose pas ce choix.
 
 ### Mot de passe oublié
 - Page **« Mot de passe oublié ? »** sur l'écran de connexion
@@ -64,10 +69,11 @@ Accessible via **Admin → Tableau de bord** (ou `/admin`).
 | Carte | Description |
 |-------|-------------|
 | **Membres actifs** | Nombre total d'utilisateurs actifs |
-| **À jour de cotisation** | Membres ayant payé leur cotisation pour la saison en cours |
 | **Événements publiés** | Nombre d'événements visibles sur le site |
-| **CA ce mois** | Chiffre d'affaires du mois (basé sur les ventes SumUp importées) |
-| **Bénéfice ce mois** | Bénéfice net = CA − coûts de revient |
+
+> Les indicateurs financiers (CA, bénéfice…) et le suivi de cotisation ne sont plus
+> sur ce tableau de bord : le CA et le bénéfice vivent dans le **Dashboard compta**
+> (voir §7.K), les cotisations dans la page **Adhésions** (voir §10).
 
 ### Journal d'audit
 En bas du tableau de bord, le **journal d'audit** liste les dernières actions :
@@ -93,7 +99,7 @@ Accessible via **Admin → Contenu → Événements** (ou `/admin/events`).
 | **Catégorie** | Type d'événement | `Soirée`, `Tournoi / LAN`, `Conférence` |
 | **Extrait** | Résumé court (affiché sur les cartes + Google) | `Le rendez-vous de rentrée...` |
 | **Description** | Texte complet (HTML autorisé) | `<p>Détails de l'événement...</p>` |
-| **Date et heure** | Quand | `12/09/2026 20:00` |
+| **Date et heure** | Quand | `13/11/2026 20:00` |
 | **Lieu** | Où | `Campus de Calais — Amphi A` |
 | **Afficher une carte** | Active une carte interactive (géocodage auto du lieu) | ✅ |
 | **Prix** | Prix en € (vide = gratuit) | `5,00` |
@@ -220,7 +226,7 @@ Si tu ajoutes une **image** au produit → l'image remplace l'emoji.
 ## 7. 💰 La comptabilité (import SumUp)
 
 ### A. Importer un rapport SumUp
-**Admin → Comptabilité → Importer CSV** :
+**Admin → Ventes → Importer CSV** :
 
 1. Récupère ton rapport SumUp (format CSV)
    - Sur l'app SumUp : **Reports** → sélectionne la période → **Export CSV**
@@ -234,7 +240,7 @@ Si tu ajoutes une **image** au produit → l'image remplace l'emoji.
 > ⚠️ Le CSV doit être au format **SumUp** (colonnes : Date, Réf. transaction, Description, Prix TTC, etc.)
 
 ### B. Mapping des libellés
-**Admin → Comptabilité → Mapping libellés** :
+**Admin → Produits & coûts → Mapping libellés** :
 
 SumUp enregistre parfois le même produit sous des noms différents (Bueno, Bueno_white, etc.).
 - Le **mapping** associe ces variantes à un **nom canonique** unique
@@ -248,7 +254,7 @@ Certains produits sont vendus sous le même nom SumUp mais à des prix différen
 - Besoin de revenir à un produit unique ? Utilise l'**outil de fusion de clés** de l'inventaire pour refusionner les deux produits
 
 ### C. Coûts de revient
-**Admin → Comptabilité → Coûts de revient** :
+**Admin → Système → Coûts de revient** (page réservée, voir §17) :
 
 Pour calculer le **bénéfice réel**, tu dois saisir le **prix d'achat** de chaque produit :
 1. Recherche le produit (champ autocomplété)
@@ -259,20 +265,20 @@ Pour calculer le **bénéfice réel**, tu dois saisir le **prix d'achat** de cha
 > 💡 Le bénéfice = Prix de vente − Coût d'achat. Sans coût saisi → bénéfice = 100% (faux).
 
 ### D. Journal des ventes
-**Admin → Comptabilité → Journal ventes** :
+**Admin → Ventes → Journal ventes** :
 - Toutes les ventes importées, **filtrables** (catégorie, produit, paiement)
 - Filtre **📅 Période** (7 jours → Tout, ou dates personnalisées), comme sur Réappro.
 - **Export CSV** disponible
 - **Totaux** en bas (CA, quantité, bénéfice)
 
 ### E. Bénéfice par produit
-**Admin → Comptabilité → Produits** :
+**Admin → Produits & coûts → Produits** :
 - Filtre **📅 Période** (7 jours → Tout, ou dates personnalisées), comme sur Réappro.
 - **Recherche** + **tri** par colonne (CA, bénéfice, marge)
 - **Filtre par catégorie**
 
 ### F. Bénéfice par catégorie
-**Admin → Comptabilité → Catégories** :
+**Admin → Produits & coûts → Catégories** :
 - Vue d'ensemble par catégorie (Boisson, Nourriture, Spécial)
 - **Cartes KPI** : CA, bénéfice, marge, % du CA total
 - Filtre **📅 Période** (7 jours → Tout, ou dates personnalisées), comme sur la page Réappro.
@@ -281,7 +287,7 @@ Pour calculer le **bénéfice réel**, tu dois saisir le **prix d'achat** de cha
 
 > 💡 Avant d'utiliser ces pages, exécute la migration `database/migrations/2026_compta_suivi.sql` (via **phpMyAdmin** ou en CLI mysql : `mysql -u user -p base < database/migrations/2026_compta_suivi.sql`). Elle crée les tables `expenses`, `budgets`, `purchases` et `inventory_counts`.
 
-**Admin → Comptabilité → Dépenses** (ou `/admin/compta/depenses`).
+**Admin → Comptabilité → Opérations** (ou `/admin/compta/depenses`).
 
 Filtre **📅 Période** (7 jours → Tout, ou dates personnalisées), comme sur la page Réappro.
 
@@ -324,7 +330,10 @@ Filtre **📅 Période** (7 jours → Tout, ou dates personnalisées), comme sur
 | **Dépassé** | Dépenses > enveloppe |
 
 ### I. Achats & inventaire
-**Admin → Comptabilité → Achats & stock** (`/admin/compta/achats`) et **Inventaire** (`/admin/compta/inventaire`).
+**Admin → Comptabilité → Opérations** (`/admin/compta/achats`) et **Inventaire** (`/admin/compta/inventaire`, menu Système).
+
+> Les pages Achats, Dépenses, Pertes et Événements compta sont regroupées sous
+> l'entrée unique **Opérations** du menu Comptabilité.
 
 Filtre **📅 Période** (7 jours → Tout, ou dates personnalisées) sur les achats, comme sur la page Réappro.
 
@@ -368,7 +377,7 @@ Le panneau **🔔 Alertes & suivi** regroupe :
 - **Réappro** : produits à racheter
 
 ### L. Pertes (`/admin/compta/pertes`)
-**Admin → Trésorerie & stock → Pertes** (ou `/admin/compta/pertes`).
+**Admin → Comptabilité → Opérations** (ou `/admin/compta/pertes`).
 
 Filtre **📅 Période** (7 jours → Tout, ou dates personnalisées), comme sur Réappro.
 
@@ -394,7 +403,7 @@ Résultat : une perte enregistrée **explique un écart d'inventaire** au lieu d
 > 💡 Pense à exécuter la migration `database/migrations/2026_compta_pertes.sql` (table `losses`) si elle n'est pas encore en base.
 
 ### M. Événements (`/admin/compta/evenements`)
-**Admin → Trésorerie & stock → Événements** (ou `/admin/compta/evenements`).
+**Admin → Comptabilité → Opérations** (ou `/admin/compta/evenements`).
 
 Filtre **📅 Période** (7 jours → Tout, ou dates personnalisées), comme sur Réappro.
 
@@ -433,7 +442,7 @@ La page calcule **combien racheter** de chaque produit, basé sur les ventes ré
 ### Comment l'utiliser
 1. Choisis la **période analysée** (7 j → tout) et l'**horizon à couvrir** (1 semaine, 2 semaines, 1 mois, 2 mois, 3 mois)
 2. Lis la colonne **« À commander »** et le **total** en bas (quantité + coût estimé du panier)
-3. Commande, puis enregistre la livraison dans **Achats & stock** : le stock théorique remonte automatiquement
+3. Commande, puis enregistre la livraison dans **Opérations** (Achats) : le stock théorique remonte automatiquement
 
 ### États
 | Badge | Signification |
@@ -497,7 +506,7 @@ En haut de la page :
 
 | Action | Description |
 |--------|-------------|
-| **Changer le rôle** | ELEVE → ADMIN, TRESORERIE, EVENEMENTS, COMMUNICATION, CAFETERIA ou JEUX |
+| **Changer le rôle** | ELEVE → ADMIN, TRESORERIE, COMMUNICATION, CAFETERIA ou JEUX (FONDATEUR réservé) |
 | **Activer/Désactiver** | Bloque l'accès au site |
 | **Reset MDP** | Génère un mot de passe temporaire (envoyé par email) |
 | **Supprimer** | Anonymise les données (RGPD) — les commandes sont conservées |
@@ -509,10 +518,10 @@ En haut de la page :
 > - Chaque action est **journalisée** (audit log)
 
 ### Adhésions / Cotisations
-**Admin → Système → Adhésions** (ou `/admin/memberships`).
+Page **Adhésions** dans le menu (ou depuis la page **Utilisateurs**) — `/admin/memberships`.
 
 - Liste de toutes les adhésions par saison
-- **Filtre par saison** (2025-2026, 2026-2027...)
+- **Filtre par saison** (2026-2027, 2027-2028...)
 - Statuts : **Payée** (vert) / **En attente** (ambre) / **Expirée** (gris)
 - Bouton **« Marquer payée »** avec montant
 
@@ -652,7 +661,7 @@ Sur la page des inscriptions :
 
 ### Importer les ventes SumUp
 - **Au moins une fois par mois** (ou plus souvent)
-- Importe le rapport SumUp dans **Comptabilité → Importer CSV**
+- Importe le rapport SumUp dans **Ventes → Importer CSV**
 - Vérifie les **libellés non mappés** (aliases)
 - Saisis les **coûts de revient** pour les nouveaux produits
 
@@ -664,7 +673,7 @@ Sur la page des inscriptions :
 ### Cotisations
 - En début d'année : crée les adhésions pour les nouveaux membres
 - Marque « Payée » avec le montant dès réception du paiement
-- Le tableau de bord affiche le nombre de membres à jour
+- Le suivi se fait depuis la page **Adhésions** (voir §10)
 
 ### Emails
 - Vérifie régulièrement que les emails partent (test depuis Paramètres)
@@ -683,6 +692,53 @@ Sur la page des inscriptions :
 - Le rôle **TRESORERIE** suffit pour gérer la comptabilité
 - **Change ton mot de passe** régulièrement (Mon compte → Changer mon mot de passe)
 - Ne partage **jamais** ton mot de passe
+
+---
+
+## 17. 🧩 Modules récents
+
+Des modules ajoutés au fil des besoins du bureau, longtemps non documentés.
+
+### 📖 Livre comptable & saisie express de dépense
+**Admin → Système → Livre comptable** (ou `/admin/ledger`).
+- Retranscription prête à recopier dans le livret papier : Date | Objet | Débit | Crédit. Les achats du même jour chez le même fournisseur (ou même n° de facture) sont fusionnés ; les ventes sont résumées en une ligne de clôture.
+- Le pied de page affiche le **solde de trésorerie** (encaissements − décaissements), qui n'est **pas** le bénéfice — ce dernier est calculé à part.
+- **Saisie express d'une dépense** (30 s : nom, référence, montant) avec **scan du ticket** intégré.
+
+### 💵 Caisses & comptages de caisse
+**Admin → Système → Caisses** (ou `/admin/caisses`) ; saisie rapide via **Comptage → Comptage caisse**.
+- Suivi du liquide : solde théorique = ventes en liquide + mouvements manuels (fond de caisse, dépôts en banque, ajustements).
+- Un **comptage physique** révèle les écarts et réaligne le solde ; tout est historisé, rien n'est supprimable.
+- Chaque **dépôt en banque** crée automatiquement la dépense de frais bancaires correspondante.
+
+### 📱 Kiosques téléphone (liens à jeton)
+**Admin → Système → Kiosques** (ou `/admin/kiosques`).
+- Des liens à ouvrir sur un téléphone, **sans connexion** : le jeton secret dans l'URL sert d'authentification.
+- Liens **membres** : hub tout-en-un — comptage de caisse, comptage d'inventaire, liste de courses partagée, ventes du jour (sans données sensibles).
+- Liens **admins** (jeton séparé) : livre comptable avec saisie express, rapports de période, analytics.
+- **Régénérer un jeton révoque tous les liens** qui l'utilisent ; copie en un clic depuis la page.
+
+### 💬 Rapports SMS
+**Admin → Système → Notifications** (ou `/admin/notifications`) ; envoi par le cron `scripts/send_sms_report.php`.
+- Messages programmés envoyés par SMS (API Free Mobile) : CA du jour, bénéfice, top produits…
+- Chaque message a ses **jours**, son **heure** et son **modèle** (variables entre accolades) ; les destinataires sont gérés dans la page, avec bouton **Test**.
+- Journée sans vente : aucun SMS envoyé.
+
+### 🧾 Scan de factures (OCR)
+Dans les formulaires **Achats** (Opérations), **Dépenses** et le livre comptable.
+- Photographie la facture (ou dépose un PDF, 10 Mo max), ou colle directement le texte : les lignes reconnues pré-remplissent la grille de saisie.
+- Les libellés reconnus sont rattachés aux produits du catalogue ; les inconnus partent dans la file « à classer » de la page **Ajouter une appellation**.
+- Le justificatif est conservé et peut être joint aux achats créés depuis la facture.
+
+### 🔐 Permissions du groupe Système (SYSTEM_ADMINS)
+- Le groupe **Système** (Utilisateurs, Paramètres, Caisses, Kiosques, Livre comptable, Inventaire, Coûts de revient, Notifications) est réservé au **Fondateur** et aux ADMIN dont l'email figure dans `SYSTEM_ADMINS` (fichier `config.env` du VPS, emails séparés par des virgules).
+- Les autres membres du bureau peuvent recevoir des **pages attribuées individuellement** depuis la page **Utilisateurs** (« Pages + » : inventaire, coûts, caisses…), en plus de leur rôle.
+
+### 🛒 Saisie d'achats en lot / collage multi-lignes
+Dans le formulaire **Achats** (Admin → Comptabilité → Opérations).
+- Grille **multi-lignes** : toute une commande fournisseur en un seul enregistrement (jusqu'à 60 lignes).
+- Colle « Nom ; Qté ; Montant » copié depuis une facture : la grille se remplit toute seule.
+- Au clavier : **Entrée** enchaîne les lignes, **Ctrl+Entrée** enregistre ; case **hors stock** et **TVA par ligne** disponibles.
 
 ---
 
