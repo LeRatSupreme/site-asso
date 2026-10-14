@@ -181,6 +181,10 @@ function aeic_register_routes(Router $router): void
     $router->post('/admin/cafeteria/categories/{id}/delete', [AdminCafeteriaController::class, 'deleteCategory']);
     $router->post('/admin/cafeteria/sync', [AdminCafeteriaController::class, 'syncProducts']);
 
+    // Commandes élèves (définitions d'origine restaurées, cf. c2f8b6f^).
+    $router->get('/admin/cafeteria/commandes', [AdminCafeteriaController::class, 'orders']);
+    $router->post('/admin/cafeteria/commandes/{id}/status', [AdminCafeteriaController::class, 'changeStatus']);
+
     $router->get('/admin/users', [AdminUserController::class, 'index']);
     $router->post('/admin/users/{id}/role', [AdminUserController::class, 'changeRole']);
     $router->post('/admin/users/{id}/name', [AdminUserController::class, 'rename']);

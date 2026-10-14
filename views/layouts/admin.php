@@ -44,6 +44,7 @@ $sections = [
     'Cafétéria' => [
         'Produits'    => '/admin/cafeteria',
         'Catégories'  => '/admin/cafeteria/categories',
+        'Commandes'   => '/admin/cafeteria/commandes',
     ],
     'Jeux' => [
         'Vue d\'ensemble' => '/admin/jeux',
