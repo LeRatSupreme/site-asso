@@ -305,7 +305,7 @@ final class AuthController extends Controller
         $callback = (string) ($_POST['callbackUrl'] ?? '');
         $target = $this->safeCallback($callback);
 
-        $this->setFlash('success', sprintf('Bonjour, %s !', e($user['prenom'])));
+        $this->setFlash('success', sprintf('Bonjour, %s !', (string) $user['prenom']));
         redirect(url($target));
     }
 
@@ -488,8 +488,8 @@ final class AuthController extends Controller
         $errors = [];
         if ($valid === null) {
             $errors[] = 'Ce lien de réinitialisation est invalide ou expiré.';
-        } elseif (strlen($password) < 8) {
-            $errors[] = 'Le mot de passe doit comporter au moins 8 caractères.';
+        } elseif (mb_strlen($password) < Validator::PASSWORD_MIN) {
+            $errors[] = sprintf('Le mot de passe doit comporter au moins %d caractères.', Validator::PASSWORD_MIN);
         } elseif (!preg_match('/[A-Za-z]/', $password) || !preg_match('/\d/', $password)) {
             $errors[] = 'Le mot de passe doit contenir au moins une lettre et un chiffre.';
         } elseif ($password !== $confirm) {

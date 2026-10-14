@@ -155,9 +155,28 @@
        Scan de facture : compression photo (canvas) puis OCR serveur.
        ------------------------------------------------------------ */
 
-    /** Endpoint par défaut de l'API « scan de facture » (contrôle :
-        routes POST /admin/compta/achats/scan, contrôleur Achats). */
-    var SCAN_ENDPOINT = '/admin/compta/achats/scan';
+    /**
+     * Endpoint de l'API « scan de facture » (contrôle : routes POST
+     * /admin/compta/achats/scan, contrôleur Achats).
+     *
+     * Surchargé au chargement par la vue si elle fournit l'URL rendue par
+     * url() — via la variable globale `window.AEIC_SCAN_URL` ou le
+     * data-attribut `data-scan-url` de la balise <script> qui charge ce
+     * fichier (ex. : <script src="…/compta-saisie.js"
+     * data-scan-url="<?= url('/admin/compta/achats/scan') ?>">) — sinon
+     * repli sur le chemin par défaut.
+     */
+    var SCAN_ENDPOINT = (function () {
+        var fromGlobal = global && typeof global.AEIC_SCAN_URL === 'string'
+            ? global.AEIC_SCAN_URL.trim() : '';
+        if (fromGlobal !== '') return fromGlobal;
+        var script = typeof document !== 'undefined' && document.currentScript
+            ? document.currentScript : null;
+        var fromAttr = script && script.dataset && typeof script.dataset.scanUrl === 'string'
+            ? script.dataset.scanUrl.trim() : '';
+        if (fromAttr !== '') return fromAttr;
+        return '/admin/compta/achats/scan';
+    })();
 
     /**
      * Côté long maximal d'une photo recompressée avant upload (px). Les

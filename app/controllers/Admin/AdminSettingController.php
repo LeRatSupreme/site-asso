@@ -24,7 +24,7 @@ final class AdminSettingController extends AdminBaseController
         'mailer_from', 'mailer_from_name',
         'smtp_host', 'smtp_port', 'smtp_user', 'smtp_pass', 'smtp_encryption',
         'brevo_api_key',
-        'sumup_default_link', 'sumup_enabled', 'default_sumup_link', 'sumup_fee_rate',
+        'sumup_default_link', 'sumup_enabled', 'sumup_fee_rate',
         'maintenance_mode', 'orders_enabled', 'registrations_enabled',
         'og_image', 'twitter_handle', 'csp_directives',
         'facebook_url', 'instagram_url', 'linkedin_url',
@@ -57,7 +57,6 @@ final class AdminSettingController extends AdminBaseController
         'brevo_api_key'          => ['email', ''],
         'sumup_default_link'     => ['sumup', ''],
         'sumup_enabled'          => ['sumup', '0'],
-        'default_sumup_link'     => ['sumup', ''],
         'sumup_fee_rate'         => ['sumup', '1.75'],
         'maintenance_mode'       => ['features', '0'],
         'orders_enabled'         => ['features', '1'],
@@ -166,9 +165,9 @@ final class AdminSettingController extends AdminBaseController
 
         if ($ok) {
             $this->audit('settings.test_email', 'settings', null, ['to' => $to]);
-            $this->setFlash('success', sprintf('E-mail de test envoyé à %s (transport : %s).', e($to), e($host)));
+            $this->setFlash('success', sprintf('E-mail de test envoyé à %s (transport : %s).', $to, $host));
         } else {
-            $this->setFlash('error', sprintf('Échec de l\'envoi à %s. Vérifiez la configuration SMTP.', e($to)));
+            $this->setFlash('error', sprintf('Échec de l\'envoi à %s. Vérifiez la configuration SMTP.', $to));
         }
 
         redirect(url('/admin/settings'));

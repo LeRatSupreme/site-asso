@@ -13,8 +13,8 @@ namespace App\Core;
  */
 final class Validator
 {
-    /** Longueur minimale du mot de passe. */
-    public const PASSWORD_MIN = 8;
+    /** Longueur minimale du mot de passe (12 caractères). */
+    public const PASSWORD_MIN = 12;
 
     /**
      * Valide les données d'inscription.

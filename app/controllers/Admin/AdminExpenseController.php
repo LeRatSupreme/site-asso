@@ -6,6 +6,7 @@ namespace App\Controllers\Admin;
 
 use App\Core\Compta\ComptaCalc;
 use App\Core\Compta\ReceiptStorage;
+use App\Core\Logger;
 use App\Models\Expense;
 
 /**
@@ -75,7 +76,9 @@ final class AdminExpenseController extends AdminBaseController
         try {
             return ReceiptStorage::store();
         } catch (\RuntimeException $e) {
-            $this->setFlash('error', $e->getMessage());
+            // Message générique affiché : le motif réel part dans le log.
+            Logger::error('compta: enregistrement du justificatif impossible', ['msg' => $e->getMessage()]);
+            $this->setFlash('error', 'Le justificatif n\'a pas pu être enregistré. L\'incident a été journalisé.');
             redirect(url($back));
         }
     }

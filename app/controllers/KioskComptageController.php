@@ -13,6 +13,7 @@ use App\Core\Compta\ScanCatalogMatcher;
 use App\Core\Compta\StockPublic;
 use App\Core\Compta\SumUpCsvParser;
 use App\Core\Controller;
+use App\Core\Logger;
 use App\Models\Analytics;
 use App\Models\AuditLog;
 use App\Models\Expense;
@@ -249,7 +250,13 @@ final class KioskComptageController extends Controller
         try {
             $receiptPath = ReceiptStorage::store();
         } catch (\RuntimeException $e) {
-            $this->setFlash('error', $e->getMessage());
+            // Message générique côté kiosque : le motif réel (refus de
+            // fichier, panne disque…) part dans le log.
+            Logger::error('kiosque: enregistrement du justificatif impossible', [
+                'who' => $who,
+                'msg' => $e->getMessage(),
+            ]);
+            $this->setFlash('error', 'Le justificatif n\'a pas pu être enregistré. L\'incident a été journalisé.');
             redirect($back);
         }
 
