@@ -37,4 +37,5 @@ image_a_scan.jpg
 Thumbs.db
 .idea/
 .vscode/
+.kilo/
 tests/cache/
