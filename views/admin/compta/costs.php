@@ -75,9 +75,11 @@ declare(strict_types=1);
 
 <div class="costs-layout">
 
-    <!-- Formulaire d'ajout / modification (sticky) -->
-    <section class="card surface glass costs-form" id="costs-form">
-        <h2 class="card-title"><?= $editLot !== null ? 'Modifier le lot' : 'Ajouter un lot' ?></h2>
+    <!-- Formulaire d'ajout / modification (sticky, repliable — fermé par défaut) -->
+    <details class="card surface glass costs-form" id="costs-form" <?= $editLot !== null ? 'open' : '' ?>>
+        <summary class="costs-form-summary">
+            <span class="card-title"><?= $editLot !== null ? 'Modifier le lot' : '＋ Ajouter un lot' ?></span>
+        </summary>
         <form method="post" action="<?= e(url($editLot !== null
             ? '/admin/compta/couts/' . rawurlencode((string) $editLot['id']) . '/update'
             : '/admin/compta/couts/save')) ?>">
@@ -117,7 +119,7 @@ declare(strict_types=1);
                 <a class="btn btn-ghost btn-block" href="<?= e(url('/admin/compta/couts')) ?>">Annuler la modification</a>
             <?php endif; ?>
         </form>
-    </section>
+    </details>
 
     <!-- Liste des produits -->
     <section class="costs-list">
@@ -386,5 +388,16 @@ declare(strict_types=1);
     catSel.addEventListener('change', apply);
     noCost.addEventListener('change', apply);
     apply();
+})();
+
+/* Carte « Ajouter un lot » : ouverture automatique (ancre ou lien « Modifier ») */
+(function () {
+    var form = document.getElementById('costs-form');
+    if (!form) return;
+    if (location.hash === '#costs-form') form.open = true;
+    document.addEventListener('click', function (e) {
+        var link = e.target && e.target.closest ? e.target.closest('a[href$="#costs-form"]') : null;
+        if (link) form.open = true;
+    });
 })();
 </script>
