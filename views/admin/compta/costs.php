@@ -188,7 +188,8 @@ declare(strict_types=1);
                                 <?php if ($it['lotsCount'] > 0): ?>
                                     <details class="cost-card-lots">
                                         <summary>Voir les <?= (int) $it['lotsCount'] ?> lot<?= $it['lotsCount'] > 1 ? 's' : '' ?></summary>
-                                        <table class="table">
+                                        <div class="table-wrap">
+                                            <table class="table">
                                             <thead><tr><th>Coût unit.</th><th>Du</th><th>Au</th><th>Fournisseur</th><th>Actions</th></tr></thead>
                                             <tbody>
                                                 <?php foreach ($it['lots'] as $c): ?>
@@ -219,7 +220,8 @@ declare(strict_types=1);
                                                     </tr>
                                                 <?php endforeach; ?>
                                             </tbody>
-                                        </table>
+                                            </table>
+                                        </div>
                                     </details>
                                 <?php endif; ?>
 
@@ -259,6 +261,7 @@ declare(strict_types=1);
             </div>
         </div>
 
+        <div class="table-wrap">
         <table class="table" id="costs-bulk-grid">
             <thead>
                 <tr>
@@ -275,6 +278,7 @@ declare(strict_types=1);
                 </tr>
             </tbody>
         </table>
+        </div>
         <datalist id="bulk-products">
             <?php foreach ($productKeys as $k): ?>
                 <option value="<?= e($k) ?>"></option>

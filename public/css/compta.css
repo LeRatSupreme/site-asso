@@ -268,6 +268,8 @@
     margin-top: 2rem;
 }
 @media (max-width: 980px) { .costs-layout { grid-template-columns: 1fr; } }
+/* Enfants de grille : min-width 0 pour que le contenu (table, boutons longs) rétrécisse au lieu de déborder. */
+.costs-layout > * { min-width: 0; }
 
 .costs-form { position: sticky; top: 1rem; display: block; }
 .costs-list .card-title { margin: 0 0 1.25rem; }
@@ -300,6 +302,9 @@
 .costs-form[open] .costs-form-summary { margin-bottom: 0.75rem; }
 @media (max-width: 540px) {
     .costs-form { padding: 1rem 1.1rem; }
+    /* Padding latéral réduit : le contenu garde de la place sur petits écrans. */
+    .cost-explain { padding: 1.25rem 1.1rem; }
+    .cost-card { padding: 1.25rem 1.1rem; }
 }
 
 .costs-list-head {
@@ -311,7 +316,9 @@
 }
 .costs-list-head .card-title { margin: 0; }
 
-.field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+/* Colonnes fluides : minmax(0,1fr) pour que prix + date rétrécissent sans déborder. */
+.field-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; }
+.field-row > .field { min-width: 0; }
 @media (max-width: 540px) { .field-row { grid-template-columns: 1fr; } }
 
 .field-help { font-size: 0.78rem; color: var(--muted); margin: 0.3rem 0 0; }
@@ -356,7 +363,7 @@
 /* =========================================================
    Combobox de recherche produit (page coûts de revient)
    ========================================================= */
-.combobox { position: relative; }
+.combobox { position: relative; max-width: 100%; }
 
 .combobox-input { width: 100%; }
 
@@ -387,6 +394,7 @@
     border-radius: 12px;
     box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
     max-height: 280px;
+    max-width: 100%;
     overflow-y: auto;
 }
 
@@ -480,6 +488,7 @@
 }
 .cost-formula-item {
     flex: 1 1 180px;
+    min-width: 0; /* fluide : jamais plus large que l'écran */
     background: rgba(255, 255, 255, 0.03);
     border: 1px solid var(--border);
     border-radius: 12px;
@@ -535,7 +544,7 @@
     border: 1px solid var(--border);
     border-radius: 12px;
 }
-.costs-toolbar .search-box { flex: 1 1 200px; }
+.costs-toolbar .search-box { flex: 1 1 200px; min-width: 0; }
 .costs-toolbar .search-box input,
 .costs-toolbar select {
     width: 100%;
@@ -546,7 +555,7 @@
     padding: 0.5rem 0.7rem;
     font-size: 0.9rem;
 }
-.costs-toolbar select { width: auto; }
+.costs-toolbar select { width: auto; max-width: 100%; }
 .costs-toolbar .search-box input:focus,
 .costs-toolbar select:focus { outline: none; border-color: var(--primary); }
 .filter-check {
@@ -587,9 +596,11 @@
     justify-content: space-between;
     gap: 1rem;
 }
-.cost-card-id h3 { margin: 0 0 0.55rem; font-size: 1.1rem; font-weight: 800; }
+/* min-width 0 + coupure des noms longs : le titre ne pousse plus la carte. */
+.cost-card-id { min-width: 0; }
+.cost-card-id h3 { margin: 0 0 0.55rem; font-size: 1.1rem; font-weight: 800; overflow-wrap: anywhere; }
 .cost-card-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; font-size: 0.82rem; }
-.cost-card-current { display: flex; flex-direction: column; align-items: flex-end; gap: 0.25rem; }
+.cost-card-current { display: flex; flex-direction: column; align-items: flex-end; gap: 0.25rem; min-width: 0; max-width: 100%; }
 .cost-card-price { font-size: 1.15rem; font-weight: 800; color: var(--primary); }
 
 .cost-card-lots { margin-top: 0.85rem; }
@@ -602,7 +613,8 @@
 .cost-card-lots .table th { background: rgba(0,0,0,0.18); }
 
 .cost-card-add { margin-top: 0.7rem; }
-.cost-card-add .btn { font-size: 0.8rem; }
+/* Nom de produit long : le lien passe à la ligne au lieu de déborder (nowrap hérité de .btn). */
+.cost-card-add .btn { font-size: 0.8rem; white-space: normal; }
 
 .btn-danger {
     background: rgba(239, 68, 68, 0.14);
@@ -1446,10 +1458,14 @@ details.howto p {
     }
 
     /* Barre de filtres : recherche pleine largeur, filtres côte à côte,
-       et taille 16 px pour éviter le zoom automatique d'iOS au focus. */
+       et taille 16 px pour éviter le zoom automatique d'iOS au focus
+       (formulaire « Ajouter un lot » et grille d'ajout en lot inclus). */
     .costs-toolbar .search-box { flex: 1 1 100%; }
     .costs-toolbar .search-box input,
     .costs-toolbar select,
+    .costs-form input,
+    .costs-form select,
+    #costs-bulk-grid input,
     .reappro-bar select,
     .reappro-dates input[type="date"] { font-size: 16px; }
     .costs-toolbar select { flex: 1 1 30%; width: auto; }
