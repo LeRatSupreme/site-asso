@@ -114,7 +114,7 @@ $wikiToc = [
 
     <div class="wiki-block">
         <h3>Mot de passe oublié</h3>
-        <p>Sur la page de connexion → <strong>« Mot de passe oublié ? »</strong> → entre ton email → un lien de réinitialisation t'est envoyé. Clique le lien → choisis un nouveau mot de passe (8 caractères min, 1 lettre + 1 chiffre).</p>
+        <p>Sur la page de connexion → <strong>« Mot de passe oublié ? »</strong> → entre ton email → un lien de réinitialisation t'est envoyé. Clique le lien → choisis un nouveau mot de passe (12 caractères min, 1 lettre + 1 chiffre).</p>
         <p>Un admin peut aussi faire un <strong>« Reset MDP »</strong> depuis Admin → Utilisateurs → ça génère un mot de passe temporaire envoyé par email.</p>
     </div>
 
@@ -607,7 +607,7 @@ $wikiToc = [
 </div><!-- /wiki-body -->
 
 <div class="wiki-footer">
-    <p>Développé par <strong style="color:var(--primary)">Remond Adrien</strong> · © 2026 AEIC · 100 % étudiant</p>
+    <p>Développé par <strong style="color:var(--primary)">Remond Adrien</strong> · © <?= date('Y') ?> AEIC · 100 % étudiant</p>
 </div>
 
 </div><!-- /wiki -->

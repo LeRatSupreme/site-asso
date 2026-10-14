@@ -17,34 +17,34 @@ $password = $password ?? '';
 ?>
 <!DOCTYPE html>
 <html lang="fr">
-<head><meta charset="utf-8"></head>
-<body style="margin:0;background:#f5f7fb;font-family:Arial,Helvetica,sans-serif;color:#1a1d24;">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f5f7fb;padding:24px 12px;">
-    <tr><td align="center">
-      <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="max-width:560px;background:#fff;border-radius:14px;overflow:hidden;">
-        <tr style="background:#161a22;">
-          <td style="padding:24px 32px;">
-            <span style="display:inline-block;width:40px;height:40px;line-height:40px;text-align:center;border-radius:10px;background:#c8102e;color:#fff;font-weight:700;">AE</span>
-            <span style="margin-left:12px;color:#fff;font-size:18px;font-weight:700;"><?= e($siteName) ?></span>
-          </td>
-        </tr>
-        <tr><td style="padding:32px;">
-          <h1 style="margin:0 0 12px;font-size:24px;">Bienvenue <?= e($prenom) ?> 👋</h1>
-          <p style="margin:0 0 16px;line-height:1.6;">Ton compte a bien été créé sur le site de l'<?= e($siteName) ?> — l'association étudiante en informatique de Calais.</p>
-          <p style="margin:0 0 8px;line-height:1.6;">Voici ton mot de passe temporaire pour te connecter :</p>
-          <p style="margin:0 0 16px;">
-            <span style="display:inline-block;background:#f0f2f6;border:1px dashed #c7ccd6;border-radius:8px;padding:12px 20px;font-family:monospace;font-size:18px;font-weight:700;letter-spacing:1px;"><?= e($password) ?></span>
-          </p>
-          <p style="margin:0 0 24px;line-height:1.6;">Pour ta sécurité, nous te conseillons de le changer dès ta première connexion depuis ton profil.</p>
-          <p style="margin:0;">
-            <a href="<?= e($siteUrl) ?>/login" style="display:inline-block;background:#c8102e;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:700;">Se connecter</a>
-          </p>
-        </td></tr>
-        <tr><td style="padding:16px 32px;background:#f0f2f6;color:#6b7280;font-size:13px;text-align:center;">
-          © <?= e(date('Y')) ?> <?= e($siteName) ?> · Cet e-mail est automatique, merci de ne pas répondre.
-        </td></tr>
-      </table>
-    </td></tr>
-  </table>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#08172d;font-family:Inter,system-ui,sans-serif;color:#e8eef5;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#08172d;min-height:100vh;">
+<tr><td align="center" style="padding:2rem 1rem;">
+<table width="560" cellpadding="0" cellspacing="0" style="background:#0c1d36;border-radius:1rem;border:1px solid rgba(255,255,255,0.08);">
+<tr><td style="padding:2rem 2rem 1rem;">
+<h1 style="margin:0 0 1rem;font-size:1.4rem;color:#48bdd3;">Bienvenue <?= e($prenom) ?> 👋</h1>
+<p style="font-size:1rem;line-height:1.6;color:#e8eef5;">
+Votre compte a bien été créé sur le site de l'<strong><?= e($siteName) ?></strong> — l'association étudiante en informatique de Calais.
+</p>
+<p style="font-size:1rem;line-height:1.6;color:#e8eef5;">
+Voici votre mot de passe temporaire pour vous connecter :
+</p>
+<div style="background:rgba(72,189,211,0.12);border:1px solid rgba(72,189,211,0.3);border-radius:0.5rem;padding:1rem;margin:1rem 0;text-align:center;">
+<span style="font-family:ui-monospace,'SF Mono',Consolas,monospace;font-size:1.4rem;font-weight:800;color:#48bdd3;letter-spacing:0.1em;"><?= e($password) ?></span>
+</div>
+<p style="font-size:1rem;line-height:1.6;color:#9fb3c8;">
+Pour votre sécurité, nous vous conseillons de le changer dès votre première connexion depuis votre profil.
+</p>
+</td></tr>
+<tr><td style="padding:0 2rem 2rem;">
+<a href="<?= e($siteUrl . '/login') ?>" style="display:inline-block;background:#48bdd3;color:#08172d;font-weight:700;padding:0.8rem 1.5rem;border-radius:0.5rem;text-decoration:none;">Se connecter</a>
+</td></tr>
+<tr><td style="padding:1rem 2rem 2rem;border-top:1px solid rgba(255,255,255,0.08);">
+<p style="font-size:0.8rem;color:#6b7280;margin:0;">&copy; <?= date('Y') ?> <?= e($siteName) ?> — 100 % étudiant.</p>
+</td></tr>
+</table>
+</td></tr>
+</table>
 </body>
 </html>

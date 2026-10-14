@@ -1,11 +1,11 @@
-Bonjour <?= $prenom ?? '' ?>,
+Bonjour <?= e($prenom ?? '') ?>,
 
-Bienvenue sur le site de l'<?= $siteName ?? 'AEIC' ?> ! Pour activer ton compte, confirme ton adresse e-mail en cliquant sur le lien ci-dessous (valide <?= $expiresIn ?? 24 ?> h) :
+Bienvenue sur le site de l'<?= e($siteName ?? 'AEIC') ?> ! Pour activer votre compte, confirmez votre adresse e-mail en cliquant sur le lien ci-dessous (valide <?= e((string) ($expiresIn ?? 24)) ?> h) :
 
-<?= $verifyUrl ?? '' ?>
+<?= e($verifyUrl ?? '') ?>
 
-Tant que tu n'auras pas confirmé ton adresse, tu ne pourras pas te connecter.
+Tant que vous n'aurez pas confirmé votre adresse, vous ne pourrez pas vous connecter.
 
-Si tu n'es pas à l'origine de cette inscription, ignore cet e-mail.
+Si vous n'êtes pas à l'origine de cette inscription, ignorez cet e-mail.
 
-— L'équipe <?= $siteName ?? 'AEIC' ?>
+&copy; <?= date('Y') ?> <?= e($siteName ?? 'AEIC') ?> — 100 % étudiant.

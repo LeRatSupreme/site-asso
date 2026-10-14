@@ -6,7 +6,7 @@ Voici votre mot de passe temporaire :
 <?= e($password ?? '') ?>
 
 Connectez-vous avec ce mot de passe, puis changez-le dès que possible dans
-Mon compte → Changer mon mot de passe.
+Mes données → Changer mon mot de passe.
 
 Lien de connexion : <?= e($siteUrl ?? '') ?>/login
 

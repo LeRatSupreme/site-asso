@@ -19,6 +19,8 @@ $statusBadgeClass = [
     OrderWorkflow::DELIVERED => 'badge-secondary',
     OrderWorkflow::CANCELLED => 'badge-danger',
 ];
+
+require AEIC_VIEWS . '/partials/order_status_labels.php';
 ?>
 <header class="dash-head">
     <span class="eyebrow">Cafétéria</span>
@@ -42,7 +44,7 @@ $statusBadgeClass = [
                     <div>
                         <span class="card-meta">Commande <?= e(formatDateTime((string) ($order['created_at'] ?? ''))) ?></span>
                     </div>
-                    <span class="badge <?= e($statusBadgeClass[$status] ?? 'badge-muted') ?>"><?= e($status) ?></span>
+                    <span class="badge <?= e($statusBadgeClass[$status] ?? 'badge-muted') ?>"><?= e($orderStatusLabels[$status] ?? $status) ?></span>
                 </div>
                 <ul class="list-rows">
                     <?php foreach ($items as $item): ?>

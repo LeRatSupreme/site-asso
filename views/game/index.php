@@ -218,9 +218,9 @@ $userPseudo = ($user !== null && !empty($user['pseudo'])) ? (string) $user['pseu
             <a class="gm-ticket ae-reveal" href="<?= e(url('/jeux/memory')) ?>">
                 <span class="gm-stub" aria-hidden="true">M</span>
                 <span class="gm-body">
-                    <span class="gm-meta"><span class="badge badge-secondary">3 tailles</span></span>
+                    <span class="gm-meta"><span class="badge badge-secondary">7 tailles</span></span>
                     <span class="gm-title">Memory</span>
-                    <span class="gm-desc">Le memory cafétéria&nbsp;: retrouve toutes les paires de produits le plus vite possible. 3 tailles de grille, du 4×4 au 6×6&nbsp;!</span>
+                    <span class="gm-desc">Le memory cafétéria&nbsp;: retrouve toutes les paires de produits le plus vite possible. 7 tailles de grille, du 4×3 au 10×8&nbsp;!</span>
                     <span class="gm-cta">Jouer →</span>
                 </span>
             </a>
