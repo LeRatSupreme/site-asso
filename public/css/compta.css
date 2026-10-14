@@ -269,9 +269,38 @@
 }
 @media (max-width: 980px) { .costs-layout { grid-template-columns: 1fr; } }
 
-.costs-form { position: sticky; top: 1rem; }
-.costs-form .card-title,
+.costs-form { position: sticky; top: 1rem; display: block; }
 .costs-list .card-title { margin: 0 0 1.25rem; }
+
+/* Carte « Ajouter un lot » : repliable (details/summary), fermée par défaut */
+.costs-form-summary {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    list-style: none;
+    user-select: none;
+    padding: 0.25rem 0.5rem;
+    margin: -0.25rem -0.5rem;
+    border-radius: var(--radius-sm, 0.625rem);
+    transition: background 0.15s ease;
+}
+.costs-form-summary::-webkit-details-marker { display: none; }
+.costs-form-summary .card-title { margin: 0; flex: 1 1 auto; }
+.costs-form-summary:hover { background: rgba(255, 255, 255, 0.05); }
+.costs-form-summary:hover .card-title { color: var(--primary); }
+.costs-form-summary::after {
+    content: "▸";
+    flex: 0 0 auto;
+    font-size: 1rem;
+    color: var(--muted);
+    transition: transform 0.15s ease;
+}
+.costs-form[open] .costs-form-summary::after { transform: rotate(90deg); }
+.costs-form[open] .costs-form-summary { margin-bottom: 0.75rem; }
+@media (max-width: 540px) {
+    .costs-form { padding: 1rem 1.1rem; }
+}
 
 .costs-list-head {
     display: flex;
