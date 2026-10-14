@@ -9,6 +9,10 @@ declare(strict_types=1);
  * Notifications) aux destinataires enregistrés, selon ses jours, son
  * heure et son modèle : CA du jour, bénéfice, top produits, catégories…
  *
+ * Journée sans vente : si le CA du jour est à 0 €, aucun message ne
+ * part (le cron réessaie chaque minute — une vente saisie avant la fin
+ * de la fenêtre horaire déclenche quand même l'envoi).
+ *
  * Cron : toutes les minutes (le script filtre lui-même les jours et les
  * heures — fuseau Europe/Paris) :
  *   0-59 * * * * cd /home/ubuntu/AEIC && php scripts/send_sms_report.php >> /home/ubuntu/AEIC/logs/sms_report.log 2>&1
@@ -28,6 +32,14 @@ $day = $now->format('Y-m-d');
 
 $due = SmsReport::dueSchedules($now);
 if ($due === []) {
+    exit(0);
+}
+
+// Journée sans aucune vente : pas de SMS. On ne marque pas le jour
+// comme envoyé, donc une vente saisie avant la fin de la fenêtre
+// horaire déclenchera l'envoi à la minute suivante.
+if (SmsReport::dayRevenue($day) <= 0.0) {
+    echo '[' . $now->format('c') . '] CA du jour à 0 € : ' . count($due) . " message(s) annulé(s).\n";
     exit(0);
 }
 

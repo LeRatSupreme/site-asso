@@ -23,7 +23,7 @@ $dayLabels = [
         <div>
             <p class="eyebrow">Système</p>
             <h1 class="page-title">Notifications SMS</h1>
-            <p class="muted">Crée autant de messages programmés que tu veux : CA, bénéfice, top produits, catégories… envoyés par SMS via l'API Free Mobile.</p>
+            <p class="muted">Crée autant de messages programmés que tu veux : CA, bénéfice, top produits, catégories… envoyés par SMS via l'API Free Mobile. Un jour sans aucune vente (CA à 0 €) n'envoie rien.</p>
         </div>
     </div>
 </div>
