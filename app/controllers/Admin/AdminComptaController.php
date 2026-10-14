@@ -13,6 +13,7 @@ use App\Core\Compta\Kiosk;
 use App\Core\Compta\ProductAutoSync;
 use App\Core\Compta\StockPublic;
 use App\Core\Compta\SumUpCsvParser;
+use App\Core\Logger;
 use App\Models\Expense;
 use App\Models\ImportBatch;
 use App\Models\InventoryCount;
@@ -238,7 +239,13 @@ final class AdminComptaController extends AdminBaseController
                 'filename' => $filename,
                 'error'    => $e->getMessage(),
             ]);
-            $this->setFlash('error', 'Import interrompu, aucune ligne enregistrée : ' . $e->getMessage());
+            // Message générique affiché : le détail de l'erreur reste dans
+            // l'audit et le log applicatif.
+            Logger::error('compta: import CSV échoué', [
+                'filename' => $filename,
+                'msg'      => $e->getMessage(),
+            ]);
+            $this->setFlash('error', 'Import interrompu, aucune ligne enregistrée : une erreur inattendue est survenue. L\'incident a été journalisé.');
             redirect(url('/admin/compta/import'));
         }
 
@@ -813,7 +820,13 @@ final class AdminComptaController extends AdminBaseController
                 $pdo->rollBack();
             }
             $this->audit('compta.product.merge_failed', 'product', $keep, ['error' => $e->getMessage()]);
-            $this->setFlash('error', 'Fusion annulée : ' . $e->getMessage());
+            // Message générique affiché : le détail de l'erreur reste dans
+            // l'audit et le log applicatif.
+            Logger::error('compta: fusion de produits échouée', [
+                'keep' => $keep,
+                'msg'  => $e->getMessage(),
+            ]);
+            $this->setFlash('error', 'Fusion annulée : une erreur inattendue est survenue. L\'incident a été journalisé.');
             redirect(url('/admin/compta/couts'));
         }
 

@@ -6,6 +6,7 @@ namespace App\Controllers;
 
 use App\Core\Auth;
 use App\Core\Controller;
+use App\Core\Logger;
 use App\Core\Mailer;
 use App\Core\Middleware;
 use App\Core\Validator;
@@ -257,7 +258,7 @@ final class StudentController extends Controller
         $cart->add($product, $quantity);
         $this->saveCart($cart);
 
-        $this->setFlash('success', sprintf('« %s » ajouté au panier.', e($product['name'])));
+        $this->setFlash('success', sprintf('« %s » ajouté au panier.', (string) $product['name']));
         redirect(url('/eleve/cafeteria'));
     }
 
@@ -313,7 +314,13 @@ final class StudentController extends Controller
         try {
             CafeteriaOrder::create((string) $user['id'], $cart->items(), (string) ($_POST['notes'] ?? ''));
         } catch (\Throwable $e) {
-            $this->setFlash('error', $e->getMessage());
+            // Le message réel (souvent SQL) reste côté serveur : l'élève ne
+            // voit qu'un message générique.
+            Logger::error('eleve: commande cafétéria échouée', [
+                'user_id' => (string) $user['id'],
+                'msg'     => $e->getMessage(),
+            ]);
+            $this->setFlash('error', 'La commande n\'a pas pu être enregistrée. L\'incident a été journalisé.');
             redirect(url('/eleve/cafeteria'));
         }
 

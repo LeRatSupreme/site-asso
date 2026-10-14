@@ -12,6 +12,7 @@ use App\Core\Compta\ProductLifecycle;
 use App\Core\Compta\Kiosk;
 use App\Core\Compta\PurchaseSaver;
 use App\Core\Compta\StockPublic;
+use App\Core\Logger;
 use App\Models\InventoryCount;
 use App\Models\ProductCost;
 use App\Models\ProductDiscontinued;
@@ -750,10 +751,23 @@ final class AdminStockController extends AdminBaseController
         try {
             $moved = ProductKeyMerge::merge($source, $target, Auth::id());
         } catch (\InvalidArgumentException $e) {
-            $this->setFlash('error', 'Fusion refusée : ' . $e->getMessage());
+            // Refus de validation : motif réel dans le log, message générique
+            // affiché (les garde-fous du formulaire couvrent déjà les cas
+            // courants).
+            Logger::warning('inventory: fusion refusée', [
+                'source' => $source,
+                'target' => $target,
+                'msg'    => $e->getMessage(),
+            ]);
+            $this->setFlash('error', 'Fusion refusée : la demande est invalide.');
             redirect(url('/admin/compta/inventaire'));
         } catch (\Throwable $e) {
-            $this->setFlash('error', 'Fusion impossible : ' . $e->getMessage());
+            Logger::error('inventory: fusion impossible', [
+                'source' => $source,
+                'target' => $target,
+                'msg'    => $e->getMessage(),
+            ]);
+            $this->setFlash('error', 'Fusion impossible : une erreur inattendue est survenue. L\'incident a été journalisé.');
             redirect(url('/admin/compta/inventaire'));
         }
 

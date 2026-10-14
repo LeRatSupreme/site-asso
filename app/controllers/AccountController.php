@@ -8,6 +8,7 @@ use App\Core\Auth;
 use App\Core\Controller;
 use App\Core\Mailer;
 use App\Core\Middleware;
+use App\Core\Validator;
 use App\Models\Consent;
 use App\Models\User;
 use App\Models\UserPolicy;
@@ -58,8 +59,8 @@ final class AccountController extends Controller
         }
 
         // Valider le nouveau mot de passe.
-        if (strlen($newPassword) < 8) {
-            $this->setFlash('error', 'Le nouveau mot de passe doit faire au moins 8 caractères.');
+        if (mb_strlen($newPassword) < Validator::PASSWORD_MIN) {
+            $this->setFlash('error', sprintf('Le nouveau mot de passe doit faire au moins %d caractères.', Validator::PASSWORD_MIN));
             redirect(url('/account/privacy'));
         }
         if (!preg_match('/[a-zA-Z]/', $newPassword) || !preg_match('/[0-9]/', $newPassword)) {

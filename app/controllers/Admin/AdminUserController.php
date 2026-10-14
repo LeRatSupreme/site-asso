@@ -85,7 +85,7 @@ final class AdminUserController extends AdminBaseController
         ]);
 
         $this->setFlash('success', sprintf('Rôle de %s modifié (%s → %s).',
-            e($target['prenom'] . ' ' . $target['nom']), $oldRole, $newRole));
+            (string) ($target['prenom'] . ' ' . $target['nom']), $oldRole, $newRole));
         redirect(url('/admin/users'));
     }
 
@@ -178,7 +178,7 @@ final class AdminUserController extends AdminBaseController
             'to'   => ['prenom' => $prenom, 'nom' => $nom],
         ]);
 
-        $this->setFlash('success', sprintf('Nom de %s mis à jour.', e($prenom . ' ' . $nom)));
+        $this->setFlash('success', sprintf('Nom de %s mis à jour.', $prenom . ' ' . $nom));
         redirect(url('/admin/users'));
     }
 
@@ -207,7 +207,7 @@ final class AdminUserController extends AdminBaseController
         AuditLog::log($isActive ? 'user.deactivate' : 'user.activate', Auth::id(), 'user', $id);
 
         $this->setFlash('success', sprintf('Compte de %s %s.',
-            e($target['prenom'] . ' ' . $target['nom']),
+            (string) ($target['prenom'] . ' ' . $target['nom']),
             $isActive ? 'désactivé' : 'activé'));
         redirect(url('/admin/users'));
     }
@@ -215,7 +215,7 @@ final class AdminUserController extends AdminBaseController
     /**
      * Réinitialise le mot de passe d'un compte avec un mot de passe temporaire.
      *
-     * Génère un mot de passe temporaire aléatoire (≥ 8 caractères, lettre +
+     * Génère un mot de passe temporaire aléatoire (≥ 12 caractères, lettre +
      * chiffre), le hash et le stocke sur le compte. Le mot de passe temporaire
      * est affiché dans le flash (à communiquer hors-bande à l'utilisateur) et
      * l'action est journalisée (audit log).
@@ -256,9 +256,9 @@ final class AdminUserController extends AdminBaseController
             // affiché dans le flash pour faciliter les tests.
             $this->setFlash('success', sprintf(
                 'Mot de passe temporaire pour %s : %s — Un email a été envoyé à %s. Il devra le changer rapidement.',
-                e(trim((string) $target['prenom'] . ' ' . (string) $target['nom'])),
-                e($temporary),
-                e($email !== '' ? $email : '(pas d\'email)')
+                trim((string) $target['prenom'] . ' ' . (string) $target['nom']),
+                $temporary,
+                $email !== '' ? $email : '(pas d\'email)'
             ));
         } else {
             // En production, aucun secret dans le flash : le mot de passe
@@ -269,7 +269,7 @@ final class AdminUserController extends AdminBaseController
     }
 
     /**
-     * Génère un mot de passe temporaire aléatoire (10 caractères, alphabet
+     * Génère un mot de passe temporaire aléatoire (12 caractères, alphabet
      * sans ambiguïté, au moins une lettre et un chiffre).
      */
     private static function generateTemporaryPassword(): string
@@ -282,7 +282,7 @@ final class AdminUserController extends AdminBaseController
             . $digits[random_int(0, strlen($digits) - 1)];
 
         $pool = $letters . $digits;
-        for ($i = 0; $i < 8; $i++) {
+        for ($i = 0; $i < 10; $i++) {
             $password .= $pool[random_int(0, strlen($pool) - 1)];
         }
 
@@ -325,7 +325,7 @@ final class AdminUserController extends AdminBaseController
             'role'  => (string) $target['role'],
         ]);
 
-        $this->setFlash('success', sprintf('Compte de %s supprimé.', e($target['prenom'] . ' ' . $target['nom'])));
+        $this->setFlash('success', sprintf('Compte de %s supprimé.', (string) ($target['prenom'] . ' ' . $target['nom'])));
         redirect(url('/admin/users'));
     }
 }
