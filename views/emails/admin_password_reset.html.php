@@ -23,7 +23,7 @@ Voici votre mot de passe temporaire :
 </div>
 <p style="font-size:1rem;line-height:1.6;color:#e8eef5;">
 Connectez-vous avec ce mot de passe, puis changez-le dès que possible dans
-<strong>Mon compte → Changer mon mot de passe</strong>.
+<strong>Mes données → Changer mon mot de passe</strong>.
 </p>
 </td></tr>
 <tr><td style="padding:0 2rem 2rem;">

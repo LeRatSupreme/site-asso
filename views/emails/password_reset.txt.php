@@ -1,11 +1,11 @@
-Bonjour <?= $prenom ?? '' ?>,
+Bonjour <?= e($prenom ?? '') ?>,
 
-Tu as demandé à réinitialiser ton mot de passe sur le site de l'<?= $siteName ?? 'AEIC' ?>.
+Vous avez demandé à réinitialiser votre mot de passe sur le site de l'<?= e($siteName ?? 'AEIC') ?>.
 
-Clique sur le lien ci-dessous pour en choisir un nouveau (valide <?= $expiresIn ?? 1 ?> h) :
+Cliquez sur le lien ci-dessous pour en choisir un nouveau (valide <?= e((string) ($expiresIn ?? 1)) ?> h) :
 
-<?= $resetUrl ?? '' ?>
+<?= e($resetUrl ?? '') ?>
 
-Si tu n'es pas à l'origine de cette demande, ignore cet e-mail : ton mot de passe restera inchangé.
+Si vous n'êtes pas à l'origine de cette demande, ignorez cet e-mail : votre mot de passe restera inchangé.
 
-— L'équipe <?= $siteName ?? 'AEIC' ?>
+&copy; <?= date('Y') ?> <?= e($siteName ?? 'AEIC') ?> — 100 % étudiant.

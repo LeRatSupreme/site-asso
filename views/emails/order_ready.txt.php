@@ -1,7 +1,7 @@
-Bonjour <?= $prenom ?? '' ?>,
+Bonjour <?= e($prenom ?? '') ?>,
 
-Ta commande <?= $orderId ?? '' ?> (<?= $total ?? '' ?>) est prête à être récupérée à la cafétéria.
+Votre commande <?= e($orderId ?? '') ?> (<?= e($total ?? '') ?>) est prête à être récupérée à la cafétéria.
 
 Merci de la retirer dès que possible.
 
-— La cafétéria <?= $siteName ?? 'AEIC' ?>
+&copy; <?= date('Y') ?> <?= e($siteName ?? 'AEIC') ?> — 100 % étudiant.

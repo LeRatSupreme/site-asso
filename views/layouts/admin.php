@@ -115,6 +115,7 @@ if (isset($sections['Contenu']) && $sections['Contenu'] === []) {
 // à sa clé de page (null n'existe plus : tout est attribuable).
 $systemEntries = [
     'Utilisateurs'     => ['/admin/users', 'users'],
+    'Adhésions'        => ['/admin/memberships', 'users'],
     'Caisses'          => ['/admin/caisses', 'cash'],
     'Kiosques'         => ['/admin/kiosques', 'kiosques'],
     'Livre comptable'  => ['/admin/ledger', 'ledger'],

@@ -1,4 +1,4 @@
-Bonjour <?= $prenom ?? '' ?>,
+Bonjour <?= e($prenom ?? '') ?>,
 
 Votre demande de suppression de compte a bien été prise en compte.
 
@@ -6,6 +6,6 @@ Conformément au RGPD, vos données personnelles (nom, adresse e-mail, mot de pa
 
 Les traces à obligation comptable (commandes à la cafétéria) sont conservées à des fins légales mais sont désormais déliées de votre identité.
 
-Si vous n'êtes pas à l'origine de cette demande, contactez l'<?= $siteName ?? 'AEIC' ?> dès que possible.
+Si vous n'êtes pas à l'origine de cette demande, contactez l'<?= e($siteName ?? 'AEIC') ?> dès que possible.
 
-— L'équipe <?= $siteName ?? 'AEIC' ?>
+&copy; <?= date('Y') ?> <?= e($siteName ?? 'AEIC') ?> — 100 % étudiant.

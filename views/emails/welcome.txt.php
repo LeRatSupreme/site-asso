@@ -1,9 +1,9 @@
-Bienvenue <?= $prenom ?? '' ?> !
+Bienvenue <?= e($prenom ?? '') ?> !
 
-Ton compte a bien été créé sur le site de l'<?= $siteName ?? 'AEIC' ?>.
+Votre compte a bien été créé sur le site de l'<?= e($siteName ?? 'AEIC') ?>.
 
-Tu peux désormais t'inscrire aux événements et commander à la cafétéria depuis ton espace membre :
+Vous pouvez désormais vous inscrire aux événements et commander à la cafétéria depuis votre espace membre :
 
-<?= $siteUrl ?? '' ?>/eleve
+<?= e($siteUrl ?? '') ?>/eleve
 
-— L'équipe <?= $siteName ?? 'AEIC' ?>
+&copy; <?= date('Y') ?> <?= e($siteName ?? 'AEIC') ?> — 100 % étudiant.
