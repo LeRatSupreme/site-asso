@@ -521,6 +521,15 @@ final class SmsReport
     }
 
     /**
+     * CA du jour (€) — utilisé par le cron pour annuler l'envoi des
+     * messages quand la journée est sans aucune vente.
+     */
+    public static function dayRevenue(string $day): float
+    {
+        return (float) (Sale::aggregatesBetween($day, $day)['ca'] ?? 0.0);
+    }
+
+    /**
      * Marque un message comme envoyé pour le jour donné.
      */
     public static function markScheduleSent(string $id, string $day): void
