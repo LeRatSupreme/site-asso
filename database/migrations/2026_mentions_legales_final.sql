@@ -13,16 +13,17 @@ content = '<h2>Article 1 — Identité de l''éditeur</h2>
 <tr><td style="padding:0.5rem;border:1px solid rgba(255,255,255,0.1);font-weight:700;width:40%;">Dénomination</td><td style="padding:0.5rem;border:1px solid rgba(255,255,255,0.1);">AEIC — Association Étudiante Informatique de Calais</td></tr>
 <tr><td style="padding:0.5rem;border:1px solid rgba(255,255,255,0.1);font-weight:700;">Forme juridique</td><td style="padding:0.5rem;border:1px solid rgba(255,255,255,0.1);">Association loi 1901 (à but non lucratif)</td></tr>
 <tr><td style="padding:0.5rem;border:1px solid rgba(255,255,255,0.1);font-weight:700;">Siège social</td><td style="padding:0.5rem;border:1px solid rgba(255,255,255,0.1);">IUT de Calais — Département Informatique, 19 Rue Louis David, 62100 Calais</td></tr>
-<tr><td style="padding:0.5rem;border:1px solid rgba(255,255,255,0.1);font-weight:700;">Numéro RNA</td><td style="padding:0.5rem;border:1px solid rgba(255,255,255,0.1);">[À COMPLÉTER — Répertoire National des Associations]</td></tr>
-<tr><td style="padding:0.5rem;border:1px solid rgba(255,255,255,0.1);font-weight:700;">Numéro SIRET</td><td style="padding:0.5rem;border:1px solid rgba(255,255,255,0.1);">[À COMPLÉTER — si applicable]</td></tr>
-<tr><td style="padding:0.5rem;border:1px solid rgba(255,255,255,0.1);font-weight:700;">Directeur de la publication</td><td style="padding:0.5rem;border:1px solid rgba(255,255,255,0.1);">[PRÉNOM NOM DU PRÉSIDENT], Président en exercice</td></tr>
+<tr><td style="padding:0.5rem;border:1px solid rgba(255,255,255,0.1);font-weight:700;">Numéro RNA</td><td style="padding:0.5rem;border:1px solid rgba(255,255,255,0.1);">[à compléter]</td></tr>
+<tr><td style="padding:0.5rem;border:1px solid rgba(255,255,255,0.1);font-weight:700;">Numéro SIREN</td><td style="padding:0.5rem;border:1px solid rgba(255,255,255,0.1);">828 410 837</td></tr>
+<tr><td style="padding:0.5rem;border:1px solid rgba(255,255,255,0.1);font-weight:700;">Numéro SIRET (siège)</td><td style="padding:0.5rem;border:1px solid rgba(255,255,255,0.1);">828 410 837 00011</td></tr>
+<tr><td style="padding:0.5rem;border:1px solid rgba(255,255,255,0.1);font-weight:700;">Directeur de la publication</td><td style="padding:0.5rem;border:1px solid rgba(255,255,255,0.1);">Thibault Frappart, Président en exercice</td></tr>
 <tr><td style="padding:0.5rem;border:1px solid rgba(255,255,255,0.1);font-weight:700;">Email de contact</td><td style="padding:0.5rem;border:1px solid rgba(255,255,255,0.1);"><a href="mailto:calais.aeic@gmail.com">calais.aeic@gmail.com</a></td></tr>
 </table>
 
 <h2>Article 2 — Responsable de la publication</h2>
 <p>Le responsable de la publication est le <strong>Président de l''association AEIC</strong> en exercice, à savoir :</p>
 <ul>
-<li>[PRÉNOM NOM DU PRÉSIDENT], en sa qualité de Président.</li>
+<li>Thibault Frappart, en sa qualité de Président.</li>
 <li>Pour toute question relative au contenu du Site : <a href="mailto:calais.aeic@gmail.com">calais.aeic@gmail.com</a>.</li>
 </ul>
 
