@@ -7,15 +7,19 @@ namespace App\Controllers\Admin;
 use App\Core\Auth;
 use App\Core\Compta\ProductAutoSync;
 use App\Core\Compta\StockPublic;
+use App\Core\Mailer;
 use App\Core\Permissions;
+use App\Models\CafeteriaOrder;
 use App\Models\InventoryCount;
+use App\Models\OrderWorkflow;
 use App\Models\Product;
 use App\Models\ProductAlias;
 use App\Models\ProductCategory;
 use App\Models\Sale;
+use App\Models\User;
 
 /**
- * Gestion de la cafétéria : produits et catégories.
+ * Gestion de la cafétéria : produits, catégories et commandes.
  */
 final class AdminCafeteriaController extends AdminBaseController
 {
@@ -307,5 +311,100 @@ final class AdminCafeteriaController extends AdminBaseController
         $this->audit('category.sync_mapping', 'product_category', null, ['created' => $created]);
         $this->setFlash('success', sprintf('%d catégorie(s) ajoutée(s) depuis le mapping.', $created));
         redirect(url('/admin/cafeteria/categories'));
+    }
+
+    // -----------------------------------------------------------------
+    //  Commandes
+    // -----------------------------------------------------------------
+
+    /**
+     * Liste des commandes (la plus récente d'abord) avec leur client,
+     * et formulaire de changement de statut par ligne.
+     */
+    public function orders(): void
+    {
+        $this->guardModule(Permissions::MODULE_CAFETERIA);
+
+        $this->renderAdmin('admin/cafeteria/orders', [
+            'title'    => 'Commandes',
+            'orders'   => CafeteriaOrder::allForAdmin(),
+            'statuses' => OrderWorkflow::statuses(),
+        ]);
+    }
+
+    /**
+     * Change le statut d'une commande.
+     *
+     * Le statut POSTé n'est jamais cru : il est validé contre les
+     * transitions autorisées par OrderWorkflow (le modèle revalide de
+     * son côté). E-mail « commande prête » envoyé au client UNIQUEMENT
+     * sur la transition → READY, sans jamais bloquer le changement.
+     */
+    public function changeStatus(string $id): void
+    {
+        $this->guardModule(Permissions::MODULE_CAFETERIA);
+
+        $status = strtoupper(trim((string) ($_POST['status'] ?? '')));
+        $order = CafeteriaOrder::find($id);
+        $current = $order !== null ? (string) $order['status'] : '';
+
+        if ($order === null) {
+            $this->setFlash('error', 'Commande introuvable.');
+        } elseif (
+            !in_array($status, OrderWorkflow::statuses(), true)
+            || !OrderWorkflow::canTransition($current, $status)
+        ) {
+            $this->setFlash('error', sprintf(
+                'Transition de statut interdite (%s → %s).',
+                $current !== '' ? $current : '?',
+                $status !== '' ? $status : '?'
+            ));
+        } else {
+            try {
+                CafeteriaOrder::changeStatus($id, $status);
+                $this->audit('order.status_change', 'order', $id, [
+                    'from'   => $current,
+                    'status' => $status,
+                ]);
+                $this->setFlash('success', 'Statut mis à jour.');
+
+                // Notification par e-mail quand la commande est prête
+                // (et associée à un compte).
+                if ($status === OrderWorkflow::READY) {
+                    $this->sendOrderReadyEmail($order);
+                }
+            } catch (\Throwable $e) {
+                $this->setFlash('error', $e->getMessage());
+            }
+        }
+
+        redirect(url('/admin/cafeteria/commandes'));
+    }
+
+    /**
+     * E-mail « Votre commande est prête » au client de la commande.
+     * Non bloquant : un échec d'envoi n'affecte pas le changement de
+     * statut (même convention que les autres Mailer::send).
+     */
+    private function sendOrderReadyEmail(array $order): void
+    {
+        if (empty($order['user_id'])) {
+            return;
+        }
+
+        $user = User::find((string) $order['user_id']);
+        if ($user === null || empty($user['email'])) {
+            return;
+        }
+
+        try {
+            Mailer::send('order_ready', (string) $user['email'], 'Votre commande est prête', [
+                'prenom'  => (string) ($user['prenom'] ?? ''),
+                'orderId' => (string) ($order['number'] ?? $order['id'] ?? ''),
+                'total'   => formatPrice($order['total'] ?? 0),
+            ]);
+        } catch (\Throwable) {
+            // L'envoi d'e-mail ne doit pas bloquer le changement de statut.
+        }
     }
 }
