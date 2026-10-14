@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS users (
     id          VARCHAR(255) NOT NULL PRIMARY KEY,
     prenom      VARCHAR(255) NOT NULL,
     nom         VARCHAR(255) NOT NULL,
+    pseudo      VARCHAR(50) NULL,
     email       VARCHAR(255) NOT NULL,
     password    VARCHAR(255) NULL,
     image       VARCHAR(255) NULL,
@@ -24,7 +25,8 @@ CREATE TABLE IF NOT EXISTS users (
     email_verified_at DATETIME NULL,
     created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    UNIQUE KEY uniq_users_email (email)
+    UNIQUE KEY uniq_users_email (email),
+    UNIQUE KEY uniq_users_pseudo (pseudo)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- -------------------------------------------------------------------
@@ -40,6 +42,7 @@ CREATE TABLE IF NOT EXISTS events (
     date          DATETIME NOT NULL,
     end_date      DATETIME NULL,
     location      VARCHAR(255) NULL,
+    category      VARCHAR(100) NULL,
     show_map      TINYINT(1) NOT NULL DEFAULT 0,
     map_lat       DECIMAL(10, 7) NULL,
     map_lon       DECIMAL(10, 7) NULL,
@@ -95,6 +98,8 @@ CREATE TABLE IF NOT EXISTS event_registrations (
     qr_token    VARCHAR(64) NULL UNIQUE,
     checked_in  TINYINT(1) NOT NULL DEFAULT 0,
     created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    reminder_24h_sent TINYINT(1) NOT NULL DEFAULT 0,
+    reminder_1h_sent  TINYINT(1) NOT NULL DEFAULT 0,
     UNIQUE KEY uniq_registration_user_event (user_id, event_id),
     KEY idx_registrations_event (event_id),
     CONSTRAINT fk_reg_user  FOREIGN KEY (user_id)  REFERENCES users(id)  ON DELETE CASCADE,
@@ -727,7 +732,7 @@ CREATE TABLE IF NOT EXISTS notifications (
     is_read TINYINT(1) NOT NULL DEFAULT 0,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     KEY idx_notif_user (user_id, is_read)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- -------------------------------------------------------------------
 --  Adhésions / cotisations annuelles

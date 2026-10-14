@@ -31,11 +31,18 @@ INSERT INTO settings (id, `key`, value, type, label, `group`) VALUES
     ('set_site_description',     'site_description',     'Association Étudiante Informatique de Calais. Fait par les étudiants, pour les étudiants.', 'text', 'Description', 'general'),
     ('set_contact_email',        'contact_email',        'calais.aeic@gmail.com',                                      'text',    'Email de contact', 'general'),
     ('set_logo_url',             'logo_url',             '',                                                           'text',    'Logo',             'general'),
+    ('set_app_url',              'app_url',              '',                                                           'text',    'URL publique du site (liens des e-mails)', 'general'),
     ('set_maintenance_mode',     'maintenance_mode',     'false',                                                      'boolean', 'Mode maintenance', 'features'),
     ('set_orders_enabled',       'orders_enabled',       'true',                                                       'boolean', 'Commandes activées','features'),
     ('set_registrations_enabled','registrations_enabled','true',                                                       'boolean', 'Inscriptions activées','features'),
+    ('set_membership_price',     'membership_price',     '0',                                                          'text',    'Prix de la cotisation (€)', 'features'),
+    ('set_membership_enabled',   'membership_enabled',   '0',                                                          'boolean', 'Activer la gestion des adhésions', 'features'),
+    ('set_membership_season',    'membership_season',    '',                                                           'text',    'Saison en cours (vide = auto, ex: 2026-2027)', 'features'),
     ('set_og_image',             'og_image',             '',                                                           'text',    'Image Open Graph par défaut', 'seo'),
     ('set_twitter_handle',       'twitter_handle',       '',                                                           'text',    'Compte Twitter/X (@handle)', 'seo'),
+    ('set_seo_keywords',         'seo_keywords',         '',                                                           'text',    'Mots-clés SEO (meta keywords)', 'seo'),
+    ('set_google_site_verification', 'google_site_verification', '',                                                 'text',    'Vérification Google Search Console', 'seo'),
+    ('set_csp_directives',       'csp_directives',       '',                                                           'text',    'Directives CSP additionnelles', 'seo'),
     ('set_mailer_from',          'mailer_from',          'noreply@aeic.fr',                                            'text',    'Adresse expéditrice', 'email'),
     ('set_mailer_from_name',     'mailer_from_name',     'AEIC',                                                       'text',    'Nom expéditeur', 'email'),
     ('set_smtp_host',            'smtp_host',            '',                                                           'text',    'Hôte SMTP (vide = mail() natif)', 'email'),
@@ -43,9 +50,27 @@ INSERT INTO settings (id, `key`, value, type, label, `group`) VALUES
     ('set_smtp_encryption',      'smtp_encryption',      '',                                                           'text',    'Chiffrement SMTP (none / tls / ssl ; vide = auto)', 'email'),
     ('set_smtp_user',            'smtp_user',            '',                                                           'text',    'Utilisateur SMTP', 'email'),
     ('set_smtp_pass',            'smtp_pass',            '',                                                           'text',    'Mot de passe SMTP', 'email'),
+    ('set_brevo_api_key',        'brevo_api_key',        '',                                                           'text',    'Clé API Brevo', 'email'),
     ('set_sumup_enabled',        'sumup_enabled',        '0',                                                          'boolean', 'Paiements par lien SumUp activés', 'sumup'),
     ('set_sumup_default_link',   'sumup_default_link',   '',                                                           'text',    'Lien de paiement SumUp par défaut', 'sumup'),
-    ('set_sumup_fee_rate',       'sumup_fee_rate',       '1.75',                                                       'text',    'Taux de commission SumUp (% — estimation des frais carte)', 'sumup')
+    ('set_sumup_fee_rate',       'sumup_fee_rate',       '1.75',                                                       'text',    'Taux de commission SumUp (% — estimation des frais carte)', 'sumup'),
+    ('set_address',              'address',              '',                                                           'text',    'Adresse affichée', 'contact'),
+    ('set_map_lat',              'map_lat',              '',                                                           'text',    'Carte — Latitude',  'contact'),
+    ('set_map_lon',              'map_lon',              '',                                                           'text',    'Carte — Longitude', 'contact'),
+    ('set_facebook_url',         'facebook_url',         '',                                                           'text',    'Page Facebook (URL)', 'social'),
+    ('set_instagram_url',        'instagram_url',        '',                                                           'text',    'Profil Instagram (URL)', 'social'),
+    ('set_linkedin_url',         'linkedin_url',         '',                                                           'text',    'Page LinkedIn (URL)', 'social'),
+    ('set_discord_webhook',      'discord_webhook_url',  '',                                                           'text',    'URL Webhook Discord', 'social'),
+    ('set_discord_enabled',      'discord_enabled',      '0',                                                          'boolean', 'Activer les annonces Discord', 'social'),
+    ('set_sms_report_enabled',   'sms_report_enabled',   '0',                                                          'boolean', 'Rapport SMS quotidien activé', 'sms'),
+    ('set_sms_report_days',      'sms_report_days',      '1,2,3,4,5',                                                  'text',    'Jours d''envoi (1=lundi … 7=dimanche)', 'sms'),
+    ('set_sms_report_time',      'sms_report_time',      '20:00',                                                      'text',    'Heure d''envoi', 'sms'),
+    ('set_sms_report_template',  'sms_report_template',  '',                                                           'text',    'Modèle du message (variables {date} {ca} {benefice} {qty} {top})', 'sms'),
+    ('set_sms_recipients',       'sms_recipients',       '[]',                                                         'text',    'Destinataires Free Mobile (JSON)', 'sms'),
+    ('set_sms_report_last_sent', 'sms_report_last_sent', '',                                                           'text',    'Dernier envoi du rapport (garde anti-doublon)', 'sms'),
+    ('set_sms_chart_token',      'sms_chart_token',      '',                                                           'text',    'Jeton du graphique SMS (auto-généré)', 'sms'),
+    ('set_admin_kiosk_token',    'admin_kiosk_token',    '',                                                           'text',    'Jeton kiosque admins (auto-généré)', 'securite'),
+    ('set_reappro_kiosk_token',  'reappro_kiosk_token',  '',                                                           'text',    'Jeton kiosque membres/réappro (auto-généré)', 'securite')
 ON DUPLICATE KEY UPDATE value = VALUES(value);
 
 -- -------------------------------------------------------------------
@@ -145,3 +170,66 @@ INSERT INTO events (id, slug, title, excerpt, description, date, location, is_fe
      'Amphi B',
      0, 1)
 ON DUPLICATE KEY UPDATE title = VALUES(title);
+
+-- -------------------------------------------------------------------
+--  Wordle : jeu de démarrage (24 FR + 24 EN)
+--  Le remplissage complet se fait via scripts/import_wordle_words.php
+--  (dictionnaires système) ; ces mots courants suffisent à jouer dès
+--  l'installation. Convention : MAJUSCULES A-Z sans accents,
+--  5 lettres = facile, 6 = moyen, 7 = difficile (schéma v2).
+-- -------------------------------------------------------------------
+INSERT IGNORE INTO wordle_words (word, language, length, difficulty) VALUES
+    -- FR — facile (5 lettres)
+    ('TABLE', 'fr', 5, 'facile'),
+    ('VERRE', 'fr', 5, 'facile'),
+    ('ECOLE', 'fr', 5, 'facile'),
+    ('CHIEN', 'fr', 5, 'facile'),
+    ('PLAGE', 'fr', 5, 'facile'),
+    ('LIVRE', 'fr', 5, 'facile'),
+    ('POMME', 'fr', 5, 'facile'),
+    ('VILLE', 'fr', 5, 'facile'),
+    -- FR — moyen (6 lettres)
+    ('MAISON', 'fr', 6, 'moyen'),
+    ('JARDIN', 'fr', 6, 'moyen'),
+    ('CHEVAL', 'fr', 6, 'moyen'),
+    ('BOUTON', 'fr', 6, 'moyen'),
+    ('RAISIN', 'fr', 6, 'moyen'),
+    ('BATEAU', 'fr', 6, 'moyen'),
+    ('CAMION', 'fr', 6, 'moyen'),
+    ('VIOLON', 'fr', 6, 'moyen'),
+    -- FR — difficile (7 lettres)
+    ('FENETRE', 'fr', 7, 'difficile'),
+    ('FROMAGE', 'fr', 7, 'difficile'),
+    ('POUSSIN', 'fr', 7, 'difficile'),
+    ('TAMBOUR', 'fr', 7, 'difficile'),
+    ('PLANCHE', 'fr', 7, 'difficile'),
+    ('POIREAU', 'fr', 7, 'difficile'),
+    ('POMMIER', 'fr', 7, 'difficile'),
+    ('MUSIQUE', 'fr', 7, 'difficile'),
+    -- EN — facile (5 lettres)
+    ('HOUSE', 'en', 5, 'facile'),
+    ('WATER', 'en', 5, 'facile'),
+    ('BEACH', 'en', 5, 'facile'),
+    ('MUSIC', 'en', 5, 'facile'),
+    ('APPLE', 'en', 5, 'facile'),
+    ('GREEN', 'en', 5, 'facile'),
+    ('SLEEP', 'en', 5, 'facile'),
+    ('BREAD', 'en', 5, 'facile'),
+    -- EN — moyen (6 lettres)
+    ('GARDEN', 'en', 6, 'moyen'),
+    ('WINDOW', 'en', 6, 'moyen'),
+    ('BOTTLE', 'en', 6, 'moyen'),
+    ('ORANGE', 'en', 6, 'moyen'),
+    ('SILVER', 'en', 6, 'moyen'),
+    ('WINTER', 'en', 6, 'moyen'),
+    ('SUMMER', 'en', 6, 'moyen'),
+    ('FOREST', 'en', 6, 'moyen'),
+    -- EN — difficile (7 lettres)
+    ('VILLAGE', 'en', 7, 'difficile'),
+    ('PICTURE', 'en', 7, 'difficile'),
+    ('TEACHER', 'en', 7, 'difficile'),
+    ('MORNING', 'en', 7, 'difficile'),
+    ('PRESENT', 'en', 7, 'difficile'),
+    ('CHICKEN', 'en', 7, 'difficile'),
+    ('LIBRARY', 'en', 7, 'difficile'),
+    ('DOLPHIN', 'en', 7, 'difficile');
