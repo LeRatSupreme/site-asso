@@ -287,6 +287,10 @@ function aeic_register_routes(Router $router): void
     $router->post('/admin/compta/couts/{id}/close', [AdminComptaController::class, 'closeCost']);
     $router->post('/admin/compta/couts/{id}/delete', [AdminComptaController::class, 'deleteCost']);
     $router->get('/admin/compta/aliases', [AdminComptaController::class, 'aliases']);
+    // Fusion de deux produits clé : tout l'historique de la source est
+    // rattaché à la cible (ProductKeyMerge, transactionnel) — carte
+    // « Fusionner deux produits » en bas de la page Alias.
+    $router->post('/admin/compta/aliases/merge', [AdminComptaController::class, 'mergeAliasProducts']);
     // Page dédiée au seul formulaire d'ajout (saisie rapide d'une
     // appellation libellé facture -> nom court).
     $router->get('/admin/compta/aliases/new', [AdminComptaController::class, 'aliasNew']);

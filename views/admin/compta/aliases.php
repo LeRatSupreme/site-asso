@@ -6,6 +6,7 @@ declare(strict_types=1);
  * @var list<array<string,mixed>> $aliases
  * @var list<array<string,mixed>> $unmapped
  * @var list<string> $categories
+ * @var list<string> $known_keys
  */
 ?>
 <datalist id="alias-categories">
@@ -81,3 +82,56 @@ declare(strict_types=1);
         </p>
     </div>
 </div>
+
+<div class="card surface glass merge-products-card">
+    <h2 class="card-title">Fusionner deux produits</h2>
+    <p class="muted">Même produit sous deux noms (ex. « Cristaline » et « Eau ») ? Rattache tout l'historique du produit absorbé au produit conservé : ventes, achats, pertes, alias, comptages, coûts, stocks, drapeaux, promotions, fiches carte. Action irréversible.</p>
+    <form id="merge-products-form" method="post" action="<?= e(url('/admin/compta/aliases/merge')) ?>"
+          data-confirm="Fusionner définitivement ces deux produits ? Cette action est irréversible."
+          data-confirm-button="Fusionner" class="merge-products-form">
+        <?= csrf_field() ?>
+        <div class="merge-products-fields">
+            <div class="field">
+                <label for="merge-products-from">Produit absorbé</label>
+                <input type="text" id="merge-products-from" name="from" list="merge-products-keys"
+                       placeholder="ex: Cristaline" maxlength="255" required>
+            </div>
+            <div class="field">
+                <label for="merge-products-to">Produit conservé</label>
+                <input type="text" id="merge-products-to" name="to" list="merge-products-keys"
+                       placeholder="ex: Eau" maxlength="255" required>
+            </div>
+            <button type="submit" class="btn btn-destructive merge-products-submit">Fusionner</button>
+        </div>
+    </form>
+    <datalist id="merge-products-keys">
+        <?php foreach ($known_keys as $k): ?>
+            <option value="<?= e((string) $k) ?>"></option>
+        <?php endforeach; ?>
+    </datalist>
+</div>
+
+<script>
+/* Confirmation nominative : le message reprend les deux champs saisis.
+   Écouteur posé sur le formulaire : il s'exécute AVANT le handler global
+   data-confirm (posé sur document), qui lit alors le message à jour. */
+(function () {
+    var form = document.getElementById('merge-products-form');
+    var from = document.getElementById('merge-products-from');
+    var to = document.getElementById('merge-products-to');
+    if (!form || !from || !to) return;
+    form.addEventListener('submit', function () {
+        form.setAttribute('data-confirm',
+            'Fusionner définitivement « ' + (from.value || '').trim() +
+            ' » dans « ' + (to.value || '').trim() + ' » ? Cette action est irréversible.');
+    });
+})();
+</script>
+
+<style>
+    .merge-products-card { margin-top: 18px; }
+    .merge-products-fields { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; }
+    .merge-products-fields .field { flex: 1 1 220px; }
+    .merge-products-fields input[type="text"] { width: 100%; }
+    .merge-products-submit { flex: 0 0 auto; }
+</style>
