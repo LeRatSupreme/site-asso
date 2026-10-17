@@ -207,6 +207,36 @@ final class ScanCatalogMatcherTest extends TestCase
         self::assertFalse(ScanCatalogMatcher::sameKey('', ''));
     }
 
+    // ————————————————————————————————————————————————————————————
+    // looksLikeInvoiceLabel : heuristique « nom de facture »
+    // ————————————————————————————————————————————————————————————
+
+    public function testLibelleDeFactureReconnu(): void
+    {
+        // Conditionnement + contenance (motif chiffre + unité).
+        self::assertTrue(ScanCatalogMatcher::looksLikeInvoiceLabel('OASIS TROPICAL SLIM BTE 33CL'));
+        self::assertTrue(ScanCatalogMatcher::looksLikeInvoiceLabel('RED BULL BLUE BOITE 25CL'));
+        self::assertTrue(ScanCatalogMatcher::looksLikeInvoiceLabel('CRISTALI 50CL PET'));
+        self::assertTrue(ScanCatalogMatcher::looksLikeInvoiceLabel('MARS 51G UVC'));
+        self::assertTrue(ScanCatalogMatcher::looksLikeInvoiceLabel('CRISTALINE 6X1,5L'));
+        // Jetons de conditionnement seuls (sans contenance).
+        self::assertTrue(ScanCatalogMatcher::looksLikeInvoiceLabel('Frites Pack'));
+        self::assertTrue(ScanCatalogMatcher::looksLikeInvoiceLabel('Boîtes de sardines'));
+        // Tout en MAJUSCULES (>= 8 lettres hors espaces).
+        self::assertTrue(ScanCatalogMatcher::looksLikeInvoiceLabel('KITPURAINE NOUVEAU'));
+    }
+
+    public function testNomCourtPasUnLibelleDeFacture(): void
+    {
+        self::assertFalse(ScanCatalogMatcher::looksLikeInvoiceLabel('Oasis Tropical'));
+        self::assertFalse(ScanCatalogMatcher::looksLikeInvoiceLabel('Menu BBQ'));
+        self::assertFalse(ScanCatalogMatcher::looksLikeInvoiceLabel('Eau'));
+        self::assertFalse(ScanCatalogMatcher::looksLikeInvoiceLabel('Monster rose'));
+        self::assertFalse(ScanCatalogMatcher::looksLikeInvoiceLabel('cristaline'));
+        self::assertFalse(ScanCatalogMatcher::looksLikeInvoiceLabel(''));
+        self::assertFalse(ScanCatalogMatcher::looksLikeInvoiceLabel('   '));
+    }
+
     public function testAliasSavoirMarqueMonsterUltraZero(): void
     {
         // Sans l'alias, « MONSTER ULTRA ZERO » ne matche que le générique

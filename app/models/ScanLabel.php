@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Core\Compta\ScanCatalogMatcher;
+use App\Core\Compta\StockPublic;
 
 /**
  * File « libellés factures non rattachés » (table `scan_labels`).
@@ -14,7 +15,9 @@ use App\Core\Compta\ScanCatalogMatcher;
  * d'occurrences : la page « Ajouter une appellation » le propose
  * pré-rempli dans son formulaire, et l'entrée disparaît dès qu'un
  * alias UTILISATEUR existe pour ce libellé exact — ou qu'il devient
- * lui-même une clé exacte du catalogue. Les appariements flous
+ * lui-même une clé exacte du catalogue HORS nom de facture (une fiche
+ * auto-créée au nom long ne compte plus : c'est justement ce que
+ * l'utilisateur doit renommer). Les appariements flous
  * (troncatures, conditionnements…) ne purgent PAS : c'est
  * l'utilisateur qui nomme, jamais l'heuristique. Écriture jamais
  * bloquante : une panne de base ne doit pas faire échouer un scan.
@@ -185,11 +188,18 @@ final class ScanLabel extends Model
      *      matcher) ;
      *  (b) OU le libellé correspond EXACTEMENT (même normalisation)
      *      à une clé existante du catalogue : fiches produits, alias,
-     *      clés vendues/SumUp (ScanCatalogMatcher::exactCatalogKey).
+     *      clés vendues/SumUp (ScanCatalogMatcher::exactCatalogKey) —
+     *      SAUF si cette clé est elle-même un « libellé de facture »
+     *      (looksLikeInvoiceLabel : nom long tout caps avec
+     *      conditionnement) : une fiche auto-créée par un ancien scan
+     *      au nom long ne résout PLUS — le libellé reste en file pour
+     *      que l'utilisateur donne le nom court (ex. fiche « OASIS
+     *      TROPICAL SLIM BTE 33CL » ne purge plus « OASIS TROPICAL
+     *      SLIM BTE 33CL » ; une fiche propre « Eau » purge « eau »).
      *
      * Les correspondances FLOUES (paliers heuristiques du matcher :
      * troncatures, « SLIM BTE 33CL », faute de frappe…) ne résolvent
-     * PLUS : le libellé reste dans la file jusqu'à ce que
+     * PAS : le libellé reste dans la file jusqu'à ce que
      * l'utilisateur crée lui-même l'appellation — l'heuristique ne
      * nomme jamais à sa place.
      */
@@ -215,8 +225,95 @@ final class ScanLabel extends Model
             // Alias illisibles : la règle catalogue suffit.
         }
 
-        // (b) Clé de catalogue exacte (fiches, alias, clés vendues).
-        return ScanCatalogMatcher::exactCatalogKey($label) !== null;
+        // (b) Clé de catalogue exacte — hors fiche au nom de facture.
+        $key = ScanCatalogMatcher::exactCatalogKey($label);
+
+        return $key !== null && !ScanCatalogMatcher::looksLikeInvoiceLabel($key);
+    }
+
+    /**
+     * Union dédupliquée des sources de pré-remplissage du formulaire
+     * « Nouvelles appellations » (méthode PURE, testée) :
+     *
+     *  - $scanRows : file des libellés scannés (ScanLabel::pending(),
+     *    enrichie de suggested/category par l'appelant) — hint 'scan' ;
+     *  - $ficheRows : fiches `products` au nom de facture, hint 'fiche'.
+     *
+     * Déduplication par clé normalisée (StockPublic::normalizeKey :
+     * casse, accents, ponctuation et espaces ignorés) — un libellé déjà
+     * présent côté scan n'est PAS repris côté fiches. Ordre : scans
+     * d'abord (occurrences décroissantes, ordre d'entrée à égalité),
+     * puis fiches par ordre alphabétique naturel.
+     *
+     * @param list<array<string,mixed>> $scanRows
+     * @param list<array<string,mixed>> $ficheRows
+     *
+     * @return list<array{label:string, occurrences:int, hint:string, suggested:string, category:string}>
+     */
+    public static function mergePendingSources(array $scanRows, array $ficheRows): array
+    {
+        $seen = [];
+        $scan = [];
+        foreach ($scanRows as $row) {
+            $prepared = self::pendingRow($row, 'scan');
+            if ($prepared === null || isset($seen[$prepared['norm']])) {
+                continue;
+            }
+            $seen[$prepared['norm']] = true;
+            $scan[] = $prepared;
+        }
+
+        // Occurrences décroissantes (usort est stable en PHP >= 8.0 :
+        // ordre d'entrée conservé à égalité — ScanLabel::all() trie déjà).
+        usort($scan, static fn (array $a, array $b): int => $b['occurrences'] <=> $a['occurrences']);
+
+        $fiches = [];
+        foreach ($ficheRows as $row) {
+            $prepared = self::pendingRow($row, 'fiche');
+            if ($prepared === null || isset($seen[$prepared['norm']])) {
+                continue;
+            }
+            $seen[$prepared['norm']] = true;
+            $fiches[] = $prepared;
+        }
+        usort($fiches, static fn (array $a, array $b): int => strnatcasecmp($a['label'], $b['label']));
+
+        // Le champ interne « norm » ne sort pas de la fonction.
+        $rows = array_merge($scan, $fiches);
+        foreach ($rows as &$row) {
+            unset($row['norm']);
+        }
+        unset($row);
+
+        return $rows;
+    }
+
+    /**
+     * Normalise une ligne de pré-remplissage (méthode pure) : label
+     * requis, occurrences >= 0, suggested/category trimmés. Retourne
+     * null si la ligne est vide ou sans clé normalisée. Le champ
+     * interne « norm » sert à la déduplication (retiré avant rendu).
+     *
+     * @param array<string,mixed> $row
+     *
+     * @return array{norm:string, label:string, occurrences:int, hint:string, suggested:string, category:string}|null
+     */
+    private static function pendingRow(array $row, string $hint): ?array
+    {
+        $label = trim((string) ($row['label'] ?? ''));
+        $norm = StockPublic::normalizeKey($label);
+        if ($norm === '') {
+            return null;
+        }
+
+        return [
+            'norm'        => $norm,
+            'label'       => $label,
+            'occurrences' => max(0, (int) ($row['occurrences'] ?? 0)),
+            'hint'        => $hint,
+            'suggested'   => trim((string) ($row['suggested'] ?? '')),
+            'category'    => trim((string) ($row['category'] ?? '')),
+        ];
     }
 
     /**

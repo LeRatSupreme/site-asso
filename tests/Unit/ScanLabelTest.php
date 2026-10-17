@@ -22,7 +22,10 @@ use PHPUnit\Framework\TestCase;
  * Partie BASE (auto-skip sans `aeic_test`) : la nouvelle règle de
  * purge de pending()/isResolved() — un libellé ne sort de la file que
  * si un ALIAS utilisateur existe pour lui exactement, ou s'il est
- * EXACTEMENT (clé normalisée) une entrée du catalogue. Les
+ * EXACTEMENT (clé normalisée) une entrée du catalogue qui n'est PAS
+ * elle-même un libellé de facture (une fiche auto-créée au nom long
+ * « OASIS … SLIM BTE 33CL » ne purge plus son libellé ; une fiche
+ * propre « Eau » purge toujours « eau »). Les
  * correspondances FLOUES (troncatures, « SLIM BTE 33CL ») le laissent
  * en file : l'heuristique ne nomme plus à la place de l'utilisateur.
  */
@@ -191,6 +194,31 @@ final class ScanLabelTest extends TestCase
         // PAS exactement cette clé (conditionnements « SLIM BTE 33CL ») :
         // l'ancienne règle le purgeait (palier inclusion) — plus maintenant.
         $this->insertFiche('Oasis Tropical');
+        $this->insertLabel('OASIS TROPICAL SLIM BTE 33CL');
+
+        self::assertSame(['OASIS TROPICAL SLIM BTE 33CL'], $this->pendingLabels());
+    }
+
+    public function testFicheAuNomDeFactureNePurgePlusSonLibelle(): void
+    {
+        // Fiche auto-créée par un ancien scan au NOM LONG : son égalité
+        // exacte avec le libellé ne compte PLUS comme résolution — le
+        // libellé reste en file pour que l'utilisateur donne le nom
+        // court (la clé du catalogue est elle-même un libellé de
+        // facture : looksLikeInvoiceLabel).
+        $this->insertFiche('OASIS TROPICAL SLIM BTE 33CL');
+        $this->insertLabel('OASIS TROPICAL SLIM BTE 33CL');
+
+        self::assertSame(['OASIS TROPICAL SLIM BTE 33CL'], $this->pendingLabels());
+    }
+
+    public function testFicheProprePurgeToujoursSonLibelle(): void
+    {
+        // À l'inverse, une fiche au nom PROPRE (« Eau », pas un libellé
+        // de facture) purge toujours son libellé exact (« eau »).
+        $this->insertFiche('Eau');
+        $this->insertFiche('OASIS TROPICAL SLIM BTE 33CL');
+        $this->insertLabel('eau');
         $this->insertLabel('OASIS TROPICAL SLIM BTE 33CL');
 
         self::assertSame(['OASIS TROPICAL SLIM BTE 33CL'], $this->pendingLabels());

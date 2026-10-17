@@ -11,6 +11,7 @@ use App\Core\Compta\CashLedger;
 use App\Core\Compta\ComptaCalc;
 use App\Core\Compta\Kiosk;
 use App\Core\Compta\ProductAutoSync;
+use App\Core\Compta\ScanCatalogMatcher;
 use App\Core\Compta\StockPublic;
 use App\Core\Compta\SumUpCsvParser;
 use App\Core\Logger;
@@ -986,18 +987,169 @@ final class AdminComptaController extends AdminBaseController
      * pour saisir vite un lien libellé facture/CSV -> nom court
      * (ex. « MONSTER PIPELINE PUNCH » -> « Monster rose »). La liste
      * et l'édition restent dans la page Mapping des libellés.
+     *
+     * Pré-remplissage : libellés de scans non nommés (file
+     * ScanLabel::pending(), règle affinée) PLUS les fiches carte au
+     * nom de facture (« OASIS TROPICAL SLIM BTE 33CL »…) — pour ces
+     * dernières, l'appellation existante (alias) pré-remplit le nom
+     * court quand elle existe déjà.
      */
     public function aliasNew(): void
     {
         $user = $this->guardCompta();
 
         $this->renderAdmin('admin/compta/alias_new', [
-            'title'      => 'Ajouter une appellation',
-            'user'       => $user,
-            'categories' => self::aliasCategories(),
-            'products'   => Sale::distinctProducts(),
-            'pending'    => ScanLabel::pending(),
+            'title'       => 'Ajouter une appellation',
+            'user'        => $user,
+            'categories'  => self::aliasCategories(),
+            'products'    => Sale::distinctProducts(),
+            'pendingRows' => self::pendingAliasRows(),
         ]);
+    }
+
+    /**
+     * Lignes de pré-remplissage du formulaire « Nouvelles appellations »
+     * : union dédupliquée (ScanLabel::mergePendingSources) de la file
+     * des libellés scannés (hint 'scan') et des fiches carte dont le
+     * nom ressemble à un libellé de facture (hint 'fiche'). Silencieux
+     * en cas de panne de base : le formulaire s'affiche avec ses lignes
+     * vides.
+     *
+     * Pour une fiche : `suggested` = produit cible de l'alias existant
+     * sur ce nom (exact puis normalisé), et la fiche est EXCLUE si son
+     * alias vise déjà la fiche elle-même (rien à faire).
+     *
+     * @return list<array{label:string, occurrences:int, hint:string, suggested:string, category:string}>
+     */
+    private static function pendingAliasRows(): array
+    {
+        $scan = [];
+        foreach (ScanLabel::pending() as $row) {
+            $label = (string) $row['label'];
+            [$key, $cat] = self::aliasSuggestionFor($label);
+            $scan[] = [
+                'label'       => $label,
+                'occurrences' => (int) ($row['occurrences'] ?? 0),
+                'suggested'   => $key,
+                'category'    => $cat,
+            ];
+        }
+
+        $fiches = [];
+        try {
+            foreach (Product::allForAdmin() as $fiche) {
+                $name = trim((string) ($fiche['name'] ?? ''));
+                if ($name === '' || !ScanCatalogMatcher::looksLikeInvoiceLabel($name)) {
+                    continue;
+                }
+                [$key, $cat] = self::aliasSuggestionFor($name);
+                if ($key !== '' && ScanCatalogMatcher::sameKey($key, $name)) {
+                    continue; // l'alias vise la fiche elle-même : rien à faire
+                }
+                $fiches[] = [
+                    'label'       => $name,
+                    'occurrences' => 0,
+                    'suggested'   => $key,
+                    'category'    => $cat,
+                ];
+            }
+        } catch (\Throwable) {
+            $fiches = [];
+        }
+
+        return ScanLabel::mergePendingSources($scan, $fiches);
+    }
+
+    /**
+     * Appellation existante pour un libellé : [product_key, category]
+     * de l'alias (recherche exacte par libellé brut, puis variante
+     * d'écriture comparée en clé normalisée). ['',''] si aucun alias.
+     *
+     * @return array{0:string, 1:string}
+     */
+    private static function aliasSuggestionFor(string $label): array
+    {
+        try {
+            $found = ProductAlias::findByRaw($label);
+            if ($found !== null) {
+                return [(string) ($found['product_key'] ?? ''), (string) ($found['category'] ?? '')];
+            }
+            foreach (ProductAlias::all() as $alias) {
+                if (ScanCatalogMatcher::sameKey((string) ($alias['raw_description'] ?? ''), $label)) {
+                    return [(string) ($alias['product_key'] ?? ''), (string) ($alias['category'] ?? '')];
+                }
+            }
+        } catch (\Throwable) {
+            // Alias illisibles : pas de suggestion, ligne saisissable.
+        }
+
+        return ['', ''];
+    }
+
+    /**
+     * Fusion AUTOMATIQUE d'une fiche carte au nom long dans le produit
+     * court : déclenchée quand une fiche `products` porte exactement
+     * le libellé de l'appellation (même clé normalisée) ET que le nom
+     * court visé est différent — le même mécanisme que la carte
+     * « Fusionner deux produits » (ProductKeyMerge::merge) : achats,
+     * pertes, ventes, coûts, stock et fiche source absorbés, sans
+     * perte. Jamais bloquant : en cas d'échec SQL, journalise et
+     * laisse la suite des lignes se traiter (flash d'avertissement
+     * partiel côté appelant).
+     *
+     * @return array{0:int, 1:bool} [fiches fusionnées, échec à signaler]
+     */
+    private function mergeLongFiche(string $raw, string $productKey): array
+    {
+        $raw = trim($raw);
+        $productKey = trim($productKey);
+        if ($raw === '' || $productKey === '' || !ProductKeyMerge::canMerge($raw, $productKey)) {
+            return [0, false]; // alias visant la fiche elle-même : exclu
+        }
+
+        try {
+            foreach (Product::allForAdmin() as $fiche) {
+                if (StockPublic::normalizeKey((string) ($fiche['name'] ?? '')) === StockPublic::normalizeKey($raw)) {
+                    ProductKeyMerge::merge($raw, $productKey, Auth::id());
+
+                    return [1, false];
+                }
+            }
+        } catch (\Throwable $e) {
+            Logger::warning('alias: fusion automatique de la fiche au nom long impossible', [
+                'raw' => $raw,
+                'key' => $productKey,
+                'msg' => $e->getMessage(),
+            ]);
+
+            return [0, true];
+        }
+
+        return [0, false]; // aucune fiche au nom long : rien à fusionner
+    }
+
+    /**
+     * Compte rendu des fusions réussies, à AJOUTER au flash de succès
+     * de l'enregistrement ('' si rien fusionné).
+     */
+    private static function mergedFlashSuffix(int $merged): string
+    {
+        return $merged > 0
+            ? ' ' . sprintf('%d fiche(s) au nom long fusionnée(s) dans le produit court.', $merged)
+            : '';
+    }
+
+    /**
+     * Flash d'avertissement quand une auto-fusion a échoué (appelant
+     * enchaîné malgré tout) : les appellations restent enregistrées,
+     * seule l'absorption de la fiche reste à refaire.
+     */
+    private function flashMergeFailure(): void
+    {
+        $this->setFlash(
+            'warning',
+            'Fusion automatique d\'une fiche au nom long impossible (voir journal) — l\'appellation est enregistrée ; réessaie depuis la carte « Fusionner deux produits ».'
+        );
     }
 
     /**
@@ -1034,10 +1186,12 @@ final class AdminComptaController extends AdminBaseController
         if (ProductAlias::save($data) === '') {
             $this->setFlash('error', 'Libellé et produit canonique requis.');
         } else {
+            $raw = (string) ($data['raw_description'] ?? '');
+            $productKey = (string) ($data['product_key'] ?? '');
             // Synchronisation : la catégorie choisie est reportée sur les
             // ventes déjà enregistrées portant ce libellé.
             $categorized = Sale::applyAliasCategory(
-                (string) ($data['raw_description'] ?? ''),
+                $raw,
                 isset($data['category']) ? (string) $data['category'] : null
             );
             // La catégorie choisie doit aussi exister dans la carte (page
@@ -1046,13 +1200,27 @@ final class AdminComptaController extends AdminBaseController
             if ($cat !== '') {
                 ProductCategory::ensure($cat, Auth::id());
             }
+            // Nettoyage automatique : une fiche carte au nom du libellé
+            // (« OASIS TROPICAL SLIM BTE 33CL ») est fusionnée dans le
+            // produit court (« Oasis Tropical ») — achats, stock, coûts
+            // et fiche absorbés, sans perte.
+            [$merged, $mergeFailed] = $this->mergeLongFiche($raw, $productKey);
             $this->audit('compta.alias.save', 'product_alias', null, [
                 'raw'           => $data['raw_description'] ?? null,
                 'sales_updated' => $categorized,
+                'merged_fiches' => $merged,
             ]);
             // File « à classer » : le libellé vient d'être résolu.
-            ScanLabel::deleteByLabel((string) ($data['raw_description'] ?? ''));
-            $this->setFlash('success', 'Libellé rattaché au produit.' . ($categorized > 0 ? sprintf(' %d vente(s) catégorisée(s).', $categorized) : ''));
+            ScanLabel::deleteByLabel($raw);
+            $this->setFlash(
+                'success',
+                'Libellé rattaché au produit.'
+                . ($categorized > 0 ? sprintf(' %d vente(s) catégorisée(s).', $categorized) : '')
+                . self::mergedFlashSuffix($merged)
+            );
+            if ($mergeFailed) {
+                $this->flashMergeFailure();
+            }
         }
 
         // Page dédiée : retour au formulaire (ajout en série), sinon à
@@ -1069,7 +1237,12 @@ final class AdminComptaController extends AdminBaseController
      * category[] en parallèle). Les lignes incomplètes sont ignorées,
      * les autres suivent le même chemin que saveAlias() (catégorie
      * propagée aux ventes, catégorie créée dans la carte, purge de la
-     * file des libellés scans).
+     * file des libellés scans) PLUS la fusion automatique de la fiche
+     * carte au nom long dans le produit court : enregistrer
+     * l'appellation d'un nom long absorbe ses achats/stock/coûts/fiche
+     * (ProductKeyMerge::merge, comme la carte « Fusionner ») — un
+     * échec est journalisé et n'interrompt pas les lignes suivantes
+     * (flash d'avertissement partiel).
      */
     public function saveAliasBulk(): void
     {
@@ -1087,6 +1260,8 @@ final class AdminComptaController extends AdminBaseController
         }
 
         $done = 0;
+        $merged = 0;
+        $mergeFailed = false;
         foreach ($raws as $i => $raw) {
             $raw = trim((string) $raw);
             $productKey = trim((string) ($keys[$i] ?? ''));
@@ -1105,16 +1280,28 @@ final class AdminComptaController extends AdminBaseController
                 ProductCategory::ensure($category, Auth::id());
             }
             ScanLabel::deleteByLabel($raw);
+            // Nettoyage automatique de la fiche au nom long (voir
+            // mergeLongFiche) : absorbe achats/stock/coûts/fiche dans
+            // le produit court, sans jamais bloquer la série.
+            [$lineMerged, $lineFailed] = $this->mergeLongFiche($raw, $productKey);
+            $merged += $lineMerged;
+            $mergeFailed = $mergeFailed || $lineFailed;
             $done++;
         }
 
-        $this->audit('compta.alias.bulk', 'product_alias', null, ['count' => $done]);
+        $this->audit('compta.alias.bulk', 'product_alias', null, [
+            'count'         => $done,
+            'merged_fiches' => $merged,
+        ]);
         $this->setFlash(
             $done > 0 ? 'success' : 'error',
             $done > 0
-                ? sprintf('%d appellation(s) enregistrée(s).', $done)
+                ? sprintf('%d appellation(s) enregistrée(s).', $done) . self::mergedFlashSuffix($merged)
                 : 'Aucune ligne complète : libellé et nom court sont requis.'
         );
+        if ($mergeFailed) {
+            $this->flashMergeFailure();
+        }
 
         redirect(url('/admin/compta/aliases/new'));
     }

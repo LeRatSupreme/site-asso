@@ -6,14 +6,17 @@ declare(strict_types=1);
  * Page dédiée « Ajouter une appellation » : saisie en série du lien
  * libellé facture/CSV -> nom court. Grille multi-lignes : une ligne
  * par appellation, tout est enregistré d'un coup (Entrée = champ
- * suivant, nouvelle ligne automatique en bas). Les libellés extraits
- * des scans de factures y arrivent PRÉ-REMPLIS (un par libellé en
- * file) : il ne reste qu'à saisir le nom court. La liste complète
- * reste consultable et éditable dans la page Mapping des libellés.
+ * suivant, nouvelle ligne automatique en bas). Y arrivent PRÉ-REMPLIS
+ * les libellés extraits des scans de factures (un par libellé en
+ * file) ET les fiches carte au nom de facture (« OASIS TROPICAL SLIM
+ * BTE 33CL »…) : il ne reste qu'à saisir le nom court — à
+ * l'enregistrement, la fiche longue est fusionnée automatiquement
+ * dans le produit court. La liste complète reste consultable et
+ * éditable dans la page Mapping des libellés.
  *
  * @var list<string> $categories
  * @var list<string> $products
- * @var list<array<string,mixed>> $pending
+ * @var list<array{label:string, occurrences:int, hint:string, suggested:string, category:string}> $pendingRows
  */
 ?>
 <div class="compta-head">
@@ -39,12 +42,23 @@ declare(strict_types=1);
                 <span></span>
             </div>
             <div id="alias-rows">
-                <?php foreach (($pending ?? []) as $row): ?>
-                    <?php $label = (string) $row['label']; ?>
+                <?php foreach (($pendingRows ?? []) as $row): ?>
+                    <?php
+                        $label = (string) $row['label'];
+                        $isFiche = ($row['hint'] ?? 'scan') === 'fiche';
+                        $occ = max(0, (int) ($row['occurrences'] ?? 0));
+                        $hint = $isFiche ? 'fiche produit' : 'scanné ×' . max(1, $occ);
+                        $title = $isFiche
+                            ? 'Fiche produit existante au nom long — saisis le nom court : à l\'enregistrement, la fiche longue est fusionnée automatiquement dans le produit court.'
+                            : 'Libellé extrait d\'un scan de facture (' . $occ . ' fois) — saisis le nom court à droite.';
+                    ?>
                     <div class="alias-line">
-                        <input type="text" name="raw_description[]" value="<?= e($label) ?>" readonly title="Libellé extrait d'un scan de facture (<?= (int) $row['occurrences'] ?> fois) — saisis le nom court à droite.">
-                        <input type="text" name="product_key[]" list="alias-products" placeholder="ex : Eau" autocomplete="off">
-                        <input type="text" name="category[]" list="alias-categories" placeholder="ex : Boissons" autocomplete="off">
+                        <div class="alias-raw">
+                            <input type="text" name="raw_description[]" value="<?= e($label) ?>" readonly title="<?= e($title) ?>">
+                            <span class="alias-hint"><?= e($hint) ?></span>
+                        </div>
+                        <input type="text" name="product_key[]" list="alias-products" value="<?= e((string) ($row['suggested'] ?? '')) ?>" placeholder="ex : Eau" autocomplete="off">
+                        <input type="text" name="category[]" list="alias-categories" value="<?= e((string) ($row['category'] ?? '')) ?>" placeholder="ex : Boissons" autocomplete="off">
                         <button type="button" class="btn btn-ghost btn-sm alias-del" title="Retirer la ligne">✕</button>
                     </div>
                 <?php endforeach; ?>
@@ -77,7 +91,7 @@ declare(strict_types=1);
             </div>
         </form>
 
-        <p class="muted">Tous les libellés scannés arrivent pré-remplis dans le formulaire ci-dessus ; saisis le nom court et enregistre.</p>
+        <p class="muted">Les libellés scannés et les fiches au nom long arrivent ici ; saisis le nom court — à l'enregistrement, la fiche longue est fusionnée automatiquement dans le produit court.</p>
 
         <datalist id="alias-products">
             <?php foreach (($products ?? []) as $p): ?>
@@ -119,10 +133,29 @@ declare(strict_types=1);
         width: 100%;
         margin: 0;
     }
-    /* Libellé pré-rempli depuis un scan : lecture seule, discret. */
+    /* Libellé pré-rempli (scan ou fiche au nom long) : lecture seule,
+       discret, avec son badge d'origine à côté. */
     .alias-line input[type="text"][readonly] {
         opacity: 0.85;
         cursor: default;
+    }
+    .alias-raw {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        min-width: 0;
+    }
+    .alias-raw input[type="text"] {
+        flex: 1;
+        min-width: 0;
+    }
+    .alias-hint {
+        font-size: 0.72rem;
+        opacity: 0.65;
+        white-space: nowrap;
+        border: 1px solid rgba(127, 127, 127, 0.35);
+        border-radius: 999px;
+        padding: 0.05rem 0.45rem;
     }
     .alias-line .alias-del {
         padding: 0.3rem 0.55rem;
@@ -178,8 +211,8 @@ declare(strict_types=1);
         if (!btn) return;
         var row = btn.closest('.alias-line');
         if (row.querySelector('input[readonly]')) {
-            // Ligne pré-remplie depuis un scan : le libellé est en
-            // lecture seule — on RETIRE la ligne (pas de « vidage »
+            // Ligne pré-remplie (scan ou fiche au nom long) : le libellé
+            // est en lecture seule — on RETIRE la ligne (pas de « vidage »
             // possible), et la grille ne reste jamais vide.
             row.remove();
             if (rows().length === 0) addRow(false);

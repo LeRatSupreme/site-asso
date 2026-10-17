@@ -277,6 +277,69 @@ final class ScanCatalogMatcher
     }
 
     /**
+     * Jetons de conditionnement / unité de vente typiques d'un libellé
+     * de facture fournisseur (METRO…) : leur présence signale un nom
+     * « brut de livraison », pas un nom choisi par l'asso.
+     *
+     * @var list<string>
+     */
+    private const PACKAGING_TOKENS = [
+        'bte', 'btes', 'boite', 'boites', 'slim', 'pet', 'uvc',
+        'sachet', 'sachets', 'pack', 'packs',
+        'bouteille', 'bouteilles', 'brique', 'briques',
+    ];
+
+    /**
+     * Le nom BRUT ressemble-t-il à un libellé de facture (plutôt qu'au
+     * nom court choisi par l'asso) ? HEURISTIQUE — jamais une vérité
+     * absolue : elle peut rater des noms longs sans conditionnement
+     * (« Snickers Xxl ») et signaler un vrai nom produit contenant un
+     * conditionnement (« Pack Bienvenue »). Elle ne pilote que le
+     * pré-remplissage du formulaire et la purge de la file des scans,
+     * jamais une écriture comptable.
+     *
+     * Positifs : « OASIS TROPICAL SLIM BTE 33CL », « RED BULL BLUE
+     * BOITE 25CL », « CRISTALI 50CL PET », « MARS 51G UVC ».
+     * Négatifs : « Oasis Tropical », « Menu BBQ », « Eau ».
+     */
+    public static function looksLikeInvoiceLabel(string $name): bool
+    {
+        $name = trim($name);
+        if ($name === '') {
+            return false;
+        }
+
+        // Minuscules sans accents, séparateurs repliés (même repliement
+        // que le reste du matcher) : « BTE », « Boîte » -> « bte »/« boite ».
+        $norm = AliasSuggester::normalizeKey($name);
+
+        // 1) Motif packaging/quantité : « 33CL », « 51G », « 2KG »,
+        //    « 0,5L » (le chiffre devant l'unité suffit : « BTE50CL »).
+        if (preg_match('/\d+\s?(cl|ml|kg|g|l)\b/i', $norm) === 1) {
+            return true;
+        }
+
+        // 2) Colisage : « x 6 », « ×24 ».
+        if (preg_match('/\b(x|×)\s?\d+\b/iu', $norm) === 1) {
+            return true;
+        }
+
+        // 3) Jeton de conditionnement isolé (BTE, SLIM, PET, UVC…).
+        foreach (explode(' ', $norm) as $token) {
+            if (in_array($token, self::PACKAGING_TOKENS, true)) {
+                return true;
+            }
+        }
+
+        // 4) Nom tout en MAJUSCULES (au moins 8 lettres hors espaces,
+        //    chiffres et ponctuation) : l'OCR des factures crie, l'asso
+        //    écrit « Oasis Tropical ».
+        $letters = (string) preg_replace('/\P{L}+/u', '', $name);
+
+        return mb_strlen($letters) >= 8 && $letters === mb_strtoupper($letters);
+    }
+
+    /**
      * Deux libellés désignent-ils la MÊME clé une fois normalisés
      * (casse, accents, séparateurs et espaces ignorés — même repliement
      * que StockPublic::normalizeKey) ?
