@@ -36,6 +36,10 @@ final class AdminLedgerController extends AdminBaseController
         $this->renderAdmin('admin/ledger/index', [
             'title'   => 'Livre comptable',
             'user'    => Auth::user() ?? [],
+            // Onglets .compta-tab stylés par compta.css : le layout admin
+            // ne la charge que sur /compta ou sur ce drapeau, et
+            // /admin/ledger n'est ni l'un ni l'autre.
+            'loadComptaCss' => true,
             'entries' => $entries,
             'from'    => $from,
             'to'      => $to,
