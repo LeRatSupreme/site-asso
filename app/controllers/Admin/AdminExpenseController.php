@@ -104,6 +104,139 @@ final class AdminExpenseController extends AdminBaseController
         $user = $this->guardCompta();
         $back = $this->returnTo();
 
+        $data = $this->readExpensePost();
+        if (!$data['ok']) {
+            $this->setFlash('error', 'Libellé requis, avec un montant (> 0).');
+            redirect(url($back));
+        }
+
+        $receiptPath = $this->storeReceipt($back);
+
+        $category = strtoupper(trim((string) ($_POST['category'] ?? '')));
+        if (!in_array($category, Expense::CATEGORIES, true)) {
+            $category = 'DIVERS';
+        }
+
+        $id = Expense::create([
+            'spent_at'   => (string) ($_POST['spent_at'] ?? '') !== '' ? (string) $_POST['spent_at'] : date('Y-m-d'),
+            'category'   => $category,
+            'label'      => $data['label'],
+            'amount_ttc' => $data['amount_ttc'],
+            'amount_ht'  => $data['amount_ht'],
+            'vat'        => $data['vat'],
+            'invoice_number' => (string) ($_POST['invoice_number'] ?? ''),
+            'notes'      => (string) ($_POST['notes'] ?? ''),
+            'receipt_path' => $receiptPath,
+            'created_by' => (string) ($user['id'] ?? ''),
+        ]);
+
+        if ($id === '') {
+            $this->setFlash('error', 'Libellé requis, avec un montant (> 0).');
+            redirect(url($back));
+        }
+
+        $this->audit('compta.expense.create', 'expense', $id, [
+            'label'      => $data['label'],
+            'category'   => $category,
+            'basis'      => $data['basis'],
+            'vat_rate'   => $data['rate'],
+            'amount_ht'  => $data['amount_ht'],
+            'amount_ttc' => $data['amount_ttc'],
+            'vat'        => $data['vat'],
+            'receipt'    => $receiptPath,
+        ]);
+        $this->setFlash('success', 'Dépense enregistrée.');
+        redirect(url($back));
+    }
+
+    /**
+     * Met à jour une dépense existante (POST /admin/compta/depenses/{id}/update).
+     * Validation strictement identique à save() (même lecture du POST,
+     * mêmes messages) ; le justificatif, optionnel, REMPLACE l'ancien :
+     * le fichier précédent est supprimé du disque quand un nouveau est
+     * stocké (même garde « dossier receipts uniquement » que delete()).
+     */
+    public function update(string $id): void
+    {
+        $this->guardCompta();
+
+        $expense = Expense::find($id);
+        if ($expense === null) {
+            $this->setFlash('error', 'Dépense introuvable (déjà supprimée ?).');
+            redirect(url('/admin/compta/depenses'));
+        }
+        $back = $this->returnTo();
+
+        $data = $this->readExpensePost();
+        if (!$data['ok']) {
+            $this->setFlash('error', 'Libellé requis, avec un montant (> 0).');
+            redirect(url($back));
+        }
+
+        $receiptPath = $this->storeReceipt($back);
+
+        $category = strtoupper(trim((string) ($_POST['category'] ?? '')));
+        if (!in_array($category, Expense::CATEGORIES, true)) {
+            $category = 'DIVERS';
+        }
+
+        $oldReceipt = trim((string) ($expense['receipt_path'] ?? ''));
+
+        $fields = [
+            'spent_at'   => (string) ($_POST['spent_at'] ?? '') !== '' ? (string) $_POST['spent_at'] : date('Y-m-d'),
+            'category'   => $category,
+            'label'      => $data['label'],
+            'amount_ttc' => $data['amount_ttc'],
+            'amount_ht'  => $data['amount_ht'],
+            'vat'        => $data['vat'],
+            'invoice_number' => (string) ($_POST['invoice_number'] ?? ''),
+            'notes'      => (string) ($_POST['notes'] ?? ''),
+        ];
+        // Sans nouveau fichier : le justificatif existant est conservé.
+        if ($receiptPath !== null) {
+            $fields['receipt_path'] = $receiptPath;
+        }
+
+        if (!Expense::update($id, $fields)) {
+            $this->setFlash('error', 'Dépense introuvable (déjà supprimée ?).');
+            redirect(url('/admin/compta/depenses'));
+        }
+
+        // Remplacement du justificatif : l'ancien fichier sort du disque
+        // (chemin contenu dans le dossier receipts uniquement, jamais un
+        // chemin arbitraire — même garde que delete()).
+        if ($receiptPath !== null && $oldReceipt !== '' && $oldReceipt !== $receiptPath) {
+            $this->deleteReceiptFile($oldReceipt);
+        }
+
+        $this->audit('compta.expense.update', 'expense', $id, [
+            'label'      => $data['label'],
+            'category'   => $category,
+            'basis'      => $data['basis'],
+            'vat_rate'   => $data['rate'],
+            'amount_ht'  => $data['amount_ht'],
+            'amount_ttc' => $data['amount_ttc'],
+            'vat'        => $data['vat'],
+            'receipt'    => $receiptPath,
+            'old_receipt' => $oldReceipt !== '' ? $oldReceipt : null,
+        ]);
+        $this->setFlash('success', 'Dépense mise à jour.');
+        redirect(url($back));
+    }
+
+    /**
+     * Lit et valide le POST d'une dépense — le cœur commun de save() et
+     * update() : libellé, montant unique dans sa base (« ttc » défaut,
+     * « ht »), compatibilité ancien formulaire (champs HT/TTC séparés),
+     * TVA saisie prioritaire sur le taux, puis HT/TTC/TVA déduits par
+     * Expense::computeAmounts(). ok=false si libellé ou montant invalide
+     * (le flash et la redirection restent à la charge de l'appelant, qui
+     * affiche le même message que save()).
+     *
+     * @return array{ok:bool, label:string, basis:string, rate:?float, amount_ht:?float, amount_ttc:?float, vat:?float}
+     */
+    private function readExpensePost(): array
+    {
         $label = trim((string) ($_POST['label'] ?? ''));
         // Saisie souple : un seul montant, dans une base explicite.
         // « amount_basis » = « ttc » (défaut — les tickets indiquent le TTC)
@@ -135,8 +268,7 @@ final class AdminExpenseController extends AdminBaseController
         }
 
         if ($label === '' || $amount <= 0) {
-            $this->setFlash('error', 'Libellé requis, avec un montant (> 0).');
-            redirect(url($back));
+            return ['ok' => false, 'label' => $label, 'basis' => $basis, 'rate' => $rate, 'amount_ht' => null, 'amount_ttc' => null, 'vat' => null];
         }
 
         // HT/TTC/TVA déduits du montant unique : montant de TVA saisi
@@ -149,43 +281,22 @@ final class AdminExpenseController extends AdminBaseController
             $rate
         );
 
-        $receiptPath = $this->storeReceipt($back);
+        return ['ok' => true, 'label' => $label, 'basis' => $basis, 'rate' => $rate, 'amount_ht' => $amountHt, 'amount_ttc' => $amountTtc, 'vat' => $vat];
+    }
 
-        $category = strtoupper(trim((string) ($_POST['category'] ?? '')));
-        if (!in_array($category, Expense::CATEGORIES, true)) {
-            $category = 'DIVERS';
+    /**
+     * Supprime du disque un fichier justificatif (chemin relatif sous
+     * /assets renvoyé par ReceiptStorage). Jamais un chemin arbitraire :
+     * seul le dossier receipts est concerné — code partagé par delete()
+     * (suppression) et update() (remplacement).
+     */
+    private function deleteReceiptFile(string $path): void
+    {
+        $file = realpath(AEIC_PUBLIC . '/assets/' . ltrim($path, '/'));
+        $base = realpath(AEIC_PUBLIC . '/assets/uploads/receipts');
+        if ($file !== false && $base !== false && str_starts_with($file, $base)) {
+            @unlink($file);
         }
-
-        $id = Expense::create([
-            'spent_at'   => (string) ($_POST['spent_at'] ?? '') !== '' ? (string) $_POST['spent_at'] : date('Y-m-d'),
-            'category'   => $category,
-            'label'      => $label,
-            'amount_ttc' => $amountTtc,
-            'amount_ht'  => $amountHt,
-            'vat'        => $vat,
-            'invoice_number' => (string) ($_POST['invoice_number'] ?? ''),
-            'notes'      => (string) ($_POST['notes'] ?? ''),
-            'receipt_path' => $receiptPath,
-            'created_by' => (string) ($user['id'] ?? ''),
-        ]);
-
-        if ($id === '') {
-            $this->setFlash('error', 'Libellé requis, avec un montant (> 0).');
-            redirect(url($back));
-        }
-
-        $this->audit('compta.expense.create', 'expense', $id, [
-            'label'      => $label,
-            'category'   => $category,
-            'basis'      => $basis,
-            'vat_rate'   => $rate,
-            'amount_ht'  => $amountHt,
-            'amount_ttc' => $amountTtc,
-            'vat'        => $vat,
-            'receipt'    => $receiptPath,
-        ]);
-        $this->setFlash('success', 'Dépense enregistrée.');
-        redirect(url($back));
     }
 
     public function delete(string $id): void
@@ -196,11 +307,7 @@ final class AdminExpenseController extends AdminBaseController
         // dossier receipts uniquement, jamais un chemin arbitraire).
         $expense = Expense::find($id);
         if ($expense !== null && !empty($expense['receipt_path'])) {
-            $file = realpath(AEIC_PUBLIC . '/assets/' . ltrim((string) $expense['receipt_path'], '/'));
-            $base = realpath(AEIC_PUBLIC . '/assets/uploads/receipts');
-            if ($file !== false && $base !== false && str_starts_with($file, $base)) {
-                @unlink($file);
-            }
+            $this->deleteReceiptFile((string) $expense['receipt_path']);
         }
 
         Expense::delete($id);

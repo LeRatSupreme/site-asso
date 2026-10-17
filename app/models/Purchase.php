@@ -118,6 +118,158 @@ final class Purchase extends Model
     }
 
     /**
+     * Achats existants par identifiants (les ids inconnus sont simplement
+     * absents du résultat), triés comme le reste du modèle : du plus
+     * récent au plus ancien.
+     *
+     * @param list<string> $ids Identifiants bruts (espaces bornes tolérés,
+     *                          doublons ignorés).
+     *
+     * @return list<array<string,mixed>>
+     */
+    public static function findByIds(array $ids): array
+    {
+        $ids = self::normalizeIds($ids);
+        if ($ids === []) {
+            return [];
+        }
+
+        $in = implode(',', array_fill(0, count($ids), '?'));
+
+        try {
+            $stmt = self::pdo()->prepare(
+                'SELECT * FROM purchases WHERE id IN (' . $in . ')
+                 ORDER BY purchased_at DESC, created_at DESC'
+            );
+            $stmt->execute($ids);
+
+            /** @var list<array<string,mixed>> $r */
+            return $stmt->fetchAll();
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    /**
+     * Met à jour les mêmes champs sur plusieurs achats en une requête
+     * (édition d'une course entière : date, fournisseur, n° de facture,
+     * justificatif). Le stock n'est PAS touché — les quantités et clés
+     * produit restent inchangées.
+     *
+     * Conventions de create() : fournisseur / n° de facture vides → NULL ;
+     * justificatif contrôlé par PurchaseSaver::receiptPathOrNull — null ou
+     * vide → NULL (justificatif retiré), valeur non reconnue (chemin
+     * arbitraire, ../, URL…) → NULL également. Les appelants ne passent
+     * « receipt_path » qu'avec un chemin renvoyé par ReceiptStorage, ou ne
+     * passent pas la clé pour conserver l'ancien justificatif. Seules les
+     * clés présentes dans $fields sont modifiées.
+     *
+     * @param list<string>            $ids    Identifiants bruts (espaces
+     *                                        bornes tolérés, doublons
+     *                                        ignorés).
+     * @param array<string,mixed>     $fields Liste blanche : purchased_at
+     *                                        (« YYYY-MM-DD »), supplier,
+     *                                        invoice_number, receipt_path.
+     */
+    public static function updateByIds(array $ids, array $fields): bool
+    {
+        $ids = self::normalizeIds($ids);
+
+        $sets = [];
+        $args = [];
+        if (array_key_exists('purchased_at', $fields)) {
+            $purchasedAt = substr((string) $fields['purchased_at'], 0, 10);
+            if ($purchasedAt === '') {
+                return false;
+            }
+            $sets[] = 'purchased_at = ?';
+            $args[] = $purchasedAt;
+        }
+        if (array_key_exists('supplier', $fields)) {
+            $sets[] = 'supplier = ?';
+            $args[] = ($fields['supplier'] ?? '') !== '' ? (string) $fields['supplier'] : null;
+        }
+        if (array_key_exists('invoice_number', $fields)) {
+            $sets[] = 'invoice_number = ?';
+            $args[] = ($fields['invoice_number'] ?? '') !== '' ? trim((string) $fields['invoice_number']) : null;
+        }
+        if (array_key_exists('receipt_path', $fields)) {
+            $sets[] = 'receipt_path = ?';
+            $args[] = \App\Core\Compta\PurchaseSaver::receiptPathOrNull($fields['receipt_path'] ?? null);
+        }
+
+        if ($ids === [] || $sets === []) {
+            return false;
+        }
+
+        $in = implode(',', array_fill(0, count($ids), '?'));
+        $stmt = self::pdo()->prepare(
+            'UPDATE purchases SET ' . implode(', ', $sets) . ' WHERE id IN (' . $in . ')'
+        );
+
+        return $stmt->execute([...$args, ...$ids]);
+    }
+
+    /**
+     * Un justificatif (chemin « uploads/receipts/… ») est-il porté par
+     * d'autres achats que ceux listés ? Sert à ne pas supprimer du disque
+     * un fichier partagé par plusieurs lignes (une même photo jointe à
+     * toute une course).
+     *
+     * En cas d'erreur de base, répond true (conservateur : on ne supprime
+     * jamais un fichier par doute).
+     *
+     * @param list<string> $excludeIds Identifiants à exclure du compte.
+     */
+    public static function receiptUsedElsewhere(string $path, array $excludeIds): bool
+    {
+        $path = trim($path);
+        if ($path === '') {
+            return false;
+        }
+
+        $ids = self::normalizeIds($excludeIds);
+
+        try {
+            if ($ids === []) {
+                $stmt = self::pdo()->prepare(
+                    'SELECT COUNT(*) FROM purchases WHERE receipt_path = ?'
+                );
+                $stmt->execute([$path]);
+            } else {
+                $in = implode(',', array_fill(0, count($ids), '?'));
+                $stmt = self::pdo()->prepare(
+                    'SELECT COUNT(*) FROM purchases WHERE receipt_path = ? AND id NOT IN (' . $in . ')'
+                );
+                $stmt->execute([$path, ...$ids]);
+            }
+
+            return (int) $stmt->fetchColumn() > 0;
+        } catch (\Throwable) {
+            return true;
+        }
+    }
+
+    /**
+     * Normalise une liste d'identifiants bruts : trim, vide retiré,
+     * doublons retirés, indexations rétablies.
+     *
+     * @return list<string>
+     */
+    private static function normalizeIds(array $ids): array
+    {
+        $out = [];
+        foreach ($ids as $id) {
+            $id = trim((string) $id);
+            if ($id !== '') {
+                $out[] = $id;
+            }
+        }
+
+        return array_values(array_unique($out));
+    }
+
+    /**
      * Derniers achats, du plus récent au plus ancien.
      *
      * @return list<array<string,mixed>>

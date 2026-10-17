@@ -1004,10 +1004,60 @@ usort($pickerList, 'strnatcasecmp');
 </div>
 
 <!-- ==================== Onglet : Journal ==================== -->
+<style>
+    /* Regroupement visuel par facture (jour + fournisseur + n° normalisé) :
+       en-tête de groupe avec total, nombre de lignes et justificatif(s),
+       puis les lignes détaillées inchangées. Deux factures distinctes le
+       même jour chez le même fournisseur = deux groupes. */
+    .pj-group-head td { background: rgba(255, 255, 255, 0.045); }
+    .pj-group-line {
+        display: flex; flex-wrap: wrap; gap: 0.45rem 0.9rem;
+        align-items: center; font-size: 0.86rem;
+    }
+    .pj-group-total { font-weight: 800; }
+    .pj-receipt-thumbs { display: flex; gap: 0.3rem; align-items: center; }
+    .pj-receipt-thumbs img {
+        height: 36px; border-radius: 6px; display: block;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+    }
+    .pj-group-edit summary {
+        display: inline-block; cursor: pointer; list-style: none;
+        padding: 0.2rem 0.6rem; border-radius: 999px;
+        border: 1px solid var(--border, rgba(255,255,255,0.12));
+        background: rgba(255, 255, 255, 0.04);
+        font-size: 0.76rem; font-weight: 800; color: var(--foreground, inherit);
+    }
+    .pj-group-edit summary::-webkit-details-marker { display: none; }
+    .pj-group-edit[open] summary { margin-bottom: 0.45rem; }
+    .pj-group-form {
+        display: flex; flex-wrap: wrap; gap: 0.45rem; align-items: flex-end;
+        padding: 0.6rem 0.7rem;
+        border: 1px dashed rgba(255, 255, 255, 0.2); border-radius: 10px;
+        background: rgba(255, 255, 255, 0.03);
+    }
+    .pj-group-form label {
+        display: grid; gap: 0.2rem;
+        font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em;
+        color: var(--muted, #8892a6);
+    }
+    .pj-group-form input {
+        padding: 0.35rem 0.5rem; border: 1px solid var(--border, rgba(255,255,255,0.15));
+        border-radius: 8px; background: rgba(255, 255, 255, 0.05); color: var(--foreground, inherit);
+        font-size: 0.82rem; min-width: 0;
+    }
+    /* Case « ne pas corriger le stock » des formulaires de suppression
+       (groupe et ligne) : sobre, alignée sur le bouton voisin. */
+    .pj-keep-stock {
+        display: inline-flex; gap: 0.35rem; align-items: center;
+        font-size: 0.76rem; font-weight: 600; cursor: pointer;
+        color: var(--muted, #8892a6);
+    }
+    .pj-keep-stock input { margin: 0; accent-color: var(--primary, currentColor); }
+</style>
 <div class="compta-tabpane" data-pane="journal" hidden>
     <div class="card surface glass table-wrap">
         <h2 class="card-title">Derniers achats</h2>
-        <p class="muted">Achats de la période sélectionnée (200 lignes max).</p>
+        <p class="muted">Achats de la période sélectionnée (200 lignes max), regroupés par facture (jour + fournisseur + n° de facture).</p>
         <table class="table">
             <thead>
                 <tr>
@@ -1024,38 +1074,114 @@ usort($pickerList, 'strnatcasecmp');
                 </tr>
             </thead>
             <tbody>
-                <?php foreach ($rows as $r): ?>
-                    <?php $hasVat = $r['vat_rate'] !== null; ?>
-                    <tr>
-                        <td><?= e(formatDate((string) $r['purchased_at'])) ?></td>
-                        <td><strong><?= e((string) $r['product_key']) ?></strong><?php if (!empty($r['no_stock'])): ?> <small class="muted">· hors stock</small><?php endif; ?></td>
-                        <td class="num"><?= (int) $r['quantity'] ?></td>
-                        <td class="num"><?= e(formatPrice((float) $r['unit_cost'], 3)) ?></td>
-                        <td class="num">
-                            <?php if (($r['total_ht'] ?? null) !== null): ?>
-                                <?= e(formatPrice((float) $r['total_ht'], 3)) ?>
-                            <?php else: ?>
-                                <span class="muted">—</span>
-                            <?php endif; ?>
-                        </td>
-                        <td class="num"><strong><?= e(formatPrice((float) $r['total_ttc'], 3)) ?></strong></td>
-                        <td>
-                            <?php if ($hasVat): ?>
-                                <span class="badge badge-warning"><?= e(formatFrenchPercent((float) $r['vat_rate'])) ?></span>
-                            <?php else: ?>
-                                <span class="badge badge-muted">Déjà TTC</span>
-                            <?php endif; ?>
-                        </td>
-                        <td><?= e((string) ($r['supplier'] ?? '—')) ?></td>
-                        <td><?= e(trim((string) ($r['invoice_number'] ?? '')) !== '' ? (string) $r['invoice_number'] : '—') ?></td>
-                        <td class="row-actions">
-                            <form method="post" action="<?= e(url('/admin/compta/achats/' . rawurlencode((string) $r['id']) . '/delete')) ?>"
-                                  data-confirm="Supprimer cet achat ?" data-preserve-scroll>
-                                <?= csrf_field() ?>
-                                <button type="submit" class="btn btn-danger btn-sm" aria-label="Supprimer">Supprimer</button>
-                            </form>
+                <?php
+                // Regroupement CÔTÉ VUE (aucun changement contrôleur/modèle) :
+                // même clé que le livre comptable — jour + fournisseur + n° de
+                // facture normalisé (minuscules, espaces bornes retirés).
+                $pjGroups = [];
+                foreach ($rows as $r) {
+                    $key = (string) $r['purchased_at']
+                        . '|' . trim((string) ($r['supplier'] ?? ''))
+                        . '|' . strtolower(trim((string) ($r['invoice_number'] ?? '')));
+                    if (!isset($pjGroups[$key])) {
+                        $pjGroups[$key] = ['lines' => [], 'total' => 0.0, 'receipts' => []];
+                    }
+                    $pjGroups[$key]['lines'][] = $r;
+                    $pjGroups[$key]['total'] += (float) $r['total_ttc'];
+                    $pjRcpt = trim((string) ($r['receipt_path'] ?? ''));
+                    if ($pjRcpt !== '' && !in_array($pjRcpt, $pjGroups[$key]['receipts'], true)) {
+                        $pjGroups[$key]['receipts'][] = $pjRcpt;
+                    }
+                }
+                ?>
+                <?php foreach ($pjGroups as $g): ?>
+                    <?php
+                    $pjFirst = $g['lines'][0];
+                    $pjSupplier = trim((string) ($pjFirst['supplier'] ?? ''));
+                    $pjInvoice = trim((string) ($pjFirst['invoice_number'] ?? ''));
+                    // Ids des lignes du groupe : suppression / édition
+                    // d'en-tête GROUPÉES (routes /achats/group/*).
+                    $pjIds = implode(',', array_map(static fn (array $r): string => (string) $r['id'], $g['lines']));
+                    ?>
+                    <tr class="pj-group-head">
+                        <td colspan="10">
+                            <div class="pj-group-line">
+                                <strong><?= e(formatDate((string) $pjFirst['purchased_at'])) ?></strong>
+                                <span><?= e($pjSupplier !== '' ? $pjSupplier : '—') ?></span>
+                                <span class="muted">Facture : <?= e($pjInvoice !== '' ? $pjInvoice : '—') ?></span>
+                                <span class="muted"><?= count($g['lines']) ?> ligne(s)</span>
+                                <span class="pj-group-total"><?= e(formatPrice($g['total'], 3)) ?></span>
+                                <?php if ($g['receipts'] !== []): ?>
+                                    <span class="pj-receipt-thumbs">
+                                        <?php foreach ($g['receipts'] as $pjRcpt): ?>
+                                            <a href="<?= e(asset($pjRcpt)) ?>" target="_blank" rel="noopener" title="Voir le justificatif">
+                                                <img src="<?= e(asset($pjRcpt)) ?>" alt="Justificatif de la facture">
+                                            </a>
+                                        <?php endforeach; ?>
+                                    </span>
+                                <?php else: ?>
+                                    <span class="muted">Aucun justificatif</span>
+                                <?php endif; ?>
+                                <details class="pj-group-edit">
+                                    <summary>Modifier en-tête / Ajouter une preuve</summary>
+                                    <!-- Édition groupée (POST /achats/group/update) :
+                                          appliquée à TOUTES les lignes du groupe ;
+                                          le stock n'est pas touché. Joindre un
+                                          fichier ici = ajouter/remplacer le ticket
+                                          (METRO…) de toute la course. -->
+                                    <form class="pj-group-form" method="post" action="<?= e(url('/admin/compta/achats/group/update')) ?>" enctype="multipart/form-data">
+                                        <?= csrf_field() ?>
+                                        <input type="hidden" name="ids" value="<?= e($pjIds) ?>">
+                                        <label>Date <input type="date" name="purchased_at" value="<?= e((string) $pjFirst['purchased_at']) ?>" required></label>
+                                        <label>Fournisseur <input type="text" name="supplier" maxlength="255" value="<?= e($pjSupplier) ?>"></label>
+                                        <label>N° de facture <input type="text" name="invoice_number" maxlength="255" value="<?= e($pjInvoice) ?>"></label>
+                                        <label>Preuve (PDF/JPG/PNG/WEBP · 5 Mo max) <input type="file" name="receipt" accept=".pdf,.jpg,.jpeg,.png,.webp"></label>
+                                        <button type="submit" class="btn btn-primary btn-sm">Enregistrer</button>
+                                    </form>
+                                </details>
+                                <form method="post" action="<?= e(url('/admin/compta/achats/group/delete')) ?>" data-confirm="Supprimer ces <?= count($g['lines']) ?> lignes d'achat ? Le stock ne sera corrigé que si la case “ne pas corriger le stock” est décochée." data-preserve-scroll>
+                                    <?= csrf_field() ?>
+                                    <input type="hidden" name="ids" value="<?= e($pjIds) ?>">
+                                    <label class="pj-keep-stock"><input type="checkbox" name="keep_stock" value="1"> Ne pas corriger le stock (les quantités restent telles quelles)</label>
+                                    <button type="submit" class="btn btn-danger btn-sm">Supprimer tout le groupe</button>
+                                </form>
+                            </div>
                         </td>
                     </tr>
+                    <?php foreach ($g['lines'] as $r): ?>
+                        <?php $hasVat = $r['vat_rate'] !== null; ?>
+                        <tr>
+                            <td><?= e(formatDate((string) $r['purchased_at'])) ?></td>
+                            <td><strong><?= e((string) $r['product_key']) ?></strong><?php if (!empty($r['no_stock'])): ?> <small class="muted">· hors stock</small><?php endif; ?></td>
+                            <td class="num"><?= (int) $r['quantity'] ?></td>
+                            <td class="num"><?= e(formatPrice((float) $r['unit_cost'], 3)) ?></td>
+                            <td class="num">
+                                <?php if (($r['total_ht'] ?? null) !== null): ?>
+                                    <?= e(formatPrice((float) $r['total_ht'], 3)) ?>
+                                <?php else: ?>
+                                    <span class="muted">—</span>
+                                <?php endif; ?>
+                            </td>
+                            <td class="num"><strong><?= e(formatPrice((float) $r['total_ttc'], 3)) ?></strong></td>
+                            <td>
+                                <?php if ($hasVat): ?>
+                                    <span class="badge badge-warning"><?= e(formatFrenchPercent((float) $r['vat_rate'])) ?></span>
+                                <?php else: ?>
+                                    <span class="badge badge-muted">Déjà TTC</span>
+                                <?php endif; ?>
+                            </td>
+                            <td><?= e((string) ($r['supplier'] ?? '—')) ?></td>
+                            <td><?= e(trim((string) ($r['invoice_number'] ?? '')) !== '' ? (string) $r['invoice_number'] : '—') ?></td>
+                            <td class="row-actions">
+                                <form method="post" action="<?= e(url('/admin/compta/achats/' . rawurlencode((string) $r['id']) . '/delete')) ?>"
+                                      data-confirm="Supprimer cet achat ? Le stock ne sera corrigé que si la case “ne pas corriger le stock” est décochée." data-preserve-scroll>
+                                    <?= csrf_field() ?>
+                                    <label class="pj-keep-stock"><input type="checkbox" name="keep_stock" value="1"> Ne pas corriger le stock (les quantités restent telles quelles)</label>
+                                    <button type="submit" class="btn btn-danger btn-sm" aria-label="Supprimer">Supprimer</button>
+                                </form>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
                 <?php endforeach; ?>
                 <?php if ($rows === []): ?>
                     <tr><td colspan="10" class="muted">Aucun achat sur la période sélectionnée.</td></tr>

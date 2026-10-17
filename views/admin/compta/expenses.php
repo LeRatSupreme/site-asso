@@ -120,6 +120,34 @@ foreach ($byCategory as $c) {
     .exp-scan-row .exp-scan-key { flex: 3 1 150px; }
     .exp-scan-row .exp-scan-qty { flex: 0 0 74px; }
     .exp-scan-row .exp-scan-total { flex: 1 1 90px; }
+    /* Édition inline d'une dépense (Journal) : ligne « Modifier » sous
+       chaque écriture — formulaire compact POST /depenses/{id}/update. */
+    .exp-edit summary {
+        display: inline-block; cursor: pointer; list-style: none;
+        padding: 0.2rem 0.6rem; border-radius: 999px;
+        border: 1px solid var(--border, rgba(255,255,255,0.12));
+        background: rgba(255, 255, 255, 0.04);
+        font-size: 0.76rem; font-weight: 800; color: var(--foreground, inherit);
+    }
+    .exp-edit summary::-webkit-details-marker { display: none; }
+    .exp-edit[open] summary { margin-bottom: 0.45rem; }
+    .exp-edit-form {
+        display: flex; flex-wrap: wrap; gap: 0.45rem; align-items: flex-end;
+        padding: 0.6rem 0.7rem;
+        border: 1px dashed rgba(255, 255, 255, 0.2); border-radius: 10px;
+        background: rgba(255, 255, 255, 0.03);
+    }
+    .exp-edit-form label {
+        display: grid; gap: 0.2rem;
+        font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em;
+        color: var(--muted, #8892a6);
+    }
+    .exp-edit-form input, .exp-edit-form select, .exp-edit-form textarea {
+        padding: 0.35rem 0.5rem; border: 1px solid var(--border, rgba(255,255,255,0.15));
+        border-radius: 8px; background: rgba(255, 255, 255, 0.05); color: var(--foreground, inherit);
+        font-size: 0.82rem; min-width: 0;
+    }
+    .exp-edit-form textarea { width: 100%; resize: vertical; }
 </style>
 <div class="compta-tabpane" data-pane="saisie" hidden>
     <section class="card surface glass">
@@ -814,6 +842,49 @@ foreach ($byCategory as $c) {
                             </form>
                         </td>
                     </tr>
+                    <?php if ((string) ($x['id'] ?? '') !== ''): ?>
+                    <tr class="exp-edit-row">
+                        <td colspan="9">
+                            <details class="exp-edit">
+                                <summary>Modifier</summary>
+                                <!-- Édition inline (POST /admin/compta/depenses/{id}/update) :
+                                     montant prérempli en TTC (amount_basis caché) ;
+                                     sans nouveau fichier, le justificatif existant
+                                     est conservé ; avec fichier, il REMPLACE
+                                     l'ancien. -->
+                                <form class="exp-edit-form" method="post" action="<?= e(url('/admin/compta/depenses/' . rawurlencode((string) $x['id']) . '/update')) ?>" enctype="multipart/form-data">
+                                    <?= csrf_field() ?>
+                                    <input type="hidden" name="return_to" value="/admin/compta/depenses">
+                                    <input type="hidden" name="amount_basis" value="ttc">
+                                    <label>Date <input type="date" name="spent_at" value="<?= e((string) ($x['spent_at'] ?? '')) ?>" required></label>
+                                    <label style="flex: 2 1 200px;">Libellé <input type="text" name="label" value="<?= e((string) ($x['label'] ?? '')) ?>" required style="width: 100%;"></label>
+                                    <label>Catégorie
+                                        <select name="category">
+                                            <?php foreach (\App\Models\Expense::CATEGORIES as $editCat): ?>
+                                                <option value="<?= e($editCat) ?>" <?= $editCat === $cat ? 'selected' : '' ?>><?= e($categoryLabels[$editCat] ?? $editCat) ?></option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    </label>
+                                    <label>Montant TTC (€) <input type="number" name="amount" step="0.01" min="0.01" value="<?= e(number_format((float) ($x['amount_ttc'] ?? 0), 2, '.', '')) ?>" required></label>
+                                    <?php $editVat = (float) ($x['vat'] ?? 0); ?>
+                                    <label>TVA (€) <input type="number" name="vat_amount" step="0.01" min="0" value="<?= $editVat > 0 ? e(number_format($editVat, 2, '.', '')) : '' ?>"></label>
+                                    <label>Taux
+                                        <select name="vat_rate">
+                                            <option value="">—</option>
+                                            <?php foreach (['20', '10', '5.5', '2.1', '0'] as $editRate): ?>
+                                                <option value="<?= e($editRate) ?>"><?= e($editRate) ?> %</option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    </label>
+                                    <label>Facture n° <input type="text" name="invoice_number" value="<?= e((string) ($x['invoice_number'] ?? '')) ?>"></label>
+                                    <label style="flex: 1 1 100%;">Notes <textarea name="notes" rows="2"><?= e((string) ($x['notes'] ?? '')) ?></textarea></label>
+                                    <label style="flex: 1 1 100%;">Preuve (remplace l'existante · PDF/JPG/PNG/WEBP · 5 Mo max) <input type="file" name="receipt" accept=".pdf,.jpg,.jpeg,.png,.webp"></label>
+                                    <button type="submit" class="btn btn-primary btn-sm">Enregistrer</button>
+                                </form>
+                            </details>
+                        </td>
+                    </tr>
+                    <?php endif; ?>
                 <?php endforeach; ?>
                 <?php if ($expenses === []): ?>
                     <tr><td colspan="9" class="muted">Aucune dépense sur la période.</td></tr>

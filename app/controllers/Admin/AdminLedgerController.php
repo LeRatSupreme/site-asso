@@ -14,9 +14,10 @@ use App\Models\Sale;
  * Livre comptable (groupe Système) : retranscription prête à recopier dans
  * le livret papier — Date | Objet | Débit | Crédit, avec pour chaque
  * dépense/achat une seconde ligne « ticket » (les achats du même jour
- * chez le même fournisseur, sinon portant le même n° de facture/ticket,
- * sont fusionnés en une écriture au total du jour, référencés par leur
- * n° de facture) et les ventes récapitulées en une
+ * chez le même fournisseur portant le même n° de facture/ticket sont
+ * fusionnés en une écriture au total du jour, référencés par leur n°
+ * de facture ; deux factures distinctes du même jour chez le même
+ * fournisseur font deux écritures) et les ventes récapitulées en une
  * unique ligne de clôture en fin de livre. L'« équilibrage » de pied de
  * page est un SOLDE DE TRÉSORERIE (encaissements − décaissements de la
  * période), PAS le bénéfice : le bénéfice net (coût des produits vendus
@@ -45,8 +46,10 @@ final class AdminLedgerController extends AdminBaseController
             'recentExpenses' => Expense::recent(8),
             // Dernières courses enregistrées en ACHATS (stock + coûts) :
             // une ligne par jour + référence (fournisseur, sinon n° de
-            // facture partagé), avec le justificatif du scan quand il a
-            // été conservé. Statique publique : partagée avec la version
+            // facture partagé) + n° de facture normalisé (deux factures
+            // distinctes du même jour chez le même fournisseur font deux
+            // lignes), avec le ou les justificatifs du scan quand ils ont
+            // été conservés. Statique publique : partagée avec la version
             // kiosque du livre (KioskComptageController).
             'recentPurchases' => self::recentPurchaseGroups(8),
             // Suggestions produit (datalist) pour l'enregistrement d'un
@@ -112,48 +115,80 @@ final class AdminLedgerController extends AdminBaseController
     }
 
     /**
+     * Clé de regroupement complète d'un achat (livre comptable et liste
+     * « Derniers tickets ») : jour + référence (purchaseGroupRef) + n° de
+     * facture NORMALISÉ (minuscules, espaces bornes retirés ; '' si
+     * absent). Deux factures distinctes saisies le même jour chez le
+     * même fournisseur donnent donc deux écritures — chacune avec son
+     * total et son justificatif. Méthode pure (aucun accès POST/DB) :
+     * testée unitairement.
+     */
+    public static function purchaseGroupKey(string $date, string $supplier, string $invoice, string $productKey): string
+    {
+        $invoiceNorm = strtolower(trim($invoice));
+
+        return $date . '|' . self::purchaseGroupRef($supplier, $invoice, $productKey) . '|' . $invoiceNorm;
+    }
+
+    /**
      * Dernières courses enregistrées en ACHATS (page Achats ou livre
      * comptable), groupées comme dans le livre : même jour + même
-     * fournisseur, sinon même jour + même n° de facture partagé (une
-     * course saisie sans fournisseur reste une seule ligne) — voir
-     * purchaseGroupRef(). Rend par groupe : total TTC, n° de facture
-     * partagé, justificatif du scan conservé (premier trouvé dans le
-     * groupe) et nombre de lignes. Statique publique : partagée avec la
-     * version kiosque du livre.
+     * fournisseur + même n° de facture normalisé (une course saisie sans
+     * fournisseur reste fusionnée par n° de facture ; deux factures
+     * distinctes du même jour chez le même fournisseur font deux
+     * groupes) — voir purchaseGroupKey(). Rend par groupe : total TTC,
+     * n° de facture (« invoice », alias « invoice_number »), justificatif
+     * du scan conservé (premier trouvé dans le groupe, aussi listé avec
+     * les autres dans « receipts ») et nombre de lignes. Statique
+     * publique : partagée avec la version kiosque du livre.
      *
      * @return list<array<string,mixed>>
      */
-    public static function recentPurchaseGroups(int $limit = 8): array
+    public static function recentPurchaseGroups(int $limit = 20): array
     {
         $groups = [];
         try {
             foreach (Purchase::recent(200) as $p) {
                 $date = (string) $p['purchased_at'];
+                $invoiceRaw = (string) ($p['invoice_number'] ?? '');
                 $ref = self::purchaseGroupRef(
                     (string) ($p['supplier'] ?? ''),
-                    (string) ($p['invoice_number'] ?? ''),
+                    $invoiceRaw,
                     (string) ($p['product_key'] ?? '')
                 );
-                $key = $date . '|' . $ref;
+                $key = self::purchaseGroupKey(
+                    $date,
+                    (string) ($p['supplier'] ?? ''),
+                    $invoiceRaw,
+                    (string) ($p['product_key'] ?? '')
+                );
                 if (!isset($groups[$key])) {
                     $groups[$key] = [
                         'date'          => $date,
                         'supplier'      => $ref,
                         'total_ttc'     => 0.0,
                         'invoice'       => null,
+                        'invoice_number' => null,
                         'receipt_path'  => null,
+                        'receipts'      => [],
                         'lines'         => 0,
                     ];
                 }
                 $groups[$key]['total_ttc'] += (float) $p['total_ttc'];
                 $groups[$key]['lines']++;
-                $invoice = trim((string) ($p['invoice_number'] ?? ''));
+                $invoice = trim($invoiceRaw);
                 if ($invoice !== '' && $groups[$key]['invoice'] === null) {
                     $groups[$key]['invoice'] = $invoice;
+                    $groups[$key]['invoice_number'] = $invoice;
                 }
                 $receipt = trim((string) ($p['receipt_path'] ?? ''));
-                if ($receipt !== '' && $groups[$key]['receipt_path'] === null) {
-                    $groups[$key]['receipt_path'] = $receipt;
+                if ($receipt !== '') {
+                    if ($groups[$key]['receipt_path'] === null) {
+                        $groups[$key]['receipt_path'] = $receipt;
+                    }
+                    if (!in_array($receipt, $groups[$key]['receipts'], true)) {
+                        $groups[$key]['receipts'][] = $receipt;
+                    }
                 }
             }
         } catch (\Throwable) {
@@ -199,27 +234,31 @@ final class AdminLedgerController extends AdminBaseController
     {
         $rows = [];
 
-        // ── Débits : ACHATS (une ligne par jour + référence) ───────────
-        // Tous les reçus d'un même jour chez le même fournisseur — ou
-        // portant le même n° de facture/ticket quand le fournisseur
-        // n'a pas été saisi (course scannée sans champ rempli) — sont
-        // fusionnés en une écriture unique portant le total (voir
-        // purchaseGroupRef()) ; les reçus individuels restent listés
-        // en lignes « ticket », référencés par le n° de facture quand
-        // il est renseigné (sinon n° interne).
+        // ── Débits : ACHATS (une ligne par jour + référence + facture) ──
+        // Tous les reçus d'un même jour chez le même fournisseur portant
+        // le même n° de facture/ticket normalisé sont fusionnés en une
+        // écriture unique portant le total (voir purchaseGroupKey()) ;
+        // deux factures distinctes du même jour chez le même fournisseur
+        // font deux écritures. Les reçus individuels restent listés en
+        // lignes « ticket », référencés par le n° de facture quand il est
+        // renseigné (sinon n° interne).
         $purchaseGroups = [];
         foreach (Purchase::between($from, $to, 500) as $p) {
             $date = (string) $p['purchased_at'];
-            $ref = self::purchaseGroupRef(
+            $key = self::purchaseGroupKey(
+                $date,
                 (string) ($p['supplier'] ?? ''),
                 (string) ($p['invoice_number'] ?? ''),
                 (string) ($p['product_key'] ?? '')
             );
-            $key = $date . '|' . $ref;
             if (!isset($purchaseGroups[$key])) {
                 $purchaseGroups[$key] = [
                     'date'     => $date,
-                    'supplier' => $ref,
+                    'supplier' => self::purchaseGroupRef(
+                        (string) ($p['supplier'] ?? ''),
+                        (string) ($p['invoice_number'] ?? ''),
+                        (string) ($p['product_key'] ?? '')
+                    ),
                     'total'    => 0.0,
                     'purchases' => [],
                 ];

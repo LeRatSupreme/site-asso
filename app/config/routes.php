@@ -368,6 +368,9 @@ function aeic_register_routes(Router $router): void
     // contrat que le scan d'achat, clé kind = 'metro' | 'ticket').
     // Déclarée AVANT /depenses/{id}/delete : le routeur matche par ordre.
     $router->post('/admin/compta/depenses/scan', [AdminExpenseController::class, 'scanTicket']);
+    // Édition d'une dépense existante (justificatif remplacé si un
+    // nouveau fichier est envoyé, conservé sinon).
+    $router->post('/admin/compta/depenses/{id}/update', [AdminExpenseController::class, 'update']);
     $router->post('/admin/compta/depenses/{id}/delete', [AdminExpenseController::class, 'delete']);
     $router->get('/admin/compta/budgets', [AdminBudgetController::class, 'index']);
     $router->post('/admin/compta/budgets/save', [AdminBudgetController::class, 'save']);
@@ -376,6 +379,12 @@ function aeic_register_routes(Router $router): void
     // Scan d'une facture fournisseur METRO (OCR image/PDF ou texte collé) :
     // renvoie les données extraites en JSON pour préremplir la grille d'achat.
     $router->post('/admin/compta/achats/scan', [AdminStockController::class, 'scanInvoice']);
+    // Suppression / édition d'un GROUPE d'achats (toutes les lignes d'une
+    // même facture — champ « ids » séparés par des virgules). Déclarées
+    // AVANT /achats/{id}/delete : le routeur matche par ordre et le
+    // segment {id} avalerait sinon le segment littéral « group ».
+    $router->post('/admin/compta/achats/group/delete', [AdminStockController::class, 'deletePurchaseGroup']);
+    $router->post('/admin/compta/achats/group/update', [AdminStockController::class, 'updatePurchaseGroup']);
     $router->post('/admin/compta/achats/{id}/delete', [AdminStockController::class, 'deletePurchase']);
     $router->get('/admin/compta/inventaire', [AdminStockController::class, 'inventory']);
     $router->post('/admin/compta/inventaire/save', [AdminStockController::class, 'saveCount']);
