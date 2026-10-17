@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Unit;
 
 use App\Controllers\Admin\AdminLedgerController;
+use App\Models\Expense;
 use App\Models\Model;
 use App\Models\Purchase;
 use PDO;
@@ -142,6 +143,16 @@ final class LedgerPurchaseGroupsDbTest extends TestCase
         self::assertSame(12.30, $purchases[0]['debit']);
         self::assertSame(8.50, $purchases[1]['debit']);
 
+        // Chaque écriture porte « ids » : les ids des lignes d'achats de
+        // SON groupe (une facture = un id ici), tous distincts.
+        self::assertCount(1, $purchases[0]['ids'], 'Facture 1 : un seul id.');
+        self::assertCount(1, $purchases[1]['ids'], 'Facture 2 : un seul id.');
+        self::assertNotSame(
+            $purchases[0]['ids'][0],
+            $purchases[1]['ids'][0],
+            'Deux factures distinctes : des ids différents.'
+        );
+
         // Totaux globaux inchangés : la somme des deux factures.
         self::assertSame(20.80, $entries['total_debit']);
         self::assertSame(0.0, $entries['total_credit']);
@@ -172,6 +183,58 @@ final class LedgerPurchaseGroupsDbTest extends TestCase
         self::assertCount(1, $purchases);
         self::assertSame(20.80, $purchases[0]['debit'], 'Total du jour fusionné.');
         self::assertSame(20.80, $entries['total_debit'], 'Total global inchangé.');
+    }
+
+    /**
+     * buildEntries : clés ADDITIONNELLES pour la suppression depuis le
+     * livre (admin) — « ids » sur une écriture d'achat (les ids des
+     * lignes d'achats du groupe, même regroupement que l'affichage) et
+     * « id » sur une écriture de dépense (id de la dépense). Aucun
+     * calcul changé : totaux et solde identiques.
+     */
+    public function test_build_entries_expose_ids_et_id_pour_suppression(): void
+    {
+        $idA = $this->createPurchase('Coca 33cl', '3007 02 0090', 12.30, null, '2026-10-14 08:00:00');
+        $idB = $this->createPurchase('Fanta 33cl', '3007 02 0090', 8.50, null, '2026-10-14 09:00:00');
+        $expenseId = Expense::create([
+            'spent_at'   => '2026-10-14',
+            'category'   => 'DIVERS',
+            'label'      => 'Gobelets',
+            'amount_ttc' => 9.90,
+        ]);
+        self::assertNotSame('', $expenseId, 'Dépense créée (données valides).');
+
+        $ledger = new AdminLedgerController();
+        $entries = $ledger->buildEntries('2026-10-14', '2026-10-14');
+
+        // Achat fusionné : « ids » porte les deux ids du groupe (même
+        // facture), triés ici car la requête DESC à created_at fixé ne
+        // garantit pas l'ordre entre les deux lignes.
+        $purchases = array_values(array_filter(
+            $entries['rows'],
+            static fn (array $r): bool => $r['kind'] === 'purchase'
+        ));
+        self::assertCount(1, $purchases);
+        $groupIds = (array) $purchases[0]['ids'];
+        sort($groupIds);
+        self::assertSame(
+            [min($idA, $idB), max($idA, $idB)],
+            $groupIds,
+            '« ids » = les ids des lignes d\'achats du groupe.'
+        );
+
+        // Dépense : « id » porte l'id de la dépense.
+        $expenses = array_values(array_filter(
+            $entries['rows'],
+            static fn (array $r): bool => $r['kind'] === 'expense'
+        ));
+        self::assertCount(1, $expenses);
+        self::assertSame($expenseId, $expenses[0]['id'], '« id » = l\'id de la dépense.');
+
+        // Aucun calcul changé : achats + dépense au débit, solde négatif.
+        self::assertSame(30.70, $entries['total_debit']);
+        self::assertSame(0.0, $entries['total_credit']);
+        self::assertSame(-30.70, $entries['balance']);
     }
 
     /**
