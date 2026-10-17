@@ -151,6 +151,45 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
     .lg-recent-table th { font-size: 0.72rem; text-transform: uppercase; color: var(--muted, #8892a6); }
     .lg-recent-table .num { text-align: right; white-space: nowrap; }
     .ledger-thumb { height: 44px; border-radius: 6px; display: block; border: 1px solid rgba(255,255,255,0.12); }
+    /* Sous-lignes du tableau « Derniers tickets & dépenses » : reçus
+       distincts d'un même groupe (chaque facture liste SES tickets) et
+       formulaires d'édition inline (admin uniquement — rien en kiosque). */
+    .lg-more-receipts {
+        display: inline-block; margin-left: 0.35rem;
+        font-size: 0.72rem; font-weight: 800; color: var(--muted, #8892a6);
+    }
+    .lg-subrow td {
+        padding-top: 0.15rem !important;
+        font-size: 0.76rem; color: var(--muted, #8892a6);
+    }
+    .lg-subrow a { color: var(--primary, #48bdd3); }
+    .lg-actions { white-space: nowrap; }
+    .lg-edit summary {
+        display: inline-block; cursor: pointer; list-style: none;
+        padding: 0.22rem 0.6rem; border-radius: 999px;
+        border: 1px solid var(--border, rgba(255,255,255,0.12));
+        background: rgba(255,255,255,0.04);
+        font-size: 0.74rem; font-weight: 800; color: var(--foreground, inherit);
+    }
+    .lg-edit summary::-webkit-details-marker { display: none; }
+    .lg-edit details[open] summary, .lg-edit[open] summary { margin-bottom: 0.45rem; }
+    .lg-inline-form {
+        display: flex; flex-wrap: wrap; gap: 0.45rem; align-items: flex-end;
+        padding: 0.6rem 0.7rem;
+        border: 1px dashed rgba(255,255,255,0.2); border-radius: 10px;
+        background: rgba(255,255,255,0.03);
+    }
+    .lg-inline-form label {
+        display: grid; gap: 0.2rem;
+        font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em;
+        color: var(--muted, #8892a6);
+    }
+    .lg-inline-form input, .lg-inline-form select, .lg-inline-form textarea {
+        padding: 0.35rem 0.5rem; border: 1px solid var(--border, rgba(255,255,255,0.15));
+        border-radius: 8px; background: rgba(255,255,255,0.05); color: var(--foreground, inherit);
+        font-size: 0.82rem; min-width: 0; width: auto;
+    }
+    .lg-inline-form textarea { width: 100%; resize: vertical; }
     /* Scan automatique du ticket (admin) : pavés « Informations extraites »
        et « Détail des produits » — style sobre, réutilise .muted, .btn,
        .form-actions et le style des inputs de .lg-quick. */
@@ -518,42 +557,144 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
         <div class="lg-table-wrap">
             <table class="lg-recent-table">
                 <thead>
-                    <tr><th>Date</th><th>Nom</th><th>Référence</th><th class="num">Montant</th><th>Photo</th></tr>
+                    <tr>
+                        <th>Date</th><th>Nom</th><th>Référence</th><th class="num">Montant</th><th>Photo</th>
+                        <?php if (!$kiosk): ?><th>Actions</th><?php endif; ?>
+                    </tr>
                 </thead>
                 <tbody>
+                    <?php
+                    // Libellés courts des catégories (formulaires d'édition
+                    // des dépenses, admin uniquement).
+                    $lgCategories = [
+                        'MATIERE'   => 'Matière',
+                        'MATERIEL'  => 'Matériel',
+                        'EVENEMENT' => 'Événements',
+                        'FRAIS'     => 'Frais',
+                        'DIVERS'    => 'Divers',
+                    ];
+                    ?>
                     <?php foreach ($recentPurchases as $x): ?>
-                    <tr>
-                        <td><?= e($fmtDate((string) $x['date'])) ?></td>
-                        <td>Achat — <?= e((string) $x['supplier']) ?> <span class="muted">(<?= (int) $x['lines'] ?> ligne(s), stock &amp; coûts)</span></td>
-                        <td><?= e((string) ($x['invoice'] ?? '—')) ?></td>
-                        <td class="num"><?= e(formatPrice((float) $x['total_ttc'])) ?></td>
-                        <td>
-                            <?php if (!empty($x['receipt_path'])): ?>
-                                <a href="<?= e(asset((string) $x['receipt_path'])) ?>" target="_blank" rel="noopener" title="Voir la photo du ticket">
-                                    <img class="ledger-thumb" src="<?= e(asset((string) $x['receipt_path'])) ?>" alt="Ticket <?= e((string) $x['supplier']) ?>">
-                                </a>
-                            <?php else: ?>
-                                <span class="muted">—</span>
+                        <?php
+                        // Reçus distincts du groupe (une facture METRO par
+                        // groupe depuis la fusion par n° de facture — chaque
+                        // groupe liste SES justificatifs).
+                        $lgReceipts = array_values(array_filter(
+                            array_map('strval', (array) ($x['receipts'] ?? [])),
+                            static fn (string $p): bool => trim($p) !== ''
+                        ));
+                        $lgInvoice = trim((string) ($x['invoice_number'] ?? ''));
+                        ?>
+                        <tr>
+                            <td><?= e($fmtDate((string) $x['date'])) ?></td>
+                            <td>Achat — <?= e((string) $x['supplier']) ?> <span class="muted">(<?= (int) $x['lines'] ?> ligne(s), stock &amp; coûts)</span></td>
+                            <td><?= e($lgInvoice !== '' ? $lgInvoice : (string) $x['supplier']) ?></td>
+                            <td class="num"><?= e(formatPrice((float) $x['total_ttc'])) ?></td>
+                            <td>
+                                <?php if ($lgReceipts !== []): ?>
+                                    <a href="<?= e(asset($lgReceipts[0])) ?>" target="_blank" rel="noopener" title="Voir la photo du ticket">
+                                        <img class="ledger-thumb" src="<?= e(asset($lgReceipts[0])) ?>" alt="Ticket <?= e((string) $x['supplier']) ?>">
+                                    </a>
+                                    <?php if (count($lgReceipts) > 1): ?><span class="lg-more-receipts">+<?= count($lgReceipts) - 1 ?></span><?php endif; ?>
+                                <?php else: ?>
+                                    <span class="muted">—</span>
+                                <?php endif; ?>
+                            </td>
+                            <?php if (!$kiosk): ?>
+                            <td class="lg-actions">
+                                <!-- Les groupes du livre n'exposent pas les ids
+                                     des lignes : la suppression/édition groupée
+                                     vit dans Opérations · Achats (onglet Journal). -->
+                                <a class="btn btn-ghost btn-sm" href="<?= e(url('/admin/compta/achats')) ?>?tab=journal">Gérer dans Opérations</a>
+                            </td>
                             <?php endif; ?>
-                        </td>
-                    </tr>
+                        </tr>
+                        <?php if (count($lgReceipts) > 1): ?>
+                        <tr class="lg-subrow">
+                            <td></td>
+                            <td colspan="<?= $kiosk ? 4 : 5 ?>">
+                                └ Tickets :
+                                <?php foreach ($lgReceipts as $lgI => $lgRcpt): ?>
+                                    <a href="<?= e(asset($lgRcpt)) ?>" target="_blank" rel="noopener">Ticket <?= $lgI + 1 ?></a><?= $lgI < count($lgReceipts) - 1 ? ' ·' : '' ?>
+                                <?php endforeach; ?>
+                            </td>
+                        </tr>
+                        <?php endif; ?>
                     <?php endforeach; ?>
                     <?php foreach ($recentExpenses as $x): ?>
-                    <tr>
-                        <td><?= e($fmtDate((string) $x['spent_at'])) ?></td>
-                        <td><?= e((string) $x['label']) ?></td>
-                        <td><?= e(trim((string) ($x['invoice_number'] ?? '')) !== '' ? (string) $x['invoice_number'] : '—') ?></td>
-                        <td class="num"><?= e(formatPrice((float) $x['amount_ttc'])) ?></td>
-                        <td>
-                            <?php if (!empty($x['receipt_path'])): ?>
-                                <a href="<?= e(asset((string) $x['receipt_path'])) ?>" target="_blank" rel="noopener" title="Voir la photo du ticket">
-                                    <img class="ledger-thumb" src="<?= e(asset((string) $x['receipt_path'])) ?>" alt="Ticket <?= e((string) $x['label']) ?>">
-                                </a>
-                            <?php else: ?>
-                                <span class="muted">—</span>
+                        <?php
+                        $lgExpId = (string) ($x['id'] ?? '');
+                        $lgExpVat = (float) ($x['vat'] ?? 0);
+                        $lgExpCat = (string) ($x['category'] ?? 'DIVERS');
+                        $lgExpLabel = (string) $x['label'];
+                        ?>
+                        <tr>
+                            <td><?= e($fmtDate((string) $x['spent_at'])) ?></td>
+                            <td><?= e($lgExpLabel) ?></td>
+                            <td><?= e(trim((string) ($x['invoice_number'] ?? '')) !== '' ? (string) $x['invoice_number'] : '—') ?></td>
+                            <td class="num"><?= e(formatPrice((float) $x['amount_ttc'])) ?></td>
+                            <td>
+                                <?php if (!empty($x['receipt_path'])): ?>
+                                    <a href="<?= e(asset((string) $x['receipt_path'])) ?>" target="_blank" rel="noopener" title="Voir la photo du ticket">
+                                        <img class="ledger-thumb" src="<?= e(asset((string) $x['receipt_path'])) ?>" alt="Ticket <?= e($lgExpLabel) ?>">
+                                    </a>
+                                <?php else: ?>
+                                    <span class="muted">—</span>
+                                <?php endif; ?>
+                            </td>
+                            <?php if (!$kiosk): ?>
+                            <td class="lg-actions">
+                                <?php if ($lgExpId !== ''): ?>
+                                <form method="post" action="<?= e(url('/admin/compta/depenses/' . rawurlencode($lgExpId) . '/delete')) ?>" data-confirm="Supprimer cette dépense ?" data-preserve-scroll>
+                                    <?= csrf_field() ?>
+                                    <button type="submit" class="btn btn-danger btn-sm" aria-label="Supprimer la dépense">Supprimer</button>
+                                </form>
+                                <?php endif; ?>
+                            </td>
                             <?php endif; ?>
-                        </td>
-                    </tr>
+                        </tr>
+                        <?php if (!$kiosk && $lgExpId !== ''): ?>
+                        <tr class="lg-subrow lg-edit">
+                            <td></td>
+                            <td colspan="5">
+                                <details>
+                                    <summary>Modifier</summary>
+                                    <!-- Édition inline (POST /admin/compta/depenses/{id}/update) :
+                                         montant prérempli en TTC (amount_basis caché) ;
+                                         sans nouveau fichier, le justificatif existant
+                                         est conservé. -->
+                                    <form class="lg-inline-form" method="post" action="<?= e(url('/admin/compta/depenses/' . rawurlencode($lgExpId) . '/update')) ?>" enctype="multipart/form-data">
+                                        <?= csrf_field() ?>
+                                        <input type="hidden" name="return_to" value="/admin/ledger">
+                                        <input type="hidden" name="amount_basis" value="ttc">
+                                        <label>Date <input type="date" name="spent_at" value="<?= e((string) $x['spent_at']) ?>" required></label>
+                                        <label style="flex: 2 1 200px;">Nom <input type="text" name="label" value="<?= e($lgExpLabel) ?>" required style="width: 100%;"></label>
+                                        <label>Catégorie
+                                            <select name="category">
+                                                <?php foreach (\App\Models\Expense::CATEGORIES as $lgCat): ?>
+                                                    <option value="<?= e($lgCat) ?>" <?= $lgCat === $lgExpCat ? 'selected' : '' ?>><?= e($lgCategories[$lgCat] ?? $lgCat) ?></option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                        </label>
+                                        <label>Montant TTC (€) <input type="number" name="amount" step="0.01" min="0.01" value="<?= e(number_format((float) $x['amount_ttc'], 2, '.', '')) ?>" required></label>
+                                        <label>TVA (€) <input type="number" name="vat_amount" step="0.01" min="0" value="<?= $lgExpVat > 0 ? e(number_format($lgExpVat, 2, '.', '')) : '' ?>"></label>
+                                        <label>Taux
+                                            <select name="vat_rate">
+                                                <option value="">—</option>
+                                                <?php foreach (['20', '10', '5.5', '2.1', '0'] as $lgRate): ?>
+                                                    <option value="<?= e($lgRate) ?>"><?= e($lgRate) ?> %</option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                        </label>
+                                        <label>Réf. ticket <input type="text" name="invoice_number" value="<?= e((string) ($x['invoice_number'] ?? '')) ?>"></label>
+                                        <label style="flex: 1 1 100%;">Notes <textarea name="notes" rows="2"><?= e((string) ($x['notes'] ?? '')) ?></textarea></label>
+                                        <label style="flex: 1 1 100%;">Preuve (remplace l'existante · PDF/JPG/PNG/WEBP · 5 Mo max) <input type="file" name="receipt" accept=".pdf,.jpg,.jpeg,.png,.webp"></label>
+                                        <button type="submit" class="btn btn-primary btn-sm">Enregistrer</button>
+                                    </form>
+                                </details>
+                            </td>
+                        </tr>
+                        <?php endif; ?>
                     <?php endforeach; ?>
                 </tbody>
             </table>

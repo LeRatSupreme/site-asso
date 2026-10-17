@@ -11,6 +11,7 @@ use App\Core\Compta\ProductAutoSync;
 use App\Core\Compta\ProductLifecycle;
 use App\Core\Compta\Kiosk;
 use App\Core\Compta\PurchaseSaver;
+use App\Core\Compta\ReceiptStorage;
 use App\Core\Compta\StockPublic;
 use App\Core\Logger;
 use App\Models\InventoryCount;
@@ -214,6 +215,11 @@ final class AdminStockController extends AdminBaseController
      * ProductStock::adjust(+qty), la suppression retire la quantité.
      * Un achat « hors stock » (no_stock = 1) n'ayant rien ajouté au stock,
      * sa suppression le laisse inchangé.
+     *
+     * Option « ne pas corriger le stock » (POST keep_stock = « 1 ») :
+     * pour une resaisie de facture déjà comptabilisée dont le stock
+     * physique est correct — l'achat part, le stock de référence reste
+     * tel quel (aucun ProductStock::adjust, même pour un achat en stock).
      */
     public function deletePurchase(string $id): void
     {
@@ -227,49 +233,359 @@ final class AdminStockController extends AdminBaseController
             redirect(url('/admin/compta/achats'));
         }
 
-        $productKey = (string) $purchase['product_key'];
-        $quantity = (int) $purchase['quantity'];
+        // Case « ne pas corriger le stock » : cochée (« 1 ») ou absente.
+        $keepStock = trim((string) ($_POST['keep_stock'] ?? '')) === '1';
 
-        // Achat « hors stock » : aucun stock n'avait été ajouté à la
-        // création — rien à contre-passé ici.
-        $noStock = !empty($purchase['no_stock']);
-
-        // Cascade : supprime les lots de coût liés à l'achat ; si l'un
-        // d'eux était « en cours », le lot antérieur est réouvert
-        // (ProductCost::delete) pour ne pas casser la chaîne de coûts.
-        $lotsDeleted = ProductCost::deleteByPurchase($id);
-
-        Purchase::delete($id);
-
-        // Contre-passation du stock de référence : ajusté de +quantity à
-        // la création de l'achat — sauf achat « hors stock » (rien n'avait
-        // été ajouté).
-        if (!$noStock) {
-            ProductStock::adjust($productKey, -$quantity);
-        }
+        $summary = $this->deletePurchaseLines([$purchase], $keepStock);
 
         StockPublic::invalidate();
 
         $this->audit('compta.purchase.delete', 'purchase', $id, [
-            'product_key'    => $productKey,
-            'quantity'       => $quantity,
-            'lots_deleted'   => $lotsDeleted,
-            'stock_adjusted' => $noStock ? 0 : -$quantity,
-            'no_stock'       => $noStock,
+            'product_key'      => (string) $purchase['product_key'],
+            'quantity'         => (int) $purchase['quantity'],
+            'lots_deleted'     => $summary['lots_deleted'],
+            'stock_adjusted'   => $summary['stock_adjusted'],
+            'no_stock'         => !empty($purchase['no_stock']),
+            'keep_stock'       => $keepStock,
+            'stock_kept_lines' => $summary['stock_kept_lines'],
         ]);
 
+        $noStock = !empty($purchase['no_stock']);
         $flash = sprintf(
             'Achat supprimé — stock de référence ajusté (−%d).',
-            $quantity
+            (int) $purchase['quantity']
         );
-        if ($noStock) {
+        if ($keepStock) {
+            $flash = 'Achat supprimé — stock inchangé (conservé à la demande).';
+        } elseif ($noStock) {
             $flash = 'Achat supprimé — stock inchangé (achat hors stock).';
         }
-        if ($lotsDeleted > 0) {
-            $flash .= sprintf(' %d lot(s) de coût lié(s) supprimé(s), lot antérieur réouvert.', $lotsDeleted);
+        if ($summary['lots_deleted'] > 0) {
+            $flash .= sprintf(' %d lot(s) de coût lié(s) supprimé(s), lot antérieur réouvert.', $summary['lots_deleted']);
         }
         $this->setFlash('success', $flash);
         redirect(url('/admin/compta/achats'));
+    }
+
+    /**
+     * Cascade de suppression d'une ou plusieurs lignes d'achat — le cœur
+     * commun de deletePurchase() (une ligne) et deletePurchaseGroup()
+     * (toutes les lignes d'une facture). Pour chaque ligne, exactement la
+     * cascade historique : lots de coût liés supprimés (lot antérieur
+     * réouvert par ProductCost::delete), ligne retirée, contre-passation
+     * du stock de référence (sauf achat « hors stock »).
+     *
+     * Option keepStock (case « ne pas corriger le stock ») : AUCUN
+     * ProductStock::adjust n'est passé, même pour un achat en stock —
+     * les lignes concernées sont comptées dans stock_kept_lines. Le
+     * comportement par défaut (false) reste strictement identique.
+     *
+     * L'invalidation du cache public et l'audit restent à la charge de
+     * l'appelant (une seule invalidation / une seule entrée d'audit pour
+     * tout le groupe). Le justificatif n'est PAS supprimé du disque : une
+     * même photo peut être partagée par plusieurs lignes.
+     *
+     * @param list<array<string,mixed>> $rows Lignes complètes lues AVANT
+     *                                        suppression (Purchase::find /
+     *                                        Purchase::findByIds).
+     *
+     * @return array{lines:int, lots_deleted:int, stock_adjusted:int, no_stock_lines:int, stock_kept_lines:int, ids:list<string>}
+     */
+    private function deletePurchaseLines(array $rows, bool $keepStock = false): array
+    {
+        $lotsDeleted = 0;
+        $stockAdjusted = 0;
+        $noStockLines = 0;
+        $stockKeptLines = 0;
+        $ids = [];
+
+        foreach ($rows as $row) {
+            $id = (string) ($row['id'] ?? '');
+            if ($id === '') {
+                continue;
+            }
+
+            $productKey = (string) $row['product_key'];
+            $quantity = (int) $row['quantity'];
+
+            // Achat « hors stock » : aucun stock n'avait été ajouté à la
+            // création — rien à contre-passé ici.
+            $noStock = !empty($row['no_stock']);
+
+            // Cascade : supprime les lots de coût liés à l'achat ; si l'un
+            // d'eux était « en cours », le lot antérieur est réouvert
+            // (ProductCost::delete) pour ne pas casser la chaîne de coûts.
+            $lotsDeleted += ProductCost::deleteByPurchase($id);
+
+            Purchase::delete($id);
+
+            // Contre-passation du stock de référence : ajusté de +quantity
+            // à la création de l'achat — sauf achat « hors stock » (rien
+            // n'avait été ajouté) ou stock volontairement conservé
+            // (option « ne pas corriger le stock » : compteur dédié).
+            if (!$noStock && !$keepStock) {
+                ProductStock::adjust($productKey, -$quantity);
+                $stockAdjusted += -$quantity;
+            } elseif (!$noStock) {
+                $stockKeptLines++;
+            } else {
+                $noStockLines++;
+            }
+
+            $ids[] = $id;
+        }
+
+        return [
+            'lines'            => count($ids),
+            'lots_deleted'     => $lotsDeleted,
+            'stock_adjusted'   => $stockAdjusted,
+            'no_stock_lines'   => $noStockLines,
+            'stock_kept_lines' => $stockKeptLines,
+            'ids'              => $ids,
+        ];
+    }
+
+    /**
+     * Supprime un GROUPE d'achats en un seul POST (toutes les lignes
+      * d'une même facture — ids séparés par des virgules) : exactement la
+      * cascade de deletePurchase() appliquée à chaque ligne, une seule
+      * invalidation du cache public et une seule entrée d'audit pour tout
+      * le groupe. Même option « ne pas corriger le stock » (POST
+      * keep_stock = « 1 ») : le stock de référence reste tel quel.
+      */
+    public function deletePurchaseGroup(): void
+    {
+        $this->guardCompta();
+
+        $ids = array_map('trim', explode(',', (string) ($_POST['ids'] ?? '')));
+        $ids = array_values(array_unique(array_filter($ids, static fn (string $v): bool => $v !== '')));
+
+        if ($ids === []) {
+            $this->setFlash('error', 'Aucun achat sélectionné (ids manquants).');
+            redirect(url('/admin/compta/achats'));
+        }
+
+        // Lecture AVANT suppression : la contre-passation (stock) et
+        // l'audit ont besoin des données des achats. Les ids inconnus
+        // (déjà supprimés ?) sont simplement absents du résultat.
+        $rows = Purchase::findByIds($ids);
+        if ($rows === []) {
+            $this->setFlash('error', 'Achat(s) introuvable(s) (déjà supprimé(s) ?).');
+            redirect(url('/admin/compta/achats'));
+        }
+
+        // Case « ne pas corriger le stock » : cochée (« 1 ») ou absente.
+        $keepStock = trim((string) ($_POST['keep_stock'] ?? '')) === '1';
+
+        $summary = $this->deletePurchaseLines($rows, $keepStock);
+
+        StockPublic::invalidate();
+
+        $this->audit('compta.purchase.delete', 'purchase', null, [
+            'ids'              => $summary['ids'],
+            'lines'            => $summary['lines'],
+            'lots_deleted'     => $summary['lots_deleted'],
+            'stock_adjusted'   => $summary['stock_adjusted'],
+            'no_stock_lines'   => $summary['no_stock_lines'],
+            'keep_stock'       => $keepStock,
+            'stock_kept_lines' => $summary['stock_kept_lines'],
+        ]);
+
+        $allNoStock = $summary['no_stock_lines'] === $summary['lines'];
+        $flash = $keepStock
+            ? sprintf('%d achat(s) supprimé(s) — stock inchangé (conservé à la demande).', $summary['lines'])
+            : ($allNoStock
+                ? sprintf('%d achat(s) supprimé(s) — stock inchangé (achats hors stock).', $summary['lines'])
+                : sprintf('%d achat(s) supprimé(s) — stock de référence ajusté (−%d).', $summary['lines'], -$summary['stock_adjusted']));
+        if ($summary['lots_deleted'] > 0) {
+            $flash .= sprintf(' %d lot(s) de coût lié(s) supprimé(s).', $summary['lots_deleted']);
+        }
+        $this->setFlash('success', $flash);
+        redirect(url('/admin/compta/achats'));
+    }
+
+    /**
+     * Met à jour l'en-tête commun d'un GROUPE d'achats en un seul POST
+     * (toutes les lignes d'une même facture — ids séparés par des
+     * virgules) : date, fournisseur, n° de facture et, optionnellement,
+     * un nouveau justificatif (photo/PDF stocké par ReceiptStorage). Le
+     * stock n'est PAS touché : quantités, montants et clés produit
+     * restent inchangés.
+     *
+     * Justificatif : si un nouveau fichier est stocké, receipt_path est
+     * appliqué à toutes les lignes ; l'ancien fichier est supprimé du
+     * disque uniquement s'il était uniforme sur le groupe (un seul chemin
+     * non vide) ET porté par aucune autre ligne (receiptUsedElsewhere).
+     */
+    public function updatePurchaseGroup(): void
+    {
+        $this->guardCompta();
+
+        $ids = array_map('trim', explode(',', (string) ($_POST['ids'] ?? '')));
+        $ids = array_values(array_unique(array_filter($ids, static fn (string $v): bool => $v !== '')));
+
+        if ($ids === []) {
+            $this->setFlash('error', 'Aucun achat sélectionné (ids manquants).');
+            redirect(url('/admin/compta/achats'));
+        }
+
+        // Lignes lues AVANT mise à jour : l'ancien justificatif (pour son
+        // remplacement éventuel) et l'audit en ont besoin.
+        $rows = Purchase::findByIds($ids);
+        if ($rows === []) {
+            $this->setFlash('error', 'Achat(s) introuvable(s) (déjà supprimé(s) ?).');
+            redirect(url('/admin/compta/achats'));
+        }
+
+        $validated = self::validatePurchaseGroupUpdate(
+            (string) ($_POST['purchased_at'] ?? ''),
+            (string) ($_POST['supplier'] ?? ''),
+            (string) ($_POST['invoice_number'] ?? '')
+        );
+        if (!$validated['ok']) {
+            $this->setFlash('error', (string) $validated['error']);
+            redirect(url('/admin/compta/achats'));
+        }
+
+        // Justificatif optionnel (même mécanique que les dépenses) :
+        // ReceiptStorage stocke le fichier, receiptPathOrNull contrôle le
+        // chemin retourné. Erreur d'upload : flash + redirection (comme
+        // AdminExpenseController::storeReceipt).
+        $newReceipt = null;
+        try {
+            $newReceipt = ReceiptStorage::store();
+        } catch (\RuntimeException $e) {
+            Logger::error('compta: enregistrement du justificatif impossible', ['msg' => $e->getMessage()]);
+            $this->setFlash('error', 'Le justificatif n\'a pas pu être enregistré. L\'incident a été journalisé.');
+            redirect(url('/admin/compta/achats'));
+        }
+
+        // Ancien justificatif du groupe : retenu seulement s'il est
+        // uniforme (un seul chemin distinct non vide sur les lignes).
+        $oldReceipts = [];
+        foreach ($rows as $row) {
+            $p = trim((string) ($row['receipt_path'] ?? ''));
+            if ($p !== '' && !in_array($p, $oldReceipts, true)) {
+                $oldReceipts[] = $p;
+            }
+        }
+        $oldReceipt = count($oldReceipts) === 1 ? $oldReceipts[0] : null;
+
+        $fields = [
+            'purchased_at'   => $validated['purchased_at'],
+            'supplier'       => $validated['supplier'],
+            'invoice_number' => $validated['invoice_number'],
+        ];
+        if ($newReceipt !== null) {
+            $fields['receipt_path'] = $newReceipt;
+        }
+
+        $groupIds = array_map(static fn (array $r): string => (string) $r['id'], $rows);
+
+        if (!Purchase::updateByIds($groupIds, $fields)) {
+            $this->setFlash('error', 'Mise à jour impossible (achats introuvables ou champs invalides).');
+            redirect(url('/admin/compta/achats'));
+        }
+
+        // L'ancien justificatif (uniforme sur le groupe) est supprimé du
+        // disque seulement s'il n'est porté par aucune autre ligne et si
+        // le nouveau fichier est différent (jamais un chemin arbitraire :
+        // dossier receipts uniquement).
+        if ($newReceipt !== null && $oldReceipt !== null && $oldReceipt !== $newReceipt
+            && !Purchase::receiptUsedElsewhere($oldReceipt, $groupIds)) {
+            $this->deleteReceiptFile($oldReceipt);
+        }
+
+        $this->audit('compta.purchase.update', 'purchase', null, [
+            'ids'            => $groupIds,
+            'lines'          => count($groupIds),
+            'purchased_at'   => $validated['purchased_at'],
+            'supplier'       => $validated['supplier'] !== '' ? $validated['supplier'] : null,
+            'invoice_number' => $validated['invoice_number'] !== '' ? $validated['invoice_number'] : null,
+            'receipt'        => $newReceipt,
+            'old_receipt'    => $oldReceipt,
+        ]);
+
+        $flash = sprintf('%d ligne(s) d\'achat mise(s) à jour.', count($groupIds));
+        if ($newReceipt !== null) {
+            $flash .= ' Justificatif remplacé.';
+        }
+        $this->setFlash('success', $flash);
+        redirect(url('/admin/compta/achats'));
+    }
+
+    /**
+     * Validation pure des champs d'en-tête de la mise à jour d'un groupe
+     * d'achats (méthode statique publique, aucun accès POST/DB : testée
+     * unitairement). Date obligatoire au format « YYYY-MM-DD » (jour de
+     * calendrier réel) ; fournisseur et n° de facture bornés à 255
+     * caractères (taille des colonnes), trimés ; '' = champ vidé (sera
+     * stocké NULL par le modèle).
+     *
+     * @return array{ok:bool, error:?string, purchased_at:string, supplier:string, invoice_number:string}
+     */
+    public static function validatePurchaseGroupUpdate(
+        string $purchasedAt,
+        string $supplier,
+        string $invoiceNumber
+    ): array {
+        $purchasedAt = trim($purchasedAt);
+        $supplier = trim($supplier);
+        $invoiceNumber = trim($invoiceNumber);
+
+        $date = \DateTime::createFromFormat('Y-m-d', $purchasedAt);
+        if ($purchasedAt === '' || $date === false || $date->format('Y-m-d') !== $purchasedAt) {
+            return [
+                'ok'             => false,
+                'error'          => 'Date invalide (format attendu AAAA-MM-JJ).',
+                'purchased_at'   => $purchasedAt,
+                'supplier'       => $supplier,
+                'invoice_number' => $invoiceNumber,
+            ];
+        }
+
+        if (mb_strlen($supplier) > 255) {
+            return [
+                'ok'             => false,
+                'error'          => 'Fournisseur trop long (255 caractères maximum).',
+                'purchased_at'   => $purchasedAt,
+                'supplier'       => $supplier,
+                'invoice_number' => $invoiceNumber,
+            ];
+        }
+
+        if (mb_strlen($invoiceNumber) > 255) {
+            return [
+                'ok'             => false,
+                'error'          => 'Numéro de facture trop long (255 caractères maximum).',
+                'purchased_at'   => $purchasedAt,
+                'supplier'       => $supplier,
+                'invoice_number' => $invoiceNumber,
+            ];
+        }
+
+        return [
+            'ok'             => true,
+            'error'          => null,
+            'purchased_at'   => $purchasedAt,
+            'supplier'       => $supplier,
+            'invoice_number' => $invoiceNumber,
+        ];
+    }
+
+    /**
+     * Supprime du disque un fichier justificatif (chemin relatif sous
+     * /assets renvoyé par ReceiptStorage). Jamais un chemin arbitraire :
+     * seul le dossier receipts est concerné (même garde que la
+     * suppression de dépense).
+     */
+    private function deleteReceiptFile(string $path): void
+    {
+        $file = realpath(AEIC_PUBLIC . '/assets/' . ltrim($path, '/'));
+        $base = realpath(AEIC_PUBLIC . '/assets/uploads/receipts');
+        if ($file !== false && $base !== false && str_starts_with($file, $base) && is_file($file)) {
+            @unlink($file);
+        }
     }
 
     /**

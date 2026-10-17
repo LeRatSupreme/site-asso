@@ -160,6 +160,91 @@ final class Expense extends Model
     }
 
     /**
+     * Met à jour une dépense existante (édition du journal).
+     *
+     * Conventions de create() : catégorie normalisée en majuscules avec
+     * repli sur DIVERS si inconnue ; libellé trimé ; montant HT / TVA
+     * absents ('' ou null) → NULL ; n° de facture / notes / justificatif
+     * vides → NULL. Seules les clés présentes dans $fields sont
+     * modifiées — la liste blanche exclut id, created_by et created_at.
+     *
+     * @param array<string,mixed> $fields spent_at (« YYYY-MM-DD »),
+     *                                    category, label, amount_ttc,
+     *                                    amount_ht, vat, invoice_number,
+     *                                    notes, receipt_path
+     */
+    public static function update(string $id, array $fields): bool
+    {
+        $id = trim($id);
+        if ($id === '') {
+            return false;
+        }
+
+        $sets = [];
+        $args = [];
+        if (array_key_exists('spent_at', $fields)) {
+            $spentAt = substr((string) $fields['spent_at'], 0, 10);
+            if ($spentAt === '') {
+                return false;
+            }
+            $sets[] = 'spent_at = ?';
+            $args[] = $spentAt;
+        }
+        if (array_key_exists('category', $fields)) {
+            $category = strtoupper(trim((string) $fields['category']));
+            if (!in_array($category, self::CATEGORIES, true)) {
+                $category = 'DIVERS';
+            }
+            $sets[] = 'category = ?';
+            $args[] = $category;
+        }
+        if (array_key_exists('label', $fields)) {
+            $label = trim((string) $fields['label']);
+            if ($label === '') {
+                return false;
+            }
+            $sets[] = 'label = ?';
+            $args[] = $label;
+        }
+        if (array_key_exists('amount_ttc', $fields)) {
+            $sets[] = 'amount_ttc = ?';
+            $args[] = (float) $fields['amount_ttc'];
+        }
+        if (array_key_exists('amount_ht', $fields)) {
+            $raw = $fields['amount_ht'];
+            $sets[] = 'amount_ht = ?';
+            $args[] = ($raw === null || $raw === '') ? null : (float) $raw;
+        }
+        if (array_key_exists('vat', $fields)) {
+            $raw = $fields['vat'];
+            $sets[] = 'vat = ?';
+            $args[] = ($raw === null || $raw === '') ? null : (float) $raw;
+        }
+        if (array_key_exists('invoice_number', $fields)) {
+            $sets[] = 'invoice_number = ?';
+            $args[] = ($fields['invoice_number'] ?? '') !== '' ? (string) $fields['invoice_number'] : null;
+        }
+        if (array_key_exists('notes', $fields)) {
+            $sets[] = 'notes = ?';
+            $args[] = ($fields['notes'] ?? '') !== '' ? (string) $fields['notes'] : null;
+        }
+        if (array_key_exists('receipt_path', $fields)) {
+            $sets[] = 'receipt_path = ?';
+            $args[] = ($fields['receipt_path'] ?? '') !== '' ? (string) $fields['receipt_path'] : null;
+        }
+
+        if ($sets === []) {
+            return false;
+        }
+
+        $stmt = self::pdo()->prepare(
+            'UPDATE expenses SET ' . implode(', ', $sets) . ' WHERE id = ?'
+        );
+
+        return $stmt->execute([...$args, $id]);
+    }
+
+    /**
      * Dépenses d'une période (année obligatoire, mois optionnel),
      * de la plus récente à la plus ancienne.
      *
