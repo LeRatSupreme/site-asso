@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Core\Compta\AliasSuggester;
 use App\Core\Compta\StockPublic;
 use App\Core\Logger;
 
@@ -67,6 +68,32 @@ final class ProductKeyMerge extends Model
      * @var list<string>
      */
     private const UNIQUE_KEY_TABLES = ['product_infinite', 'product_zero_since', 'product_packs', 'shopping_checks'];
+
+    /**
+     * Deux clés sont-elles FUSIBLES (méthode pure, testée) : non vides
+     * et DISTINCTES une fois normalisées (StockPublic::normalizeKey :
+     * casse, accents, ponctuation et espaces ignorés) ? Pré-condition
+     * de l'auto-fusion des fiches au nom long : « OASIS TROPICAL SLIM
+     * BTE 33CL » -> « Oasis Tropical » est fusible ; un alias qui vise
+     * la fiche elle-même (même clé normalisée) ne l'est pas — rien à
+     * absorber, merge() refuserait de toute façon.
+     */
+    public static function canMerge(string $source, string $target): bool
+    {
+        $src = self::normalize($source);
+        $tgt = self::normalize($target);
+
+        return $src !== '' && $tgt !== '' && $src !== $tgt;
+    }
+
+    /**
+     * Clé normalisée sans espaces (même repliement que partout ailleurs :
+     * AliasSuggester::normalizeKey + retrait des espaces).
+     */
+    private static function normalize(string $value): string
+    {
+        return str_replace(' ', '', AliasSuggester::normalizeKey($value));
+    }
 
     /**
      * Fusionne la clé source dans la clé cible, transactionnellement :
