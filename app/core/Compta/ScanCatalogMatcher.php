@@ -22,7 +22,10 @@ use App\Models\Sale;
  *
  * Heuristique déterministe, en trois paliers :
  *  1. égalité exacte des clés normalisées (casse/accents/espaces
- *     ignorés : « KIT KAT » = « KitKat ») ;
+ *     ignorés : « KIT KAT » = « KitKat ») — une fiche au nom long
+ *     héritée d'un ancien scan est SURCACHÉE par un alias
+ *     utilisateur posé sur ce même libellé (l'appellation choisie
+ *     par l'utilisateur gagne toujours) ;
  *  2. appariement par mots-clés : mots signifiants du libellé vs de
  *     chaque entrée du catalogue, avec tolérance de saisine
  *     (Levenshtein <= 1, ex. « SNACK » ~ « SNAK ») et dictionnaire
@@ -116,9 +119,13 @@ final class ScanCatalogMatcher
 
     /**
      * Assemble le catalogue (méthode pure, testée unitairement) :
-     * déduplication par clé normalisée, priorité fiche produit >
-     * alias > clé de vente, tri naturel par nom pour un comportement
-     * déterministe.
+     * déduplication par clé normalisée. L'ALIAS UTILISATEUR gagne sur
+     * la fiche qui porterait le même libellé brut (c'est le mapping
+     * choisi par l'utilisateur — ex. fiche longue auto-créée « OASIS
+     * TROPICAL SLIM BTE 33CL » sur laquelle l'utilisateur pose
+     * ensuite l'alias « … » → « Oasis Tropical ») ; sinon priorité
+     * fiche produit > alias > clé de vente. Tri naturel par nom pour
+     * un comportement déterministe.
      *
      * @param list<string>                        $ficheNames Noms des fiches produits.
      * @param list<array<string,mixed>>           $aliasRows  Lignes product_aliases
@@ -146,17 +153,20 @@ final class ScanCatalogMatcher
 
         $byNorm = [];
 
-        // 1) Fiches produits : priorité maximale (orthographe canonique).
+        // 1) Fiches produits : orthographe canonique par défaut.
         foreach ($ficheNames as $name) {
             $byNorm[self::spaceless($name)] = $name;
         }
 
-        // 2) Alias : le libellé brut mène à sa clé cible ; la cible
-        //    elle-même devient aussi une entrée candidate.
+        // 2) Alias : le libellé brut mène à sa clé cible et PREND LE
+        //    CONTRÔLE de cette clé (écrase une fiche homonyme : l'alias
+        //    choisi par l'utilisateur gagne) ; la cible elle-même
+        //    devient aussi une entrée candidate (sans écraser une
+        //    fiche : c'est elle qui fixe l'orthographe via resolve).
         foreach ($aliasRows as $row) {
             $raw = trim((string) ($row['raw_description'] ?? ''));
             $target = trim((string) ($row['product_key'] ?? ''));
-            if ($raw !== '' && !isset($byNorm[self::spaceless($raw)])) {
+            if ($raw !== '') {
                 $byNorm[self::spaceless($raw)] = $target === '' ? $raw : $resolve($target);
             }
             if ($target !== '' && !isset($byNorm[self::spaceless($target)])) {
@@ -228,6 +238,55 @@ final class ScanCatalogMatcher
 
         // Palier 3 : inclusion symétrique, aiguille la plus longue.
         return self::matchByInclusion($norm, $catalog);
+    }
+
+    /**
+     * Clé de catalogue pour un libellé par ÉGALITÉ EXACTE uniquement
+     * (palier 1 : casse, accents, séparateurs et espaces ignorés) —
+     * jamais les paliers flous (mots-clés, inclusion). Renvoie le nom
+     * canonique de l'entrée (fiche, alias ou clé vendue), ou null si
+     * aucune égalité exacte.
+     *
+     * Sert à la purge de la file des libellés de scan (ScanLabel) :
+     * seul un libellé nommé EXACTEMENT comme une entrée connue est
+     * considéré résolu — une ressemblance floue laisse le libellé en
+     * file pour nommage utilisateur.
+     *
+     * @param array<array{key:string, name:string, tokens:list<string>}>|null $catalog
+     */
+    public static function exactCatalogKey(string $label, ?array $catalog = null): ?string
+    {
+        $label = trim($label);
+        if ($label === '') {
+            return null;
+        }
+
+        $catalog ??= self::buildCatalog();
+        $norm = self::spaceless($label);
+        if ($norm === '') {
+            return null;
+        }
+
+        foreach ($catalog as $cand) {
+            if ($cand['key'] === $norm) {
+                return $cand['name'];
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Deux libellés désignent-ils la MÊME clé une fois normalisés
+     * (casse, accents, séparateurs et espaces ignorés — même repliement
+     * que StockPublic::normalizeKey) ?
+     */
+    public static function sameKey(string $a, string $b): bool
+    {
+        $na = self::spaceless(trim($a));
+        $nb = self::spaceless(trim($b));
+
+        return $na !== '' && $na === $nb;
     }
 
     /**

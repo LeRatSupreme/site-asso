@@ -347,10 +347,10 @@ final class KioskComptageController extends Controller
         // Panne de base : silencieusement sauté, le scan reste utilisable.
         $invoice['lines'] = ScanCatalogMatcher::enrichLines($invoice['lines']);
 
-        // Libellés non reconnus -> file « à classer » de la page
-        // « Ajouter une appellation » (jamais bloquant), comme les
-        // scans admin.
-        ScanLabel::recordUnmatched($invoice['lines']);
+        // TOUS les libellés du scan -> file « à classer » de la page
+        // « Ajouter une appellation » (pré-remplis dans le formulaire,
+        // jamais bloquant), comme les scans admin.
+        ScanLabel::recordAll($invoice['lines']);
 
         // Justificatif conservé quand le scan vient d'un fichier : le
         // chemin est renvoyé au frontend, qui le joindra aux achats

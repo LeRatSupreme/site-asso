@@ -17,10 +17,11 @@ use App\Models\ProductCost;
  * messages d'erreur FR que la page Achats), création de l'achat (stock
  * de référence ajusté par Purchase::create), lot de coût de revient
  * (ProductCost, lié à l'achat pour la suppression en cascade), synchro
- * carte (ProductAutoSync::ensureKeys) et invalidation du cache public
- * (StockPublic). La redirection, le flash et l'audit restent à la
- * charge du contrôleur appelant (mécanismes différents : session admin
- * vs jeton kiosque).
+ * carte (ProductAutoSync::ensureKeys — sauf les libellés de scan non
+ * traités, qui ne créent JAMAIS de fiche au nom long) et invalidation
+ * du cache public (StockPublic). La redirection, le flash et l'audit
+ * restent à la charge du contrôleur appelant (mécanismes différents :
+ * session admin vs jeton kiosque).
  *
  * Apprentissage des appellations : quand une ligne issue d'un scan
  * porte son libellé facture brut (« MONSTER PIPELINE PUNCH 24X0,5L »)
@@ -104,6 +105,7 @@ final class PurchaseSaver
         $inserted = 0;
         $noStockInserted = 0;
         $products = [];
+        $syncKeys = [];
         $errors = [];
         $toLearn = [];
 
@@ -141,6 +143,17 @@ final class PurchaseSaver
                     $noStockInserted++;
                 }
                 $products[$key] = true;
+
+                // Libellé scan non traité (le « produit » EST le
+                // libellé OCR brut) : PAS de fiche automatique — la clé
+                // reste dans la file « Nouvelles appellations » jusqu'à
+                // ce que l'utilisateur saisisse le nom court. Les clés
+                // saisies à la main (sans libellé d'origine) et les
+                // lignes reconnues/corrigées (libellé ≠ clé) continuent
+                // de créer une fiche comme avant.
+                if (!self::isRawScanLabel((string) ($line['raw_label'] ?? ''), $key)) {
+                    $syncKeys[$key] = true;
+                }
 
                 // Apprentissage : libellé facture d'origine (scan) vs clé
                 // retenue — dédupliqué par libellé normalisé.
@@ -182,11 +195,13 @@ final class PurchaseSaver
             }
         }
 
-        // Synchro automatique de la carte limitée aux clés saisies :
-        // un achat sur un produit sans fiche crée la fiche. Jamais bloquant.
+        // Synchro automatique de la carte limitée aux clés saisies qui
+        // ne sont PAS des libellés de scan non traités (un achat sur un
+        // produit sans fiche crée la fiche ; un libellé OCR brut laissé
+        // tel quel n'en crée PAS). Jamais bloquant.
         $sync = ['created' => []];
         try {
-            $sync = ProductAutoSync::ensureKeys(array_keys($products));
+            $sync = ProductAutoSync::ensureKeys(array_keys($syncKeys));
         } catch (\Throwable) {
             // Le stock ne doit jamais casser à cause de la synchro carte.
         }
@@ -269,6 +284,28 @@ final class PurchaseSaver
         return self::spaceless($raw) !== self::spaceless($key)
             ? ['raw_description' => $raw, 'product_key' => $key]
             : [];
+    }
+
+    /**
+     * La clé d'une ligne est-elle un libellé de scan NON TRAITÉ ?
+     * Oui quand la ligne porte son libellé facture d'origine ET que ce
+     * libellé, une fois normalisé, EST la clé (l'utilisateur n'a pas
+     * nommé le produit : le libellé OCR a été posé comme clé de
+     * départ). Ces clés sont exclues de la création automatique de
+     * fiches (ProductAutoSync) — elles restent dans la file
+     * « Nouvelles appellations » jusqu'au vrai nom.
+     *
+     * Méthode pure (aucun accès POST/DB) : testée unitairement.
+     */
+    public static function isRawScanLabel(string $rawLabel, string $productKey): bool
+    {
+        $raw = trim($rawLabel);
+        $key = trim($productKey);
+        if ($raw === '' || $key === '') {
+            return false;
+        }
+
+        return self::spaceless($raw) === self::spaceless($key);
     }
 
     /**

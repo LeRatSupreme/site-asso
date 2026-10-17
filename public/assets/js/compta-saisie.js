@@ -435,13 +435,21 @@
     /**
      * Lignes d'une facture analysée -> lignes de la grille, dans le
      * même format que le collage (parsePasteLine) :
-     * [{key, raw_label, qty, total, notes, vat_rate}]
+     * [{key, raw_label, matched, qty, total, notes, vat_rate}]
      * - key       : PRODUIT RECONNU dans le catalogue (line.product,
      *               injecté par le serveur — fiches/alias/clés SumUp),
      *               à défaut libellé OCR brut ; lignes sans libellé
      *               ignorées ;
-     * - raw_label : libellé OCR brut quand il diffère du produit reconnu
-     *               ('' sinon) — info-bulle de contrôle avant achat ;
+     * - raw_label : libellé OCR d'origine, TOUJOURS conservé — même
+     *               quand le produit est reconnu (info-bulle de
+     *               contrôle avant achat) comme quand il ne l'est pas
+     *               (le serveur exclura alors cette clé de la création
+     *               de fiche : c'est un libellé non nommé, pas un
+     *               produit) ;
+     * - matched   : true quand le serveur a reconnu un produit
+     *               DIFFÉRENT du libellé brut ; false = la clé de la
+     *               ligne EST le libellé OCR (ligne à nommer avant
+     *               d'enregistrer) ;
      * - qty       : unités (entier, < 1 ou absent -> 1) ;
      * - total     : montant au format français (« 17,28 »), '' si absent ;
      * - notes     : « EAN … · art. … » (ou le champ notes du serveur),
@@ -460,9 +468,9 @@
             if (label === '') continue;
             // Produit reconnu côté serveur dans la base (fiches produits,
             // alias de ventes, clés SumUp) : prioritaire au libellé OCR.
-            var key = cleanStr(line.product);
-            var matched = key !== '' && key !== label;
-            if (!matched) key = label;
+            var product = cleanStr(line.product);
+            var matched = product !== '' && product !== label;
+            var key = matched ? product : label;
             var qty = parseInt(line.units, 10);
             if (!isFinite(qty) || qty < 1) qty = 1;
             var total = '';
@@ -476,7 +484,8 @@
             }
             rows.push({
                 key: key,
-                raw_label: matched ? label : '',
+                raw_label: label,
+                matched: matched,
                 qty: qty,
                 total: total,
                 notes: notes,
