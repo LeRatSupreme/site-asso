@@ -26,6 +26,10 @@ declare(strict_types=1);
  *
  * @var array<string,mixed> $user
  * @var array{rows:list<array<string,mixed>>, total_debit:float, total_credit:float, balance:float, sales_profit:float} $entries
+ *      Lignes purchase portent en plus « ids » (ids des lignes d'achats
+ *      du groupe) et les lignes expense « id » (id de la dépense) —
+ *      clés additionnelles utilisées par les boutons Supprimer (admin
+ *      uniquement), ignorées partout ailleurs.
  * @var list<array<string,mixed>> $recentExpenses
  * @var string $from
  * @var string $to
@@ -97,6 +101,19 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
     }
     .ledger-ticket .tk { padding-left: 1.6rem; }
     .ledger-table tfoot td { border-top: 2px solid rgba(255, 255, 255, 0.18); font-weight: 900; }
+    /* Colonne Actions du livre (ADMIN uniquement — absente en kiosque) :
+       formulaires de suppression compacts (achat groupé + case stock,
+       dépense). */
+    .ledger-table .lg-row-actions { white-space: nowrap; }
+    .ledger-table .lg-row-actions form {
+        display: flex; flex-wrap: wrap; gap: 0.3rem; align-items: center;
+    }
+    .lg-keep-stock {
+        display: inline-flex; gap: 0.3rem; align-items: center;
+        font-size: 0.72rem; font-weight: 600; cursor: pointer;
+        color: var(--muted, #8892a6); white-space: nowrap;
+    }
+    .lg-keep-stock input { margin: 0; accent-color: var(--primary, currentColor); }
     .ledger-balance td { background: <?= $balancePos ? 'rgba(74, 222, 128, 0.08)' : 'rgba(248, 113, 113, 0.08)' ?>; font-weight: 900; font-size: 1rem; }
     .ledger-balance .is-pos { color: #4ade80; }
     .ledger-balance .is-neg { color: #f87171; }
@@ -738,49 +755,70 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
     </div>
 
     <div class="card surface glass lg-table-wrap">
-        <table class="ledger-table">
-            <thead>
-                <tr><th>Date</th><th>Objet</th><th class="num">Débit</th><th class="num">Crédit</th></tr>
-            </thead>
-            <tbody>
-                <?php foreach ($entries['rows'] as $r): ?>
-                <tr>
-                    <td><?= e($fmtDate((string) $r['date'])) ?></td>
-                    <td><?= e((string) $r['label']) ?></td>
-                    <td class="num debit"><?= (float) $r['debit'] > 0 ? '− ' . e(formatPrice((float) $r['debit'])) : '' ?></td>
-                    <td class="num credit"><?= (float) $r['credit'] > 0 ? '+ ' . e(formatPrice((float) $r['credit'])) : '' ?></td>
-                </tr>
-                <?php if (($r['ticket'] ?? '') !== ''): ?>
-                <tr class="ledger-ticket">
-                    <td></td>
-                    <td colspan="3"><span class="tk"><?= ($r['kind'] ?? '') === 'sales' ? '└' : '└ Ticket' ?> <?= nl2br(e((string) $r['ticket'])) ?></span></td>
-                </tr>
-                <?php endif; ?>
-                <?php endforeach; ?>
-                <?php if ($entries['rows'] === []): ?>
-                <tr><td colspan="4" class="muted">Aucune écriture sur la période.</td></tr>
-                <?php endif; ?>
-            </tbody>
-            <tfoot>
-                <tr>
-                    <td colspan="2">TOTAUX</td>
-                    <td class="num"><?= e(formatPrice((float) $entries['total_debit'])) ?></td>
-                    <td class="num"><?= e(formatPrice((float) $entries['total_credit'])) ?></td>
-                </tr>
-                <tr class="ledger-balance">
-                    <td colspan="2">ÉQUILIBRAGE — SOLDE</td>
-                    <td colspan="2" class="num <?= $balancePos ? 'is-pos' : 'is-neg' ?>">
-                        <?= ($balancePos ? '+ ' : '− ') . e(formatPrice(abs((float) $entries['balance']))) ?>
-                    </td>
-                </tr>
-                <tr class="ledger-balance lg-profit">
-                    <td colspan="2">BÉNÉFICE NET — coût des produits vendus déduit</td>
-                    <td colspan="2" class="num <?= $salesProfitPos ? 'is-pos' : 'is-neg' ?>">
-                        <?= ($salesProfitPos ? '+ ' : '− ') . e(formatPrice(abs($salesProfit))) ?>
-                    </td>
-                </tr>
-            </tfoot>
-        </table>
+            <table class="ledger-table">
+                <thead>
+                    <tr><th>Date</th><th>Objet</th><th class="num">Débit</th><th class="num">Crédit</th><?php if (!$kiosk): ?><th>Actions</th><?php endif; ?></tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($entries['rows'] as $r): ?>
+                    <tr>
+                        <td><?= e($fmtDate((string) $r['date'])) ?></td>
+                        <td><?= e((string) $r['label']) ?></td>
+                        <td class="num debit"><?= (float) $r['debit'] > 0 ? '− ' . e(formatPrice((float) $r['debit'])) : '' ?></td>
+                        <td class="num credit"><?= (float) $r['credit'] > 0 ? '+ ' . e(formatPrice((float) $r['credit'])) : '' ?></td>
+                        <?php if (!$kiosk): ?>
+                        <td class="lg-row-actions">
+                            <?php if (($r['kind'] ?? '') === 'purchase' && !empty($r['ids'])): ?>
+                            <!-- Suppression GROUPÉE du groupe d'achats (ids joints
+                                 par virgules) : case cochée = stock laissé tel
+                                 quel ; décochée (défaut) = contre-passation. -->
+                            <form method="post" action="<?= e(url('/admin/compta/achats/group/delete')) ?>" data-confirm="Supprimer cet achat (<?= count((array) $r['ids']) ?> ligne(s)) ? Le stock ne sera corrigé que si la case “ne pas corriger le stock” est décochée." data-preserve-scroll>
+                                <?= csrf_field() ?>
+                                <input type="hidden" name="ids" value="<?= e(implode(',', array_map('strval', (array) $r['ids']))) ?>">
+                                <label class="lg-keep-stock"><input type="checkbox" name="keep_stock" value="1"> Ne pas corriger le stock</label>
+                                <button type="submit" class="btn btn-danger btn-sm" aria-label="Supprimer cet achat">Supprimer</button>
+                            </form>
+                            <?php elseif (($r['kind'] ?? '') === 'expense' && !empty($r['id'])): ?>
+                            <form method="post" action="<?= e(url('/admin/compta/depenses/' . rawurlencode((string) $r['id']) . '/delete')) ?>" data-confirm="Supprimer cette dépense ?" data-preserve-scroll>
+                                <?= csrf_field() ?>
+                                <button type="submit" class="btn btn-danger btn-sm" aria-label="Supprimer la dépense">Supprimer</button>
+                            </form>
+                            <?php endif; ?>
+                        </td>
+                        <?php endif; ?>
+                    </tr>
+                    <?php if (($r['ticket'] ?? '') !== ''): ?>
+                    <tr class="ledger-ticket">
+                        <td></td>
+                        <td colspan="<?= $kiosk ? 3 : 4 ?>"><span class="tk"><?= ($r['kind'] ?? '') === 'sales' ? '└' : '└ Ticket' ?> <?= nl2br(e((string) $r['ticket'])) ?></span></td>
+                    </tr>
+                    <?php endif; ?>
+                    <?php endforeach; ?>
+                    <?php if ($entries['rows'] === []): ?>
+                    <tr><td colspan="<?= $kiosk ? 4 : 5 ?>" class="muted">Aucune écriture sur la période.</td></tr>
+                    <?php endif; ?>
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <td colspan="2">TOTAUX</td>
+                        <td class="num"><?= e(formatPrice((float) $entries['total_debit'])) ?></td>
+                        <td class="num"><?= e(formatPrice((float) $entries['total_credit'])) ?></td>
+                        <?php if (!$kiosk): ?><td></td><?php endif; ?>
+                    </tr>
+                    <tr class="ledger-balance">
+                        <td colspan="2">ÉQUILIBRAGE — SOLDE</td>
+                        <td colspan="<?= $kiosk ? 2 : 3 ?>" class="num <?= $balancePos ? 'is-pos' : 'is-neg' ?>">
+                            <?= ($balancePos ? '+ ' : '− ') . e(formatPrice(abs((float) $entries['balance']))) ?>
+                        </td>
+                    </tr>
+                    <tr class="ledger-balance lg-profit">
+                        <td colspan="2">BÉNÉFICE NET — coût des produits vendus déduit</td>
+                        <td colspan="<?= $kiosk ? 2 : 3 ?>" class="num <?= $salesProfitPos ? 'is-pos' : 'is-neg' ?>">
+                            <?= ($salesProfitPos ? '+ ' : '− ') . e(formatPrice(abs($salesProfit))) ?>
+                        </td>
+                    </tr>
+                </tfoot>
+            </table>
         <p class="muted" style="font-size: 0.78rem; margin-top: 0.7rem;">
             Le solde compare les encaissements (ventes) aux décaissements (achats + dépenses) de la période :
             c'est une trace de trésorerie, pas le bénéfice — les achats incluent du stock pas encore vendu,

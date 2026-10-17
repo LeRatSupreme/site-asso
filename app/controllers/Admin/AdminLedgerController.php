@@ -298,6 +298,14 @@ final class AdminLedgerController extends AdminBaseController
                 'debit' => round($g['total'], 2),
                 'credit' => 0.0,
                 'ticket' => implode("\n", $tickets),
+                // Ids des lignes d'achats du groupe (même regroupement que
+                // l'affichage, cf. purchaseGroupKey()) : clé ADDITIONNELLE
+                // pour la suppression groupée depuis le livre (admin) —
+                // aucun calcul n'en dépend.
+                'ids' => array_map(
+                    static fn (array $p): string => (string) $p['id'],
+                    $g['purchases']
+                ),
             ];
         }
 
@@ -315,6 +323,9 @@ final class AdminLedgerController extends AdminBaseController
                 'debit' => (float) $e['amount_ttc'],
                 'credit' => 0.0,
                 'ticket' => $this->ticketLine('', $ticketParts),
+                // Id de la dépense : clé ADDITIONNELLE pour la suppression
+                // depuis le livre (admin) — aucun calcul n'en dépend.
+                'id' => (string) $e['id'],
             ];
         }
 
