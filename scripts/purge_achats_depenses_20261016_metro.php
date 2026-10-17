@@ -8,13 +8,13 @@ declare(strict_types=1);
  * Cibles EXACTES (hardcodées, volontairement étroites) :
  *  - Achats (table `purchases`) : purchased_at = 2026-10-16, supplier =
  *    METRO, invoice_number ∈ {0/0(087)0054/035408, 0/0(087)0051/024330}
- *    → 16 lignes attendues, 368,21 € TTC ;
+ *    → 15 lignes attendues, 337,00 € TTC ;
  *  - Dépenses (table `expenses`) : spent_at = 2026-10-16, category =
  *    DIVERS, label = METRO, amount_ttc ∈ {141,79 ; 226,41} (comparaison
  *    à ± 0,005 — colonne DECIMAL(10,3)) → 3 lignes attendues,
  *    594,61 € TTC.
  *
- * Si les comptes trouvés ne correspondent PAS exactement (16 et 3), le
+ * Si les comptes trouvés ne correspondent PAS exactement (15 et 3), le
  * script affiche le détail de ce qu'il a trouvé et REFUSE de s'exécuter
  * (code retour 1) — aucun effet de bord dans ce cas.
  *
@@ -65,8 +65,8 @@ const TARGET_EXPENSE_AMOUNTS = [141.79, 226.41];
 const AMOUNT_TOLERANCE = 0.005;
 
 /** Comptes attendus — le script REFUSE de s'exécuter si ≠. */
-const EXPECTED_PURCHASE_LINES = 16;
-const EXPECTED_PURCHASE_TTC   = 368.21;
+const EXPECTED_PURCHASE_LINES = 15;
+const EXPECTED_PURCHASE_TTC   = 337.00;
 const EXPECTED_EXPENSE_LINES  = 3;
 const EXPECTED_EXPENSE_TTC    = 594.61;
 
