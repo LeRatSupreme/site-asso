@@ -433,7 +433,12 @@ usort($pickerList, 'strnatcasecmp');
 
                 keyInput.addEventListener('blur', function () { checkDup(tr); });
                 keyInput.addEventListener('change', function () { checkDup(tr); });
-                keyInput.addEventListener('input', function () { updateTotals(); });
+                keyInput.addEventListener('input', function () {
+                    updateTotals();
+                    // Le vrai produit est choisi : la marque « libellé
+                    // non reconnu » (contour orange) disparaît.
+                    refreshScanMark(tr);
+                });
                 keyInput.addEventListener('keydown', function (ev) {
                     if (ev.key === 'Enter') { ev.preventDefault(); focusField(tr, 'quantity[]'); }
                 });
@@ -548,8 +553,31 @@ usort($pickerList, 'strnatcasecmp');
             function clearRawLabel(tr) {
                 var hidden = tr.querySelector('[name="raw_label[]"]');
                 if (hidden) hidden.value = '';
+                refreshScanMark(tr);
+            }
+
+            // Marque visuelle « libellé scan non reconnu » : la clé de la
+            // ligne EST le libellé OCR brut (produit non reconnu dans le
+            // catalogue) — contour orange jusqu'au choix du vrai produit
+            // (sans ça, l'enregistrement créerait une fiche au nom long).
+            // Le libellé reste en champ caché : corriger la clé retiendra
+            // l'appellation automatiquement. Libellé ≠ clé (ligne
+            // reconnue/corrigée) : simple info-bulle de contrôle.
+            function refreshScanMark(tr) {
+                var hidden = tr.querySelector('[name="raw_label[]"]');
                 var input = tr.querySelector('[name="product_key[]"]');
-                if (input) input.removeAttribute('title');
+                if (!input) return;
+                var raw = hidden ? String(hidden.value || '').trim() : '';
+                var name = input.value.trim();
+                var unmatched = raw !== '' && normKey(raw) === normKey(name);
+                tr.classList.toggle('pa-unmatched', unmatched);
+                if (raw === '') {
+                    input.removeAttribute('title');
+                } else if (unmatched) {
+                    input.title = 'Libellé scan non reconnu — choisissez le vrai produit';
+                } else {
+                    input.title = 'Libellé facture : ' + raw;
+                }
             }
 
             // Remplit une ligne (picker ou import) : nom, qté, montant.
@@ -564,14 +592,7 @@ usort($pickerList, 'strnatcasecmp');
                 tr.querySelector('[name="total_amount[]"]').value = amount || '';
                 var hidden = tr.querySelector('[name="raw_label[]"]');
                 if (hidden) hidden.value = rawLabel || '';
-                var input = tr.querySelector('[name="product_key[]"]');
-                if (input) {
-                    if (rawLabel && normKey(rawLabel) !== normKey(name)) {
-                        input.title = 'Libellé facture : ' + rawLabel;
-                    } else {
-                        input.removeAttribute('title');
-                    }
-                }
+                refreshScanMark(tr);
                 if (vat !== undefined) setLineVat(tr, vat);
                 updateRow(tr);
                 checkDup(tr);
@@ -826,9 +847,11 @@ usort($pickerList, 'strnatcasecmp');
                     Array.prototype.forEach.call(rowsData, function (r) {
                         var tr = firstEmptyRow() || (rows().length < MAX_LINES ? addLine(false) : null);
                         if (!tr) return;
-                        // Libellé facture d'origine : produit reconnu ->
-                        // libellé brut ; produit inconnu -> le libellé
-                        // OCR initial (clé de départ de la ligne).
+                        // Libellé facture d'origine TOUJOURS conservé
+                        // (reconnu comme non reconnu) : info-bulle de
+                        // contrôle, liseré orange sur les lignes non
+                        // reconnues (refreshScanMark) et exclusion de la
+                        // création de fiche côté serveur pour ces clés.
                         fillRow(tr, r.key, r.qty, r.total, r.raw_label || r.key, r.vat_rate);
                         // Champ notes par ligne : absent de la grille
                         // actuelle, câblé seulement s'il existe un jour.
@@ -1005,6 +1028,15 @@ usort($pickerList, 'strnatcasecmp');
 
 <!-- ==================== Onglet : Journal ==================== -->
 <style>
+    /* Ligne de scan dont la clé EST le libellé OCR brut (produit non
+       reconnu dans le catalogue) : contour orange jusqu'au choix du
+       vrai produit — sinon l'enregistrement créerait une fiche au nom
+       long. Sobre : un liseré sur le champ produit, rien d'autre. */
+    .pa-unmatched .pa-prod input[type="text"] {
+        border: 2px solid #e8a33d;
+        background: rgba(232, 163, 61, 0.08);
+    }
+
     /* Regroupement visuel par facture (jour + fournisseur + n° normalisé) :
        en-tête de groupe avec total, nombre de lignes et justificatif(s),
        puis les lignes détaillées inchangées. Deux factures distinctes le

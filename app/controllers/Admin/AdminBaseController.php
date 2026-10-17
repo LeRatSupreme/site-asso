@@ -186,9 +186,11 @@ abstract class AdminBaseController extends Controller
         // enrichissement silencieusement sauté, le scan reste utilisable.
         $invoice['lines'] = ScanCatalogMatcher::enrichLines($invoice['lines']);
 
-        // Libellés non reconnus -> file « à classer » de la page
-        // « Ajouter une appellation » (jamais bloquant).
-        \App\Models\ScanLabel::recordUnmatched($invoice['lines']);
+        // TOUS les libellés du scan -> file « à classer » de la page
+        // « Ajouter une appellation » (pré-remplis dans le formulaire,
+        // jamais bloquant). Les libellés reconnus y restent tant
+        // qu'aucun alias utilisateur exact ne les nomme.
+        \App\Models\ScanLabel::recordAll($invoice['lines']);
 
         // Justificatif conservé quand le scan vient d'un fichier : le
         // chemin est renvoyé au frontend, qui le joindra aux achats

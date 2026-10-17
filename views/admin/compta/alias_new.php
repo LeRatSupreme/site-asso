@@ -6,7 +6,9 @@ declare(strict_types=1);
  * Page dédiée « Ajouter une appellation » : saisie en série du lien
  * libellé facture/CSV -> nom court. Grille multi-lignes : une ligne
  * par appellation, tout est enregistré d'un coup (Entrée = champ
- * suivant, nouvelle ligne automatique en bas). La liste complète
+ * suivant, nouvelle ligne automatique en bas). Les libellés extraits
+ * des scans de factures y arrivent PRÉ-REMPLIS (un par libellé en
+ * file) : il ne reste qu'à saisir le nom court. La liste complète
  * reste consultable et éditable dans la page Mapping des libellés.
  *
  * @var list<string> $categories
@@ -37,7 +39,16 @@ declare(strict_types=1);
                 <span></span>
             </div>
             <div id="alias-rows">
-                <?php for ($i = 0; $i < 8; $i++): ?>
+                <?php foreach (($pending ?? []) as $row): ?>
+                    <?php $label = (string) $row['label']; ?>
+                    <div class="alias-line">
+                        <input type="text" name="raw_description[]" value="<?= e($label) ?>" readonly title="Libellé extrait d'un scan de facture (<?= (int) $row['occurrences'] ?> fois) — saisis le nom court à droite.">
+                        <input type="text" name="product_key[]" list="alias-products" placeholder="ex : Eau" autocomplete="off">
+                        <input type="text" name="category[]" list="alias-categories" placeholder="ex : Boissons" autocomplete="off">
+                        <button type="button" class="btn btn-ghost btn-sm alias-del" title="Retirer la ligne">✕</button>
+                    </div>
+                <?php endforeach; ?>
+                <?php for ($i = 0; $i < 3; $i++): ?>
                     <div class="alias-line">
                         <input type="text" name="raw_description[]" placeholder="ex : MONSTER PIPELINE PUNCH 24X0,5L" autocomplete="off">
                         <input type="text" name="product_key[]" list="alias-products" placeholder="ex : Monster rose" autocomplete="off">
@@ -66,6 +77,8 @@ declare(strict_types=1);
             </div>
         </form>
 
+        <p class="muted">Tous les libellés scannés arrivent pré-remplis dans le formulaire ci-dessus ; saisis le nom court et enregistre.</p>
+
         <datalist id="alias-products">
             <?php foreach (($products ?? []) as $p): ?>
                 <option value="<?= e((string) $p) ?>"></option>
@@ -76,33 +89,6 @@ declare(strict_types=1);
                 <option value="<?= e((string) $cat) ?>"></option>
             <?php endforeach; ?>
         </datalist>
-    </section>
-
-    <section class="card surface glass">
-        <h2 class="card-title">Libellés factures non rattachés</h2>
-        <p class="muted">Libellés détectés par les scans de factures (METRO…) mais inconnus du catalogue — ex. « EVIEN 50CL » qui devrait être « Eau ». Rattache-les ici : au prochain scan du même libellé, le nom court sera proposé directement. Les libellés déjà résolus disparaissent de la file tout seuls.</p>
-        <?php if (($pending ?? []) === []): ?>
-            <p class="muted">Aucun libellé en attente : tous les libellés scannés sont reconnus.</p>
-        <?php endif; ?>
-        <?php foreach (($pending ?? []) as $row): ?>
-            <?php $label = (string) $row['label']; ?>
-            <form method="post" action="<?= e(url('/admin/compta/aliases/save')) ?>" class="alias-form">
-                <?= csrf_field() ?>
-                <input type="hidden" name="stay" value="1">
-                <div class="alias-row">
-                    <div>
-                        <code><?= e($label) ?></code>
-                        <span class="muted">(<?= (int) $row['occurrences'] ?> fois)</span>
-                    </div>
-                    <div>
-                        <input type="hidden" name="raw_description" value="<?= e($label) ?>">
-                        <input type="text" name="product_key" placeholder="ex : Eau" required autocomplete="off" list="alias-products">
-                        <input type="text" name="category" placeholder="ex : <?= e($categories[0] ?? 'Catégorie') ?>" list="alias-categories" autocomplete="off">
-                        <button type="submit" class="btn btn-primary btn-sm">Rattacher</button>
-                    </div>
-                </div>
-            </form>
-        <?php endforeach; ?>
     </section>
 </div>
 
@@ -132,6 +118,11 @@ declare(strict_types=1);
     .alias-line input[type="text"] {
         width: 100%;
         margin: 0;
+    }
+    /* Libellé pré-rempli depuis un scan : lecture seule, discret. */
+    .alias-line input[type="text"][readonly] {
+        opacity: 0.85;
+        cursor: default;
     }
     .alias-line .alias-del {
         padding: 0.3rem 0.55rem;
@@ -186,7 +177,13 @@ declare(strict_types=1);
         var btn = e.target.closest('.alias-del');
         if (!btn) return;
         var row = btn.closest('.alias-line');
-        if (rows().length === 1) {
+        if (row.querySelector('input[readonly]')) {
+            // Ligne pré-remplie depuis un scan : le libellé est en
+            // lecture seule — on RETIRE la ligne (pas de « vidage »
+            // possible), et la grille ne reste jamais vide.
+            row.remove();
+            if (rows().length === 0) addRow(false);
+        } else if (rows().length === 1) {
             textInputs(row).forEach(function (inp) { inp.value = ''; });
         } else {
             row.remove();

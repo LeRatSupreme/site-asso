@@ -169,6 +169,44 @@ final class ScanCatalogMatcherTest extends TestCase
         self::assertSame('oasis pomme poire', self::m('OASIS POMME POIRE SLIM33CL'));
     }
 
+    public function testAliasGagneSurLaFicheAuNomLong(): void
+    {
+        // Fiche auto-créée par un ancien scan au nom long + alias
+        // utilisateur posé ENSUITE sur ce même libellé : le match
+        // renvoie le nom court choisi par l'utilisateur — l'alias
+        // prend le contrôle de sa clé et écrase la fiche homonyme.
+        $catalog = ScanCatalogMatcher::catalogFrom(
+            ['Oasis Tropical', 'OASIS TROPICAL SLIM BTE 33CL'],
+            [['raw_description' => 'OASIS TROPICAL SLIM BTE 33CL', 'product_key' => 'Oasis Tropical']],
+            []
+        );
+
+        self::assertSame('Oasis Tropical', self::m('OASIS TROPICAL SLIM BTE 33CL', $catalog));
+        self::assertSame('Oasis Tropical', self::m('oasis tropical slim bte 33cl', $catalog));
+    }
+
+    public function testExactCatalogKeyEgaliteExacteSeulement(): void
+    {
+        // Égalité exacte (casse/accents/espaces ignorés) : trouvée.
+        self::assertSame('KitKat', ScanCatalogMatcher::exactCatalogKey('KIT KAT', self::catalog()));
+        self::assertSame('Oasis Tropical', ScanCatalogMatcher::exactCatalogKey('oasis tropical', self::catalog()));
+        // Ressemblance FLOUE (conditionnements, troncatures) : null —
+        // le libellé reste dans la file « à classer » au lieu d'être
+        // purgé par l'heuristique.
+        self::assertNull(ScanCatalogMatcher::exactCatalogKey('OASIS TROPICAL SLIM BTE 33CL', self::catalog()));
+        self::assertNull(ScanCatalogMatcher::exactCatalogKey('KITKAT BOITE 24', self::catalog()));
+        self::assertNull(ScanCatalogMatcher::exactCatalogKey('SAUMON FUME 200G', self::catalog()));
+        self::assertNull(ScanCatalogMatcher::exactCatalogKey('', self::catalog()));
+    }
+
+    public function testSameKeyCasseAccentsEspacesIgnores(): void
+    {
+        self::assertTrue(ScanCatalogMatcher::sameKey('MONSTER ROSE', 'Monster Rose'));
+        self::assertTrue(ScanCatalogMatcher::sameKey('MONSTER PIPELINE/PUNCH', 'Monster Pipeline Punch'));
+        self::assertFalse(ScanCatalogMatcher::sameKey('Monster rose', 'Monster blanche'));
+        self::assertFalse(ScanCatalogMatcher::sameKey('', ''));
+    }
+
     public function testAliasSavoirMarqueMonsterUltraZero(): void
     {
         // Sans l'alias, « MONSTER ULTRA ZERO » ne matche que le générique

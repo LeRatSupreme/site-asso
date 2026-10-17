@@ -167,6 +167,38 @@ final class PurchaseSaverTest extends TestCase
     }
 
     /**
+     * Libellé de scan NON TRAITÉ : la clé de la ligne EST le libellé
+     * OCR brut (aucun nom saisi) — ces clés sont exclues de la création
+     * automatique de fiches (ProductAutoSync::ensureKeys), sinon chaque
+     * scan créerait une fiche au nom long du type « OASIS TROPICAL
+     * SLIM BTE 33CL ». Méthode pure, aucun accès base.
+     */
+    public function test_is_raw_scan_label_libelle_brut_non_traite(): void
+    {
+        // Le libellé OCR est la clé (casse/espaces ignorés) : non traité.
+        self::assertTrue(PurchaseSaver::isRawScanLabel('OASIS TROPICAL SLIM BTE 33CL', 'OASIS TROPICAL SLIM BTE 33CL'));
+        self::assertTrue(PurchaseSaver::isRawScanLabel('EVIEN 50CL', 'evien 50cl'));
+        self::assertTrue(PurchaseSaver::isRawScanLabel('MONSTER PIPELINE/PUNCH', 'Monster Pipeline Punch'));
+    }
+
+    /**
+     * Clés qui continuent de créer une fiche comme avant : saisie
+     * manuelle (sans libellé d'origine) et lignes reconnues/corrigées
+     * (libellé facture différent de la clé retenue — l'appellation
+     * sera apprise au passage).
+     */
+    public function test_is_raw_scan_label_cles_saisies_ou_reconnues(): void
+    {
+        // Saisie manuelle / collage / picker : pas de libellé d'origine.
+        self::assertFalse(PurchaseSaver::isRawScanLabel('', 'Monster rose'));
+        self::assertFalse(PurchaseSaver::isRawScanLabel('   ', 'Monster rose'));
+        // Ligne reconnue ou corrigée : le libellé diffère de la clé.
+        self::assertFalse(PurchaseSaver::isRawScanLabel('RED BULL WHITE BOITE 25CL', 'Red Bull Blanche'));
+        // Sans clé, rien à créer de toute façon.
+        self::assertFalse(PurchaseSaver::isRawScanLabel('EVIEN 50CL', ''));
+    }
+
+    /**
      * Chemin de justificatif accepté : uniquement un fichier déposé par
      * ReceiptStorage (uploads/receipts/ + nom hexadécimal + extension
      * sûre). Tout le reste — chemin arbitraire, traversée ../, URL,
