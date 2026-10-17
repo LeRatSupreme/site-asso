@@ -14,9 +14,10 @@ use PHPUnit\Framework\TestCase;
 
 /**
  * Tests de la fusion de clés produits (ProductKeyMerge) : déplacement des
- * lignes dans les 7 tables à product_key, stock de référence additionné,
- * drapeau « plus en vente » suivi, garde-fous de saisie, et stock
- * théorique recombiné après fusion.
+ * lignes dans les tables à product_key (PK id et PK product_key), stock de
+ * référence additionné, drapeaux suivis, purge des scan_labels, fusion des
+ * fiches jumelles `products`, garde-fous de saisie, et stock théorique
+ * recombiné après fusion.
  *
  * Saute automatiquement si la base aeic_test est indisponible.
  */
@@ -35,7 +36,7 @@ final class ProductKeyMergeTest extends TestCase
         $this->pdo = $pdo;
 
         try {
-            foreach (['sales', 'purchases', 'losses', 'product_aliases', 'inventory_counts', 'product_costs', 'product_stocks', 'product_discontinued'] as $table) {
+            foreach (['sales', 'purchases', 'losses', 'product_aliases', 'inventory_counts', 'product_costs', 'product_stocks', 'product_discontinued', 'product_infinite', 'product_zero_since', 'product_packs', 'shopping_checks', 'promotions', 'scan_labels', 'products', 'product_categories', 'cafeteria_orders', 'cafeteria_order_items'] as $table) {
                 $pdo->query('SELECT 1 FROM `' . $table . '` LIMIT 1');
             }
         } catch (\Throwable) {
@@ -45,6 +46,8 @@ final class ProductKeyMergeTest extends TestCase
         $this->reset($pdo, [
             'sales', 'import_batches', 'purchases', 'losses', 'product_aliases',
             'product_costs', 'inventory_counts', 'product_stocks', 'product_discontinued',
+            'product_infinite', 'product_zero_since', 'product_packs', 'shopping_checks',
+            'promotions', 'scan_labels', 'cafeteria_order_items', 'cafeteria_orders', 'products',
         ]);
         Model::setTestPdo($pdo);
     }
@@ -90,6 +93,77 @@ final class ProductKeyMergeTest extends TestCase
             'INSERT INTO product_costs (id, product_key, cost_price, valid_from, created_at)
              VALUES (?, ?, 1.5, ?, NOW())'
         )->execute(['cost_' . bin2hex(random_bytes(6)), $key, $validFrom]);
+    }
+
+    private function addInfinite(string $key, string $by = 'user_test'): void
+    {
+        $this->pdo->prepare('INSERT INTO product_infinite (product_key, updated_by) VALUES (?, ?)')
+            ->execute([$key, $by]);
+    }
+
+    private function addZeroSince(string $key, string $at = '2026-09-05 08:00:00'): void
+    {
+        $this->pdo->prepare('INSERT INTO product_zero_since (product_key, zero_since) VALUES (?, ?)')
+            ->execute([$key, $at]);
+    }
+
+    private function addPack(string $key, int $size): void
+    {
+        $this->pdo->prepare('INSERT INTO product_packs (product_key, pack_size) VALUES (?, ?)')
+            ->execute([$key, $size]);
+    }
+
+    private function addCheck(string $key, string $by = 'user_test'): void
+    {
+        $this->pdo->prepare('INSERT INTO shopping_checks (product_key, checked_by) VALUES (?, ?)')
+            ->execute([$key, $by]);
+    }
+
+    private function addPromotion(?string $key): void
+    {
+        $this->pdo->prepare(
+            'INSERT INTO promotions (id, title, product_key, new_price) VALUES (?, ?, ?, 1.0)'
+        )->execute(['prom_' . bin2hex(random_bytes(6)), 'Test', $key]);
+    }
+
+    private function addScanLabel(string $label): void
+    {
+        $this->pdo->prepare('INSERT INTO scan_labels (id, label) VALUES (?, ?)')
+            ->execute(['scan_' . bin2hex(random_bytes(6)), $label]);
+    }
+
+    private function addFiche(string $name, int $stock = 0): string
+    {
+        $id = 'prod_' . bin2hex(random_bytes(6));
+        $this->pdo->prepare('INSERT INTO products (id, name, price, stock) VALUES (?, ?, 1.0, ?)')
+            ->execute([$id, $name, $stock]);
+
+        return $id;
+    }
+
+    private function addOrderItem(string $productId): void
+    {
+        $orderId = 'ord_' . bin2hex(random_bytes(6));
+        $this->pdo->prepare('INSERT INTO cafeteria_orders (id) VALUES (?)')->execute([$orderId]);
+        $this->pdo->prepare(
+            'INSERT INTO cafeteria_order_items (id, order_id, product_id, quantity, price) VALUES (?, ?, ?, 1, 1.0)'
+        )->execute(['itm_' . bin2hex(random_bytes(6)), $orderId, $productId]);
+    }
+
+    /**
+     * Ids des fiches portant exactement ce nom.
+     *
+     * @return list<string>
+     */
+    private function ficheIdsByName(string $name): array
+    {
+        $stmt = $this->pdo->prepare('SELECT id FROM products WHERE name = ?');
+        $stmt->execute([$name]);
+
+        /** @var list<string> $ids */
+        $ids = $stmt->fetchAll(PDO::FETCH_COLUMN);
+
+        return $ids;
     }
 
     /**
@@ -236,5 +310,113 @@ final class ProductKeyMergeTest extends TestCase
 
         $map = InventoryCount::theoreticalStocksMap();
         self::assertSame(24, $map['Nesquik'] ?? 0);
+    }
+
+    public function test_tables_pk_cle_cible_absente_sont_deplacees(): void
+    {
+        $this->addInfinite('Cristaline');
+        $this->addZeroSince('Cristaline');
+        $this->addPack('Cristaline', 6);
+        $this->addCheck('Cristaline');
+
+        $moved = ProductKeyMerge::merge('Cristaline', 'Eau', 'user_merge');
+
+        self::assertSame(1, $moved['infinite']);
+        self::assertSame(1, $moved['zero_since']);
+        self::assertSame(1, $moved['packs']);
+        self::assertSame(1, $moved['checks']);
+        self::assertSame(['Eau'], $this->tableKeys('product_infinite'));
+        self::assertSame(['Eau'], $this->tableKeys('product_zero_since'));
+        self::assertSame(['Eau'], $this->tableKeys('product_packs'));
+        self::assertSame(['Eau'], $this->tableKeys('shopping_checks'));
+    }
+
+    public function test_tables_pk_cle_cible_existante_conserve_la_cible(): void
+    {
+        $this->addPack('Cristaline', 6);
+        $this->addPack('Eau', 24);
+        $this->addCheck('Cristaline');
+        $this->addCheck('Eau');
+
+        $moved = ProductKeyMerge::merge('Cristaline', 'Eau', null);
+
+        self::assertSame(0, $moved['packs'], 'La ligne cible existe : rien n\'est déplacé.');
+        self::assertSame(0, $moved['checks']);
+
+        $stmt = $this->pdo->prepare('SELECT pack_size FROM product_packs WHERE product_key = ?');
+        $stmt->execute(['Eau']);
+        self::assertSame(24, (int) $stmt->fetchColumn(), 'Le pack de la cible n\'est jamais écrasé.');
+        self::assertSame(['Eau'], $this->tableKeys('product_packs'), 'La ligne source est supprimée.');
+        self::assertSame(['Eau'], $this->tableKeys('shopping_checks'));
+    }
+
+    public function test_promotions_suivent_la_cible(): void
+    {
+        $this->addPromotion('Cristaline');
+        $this->addPromotion(null);
+
+        $moved = ProductKeyMerge::merge('Cristaline', 'Eau', null);
+
+        self::assertSame(1, $moved['promotions'], 'Seule la promotion rattachée à la source est déplacée.');
+        self::assertSame(['Eau'], $this->tableKeys('promotions'));
+
+        $stmt = $this->pdo->query('SELECT COUNT(*) FROM promotions WHERE product_key IS NULL');
+        self::assertSame(1, (int) $stmt->fetchColumn(), 'La promotion sans produit reste intacte.');
+    }
+
+    public function test_scan_labels_de_la_source_purges(): void
+    {
+        $this->addScanLabel('Cristaline');
+        $this->addScanLabel('CRISTALINE 50CL');
+        $this->addScanLabel('Evian');
+
+        $moved = ProductKeyMerge::merge('Cristaline', 'Eau', null);
+
+        self::assertSame(1, $moved['scan_labels'], 'Seul le libellé de même forme normalisée que la source est purgé.');
+
+        /** @var list<string> $labels */
+        $labels = $this->pdo->query('SELECT label FROM scan_labels ORDER BY label')->fetchAll(PDO::FETCH_COLUMN);
+        self::assertSame(['CRISTALINE 50CL', 'Evian'], $labels);
+    }
+
+    public function test_fiches_jumelles_repointees_et_source_supprimee(): void
+    {
+        $srcId = $this->addFiche('Cristaline', 5);
+        $tgtId = $this->addFiche('Eau', 7);
+        $this->addOrderItem($srcId);
+        $this->addOrderItem($srcId);
+
+        $moved = ProductKeyMerge::merge('Cristaline', 'Eau', 'user_merge');
+
+        self::assertSame(1, $moved['fiches']);
+        self::assertSame(2, $moved['order_items'], 'Les lignes de commande caisse suivent la fiche cible.');
+
+        $stmt = $this->pdo->query('SELECT DISTINCT product_id FROM cafeteria_order_items');
+        /** @var list<string> $ids */
+        $ids = $stmt->fetchAll(PDO::FETCH_COLUMN);
+        self::assertSame([$tgtId], $ids, 'Toutes les lignes pointent la fiche conservée.');
+
+        self::assertSame([], $this->ficheIdsByName('Cristaline'), 'La fiche source est supprimée.');
+        self::assertSame([$tgtId], $this->ficheIdsByName('Eau'));
+
+        $stmt = $this->pdo->prepare('SELECT stock FROM products WHERE id = ?');
+        $stmt->execute([$tgtId]);
+        self::assertSame(12, (int) $stmt->fetchColumn(), 'Le stock de la fiche source est additionné à la cible.');
+    }
+
+    public function test_fiche_source_seule_renommee(): void
+    {
+        $id = $this->addFiche('Cristaline', 5);
+        $this->addOrderItem($id);
+
+        $moved = ProductKeyMerge::merge('Cristaline', 'Eau', null);
+
+        self::assertSame(1, $moved['fiches']);
+        self::assertSame(0, $moved['order_items'], 'Aucun repointage : l\'historique suit l\'id conservé.');
+        self::assertSame([$id], $this->ficheIdsByName('Eau'), 'La fiche est renommée, id inchangé.');
+
+        $stmt = $this->pdo->prepare('SELECT stock FROM products WHERE id = ?');
+        $stmt->execute([$id]);
+        self::assertSame(5, (int) $stmt->fetchColumn(), 'Le stock suit la fiche renommée.');
     }
 }

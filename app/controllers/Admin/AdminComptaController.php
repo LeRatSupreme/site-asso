@@ -23,6 +23,7 @@ use App\Models\ProductCategory;
 use App\Models\ProductCost;
 use App\Models\ProductDiscontinued;
 use App\Models\ProductInfinite;
+use App\Models\ProductKeyMerge;
 use App\Models\ProductPack;
 use App\Models\Sale;
 use App\Models\SaleAdjustment;
@@ -857,7 +858,127 @@ final class AdminComptaController extends AdminBaseController
             'aliases'    => ProductAlias::all(),
             'unmapped'   => Sale::unmappedDescriptions(),
             'categories' => self::aliasCategories(),
+            'known_keys' => self::knownProductKeys(),
         ]);
+    }
+
+    /**
+     * Fusionne deux produits clé depuis la page Alias : tout l'historique
+     * de la clé source (ventes, achats, pertes, alias, comptages, coûts,
+     * stocks, drapeaux, promotions, fiches carte…) est rattaché à la clé
+     * cible conservée (ProductKeyMerge::merge, transactionnel).
+     *
+     * La saisie est libre : on peut fusionner une clé non encore connue
+     * (ex. une variante repérée dans un rapport) vers une clé existante.
+     */
+    public function mergeAliasProducts(): void
+    {
+        $this->guardCompta();
+
+        $from = trim((string) ($_POST['from'] ?? ''));
+        $to = trim((string) ($_POST['to'] ?? ''));
+
+        if ($from === '' || $to === '') {
+            $this->setFlash('error', 'Produit à absorber et produit à conserver requis.');
+            redirect(url('/admin/compta/aliases'));
+        }
+        if ($from === $to) {
+            $this->setFlash('error', 'Les deux produits sont identiques : rien à fusionner.');
+            redirect(url('/admin/compta/aliases'));
+        }
+        if (mb_strlen($from) > 255 || mb_strlen($to) > 255) {
+            $this->setFlash('error', 'Les noms de produits sont limités à 255 caractères.');
+            redirect(url('/admin/compta/aliases'));
+        }
+
+        try {
+            $moved = ProductKeyMerge::merge($from, $to, Auth::id());
+        } catch (\InvalidArgumentException $e) {
+            // Refus de validation : motif réel dans le log, message
+            // générique affiché (les garde-fous du formulaire couvrent
+            // déjà les cas courants).
+            Logger::warning('aliases: fusion refusée', [
+                'from' => $from,
+                'to'   => $to,
+                'msg'  => $e->getMessage(),
+            ]);
+            $this->setFlash('error', 'Fusion refusée : la demande est invalide.');
+            redirect(url('/admin/compta/aliases'));
+        } catch (\Throwable $e) {
+            Logger::error('aliases: fusion impossible', [
+                'from' => $from,
+                'to'   => $to,
+                'msg'  => $e->getMessage(),
+            ]);
+            $this->setFlash('error', 'Fusion impossible : une erreur inattendue est survenue. L\'incident a été journalisé.');
+            redirect(url('/admin/compta/aliases'));
+        }
+
+        $this->audit('compta.aliases.merge', 'product_key', $to, [
+            'from'   => $from,
+            'to'     => $to,
+            'tables' => $moved,
+        ]);
+
+        $labels = [
+            'purchases'    => 'achat(s)',
+            'losses'       => 'perte(s)',
+            'sales'        => 'vente(s)',
+            'aliases'      => 'alias',
+            'counts'       => 'comptage(s)',
+            'stocks'       => 'stock additionné',
+            'discontinued' => 'drapeau « plus en vente »',
+            'costs'        => 'lots de coûts',
+            'promotions'   => 'promotion(s)',
+            'infinite'     => 'drapeau « stock infini »',
+            'zero_since'   => 'suivi « à zéro depuis »',
+            'packs'        => 'taille de pack',
+            'checks'       => 'case(s) de liste de courses',
+            'scan_labels'  => 'libellé(s) de scan purgé(s)',
+            'order_items'  => 'ligne(s) de commande caisse',
+            'fiches'       => 'fiche(s) carte',
+        ];
+        $parts = [];
+        foreach ($moved as $table => $n) {
+            if ($n > 0) {
+                $parts[] = $n . ' ' . ($labels[$table] ?? $table);
+            }
+        }
+
+        $this->setFlash(
+            'success',
+            'Produits fusionnés : « ' . $from . ' » → « ' . $to . ' » ('
+            . ($parts === [] ? 'aucune donnée trouvée sur la clé source' : implode(', ', $parts))
+            . ').'
+        );
+        redirect(url('/admin/compta/aliases'));
+    }
+
+    /**
+     * Clés connues pour le datalist de fusion : noms des fiches carte
+     * (products.name), product_key des alias et produits vendus
+     * (SumUp). Trié, dédupliqué, sans chaîne vide.
+     *
+     * @return list<string>
+     */
+    private static function knownProductKeys(): array
+    {
+        $all = array_unique(array_merge(
+            array_map('strval', array_column(Product::allForAdmin(), 'name')),
+            array_map('strval', array_column(ProductAlias::all(), 'product_key')),
+            Sale::distinctProducts()
+        ), SORT_STRING);
+
+        $out = [];
+        foreach ($all as $k) {
+            $key = trim($k);
+            if ($key !== '') {
+                $out[] = $key;
+            }
+        }
+        sort($out, SORT_STRING);
+
+        return $out;
     }
 
     /**

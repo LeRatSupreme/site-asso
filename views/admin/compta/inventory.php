@@ -8,7 +8,7 @@ declare(strict_types=1);
  * @var list<array{key:string,counted_at:?string,counted_qty:?int,gap:?int,theoretical:?int}> $discontinuedRows
  * @var list<array<string,mixed>> $history
  * @var list<array<string,mixed>> $gaps
- * @var array<string, array{sales:int, purchases:int, losses:int, counts:int, costs:int, aliases:int, stock:?int, discontinued:bool}> $keyStats
+ * @var array<string, array{sales:int, purchases:int, losses:int, counts:int, costs:int, aliases:int, stock:?int, discontinued:bool, promotions:int, checks:int, infinite:int, zero_since:int, packs:int, fiche:int}> $keyStats
  * @var list<list<string>> $mergeDupes
  * @var float $stockValue   Valeur du stock valorisé (Σ stock × coût du lot en cours).
  * @var int   $stockUnits   Unités physiques en stock (stocks théoriques positifs).
@@ -540,6 +540,12 @@ declare(strict_types=1);
         if (s.counts > 0) parts.push(plural(s.counts, 'comptage'));
         if (s.costs > 0) parts.push(plural(s.costs, 'lot de coût'));
         if (s.aliases > 0) parts.push(plural(s.aliases, 'alias'));
+        if (s.promotions > 0) parts.push(plural(s.promotions, 'promotion'));
+        if (s.checks > 0) parts.push(plural(s.checks, 'case cochée'));
+        if (s.infinite > 0) parts.push('stock ∞');
+        if (s.zero_since > 0) parts.push('à zéro depuis');
+        if (s.packs > 0) parts.push('pack de ' + s.packs);
+        if (s.fiche > 0) parts.push('fiche carte');
         if (s.stock !== null && s.stock !== undefined) parts.push('stock ' + s.stock);
         if (s.discontinued) parts.push('plus en vente');
         var html = esc(parts.length > 0 ? parts.join(' · ') : 'aucune donnée');
@@ -573,6 +579,12 @@ declare(strict_types=1);
             if (ss.counts > 0) moved.push(plural(ss.counts, 'comptage'));
             if (ss.costs > 0) moved.push(plural(ss.costs, 'lot de coût'));
             if (ss.aliases > 0) moved.push(plural(ss.aliases, 'alias'));
+            if (ss.promotions > 0) moved.push(plural(ss.promotions, 'promotion'));
+            if (ss.checks > 0) moved.push(plural(ss.checks, 'case cochée'));
+            if (ss.infinite > 0) moved.push('drapeau stock ∞');
+            if (ss.zero_since > 0) moved.push('suivi « à zéro »');
+            if (ss.packs > 0) moved.push('pack de ' + ss.packs);
+            if (ss.fiche > 0) moved.push('fiche carte');
             if (ss.stock !== null && ss.stock !== undefined && ss.stock !== 0) moved.push('stock ' + ss.stock);
             lines.push(moved.length > 0
                 ? 'Déplacera « ' + s + ' » → « ' + t + ' » : ' + moved.join(', ') + '.'

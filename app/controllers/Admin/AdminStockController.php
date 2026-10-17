@@ -1102,6 +1102,14 @@ final class AdminStockController extends AdminBaseController
             'stocks'       => 'stock additionné',
             'discontinued' => 'drapeau « plus en vente »',
             'costs'        => 'lots de coûts',
+            'promotions'   => 'promotion(s)',
+            'infinite'     => 'drapeau « stock infini »',
+            'zero_since'   => 'suivi « à zéro depuis »',
+            'packs'        => 'taille de pack',
+            'checks'       => 'case(s) de liste de courses',
+            'scan_labels'  => 'libellé(s) de scan purgé(s)',
+            'order_items'  => 'ligne(s) de commande caisse',
+            'fiches'       => 'fiche(s) carte',
         ];
         $parts = [];
         foreach ($moved as $table => $n) {
