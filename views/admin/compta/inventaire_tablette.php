@@ -7,11 +7,12 @@ declare(strict_types=1);
  * « Opérations » (vague 2 : interface complète).
  *
  * Trois onglets internes commutés côté client, mémorisés dans l'URL
- * (?tab=…) : « Nouvelle saisie » (formulaire d'enregistrement d'une
- * session), « Historique » (sessions + KPIs), « Analyse » (période
- * personnalisable, KPIs avec deltas vs période précédente, graphiques
- * Chart.js et comparaison de fenêtres). L'onglet initial vient du
- * contrôleur ($tab, déjà validé côté serveur).
+ * (?tab=…) : « Nouvelle saisie » (collage du contenu de la tablette
+ * dans une zone dédiée, analyse des lignes + aperçu des écarts avant
+ * enregistrement), « Historique » (sessions + KPIs), « Analyse »
+ * (période personnalisable, KPIs avec deltas vs période précédente,
+ * graphiques Chart.js et comparaison de fenêtres). L'onglet initial
+ * vient du contrôleur ($tab, déjà validé côté serveur).
  *
  * En-tête et onglets de niveau 1 fournis par la page fusionnée
  * « Opérations » (operations.php) qui inclut cette vue.
@@ -98,11 +99,13 @@ $hasTopProducts = $analysis['top_products'] !== [];
     <section class="card surface glass">
         <h2 class="card-title">Nouveau relevé tablette</h2>
         <p class="muted">
-            Ne saisis que les produits visibles sur la tablette — une quantité par ligne,
-            les lignes laissées vides sont ignorées.
+            Copie le contenu affiché par la <strong>tablette SumUp</strong> et colle-le ci-dessous :
+            le site repère chaque produit et sa quantité, puis calcule l'écart contre son stock
+            théorique. Les lignes d'interface (« Sélectionner », « Modifier », « Options »…) sont
+            ignorées ; les lignes non reconnues sont signalées « à préciser ».
         </p>
 
-        <form method="post" action="<?= e(url('/admin/compta/inventaire-tablette/save')) ?>">
+        <form method="post" action="<?= e(url('/admin/compta/inventaire-tablette/save')) ?>" id="tablet-paste-form">
             <?= csrf_field() ?>
 
             <div class="field-row">
@@ -116,53 +119,61 @@ $hasTopProducts = $analysis['top_products'] !== [];
                 </div>
             </div>
 
-            <div class="inv-filter-row">
-                <input type="search" id="inv-filter" placeholder="Filtrer par produit…" autocomplete="off">
+            <div class="inv-paste-zone">
+                <label for="inv-paste">Collage depuis la tablette</label>
+                <textarea
+                    id="inv-paste"
+                    rows="10"
+                    spellcheck="false"
+                    autocomplete="off"
+                    class="inv-paste-input"
+                    placeholder="Redbull&#9;12&#10;eau - 104&#10;Monster Blanche : 2&#10;Bueno white&#10;28"
+                ></textarea>
+                <div class="inv-paste-actions">
+                    <button type="button" class="btn btn-outline btn-sm" id="inv-paste-analyze">Analyser le collage</button>
+                    <button type="button" class="btn btn-outline btn-sm" id="inv-paste-clear">Vider</button>
+                </div>
+                <p class="muted inv-paste-help">
+                    Formats reconnus : « Nom 12 », « Nom - 12 », « Nom — 12 », « Nom : 12 », « Nom, 12 »,
+                    « Nom ; 12 », « Nom | 12 », « Nom&#9;12 » (tabulation). Quantités négatives acceptées
+                    (la tablette peut afficher un stock négatif) ; un nombre seul sur une ligne se rattache
+                    au libellé du dessus.
+                </p>
             </div>
 
-            <div class="table-wrap">
-                <table class="table" id="inv-table">
+            <datalist id="inv-keys-list">
+                <?php foreach ($products as $p): ?>
+                    <option value="<?= e((string) $p['key']) ?>"></option>
+                <?php endforeach; ?>
+            </datalist>
+
+            <p class="inv-paste-summary muted" id="inv-paste-summary" hidden></p>
+
+            <div class="table-wrap" id="inv-paste-preview" hidden>
+                <table class="table" id="inv-paste-table">
                     <thead>
                         <tr>
-                            <th>Produit</th>
+                            <th>Libellé collé</th>
+                            <th>Produit reconnu</th>
+                            <th class="th-num">Qté</th>
                             <th class="th-num">Stock site <span class="muted">(théorique)</span></th>
-                            <th class="th-num">Stock tablette</th>
                             <th class="th-num">Écart</th>
                             <th>Avis <span class="muted">(optionnel)</span></th>
                         </tr>
                     </thead>
-                    <tbody>
-                        <?php foreach ($products as $p): ?>
-                            <tr
-                                data-name="<?= e(mb_strtolower((string) $p['key'])) ?>"
-                                data-theoretical="<?= $p['theoretical'] !== null ? (int) $p['theoretical'] : '' ?>"
-                            >
-                                <td>
-                                    <?= e((string) $p['key']) ?>
-                                    <input type="hidden" name="keys[]" value="<?= e((string) $p['key']) ?>">
-                                </td>
-                                <td class="num"><?= $p['theoretical'] !== null ? (int) $p['theoretical'] : '<span class="muted">—</span>' ?></td>
-                                <td class="num">
-                                    <input type="number" name="qtys[]" min="0" step="1" inputmode="numeric" class="inv-qty" style="width:6rem">
-                                </td>
-                                <td class="num inv-gap" data-gap>—</td>
-                                <td><input type="text" name="avis[]" maxlength="500" style="width:100%"></td>
-                            </tr>
-                        <?php endforeach; ?>
-                        <?php if ($products === []): ?>
-                            <tr><td colspan="5" class="muted">Aucun produit connu (aucune vente, stock ni comptage).</td></tr>
-                        <?php endif; ?>
-                    </tbody>
+                    <tbody id="inv-paste-tbody"></tbody>
                 </table>
             </div>
 
+            <div id="inv-paste-payload"></div>
+
             <p class="muted inv-form-note">
-                Le stock théorique est recalculé côté serveur à l'enregistrement (l'écart affiché
-                n'est qu'un aperçu) ; les lignes sans quantité sont ignorées.
+                Le stock théorique et l'écart sont recalculés côté serveur à l'enregistrement (l'aperçu
+                n'est qu'indicatif) ; seules les lignes reconnues ci-dessus sont envoyées.
             </p>
 
             <div class="form-actions">
-                <button type="submit" class="btn btn-primary"<?= $products === [] ? ' disabled' : '' ?>>Enregistrer la session</button>
+                <button type="submit" class="btn btn-primary" id="inv-paste-submit" disabled>Enregistrer la session</button>
             </div>
         </form>
     </section>
@@ -342,7 +353,20 @@ $hasTopProducts = $analysis['top_products'] !== [];
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="<?= e(rootAssetVersioned('/assets/js/inventaire-tablette.js')) ?>"></script>
 <script>
+// ---------- Produits connus (index JS pour l'appariement du collage) ----------
+var invProducts = <?= json_encode(
+    array_map(
+        static fn (array $p): array => [
+            'key'         => (string) $p['key'],
+            'theoretical' => $p['theoretical'] === null ? null : (int) $p['theoretical'],
+        ],
+        $products
+    ),
+    JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE
+) ?>;
+
 // ---------- Graphiques de l'onglet Analyse (créés au 1er affichage :
 // un canvas dans un onglet masqué a une taille nulle) ----------
 var analyseData = <?= json_encode(
@@ -451,39 +475,239 @@ function initAnalyseCharts() {
     }
 }
 
-// ---------- Aperçu d'écart + filtre produit (onglet Saisie) ----------
+// ---------- Saisie par collage (onglet Nouvelle saisie) ----------
+// Analyse la zone de collage (auto sur paste/input, debouncée), apparie
+// chaque libellé aux produits connus (InventaireTabletMatch) et reconstruit
+// l'aperçu + les champs cachés keys[] / qtys[] / avis[] (alignés, lignes
+// valides uniquement — même contrat POST qu'avant).
 (function () {
-    var table = document.getElementById('inv-table');
-    if (table) {
-        table.addEventListener('input', function (ev) {
-            var input = ev.target;
-            if (!input.classList || !input.classList.contains('inv-qty')) return;
-            var row = input.closest('tr');
-            var cell = row ? row.querySelector('[data-gap]') : null;
-            if (!cell) return;
-            var theo = row.getAttribute('data-theoretical');
-            var raw = input.value.trim();
-            // Ligne vide ou théorique inconnu : pas d'aperçu (le serveur ignore/traitera).
-            if (raw === '' || theo === '') {
-                cell.textContent = '—';
-                cell.classList.remove('is-negative');
-                return;
-            }
-            var gap = parseInt(raw, 10) - parseInt(theo, 10);
-            cell.textContent = gap > 0 ? '+' + gap : String(gap);
-            cell.classList.toggle('is-negative', gap < 0);
-        });
+    var form = document.getElementById('tablet-paste-form');
+    if (!form || typeof window.InventaireTabletParseFull !== 'function') return;
+
+    var products = invProducts || [];
+    var index = window.InventaireTabletBuildIndex(products);
+    var theoMap = new Map();
+    products.forEach(function (p) {
+        theoMap.set(p.key, p.theoretical === null ? null : Number(p.theoretical));
+    });
+
+    var area = document.getElementById('inv-paste');
+    var tbody = document.getElementById('inv-paste-tbody');
+    var preview = document.getElementById('inv-paste-preview');
+    var summary = document.getElementById('inv-paste-summary');
+    var payload = document.getElementById('inv-paste-payload');
+    var submitBtn = document.getElementById('inv-paste-submit');
+    if (!area || !tbody || !preview || !summary || !payload || !submitBtn) return;
+
+    // rows/resolved : sorties du parseur/apparieur ; chosen/avis : choix
+    // manuels de l'utilisateur par ligne (clé valide + avis optionnel).
+    var state = { rows: [], ignored: 0, resolved: [], chosen: [], avis: [] };
+
+    function el(tag, cls, text) {
+        var e = document.createElement(tag);
+        if (cls) e.className = cls;
+        if (text !== undefined && text !== null) e.textContent = text;
+        return e;
     }
 
-    var filter = document.getElementById('inv-filter');
-    if (filter && table) {
-        filter.addEventListener('input', function () {
-            var q = filter.value.trim().toLowerCase();
-            table.querySelectorAll('tbody tr[data-name]').forEach(function (tr) {
-                tr.hidden = q !== '' && tr.getAttribute('data-name').indexOf(q) === -1;
-            });
-        });
+    /** Clé produit retenue pour la ligne i (auto-reconnue ou choisie). */
+    function effKey(i) {
+        var m = state.resolved[i];
+        if (!m) return null;
+        if (m.status === 'exact' || m.status === 'check') return m.key;
+        var c = state.chosen[i];
+        return (c && index.keys.indexOf(c) !== -1) ? c : null;
     }
+
+    /** Dernière ligne portant chaque clé (doublon : la dernière gagne). */
+    function lastIdxByKey() {
+        var last = {};
+        for (var i = 0; i < state.rows.length; i++) {
+            var k = effKey(i);
+            if (k) last[k] = i;
+        }
+        return last;
+    }
+
+    function addHidden(name, value) {
+        var input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = name;
+        input.value = value;
+        payload.appendChild(input);
+    }
+
+    /** Reconstruit keys[]/qtys[]/avis[] alignés sur les lignes valides. */
+    function buildPayload() {
+        payload.innerHTML = '';
+        var last = lastIdxByKey();
+        var n = 0;
+        for (var i = 0; i < state.rows.length; i++) {
+            var key = effKey(i);
+            var row = state.rows[i];
+            if (!key || row.qty === null || (last[key] !== i)) continue;
+            addHidden('keys[]', key);
+            addHidden('qtys[]', String(row.qty));
+            addHidden('avis[]', state.avis[i] || '');
+            n++;
+        }
+        submitBtn.disabled = n === 0;
+        return n;
+    }
+
+    function render() {
+        tbody.innerHTML = '';
+        var last = lastIdxByKey();
+
+        for (var i = 0; i < state.rows.length; i++) {
+            var row = state.rows[i];
+            var m = state.resolved[i];
+            var key = effKey(i);
+            var dup = key !== null && last[key] !== i;
+            var qtyNull = row.qty === null;
+
+            var tr = document.createElement('tr');
+            if (!key || qtyNull) tr.className = 'inv-paste-tr-bad';
+            else if (dup || m.status === 'check') tr.className = 'inv-paste-tr-check';
+
+            // Libellé collé
+            tr.appendChild(el('td', null, row.label));
+
+            // Produit reconnu
+            var tdP = el('td');
+            if (key !== null && (m.status === 'exact' || m.status === 'check')) {
+                tdP.appendChild(el('strong', null, key));
+                if (m.status === 'check') tdP.appendChild(el('span', 'badge badge-warning inv-badge', 'à vérifier'));
+            } else if (m.status === 'ambiguous' && m.candidates.length > 0) {
+                tdP.appendChild(el('span', 'muted', 'Plusieurs produits possibles : '));
+                var sel = document.createElement('select');
+                sel.className = 'inv-paste-key';
+                sel.dataset.row = i;
+                var opt0 = document.createElement('option');
+                opt0.value = '';
+                opt0.textContent = '— choisir —';
+                sel.appendChild(opt0);
+                m.candidates.forEach(function (c) {
+                    var o = document.createElement('option');
+                    o.value = c;
+                    o.textContent = c;
+                    if (state.chosen[i] === c) o.selected = true;
+                    sel.appendChild(o);
+                });
+                tdP.appendChild(sel);
+            } else {
+                var inp = document.createElement('input');
+                inp.type = 'text';
+                inp.className = 'inv-paste-key';
+                inp.setAttribute('list', 'inv-keys-list');
+                inp.dataset.row = i;
+                inp.placeholder = 'Produit introuvable — choisir…';
+                inp.value = state.chosen[i] || '';
+                tdP.appendChild(inp);
+            }
+            if (dup) tdP.appendChild(el('span', 'badge badge-warning inv-badge', 'doublon, la dernière valeur gagne'));
+            if (qtyNull) tdP.appendChild(el('span', 'badge badge-danger inv-badge', 'quantité manquante'));
+            tr.appendChild(tdP);
+
+            // Qté (rouge si négative : la tablette affiche un stock négatif)
+            var tdQ = el('td', 'num');
+            if (qtyNull) tdQ.appendChild(el('span', 'muted', '—'));
+            else if (row.qty < 0) tdQ.appendChild(el('span', 'is-negative', String(row.qty)));
+            else tdQ.textContent = String(row.qty);
+            tr.appendChild(tdQ);
+
+            // Stock site + écart (aperçu indicatif : recalculés côté serveur)
+            var theo = key !== null && theoMap.has(key) ? theoMap.get(key) : null;
+            tr.appendChild(el('td', 'num', theo === null ? '—' : String(theo)));
+            var tdG = el('td', 'num');
+            if (theo === null || qtyNull) tdG.appendChild(el('span', 'muted', '—'));
+            else {
+                var gap = row.qty - theo;
+                tdG.appendChild(el('span',
+                    'inv-paste-gap ' + (gap < 0 ? 'is-missing' : (gap > 0 ? 'is-surplus' : 'is-even')),
+                    gap < 0 ? gap + ' · manquant' : (gap > 0 ? '+' + gap + ' · surplus' : '0'))
+                );
+            }
+            tr.appendChild(tdG);
+
+            // Avis (optionnel, aucune valeur par défaut)
+            var tdA = el('td');
+            var avis = document.createElement('input');
+            avis.type = 'text';
+            avis.maxLength = 500;
+            avis.className = 'inv-paste-avis';
+            avis.dataset.row = i;
+            avis.value = state.avis[i] || '';
+            tdA.appendChild(avis);
+            tr.appendChild(tdA);
+
+            tbody.appendChild(tr);
+        }
+
+        var n = buildPayload();
+        preview.hidden = state.rows.length === 0;
+        summary.hidden = state.rows.length === 0 && state.ignored === 0;
+        summary.textContent = n + ' ligne(s) reconnue(s) · '
+            + (state.rows.length - n) + ' à préciser · '
+            + state.ignored + ' ignorée(s)';
+    }
+
+    function analyze() {
+        if (timer) { clearTimeout(timer); timer = null; }
+        var parsed = window.InventaireTabletParseFull(area.value);
+        state = {
+            rows: parsed.rows,
+            ignored: parsed.ignored,
+            resolved: parsed.rows.map(function (r) {
+                return window.InventaireTabletMatch(r.label, index);
+            }),
+            chosen: [],
+            avis: [],
+        };
+        render();
+    }
+
+    // Analyse automatique sur collage/frappe (debounce ~300 ms).
+    var timer = null;
+    function schedule() {
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(analyze, 300);
+    }
+    area.addEventListener('input', schedule);
+    area.addEventListener('paste', schedule);
+    document.getElementById('inv-paste-analyze').addEventListener('click', analyze);
+    document.getElementById('inv-paste-clear').addEventListener('click', function () {
+        area.value = '';
+        analyze();
+    });
+
+    // Saisies de l'aperçu : l'avis se mémorise sans re-rendre (saisie
+    // fluide) ; un changement de clé revalide la ligne.
+    tbody.addEventListener('input', function (ev) {
+        var t = ev.target;
+        if (t.classList && t.classList.contains('inv-paste-avis')) {
+            state.avis[Number(t.dataset.row)] = t.value;
+        }
+    });
+    tbody.addEventListener('change', function (ev) {
+        var t = ev.target;
+        if (t.classList && t.classList.contains('inv-paste-key')) {
+            state.chosen[Number(t.dataset.row)] = String(t.value || '').trim();
+            render();
+        }
+    });
+
+    // Juste avant l'envoi : resynchronise les saisies non « blurées » et
+    // reconstruit le POST aligné ; rien d'envoyé si aucune ligne valide.
+    form.addEventListener('submit', function (ev) {
+        Array.prototype.forEach.call(tbody.querySelectorAll('.inv-paste-key'), function (elm) {
+            state.chosen[Number(elm.dataset.row)] = String(elm.value || '').trim();
+        });
+        Array.prototype.forEach.call(tbody.querySelectorAll('.inv-paste-avis'), function (elm) {
+            state.avis[Number(elm.dataset.row)] = elm.value;
+        });
+        if (buildPayload() === 0) ev.preventDefault();
+    });
 })();
 
 // ---------- Onglets compta : bascule côté client, mémorisée dans
@@ -561,9 +785,33 @@ function initAnalyseCharts() {
 <style>
 /* Teintes spécifiques à la vue Inventaire tablette (le reste vient
    d'admin.css : .compta-tabs, .compta-kpis, .compta-grid…). */
-.inv-filter-row { display: flex; justify-content: flex-end; margin: .25rem 0 .6rem; }
-.inv-filter-row input { max-width: 18rem; }
-.inv-gap.is-negative { color: var(--accent-danger, #ef4444); font-weight: 700; }
+.inv-paste-zone { margin: .25rem 0 .75rem; }
+.inv-paste-input {
+    width: 100%;
+    min-height: 12rem;
+    font-family: ui-monospace, SFMono-Regular, Consolas, 'Courier New', monospace;
+    font-size: .9rem;
+    line-height: 1.45;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.14);
+    border-radius: 8px;
+    color: var(--foreground);
+    padding: .6rem .75rem;
+    resize: vertical;
+}
+.inv-paste-input:focus { outline: none; border-color: var(--primary, #48bdd3); }
+.inv-paste-actions { display: flex; gap: .5rem; margin-top: .5rem; }
+.inv-paste-help { margin-top: .5rem; font-size: .82rem; }
+.inv-paste-summary { margin: .5rem 0; font-weight: 600; }
+.inv-paste-tr-check { background: rgba(245,158,11,.08); }
+.inv-paste-tr-bad { background: rgba(239,68,68,.10); }
+.inv-badge { margin-left: .4rem; }
+.inv-paste-key { max-width: 16rem; width: auto; }
+#inv-paste-table td.num { white-space: nowrap; }
+#inv-paste-table .is-negative { color: var(--accent-danger, #ef4444); font-weight: 700; }
+.inv-paste-gap.is-missing { color: var(--accent-danger, #ef4444); font-weight: 700; }
+.inv-paste-gap.is-surplus { color: #22c55e; font-weight: 700; }
+.inv-paste-gap.is-even { color: var(--muted, #9fb3c8); }
 .inv-form-note { margin-top: .75rem; }
 
 .inv-delta { font-size: .78rem; font-weight: 700; display: block; margin-top: .15rem; }
