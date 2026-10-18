@@ -1324,13 +1324,23 @@ final class Sale extends Model
     }
 
     /**
-     * Applique la catégorie d'un alias à toutes les ventes portant ce libellé
-     * (synchronisation mapping -> ventes).
+     * Applique la catégorie d'un alias à toutes les ventes portant ce
+     * libellé (synchronisation mapping -> ventes).
+     *
+     * Deux passes :
+     *  1. EXACTE : les ventes dont le libellé brut (description) égale
+     *     l'alias reçoivent la catégorie (écrase la valeur précédente) ;
+     *  2. par CLÉ CANONIQUE : les ventes du même produit (clé effective =
+     *     product_key, sinon description) encore sans catégorie (NULL/'')
+     *     sont COMPLÉTÉES — jamais une catégorie existante ni un
+     *     reclassement par variantes de prix. $productKey peut être passé
+     *     par l'appelant (formulaire/série/grille) ; sinon il est relu
+     *     dans le mapping par libellé brut.
      *
      * Une catégorie vide ne modifie rien : on ne devine jamais la valeur
      * d'origine d'une vente.
      */
-    public static function applyAliasCategory(string $rawDescription, ?string $category): int
+    public static function applyAliasCategory(string $rawDescription, ?string $category, ?string $productKey = null): int
     {
         $raw = trim($rawDescription);
         $cat = trim((string) $category);
@@ -1341,14 +1351,50 @@ final class Sale extends Model
         $stmt = self::pdo()->prepare('UPDATE sales SET category = ? WHERE description = ?');
         $stmt->execute([$cat, $raw]);
 
-        return (int) $stmt->rowCount();
+        $count = (int) $stmt->rowCount();
+
+        // Passe 2 : complément par clé canonique (mêmes ventes sous un
+        // autre libellé brut, importées via l'API/cron).
+        $key = trim((string) $productKey);
+        if ($key === '') {
+            $lookup = self::pdo()->prepare('SELECT product_key FROM product_aliases WHERE raw_description = ?');
+            $lookup->execute([$raw]);
+            $key = trim((string) ($lookup->fetchColumn() ?: ''));
+        }
+        if ($key !== '') {
+            $fill = self::pdo()->prepare(
+                "UPDATE sales s
+                 SET s.category = ?
+                 WHERE s.is_custom_amount = 0
+                   AND (s.category IS NULL OR s.category = '')
+                   AND COALESCE(NULLIF(TRIM(s.product_key), ''), TRIM(s.description)) = ?"
+            );
+            $fill->execute([$cat, $key]);
+            $count += (int) $fill->rowCount();
+        }
+
+        return $count;
     }
 
     /**
-     * Propage les catégories des alias sur toutes les ventes (un seul UPDATE).
+     * Propage les catégories des alias sur toutes les ventes (deux UPDATE).
      *
      * Utilisé après un import ou une synchro SumUp : les nouvelles lignes
      * portent directement la catégorie choisie dans le mapping des libellés.
+     *
+     * Deux passes :
+     *  1. correspondance EXACTE libellé brut (description) = libellé
+     *     d'alias : la catégorie choisie écrase la valeur précédente ;
+     *  2. complément par CLÉ CANONIQUE : les ventes importées via l'API/
+     *     cron sous un libellé brut absent du mapping, mais dont la clé
+     *     effective (product_key, sinon description) est le product_key
+     *     d'un alias, resteraient sinon « Non classé » et dédoubleraient
+     *     le produit dans les statistiques. Cette passe ne REMPLIT que
+     *     les catégories vides (NULL/'') : elle n'écrase jamais un
+     *     classement existant ni un reclassement par variantes de prix.
+     *     Si plusieurs alias partagent un product_key, la catégorie
+     *     retenue est MAX(TRIM(category)) (choix déterministe).
+     *
      * Les alias sans catégorie n'écrasent jamais une catégorie existante.
      */
     public static function syncAliasCategories(): int
@@ -1362,7 +1408,23 @@ final class Sale extends Model
             );
             $stmt->execute();
 
-            return (int) $stmt->rowCount();
+            $count = (int) $stmt->rowCount();
+
+            $fill = self::pdo()->prepare(
+                "UPDATE sales s
+                 JOIN (
+                     SELECT TRIM(product_key) AS k, MAX(TRIM(category)) AS c
+                     FROM product_aliases
+                     WHERE product_key IS NOT NULL AND TRIM(product_key) <> ''
+                       AND category IS NOT NULL AND TRIM(category) <> ''
+                     GROUP BY TRIM(product_key)
+                 ) a ON a.k = COALESCE(NULLIF(TRIM(s.product_key), ''), TRIM(s.description))
+                 SET s.category = a.c
+                 WHERE (s.category IS NULL OR s.category = '') AND s.is_custom_amount = 0"
+            );
+            $fill->execute();
+
+            return $count + (int) $fill->rowCount();
         } catch (\Throwable) {
             return 0;
         }
