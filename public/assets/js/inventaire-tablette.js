@@ -1,5 +1,5 @@
 /* =========================================================
- * Inventaire tablette SumUp — logique pure du collage.
+ * Inventaire tablette SumUp — logique pure du collage (v2).
  *
  * La saisie d'un relevé tablette se fait par COPIER-COLLER du
  * contenu de la tablette SumUp dans une zone de texte. Ce fichier
@@ -7,13 +7,26 @@
  *
  *  - InventaireTabletParseFull(text) : découpe le collage en lignes
  *    {label, qty} (formats « Nom 12 », « Nom - 12 », « Nom : 12 »,
- *    « Nom, 12 », « Nom ; 12 », « Nom | 12 », « Nom<TAB>12 », nombre
- *    seul sur une ligne rattaché au libellé du dessus, quantités
- *    signées) et compte les lignes d'interface ignorées ;
+ *    « Nom, 12 », « Nom ; 12 », « Nom | 12 », « Nom<TAB>12 », quantités
+ *    signées). v2 : un nombre SEUL sur une ligne se rattache au
+ *    libellé le plus récent en SAUTANT les lignes d'interface (le
+ *    bruit n'efface pas le libellé en attente) ; « Sélectionner <n> »
+ *    (nombre collé au verbe) pose la quantité du PROCHAIN libellé
+ *    valide ; un libellé SANS quantité ne produit JAMAIS de ligne ;
+ *    un nombre orphelin est écarté, jamais transformé en ligne.
+ *    Lignes d'interface ignorées : « Sélectionner », « Modifier »,
+ *    « Options », « Activer le suivi », « Produit », « Stock »,
+ *    ponctuation seule et clés i18n SumUp non traduites
+ *    (product_manage.bulk.…). Verbes « Sélectionner »/« Modifier »
+ *    en tête de libellé retirés ;
  *  - InventaireTabletMatch(label, index) : apparie un libellé aux
  *    clés produits connues (égalité brute insensible à la casse /
  *    aux accents / aux séparateurs, puis clé normalisée façon
- *    AliasSuggester::normalizeKey, puis inclusion unique) ;
+ *    AliasSuggester::normalizeKey, puis inclusion unique — avec
+ *    garde-fou v2 : pas d'auto-appariement quand le libellé collé
+ *    est (au moins) deux fois plus long que la clé candidate sans
+ *    commencer par elle ; les clés écartées restent candidats
+ *    indicatifs) ;
  *  - InventaireTabletBuildIndex(products) : index normalisé des
  *    produits passés par la vue.
  *
@@ -85,6 +98,20 @@
         '^(.+?)[' + S + ']+([\\u2212+-]?[0-9][0-9\\u00a0\\u202f]*)[' + S + ']*$'
     );
 
+    // Clé i18n SumUp non traduite qui a fuité dans le collage
+    // (« product_manage.bulk.select_all_label ») : minuscules, chiffres
+    // et tirets bas, au moins un point, rien d'autre.
+    var RE_I18N_KEY = /^[a-z][a-z0-9_]*(\.[a-z0-9_]+)+$/;
+
+    // « Sélectionner 1 » / « Modifier 2 » : nombre collé au verbe ->
+    // quantité en attente pour le PROCHAIN libellé valide.
+    var RE_VERB_QTY = new RegExp(
+        '^(selectionner|modifier)[' + S + ']+([\\u2212+-]?[0-9][0-9\\u00a0\\u202f ]*)$'
+    );
+
+    // Verbe d'interface en tête de libellé (« Sélectionner Cappuccino »).
+    var RE_LEADING_VERB = /^(?:s[e\u00e8\u00e9\u00ea\u00c8\u00c9\u00ca]lectionner|modifier)\s+/i;
+
     // Lignes d'interface de la tablette, ignorées silencieusement
     // (comparées sans accents ni casse).
     var JUNK_PHRASES = [
@@ -136,8 +163,10 @@
 
     /** Ligne d'interface de la tablette (« Sélectionner », « Stock »…) ? */
     function isJunkLine(line) {
-        var s = stripAccents(line).toLowerCase().replace(/[\u00a0\u202f]/g, ' ').trim();
-        if (s === '') return true;
+        var raw = String(line == null ? '' : line).trim();
+        if (raw === '') return true;
+        if (RE_I18N_KEY.test(raw)) return true;
+        var s = stripAccents(raw).toLowerCase().replace(/[\u00a0\u202f]/g, ' ').trim();
         if (RE_ONLY_PUNCT.test(s)) return true;
         var rest = s;
         for (var i = 0; i < JUNK_PHRASES.length; i++) {
@@ -162,11 +191,18 @@
         return t;
     }
 
+    /** Retire un verbe d'interface en tête (« Sélectionner X » → « X »). */
+    function stripLeadingVerb(label) {
+        return cleanLabel(String(label == null ? '' : label).replace(RE_LEADING_VERB, ''));
+    }
+
     /**
      * Ligne « libellé + quantité » ? Renvoie {label, qty} ou null.
      * Essaie, dans l'ordre : tabulation (« Nom<TAB>12 »), séparateur
-     * : ; , | (« Nom : 12 »), tiret espacé (« Nom - 12 », « Nom — 12 »),
-     * nombre final signé (« Nom 12 », « Nom -12 »).
+     * : ; , | (« Nom : 12 »), tiret espacé (« Nom - 12 », « Nom — 12 »,
+     * uniquement quand ce qui suit est un nombre PUR : « Sucette -
+     * 1 sucette » reste un libellé entier), nombre final signé
+     * (« Nom 12 », « Nom -12 »).
      */
     function splitLabelQty(line) {
         var raw = String(line == null ? '' : line);
@@ -191,41 +227,67 @@
     }
 
     /**
-     * Analyse complète d'un collage.
+     * Analyse complète d'un collage (v2).
      *
      * @param {string} text Contenu brut de la zone de collage.
-     * @returns {{rows: {label: string, qty: ?number}[], ignored: number}}
-     *      rows : lignes produit dans l'ordre du collage (qty null =
-     *      libellé en attente d'une quantité jamais arrivée) ;
-     *      ignored : lignes d'interface / orphelines écartées.
+     * @returns {{rows: {label: string, qty: number}[], ignored: number}}
+     *      rows : lignes produit dans l'ordre du collage, chacune AVEC
+     *      une quantité (un libellé sans quantité ne produit jamais de
+     *      ligne) ; ignored : lignes d'interface / nombres orphelins
+     *      écartés.
      */
     function parse(text) {
         var lines = String(text == null ? '' : text).split(/\r\n|\r|\n/);
         var rows = [];
         var ignored = 0;
-        var pending = -1;
+        var pendingLabel = null; // dernier libellé sans quantité (pas encore une ligne)
+        var pendingQty = null;   // quantité posée par « Sélectionner <n> »
 
         for (var i = 0; i < lines.length; i++) {
             var line = lines[i].replace(/^[\s\u00a0\u202f]+/, '').replace(/[\s\u00a0\u202f]+$/, '');
             if (line === '') continue;              // vide : sautée, non comptée
+            // Ligne d'interface : écartée SANS effacer le libellé en attente.
             if (isJunkLine(line)) { ignored++; continue; }
 
             var bare = tryBareQty(line);
             if (bare !== null) {
-                if (pending >= 0 && rows[pending].qty === null) {
-                    rows[pending].qty = bare;       // nombre seul -> libellé du dessus
+                if (pendingLabel !== null) {
+                    rows.push({ label: pendingLabel, qty: bare }); // nombre seul -> libellé le plus récent
+                    pendingLabel = null;
                 } else {
-                    ignored++;                      // nombre orphelin
+                    ignored++;                      // nombre orphelin : jamais une ligne
                 }
                 continue;
             }
 
+            // « Sélectionner 1 » : quantité en attente pour le prochain libellé.
+            var verbQty = stripAccents(line).toLowerCase()
+                .replace(/[\u00a0\u202f]/g, ' ').trim().match(RE_VERB_QTY);
+            if (verbQty) {
+                var vq = parseQtyToken(verbQty[2]);
+                if (!isNaN(vq)) {
+                    pendingQty = vq;
+                    ignored++;
+                    continue;
+                }
+            }
+
             var sp = splitLabelQty(line);
-            var label = cleanLabel(sp ? sp.label : line);
+            var label = stripLeadingVerb(sp ? sp.label : line);
             if (label === '') { ignored++; continue; }
 
-            rows.push({ label: label, qty: sp ? sp.qty : null });
-            pending = rows.length - 1;
+            var qty = sp ? sp.qty : null;
+            if (qty === null && pendingQty !== null) {
+                qty = pendingQty;                   // « Sélectionner <n> » au-dessus du produit
+            }
+            pendingQty = null;                      // consommée (ou inexistante)
+
+            if (qty === null) {
+                pendingLabel = label;               // libellé seul : en attente, PAS de ligne
+                continue;
+            }
+            rows.push({ label: label, qty: qty });
+            pendingLabel = null;
         }
 
         return { rows: rows, ignored: ignored };
@@ -274,9 +336,15 @@
      *  a. égalité brute normalisée « lisible » (casse/accents/séparateurs) ;
      *  b. égalité de clé normalisée (AliasSuggester + espaces retirés) ;
      *  c. inclusion unique (dans un sens ou l'autre, aiguille >= 3) ->
-     *     statut « check » (à vérifier) ;
+     *     statut « check » (à vérifier). Garde-fou v2 : PAS d'auto-
+     *     appariement quand le libellé collé est (au moins) deux fois
+     *     plus long que la clé candidate sans commencer par elle
+     *     (« Bonbon Haribo » ne choisit pas « Haribo » tout seul) —
+     *     les clés écartées reviennent comme candidats indicatifs,
+     *     statut « ambiguous » ;
      *  d. ambigu (plusieurs candidates) ou aucun match -> « ambiguous » /
-     *     « none » : la ligne attend un choix manuel.
+     *     « none » : la ligne attend un choix manuel (champ Produit
+     *     éditable de l'aperçu).
      *
      * @param {string} label Libellé collé.
      * @param {{keys: string[], bySpace: Object, byTight: Object}} index
@@ -300,18 +368,28 @@
 
         if (tn.length >= 3) {
             var cands = [];
+            var hinted = [];
             index.keys.forEach(function (k) {
                 var t = tightNorm(k);
                 if (t === tn || t.length < 3) return;
-                if (t.indexOf(tn) !== -1 || tn.indexOf(t) !== -1) {
-                    if (cands.indexOf(k) === -1) cands.push(k);
+                if (t.indexOf(tn) === -1 && tn.indexOf(t) === -1) return;
+                // Garde-fou « Bonbon Haribo » : libellé au moins deux fois
+                // plus long que la clé et ne commençant pas par elle ->
+                // pas d'auto-appariement ; la clé reste candidate indicative.
+                if (tn.length >= t.length * 2 && tn.indexOf(t) !== 0) {
+                    if (hinted.indexOf(k) === -1) hinted.push(k);
+                    return;
                 }
+                if (cands.indexOf(k) === -1) cands.push(k);
             });
             if (cands.length === 1) {
                 return { status: 'check', key: cands[0], candidates: cands };
             }
             if (cands.length > 1) {
                 return { status: 'ambiguous', key: null, candidates: cands };
+            }
+            if (hinted.length > 0) {
+                return { status: 'ambiguous', key: null, candidates: hinted };
             }
         }
 

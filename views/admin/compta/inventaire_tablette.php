@@ -102,7 +102,8 @@ $hasTopProducts = $analysis['top_products'] !== [];
             Copie le contenu affiché par la <strong>tablette SumUp</strong> et colle-le ci-dessous :
             le site repère chaque produit et sa quantité, puis calcule l'écart contre son stock
             théorique. Les lignes d'interface (« Sélectionner », « Modifier », « Options »…) sont
-            ignorées ; les lignes non reconnues sont signalées « à préciser ».
+            ignorées ; chaque ligne de l'aperçu est ensuite modifiable (produit, quantité, avis)
+            avant enregistrement.
         </p>
 
         <form method="post" action="<?= e(url('/admin/compta/inventaire-tablette/save')) ?>" id="tablet-paste-form">
@@ -136,12 +137,14 @@ $hasTopProducts = $analysis['top_products'] !== [];
                 <p class="muted inv-paste-help">
                     Formats reconnus : « Nom 12 », « Nom - 12 », « Nom — 12 », « Nom : 12 », « Nom, 12 »,
                     « Nom ; 12 », « Nom | 12 », « Nom&#9;12 » (tabulation). Quantités négatives acceptées
-                    (la tablette peut afficher un stock négatif) ; un nombre seul sur une ligne se rattache
-                    au libellé du dessus.
+                    (la tablette peut afficher un stock négatif). Un nombre seul sur une ligne se rattache
+                    au libellé du dessus (même si des lignes d'interface s'intercalent) ; une ligne
+                    « Sélectionner <em>n</em> » pose la quantité du produit suivant ; un libellé sans
+                    quantité est ignoré.
                 </p>
             </div>
 
-            <datalist id="inv-keys-list">
+            <datalist id="inv-product-keys">
                 <?php foreach ($products as $p): ?>
                     <option value="<?= e((string) $p['key']) ?>"></option>
                 <?php endforeach; ?>
@@ -168,8 +171,11 @@ $hasTopProducts = $analysis['top_products'] !== [];
             <div id="inv-paste-payload"></div>
 
             <p class="muted inv-form-note">
-                Le stock théorique et l'écart sont recalculés côté serveur à l'enregistrement (l'aperçu
-                n'est qu'indicatif) ; seules les lignes reconnues ci-dessus sont envoyées.
+                Tout est modifiable avant enregistrement : produit (choisir dans la liste ou taper une
+                clé exacte), quantité et avis. Pour ignorer une ligne, vide son champ Produit (ou clique
+                sur ×) : elle n'est pas envoyée. Le stock théorique et l'écart sont recalculés côté
+                serveur à l'enregistrement (l'aperçu n'est qu'indicatif) ; seules les lignes avec un
+                produit connu et une quantité sont envoyées.
             </p>
 
             <div class="form-actions">
@@ -477,9 +483,12 @@ function initAnalyseCharts() {
 
 // ---------- Saisie par collage (onglet Nouvelle saisie) ----------
 // Analyse la zone de collage (auto sur paste/input, debouncée), apparie
-// chaque libellé aux produits connus (InventaireTabletMatch) et reconstruit
-// l'aperçu + les champs cachés keys[] / qtys[] / avis[] (alignés, lignes
-// valides uniquement — même contrat POST qu'avant).
+// chaque libellé aux produits connus (InventaireTabletMatch) puis rend un
+// aperçu TOUT ÉDITABLE : champ Produit (dataliste, prérempli par la
+// meilleure reconnaissance, vide = ligne ignorée), quantité et avis
+// modifiables. Statut/écart/POST (keys[] / qtys[] / avis[] alignés,
+// lignes valides uniquement — même contrat qu'avant) recalculés à chaque
+// frappe depuis la valeur courante des champs.
 (function () {
     var form = document.getElementById('tablet-paste-form');
     if (!form || typeof window.InventaireTabletParseFull !== 'function') return;
@@ -499,8 +508,12 @@ function initAnalyseCharts() {
     var submitBtn = document.getElementById('inv-paste-submit');
     if (!area || !tbody || !preview || !summary || !payload || !submitBtn) return;
 
-    // rows/resolved : sorties du parseur/apparieur ; chosen/avis : choix
-    // manuels de l'utilisateur par ligne (clé valide + avis optionnel).
+    // rows/ignored : sorties du parseur ; resolved : appariement
+    // automatique figé à l'analyse (sert d'aide/indication) ; chosen :
+    // valeur COURANTE du champ Produit de chaque ligne (préremplie par
+    // la meilleure reconnaissance, modifiable librement) ; avis : avis
+    // optionnel par ligne. Le statut d'une ligne est TOUJOURS dérivé de
+    // chosen (jamais figé) : vider le champ = ligne ignorée.
     var state = { rows: [], ignored: 0, resolved: [], chosen: [], avis: [] };
 
     function el(tag, cls, text) {
@@ -510,13 +523,22 @@ function initAnalyseCharts() {
         return e;
     }
 
-    /** Clé produit retenue pour la ligne i (auto-reconnue ou choisie). */
+    function isValidKey(k) {
+        return k !== null && index.keys.indexOf(k) !== -1;
+    }
+
+    /** Clé produit retenue pour la ligne i = valeur COURANTE du champ, si valide. */
     function effKey(i) {
-        var m = state.resolved[i];
-        if (!m) return null;
-        if (m.status === 'exact' || m.status === 'check') return m.key;
-        var c = state.chosen[i];
-        return (c && index.keys.indexOf(c) !== -1) ? c : null;
+        var v = String(state.chosen[i] == null ? '' : state.chosen[i]).trim();
+        return isValidKey(v) ? v : null;
+    }
+
+    /** Quantité entière signée depuis un champ de saisie, sinon null. */
+    function readQty(v) {
+        var s = String(v == null ? '' : v).trim();
+        if (!/^[+-]?[0-9]+$/.test(s)) return null;
+        var n = parseInt(s, 10);
+        return isFinite(n) ? n : null;
     }
 
     /** Dernière ligne portant chaque clé (doublon : la dernière gagne). */
@@ -555,80 +577,156 @@ function initAnalyseCharts() {
         return n;
     }
 
+    function updateSummary(n) {
+        preview.hidden = state.rows.length === 0;
+        summary.hidden = state.rows.length === 0 && state.ignored === 0;
+        summary.textContent = n + ' ligne(s) reconnue(s) · '
+            + (state.rows.length - n) + ' à préciser · '
+            + state.ignored + ' ignorée(s)';
+    }
+
+    /**
+     * Statut de la ligne i, dérivé de la valeur COURANTE du champ Produit :
+     *  - 'ok'       : clé valide choisie, reconnue d'office ;
+     *  - 'check'    : clé valide = suggestion par inclusion (« à vérifier ») ;
+     *  - 'invalid'  : du texte mais aucune clé connue (« introuvable ») ;
+     *  - 'ambiguous': champ vide, candidats indicatifs à proposer ;
+     *  - 'cleared'  : champ vidé par l'utilisateur (ligne « ignorée ») ;
+     *  - 'none'     : champ vide, aucun candidat (« introuvable »).
+     * Tous les statuts sauf 'ok'/'check' excluent la ligne du POST.
+     */
+    function rowStatus(i) {
+        var m = state.resolved[i] || { status: 'none', key: null, candidates: [] };
+        var key = effKey(i);
+        if (key !== null) {
+            var check = m.status === 'check' && key === m.key;
+            return { kind: check ? 'check' : 'ok', key: key };
+        }
+        if (String(state.chosen[i] || '').trim() !== '') return { kind: 'invalid' };
+        if (m.status === 'ambiguous' && m.candidates.length > 0) {
+            return { kind: 'ambiguous', candidates: m.candidates };
+        }
+        if (m.status === 'exact' || m.status === 'check') return { kind: 'cleared' };
+        return { kind: 'none' };
+    }
+
+    function badge(cls, text) {
+        return el('span', 'badge ' + cls + ' inv-badge', text);
+    }
+
+    /**
+     * Recalcule badges, teinte de ligne, stock théorique et écart de la
+     * ligne i d'après la valeur COURANTE du champ Produit. Les champs
+     * (input) ne sont jamais recréés : la saisie garde le focus.
+     */
+    function patchRow(i, last) {
+        var tr = tbody.querySelector('tr[data-row="' + i + '"]');
+        if (!tr) return;
+        var st = rowStatus(i);
+        var badges = tr.querySelector('.inv-paste-badges');
+        badges.innerHTML = '';
+
+        var cls = '';
+        if (st.kind === 'check') cls = 'inv-paste-tr-check';
+        else if (st.kind === 'invalid' || st.kind === 'ambiguous' || st.kind === 'none') cls = 'inv-paste-tr-bad';
+        else if (st.kind === 'cleared') cls = 'inv-paste-tr-muted';
+        if (st.key !== null && last[st.key] !== i) cls = 'inv-paste-tr-check';
+        tr.className = cls;
+
+        if (st.kind === 'check') badges.appendChild(badge('badge-warning', 'à vérifier'));
+        if (st.kind === 'invalid') badges.appendChild(badge('badge-danger', 'introuvable : clé inconnue'));
+        if (st.kind === 'none') badges.appendChild(badge('badge-danger', 'introuvable'));
+        if (st.kind === 'ambiguous') {
+            badges.appendChild(badge('badge-warning',
+                (st.candidates.length > 1 ? 'plusieurs candidats : ' : 'candidat possible : ')
+                + st.candidates.join(' · ')));
+        }
+        if (st.kind === 'cleared') badges.appendChild(badge('badge-muted', 'ignorée'));
+        if (st.key !== null && last[st.key] !== i) {
+            badges.appendChild(badge('badge-warning', 'doublon, la dernière valeur gagne'));
+        }
+
+        // Stock théorique + écart de la clé choisie (aperçu indicatif).
+        var theo = st.key !== null && theoMap.has(st.key) ? theoMap.get(st.key) : null;
+        var qty = state.rows[i].qty;
+        tr.querySelector('[data-role="theo"]').textContent = theo === null ? '—' : String(theo);
+        var gapTd = tr.querySelector('[data-role="gap"]');
+        gapTd.innerHTML = '';
+        if (theo === null || qty === null) {
+            gapTd.appendChild(el('span', 'muted', '—'));
+        } else {
+            var gap = qty - theo;
+            gapTd.appendChild(el('span',
+                'inv-paste-gap ' + (gap < 0 ? 'is-missing' : (gap > 0 ? 'is-surplus' : 'is-even')),
+                gap < 0 ? gap + ' · manquant' : (gap > 0 ? '+' + gap + ' · surplus' : '0'))
+            );
+        }
+    }
+
+    /** Recalcule toutes les lignes + le résumé + le POST (les doublons
+     * dépendent des autres lignes). */
+    function refreshDerived() {
+        var last = lastIdxByKey();
+        for (var i = 0; i < state.rows.length; i++) {
+            patchRow(i, last);
+        }
+        updateSummary(buildPayload());
+    }
+
     function render() {
         tbody.innerHTML = '';
-        var last = lastIdxByKey();
-
         for (var i = 0; i < state.rows.length; i++) {
             var row = state.rows[i];
-            var m = state.resolved[i];
-            var key = effKey(i);
-            var dup = key !== null && last[key] !== i;
-            var qtyNull = row.qty === null;
 
             var tr = document.createElement('tr');
-            if (!key || qtyNull) tr.className = 'inv-paste-tr-bad';
-            else if (dup || m.status === 'check') tr.className = 'inv-paste-tr-check';
+            tr.dataset.row = i;
 
             // Libellé collé
             tr.appendChild(el('td', null, row.label));
 
-            // Produit reconnu
-            var tdP = el('td');
-            if (key !== null && (m.status === 'exact' || m.status === 'check')) {
-                tdP.appendChild(el('strong', null, key));
-                if (m.status === 'check') tdP.appendChild(el('span', 'badge badge-warning inv-badge', 'à vérifier'));
-            } else if (m.status === 'ambiguous' && m.candidates.length > 0) {
-                tdP.appendChild(el('span', 'muted', 'Plusieurs produits possibles : '));
-                var sel = document.createElement('select');
-                sel.className = 'inv-paste-key';
-                sel.dataset.row = i;
-                var opt0 = document.createElement('option');
-                opt0.value = '';
-                opt0.textContent = '— choisir —';
-                sel.appendChild(opt0);
-                m.candidates.forEach(function (c) {
-                    var o = document.createElement('option');
-                    o.value = c;
-                    o.textContent = c;
-                    if (state.chosen[i] === c) o.selected = true;
-                    sel.appendChild(o);
-                });
-                tdP.appendChild(sel);
-            } else {
-                var inp = document.createElement('input');
-                inp.type = 'text';
-                inp.className = 'inv-paste-key';
-                inp.setAttribute('list', 'inv-keys-list');
-                inp.dataset.row = i;
-                inp.placeholder = 'Produit introuvable — choisir…';
-                inp.value = state.chosen[i] || '';
-                tdP.appendChild(inp);
-            }
-            if (dup) tdP.appendChild(el('span', 'badge badge-warning inv-badge', 'doublon, la dernière valeur gagne'));
-            if (qtyNull) tdP.appendChild(el('span', 'badge badge-danger inv-badge', 'quantité manquante'));
+            // Produit : TOUJOURS un champ éditable, prérempli par la
+            // meilleure reconnaissance ; vide = ligne ignorée.
+            var tdP = el('td', 'inv-paste-prod');
+            var key = document.createElement('input');
+            key.type = 'text';
+            key.className = 'inv-paste-key';
+            key.setAttribute('list', 'inv-product-keys');
+            key.dataset.row = i;
+            key.placeholder = '— choisir un produit —';
+            key.autocomplete = 'off';
+            key.value = state.chosen[i] || '';
+            tdP.appendChild(key);
+            var clearBtn = document.createElement('button');
+            clearBtn.type = 'button';
+            clearBtn.className = 'inv-paste-clear';
+            clearBtn.dataset.row = i;
+            clearBtn.title = 'Ignorer cette ligne (vide le produit)';
+            clearBtn.setAttribute('aria-label', 'Ignorer cette ligne');
+            clearBtn.textContent = '×';
+            tdP.appendChild(clearBtn);
+            tdP.appendChild(el('span', 'inv-paste-badges'));
             tr.appendChild(tdP);
 
-            // Qté (rouge si négative : la tablette affiche un stock négatif)
+            // Qté : éditable (négatif autorisé, la tablette peut afficher
+            // un stock négatif).
             var tdQ = el('td', 'num');
-            if (qtyNull) tdQ.appendChild(el('span', 'muted', '—'));
-            else if (row.qty < 0) tdQ.appendChild(el('span', 'is-negative', String(row.qty)));
-            else tdQ.textContent = String(row.qty);
+            var qty = document.createElement('input');
+            qty.type = 'number';
+            qty.step = '1';
+            qty.className = 'inv-paste-qty';
+            qty.dataset.row = i;
+            if (row.qty !== null) qty.value = String(row.qty);
+            tdQ.appendChild(qty);
             tr.appendChild(tdQ);
 
-            // Stock site + écart (aperçu indicatif : recalculés côté serveur)
-            var theo = key !== null && theoMap.has(key) ? theoMap.get(key) : null;
-            tr.appendChild(el('td', 'num', theo === null ? '—' : String(theo)));
-            var tdG = el('td', 'num');
-            if (theo === null || qtyNull) tdG.appendChild(el('span', 'muted', '—'));
-            else {
-                var gap = row.qty - theo;
-                tdG.appendChild(el('span',
-                    'inv-paste-gap ' + (gap < 0 ? 'is-missing' : (gap > 0 ? 'is-surplus' : 'is-even')),
-                    gap < 0 ? gap + ' · manquant' : (gap > 0 ? '+' + gap + ' · surplus' : '0'))
-                );
-            }
-            tr.appendChild(tdG);
+            // Stock site + écart (recalculés ici à chaque saisie)
+            var tdTheo = el('td', 'num');
+            tdTheo.setAttribute('data-role', 'theo');
+            tdTheo.textContent = '—';
+            tr.appendChild(tdTheo);
+            var tdGap = el('td', 'num');
+            tdGap.setAttribute('data-role', 'gap');
+            tr.appendChild(tdGap);
 
             // Avis (optionnel, aucune valeur par défaut)
             var tdA = el('td');
@@ -644,25 +742,25 @@ function initAnalyseCharts() {
             tbody.appendChild(tr);
         }
 
-        var n = buildPayload();
-        preview.hidden = state.rows.length === 0;
-        summary.hidden = state.rows.length === 0 && state.ignored === 0;
-        summary.textContent = n + ' ligne(s) reconnue(s) · '
-            + (state.rows.length - n) + ' à préciser · '
-            + state.ignored + ' ignorée(s)';
+        refreshDerived();
     }
 
     function analyze() {
         if (timer) { clearTimeout(timer); timer = null; }
         var parsed = window.InventaireTabletParseFull(area.value);
+        var resolved = parsed.rows.map(function (r) {
+            return window.InventaireTabletMatch(r.label, index);
+        });
         state = {
             rows: parsed.rows,
             ignored: parsed.ignored,
-            resolved: parsed.rows.map(function (r) {
-                return window.InventaireTabletMatch(r.label, index);
+            resolved: resolved,
+            // Préremplissage du champ Produit : meilleure reconnaissance
+            // automatique ; vide pour introuvable/ambigu (à choisir).
+            chosen: resolved.map(function (m) {
+                return (m.key && (m.status === 'exact' || m.status === 'check')) ? m.key : '';
             }),
-            chosen: [],
-            avis: [],
+            avis: parsed.rows.map(function () { return ''; }),
         };
         render();
     }
@@ -681,27 +779,44 @@ function initAnalyseCharts() {
         analyze();
     });
 
-    // Saisies de l'aperçu : l'avis se mémorise sans re-rendre (saisie
-    // fluide) ; un changement de clé revalide la ligne.
+    // Saisies de l'aperçu : mise à jour CIBLÉE (les champs ne sont jamais
+    // recréés, la saisie garde le focus), statut recalculé depuis la
+    // valeur courante, POST reconstruit à chaque frappe.
     tbody.addEventListener('input', function (ev) {
         var t = ev.target;
-        if (t.classList && t.classList.contains('inv-paste-avis')) {
-            state.avis[Number(t.dataset.row)] = t.value;
+        if (!t.classList || t.dataset.row === undefined) return;
+        var i = Number(t.dataset.row);
+        if (t.classList.contains('inv-paste-avis')) {
+            state.avis[i] = t.value;
+            updateSummary(buildPayload());
+        } else if (t.classList.contains('inv-paste-key')) {
+            state.chosen[i] = t.value;
+            refreshDerived();
+        } else if (t.classList.contains('inv-paste-qty')) {
+            state.rows[i].qty = readQty(t.value);
+            refreshDerived();
         }
     });
-    tbody.addEventListener('change', function (ev) {
+
+    // Bouton × : vide le champ Produit = ligne ignorée (non envoyée).
+    tbody.addEventListener('click', function (ev) {
         var t = ev.target;
-        if (t.classList && t.classList.contains('inv-paste-key')) {
-            state.chosen[Number(t.dataset.row)] = String(t.value || '').trim();
-            render();
-        }
+        if (!t.classList || !t.classList.contains('inv-paste-clear')) return;
+        var i = Number(t.dataset.row);
+        state.chosen[i] = '';
+        var inp = tbody.querySelector('input.inv-paste-key[data-row="' + i + '"]');
+        if (inp) { inp.value = ''; inp.focus(); }
+        refreshDerived();
     });
 
     // Juste avant l'envoi : resynchronise les saisies non « blurées » et
     // reconstruit le POST aligné ; rien d'envoyé si aucune ligne valide.
     form.addEventListener('submit', function (ev) {
         Array.prototype.forEach.call(tbody.querySelectorAll('.inv-paste-key'), function (elm) {
-            state.chosen[Number(elm.dataset.row)] = String(elm.value || '').trim();
+            state.chosen[Number(elm.dataset.row)] = elm.value;
+        });
+        Array.prototype.forEach.call(tbody.querySelectorAll('.inv-paste-qty'), function (elm) {
+            state.rows[Number(elm.dataset.row)].qty = readQty(elm.value);
         });
         Array.prototype.forEach.call(tbody.querySelectorAll('.inv-paste-avis'), function (elm) {
             state.avis[Number(elm.dataset.row)] = elm.value;
@@ -805,8 +920,41 @@ function initAnalyseCharts() {
 .inv-paste-summary { margin: .5rem 0; font-weight: 600; }
 .inv-paste-tr-check { background: rgba(245,158,11,.08); }
 .inv-paste-tr-bad { background: rgba(239,68,68,.10); }
+.inv-paste-tr-muted { opacity: .55; }
 .inv-badge { margin-left: .4rem; }
 .inv-paste-key { max-width: 16rem; width: auto; }
+.inv-paste-prod { white-space: nowrap; }
+.inv-paste-key, .inv-paste-qty, .inv-paste-avis {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.14);
+    border-radius: 6px;
+    color: var(--foreground);
+    padding: .3rem .45rem;
+}
+.inv-paste-key:focus, .inv-paste-qty:focus, .inv-paste-avis:focus {
+    outline: none;
+    border-color: var(--primary, #48bdd3);
+}
+.inv-paste-qty { width: 5.5rem; }
+.inv-paste-avis { width: 100%; min-width: 9rem; }
+.inv-paste-clear {
+    margin-left: .25rem;
+    width: 1.6rem;
+    height: 1.6rem;
+    line-height: 1;
+    padding: 0;
+    background: transparent;
+    border: 1px solid rgba(255,255,255,.18);
+    border-radius: 6px;
+    color: var(--muted, #9fb3c8);
+    cursor: pointer;
+    vertical-align: middle;
+}
+.inv-paste-clear:hover {
+    color: var(--accent-danger, #ef4444);
+    border-color: var(--accent-danger, #ef4444);
+}
+.inv-paste-badges { margin-left: .4rem; white-space: normal; }
 #inv-paste-table td.num { white-space: nowrap; }
 #inv-paste-table .is-negative { color: var(--accent-danger, #ef4444); font-weight: 700; }
 .inv-paste-gap.is-missing { color: var(--accent-danger, #ef4444); font-weight: 700; }
