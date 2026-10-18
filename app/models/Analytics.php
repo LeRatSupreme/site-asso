@@ -365,6 +365,9 @@ final class Analytics extends Model
     /**
      * Répartition du CA par catégorie (donut).
      *
+     * Les montants personnalisés (is_custom_amount = 1) sont comptés
+     * comme « Divers », même règle que productTable().
+     *
      * @return list<array{label:string, ca:float}>
      */
     public static function revenueByCategory(
@@ -374,7 +377,9 @@ final class Analytics extends Model
     ): array {
         $w = self::buildWhere($from, $to, '', $payment);
 
-        $sql = 'SELECT COALESCE(NULLIF(category, ""), "Non classé") AS label,
+        $sql = 'SELECT CASE WHEN is_custom_amount = 1 THEN "Divers"
+                            ELSE COALESCE(NULLIF(category, ""), "Non classé")
+                       END AS label,
                        COALESCE(SUM(price_ttc), 0) AS ca
                 FROM sales
                 WHERE ' . $w['sql'] . '
