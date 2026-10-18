@@ -15,6 +15,8 @@ use App\Core\Compta\ReceiptStorage;
 use App\Core\Compta\StockPublic;
 use App\Core\Logger;
 use App\Models\InventoryCount;
+use App\Models\InventoryTablet;
+use App\Models\Loss;
 use App\Models\ProductCost;
 use App\Models\ProductDiscontinued;
 use App\Models\ProductKeyMerge;
@@ -1185,5 +1187,402 @@ final class AdminStockController extends AdminBaseController
             );
         }
         redirect($back);
+    }
+
+    // -----------------------------------------------------------------
+    //  Inventaire tablette SumUp (relevé d'écarts + correction)
+    // -----------------------------------------------------------------
+
+    /**
+     * Inventaire tablette SumUp : l'utilisateur relève à la main les
+     * quantités affichées sur la tablette de vente, le site calcule
+     * l'écart contre son stock théorique (écarts = suspicion de vol/
+     * casse, perte € estimée). Page fusionnée « Opérations » avec trois
+     * onglets internes (saisie, historique, analyse — l'analyse sera
+     * construite en vague 2 à partir des données déjà passées ici).
+     *
+     * Fenêtre d'analyse : GET from/to « YYYY-MM-DD » (invalides ignorés),
+     * défaut = 90 derniers jours (bornes incluses). La fenêtre précédente
+     * = même durée, finissant la veille de `from` (idée
+     * Analytics::kpisPrevious) : sert aux deltas de la vague 2.
+     */
+    public function tabletInventory(): void
+    {
+        $user = $this->guardCompta();
+
+        // Onglet interne (saisie par défaut).
+        $tab = (string) ($_GET['tab'] ?? 'saisie');
+        if (!in_array($tab, ['saisie', 'historique', 'analyse'], true)) {
+            $tab = 'saisie';
+        }
+
+        // Fenêtre d'analyse : bornes validées, sinon défaut 90 jours.
+        $to = self::parseDay((string) ($_GET['to'] ?? '')) ?? date('Y-m-d');
+        $from = self::parseDay((string) ($_GET['from'] ?? '')) ?? date('Y-m-d', strtotime('-89 days', strtotime($to)));
+        if ($from > $to) {
+            [$from, $to] = [$to, $from];
+        }
+
+        // Fenêtre précédente : même durée, finissant la veille de `from`.
+        $days = (int) ((strtotime($to) - strtotime($from)) / 86400) + 1;
+        $prevTo = date('Y-m-d', strtotime('-1 day', strtotime($from)));
+        $prevFrom = date('Y-m-d', strtotime('-' . ($days - 1) . ' days', strtotime($prevTo)));
+
+        // Produits candidats à la saisie : vendus (SumUp) ∪ stock de
+        // référence ∪ théorique connu — avec leur théorique actuel et
+        // leur coût du jour (indicatifs, l'écart est TOUJOURS recalculé
+        // côté serveur à l'enregistrement). Tri naturel par clé.
+        $theoreticalMap = InventoryCount::theoreticalStocksMap();
+        $keys = array_values(array_unique(array_merge(
+            Sale::distinctProducts(),
+            array_keys(ProductStock::allMap()),
+            array_keys($theoreticalMap)
+        )));
+
+        $today = date('Y-m-d');
+        $products = [];
+        foreach ($keys as $key) {
+            $key = (string) $key;
+            if ($key === '') {
+                continue;
+            }
+            $products[] = [
+                'key'         => $key,
+                'theoretical' => $theoreticalMap[$key] ?? null,
+                'unit_cost'   => ProductCost::costAt($key, $today),
+            ];
+        }
+        usort($products, static fn (array $a, array $b): int => strnatcasecmp($a['key'], $b['key']));
+
+        $this->renderAdmin('admin/compta/operations', [
+            'title'    => 'Opérations · Inventaire tablette',
+            'section'  => 'inventaire',
+            'user'     => $user,
+            'tab'      => $tab,
+            'from'     => $from,
+            'to'       => $to,
+            'prevFrom' => $prevFrom,
+            'prevTo'   => $prevTo,
+            'products' => $products,
+            'sessions' => InventoryTablet::sessions(),
+            'analysis' => InventoryTablet::analysis($from, $to),
+            'prev'     => InventoryTablet::analysis($prevFrom, $prevTo),
+        ]);
+    }
+
+    /**
+     * Enregistre une session de relevé tablette (PRG + flash). Lignes
+     * postées en tableaux parallèles keys[] / qtys[] / avis[] : les lignes
+     * sans clé ou sans quantité sont ignorées, la quantité est castée en
+     * entier >= 0, les doublons de clé retiennent la DERNIÈRE valeur
+     * saisie. Théorique, écart, coût et perte sont recalculés côté
+     * serveur par le modèle (jamais lus dans le POST). Aucun mouvement de
+     * stock ici : la correction (ultérieure, irrévocable) seule touche
+     * aux stocks.
+     */
+    public function saveTabletInventory(): void
+    {
+        $user = $this->guardCompta();
+
+        // Date du relevé : aujourd'hui par défaut, jamais dans le futur.
+        $countedAt = trim((string) ($_POST['counted_at'] ?? ''));
+        if ($countedAt === '') {
+            $countedAt = date('Y-m-d');
+        }
+        $parsed = self::parseDay($countedAt);
+        if ($parsed === null || $parsed > date('Y-m-d')) {
+            $this->setFlash('error', 'Date de relevé invalide ou future (le comptage ne peut pas être dans le futur).');
+            redirect(url('/admin/compta/inventaire-tablette'));
+        }
+        $countedAt = $parsed;
+
+        $note = mb_substr(trim((string) ($_POST['note'] ?? '')), 0, 500);
+
+        // Tableaux parallèles -> lignes propres (doublons : dernière
+        // valeur gagnante ; lignes vides ou quantités négatives ignorées).
+        $keys = is_array($_POST['keys'] ?? null) ? $_POST['keys'] : [];
+        $qtys = is_array($_POST['qtys'] ?? null) ? $_POST['qtys'] : [];
+        $aviss = is_array($_POST['avis'] ?? null) ? $_POST['avis'] : [];
+
+        $lines = [];
+        $count = max(count($keys), count($qtys), count($aviss));
+        for ($i = 0; $i < $count; $i++) {
+            $key = trim((string) ($keys[$i] ?? ''));
+            $qtyRaw = trim((string) ($qtys[$i] ?? ''));
+            if ($key === '' || $qtyRaw === '') {
+                continue;
+            }
+            $qty = (int) $qtyRaw;
+            if ($qty < 0) {
+                continue;
+            }
+            $lineAvis = trim((string) ($aviss[$i] ?? ''));
+            $lines[$key] = [
+                'key'        => $key,
+                'tablet_qty' => $qty,
+                'avis'       => $lineAvis !== '' ? $lineAvis : null,
+            ];
+        }
+        $lines = array_values($lines);
+
+        if ($lines === []) {
+            $this->setFlash('error', 'Aucune quantité saisie : la session est vide.');
+            redirect(url('/admin/compta/inventaire-tablette'));
+        }
+
+        try {
+            $sessionId = InventoryTablet::createSession($countedAt, $note !== '' ? $note : null, $user['id'] ?? null, $lines);
+        } catch (\Throwable $e) {
+            Logger::error('inventaire tablette : enregistrement impossible', ['msg' => $e->getMessage()]);
+            $this->setFlash('error', 'Enregistrement impossible : une erreur est survenue. L\'incident a été journalisé.');
+            redirect(url('/admin/compta/inventaire-tablette'));
+        }
+
+        // Récapitulatif lu depuis la session enregistrée (gap/perte ont
+        // été calculés côté serveur par le modèle).
+        $gaps = 0;
+        $lossTotal = 0.0;
+        foreach (InventoryTablet::lines($sessionId) as $line) {
+            $gap = $line['gap'] !== null ? (int) $line['gap'] : null;
+            if ($gap !== null && $gap !== 0) {
+                $gaps++;
+            }
+            $lossTotal += (float) ($line['loss_value'] ?? 0);
+        }
+
+        $this->audit('inventory.tablet.save', 'inventory_tablet_session', $sessionId, [
+            'counted_at' => $countedAt,
+            'products'   => count($lines),
+            'gaps'       => $gaps,
+            'loss_value' => round($lossTotal, 2),
+        ]);
+
+        $this->setFlash('success', sprintf(
+            'Session enregistrée : %d produits, %d écart(s), %s de perte estimée.',
+            count($lines),
+            $gaps,
+            formatPrice($lossTotal)
+        ));
+        redirect(url('/admin/compta/inventaire-tablette/' . rawurlencode($sessionId)));
+    }
+
+    /**
+     * Détail d'une session : lignes triées par écart croissant (les
+     * manquants d'abord), totaux recalculés depuis les lignes, et
+     * « correctable » = aucune ligne corrigée ET au moins un écart non
+     * corrigé (une fois corrigée, la session est verrouillée à vie).
+     */
+    public function tabletInventoryDetail(string $id): void
+    {
+        $user = $this->guardCompta();
+
+        $session = InventoryTablet::find($id);
+        if ($session === null) {
+            $this->setFlash('error', 'Session de relevé introuvable (déjà supprimée ?).');
+            redirect(url('/admin/compta/inventaire-tablette'));
+        }
+
+        $lines = InventoryTablet::lines($id);
+        $hasCorrected = InventoryTablet::hasCorrectedLines($id);
+
+        $gapsCount = 0;
+        $lossTotal = 0.0;
+        $uncorrectedGaps = 0;
+        foreach ($lines as $line) {
+            $gap = $line['gap'] !== null ? (int) $line['gap'] : null;
+            if ($gap !== null && $gap !== 0) {
+                $gapsCount++;
+                if ((int) $line['corrected'] !== 1) {
+                    $uncorrectedGaps++;
+                }
+            }
+            $lossTotal += (float) ($line['loss_value'] ?? 0);
+        }
+
+        $this->renderAdmin('admin/compta/inventaire_tablette_detail', [
+            'title'       => 'Inventaire tablette · ' . (string) $session['counted_at'],
+            'user'        => $user,
+            'session'     => $session,
+            'lines'       => $lines,
+            'gapsCount'   => $gapsCount,
+            'lossTotal'   => $lossTotal,
+            'correctable' => !$hasCorrected && $uncorrectedGaps > 0,
+        ]);
+    }
+
+    /**
+     * Corrige une session (synchronise les stocks) — IRREVOCABLE.
+     *
+     * Pour chaque ligne à écart non nul pas encore corrigée :
+     *  - gap < 0 (manquant) → perte Loss::create datée du relevé
+     *    (motif choisi par ligne, défaut VOL ; avis global du POST ou
+     *    avis de la ligne) — la perte sort du stock théorique ;
+     *  - gap > 0 (surplus) → ProductStock::set(qty tablette) : le stock
+     *    de référence est aligné, aucune perte n'est créée.
+     *
+     * Puis markCorrected (trace à vie) + invalidation du cache carte
+     * publique + audit + flash récapitulatif.
+     *
+     * Transactionnalité : PER LIGNE (Loss::create et ProductStock::set
+     * sont leurs propres transactions). En cas d'échec (exception), on
+     * s'arrête, l'erreur est flashée et journalisée, et la session N'EST
+     * PAS marquée corrigée : les lignes déjà traitées restent ce qu'elles
+     * sont (une perte créée reste, un stock aligné reste) — un nouvel
+     * essai recréerait une perte pour une ligne déjà passée. Ce cas
+     * (incident base de données en cours de correction) est supposé
+     * extrêmement rare ; le compromis est assumé et documenté ici.
+     */
+    public function correctTabletInventory(string $id): void
+    {
+        $user = $this->guardCompta();
+
+        $session = InventoryTablet::find($id);
+        if ($session === null) {
+            $this->setFlash('error', 'Session de relevé introuvable (déjà supprimée ?).');
+            redirect(url('/admin/compta/inventaire-tablette'));
+        }
+
+        if (InventoryTablet::hasCorrectedLines($id)) {
+            $this->setFlash('error', 'Session déjà corrigée : la correction est irrévocable.');
+            redirect(url('/admin/compta/inventaire-tablette/' . rawurlencode($id)));
+        }
+
+        // Lignes à corriger, dans l'ordre de lines() (aligné sur les
+        // <select name="reasons[]"> de la vue).
+        $todo = [];
+        foreach (InventoryTablet::lines($id) as $line) {
+            $gap = $line['gap'] !== null ? (int) $line['gap'] : null;
+            if ($gap !== null && $gap !== 0 && (int) $line['corrected'] !== 1) {
+                $todo[] = ['line' => $line, 'gap' => $gap];
+            }
+        }
+
+        if ($todo === []) {
+            $this->setFlash('info', 'Aucun écart à corriger sur cette session.');
+            redirect(url('/admin/compta/inventaire-tablette/' . rawurlencode($id)));
+        }
+
+        // Motifs (Loss::REASONS) par ligne, défaut VOL ; avis global
+        // optionnel prioritaire sur l'avis de chaque ligne.
+        $reasons = is_array($_POST['reasons'] ?? null) ? $_POST['reasons'] : [];
+        $avisGlobal = trim((string) ($_POST['avis'] ?? ''));
+
+        $lossesCreated = 0;
+        $lossValue = 0.0;
+        $surplusAligned = 0;
+
+        foreach ($todo as $i => $entry) {
+            $line = $entry['line'];
+            $gap = $entry['gap'];
+            $key = (string) $line['product_key'];
+
+            $reason = strtoupper(trim((string) ($reasons[$i] ?? '')));
+            if (!in_array($reason, Loss::REASONS, true)) {
+                $reason = 'VOL';
+            }
+
+            $note = $avisGlobal !== '' ? $avisGlobal : (string) ($line['avis'] ?? '');
+
+            try {
+                if ($gap < 0) {
+                    // Manquant : perte journalisée, déduite du théorique.
+                    $lossId = Loss::create([
+                        'lost_at'     => (string) $session['counted_at'],
+                        'product_key' => $key,
+                        'quantity'    => -$gap,
+                        'reason'      => $reason,
+                        'note'        => $note !== '' ? $note : null,
+                        'created_by'  => $user['id'] ?? null,
+                    ]);
+                    if ($lossId === '') {
+                        throw new \RuntimeException('données de perte refusées');
+                    }
+                    $lossesCreated++;
+                    $lossValue += (float) ($line['loss_value'] ?? 0);
+                } else {
+                    // Surplus : le stock de référence suit la tablette.
+                    ProductStock::set($key, (int) $line['tablet_qty']);
+                    $surplusAligned++;
+                }
+            } catch (\Throwable $e) {
+                Logger::error('inventaire tablette : correction interrompue', [
+                    'session' => $id,
+                    'key'     => $key,
+                    'msg'     => $e->getMessage(),
+                ]);
+                $this->setFlash('error', sprintf(
+                    'Correction interrompue sur « %s » : %d perte(s) et %d surplus déjà appliqués restent en l\'état, la session n\'a PAS été marquée corrigée. L\'incident a été journalisé.',
+                    $key,
+                    $lossesCreated,
+                    $surplusAligned
+                ));
+                redirect(url('/admin/compta/inventaire-tablette/' . rawurlencode($id)));
+            }
+        }
+
+        // Verrouillage définitif de la session (trace à vie).
+        InventoryTablet::markCorrected($id, (string) ($user['id'] ?? ''));
+
+        // Les pertes et alignements ont bougé le théorique : la carte
+        // publique suit.
+        StockPublic::invalidate();
+
+        $this->audit('inventory.tablet.correct', 'inventory_tablet_session', $id, [
+            'losses_created'  => $lossesCreated,
+            'loss_value'      => round($lossValue, 2),
+            'surplus_aligned' => $surplusAligned,
+        ]);
+
+        $this->setFlash('success', sprintf(
+            'Session corrigée : %d perte(s) créée(s) (%s), %d surplus aligné(s). Correction irrévocable.',
+            $lossesCreated,
+            formatPrice($lossValue),
+            $surplusAligned
+        ));
+        redirect(url('/admin/compta/inventaire-tablette/' . rawurlencode($id)));
+    }
+
+    /**
+     * Supprime une session de relevé (les lignes partent en cascade).
+     * Refus si des lignes corrigées existent : la trace des corrections
+     * doit rester consultable (traçabilité à vie).
+     */
+    public function deleteTabletInventory(string $id): void
+    {
+        $this->guardCompta();
+
+        $session = InventoryTablet::find($id);
+        if ($session === null) {
+            $this->setFlash('error', 'Session de relevé introuvable (déjà supprimée ?).');
+            redirect(url('/admin/compta/inventaire-tablette'));
+        }
+
+        $deleted = InventoryTablet::deleteSession($id);
+
+        $this->audit('inventory.tablet.delete', 'inventory_tablet_session', $id, [
+            'counted_at' => (string) $session['counted_at'],
+            'deleted'    => $deleted,
+            'refused'    => !$deleted,
+        ]);
+
+        if (!$deleted) {
+            $this->setFlash('error', 'Impossible : des corrigés existent (traçabilité).');
+            redirect(url('/admin/compta/inventaire-tablette/' . rawurlencode($id)));
+        }
+
+        $this->setFlash('info', 'Session de relevé supprimée.');
+        redirect(url('/admin/compta/inventaire-tablette'));
+    }
+
+    /**
+     * Valide une date « YYYY-MM-DD » (jour de calendrier réel) ;
+     * null sinon (entrées GET/POST jamais crues sur parole).
+     */
+    private static function parseDay(string $raw): ?string
+    {
+        $raw = trim($raw);
+        $date = \DateTime::createFromFormat('Y-m-d', $raw);
+
+        return ($raw !== '' && $date !== false && $date->format('Y-m-d') === $raw) ? $raw : null;
     }
 }

@@ -461,6 +461,40 @@ CREATE TABLE IF NOT EXISTS inventory_counts (
     KEY idx_inv_date (counted_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Sessions « Inventaire tablette SumUp » : relevé manuel des quantités
+-- affichées sur la tablette de vente, comparé au stock théorique du site
+-- (écart = suspicion de vol/casse, perte € estimée au coût du lot).
+-- L'action « corriger » (pertes créées, stock aligné) est irrévocable
+-- (corrected=1) et empêche la suppression de la session (traçabilité).
+CREATE TABLE IF NOT EXISTS inventory_tablet_sessions (
+    id          VARCHAR(32)  NOT NULL PRIMARY KEY,
+    counted_at  DATE         NOT NULL,
+    note        VARCHAR(500) NULL,
+    created_by  VARCHAR(255) NULL,
+    created_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_tablet_sess_date (counted_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS inventory_tablet_lines (
+    id              VARCHAR(32)  NOT NULL PRIMARY KEY,
+    session_id      VARCHAR(32)  NOT NULL,
+    product_key     VARCHAR(255) NOT NULL,
+    tablet_qty      INT          NOT NULL,
+    site_theoretical INT         NULL,
+    gap             INT          NULL,
+    unit_cost       DECIMAL(10,3) NULL,
+    loss_value      DECIMAL(10,2) NULL,
+    corrected       TINYINT(1)   NOT NULL DEFAULT 0,
+    avis            VARCHAR(500) NULL,
+    corrected_at    DATETIME     NULL,
+    corrected_by    VARCHAR(255) NULL,
+    created_at      DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_tablet_line_sess (session_id),
+    KEY idx_tablet_line_key (product_key),
+    CONSTRAINT fk_tablet_line_sess FOREIGN KEY (session_id)
+        REFERENCES inventory_tablet_sessions(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- Budgets prévisionnels (objectif de CA + enveloppes de dépenses)
 CREATE TABLE IF NOT EXISTS budgets (
     id             VARCHAR(255) NOT NULL PRIMARY KEY,

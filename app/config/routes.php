@@ -408,6 +408,20 @@ function aeic_register_routes(Router $router): void
     // Marquer un produit « plus en vente » depuis la page Comptage.
     $router->post('/admin/compta/inventaire/comptage/{key}/discontinue', [AdminStockController::class, 'discontinue']);
 
+    // Inventaire tablette SumUp : relevé manuel des quantités affichées
+    // sur la tablette de vente, écarts vs stock théorique du site,
+    // correction (pertes + alignement de stock, irrévocable).
+    // URL SŒUR mais SÉPARÉE de /inventaire/* : tout est littéral
+    // « inventaire-tablette » — sous /inventaire/, les POST /{id}/...
+    // entreraient en collision avec les {key} existants (le routeur
+    // matche par ordre, cf. commentaires achats/depenses ci-dessus).
+    $router->get('/admin/compta/inventaire-tablette', [AdminStockController::class, 'tabletInventory']);
+    // Littéraux AVANT le paramètre {id} : /save n'est pas un id.
+    $router->post('/admin/compta/inventaire-tablette/save', [AdminStockController::class, 'saveTabletInventory']);
+    $router->get('/admin/compta/inventaire-tablette/{id}', [AdminStockController::class, 'tabletInventoryDetail']);
+    $router->post('/admin/compta/inventaire-tablette/{id}/correct', [AdminStockController::class, 'correctTabletInventory']);
+    $router->post('/admin/compta/inventaire-tablette/{id}/delete', [AdminStockController::class, 'deleteTabletInventory']);
+
     // Comptage de caisse : saisie seule, tout le bureau hors élèves
     // (historique et écarts réservés à Système → Caisses, Fondateur).
     $router->get('/admin/compta/caisse', [AdminComptaController::class, 'caisse']);
