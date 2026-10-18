@@ -494,6 +494,9 @@ final class Sale extends Model
     /**
      * Agrégats par catégorie pour un mois donné (ou toute l'année si null).
      *
+     * Les montants personnalisés (is_custom_amount = 1) sont ventilés
+     * comme « Divers ».
+     *
      * @return list<array<string,mixed>>
      */
     public static function byCategory(?int $year, ?int $month): array
@@ -511,7 +514,9 @@ final class Sale extends Model
         $whereSql = $where === [] ? '' : 'WHERE ' . implode(' AND ', $where);
 
         $sql = 'SELECT
-                    COALESCE(NULLIF(category, ""), "Non classé") AS category,
+                    CASE WHEN is_custom_amount = 1 THEN "Divers"
+                         ELSE COALESCE(NULLIF(category, ""), "Non classé")
+                    END AS category,
                     COALESCE(SUM(price_ttc), 0) AS ca,
                     COALESCE(SUM(
                         CASE WHEN is_custom_amount = 0
@@ -521,7 +526,9 @@ final class Sale extends Model
                     COALESCE(SUM(quantity), 0) AS qty
                 FROM sales
                 ' . $whereSql . '
-                GROUP BY COALESCE(NULLIF(category, ""), "Non classé")
+                GROUP BY CASE WHEN is_custom_amount = 1 THEN "Divers"
+                              ELSE COALESCE(NULLIF(category, ""), "Non classé")
+                         END
                 ORDER BY ca DESC';
 
         $stmt = self::pdo()->prepare($sql);
@@ -535,7 +542,8 @@ final class Sale extends Model
      * Agrégats par catégorie sur une plage de jours (bornes incluses).
      *
      * Même agrégation que byCategory(), mais le filtre porte sur des
-     * jours explicites plutôt que sur une année/un mois.
+     * jours explicites plutôt que sur une année/un mois. Les montants
+     * personnalisés (is_custom_amount = 1) sont ventilés comme « Divers ».
      *
      * @param string|null $fromDay Jour de début « YYYY-MM-DD » (inclus), ou null.
      * @param string|null $toDay   Jour de fin « YYYY-MM-DD » (inclus), ou null.
@@ -557,7 +565,9 @@ final class Sale extends Model
         $whereSql = $where === [] ? '' : 'WHERE ' . implode(' AND ', $where);
 
         $sql = 'SELECT
-                    COALESCE(NULLIF(category, ""), "Non classé") AS category,
+                    CASE WHEN is_custom_amount = 1 THEN "Divers"
+                         ELSE COALESCE(NULLIF(category, ""), "Non classé")
+                    END AS category,
                     COALESCE(SUM(price_ttc), 0) AS ca,
                     COALESCE(SUM(
                         CASE WHEN is_custom_amount = 0
@@ -567,7 +577,9 @@ final class Sale extends Model
                     COALESCE(SUM(quantity), 0) AS qty
                 FROM sales
                 ' . $whereSql . '
-                GROUP BY COALESCE(NULLIF(category, ""), "Non classé")
+                GROUP BY CASE WHEN is_custom_amount = 1 THEN "Divers"
+                              ELSE COALESCE(NULLIF(category, ""), "Non classé")
+                         END
                 ORDER BY ca DESC';
 
         try {
