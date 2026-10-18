@@ -9,7 +9,8 @@
 --  en Redbull + « Red Bull ice » en Non classé).
 --
 --  La migration complète le mapping (Cacolac, Redbull blue/red,
---  Gauffre événement), rattache les ventes existantes par clé
+--  Gauffre événement, et catégories manquantes des alias existants
+--  « eau » et « Red bull ice »), rattache les ventes existantes par clé
 --  effective (product_key, sinon description TRIMmée), puis comble
 --  les catégories vides par clé canonique (même passe 2 que
 --  Sale::syncAliasCategories()) : « Eau » -> Boissons,
@@ -34,12 +35,18 @@ WHERE NOT EXISTS (
 
 -- 2. Mapping : futurs imports (CSV manuel + synchro API/cron) seront
 --    catégorisés d'emblée. Libellés bruts EXACTS (sans accent dans
---    « energisante » : c'est le libellé SumUp tel quel).
+--    « energisante » : c'est le libellé SumUp tel quel). Les lignes
+--    « eau » et « Red bull ice » portent le même raw_description que
+--    les alias déjà présents (al_eau, al_rb_1) mais SANS catégorie :
+--    l'upsert (unicité raw_description) leur colle Boissons/Redbull,
+--    sans quoi la passe 2 ne peut rien remplir pour ces clés.
 INSERT INTO product_aliases (id, raw_description, product_key, category) VALUES
     ('al_cacolac',     'Cacolac', 'Cacolac', 'Boissons'),
     ('al_rb_blue',     'Redbull blue', 'Redbull blue', 'Redbull'),
     ('al_rb_red',      'Redbull red', 'Redbull red', 'Redbull'),
-    ('al_gauffre_evt', 'Gauffre + boissons (hors boissons energisante)', 'Gauffre + boissons (hors boissons energisante)', 'Événement')
+    ('al_gauffre_evt', 'Gauffre + boissons (hors boissons energisante)', 'Gauffre + boissons (hors boissons energisante)', 'Événement'),
+    ('al_eau_lbl',     'eau', 'Eau', 'Boissons'),
+    ('al_rb_ice_lbl',  'Red bull ice', 'Red Bull ice', 'Redbull')
 ON DUPLICATE KEY UPDATE product_key = VALUES(product_key), category = VALUES(category);
 
 -- 3. Rattrapage des ventes existantes : correspondance EXACTE sur la
