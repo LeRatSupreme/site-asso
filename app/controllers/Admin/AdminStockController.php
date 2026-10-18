@@ -1273,8 +1273,9 @@ final class AdminStockController extends AdminBaseController
     /**
      * Enregistre une session de relevé tablette (PRG + flash). Lignes
      * postées en tableaux parallèles keys[] / qtys[] / avis[] : les lignes
-     * sans clé ou sans quantité sont ignorées, la quantité est castée en
-     * entier >= 0, les doublons de clé retiennent la DERNIÈRE valeur
+     * sans clé ou sans quantité numérique sont ignorées, la quantité est
+     * castée en entier (négatif AUTORISÉ — la tablette peut afficher un
+     * stock négatif), les doublons de clé retiennent la DERNIÈRE valeur
      * saisie. Théorique, écart, coût et perte sont recalculés côté
      * serveur par le modèle (jamais lus dans le POST). Aucun mouvement de
      * stock ici : la correction (ultérieure, irrévocable) seule touche
@@ -1299,7 +1300,8 @@ final class AdminStockController extends AdminBaseController
         $note = mb_substr(trim((string) ($_POST['note'] ?? '')), 0, 500);
 
         // Tableaux parallèles -> lignes propres (doublons : dernière
-        // valeur gagnante ; lignes vides ou quantités négatives ignorées).
+        // valeur gagnante ; lignes vides ou non numériques ignorées,
+        // quantités négatives acceptées).
         $keys = is_array($_POST['keys'] ?? null) ? $_POST['keys'] : [];
         $qtys = is_array($_POST['qtys'] ?? null) ? $_POST['qtys'] : [];
         $aviss = is_array($_POST['avis'] ?? null) ? $_POST['avis'] : [];
@@ -1312,10 +1314,13 @@ final class AdminStockController extends AdminBaseController
             if ($key === '' || $qtyRaw === '') {
                 continue;
             }
-            $qty = (int) $qtyRaw;
-            if ($qty < 0) {
+            // Quantité entière, négative autorisée : la tablette SumUp
+            // peut afficher un stock négatif (l'écart sera alors supérieur
+            // au manquant). Les lignes non numériques restent ignorées.
+            if (!is_numeric($qtyRaw)) {
                 continue;
             }
+            $qty = (int) $qtyRaw;
             $lineAvis = trim((string) ($aviss[$i] ?? ''));
             $lines[$key] = [
                 'key'        => $key,
