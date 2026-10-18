@@ -154,6 +154,7 @@ $operationsPrefixes = [
     '/admin/compta/depenses',
     '/admin/compta/pertes',
     '/admin/compta/evenements',
+    '/admin/compta/inventaire-tablette',
 ];
 $activePath = $currentUrlPath;
 foreach ($operationsPrefixes as $opPrefix) {

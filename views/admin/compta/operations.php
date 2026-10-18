@@ -11,7 +11,7 @@ declare(strict_types=1);
  * section, incluse telle quelle (période, onglets internes, formulaires
  * et routes POST inchangés).
  *
- * @var string $section 'achats'|'depenses'|'pertes'|'evenements'
+ * @var string $section 'achats'|'depenses'|'pertes'|'evenements'|'inventaire'
  */
 
 $opSections = [
@@ -35,6 +35,11 @@ $opSections = [
         'url'   => '/admin/compta/evenements',
         'desc'  => 'Crée un événement avec le <strong>nom exact du bouton SumUp</strong> : les ventes importées s\'y rattachent automatiquement, tu saisis les coûts, et le bénéfice se calcule tout seul.',
     ],
+    'inventaire' => [
+        'label' => 'Inventaire',
+        'url'   => '/admin/compta/inventaire-tablette',
+        'desc'  => 'Stock tablette SumUp : écarts, corrigés et pertes',
+    ],
 ];
 
 if (!isset($opSections[$section ?? ''])) {
@@ -48,6 +53,7 @@ $opInclude = [
     'depenses'   => 'expenses',
     'pertes'     => 'pertes',
     'evenements' => 'evenements',
+    'inventaire' => 'inventaire_tablette',
 ][$section];
 ?>
 <div class="compta-head">
