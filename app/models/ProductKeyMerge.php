@@ -87,6 +87,48 @@ final class ProductKeyMerge extends Model
     }
 
     /**
+     * Valide les paires (source → cible) du formulaire « Tout fusionner »
+     * des doublons probables (méthode PURE, testée sans base) : reçoit les
+     * tableaux bruts `pairs_from[]` / `pairs_to[]` du POST et ne rend que
+     * les paires exploitables — indices appariés, chaînes non vides
+     * (espaces rognés) de 255 caractères au plus (taille de la colonne
+     * product_key) et distinctes en COMPARAISON BRUTE (même garde que
+     * merge(), qui refuse seulement source === cible : consolider deux
+     * variantes de casse — « Bowling » → « bowling », le cas courant de
+     * la liste des doublons — est un cas d'usage légitime). Tout le reste
+     * est jeté : le formulaire ne propose que des champs cachés générés
+     * côté serveur depuis les paires AFFICHÉES, une entrée forgée ne peut
+     * donc rien fusionner de plus.
+     *
+     * @return list<array{from:string,to:string}>
+     */
+    public static function validPairs(mixed $from, mixed $to): array
+    {
+        if (!is_array($from) || !is_array($to)) {
+            return [];
+        }
+
+        $pairs = [];
+        $count = min(count($from), count($to));
+        for ($i = 0; $i < $count; $i++) {
+            $source = is_string($from[$i] ?? null) ? trim((string) $from[$i]) : '';
+            $target = is_string($to[$i] ?? null) ? trim((string) $to[$i]) : '';
+            if ($source === '' || $target === '') {
+                continue;
+            }
+            if (mb_strlen($source) > 255 || mb_strlen($target) > 255) {
+                continue;
+            }
+            if ($source === $target) {
+                continue;
+            }
+            $pairs[] = ['from' => $source, 'to' => $target];
+        }
+
+        return $pairs;
+    }
+
+    /**
      * Clé normalisée sans espaces (même repliement que partout ailleurs :
      * AliasSuggester::normalizeKey + retrait des espaces).
      */

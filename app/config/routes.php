@@ -394,6 +394,9 @@ function aeic_register_routes(Router $router): void
     $router->post('/admin/compta/inventaire/save', [AdminStockController::class, 'saveCount']);
     // Fusion de clés produits (doublons) depuis la page Inventaire.
     $router->post('/admin/compta/inventaire/merge', [AdminStockController::class, 'mergeKeys']);
+    // Fusion en masse des doublons probables affichés (« Tout fusionner ») :
+    // mêmes garde-fous que /merge (guardSystemOrPage('inventory') + CSRF).
+    $router->post('/admin/compta/inventaire/merge-all', [AdminStockController::class, 'mergeKeysAll']);
     // Remettre en vente un produit marqué « plus en vente » (groupe Système).
     $router->post('/admin/compta/inventaire/{key}/resume', [AdminStockController::class, 'resume']);
     $router->post('/admin/compta/inventaire/{key}/discontinue', [AdminStockController::class, 'discontinue']);
