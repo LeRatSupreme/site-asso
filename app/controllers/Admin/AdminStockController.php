@@ -1047,6 +1047,10 @@ final class AdminStockController extends AdminBaseController
      * clé source — ventes, achats, pertes, alias, comptages, stock de
      * référence, drapeau « plus en vente » — sont déplacées vers la clé
      * cible conservée (ProductKeyMerge::merge, transactionnel).
+     *
+     * Chaque redirection repart vers l'ancre #fusion-doublons de la carte
+     * (succès comme erreur) : l'utilisateur reste face à la liste des
+     * doublons restants au lieu d'être renvoyé en haut de page.
      */
     public function mergeKeys(): void
     {
@@ -1054,14 +1058,15 @@ final class AdminStockController extends AdminBaseController
 
         $source = trim((string) ($_POST['source'] ?? ''));
         $target = trim((string) ($_POST['target'] ?? ''));
+        $back = url('/admin/compta/inventaire') . '#fusion-doublons';
 
         if ($source === '' || $target === '') {
             $this->setFlash('error', 'Clé source et clé cible requises.');
-            redirect(url('/admin/compta/inventaire'));
+            redirect($back);
         }
         if ($source === $target) {
             $this->setFlash('error', 'Les deux clés sont identiques : rien à fusionner.');
-            redirect(url('/admin/compta/inventaire'));
+            redirect($back);
         }
 
         try {
@@ -1076,7 +1081,7 @@ final class AdminStockController extends AdminBaseController
                 'msg'    => $e->getMessage(),
             ]);
             $this->setFlash('error', 'Fusion refusée : la demande est invalide.');
-            redirect(url('/admin/compta/inventaire'));
+            redirect($back);
         } catch (\Throwable $e) {
             Logger::error('inventory: fusion impossible', [
                 'source' => $source,
@@ -1084,7 +1089,7 @@ final class AdminStockController extends AdminBaseController
                 'msg'    => $e->getMessage(),
             ]);
             $this->setFlash('error', 'Fusion impossible : une erreur inattendue est survenue. L\'incident a été journalisé.');
-            redirect(url('/admin/compta/inventaire'));
+            redirect($back);
         }
 
         $this->audit('inventory.merge', 'product_key', $target, [
@@ -1124,6 +1129,61 @@ final class AdminStockController extends AdminBaseController
             . ($parts === [] ? 'aucune donnée trouvée sur la clé source.' : implode(', ', $parts))
             . '.'
         );
-        redirect(url('/admin/compta/inventaire'));
+        redirect($back);
+    }
+
+    /**
+     * Fusionne D'UN COUP toutes les paires de doublons probables affichées
+     * (bouton « Tout fusionner ») : le formulaire dédié ne contient que des
+     * champs cachés générés côté serveur depuis les paires AFFICHÉES
+     * (pairs_from[] / pairs_to[]) — aucune entrée libre. Chaque paire est
+     * revalidée (ProductKeyMerge::validPairs) puis fusionnée
+     * SÉQUENTIELLEMENT : l'échec d'une paire (exception SQL, refus…) est
+     * collecté et n'empêche PAS les suivantes. Flash FR récapitulatif et
+     * retour à l'ancre #fusion-doublons.
+     */
+    public function mergeKeysAll(): void
+    {
+        $this->guardSystemOrPage('inventory');
+
+        $back = url('/admin/compta/inventaire') . '#fusion-doublons';
+
+        $pairs = ProductKeyMerge::validPairs($_POST['pairs_from'] ?? null, $_POST['pairs_to'] ?? null);
+        if ($pairs === []) {
+            $this->setFlash('error', 'Aucune paire de doublons à fusionner.');
+            redirect($back);
+        }
+
+        $merged = 0;
+        $failures = [];
+        foreach ($pairs as $pair) {
+            try {
+                ProductKeyMerge::merge($pair['from'], $pair['to'], Auth::id());
+                $merged++;
+                $this->audit('inventory.merge', 'product_key', $pair['to'], [
+                    'source' => $pair['from'],
+                    'target' => $pair['to'],
+                    'via'    => 'merge-all',
+                ]);
+            } catch (\Throwable $e) {
+                Logger::error('inventory: fusion automatique impossible', [
+                    'source' => $pair['from'],
+                    'target' => $pair['to'],
+                    'msg'    => $e->getMessage(),
+                ]);
+                $failures[] = $pair['from'] . ' → ' . $pair['to'];
+            }
+        }
+
+        if ($failures === []) {
+            $this->setFlash('success', sprintf('Fusion automatique : %d paire(s) fusionnée(s).', $merged));
+        } else {
+            $this->setFlash(
+                $merged > 0 ? 'warning' : 'error',
+                sprintf('Fusion automatique : %d paire(s) fusionnée(s), %d échec(s).', $merged, count($failures))
+                . ' Paires non fusionnées : ' . implode(' ; ', $failures) . ' (détail dans les logs).'
+            );
+        }
+        redirect($back);
     }
 }

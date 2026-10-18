@@ -406,6 +406,7 @@ declare(strict_types=1);
 </div>
 
 <div class="card surface glass" id="merge-card">
+    <span id="fusion-doublons" aria-hidden="true"></span>
     <h2 class="card-title">Fusionner des clés produits</h2>
     <p class="muted">Même produit sous deux noms (ex. « Madeleine » dans les ventes SumUp et « Madel Coquille » dans les achats) ? Déplace toutes les données d'une clé vers l'autre : ventes, achats, pertes, aliases, stocks, comptages, drapeaux. Le bouton à côté de chaque produit ci-dessus pré-remplit la clé source.</p>
 
@@ -425,6 +426,7 @@ declare(strict_types=1);
         .merge-preview { font-size: 0.87rem; background: rgba(72, 189, 211, 0.10); border: 1px solid var(--border, #e5e7eb); border-radius: 8px; padding: 8px 12px; margin: 10px 0 0; }
         .merge-preview.is-warn { background: rgba(234, 88, 12, 0.10); }
         .merge-preview div + div { margin-top: 4px; }
+        .merge-all { margin-top: 12px; }
     </style>
 
     <?php
@@ -461,6 +463,20 @@ declare(strict_types=1);
                         data-drop="<?= e($d['drop']) ?>" data-keep="<?= e($d['keep']) ?>">Remplir</button>
             </div>
         <?php endforeach; ?>
+        <?php if (count($dupeRows) >= 2): ?>
+        <?php // « Tout fusionner » : uniquement des champs cachés générés depuis les paires AFFICHÉES ci-dessus (aucune entrée libre) ; le contrôleur revalide chaque paire. ?>
+        <?php $allPairs = implode(' ; ', array_map(static fn (array $d): string => $d['drop'] . ' → ' . $d['keep'], $dupeRows)); ?>
+        <form method="post" action="<?= e(url('/admin/compta/inventaire/merge-all')) ?>"
+              data-confirm="Fusionner définitivement : <?= e($allPairs) ?> ? Action irréversible."
+              data-confirm-button="Tout fusionner" class="merge-all">
+            <?= csrf_field() ?>
+            <?php foreach ($dupeRows as $d): ?>
+                <input type="hidden" name="pairs_from[]" value="<?= e($d['drop']) ?>">
+                <input type="hidden" name="pairs_to[]" value="<?= e($d['keep']) ?>">
+            <?php endforeach; ?>
+            <button type="submit" class="btn btn-danger btn-sm">Tout fusionner (<?= count($dupeRows) ?> paires)</button>
+        </form>
+        <?php endif; ?>
     </div>
     <?php endif; ?>
 
