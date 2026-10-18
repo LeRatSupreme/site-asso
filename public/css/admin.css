@@ -84,17 +84,18 @@
 }
 
 /* Intertitre de sous-groupe (ex. « Ventes » dans Comptabilité) :
-   subordonné à .admin-group (même famille, plus petit et plus discret).
+   typographie strictement identique à .admin-group (uniformisation
+   demandée) ; la hiérarchie est marquée par le retrait (padding-left).
    Pas de règle « menu réduit » dédiée : comme .admin-group, il vit dans
    la sidebar entièrement masquée en mode réduit (opacity/visibility). */
 .admin-subgroup {
-    font-size: 0.62rem;
+    font-size: 0.7rem;
     text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: hsl(204 20% 38%);
+    letter-spacing: 0.12em;
+    color: hsl(204 20% 45%);
     margin: 0.7rem 0.5rem 0.2rem;
     padding-left: 0.3rem;
-    font-weight: 700;
+    font-weight: 800;
 }
 
 /* Groupes/sous-groupes repliables : les titres sont devenus des <button>
