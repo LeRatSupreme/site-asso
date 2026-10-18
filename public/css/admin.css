@@ -97,6 +97,60 @@
     font-weight: 700;
 }
 
+/* Groupes/sous-groupes repliables : les titres sont devenus des <button>
+   (état mémorisé dans localStorage, clé « aeic_admin_sidebar_groups », voir
+   le layout admin). Le reset d'apparence passe par :where() (spécificité
+   nulle) pour ne pas écraser font-size/graisse/couleur des classes
+   ci-dessus ; seuls ces boutons sont visés, pas les autres boutons de
+   l'admin. Sans incidence en mode « menu réduit » : la sidebar y est
+   masquée en bloc (body.sidebar-collapsed, règles plus bas), l'état des
+   groupes n'y est simplement pas visible. */
+button:where(.admin-group, .admin-subgroup) {
+    background: none;
+    border: 0;
+    padding: 0;
+    width: 100%;
+    text-align: left;
+    cursor: pointer;
+    color: inherit;
+    font: inherit;
+    display: flex;
+    align-items: baseline;
+    gap: 0.4rem;
+}
+
+button:where(.admin-group, .admin-subgroup):hover {
+    color: hsl(204 20% 62%);
+}
+
+button:where(.admin-group, .admin-subgroup):focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+
+/* Chevron indicateur : pointe à droite du titre, pivote quand replié
+   (seule transition de l'ensemble : pas d'animation de pliage des liens). */
+.admin-group::after,
+.admin-subgroup::after {
+    content: '▾';
+    margin-left: auto;
+    font-size: 0.9em;
+    transform-origin: 50% 45%;
+    transition: transform 0.15s ease;
+}
+
+.admin-group[aria-expanded='false']::after,
+.admin-subgroup[aria-expanded='false']::after {
+    transform: rotate(-90deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .admin-group::after,
+    .admin-subgroup::after {
+        transition: none;
+    }
+}
+
 .admin-link {
     position: relative;
     display: block;

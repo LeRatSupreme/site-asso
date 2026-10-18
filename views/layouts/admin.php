@@ -242,15 +242,47 @@ foreach ($operationsPrefixes as $opPrefix) {
                 return $active;
             };
             ?>
+            <?php
+            // Identifiants stables des conteneurs de liens : slug du libellé
+            // (minuscules, accents retirés via une table strtr — approche
+            // retenue car iconv peut manquer selon l'hôte — puis tout
+            // non-alphanumérique remplacé par « - »), et non un index, pour
+            // que le DOM reste stable si on réordonne les groupes. La clé de
+            // persistance JS (data-nav-key) reste le libellé EXACT, les
+            // sous-groupes étant notés « Groupe/Sous-groupe ».
+            $navSlug = function (string $label): string {
+                $accents = [
+                    'à'=>'a','á'=>'a','â'=>'a','ä'=>'a','ã'=>'a',
+                    'é'=>'e','è'=>'e','ê'=>'e','ë'=>'e',
+                    'ì'=>'i','í'=>'i','î'=>'i','ï'=>'i',
+                    'ò'=>'o','ó'=>'o','ô'=>'o','ö'=>'o','õ'=>'o',
+                    'ù'=>'u','ú'=>'u','û'=>'u','ü'=>'u',
+                    'ç'=>'c','ñ'=>'n','œ'=>'oe','æ'=>'ae',
+                    'À'=>'a','Á'=>'a','Â'=>'a','Ä'=>'a','Ã'=>'a',
+                    'É'=>'e','È'=>'e','Ê'=>'e','Ë'=>'e',
+                    'Ì'=>'i','Í'=>'i','Î'=>'i','Ï'=>'i',
+                    'Ò'=>'o','Ó'=>'o','Ô'=>'o','Ö'=>'o','Õ'=>'o',
+                    'Ù'=>'u','Ú'=>'u','Û'=>'u','Ü'=>'u',
+                    'Ç'=>'c','Ñ'=>'n','Œ'=>'oe','Æ'=>'ae',
+                ];
+                $slug = strtolower(strtr($label, $accents));
+                $slug = (string) preg_replace('/[^a-z0-9]+/', '-', $slug);
+                return trim($slug, '-') ?: 'section';
+            };
+            ?>
             <?php foreach ($sections as $group => $links): ?>
-                <p class="admin-group"><?= e($group) ?></p>
-                <nav aria-label="<?= e($group) ?>">
+                <?php $groupSlug = $navSlug($group); ?>
+                <button type="button" class="admin-group" data-nav-key="<?= e($group) ?>" aria-expanded="true" aria-controls="nav-<?= e($groupSlug) ?>"><?= e($group) ?></button>
+                <nav id="nav-<?= e($groupSlug) ?>" aria-label="<?= e($group) ?>">
                     <?php foreach ($links as $label => $path): ?>
                         <?php if (is_array($path)): ?>
-                            <p class="admin-subgroup"><?= e($label) ?></p>
-                            <?php foreach ($path as $subLabel => $subPath): ?>
-                                <a class="admin-link<?= $isActive($subLabel, $subPath) ? ' is-active' : '' ?>" href="<?= e(url($subPath)) ?>"><?= e($subLabel) ?></a>
-                            <?php endforeach; ?>
+                            <?php $subId = 'nav-' . $groupSlug . '-' . $navSlug($label); ?>
+                            <button type="button" class="admin-subgroup" data-nav-key="<?= e($group . '/' . $label) ?>" aria-expanded="true" aria-controls="<?= e($subId) ?>"><?= e($label) ?></button>
+                            <div id="<?= e($subId) ?>">
+                                <?php foreach ($path as $subLabel => $subPath): ?>
+                                    <a class="admin-link<?= $isActive($subLabel, $subPath) ? ' is-active' : '' ?>" href="<?= e(url($subPath)) ?>"><?= e($subLabel) ?></a>
+                                <?php endforeach; ?>
+                            </div>
                         <?php else: ?>
                             <a class="admin-link<?= $isActive($label, $path) ? ' is-active' : '' ?>" href="<?= e(url($path)) ?>"><?= e($label) ?></a>
                         <?php endif; ?>
@@ -269,6 +301,62 @@ foreach ($operationsPrefixes as $opPrefix) {
                 <a class="admin-link" href="<?= e(url('/logout') . '?t=' . csrf_token()) ?>">Déconnexion (<?= e($user['prenom'] ?? '') ?>)</a>
             </div>
         </aside>
+        <script>
+            /* Groupes/sous-groupes repliables : restauration de l'état
+               mémorisé dans localStorage (clé « aeic_admin_sidebar_groups »,
+               JSON « libellé -> replié ? », sous-groupe « Groupe/Sous-groupe »,
+               clé absente = déplié). Script synchrone placé juste après la
+               sidebar : même frame de peinture, aucun flash. JSON corrompu
+               ou invalide = ignoré (tout est déplié). */
+            (function () {
+                var KEY = 'aeic_admin_sidebar_groups';
+                var state = null;
+                try {
+                    state = JSON.parse(localStorage.getItem(KEY) || '{}');
+                } catch (e) { state = null; }
+                if (!state || typeof state !== 'object' || Array.isArray(state)) { state = {}; }
+
+                var headings = document.querySelectorAll('.admin-sidebar button.admin-group, .admin-sidebar button.admin-subgroup');
+
+                function setCollapsed(btn, collapsed) {
+                    var panel = document.getElementById(btn.getAttribute('aria-controls'));
+                    if (!panel) return;
+                    btn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+                    panel.hidden = collapsed;
+                }
+
+                /* 1) Applique l'état stocké aux deux niveaux de titres. */
+                headings.forEach(function (btn) {
+                    setCollapsed(btn, state[btn.getAttribute('data-nav-key')] === true);
+                });
+
+                /* 2) Auto-dépli du chemin actif : le lien surligné doit
+                   rester visible, mais SANS sauvegarde — la prochaine
+                   visite retrouve l'état mémorisé. */
+                var active = document.querySelector('.admin-sidebar .admin-link.is-active');
+                if (active) {
+                    headings.forEach(function (btn) {
+                        var panel = document.getElementById(btn.getAttribute('aria-controls'));
+                        if (panel && panel.contains(active)) { setCollapsed(btn, false); }
+                    });
+                }
+
+                /* 3) Clic = bascule + sauvegarde. Le stockage est relu à
+                   chaque clic pour ne pas écraser un état plus récent. */
+                headings.forEach(function (btn) {
+                    btn.addEventListener('click', function () {
+                        var collapsed = btn.getAttribute('aria-expanded') !== 'false';
+                        setCollapsed(btn, collapsed);
+                        try {
+                            var s = JSON.parse(localStorage.getItem(KEY) || '{}');
+                            if (!s || typeof s !== 'object' || Array.isArray(s)) { s = {}; }
+                            s[btn.getAttribute('data-nav-key')] = collapsed;
+                            localStorage.setItem(KEY, JSON.stringify(s));
+                        } catch (e) {}
+                    });
+                });
+            })();
+        </script>
 
         <main id="contenu" class="admin-main">
             <?php require AEIC_VIEWS . '/partials/flash_messages.php'; ?>
