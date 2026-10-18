@@ -83,6 +83,20 @@
     font-weight: 800;
 }
 
+/* Intertitre de sous-groupe (ex. « Ventes » dans Comptabilité) :
+   subordonné à .admin-group (même famille, plus petit et plus discret).
+   Pas de règle « menu réduit » dédiée : comme .admin-group, il vit dans
+   la sidebar entièrement masquée en mode réduit (opacity/visibility). */
+.admin-subgroup {
+    font-size: 0.62rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: hsl(204 20% 38%);
+    margin: 0.7rem 0.5rem 0.2rem;
+    padding-left: 0.3rem;
+    font-weight: 700;
+}
+
 .admin-link {
     position: relative;
     display: block;
