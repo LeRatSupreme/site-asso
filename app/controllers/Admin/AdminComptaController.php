@@ -1192,7 +1192,8 @@ final class AdminComptaController extends AdminBaseController
             // ventes déjà enregistrées portant ce libellé.
             $categorized = Sale::applyAliasCategory(
                 $raw,
-                isset($data['category']) ? (string) $data['category'] : null
+                isset($data['category']) ? (string) $data['category'] : null,
+                $productKey
             );
             // La catégorie choisie doit aussi exister dans la carte (page
             // Catégories de la cafétéria) : création silencieuse si absente.
@@ -1275,7 +1276,7 @@ final class AdminComptaController extends AdminBaseController
                 'product_key'     => $productKey,
                 'category'        => $category,
             ]);
-            Sale::applyAliasCategory($raw, $category !== '' ? $category : null);
+            Sale::applyAliasCategory($raw, $category !== '' ? $category : null, $productKey);
             if ($category !== '') {
                 ProductCategory::ensure($category, Auth::id());
             }
@@ -1350,7 +1351,7 @@ final class AdminComptaController extends AdminBaseController
             ]);
             // Synchronisation : les ventes portant ce libellé suivent la
             // catégorie choisie (une catégorie vidée ne les modifie pas).
-            $categorized += Sale::applyAliasCategory($raw, $newCat);
+            $categorized += Sale::applyAliasCategory($raw, $newCat, (string) $existing['product_key']);
             // Une catégorie non vide doit aussi exister dans la carte :
             // création silencieuse si absente.
             if ($newCat !== null) {
