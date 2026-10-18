@@ -30,7 +30,7 @@ function t(name, fn) {
 const KEYS = [
     'eau', 'caprisun', 'Coca Cola', 'Monster Blanche', 'Bueno white',
     'Oasis (ice tea)', 'MMS', 'Perrier', 'Redbull', 'Red Bull',
-    'Redbull Abricot', 'Perrier 33cl',
+    'Redbull Abricot', 'Perrier 33cl', 'Pepsi', 'Haribo',
 ];
 const INDEX = H.buildIndex(KEYS.map((key) => ({ key, theoretical: null, unit_cost: null })));
 
@@ -115,8 +115,70 @@ t('parse : nombre seul sans libellé au-dessus = ignoré', function () {
     assert.strictEqual(r.ignored, 1);
 });
 
-t('parse : libellé sans quantité = ligne en attente (qty null)', function () {
-    assert.deepStrictEqual(H.parse('Bueno white').rows, [{ label: 'Bueno white', qty: null }]);
+t('parse v2 : libellé sans quantité = AUCUNE ligne (jamais « quantité manquante »)', function () {
+    const r = H.parse('Bueno white');
+    assert.deepStrictEqual(r.rows, []);
+    assert.strictEqual(r.ignored, 0);
+});
+
+/* ------------------------------------------------------------------ *
+ * Parsing v2 — quantités en attente, libellés seuls, bruit SumUp
+ * ------------------------------------------------------------------ */
+
+t('parse v2 : nombre seul rattaché au libellé du dessus EN SAUTANT le bruit', function () {
+    const r = H.parse(
+        'Gauffre + boissons (hors boissons energisante)\n' +
+        'product_manage.bulk.select_all_label\n' +
+        '30'
+    );
+    assert.deepStrictEqual(r.rows, [
+        { label: 'Gauffre + boissons (hors boissons energisante)', qty: 30 },
+    ]);
+    assert.strictEqual(r.ignored, 1);
+});
+
+t('parse v2 : « Sélectionner 1 » au-dessus du produit -> qty 1', function () {
+    const r = H.parse('Sélectionner 1\nSoiree bowling (2 parties / 1 personne ou 2 personnes) - 1');
+    assert.deepStrictEqual(r.rows, [
+        { label: 'Soiree bowling (2 parties / 1 personne ou 2 personnes)', qty: 1 },
+    ]);
+    assert.strictEqual(r.ignored, 1);
+});
+
+t('parse v2 : « Sélectionner 3 » + libellé sans quantité propre -> qty 3', function () {
+    const r = H.parse('Sélectionner 3\nCoca Cola');
+    assert.deepStrictEqual(r.rows, [{ label: 'Coca Cola', qty: 3 }]);
+    assert.strictEqual(r.ignored, 1);
+});
+
+t('parse v2 : « Sélectionner <mot> » (verbe sans nombre) -> libellé sans quantité -> ignoré', function () {
+    assert.deepStrictEqual(H.parse('Sélectionner Cappuccino').rows, []);
+    // Le verbe est retiré du libellé, puis pas de quantité : rien.
+    assert.deepStrictEqual(H.parse('Modifier Cappuccino\n4').rows, [{ label: 'Cappuccino', qty: 4 }]);
+});
+
+t('parse v2 : libellé seul « Mister Freeze » -> aucune ligne', function () {
+    assert.deepStrictEqual(H.parse('Mister Freeze').rows, []);
+});
+
+t('parse v2 : clé i18n SumUp non traduite -> ignorée, jamais une ligne', function () {
+    const r = H.parse('product_manage.bulk.select_all_label');
+    assert.deepStrictEqual(r.rows, []);
+    assert.strictEqual(r.ignored, 1);
+});
+
+t('parse v2 : nombre seul SANS libellé en attente -> jamais une ligne', function () {
+    const r = H.parse('7');
+    assert.deepStrictEqual(r.rows, []);
+    assert.strictEqual(r.ignored, 1);
+});
+
+t('parse v2 : « Sucette - 1 sucette » n\'est pas « - <nombre> » -> libellé seul -> ignoré', function () {
+    assert.deepStrictEqual(H.parse('Sucette - 1 sucette').rows, []);
+    // En revanche « - <nombre pur » reste une quantité :
+    assert.deepStrictEqual(H.parse('Soiree bowling (2 joueurs) - 1').rows, [
+        { label: 'Soiree bowling (2 joueurs)', qty: 1 },
+    ]);
 });
 
 t('parse : quantités avec espaces insécables/fines', function () {
@@ -230,6 +292,26 @@ t('match (d) : « M&Ms » sans clé équivalente -> aucun match (& conservé)', 
     assert.strictEqual(r.status, 'none');
     assert.strictEqual(r.key, null);
     assert.deepStrictEqual(r.candidates, []);
+});
+
+/* ------------------------------------------------------------------ *
+ * Appariement v2 — garde-fou sur l'inclusion (auto-match éditable)
+ * ------------------------------------------------------------------ */
+
+t('match v2 : « Bonbon Haribo » ne pré-remplit PAS « Haribo » (2× plus long, sans préfixe)', function () {
+    const r = H.match('Bonbon Haribo', INDEX);
+    assert.strictEqual(r.status, 'ambiguous');
+    assert.strictEqual(r.key, null);
+    assert.deepStrictEqual(r.candidates, ['Haribo'], '« Haribo » reste candidat indicatif');
+});
+
+t('match v2 : « Pepsi sans sucre » -> candidat « Pepsi » à vérifier (préfixe, auto-prérempli)', function () {
+    assert.deepStrictEqual(H.match('Pepsi sans sucre', INDEX), {
+        status: 'check', key: 'Pepsi', candidates: ['Pepsi'],
+    });
+    // La ligne parse toujours « libellé + quantité » (édition côté vue).
+    assert.deepStrictEqual(H.parse('Pepsi sans sucre 8').rows, [{ label: 'Pepsi sans sucre', qty: 8 }]);
+    assert.deepStrictEqual(H.parse('Bonbon Haribo 25').rows, [{ label: 'Bonbon Haribo', qty: 25 }]);
 });
 
 t('match : libellé vide / index absent -> aucun match', function () {
