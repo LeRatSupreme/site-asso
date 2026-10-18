@@ -52,36 +52,43 @@ $sections = [
         'Mots Wordle'   => '/admin/jeux/wordle',
         'Énigmes'       => '/admin/jeux/enigmes',
     ],
+    // Convention : la valeur d'un groupe est SOIT un tableau à plat
+    // « libellé => URL », SOIT un tableau imbriqué « sous-groupe =>
+    // (libellé => URL) » rendu avec des intertitres .admin-subgroup.
     'Comptabilité' => [
-        'Dashboard'    => '/admin/compta',
-        'Opérations'   => '/admin/compta/achats',
-        'Bilan annuel' => '/admin/compta/annuel',
-        'Analytics'    => '/admin/analytics',
-        'Budgets'      => '/admin/compta/budgets',
-        'Réappro'      => '/admin/compta/reappro',
-        'Liste de courses' => '/admin/compta/liste',
-    ],
-    'Ventes' => [
-        'Importer CSV'    => '/admin/compta/import',
-        'Journal ventes'  => '/admin/compta/ventes',
-        'Dashboard SumUp' => '/admin/sumup',
-    ],
-    'Produits & coûts' => [
-        'Produits'               => '/admin/compta/produits',
-        'Catégories'             => '/admin/compta/categories',
-        'Ajouter une appellation' => '/admin/compta/aliases/new',
-        'Mapping libellés'       => '/admin/compta/aliases',
+        'Général' => [
+            'Dashboard'    => '/admin/compta',
+            'Opérations'   => '/admin/compta/achats',
+            'Bilan annuel' => '/admin/compta/annuel',
+        ],
+        'Analyse' => [
+            'Analytics' => '/admin/analytics',
+            'Budgets'   => '/admin/compta/budgets',
+        ],
+        'Stock' => [
+            'Réappro'          => '/admin/compta/reappro',
+            'Liste de courses' => '/admin/compta/liste',
+        ],
+        'Ventes' => [
+            'Importer CSV'    => '/admin/compta/import',
+            'Journal ventes'  => '/admin/compta/ventes',
+            'Dashboard SumUp' => '/admin/sumup',
+        ],
+        'Produits & coûts' => [
+            'Produits'                => '/admin/compta/produits',
+            'Catégories'              => '/admin/compta/categories',
+            'Ajouter une appellation' => '/admin/compta/aliases/new',
+            'Mapping libellés'        => '/admin/compta/aliases',
+        ],
     ],
 ];
 
 // Filtre les groupes de menu selon les modules autorisés au rôle :
 // un rôle ne doit jamais voir un lien vers une page qui lui est interdite.
 $sectionModules = [
-    'Cafétéria'        => Permissions::MODULE_CAFETERIA,
-    'Jeux'             => Permissions::MODULE_GAMES,
-    'Comptabilité'     => Permissions::MODULE_COMPTA,
-    'Ventes'           => Permissions::MODULE_COMPTA,
-    'Produits & coûts' => Permissions::MODULE_COMPTA,
+    'Cafétéria'    => Permissions::MODULE_CAFETERIA,
+    'Jeux'         => Permissions::MODULE_GAMES,
+    'Comptabilité' => Permissions::MODULE_COMPTA,
 ];
 $viewerRole = (string) ($user['role'] ?? '');
 foreach ($sectionModules as $group => $module) {
@@ -191,36 +198,62 @@ foreach ($operationsPrefixes as $opPrefix) {
                 <span class="brand-name">Admin <?= e($siteName) ?></span>
             </a>
 
+            <?php
+            // Version à plat de tous les liens de la sidebar (en parcourant
+            // les groupes imbriqués éventuels) : sert à la détection du
+            // « meilleur match » de l'état actif. Liste simple : deux
+            // groupes peuvent porter le même libellé (ex. « Produits »).
+            $flatLinks = [];
+            foreach ($sections as $groupLinks) {
+                foreach ($groupLinks as $path) {
+                    if (is_array($path)) {
+                        foreach ($path as $subPath) {
+                            $flatLinks[] = $subPath;
+                        }
+                    } else {
+                        $flatLinks[] = $path;
+                    }
+                }
+            }
+
+            // État actif d'un lien, partagé par les deux niveaux de rendu.
+            $isActive = function (string $label, string $path) use ($flatLinks, $activePath): bool {
+                // État actif : match exact OU sous-route directe.
+                // Évite que /admin/compta reste allumé sur /admin/compta/produits.
+                $active = false;
+                if ($activePath === $path) {
+                    $active = true;
+                } elseif (str_starts_with($activePath, $path . '/')) {
+                    // Sous-route : on ne marque actif que si c'est le parent le plus précis.
+                    // On vérifie qu'aucun autre lien plus long ne matche mieux.
+                    $betterMatch = false;
+                    foreach ($flatLinks as $p2) {
+                        if ($p2 !== $path && strlen($p2) > strlen($path) && str_starts_with($activePath, $p2)) {
+                            $betterMatch = true;
+                            break;
+                        }
+                    }
+                    $active = !$betterMatch;
+                }
+                // Cas spécial : /admin (tableau de bord) n'est actif que sur /admin exact.
+                if ($path === '/admin' && $activePath !== '/admin') {
+                    $active = false;
+                }
+                return $active;
+            };
+            ?>
             <?php foreach ($sections as $group => $links): ?>
                 <p class="admin-group"><?= e($group) ?></p>
                 <nav aria-label="<?= e($group) ?>">
                     <?php foreach ($links as $label => $path): ?>
-                        <?php
-                        // État actif : match exact OU sous-route directe.
-                        // Évite que /admin/compta reste allumé sur /admin/compta/produits.
-                        $active = false;
-                        if ($activePath === $path) {
-                            $active = true;
-                        } elseif (str_starts_with($activePath, $path . '/')) {
-                            // Sous-route : on ne marque actif que si c'est le parent le plus précis.
-                            // On vérifie qu'aucun autre lien plus long ne matche mieux.
-                            $betterMatch = false;
-                            foreach ($sections as $g2 => $links2) {
-                                foreach ($links2 as $l2 => $p2) {
-                                    if ($p2 !== $path && strlen($p2) > strlen($path) && str_starts_with($activePath, $p2)) {
-                                        $betterMatch = true;
-                                        break 2;
-                                    }
-                                }
-                            }
-                            $active = !$betterMatch;
-                        }
-                        // Cas spécial : /admin (tableau de bord) n'est actif que sur /admin exact.
-                        if ($path === '/admin' && $activePath !== '/admin') {
-                            $active = false;
-                        }
-                        ?>
-                        <a class="admin-link<?= $active ? ' is-active' : '' ?>" href="<?= e(url($path)) ?>"><?= e($label) ?></a>
+                        <?php if (is_array($path)): ?>
+                            <p class="admin-subgroup"><?= e($label) ?></p>
+                            <?php foreach ($path as $subLabel => $subPath): ?>
+                                <a class="admin-link<?= $isActive($subLabel, $subPath) ? ' is-active' : '' ?>" href="<?= e(url($subPath)) ?>"><?= e($subLabel) ?></a>
+                            <?php endforeach; ?>
+                        <?php else: ?>
+                            <a class="admin-link<?= $isActive($label, $path) ? ' is-active' : '' ?>" href="<?= e(url($path)) ?>"><?= e($label) ?></a>
+                        <?php endif; ?>
                     <?php endforeach; ?>
                 </nav>
             <?php endforeach; ?>
