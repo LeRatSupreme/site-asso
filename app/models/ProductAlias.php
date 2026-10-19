@@ -99,6 +99,13 @@ final class ProductAlias extends Model
     /**
      * Crée ou met à jour un alias (upsert sur raw_description).
      *
+     * `kind` : 'appellation' pour un libellé long de facture/scan (page
+     * « Ajouter une appellation »), 'label' (défaut) pour un alias
+     * produit. À la MISE À JOUR d'une ligne existante, un kind absent
+     * préserve celui en base (la grille des catégories ne reclasse
+     * jamais une appellation) ; un kind explicite reclasse la ligne
+     * (ressaisir un libellé sur la page appellations le déplace).
+     *
      * @param array<string,mixed> $data
      */
     public static function save(array $data): string
@@ -106,6 +113,10 @@ final class ProductAlias extends Model
         $raw = trim((string) ($data['raw_description'] ?? ''));
         $productKey = trim((string) ($data['product_key'] ?? ''));
         $category = ($data['category'] ?? '') !== '' ? (string) $data['category'] : null;
+        $kind = trim((string) ($data['kind'] ?? ''));
+        if (!in_array($kind, ['label', 'appellation'], true)) {
+            $kind = '';
+        }
 
         if ($raw === '' || $productKey === '') {
             return '';
@@ -113,22 +124,73 @@ final class ProductAlias extends Model
 
         $existing = self::findByRaw($raw);
         if ($existing !== null) {
-            $stmt = self::pdo()->prepare(
-                'UPDATE product_aliases SET product_key = ?, category = ? WHERE id = ?'
-            );
-            $stmt->execute([$productKey, $category, $existing['id']]);
+            if ($kind !== '') {
+                $stmt = self::pdo()->prepare(
+                    'UPDATE product_aliases SET product_key = ?, category = ?, kind = ? WHERE id = ?'
+                );
+                $stmt->execute([$productKey, $category, $kind, $existing['id']]);
+            } else {
+                $stmt = self::pdo()->prepare(
+                    'UPDATE product_aliases SET product_key = ?, category = ? WHERE id = ?'
+                );
+                $stmt->execute([$productKey, $category, $existing['id']]);
+            }
 
             return (string) $existing['id'];
         }
 
         $id = 'alias_' . bin2hex(random_bytes(10));
         $stmt = self::pdo()->prepare(
-            'INSERT INTO product_aliases (id, raw_description, product_key, category, created_at)
-             VALUES (?,?,?,?, NOW())'
+            "INSERT INTO product_aliases (id, raw_description, product_key, category, kind, created_at)
+             VALUES (?,?,?,?,?, NOW())"
         );
-        $stmt->execute([$id, $raw, $productKey, $category]);
+        $stmt->execute([$id, $raw, $productKey, $category, $kind !== '' ? $kind : 'label']);
 
         return $id;
+    }
+
+    /**
+     * Alias produits uniquement (hors appellations de facture/scan) :
+     * c'est la liste de la page « Mapping des libellés ».
+     *
+     * @return list<array<string,mixed>>
+     */
+    public static function allLabels(): array
+    {
+        try {
+            /** @var list<array<string,mixed>> $r */
+            return self::pdo()
+                ->query(
+                    "SELECT * FROM product_aliases
+                     WHERE kind IS NULL OR kind <> 'appellation'
+                     ORDER BY product_key, raw_description"
+                )
+                ->fetchAll();
+        } catch (\Throwable) {
+            return self::all();
+        }
+    }
+
+    /**
+     * Appellations enregistrées (libellés longs facture/CSV), de la plus
+     * récente à la plus ancienne : liste du bas de la page
+     * « Ajouter une appellation ».
+     *
+     * @return list<array<string,mixed>>
+     */
+    public static function appellations(): array
+    {
+        try {
+            /** @var list<array<string,mixed>> $r */
+            return self::pdo()
+                ->query(
+                    "SELECT * FROM product_aliases WHERE kind = 'appellation'
+                     ORDER BY created_at DESC, raw_description"
+                )
+                ->fetchAll();
+        } catch (\Throwable) {
+            return [];
+        }
     }
 
     public static function deleteRow(string $id): void
@@ -209,7 +271,7 @@ final class ProductAlias extends Model
     {
         $from = trim($from);
         $to = trim($to);
-        if ($from === '' || $to === '' || strcasecmp($from, $to) === 0) {
+        if ($from === '' || $to === '') {
             return ['repointed' => 0, 'absorbed' => 0];
         }
 
@@ -245,7 +307,7 @@ final class ProductAlias extends Model
     {
         $raw = trim($raw);
         $to = trim($to);
-        if ($raw === '' || $to === '' || strcasecmp($raw, $to) === 0) {
+        if ($raw === '' || $to === '') {
             return false;
         }
         if (!self::labelIsLive($raw, $liveDays)) {

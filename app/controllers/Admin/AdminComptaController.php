@@ -882,7 +882,7 @@ final class AdminComptaController extends AdminBaseController
         $this->renderAdmin('admin/compta/aliases', [
             'title'      => 'Mapping des libellés',
             'user'       => $user,
-            'aliases'    => ProductAlias::all(),
+            'aliases'    => ProductAlias::allLabels(),
             'unmapped'   => Sale::unmappedDescriptions(),
             'categories' => self::aliasCategories(),
             'known_keys' => self::knownProductKeys(),
@@ -1027,11 +1027,12 @@ final class AdminComptaController extends AdminBaseController
         $user = $this->guardCompta();
 
         $this->renderAdmin('admin/compta/alias_new', [
-            'title'       => 'Ajouter une appellation',
-            'user'        => $user,
-            'categories'  => self::aliasCategories(),
-            'products'    => Sale::distinctProducts(),
-            'pendingRows' => self::pendingAliasRows(),
+            'title'        => 'Ajouter une appellation',
+            'user'         => $user,
+            'categories'   => self::aliasCategories(),
+            'products'     => Sale::distinctProducts(),
+            'pendingRows'  => self::pendingAliasRows(),
+            'appellations' => ProductAlias::appellations(),
         ]);
     }
 
@@ -1303,6 +1304,7 @@ final class AdminComptaController extends AdminBaseController
                 'raw_description' => $raw,
                 'product_key'     => $productKey,
                 'category'        => $category,
+                'kind'            => 'appellation',
             ]);
             Sale::applyAliasCategory($raw, $category !== '' ? $category : null, $productKey);
             if ($category !== '') {
@@ -1408,6 +1410,12 @@ final class AdminComptaController extends AdminBaseController
         ProductAlias::deleteRow($id);
         $this->audit('compta.alias.delete', 'product_alias', $id);
         $this->setFlash('success', 'Alias supprimé.');
+
+        // Suppression depuis la page « Ajouter une appellation » :
+        // on y revient (la liste du bas vit sur cette page).
+        if (($_POST['back'] ?? '') === 'new') {
+            redirect(url('/admin/compta/aliases/new'));
+        }
         redirect(url('/admin/compta/aliases'));
     }
 

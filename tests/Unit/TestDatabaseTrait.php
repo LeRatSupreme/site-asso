@@ -88,4 +88,20 @@ trait TestDatabaseTrait
             }
         }
     }
+
+    /**
+     * Applique (best effort) la migration du kind d'alias
+     * (database/migrations/2026_alias_kind.sql) sur la base de test :
+     * 'label' (alias produit) vs 'appellation' (libellé long facture).
+     */
+    protected function applyAliasKindMigration(PDO $pdo): void
+    {
+        try {
+            $pdo->exec(
+                "ALTER TABLE product_aliases ADD COLUMN kind VARCHAR(20) NOT NULL DEFAULT 'label' AFTER category"
+            );
+        } catch (PDOException) {
+            // Déjà appliqué : non bloquant.
+        }
+    }
 }
