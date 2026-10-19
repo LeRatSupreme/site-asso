@@ -358,7 +358,14 @@ final class ProductKeyMergeTest extends TestCase
         $moved = ProductKeyMerge::merge('Cristaline', 'Eau', null);
 
         self::assertSame(1, $moved['promotions'], 'Seule la promotion rattachée à la source est déplacée.');
-        self::assertSame(['Eau'], $this->tableKeys('promotions'));
+
+        // La promotion sans produit (product_key NULL) reste en place :
+        // elle ne fait pas partie des clés déplacées.
+        $keys = array_values(array_filter(
+            $this->tableKeys('promotions'),
+            static fn ($k): bool => $k !== null
+        ));
+        self::assertSame(['Eau'], $keys);
 
         $stmt = $this->pdo->query('SELECT COUNT(*) FROM promotions WHERE product_key IS NULL');
         self::assertSame(1, (int) $stmt->fetchColumn(), 'La promotion sans produit reste intacte.');

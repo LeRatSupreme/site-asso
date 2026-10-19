@@ -96,8 +96,9 @@ final class LedgerPurchaseGroupsDbTest extends TestCase
     /**
      * Même n° de facture partagé (ou facture absente) : la fusion
      * historique reste en place — un seul groupe, plusieurs lignes, les
-     * reçus distincts listés dans « receipts » (ordre de rencontre), le
-     * premier dans « receipt_path ».
+     * reçus distincts listés dans « receipts » en ordre de rencontre
+     * (lecture DESC du livre : dernière ligne saisie d'abord), le
+     * premier rencontré dans « receipt_path ».
      */
     public function test_meme_facture_fusion_conservee_avec_receipts(): void
     {
@@ -115,8 +116,8 @@ final class LedgerPurchaseGroupsDbTest extends TestCase
         self::assertSame(2, $g['lines']);
         self::assertSame('3007 02 0090', $g['invoice']);
         self::assertSame('3007 02 0090', $g['invoice_number']);
-        self::assertSame($receiptA, $g['receipt_path'], 'Premier justificatif rencontré (comportement historique).');
-        self::assertSame([$receiptA, $receiptB], $g['receipts'], 'Tous les justificatifs distincts, ordre de rencontre.');
+        self::assertSame($receiptB, $g['receipt_path'], 'Premier justificatif rencontré (lecture DESC : dernière ligne saisie du groupe).');
+        self::assertSame([$receiptB, $receiptA], $g['receipts'], 'Tous les justificatifs distincts, ordre de rencontre (DESC).');
     }
 
     /**

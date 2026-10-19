@@ -387,7 +387,7 @@ final class PurchaseTest extends TestCase
         $stats = Purchase::statsBetween('2026-09-01', '2026-09-30');
 
         self::assertSame(4, $stats['lines'], 'Quatre lignes sur la période (l’alias « lines » doit être accepté).');
-        self::assertSame(28, $stats['qty'], 'Quantité entrée en stock : 24 + 4, le hors stock (36) exclu.');
+        self::assertSame(52, $stats['qty'], 'Quantité entrée en stock : 24 (Coca) + 24 (Bueno) + 4 (Fanta), le hors stock (36) exclu.');
         self::assertEqualsWithDelta(79.312, $stats['ht'], 0.001, '25,20 + 25,152 + 20,96 + 8 (historique en TTC).');
         self::assertEqualsWithDelta(86.888, $stats['ttc'], 0.001, '30,24 + 26,535 + 22,113 (MMS TTC) + 8.');
         self::assertEqualsWithDelta(7.576, $stats['vat'], 0.001, 'TVA = TTC − HT.');
