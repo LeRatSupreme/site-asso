@@ -30,6 +30,7 @@ declare(strict_types=1);
  * @var array<string,mixed> $kpis           KPI de la période (+ *_delta vs période précédente)
  * @var list<array<string,mixed>> $insights Insights automatiques (icon, tone, title, text)
  * @var array<string,mixed> $forecast       Prévisions (today pro-rata, yesterday, reliable…)
+ * @var array<string,mixed> $day_track      Estimation du jour (window, estimate, reliable, track, now_hour)
  * @var array<int,array{ca:float,qty:int,tx:int}> $weekday CA par jour de semaine (0 = lundi)
  * @var array<int,array{ca:float,qty:int,tx:int}> $hourly  CA par heure (0..23)
  * @var string $json                        Payload JSON (Chart.js) injecté dans un <script>
@@ -222,6 +223,30 @@ $iconSvg = static function (string $name): string {
             <?php endforeach; ?>
             <?php if (empty($forecast['reliable'])): ?>
                 <span class="ka-fc-note">Prévisions fiables à partir de 7 jours d'historique</span>
+            <?php endif; ?>
+        </section>
+        <?php endif; ?>
+
+        <?php
+        // Chips « Estimation du jour » : objectif (estimation sur la
+        // fenêtre) + avance/retard live à l'heure courante — pas de
+        // graphique supplémentaire sur le kiosque téléphone.
+        $dtEst   = $day_track['estimate'] ?? null;
+        $dtTrack = $day_track['track'] ?? null;
+        $dtDelta = $dtTrack['delta_pct'] ?? null;
+        $dtUp    = $dtDelta === null ? null : ($dtDelta >= 0);
+        ?>
+        <?php if ($dtEst !== null && (float) $dtEst > 0): ?>
+        <section class="card surface glass ka-card ka-fc">
+            <span class="ka-kpi-delta is-muted">
+                Objectif du jour : <?= e(formatPrice((float) $dtEst)) ?>
+            </span>
+            <?php if ($dtUp !== null): ?>
+                <span class="ka-kpi-delta <?= $dtUp ? 'is-up' : 'is-down' ?>">
+                    à <?= (int) ($day_track['now_hour'] ?? 0) ?>h : <?= $dtUp ? '↑' : '↓' ?> <?= number_format(abs($dtDelta), 1, ',', ' ') ?> %
+                </span>
+            <?php else: ?>
+                <span class="ka-kpi-delta is-muted">à <?= (int) ($day_track['now_hour'] ?? 0) ?>h : —</span>
             <?php endif; ?>
         </section>
         <?php endif; ?>
