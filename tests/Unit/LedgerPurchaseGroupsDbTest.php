@@ -126,8 +126,11 @@ final class LedgerPurchaseGroupsDbTest extends TestCase
      */
     public function test_build_entries_deux_ecritures_totaux_inchanges(): void
     {
-        $this->createPurchase('Coca 33cl', '159-10007281', 12.30, null);
-        $this->createPurchase('Fanta 33cl', '159-10007282', 8.50, null);
+        // created_at distincts : la lecture du livre est DESC (dernière
+        // ligne saisie d'abord) — à horodatage égal l'ordre SQL d'un
+        // ex æquo est indéterminé (échec aléatoire).
+        $this->createPurchase('Coca 33cl', '159-10007281', 12.30, null, '2026-10-14 08:00:00');
+        $this->createPurchase('Fanta 33cl', '159-10007282', 8.50, null, '2026-10-14 09:00:00');
 
         $ledger = new AdminLedgerController();
         $entries = $ledger->buildEntries('2026-10-14', '2026-10-14');
@@ -141,8 +144,8 @@ final class LedgerPurchaseGroupsDbTest extends TestCase
 
         $labels = array_map(static fn (array $r): string => (string) $r['label'], $purchases);
         self::assertSame(['Achat — METRO', 'Achat — METRO'], $labels, 'La référence fournisseur reste affichée.');
-        self::assertSame(12.30, $purchases[0]['debit']);
-        self::assertSame(8.50, $purchases[1]['debit']);
+        self::assertSame(8.50, $purchases[0]['debit'], 'Fanta (saisi à 09:00) : écriture la plus récente d\'abord.');
+        self::assertSame(12.30, $purchases[1]['debit']);
 
         // Chaque écriture porte « ids » : les ids des lignes d'achats de
         // SON groupe (une facture = un id ici), tous distincts.
@@ -160,8 +163,8 @@ final class LedgerPurchaseGroupsDbTest extends TestCase
         self::assertSame(-20.80, $entries['balance']);
 
         // Le « ticket » de chaque écriture référence sa facture.
-        self::assertStringContainsString('facture 159-10007281', (string) $purchases[0]['ticket']);
-        self::assertStringContainsString('facture 159-10007282', (string) $purchases[1]['ticket']);
+        self::assertStringContainsString('facture 159-10007282', (string) $purchases[0]['ticket']);
+        self::assertStringContainsString('facture 159-10007281', (string) $purchases[1]['ticket']);
     }
 
     /**
