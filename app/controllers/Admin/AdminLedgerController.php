@@ -47,15 +47,15 @@ final class AdminLedgerController extends AdminBaseController
             'totalDebit'  => $entries['total_debit'],
             'totalCredit' => $entries['total_credit'],
             'balance'     => $entries['balance'],
-            'recentExpenses' => Expense::recent(8),
-            // Dernières courses enregistrées en ACHATS (stock + coûts) :
-            // une ligne par jour + référence (fournisseur, sinon n° de
-            // facture partagé) + n° de facture normalisé (deux factures
-            // distinctes du même jour chez le même fournisseur font deux
-            // lignes), avec le ou les justificatifs du scan quand ils ont
-            // été conservés. Statique publique : partagée avec la version
-            // kiosque du livre (KioskComptageController).
-            'recentPurchases' => self::recentPurchaseGroups(8),
+            // Vignette « Derniers tickets & dépenses » : liste FUSIONNÉE et
+            // chronologique (dépenses ET groupes d'achats mélangés, du plus
+            // récent au plus ancien — même ordre que le livre). Les anciennes
+            // variables séparées (recentExpenses / recentPurchases, 8 + 8)
+            // cachaient les saisies au-delà des 8 premières et rangeaient
+            // chaque type dans son ordre : une dépense datée d'un ancien
+            // jour n'apparaissait jamais en haut, la vignette semblait
+            // figée alors que le livre, lui, montrait tout.
+            'recentItems' => self::recentItems(20),
             // Suggestions produit (datalist) pour l'enregistrement d'un
             // achat depuis le livre — même fusion que la liste de picking
             // de la page Achats, en version simplifiée. Méthode statique
@@ -176,10 +176,18 @@ final class AdminLedgerController extends AdminBaseController
                         'receipt_path'  => null,
                         'receipts'      => [],
                         'lines'         => 0,
+                        // Dernière saisie du groupe (max des created_at de
+                        // ses lignes) : clé de tri secondaire de la liste
+                        // fusionnée recentItems().
+                        'created_at'    => (string) ($p['created_at'] ?? ''),
                     ];
                 }
                 $groups[$key]['total_ttc'] += (float) $p['total_ttc'];
                 $groups[$key]['lines']++;
+                $createdAt = (string) ($p['created_at'] ?? '');
+                if ($createdAt > $groups[$key]['created_at']) {
+                    $groups[$key]['created_at'] = $createdAt;
+                }
                 $invoice = trim($invoiceRaw);
                 if ($invoice !== '' && $groups[$key]['invoice'] === null) {
                     $groups[$key]['invoice'] = $invoice;
@@ -202,6 +210,49 @@ final class AdminLedgerController extends AdminBaseController
         // La requête est déjà DESC (plus récent d'abord) : l'ordre
         // d'insertion des groupes suit.
         return array_slice(array_values($groups), 0, max(1, $limit));
+    }
+
+    /**
+     * Vignette « Derniers tickets & dépenses » : dépenses et groupes
+     * d'achats FUSIONNÉS en une seule liste chronologique, de la plus
+     * récente à la plus ancienne (même lecture que le livre) — à date
+     * égale, la saisie la plus récente d'abord (created_at DESC).
+     *
+     * Chaque élément porte « type » : 'purchase' (groupe d'achats,
+     * structure de recentPurchaseGroups()) ou 'expense' (dépense,
+     * structure de Expense::recent()). Une dépense saisie aujourd'hui
+     * mais datée d'un ancien jour apparaît donc à SA place dans la
+     * liste, visible, au lieu d'être cachée sous les achats.
+     *
+     * Statique publique : partagée avec la version kiosque du livre.
+     *
+     * @return list<array<string,mixed>>
+     */
+    public static function recentItems(int $limit = 20): array
+    {
+        $limit = max(1, $limit);
+
+        $items = [];
+        foreach (self::recentPurchaseGroups($limit * 2) as $g) {
+            $g['type'] = 'purchase';
+            $items[] = $g;
+        }
+        foreach (Expense::recent($limit * 2) as $e) {
+            $e['type'] = 'expense';
+            $items[] = $e;
+        }
+
+        usort($items, static function (array $a, array $b): int {
+            $dateA = (string) ($a['type'] === 'purchase' ? $a['date'] : $a['spent_at']);
+            $dateB = (string) ($b['type'] === 'purchase' ? $b['date'] : $b['spent_at']);
+            if ($dateA !== $dateB) {
+                return strcmp($dateB, $dateA);
+            }
+
+            return strcmp((string) ($b['created_at'] ?? ''), (string) ($a['created_at'] ?? ''));
+        });
+
+        return array_slice($items, 0, $limit);
     }
 
     /**

@@ -30,7 +30,11 @@ declare(strict_types=1);
  *      du groupe) et les lignes expense « id » (id de la dépense) —
  *      clés additionnelles utilisées par les boutons Supprimer (admin
  *      uniquement), ignorées partout ailleurs.
- * @var list<array<string,mixed>> $recentExpenses
+ * @var list<array<string,mixed>> $recentItems Vignette « Derniers tickets
+ *      & dépenses » : dépenses et groupes d'achats fusionnés en une liste
+ *      chronologique (du plus récent au plus ancien, à date égale la
+ *      saisie la plus récente d'abord) — chaque élément porte « type » :
+ *      'purchase' (groupe d'achats) ou 'expense' (dépense).
  * @var string $from
  * @var string $to
  * @var string $preset
@@ -568,7 +572,7 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
 
     <section class="card surface glass">
         <h2 class="card-title">Derniers tickets &amp; dépenses</h2>
-        <?php if ($recentPurchases === [] && $recentExpenses === []): ?>
+        <?php if ($recentItems === []): ?>
             <p class="muted">Aucune dépense ni achat enregistré pour le moment.</p>
         <?php else: ?>
         <div class="lg-table-wrap">
@@ -591,7 +595,8 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
                         'DIVERS'    => 'Divers',
                     ];
                     ?>
-                    <?php foreach ($recentPurchases as $x): ?>
+                    <?php foreach ($recentItems as $x): ?>
+                    <?php if (($x['type'] ?? '') === 'purchase'): ?>
                         <?php
                         // Reçus distincts du groupe (une facture METRO par
                         // groupe depuis la fusion par n° de facture — chaque
@@ -637,8 +642,7 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
                             </td>
                         </tr>
                         <?php endif; ?>
-                    <?php endforeach; ?>
-                    <?php foreach ($recentExpenses as $x): ?>
+                    <?php else: ?>
                         <?php
                         $lgExpId = (string) ($x['id'] ?? '');
                         $lgExpVat = (float) ($x['vat'] ?? 0);
@@ -708,10 +712,11 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
                                         <label style="flex: 1 1 100%;">Preuve (remplace l'existante · PDF/JPG/PNG/WEBP · 5 Mo max) <input type="file" name="receipt" accept=".pdf,.jpg,.jpeg,.png,.webp"></label>
                                         <button type="submit" class="btn btn-primary btn-sm">Enregistrer</button>
                                     </form>
-                                </details>
-                            </td>
-                        </tr>
-                        <?php endif; ?>
+                                 </details>
+                             </td>
+                         </tr>
+                         <?php endif; ?>
+                    <?php endif; ?>
                     <?php endforeach; ?>
                 </tbody>
             </table>
