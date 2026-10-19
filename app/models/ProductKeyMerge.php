@@ -15,7 +15,9 @@ use App\Core\Logger;
  *  - UPDATE simple (PK `id`, pas de conflit possible) : purchases,
  *    losses, sales, inventory_counts, product_costs,
  *    promotions (product_key nullable : seules les lignes rattachées
- *    à la source sont déplacées) ;
+ *    à la source sont déplacées), inventory_tablet_lines (relevés
+ *    tablette en attente : leurs corrections futures écriront sur la
+ *    cible, pas sur une clé morte) ;
  *  - alias : les libellés de la source suivent la cible SAUF la ligne
  *    « identité » d'un libellé plus vendu (absorbée : fusion totale,
  *    ProductAlias::absorbInto) ; les doublons de libellé ramenés sur
@@ -56,17 +58,17 @@ final class ProductKeyMerge extends Model
 
     /**
      * Tables à PK `id` (sales, purchases, losses, inventory_counts,
-     * product_costs, promotions) : un UPDATE par table suffit — pas de
-     * conflit possible (product_costs : plusieurs lots par produit ;
-     * promotions : PK id, product_key nullable — l'UPDATE ne touche que
-     * les lignes rattachées à la source).
+     * product_costs, promotions, inventory_tablet_lines) : un UPDATE par
+     * table suffit — pas de conflit possible (product_costs : plusieurs
+     * lots par produit ; promotions : PK id, product_key nullable —
+     * l'UPDATE ne touche que les lignes rattachées à la source).
      *
      * NB : product_aliases est traité à part (absorbInto) pour absorber
      * la ligne « identité » d'un libellé mort au lieu de la repointer.
      *
      * @var list<string>
      */
-    private const SIMPLE_TABLES = ['purchases', 'losses', 'sales', 'inventory_counts', 'product_costs', 'promotions'];
+    private const SIMPLE_TABLES = ['purchases', 'losses', 'sales', 'inventory_counts', 'product_costs', 'promotions', 'inventory_tablet_lines'];
 
     /**
      * Tables à PK `product_key` (une seule ligne par produit) fusionnées
@@ -159,8 +161,9 @@ final class ProductKeyMerge extends Model
      *                           purchases, losses, sales, aliases,
      *                           aliases_absorbed, aliases_deduped,
      *                           counts, costs, stocks, discontinued,
-     *                           promotions, infinite, zero_since, packs,
-     *                           checks, scan_labels, order_items, fiches.
+     *                           promotions, tablet_lines, infinite,
+     *                           zero_since, packs, checks, scan_labels,
+     *                           order_items, fiches.
      *
      * @throws \InvalidArgumentException Clé source vide ou identique à la cible.
      * @throws \Throwable                Erreur SQL (transaction annulée).
@@ -296,6 +299,7 @@ final class ProductKeyMerge extends Model
             'stocks'         => $stocks,
             'discontinued'   => $discontinued,
             'promotions'     => $moved['promotions'],
+            'tablet_lines'   => $moved['inventory_tablet_lines'],
             'infinite'       => $flags['product_infinite'],
             'zero_since'     => $flags['product_zero_since'],
             'packs'          => $flags['product_packs'],

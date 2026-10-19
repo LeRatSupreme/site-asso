@@ -17,6 +17,7 @@ use App\Core\Logger;
 use App\Models\InventoryCount;
 use App\Models\InventoryTablet;
 use App\Models\Loss;
+use App\Models\ProductAlias;
 use App\Models\ProductCost;
 use App\Models\ProductDiscontinued;
 use App\Models\ProductKeyMerge;
@@ -790,6 +791,7 @@ final class AdminStockController extends AdminBaseController
             'gaps'             => InventoryCount::recentGaps(30),
             'keyStats'         => $keyStats,
             'mergeDupes'       => AliasSuggester::groupDuplicates(array_keys($keyStats)),
+            'pending_sessions' => InventoryTablet::pendingSessions(),
             'stockValue'       => round($stockValue, 2),
             'stockUnits'       => $stockUnits,
             'valuedLines'      => $valuedLines,
@@ -1112,6 +1114,7 @@ final class AdminStockController extends AdminBaseController
             'discontinued'   => 'drapeau « plus en vente »',
             'costs'          => 'lots de coûts',
             'promotions'     => 'promotion(s)',
+            'tablet_lines'   => 'ligne(s) de relevé tablette',
             'infinite'       => 'drapeau « stock infini »',
             'zero_since'     => 'suivi « à zéro depuis »',
             'packs'          => 'taille de pack',
@@ -1481,7 +1484,11 @@ final class AdminStockController extends AdminBaseController
         foreach ($todo as $i => $entry) {
             $line = $entry['line'];
             $gap = $entry['gap'];
-            $key = (string) $line['product_key'];
+            // Clé canonique du jour : le relevé peut être antérieur à
+            // une fusion de clés — on résout l'alias pour écrire la
+            // perte/l'alignement sur la clé vivante, jamais sur une
+            // clé morte.
+            $key = ProductAlias::resolve((string) $line['product_key']) ?? (string) $line['product_key'];
 
             $reason = strtoupper(trim((string) ($reasons[$i] ?? '')));
             if (!in_array($reason, Loss::REASONS, true)) {

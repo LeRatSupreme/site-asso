@@ -151,6 +151,58 @@ final class InventoryTablet extends Model
     }
 
     /**
+     * Sessions ayant encore au moins un écart NON corrigé (« à
+     * corriger »), de la plus récente à la plus ancienne : alimente le
+     * rappel de la page Inventaire — un relevé tablette ne touche au
+     * stock qu'au clic sur « Corriger & synchroniser le stock », il
+     * faut le rendre visible tant que ce clic n'a pas eu lieu.
+     *
+     * Chaque session porte lines_count, gaps_count (écart ≠ 0),
+     * corrected_count, pending_count (= gaps_count − corrected_count,
+     * toujours > 0 : une session entièrement corrigée est exclue) et
+     * loss_value_sum.
+     *
+     * @return list<array<string,mixed>>
+     */
+    public static function pendingSessions(int $limit = 5): array
+    {
+        $limit = max(1, (int) $limit);
+
+        $sql = 'SELECT s.id, s.counted_at,
+                       COUNT(l.id)                                            AS lines_count,
+                       COALESCE(SUM(CASE WHEN l.gap IS NOT NULL AND l.gap <> 0 THEN 1 ELSE 0 END), 0) AS gaps_count,
+                       COALESCE(SUM(CASE WHEN l.corrected = 1 THEN 1 ELSE 0 END), 0) AS corrected_count,
+                       COALESCE(SUM(CASE WHEN l.gap IS NOT NULL AND l.gap <> 0 THEN 1 ELSE 0 END), 0)
+                         - COALESCE(SUM(CASE WHEN l.corrected = 1 THEN 1 ELSE 0 END), 0) AS pending_count,
+                       COALESCE(SUM(COALESCE(l.loss_value, 0)), 0)            AS loss_value_sum
+                FROM inventory_tablet_sessions s
+                LEFT JOIN inventory_tablet_lines l ON l.session_id = s.id
+                GROUP BY s.id
+                HAVING pending_count > 0
+                ORDER BY s.counted_at DESC, s.created_at DESC
+                LIMIT ' . $limit;
+
+        try {
+            /** @var list<array<string,mixed>> $rows */
+            $rows = self::pdo()->query($sql)->fetchAll();
+        } catch (\Throwable) {
+            return [];
+        }
+
+        // Décimaux SQL → types PHP propres pour la vue.
+        foreach ($rows as &$r) {
+            $r['lines_count'] = (int) $r['lines_count'];
+            $r['gaps_count'] = (int) $r['gaps_count'];
+            $r['corrected_count'] = (int) $r['corrected_count'];
+            $r['pending_count'] = (int) $r['pending_count'];
+            $r['loss_value_sum'] = (float) $r['loss_value_sum'];
+        }
+        unset($r);
+
+        return $rows;
+    }
+
+    /**
      * Lignes d'une session, de l'écart le plus négatif au plus positif
      * puis par produit (les manquants en premier : ce sont eux qu'on
      * corrige).

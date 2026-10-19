@@ -1298,13 +1298,49 @@ final class Sale extends Model
     }
 
     /**
-     * Ré-applique tous les aliases aux ventes existantes.
+     * Clé produit à appliquer à une vente lors du ré-applique du
+     * mapping (« compta.alias.apply ») : null = ne pas toucher la
+     * vente.
      *
-     * Pour chaque alias (raw_description -> product_key), on met à jour les
-     * ventes dont la `description` correspond, que `product_key` soit NULL ou
-     * déjà renseigné (utile quand la clé canonique d'un alias change).
-     * La catégorie de l'alias est propagée dans la foulée (une catégorie
-     * absente laisse la catégorie existante de la vente inchangée).
+     *  - libellé RÉSOLU par le mapping (ProductAlias::resolve, repli
+     *    normalisé inclus) → la clé canonique du mapping, quelle que
+     *    soit la clé courante (utile quand la cible d'un alias change) ;
+     *  - libellé NON résolu + vente déjà rattachée à une clé → null :
+     *    la clé existante fait foi (fusion passée, saisie manuelle).
+     *    Ramener le libellé brut ressusciterait les clés fusionnées à
+     *    chaque « appliquer » ;
+     *  - libellé NON résolu + vente sans clé → le libellé brut
+     *    (comportement historique : la description servait de clé par
+     *    défaut).
+     */
+    public static function resolvedKeyForApply(string $description, ?string $currentKey): ?string
+    {
+        $description = trim($description);
+        if ($description === '') {
+            return null;
+        }
+
+        $resolved = ProductAlias::resolve($description);
+        if ($resolved !== null) {
+            return $resolved;
+        }
+
+        return trim((string) $currentKey) === '' ? $description : null;
+    }
+
+    /**
+     * Ré-applique tous les aliases aux ventes existantes (par libellé
+     * de vente, via resolvedKeyForApply).
+     *
+     * Pour chaque libellé distinct des ventes :
+     *  - résolu par le mapping → toutes les ventes du libellé
+     *    reçoivent la clé canonique (que product_key soit NULL ou déjà
+     *    renseigné : utile quand la clé canonique d'un alias change) et
+     *    la catégorie de l'alias en comblement (COALESCE) ;
+     *  - non résolu → SEULES les ventes sans clé reçoivent le libellé
+     *    brut en clé ; les ventes déjà cléées sont laissées telles
+     *    quelles — un « appliquer » ne ressuscite pas une clé fusionnée
+     *    (la clé existante fait foi).
      *
      * @return int Nombre total de lignes affectées.
      */
@@ -1313,23 +1349,54 @@ final class Sale extends Model
         $pdo = self::pdo();
 
         try {
-            $rows = $pdo->query('SELECT raw_description, product_key, category FROM product_aliases')->fetchAll();
+            /** @var list<array<string,mixed>> $aliases */
+            $aliases = $pdo->query('SELECT raw_description, category FROM product_aliases')->fetchAll();
+            /** @var list<string> $descs */
+            $descs = $pdo->query(
+                "SELECT DISTINCT description FROM sales
+                 WHERE description IS NOT NULL AND description <> ''"
+            )->fetchAll(\PDO::FETCH_COLUMN);
         } catch (\Throwable) {
             return 0;
         }
 
-        $stmt = $pdo->prepare('UPDATE sales SET product_key = ?, category = COALESCE(?, category) WHERE description = ?');
+        // Catégorie par libellé brut (comblement, jamais d'écrasement).
+        $categories = [];
+        foreach ($aliases as $a) {
+            $raw = trim((string) ($a['raw_description'] ?? ''));
+            $cat = trim((string) ($a['category'] ?? ''));
+            if ($raw !== '' && $cat !== '' && !isset($categories[$raw])) {
+                $categories[$raw] = $cat;
+            }
+        }
+
+        $propagate = $pdo->prepare(
+            'UPDATE sales SET product_key = ?, category = COALESCE(?, category) WHERE description = ?'
+        );
+        $fill = $pdo->prepare(
+            "UPDATE sales SET product_key = ? WHERE description = ? AND (product_key IS NULL OR product_key = '')"
+        );
 
         $count = 0;
-        foreach ($rows as $a) {
-            $raw = trim((string) ($a['raw_description'] ?? ''));
-            $key = trim((string) ($a['product_key'] ?? ''));
-            if ($raw === '' || $key === '') {
+        foreach ($descs as $desc) {
+            $raw = trim((string) $desc);
+            if ($raw === '') {
                 continue;
             }
-            $cat = trim((string) ($a['category'] ?? ''));
-            $stmt->execute([$key, $cat !== '' ? $cat : null, $raw]);
-            $count += (int) $stmt->rowCount();
+
+            // Décision par le helper (vente déjà cléée portant ce
+            // libellé) : non nul = le libellé RÉSOUT et la clé canonique
+            // du mapping s'impose à toutes les ventes du libellé ;
+            // null = non résolu, seules les ventes sans clé reçoivent
+            // le libellé brut (clé par défaut).
+            $fullKey = self::resolvedKeyForApply($raw, $raw);
+            if ($fullKey !== null) {
+                $propagate->execute([$fullKey, $categories[$raw] ?? null, $raw]);
+                $count += (int) $propagate->rowCount();
+            } else {
+                $fill->execute([$raw, $raw]);
+                $count += (int) $fill->rowCount();
+            }
         }
 
         return $count;
