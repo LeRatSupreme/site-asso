@@ -167,4 +167,110 @@ final class SalesForecastTest extends TestCase
 
         self::assertSame(0.0, $fc['today']['actual'], 'Jour absent de la carte → réel 0 (pas null).');
     }
+
+    /**
+     * Parts horaires et CA du jour partagés par les tests dayTrack :
+     * estimation 240 €, ventes à 10h (50 %) et 14h (50 %).
+     *
+     * @return array{0:array<int,float>,1:float,2:array<int,float>}
+     */
+    private function journeeSuivi(): array
+    {
+        return [
+            [10 => 60.0, 12 => 30.0, 14 => 30.0], // CA du jour par heure
+            240.0,                                    // estimation journée
+            [10 => 0.5, 14 => 0.5],                   // parts horaires
+        ];
+    }
+
+    public function test_daytrack_courbes_cumulees_correctes(): void
+    {
+        [$ca, $estimation, $shares] = $this->journeeSuivi();
+
+        $t = SalesForecast::dayTrack($ca, $estimation, $shares, $this->paris('2026-10-15 12:30:00'));
+
+        self::assertCount(24, $t['cum_actual']);
+        self::assertCount(24, $t['cum_expected']);
+
+        // Réel : 0 € jusqu'à 9h, 60 € à 10-11h, 90 € à 12-13h, 120 € ensuite.
+        self::assertSame(0.0, $t['cum_actual'][9]);
+        self::assertSame(60.0, $t['cum_actual'][10]);
+        self::assertSame(90.0, $t['cum_actual'][12]);
+        self::assertSame(120.0, $t['cum_actual'][14]);
+        self::assertSame(120.0, $t['cum_actual'][23]);
+
+        // Attendu : 0 € jusqu'à 9h (parts 0 → cumul porté), 120 € à
+        // 10-13h, 240 € à partir de 14h.
+        self::assertSame(0.0, $t['cum_expected'][9]);
+        self::assertSame(120.0, $t['cum_expected'][10]);
+        self::assertSame(120.0, $t['cum_expected'][13]);
+        self::assertSame(240.0, $t['cum_expected'][14]);
+        self::assertSame(240.0, $t['cum_expected'][23]);
+    }
+
+    public function test_daytrack_pro_rata_et_projection_fin_de_journee_exacts(): void
+    {
+        [$ca, $estimation, $shares] = $this->journeeSuivi();
+
+        // À 12h30 : 90 € réels vs 120 € attendus (moitié des parts écoulée).
+        $t = SalesForecast::dayTrack($ca, $estimation, $shares, $this->paris('2026-10-15 12:30:00'));
+        self::assertSame(12, $t['hour']);
+        self::assertSame(90.0, $t['actual_so_far']);
+        self::assertSame(120.0, $t['expected_so_far']);
+        self::assertSame(-25.0, $t['delta_pct'], '(90 − 120) / 120 = −25 %.');
+        self::assertEqualsWithDelta(210.0, $t['projection_eod'], 0.0001, '90 + 240 × (1 − 0,5) = 210.');
+
+        // À 14h30 : 120 € réels vs 240 € attendus, plus rien à ajouter.
+        $t14 = SalesForecast::dayTrack($ca, $estimation, $shares, $this->paris('2026-10-15 14:30:00'));
+        self::assertSame(14, $t14['hour']);
+        self::assertSame(120.0, $t14['actual_so_far']);
+        self::assertSame(240.0, $t14['expected_so_far']);
+        self::assertSame(-50.0, $t14['delta_pct']);
+        self::assertEqualsWithDelta(120.0, $t14['projection_eod'], 0.0001, 'Part écoulée = 1 → projection = réel.');
+    }
+
+    public function test_daytrack_delta_null_quand_attendu_zero(): void
+    {
+        // Estimation nulle : attendu 0 à toute heure → pas de division.
+        $t = SalesForecast::dayTrack([10 => 50.0], 0.0, [10 => 1.0], $this->paris('2026-10-15 12:00:00'));
+        self::assertSame(0.0, $t['expected_so_far']);
+        self::assertNull($t['delta_pct']);
+        self::assertSame(50.0, $t['projection_eod'], 'Rien à ajouter : projection = réel.');
+
+        // Estimation positive mais toutes les ventes arrivent plus tard :
+        // l'attendu à cette heure est encore 0 → delta null aussi.
+        $t2 = SalesForecast::dayTrack([10 => 50.0], 100.0, [20 => 1.0], $this->paris('2026-10-15 12:00:00'));
+        self::assertNull($t2['delta_pct']);
+        self::assertEqualsWithDelta(150.0, $t2['projection_eod'], 0.0001, '50 + 100 × (1 − 0) = 150.');
+    }
+
+    public function test_daytrack_repli_lineaire_sans_parts_horaires(): void
+    {
+        // Aucune part → 1/24 par heure : à 9h15, 10/24e de journée écoulés.
+        $t = SalesForecast::dayTrack([9 => 100.0], 240.0, [], $this->paris('2026-10-15 09:15:00'));
+        self::assertEqualsWithDelta(240.0 / 24, $t['cum_expected'][0], 0.0001);
+        self::assertEqualsWithDelta(240.0 * 10 / 24, $t['cum_expected'][9], 0.0001);
+        self::assertEqualsWithDelta(240.0, $t['cum_expected'][23], 0.0001);
+        self::assertEqualsWithDelta(100.0, $t['expected_so_far'], 0.0001);
+        self::assertSame(0.0, $t['delta_pct'], '100 réels vs 100 attendus.');
+        self::assertEqualsWithDelta(240.0, $t['projection_eod'], 0.0001, '100 + 240 × (1 − 10/24) = 240.');
+
+        // Parts toutes nulles → même repli linéaire.
+        $t2 = SalesForecast::dayTrack([9 => 100.0], 240.0, [12 => 0.0, 18 => 0.0], $this->paris('2026-10-15 09:15:00'));
+        self::assertEqualsWithDelta(100.0, $t2['expected_so_far'], 0.0001);
+    }
+
+    public function test_daytrack_heures_manquantes_comptent_pour_zero(): void
+    {
+        // Seule une vente à 23h : le cumulé reste 0 jusqu'à 22h.
+        $t = SalesForecast::dayTrack([23 => 10.0], 20.0, [23 => 1.0], $this->paris('2026-10-15 23:30:00'));
+
+        for ($h = 0; $h <= 22; $h++) {
+            self::assertSame(0.0, $t['cum_actual'][$h], "Heure $h absente → cumulé 0.");
+        }
+        self::assertSame(10.0, $t['cum_actual'][23]);
+        self::assertSame(10.0, $t['actual_so_far']);
+        self::assertEqualsWithDelta(20.0, $t['expected_so_far'], 0.0001);
+        self::assertSame(-50.0, $t['delta_pct']);
+    }
 }

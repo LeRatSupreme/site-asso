@@ -16,6 +16,7 @@ declare(strict_types=1);
  * @var array<string,mixed> $kpis
  * @var list<array<string,mixed>> $insights
  * @var array<string,mixed> $forecast      Prévisions (days, today, yesterday, history, reliable…)
+ * @var array<string,mixed> $day_track     Estimation du jour (window, estimate, reliable, track, now_hour)
  * @var array<int,array{ca:float,qty:int,tx:int}> $weekday   CA par jour de semaine (0 = lundi)
  * @var array<int,array{ca:float,qty:int,tx:int}> $hourly    CA par heure (0..23)
  * @var list<string> $products             Produits distincts (sélecteur tendance)
@@ -237,6 +238,68 @@ $iconSvg = static function (string $name): string {
                     <span class="chart-sub fc-note">Prévisions fiables à partir de 7 jours d'historique</span>
                 <?php endif; ?>
                 <div class="chart-canvas"><canvas id="chart-forecast" height="120"></canvas></div>
+            <?php endif; ?>
+        </div>
+
+        <?php
+        // Carte « Estimation du jour » : avance et suivi live du jour sur
+        // une fenêtre d'analyse au choix (7/14/30 j, paramètre GET « fw »).
+        $dtTrack = $day_track['track'] ?? null;
+        $dtFw    = (int) ($day_track['window'] ?? 14);
+        $dtEst   = $day_track['estimate'] ?? null;
+        $dtHour  = (int) ($day_track['now_hour'] ?? 0);
+        $dtDelta = $dtTrack['delta_pct'] ?? null;
+        $dtUp    = $dtDelta === null ? null : ($dtDelta >= 0);
+        $dtProj  = (float) ($dtTrack['projection_eod'] ?? 0.0);
+        $dtHasEst = $dtEst !== null && (float) $dtEst > 0;
+
+        // Liens de fenêtre : GET courant (période, catégorie, paiement,
+        // granularité, produit…) avec seul « fw » surchargé.
+        $token = $token ?? '';
+        $dtUrl = static function (int $w) use ($kiosk, $token): string {
+            $params           = $_GET;
+            $params['fw']     = (string) $w;
+            $path = $kiosk
+                ? '/kiosque/admin/analytics/' . rawurlencode($token)
+                : '/admin/analytics';
+
+            return url($path) . '?' . http_build_query($params);
+        };
+        ?>
+        <div class="card surface glass chart-card chart-span-2">
+            <div class="chart-head">
+                <div>
+                    <h2 class="chart-title">Estimation du jour</h2>
+                    <span class="chart-sub">Fenêtre d'analyse : <?= $dtFw ?> derniers jours</span>
+                </div>
+                <div class="af-pills dt-pills">
+                    <?php foreach ([7 => '7 j', 14 => '14 j', 30 => '30 j'] as $w => $lbl): ?>
+                        <a class="af-pill <?= $dtFw === $w ? 'is-active' : '' ?>" href="<?= e($dtUrl($w)) ?>"><?= e($lbl) ?></a>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+            <?php if (!$dtHasEst): ?>
+                <p class="muted fc-empty">Pas assez d'historique sur la fenêtre.</p>
+            <?php else: ?>
+                <div class="fc-chips dt-chips">
+                    <span class="kpi-delta is-muted">Estimation journée : <?= e(formatPrice((float) $dtEst)) ?></span>
+                    <span class="kpi-delta is-muted">Réel à <?= $dtHour ?>h : <?= e(formatPrice((float) ($dtTrack['actual_so_far'] ?? 0.0))) ?></span>
+                    <?php if ($dtUp !== null): ?>
+                        <span class="kpi-delta <?= $dtUp ? 'is-up' : 'is-down' ?>">
+                            <?= $dtUp ? '↑' : '↓' ?> <?= number_format(abs($dtDelta), 1, ',', ' ') ?>% vs attendu à cette heure
+                        </span>
+                    <?php else: ?>
+                        <span class="kpi-delta is-muted">— vs attendu à cette heure</span>
+                    <?php endif; ?>
+                    <span class="kpi-delta <?= $dtProj >= (float) $dtEst ? 'is-up' : 'is-down' ?>">
+                        Projection fin de journée : <?= e(formatPrice($dtProj)) ?> ·
+                        <?= $dtProj >= (float) $dtEst ? 'au-dessus' : 'en-dessous' ?> de l'estimation
+                    </span>
+                    <?php if (empty($day_track['reliable'])): ?>
+                        <span class="kpi-delta is-muted">Historique récent — estimation indicative</span>
+                    <?php endif; ?>
+                </div>
+                <div class="chart-canvas"><canvas id="chart-daytrack" height="120"></canvas></div>
             <?php endif; ?>
         </div>
 
@@ -623,6 +686,63 @@ $iconSvg = static function (string $name): string {
                     tooltip: { callbacks: { label: function (c) { return c.dataset.label + ' : ' + (c.raw == null ? '—' : money(c.raw)); } } },
                 },
                 scales: { y: { beginAtZero: true, ticks: { callback: money } } },
+            },
+        });
+    }
+
+    // ---------- 1ter. Estimation du jour : cumul réel vs attendu ----------
+    // Le cumul du jour s'arrête à l'heure courante (null au-delà), la
+    // courbe attendue court sur 0h→23h (tirets violets).
+    var dt = data.day_track || null;
+    var ctxDt = document.getElementById('chart-daytrack');
+    if (ctxDt && dt && dt.track && dt.estimate != null && Number(dt.estimate) > 0) {
+        var dtT = dt.track;
+        var dtHour = Number(dtT.hour);
+        var dtLabels = [];
+        for (var di = 0; di < 24; di++) { dtLabels.push(di + 'h'); }
+        var dtToday = (dtT.cum_actual || []).map(function (v, i) {
+            return i <= dtHour ? Number(v) : null;
+        });
+        new Chart(ctxDt, {
+            type: 'line',
+            data: {
+                labels: dtLabels,
+                datasets: [
+                    {
+                        label: "Aujourd'hui (cumulé €)",
+                        data: dtToday,
+                        borderColor: teal,
+                        backgroundColor: 'rgba(72,189,211,.15)',
+                        fill: true,
+                        tension: 0.3,
+                        pointRadius: 3,
+                        pointBackgroundColor: teal,
+                        spanGaps: false,
+                    },
+                    {
+                        label: 'Attendu (cumulé €)',
+                        data: (dtT.cum_expected || []).map(Number),
+                        borderColor: violet,
+                        borderDash: [6, 6],
+                        fill: false,
+                        tension: 0.3,
+                        pointRadius: 0,
+                        pointHitRadius: 8,
+                    },
+                ],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    legend: { position: 'bottom' },
+                    tooltip: { callbacks: { label: function (c) { return c.dataset.label + ' : ' + (c.raw == null ? '—' : money(c.raw)); } } },
+                },
+                scales: {
+                    x: { ticks: { maxRotation: 0, autoSkip: true, autoSkipPadding: 4 } },
+                    y: { beginAtZero: true, ticks: { callback: money } },
+                },
             },
         });
     }
@@ -1099,6 +1219,11 @@ $iconSvg = static function (string $name): string {
 .fc-note { display: block; margin: -0.6rem 0 0.75rem; }
 .fc-empty { margin: 0; padding: 0.5rem 0 1rem; }
 .pt-form { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; justify-content: flex-end; }
+
+/* ---- Estimation du jour ---- */
+.dt-pills { gap: 0.3rem; }
+.dt-pills .af-pill { padding: 0.32rem 0.75rem; font-size: 0.78rem; text-decoration: none; }
+.dt-chips { justify-content: flex-start; margin-bottom: 0.75rem; }
 
 /* ---- Heatmap ---- */
 .heatmap-card { overflow-x: auto; }

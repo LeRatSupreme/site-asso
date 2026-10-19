@@ -138,6 +138,73 @@ final class SalesForecast
     }
 
     /**
+     * Suivi « estimation du jour » : compare le CA cumulé du jour à la
+     * courbe attendue (estimation × parts horaires cumulées) et projette
+     * la fin de journée si le rythme actuel se maintient.
+     *
+     * Les heures absentes de $todayHourlyCa comptent pour 0 ; les heures
+     * sans part horaire ont une part 0 (le cumulé attendu conserve sa
+     * valeur précédente). Sans parts exploitables (vides ou toutes
+     * nulles), répartition linéaire 1/24 — même repli que
+     * proRatedForecast.
+     *
+     * @param array<int,float> $todayHourlyCa [heure => CA du jour à cette heure]
+     * @param array<int,float> $hourlyShares  [heure => part 0..1] (somme ≈ 1)
+     * @return array{cum_actual:list<float>,cum_expected:list<float>,actual_so_far:float,expected_so_far:float,delta_pct:?float,projection_eod:float,hour:int}
+     */
+    public static function dayTrack(array $todayHourlyCa, float $dayEstimate, array $hourlyShares, \DateTimeImmutable $now): array
+    {
+        $now  = $now->setTimezone(new \DateTimeZone(self::TZ));
+        $hour = (int) $now->format('G');
+
+        // Parts horaires effectives (heures valides, parts > 0 uniquement).
+        $shares = [];
+        foreach ($hourlyShares as $h => $s) {
+            $h = (int) $h;
+            if ($h >= 0 && $h <= 23 && (float) $s > 0.0) {
+                $shares[$h] = (float) $s;
+            }
+        }
+        if ($shares === []) {
+            $shares = array_fill(0, 24, 1 / 24);
+        }
+
+        // Courbes cumulées 0h → 23h (24 entrées chacune).
+        $cumActual   = [];
+        $cumExpected = [];
+        $sumCa    = 0.0;
+        $sumShare = 0.0;
+        for ($h = 0; $h < 24; $h++) {
+            $sumCa    += (float) ($todayHourlyCa[$h] ?? 0.0);
+            $sumShare += (float) ($shares[$h] ?? 0.0);
+            $cumActual[]   = $sumCa;
+            $cumExpected[] = $dayEstimate * $sumShare;
+        }
+
+        $actualSoFar   = $cumActual[$hour];
+        $expectedSoFar = $cumExpected[$hour];
+
+        // Part de journée déjà écoulée à l'heure courante (pour la
+        // projection : le reste de l'estimation au rythme attendu).
+        $shareSoFar = 0.0;
+        for ($h = 0; $h <= $hour; $h++) {
+            $shareSoFar += (float) ($shares[$h] ?? 0.0);
+        }
+
+        return [
+            'cum_actual'     => $cumActual,
+            'cum_expected'   => $cumExpected,
+            'actual_so_far'  => $actualSoFar,
+            'expected_so_far' => $expectedSoFar,
+            'delta_pct'      => $expectedSoFar > 0
+                ? round((($actualSoFar - $expectedSoFar) / $expectedSoFar) * 100, 1)
+                : null,
+            'projection_eod' => $actualSoFar + $dayEstimate * max(0.0, 1.0 - $shareSoFar),
+            'hour'           => $hour,
+        ];
+    }
+
+    /**
      * Libellé court français d'un jour : « Ven 16/10 ».
      */
     public static function dayLabel(\DateTimeImmutable $date): string

@@ -68,7 +68,7 @@ final class AdminAnalyticsController extends AdminBaseController
      * temps, agrégats, prévisions, insights, payload JSON) — partagées
      * entre les rendus admin et kiosque.
      *
-     * @return array{filters:array<string,mixed>,periods:array<string,string>,categories:list<string>,hasSales:bool,kpis:array<string,mixed>,insights:list<array<string,mixed>>,forecast:array<string,mixed>,weekday:array<int,array{ca:float,qty:int,tx:int}>,hourly:array<int,array{ca:float,qty:int,tx:int}>,products:list<string>,productSelected:string,productWeekly:list<array{week:string,ca:float,qty:int}>,json:string}
+     * @return array{filters:array<string,mixed>,periods:array<string,string>,categories:list<string>,hasSales:bool,kpis:array<string,mixed>,insights:list<array<string,mixed>>,forecast:array<string,mixed>,day_track:array<string,mixed>,weekday:array<int,array{ca:float,qty:int,tx:int}>,hourly:array<int,array{ca:float,qty:int,tx:int}>,products:list<string>,productSelected:string,productWeekly:list<array{week:string,ca:float,qty:int}>,json:string}
      */
     private function buildPage(string $defaultPeriod = '30d', ?\DateTimeImmutable $now = null): array
     {
@@ -172,6 +172,58 @@ final class AdminAnalyticsController extends AdminBaseController
         $forecast['today']['label'] = SalesForecast::dayLabel($now);
         $forecast['now_hour']    = (int) $now->format('G');
 
+        // ---- Estimation du jour (fenêtre d'analyse au choix) ----
+        // Indépendante de la période affichée : la fenêtre fw (7/14/30 j,
+        // GET « fw », défaut 14) finit aujourd'hui et sert à la fois à
+        // l'estimation (moyenne par jour de semaine sur la fenêtre) et aux
+        // parts horaires attendues. Fiable dès min(7, fw-1) jours écoulés :
+        // fenêtre complète pour 7 j, une semaine pleine au-delà.
+        $fwRaw = $this->filter('fw', '14');
+        $fw    = in_array($fwRaw, ['7', '14', '30'], true) ? (int) $fwRaw : 14;
+
+        $trackFrom = $now->modify('-' . ($fw - 1) . ' days')->format('Y-m-d');
+        $trackTo   = $now->format('Y-m-d');
+
+        $trackDailyCa = [];
+        foreach (Analytics::revenueTrend($trackFrom, $trackTo, 'day', $category, $payment) as $b) {
+            $trackDailyCa[$b['bucket']] = (float) $b['ca'];
+        }
+
+        $trackForecast = SalesForecast::forecast($trackDailyCa, $now);
+        $dayEstimate   = $trackForecast['today']['forecast_full'];
+
+        // Parts horaires du CA sur la fenêtre (normalisées), et CA du jour
+        // heure par heure (aujourd'hui inclus dans la fenêtre).
+        $trackHourly    = Analytics::revenueByHour($trackFrom, $trackTo, $category, $payment);
+        $trackHourTotal = 0.0;
+        foreach ($trackHourly as $row) {
+            $trackHourTotal += $row['ca'];
+        }
+        $trackShares = [];
+        if ($trackHourTotal > 0) {
+            foreach ($trackHourly as $h => $row) {
+                $trackShares[(int) $h] = $row['ca'] / $trackHourTotal;
+            }
+        }
+
+        $todayHourlyCa = [];
+        foreach (Analytics::revenueByHour($trackTo, $trackTo, $category, $payment) as $h => $row) {
+            $todayHourlyCa[(int) $h] = (float) $row['ca'];
+        }
+
+        $dayTrack = [
+            'window'    => $fw,
+            'estimate'  => $dayEstimate,
+            'reliable'  => $trackForecast['elapsed_days'] >= min(7, $fw - 1),
+            'track'     => SalesForecast::dayTrack(
+                $todayHourlyCa,
+                (float) ($dayEstimate ?? 0.0),
+                $trackShares,
+                $now
+            ),
+            'now_hour'  => (int) $now->format('G'),
+        ];
+
         $weekday = Analytics::revenueByWeekday($from, $to, $category, $payment);
 
         // Produit suivi (sélecteur GET, défaut = produit star de la période).
@@ -214,6 +266,7 @@ final class AdminAnalyticsController extends AdminBaseController
             'table'      => $table,
             'insights'   => $insights,
             'forecast'   => $forecast,
+            'day_track'  => $dayTrack,
             'weekday'    => [
                 'labels' => ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'],
                 'ca'     => array_column($weekday, 'ca'),
@@ -253,6 +306,7 @@ final class AdminAnalyticsController extends AdminBaseController
             'kpis'           => $this->kpisWithDelta($kpis, $kpisPrev),
             'insights'       => $insights,
             'forecast'       => $forecast,
+            'day_track'      => $dayTrack,
             'weekday'        => $weekday,
             'hourly'         => $hourly,
             'products'       => $products,
