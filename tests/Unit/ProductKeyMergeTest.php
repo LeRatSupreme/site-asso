@@ -73,6 +73,20 @@ final class ProductKeyMergeTest extends TestCase
         )->execute(['los_' . bin2hex(random_bytes(6)), $date, $key, $qty]);
     }
 
+    private function addSale(string $description, string $productKey, ?string $category = null): void
+    {
+        $this->pdo->prepare(
+            "INSERT INTO sales (id, transaction_ref, sold_at, payment_method, quantity, description, product_key, category, price_ttc)
+             VALUES (?, ?, '2026-10-01 12:00:00', 'CARTE', 1, ?, ?, ?, 1.0)"
+        )->execute([
+            'sal_' . bin2hex(random_bytes(6)),
+            'tx_' . bin2hex(random_bytes(8)),
+            $description,
+            $productKey,
+            $category,
+        ]);
+    }
+
     private function addCount(string $key, int $qty, string $at): void
     {
         $this->pdo->prepare(
@@ -195,6 +209,7 @@ final class ProductKeyMergeTest extends TestCase
         self::assertSame(1, $moved['purchases']);
         self::assertSame(1, $moved['losses']);
         self::assertSame(1, $moved['aliases']);
+        self::assertSame(0, $moved['aliases_deduped'], 'Aucun doublon de libellé sur la cible : rien à consolider.');
         self::assertSame(1, $moved['counts']);
         self::assertSame(0, $moved['costs'], 'Aucun lot de coût : rien à déplacer.');
         self::assertSame(0, $moved['stocks'], 'Aucun stock de référence : rien à additionner.');
@@ -384,6 +399,104 @@ final class ProductKeyMergeTest extends TestCase
         /** @var list<string> $labels */
         $labels = $this->pdo->query('SELECT label FROM scan_labels ORDER BY label')->fetchAll(PDO::FETCH_COLUMN);
         self::assertSame(['CRISTALINE 50CL', 'Evian'], $labels);
+    }
+
+    public function test_merge_consolide_les_alias_en_doublon(): void
+    {
+        $target = 'Coca Cherry';
+        $source = 'coca cherry';
+
+        // Doublons de forme normalisée déjà sur la cible + alias de la source.
+        ProductAlias::save(['raw_description' => 'Coca Cherry', 'product_key' => $target, 'category' => 'Boissons']);
+        ProductAlias::save(['raw_description' => 'Coca_cherry', 'product_key' => $target, 'category' => 'ex: Spécial']);
+        ProductAlias::save(['raw_description' => 'Coca cherry', 'product_key' => $source]);
+
+        // Le libellé le plus vendu (« Coca Cherry », 3 ventes) doit survivre.
+        $this->addSale('Coca Cherry', $target, 'Boissons');
+        $this->addSale('Coca Cherry', $target, 'Boissons');
+        $this->addSale('Coca Cherry', $target, 'Boissons');
+        $this->addSale('Coca_cherry', $target, null);
+        $this->addSale('coca cherry', $source, null);
+
+        $moved = ProductKeyMerge::merge($source, $target, 'user_test');
+
+        self::assertSame(1, $moved['aliases'], 'L\'alias de la source est déplacé.');
+        self::assertSame(2, $moved['aliases_deduped'], 'Les deux doublons de forme normalisée sont supprimés.');
+
+        // Un seul alias survit : le libellé le plus vendu, catégorie conservée.
+        /** @var list<array<string,mixed>> $rows */
+        $rows = $this->pdo->query('SELECT raw_description, category FROM product_aliases')->fetchAll();
+        self::assertCount(1, $rows);
+        self::assertSame('Coca Cherry', (string) $rows[0]['raw_description']);
+        self::assertSame('Boissons', (string) $rows[0]['category']);
+
+        // Ventes des libellés absorbés : catégorie vide comblée, jamais écrasée.
+        $stmt = $this->pdo->prepare('SELECT description, category FROM sales ORDER BY description');
+        $stmt->execute();
+        $byDesc = [];
+        foreach ($stmt->fetchAll() as $sale) {
+            $byDesc[(string) $sale['description']] = (string) ($sale['category'] ?? '');
+        }
+        self::assertSame('Boissons', $byDesc['Coca_cherry']);
+        self::assertSame('Boissons', $byDesc['coca cherry']);
+
+        // Les orthographes supprimées restent résolvables (repli normalisé).
+        self::assertSame('Coca Cherry', ProductAlias::resolve('Coca Cherry'));
+        self::assertSame('Coca Cherry', ProductAlias::resolve('coca cherry'));
+        self::assertSame('Coca Cherry', ProductAlias::resolve('Coca_Cherry'));
+        self::assertNull(ProductAlias::resolve('Pepsi Max'));
+    }
+
+    /**
+     * @return list<array<string,string>>
+     */
+    private function survivorRow(string $id, string $raw, string $category, string $createdAt): array
+    {
+        return ['id' => $id, 'raw_description' => $raw, 'category' => $category, 'created_at' => $createdAt];
+    }
+
+    public function test_chooseSurvivor_prefere_le_libelle_le_plus_vendu(): void
+    {
+        $rows = [
+            $this->survivorRow('a1', 'Coca Cherry', 'Boissons', '2026-09-01 00:00:00'),
+            $this->survivorRow('b1', 'coca cherry', '', '2026-08-01 00:00:00'),
+        ];
+
+        $id = ProductAlias::chooseSurvivor($rows, ['coca cherry' => 5, 'Coca Cherry' => 2], 'Coca Cherry');
+
+        self::assertSame('b1', $id, 'Le libellé le plus vendu gagne malgré les autres critères.');
+    }
+
+    public function test_chooseSurvivor_a_egalite_auto_alias_puis_categorie(): void
+    {
+        $rows = [
+            $this->survivorRow('a1', 'coca cherry', '', '2026-08-01 00:00:00'),
+            $this->survivorRow('b1', 'Coca Cherry', '', '2026-09-01 00:00:00'),
+            $this->survivorRow('c1', 'Coca-cherry', 'Boissons', '2026-07-01 00:00:00'),
+        ];
+
+        // À usage égal, le libellé canonique (=== clé) bat les variantes.
+        self::assertSame('b1', ProductAlias::chooseSurvivor($rows, [], 'Coca Cherry'));
+
+        // Sans libellé canonique dans le groupe : la catégorie renseignée gagne.
+        unset($rows[1]);
+        self::assertSame('c1', ProductAlias::chooseSurvivor($rows, [], 'Coca Cherry'));
+    }
+
+    public function test_chooseSurvivor_a_egalite_totale_plus_ancien_puis_id(): void
+    {
+        $rows = [
+            $this->survivorRow('z9', 'coca cherry', '', '2026-09-01 00:00:00'),
+            $this->survivorRow('a2', 'Coca_cherry', '', '2026-09-01 00:00:00'),
+            $this->survivorRow('m3', 'Coca-cherry', '', '2026-08-01 00:00:00'),
+        ];
+
+        // Plus ancien d'abord…
+        self::assertSame('m3', ProductAlias::chooseSurvivor($rows, [], 'Coca Cherry'));
+
+        // …puis, à ancienneté égale, l'id le plus petit (déterminisme).
+        $rows[2]['created_at'] = '2026-09-01 00:00:00';
+        self::assertSame('a2', ProductAlias::chooseSurvivor($rows, [], 'Coca Cherry'));
     }
 
     public function test_fiches_jumelles_repointees_et_source_supprimee(): void
