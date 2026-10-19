@@ -275,7 +275,7 @@ final class ProductAlias extends Model
             return ['repointed' => 0, 'absorbed' => 0];
         }
 
-        $stmt = self::pdo()->prepare('SELECT id, raw_description FROM product_aliases WHERE product_key = ?');
+        $stmt = self::pdo()->prepare('SELECT id, raw_description, product_key FROM product_aliases WHERE product_key = ?');
         $stmt->execute([$from]);
         /** @var list<array<string,mixed>> $rows */
         $rows = $stmt->fetchAll();
@@ -284,6 +284,13 @@ final class ProductAlias extends Model
         $repointed = 0;
         $absorbed = 0;
         foreach ($rows as $row) {
+            // Collation ci : la requête attrape aussi les lignes déjà
+            // rattachées à la cible par une variante de casse — elles
+            // sont déjà en place, rien à faire ni à compter.
+            if ((string) $row['product_key'] === $to) {
+                continue;
+            }
+
             $isSelf = strcasecmp(trim((string) $row['raw_description']), $from) === 0;
             if ($isSelf && !self::labelIsLive((string) $row['raw_description'], $liveDays)) {
                 self::deleteRow((string) $row['id']);
