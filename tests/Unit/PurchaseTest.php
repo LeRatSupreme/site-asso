@@ -39,7 +39,10 @@ final class PurchaseTest extends TestCase
             self::markTestSkipped('Table purchases absente de aeic_test : importez database/schema.sql.');
         }
 
-        $this->reset($pdo, ['purchases', 'product_costs', 'product_stocks']);
+        // « sales » inclus : test_stats_between_et_ca_between_bornes_incluses
+        // exige une base vide AU DÉPART — l'ordre d'exécution étant aléatoire,
+        // les ventes semées par d'autres classes ne doivent pas fuiter ici.
+        $this->reset($pdo, ['purchases', 'product_costs', 'product_stocks', 'sales']);
         $this->applyPurchasesVatMigration($pdo);
         Model::setTestPdo($pdo);
     }
