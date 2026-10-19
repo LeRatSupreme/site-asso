@@ -310,6 +310,177 @@ final class Analytics extends Model
     }
 
     // -----------------------------------------------------------------
+    //  Prévisions & rythmes semaine / heure
+    // -----------------------------------------------------------------
+
+    /**
+     * CA / volume / transactions par JOUR DE SEMAINE sur la fenêtre.
+     * WEEKDAY(sold_at) est fiable : sold_at stocke l'heure murale
+     * parisienne (jamais de décalage de fuseau à appliquer).
+     *
+     * @return array<int,array{ca:float,qty:int,tx:int}>  Clés 0 (lundi) à 6 (dimanche).
+     */
+    public static function revenueByWeekday(
+        ?string $from,
+        ?string $to,
+        ?string $category = null,
+        ?string $payment = null
+    ): array {
+        $w = self::buildWhere($from ?? '', $to ?? '', $category ?? '', $payment ?? '');
+
+        $sql = 'SELECT WEEKDAY(sold_at) AS d,
+                       COALESCE(SUM(price_ttc), 0) AS ca,
+                       COALESCE(SUM(quantity), 0) AS qty,
+                       COUNT(*) AS tx
+                FROM sales
+                WHERE ' . $w['sql'] . '
+                GROUP BY d';
+
+        try {
+            $stmt = self::pdo()->prepare($sql);
+            $stmt->execute($w['args']);
+            $rows = $stmt->fetchAll();
+        } catch (\Throwable) {
+            $rows = [];
+        }
+
+        $out = [];
+        for ($d = 0; $d < 7; $d++) {
+            $out[$d] = ['ca' => 0.0, 'qty' => 0, 'tx' => 0];
+        }
+        foreach ($rows as $r) {
+            $d = (int) ($r['d'] ?? -1);
+            if ($d >= 0 && $d <= 6) {
+                $out[$d]['ca'] += (float) ($r['ca'] ?? 0);
+                $out[$d]['qty'] += (int) ($r['qty'] ?? 0);
+                $out[$d]['tx'] += (int) ($r['tx'] ?? 0);
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * CA / volume / transactions par HEURE de la journée sur la fenêtre.
+     * HOUR(sold_at) = heure murale parisienne.
+     *
+     * @return array<int,array{ca:float,qty:int,tx:int}>  Clés 0 à 23.
+     */
+    public static function revenueByHour(
+        ?string $from,
+        ?string $to,
+        ?string $category = null,
+        ?string $payment = null
+    ): array {
+        $w = self::buildWhere($from ?? '', $to ?? '', $category ?? '', $payment ?? '');
+
+        $sql = 'SELECT HOUR(sold_at) AS h,
+                       COALESCE(SUM(price_ttc), 0) AS ca,
+                       COALESCE(SUM(quantity), 0) AS qty,
+                       COUNT(*) AS tx
+                FROM sales
+                WHERE ' . $w['sql'] . '
+                GROUP BY h';
+
+        try {
+            $stmt = self::pdo()->prepare($sql);
+            $stmt->execute($w['args']);
+            $rows = $stmt->fetchAll();
+        } catch (\Throwable) {
+            $rows = [];
+        }
+
+        $out = [];
+        for ($h = 0; $h < 24; $h++) {
+            $out[$h] = ['ca' => 0.0, 'qty' => 0, 'tx' => 0];
+        }
+        foreach ($rows as $r) {
+            $h = (int) ($r['h'] ?? -1);
+            if ($h >= 0 && $h <= 23) {
+                $out[$h]['ca'] += (float) ($r['ca'] ?? 0);
+                $out[$h]['qty'] += (int) ($r['qty'] ?? 0);
+                $out[$h]['tx'] += (int) ($r['tx'] ?? 0);
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * Tendance hebdomadaire d'un produit (CA + volume par semaine, du
+     * lundi au dimanche), semaines vides zéro-remplies (idiome
+     * enumerateBuckets). Le produit est rapproché par product_key OU
+     * description (les ventes sans clé canonique restent suivies).
+     *
+     * @return list<array{week:string, ca:float, qty:int}>  week = lundi « Y-m-d ».
+     */
+    public static function productWeeklyTrend(
+        string $productKey,
+        ?string $from,
+        ?string $to,
+        string $category = '',
+        string $payment = ''
+    ): array {
+        $from = $from ?? '';
+        $to   = $to ?? '';
+
+        try {
+            $start = new \DateTimeImmutable($from);
+            new \DateTimeImmutable($to);
+        } catch (\Throwable) {
+            return [];
+        }
+
+        // Alignement sur le LUNDI de la semaine de départ : les buckets
+        // SQL sont les lundis (WEEKDAY), la fenêtre peut démarrer en
+        // cours de semaine.
+        $weekStart = $start->modify('-' . ((int) $start->format('N') - 1) . ' days');
+
+        $w = self::buildWhere($from, $to, $category, $payment);
+
+        $sql = 'SELECT DATE(DATE_SUB(sold_at, INTERVAL WEEKDAY(sold_at) DAY)) AS bucket,
+                       COALESCE(SUM(price_ttc), 0) AS ca,
+                       COALESCE(SUM(quantity), 0) AS qty
+                FROM sales
+                WHERE ' . $w['sql'] . '
+                  AND (product_key = ? OR description = ?)
+                GROUP BY bucket';
+
+        $args = array_merge($w['args'], [$productKey, $productKey]);
+
+        try {
+            $stmt = self::pdo()->prepare($sql);
+            $stmt->execute($args);
+            $rows = $stmt->fetchAll();
+        } catch (\Throwable) {
+            $rows = [];
+        }
+
+        $byBucket = [];
+        foreach ($rows as $r) {
+            $b = (string) ($r['bucket'] ?? '');
+            if ($b !== '') {
+                $byBucket[$b] = [
+                    'ca'  => (float) ($r['ca'] ?? 0),
+                    'qty' => (int) ($r['qty'] ?? 0),
+                ];
+            }
+        }
+
+        $out = [];
+        foreach (self::enumerateBuckets($weekStart->format('Y-m-d'), $to, 'week') as $b) {
+            $entry = $byBucket[$b['key']] ?? ['ca' => 0.0, 'qty' => 0];
+            $out[] = [
+                'week' => $b['key'],
+                'ca'   => $entry['ca'],
+                'qty'  => $entry['qty'],
+            ];
+        }
+
+        return $out;
+    }
+
+    // -----------------------------------------------------------------
     //  Répartitions
     // -----------------------------------------------------------------
 

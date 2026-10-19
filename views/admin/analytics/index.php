@@ -15,6 +15,12 @@ declare(strict_types=1);
  * @var bool $hasSales
  * @var array<string,mixed> $kpis
  * @var list<array<string,mixed>> $insights
+ * @var array<string,mixed> $forecast      Prévisions (days, today, yesterday, history, reliable…)
+ * @var array<int,array{ca:float,qty:int,tx:int}> $weekday   CA par jour de semaine (0 = lundi)
+ * @var array<int,array{ca:float,qty:int,tx:int}> $hourly    CA par heure (0..23)
+ * @var list<string> $products             Produits distincts (sélecteur tendance)
+ * @var string $productSelected            Produit suivi par la tendance hebdo
+ * @var list<array{week:string,ca:float,qty:int}> $productWeekly Tendance hebdo du produit
  * @var string $json  Payload JSON injecté dans un <script>.
  * @var bool $kiosk   Vrai si rendu dans le layout kiosque (défaut : false).
  * @var string $token Jeton kiosque ADMIN (utilisé si $kiosk).
@@ -179,6 +185,61 @@ $iconSvg = static function (string $name): string {
             <div class="chart-canvas"><canvas id="chart-trend" height="120"></canvas></div>
         </div>
 
+        <?php
+        // Chips du jour (pro-rata) et d'hier, même motif que les deltas KPI.
+        $fcToday  = $forecast['today'];
+        $fcYday   = $forecast['yesterday'];
+        $fcChips  = [];
+        if ($fcToday['forecast_so_far'] !== null) {
+            $fcChips[] = [
+                'delta' => $fcToday['delta_pct'],
+                'text'  => sprintf(
+                    "Aujourd'hui %dh : %s vs %s (pro-rata)",
+                    (int) ($forecast['now_hour'] ?? 0),
+                    formatPrice((float) $fcToday['actual']),
+                    formatPrice((float) $fcToday['forecast_so_far'])
+                ),
+            ];
+        }
+        if ($fcYday['forecast_full'] !== null) {
+            $fcChips[] = [
+                'delta' => $fcYday['delta_pct'],
+                'text'  => sprintf(
+                    'Hier : %s vs %s',
+                    formatPrice((float) $fcYday['actual']),
+                    formatPrice((float) $fcYday['forecast_full'])
+                ),
+            ];
+        }
+        ?>
+        <div class="card surface glass chart-card chart-span-2">
+            <div class="chart-head">
+                <h2 class="chart-title">Prévisions</h2>
+                <div class="fc-chips">
+                    <?php foreach ($fcChips as $chip):
+                        $d  = $chip['delta'];
+                        $up = $d === null ? null : ($d >= 0);
+                    ?>
+                        <?php if ($up !== null): ?>
+                            <span class="kpi-delta <?= $up ? 'is-up' : 'is-down' ?>">
+                                <?= e($chip['text']) ?> <?= $up ? '↑' : '↓' ?> <?= number_format(abs($d), 1, ',', ' ') ?>%
+                            </span>
+                        <?php else: ?>
+                            <span class="kpi-delta is-muted"><?= e($chip['text']) ?> —</span>
+                        <?php endif; ?>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+            <?php if (($forecast['elapsed_days'] ?? 0) < 1): ?>
+                <p class="muted fc-empty">Prévisions indisponibles : aucun jour d'historique écoulé sur la période.</p>
+            <?php else: ?>
+                <?php if (empty($forecast['reliable'])): ?>
+                    <span class="chart-sub fc-note">Prévisions fiables à partir de 7 jours d'historique</span>
+                <?php endif; ?>
+                <div class="chart-canvas"><canvas id="chart-forecast" height="120"></canvas></div>
+            <?php endif; ?>
+        </div>
+
         <div class="card surface glass chart-card">
             <div class="chart-head">
                 <h2 class="chart-title">Top 10 produits</h2>
@@ -210,6 +271,71 @@ $iconSvg = static function (string $name): string {
             </div>
             <div class="chart-canvas"><canvas id="chart-activity" height="160"></canvas></div>
         </div>
+
+        <?php
+        // Meilleur jour de semaine et heure de pointe (calculs serveur).
+        $dayNames  = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
+        $wdCa      = array_column($weekday, 'ca');
+        $bestDay   = '—';
+        if ($wdCa !== [] && max($wdCa) > 0) {
+            $bestDay = $dayNames[(int) array_search(max($wdCa), $wdCa, true)];
+        }
+        $hrCa     = array_column($hourly, 'ca');
+        $peakHour = '—';
+        if ($hrCa !== [] && max($hrCa) > 0) {
+            $peakHour = ((int) array_search(max($hrCa), $hrCa, true)) . 'h';
+        }
+
+        $pwCa  = array_sum(array_column($productWeekly, 'ca'));
+        $pwQty = array_sum(array_column($productWeekly, 'qty'));
+        ?>
+        <div class="card surface glass chart-card">
+            <div class="chart-head">
+                <h2 class="chart-title">Par jour de semaine</h2>
+                <span class="chart-sub">Meilleur jour : <?= e($bestDay) ?></span>
+            </div>
+            <div class="chart-canvas"><canvas id="chart-weekday" height="160"></canvas></div>
+        </div>
+
+        <div class="card surface glass chart-card">
+            <div class="chart-head">
+                <h2 class="chart-title">Par heure</h2>
+                <span class="chart-sub">Heure de pointe : <?= e($peakHour) ?></span>
+            </div>
+            <div class="chart-canvas"><canvas id="chart-hourly" height="160"></canvas></div>
+        </div>
+
+        <?php if ($products !== []): ?>
+        <div class="card surface glass chart-card chart-span-2">
+            <div class="chart-head">
+                <div>
+                    <h2 class="chart-title">Tendance produit (semaines)</h2>
+                    <span class="chart-sub">
+                        <?= $productSelected !== '' ? e($productSelected) . ' — ' : '' ?>
+                        CA <?= e(formatPrice((float) $pwCa)) ?> · <?= number_format((float) $pwQty, 0, ',', ' ') ?> ventes sur la période
+                    </span>
+                </div>
+                <!-- Le sélecteur re-soumet la page en GET en préservant les
+                     filtres (période + dates custom, catégorie, paiement). -->
+                <form method="get" class="pt-form">
+                    <?php if ($filters['period'] === 'custom'): ?>
+                        <input type="hidden" name="from" value="<?= e($filters['fromInput']) ?>">
+                        <input type="hidden" name="to" value="<?= e($filters['toInput']) ?>">
+                    <?php endif; ?>
+                    <input type="hidden" name="period" value="<?= e($filters['period']) ?>">
+                    <input type="hidden" name="category" value="<?= e($filters['category']) ?>">
+                    <input type="hidden" name="payment" value="<?= e($filters['payment']) ?>">
+                    <label class="af-label" for="product-select">Produit</label>
+                    <select name="product" id="product-select" class="af-select">
+                        <?php foreach ($products as $p): ?>
+                            <option value="<?= e($p) ?>" <?= $p === $productSelected ? 'selected' : '' ?>><?= e($p) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </form>
+            </div>
+            <div class="chart-canvas"><canvas id="chart-product-weekly" height="120"></canvas></div>
+        </div>
+        <?php endif; ?>
     </div>
 
     <!-- ============================================================ -->
@@ -438,6 +564,69 @@ $iconSvg = static function (string $name): string {
         });
     }
 
+    // ---------- 1bis. Prévisions : barres CA réalisé + ligne pointillée ----------
+    // Barres = CA quotidien réalisé (barre du jour en ambre), ligne
+    // violette en tirets = prévision (pleine au jour courant, puis 7 jours).
+    var fc = data.forecast || null;
+    var ctxFc = document.getElementById('chart-forecast');
+    if (ctxFc && fc && Number(fc.elapsed_days) > 0) {
+        var fLabels = ((fc.history || {}).labels || []).slice();
+        var fBars   = ((fc.history || {}).values || []).slice();
+        var fLine   = fBars.slice();
+        var fTi     = Number(fc.today_index);
+        if (fTi >= 0 && fTi < fLine.length) {
+            fLine[fTi] = (fc.today && fc.today.forecast_full != null) ? Number(fc.today.forecast_full) : null;
+        }
+        (fc.days || []).forEach(function (d) {
+            fLabels.push(d.label);
+            fBars.push(null);
+            fLine.push(d.value == null ? null : Number(d.value));
+        });
+        var fBg = fBars.map(function (v, i) {
+            return i === fTi ? 'rgba(245,158,11,.75)' : 'rgba(72,189,211,.55)';
+        });
+        new Chart(ctxFc, {
+            type: 'bar',
+            data: {
+                labels: fLabels,
+                datasets: [
+                    {
+                        type: 'bar',
+                        label: 'CA réalisé (€)',
+                        data: fBars,
+                        backgroundColor: fBg,
+                        borderColor: teal,
+                        borderWidth: 1,
+                        borderRadius: 4,
+                        order: 2,
+                    },
+                    {
+                        type: 'line',
+                        label: 'Prévision (€)',
+                        data: fLine,
+                        borderColor: violet,
+                        borderDash: [6, 6],
+                        pointRadius: 3,
+                        pointBackgroundColor: violet,
+                        fill: false,
+                        spanGaps: false,
+                        order: 1,
+                    },
+                ],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    legend: { position: 'bottom' },
+                    tooltip: { callbacks: { label: function (c) { return c.dataset.label + ' : ' + (c.raw == null ? '—' : money(c.raw)); } } },
+                },
+                scales: { y: { beginAtZero: true, ticks: { callback: money } } },
+            },
+        });
+    }
+
     // ---------- 2. Top 10 produits (bar horizontal, cliquable) ----------
     var tp = data.topProducts || { labels: [], ca: [] };
     var ctxTop = document.getElementById('chart-top');
@@ -586,6 +775,103 @@ $iconSvg = static function (string $name): string {
                 interaction: { mode: 'index', intersect: false },
                 plugins: { legend: { position: 'bottom' } },
                 scales: { y: { beginAtZero: true } },
+            },
+        });
+    }
+
+    // ---------- 5bis. CA par jour de semaine ----------
+    var wd = data.weekday || { labels: [], ca: [] };
+    var ctxWd = document.getElementById('chart-weekday');
+    if (ctxWd) {
+        new Chart(ctxWd, {
+            type: 'bar',
+            data: {
+                labels: wd.labels,
+                datasets: [{
+                    label: 'CA (€)',
+                    data: wd.ca,
+                    backgroundColor: 'rgba(97,80,170,.55)',
+                    borderColor: violet,
+                    borderWidth: 1,
+                    borderRadius: 4,
+                }],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: { callbacks: { label: function (c) { return money(c.raw); } } },
+                },
+                scales: { y: { beginAtZero: true, ticks: { callback: money } } },
+            },
+        });
+    }
+
+    // ---------- 5ter. CA par heure ----------
+    var hr = data.hourly || { labels: [], ca: [] };
+    var ctxHr = document.getElementById('chart-hourly');
+    if (ctxHr) {
+        new Chart(ctxHr, {
+            type: 'bar',
+            data: {
+                labels: hr.labels,
+                datasets: [{
+                    label: 'CA (€)',
+                    data: hr.ca,
+                    backgroundColor: 'rgba(245,158,11,.55)',
+                    borderColor: amber,
+                    borderWidth: 1,
+                    borderRadius: 3,
+                }],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: { callbacks: { label: function (c) { return money(c.raw); } } },
+                },
+                scales: {
+                    x: { ticks: { maxRotation: 0, autoSkip: true, autoSkipPadding: 4 } },
+                    y: { beginAtZero: true, ticks: { callback: money } },
+                },
+            },
+        });
+    }
+
+    // ---------- 5quater. Tendance produit (semaines) + sélecteur auto ----------
+    var pw = data.product_weekly || { labels: [], ca: [] };
+    var pwSelect = document.getElementById('product-select');
+    if (pwSelect) {
+        pwSelect.addEventListener('change', function () { pwSelect.form.submit(); });
+    }
+    var ctxPw = document.getElementById('chart-product-weekly');
+    if (ctxPw) {
+        new Chart(ctxPw, {
+            type: 'line',
+            data: {
+                labels: pw.labels,
+                datasets: [{
+                    label: 'CA (€)',
+                    data: pw.ca,
+                    borderColor: teal,
+                    backgroundColor: 'rgba(72,189,211,.12)',
+                    tension: 0.3,
+                    pointBackgroundColor: teal,
+                    pointRadius: 3,
+                    fill: true,
+                }],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: { callbacks: { label: function (c) { return money(c.raw); } } },
+                },
+                scales: { y: { beginAtZero: true, ticks: { callback: money } } },
             },
         });
     }
@@ -807,6 +1093,12 @@ $iconSvg = static function (string $name): string {
 .chart-canvas { position: relative; height: 300px; }
 .chart-canvas-square { height: 280px; max-width: 360px; margin: 0 auto; }
 @media (max-width: 860px) { .analytics-grid { grid-template-columns: 1fr; } .chart-span-2 { grid-column: auto; } }
+
+/* ---- Prévisions ---- */
+.fc-chips { display: flex; flex-wrap: wrap; gap: 0.35rem 0.75rem; justify-content: flex-end; }
+.fc-note { display: block; margin: -0.6rem 0 0.75rem; }
+.fc-empty { margin: 0; padding: 0.5rem 0 1rem; }
+.pt-form { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; justify-content: flex-end; }
 
 /* ---- Heatmap ---- */
 .heatmap-card { overflow-x: auto; }
