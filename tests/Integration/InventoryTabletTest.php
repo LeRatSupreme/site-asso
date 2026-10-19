@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Integration;
 
 use App\Models\InventoryCount;
+use App\Models\Model;
 
 /**
  * Inventaire tablette SumUp : cycle de vie complet d'une session.
@@ -47,6 +48,17 @@ final class InventoryTabletTest extends IntegrationTestCase
         // = SURPLUS de 10, alignera le stock de référence à la hausse).
         $this->insertCount('inv_tab_eau', '2026-01-01 10:00:00', 'eau', 150);
         $this->insertCount('inv_tab_rb', '2026-01-01 10:05:00', 'redbull', 0);
+
+        // Les assertions sur les modèles (theoreticalStock) tournent dans le
+        // processus de test, pas dans le sous-processus du runner : on
+        // injecte la connexion à aeic_test.
+        Model::setTestPdo($pdo);
+    }
+
+    protected function tearDown(): void
+    {
+        Model::setTestPdo(null);
+        parent::tearDown();
     }
 
     public function test_page_inventaire_tablette_s_affiche(): void
