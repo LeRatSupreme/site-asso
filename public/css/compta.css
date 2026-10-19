@@ -1260,6 +1260,11 @@ details.howto p {
     box-shadow: 0 4px 14px rgba(72, 189, 211, 0.25);
 }
 
+/* ---- Sous-onglets de niveau 2 (bloc « Pertes / Inventaire ») :
+      mêmes pastilles, un cran plus discrètes, sous la barre principale. */
+.op-subtabs { margin: -1.05rem 0 1.25rem; }
+.op-subtabs .op-tab { padding: 0.38rem 0.9rem; font-size: 0.8rem; }
+
 /* ---- Barre « 📅 Période » partagée (pastilles) ---- */
 .period-bar {
     display: flex;
