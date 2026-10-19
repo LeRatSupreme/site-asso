@@ -336,26 +336,15 @@ $iconSvg = static function (string $name): string {
         </div>
 
         <?php
-        // Meilleur jour de semaine et heure de pointe (calculs serveur).
-        $dayNames  = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
-        $wdCa      = array_column($weekday, 'ca');
-        $bestDay   = '—';
-        if ($wdCa !== [] && max($wdCa) > 0) {
-            $bestDay = $dayNames[(int) array_search(max($wdCa), $wdCa, true)];
-        }
-        $hrCa     = array_column($hourly, 'ca');
-        $peakHour = '—';
-        if ($hrCa !== [] && max($hrCa) > 0) {
-            $peakHour = ((int) array_search(max($hrCa), $hrCa, true)) . 'h';
-        }
-
+        // Totaux de la tendance produit (le meilleur jour et l'heure de
+        // pointe sont calculés côté client sur les moyennes ca_avg).
         $pwCa  = array_sum(array_column($productWeekly, 'ca'));
         $pwQty = array_sum(array_column($productWeekly, 'qty'));
         ?>
         <div class="card surface glass chart-card">
             <div class="chart-head">
                 <h2 class="chart-title">Par jour de semaine</h2>
-                <span class="chart-sub">Meilleur jour : <?= e($bestDay) ?></span>
+                <span class="chart-sub" id="weekday-sub">moyenne par jour de semaine</span>
             </div>
             <div class="chart-canvas"><canvas id="chart-weekday" height="160"></canvas></div>
         </div>
@@ -363,7 +352,7 @@ $iconSvg = static function (string $name): string {
         <div class="card surface glass chart-card">
             <div class="chart-head">
                 <h2 class="chart-title">Par heure</h2>
-                <span class="chart-sub">Heure de pointe : <?= e($peakHour) ?></span>
+                <span class="chart-sub" id="hourly-sub">moyenne par heure sur la fenêtre</span>
             </div>
             <div class="chart-canvas"><canvas id="chart-hourly" height="160"></canvas></div>
         </div>
@@ -899,58 +888,145 @@ $iconSvg = static function (string $name): string {
         });
     }
 
-    // ---------- 5bis. CA par jour de semaine ----------
+    // ---------- 5bis. CA par jour de semaine (moyennes + moyenne/jour) ----------
+    // Barres = moyenne par jour de semaine sur les jours écoulés (null =
+    // jour jamais vu, barre absente), barre du jour en ambre. Ligne
+    // violette en tirets = moyenne/jour globale de la période.
     var wd = data.weekday || { labels: [], ca: [] };
     var ctxWd = document.getElementById('chart-weekday');
     if (ctxWd) {
+        var wdAvg = (wd.ca_avg || []).map(function (v) { return v == null ? null : Number(v); });
+        var wdTi  = Number(wd.today_index);
+        var wdAvgPerDay = wd.avg_per_day == null ? null : Number(wd.avg_per_day);
+
+        var wdSub = document.getElementById('weekday-sub');
+        if (wdSub) {
+            var bestIdx = -1, bestVal = 0;
+            wdAvg.forEach(function (v, i) {
+                if (v != null && v > bestVal) { bestVal = v; bestIdx = i; }
+            });
+            var wdParts = ['Meilleur jour : ' + (bestIdx >= 0 ? wd.labels[bestIdx] : '—')];
+            if (wdAvgPerDay != null) { wdParts.push('Moyenne/jour : ' + money(wdAvgPerDay)); }
+            wdSub.textContent = wdParts.join(' · ');
+        }
+
+        var wdBg = wdAvg.map(function (v, i) {
+            return i === wdTi ? 'rgba(245,158,11,.75)' : 'rgba(97,80,170,.55)';
+        });
+        var wdDatasets = [{
+            type: 'bar',
+            label: 'CA moyen (€)',
+            data: wdAvg,
+            backgroundColor: wdBg,
+            borderColor: violet,
+            borderWidth: 1,
+            borderRadius: 4,
+            order: 2,
+        }];
+        if (wdAvgPerDay != null) {
+            wdDatasets.push({
+                type: 'line',
+                label: 'Moyenne/jour (€)',
+                data: wdAvg.map(function () { return wdAvgPerDay; }),
+                borderColor: violet,
+                borderDash: [6, 6],
+                pointRadius: 0,
+                pointHitRadius: 8,
+                fill: false,
+                order: 1,
+            });
+        }
         new Chart(ctxWd, {
             type: 'bar',
-            data: {
-                labels: wd.labels,
-                datasets: [{
-                    label: 'CA (€)',
-                    data: wd.ca,
-                    backgroundColor: 'rgba(97,80,170,.55)',
-                    borderColor: violet,
-                    borderWidth: 1,
-                    borderRadius: 4,
-                }],
-            },
+            data: { labels: wd.labels, datasets: wdDatasets },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
                 plugins: {
-                    legend: { display: false },
-                    tooltip: { callbacks: { label: function (c) { return money(c.raw); } } },
+                    legend: { position: 'bottom' },
+                    tooltip: { callbacks: { label: function (c) { return c.dataset.label + ' : ' + (c.raw == null ? '—' : money(c.raw)); } } },
                 },
                 scales: { y: { beginAtZero: true, ticks: { callback: money } } },
             },
         });
     }
 
-    // ---------- 5ter. CA par heure ----------
+    // ---------- 5ter. CA par heure (moyennes + attendu/réel du jour) ----------
+    // Barres ambre = moyenne par heure (CA / jours écoulés). Tirets
+    // violets = profil attendu d'aujourd'hui (estimation × parts
+    // horaires) ; ligne sarcelle = CA réel du jour, arrêté à l'heure
+    // courante (null au-delà).
     var hr = data.hourly || { labels: [], ca: [] };
     var ctxHr = document.getElementById('chart-hourly');
     if (ctxHr) {
+        var hrAvg  = (hr.ca_avg || []).map(Number);
+        var hrHour = Number(hr.now_hour);
+        var hrToday = (hr.today_ca || []).map(function (v, i) {
+            return i <= hrHour ? Number(v) : null;
+        });
+        var hrExpected = (hr.today_expected || []).map(Number);
+        var hrExpTotal = hrExpected.reduce(function (a, b) { return a + b; }, 0);
+
+        var hrSub = document.getElementById('hourly-sub');
+        if (hrSub) {
+            var peakIdx = -1, peakVal = 0;
+            hrAvg.forEach(function (v, i) {
+                if (v > peakVal) { peakVal = v; peakIdx = i; }
+            });
+            hrSub.textContent = 'Heure de pointe : ' + (peakIdx >= 0 ? peakIdx + 'h' : '—')
+                + " · Attendu aujourd'hui : " + money(hrExpTotal);
+        }
+
         new Chart(ctxHr, {
             type: 'bar',
             data: {
                 labels: hr.labels,
-                datasets: [{
-                    label: 'CA (€)',
-                    data: hr.ca,
-                    backgroundColor: 'rgba(245,158,11,.55)',
-                    borderColor: amber,
-                    borderWidth: 1,
-                    borderRadius: 3,
-                }],
+                datasets: [
+                    {
+                        type: 'bar',
+                        label: 'CA moyen (€)',
+                        data: hrAvg,
+                        backgroundColor: 'rgba(245,158,11,.55)',
+                        borderColor: amber,
+                        borderWidth: 1,
+                        borderRadius: 3,
+                        order: 3,
+                    },
+                    {
+                        type: 'line',
+                        label: "Attendu aujourd'hui (€)",
+                        data: hrExpected,
+                        borderColor: violet,
+                        borderDash: [6, 6],
+                        fill: false,
+                        tension: 0.3,
+                        pointRadius: 0,
+                        pointHitRadius: 8,
+                        order: 2,
+                    },
+                    {
+                        type: 'line',
+                        label: "Aujourd'hui (€)",
+                        data: hrToday,
+                        borderColor: teal,
+                        backgroundColor: 'rgba(72,189,211,.15)',
+                        fill: true,
+                        tension: 0.3,
+                        pointRadius: 3,
+                        pointBackgroundColor: teal,
+                        spanGaps: false,
+                        order: 1,
+                    },
+                ],
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
                 plugins: {
-                    legend: { display: false },
-                    tooltip: { callbacks: { label: function (c) { return money(c.raw); } } },
+                    legend: { position: 'bottom' },
+                    tooltip: { callbacks: { label: function (c) { return c.dataset.label + ' : ' + (c.raw == null ? '—' : money(c.raw)); } } },
                 },
                 scales: {
                     x: { ticks: { maxRotation: 0, autoSkip: true, autoSkipPadding: 4 } },
