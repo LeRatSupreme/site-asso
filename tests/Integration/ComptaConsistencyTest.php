@@ -375,14 +375,20 @@ final class ComptaConsistencyTest extends IntegrationTestCase
         self::assertStringContainsString('Montant compté', (string) ($rc['body'] ?? ''));
 
         // … et enregistrement réel (comptage à l'aveugle, trace kiosque).
+        // L'identité « pastille » (prénom, nom, rôle) est exigée par le
+        // contrôleur et porte la trace : created_by = « Jean Dupont
+        // (vice-trésorier) », pas juste « kiosque ».
         $this->request('POST', '/kiosque/comptage/caisse/' . $token, [
-            'counted' => '10,50',
-            'label'   => 'test kiosque',
+            'counted'    => '10,50',
+            'label'      => 'test kiosque',
+            'who_prenom' => 'Jean',
+            'who_nom'    => 'Dupont',
+            'who_alias'  => 'vice-trésorier',
         ]);
         self::assertSame(
             1,
-            (int) $this->pdo->query("SELECT COUNT(*) FROM cash_counts WHERE created_by = 'kiosque' AND counted_amount = 10.5")->fetchColumn(),
-            'Le comptage de caisse kiosque doit être enregistré.'
+            (int) $this->pdo->query("SELECT COUNT(*) FROM cash_counts WHERE created_by = 'Jean Dupont (vice-trésorier)' AND counted_amount = 10.5")->fetchColumn(),
+            'Le comptage de caisse kiosque doit être enregistré au nom du membre.'
         );
 
         // Comptage inventaire : le produit vendu apparaît (à l'aveugle)…
@@ -396,14 +402,18 @@ final class ComptaConsistencyTest extends IntegrationTestCase
         self::assertStringContainsString('Boissons', $bodyI, 'Les catégories doivent grouper la liste.');
         self::assertStringContainsString('Snacks', $bodyI, 'Les catégories doivent grouper la liste.');
 
-        // … et l'enregistrement crée bien le comptage (théorique calculé côté serveur).
+        // … et l'enregistrement crée bien le comptage (théorique calculé côté serveur),
+        // même exigence d'identité que le comptage caisse.
         $this->request('POST', '/kiosque/comptage/inventaire/save/' . $token, [
-            'count' => ['colakiosque' => '7'],
+            'count'      => ['colakiosque' => '7'],
+            'who_prenom' => 'Jean',
+            'who_nom'    => 'Dupont',
+            'who_alias'  => 'vice-trésorier',
         ]);
         self::assertSame(
             1,
-            (int) $this->pdo->query("SELECT COUNT(*) FROM inventory_counts WHERE product_key = 'colakiosque' AND counted_qty = 7 AND created_by = 'kiosque'")->fetchColumn(),
-            'Le comptage inventaire kiosque doit être enregistré.'
+            (int) $this->pdo->query("SELECT COUNT(*) FROM inventory_counts WHERE product_key = 'colakiosque' AND counted_qty = 7 AND created_by = 'Jean Dupont (vice-trésorier)'")->fetchColumn(),
+            'Le comptage inventaire kiosque doit être enregistré au nom du membre.'
         );
 
         // Mauvais jeton : 403 sur le hub et sur les POST.
