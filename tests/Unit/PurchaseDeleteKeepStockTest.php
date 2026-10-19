@@ -196,7 +196,9 @@ final class PurchaseDeleteKeepStockTest extends TestCase
         self::assertNotSame('', $idA);
         self::assertNotSame('', $idB);
         self::assertSame(4, ProductStock::get('Redbull'));
-        self::assertSame(0, ProductStock::get('Fournitures'));
+        // « Hors stock » : aucune ligne product_stocks n'est jamais créée
+        // (contrat de ProductStock::get : null si non défini).
+        self::assertNull(ProductStock::get('Fournitures'));
 
         $rowA = Purchase::find($idA);
         $rowB = Purchase::find($idB);
@@ -211,7 +213,7 @@ final class PurchaseDeleteKeepStockTest extends TestCase
         self::assertSame(1, $summary['stock_kept_lines'], 'Seule la ligne en stock compte dans stock_kept_lines.');
         self::assertSame(1, $summary['no_stock_lines'], 'La ligne hors stock reste comptée à part.');
         self::assertSame(4, ProductStock::get('Redbull'), 'Stock conservé : aucune contre-passation.');
-        self::assertSame(0, ProductStock::get('Fournitures'));
+        self::assertNull(ProductStock::get('Fournitures'), 'Toujours aucune ligne de stock pour le « hors stock ».');
         self::assertNull(Purchase::find($idA));
         self::assertNull(Purchase::find($idB));
     }
@@ -232,7 +234,8 @@ final class PurchaseDeleteKeepStockTest extends TestCase
             'no_stock'     => true,
         ]);
         self::assertNotSame('', $id);
-        self::assertSame(0, ProductStock::get('Conso bureau'));
+        // Achat « hors stock » : jamais de ligne product_stocks (null).
+        self::assertNull(ProductStock::get('Conso bureau'));
 
         $row = Purchase::find($id);
         self::assertNotNull($row);
@@ -243,7 +246,7 @@ final class PurchaseDeleteKeepStockTest extends TestCase
         self::assertSame(0, $summary['stock_adjusted']);
         self::assertSame(0, $summary['stock_kept_lines']);
         self::assertSame(1, $summary['no_stock_lines']);
-        self::assertSame(0, ProductStock::get('Conso bureau'));
+        self::assertNull(ProductStock::get('Conso bureau'), 'Rien n\'a changé : toujours aucune ligne de stock.');
         self::assertNull(Purchase::find($id));
     }
 }

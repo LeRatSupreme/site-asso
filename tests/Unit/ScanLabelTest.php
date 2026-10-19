@@ -237,9 +237,12 @@ final class ScanLabelTest extends TestCase
 
     public function testAliasUtilisateurPurgeLeLibelle(): void
     {
+        // Alias saisi en MAJUSCULES, libellé mémorisé en minuscules : la
+        // clé uniq_scan_label (collation ci) interdit une seconde ligne
+        // pour une simple variante de casse — la purge passe donc par la
+        // comparaison normalisée de isResolved() (règle (a) : casse,
+        // accents et séparateurs ignorés).
         $this->insertAlias('MONSTER PIPELINE PUNCH 24X0,5L', 'Monster rose');
-        $this->insertLabel('MONSTER PIPELINE PUNCH 24X0,5L');
-        // Variante d'écriture (casse) : même clé normalisée -> purge aussi.
         $this->insertLabel('monster pipeline punch 24x0,5l');
         $this->insertLabel('SAUMON FUME 200G');
 
