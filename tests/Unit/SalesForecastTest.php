@@ -273,4 +273,58 @@ final class SalesForecastTest extends TestCase
         self::assertEqualsWithDelta(20.0, $t['expected_so_far'], 0.0001);
         self::assertSame(-50.0, $t['delta_pct']);
     }
+
+    public function test_weekday_averages_division_exacte(): void
+    {
+        // Lundis : 100 + 200 sur 2 occurrences ; mardi : 40 sur 1.
+        $avg = SalesForecast::weekdayAverages([0 => 300.0, 1 => 40.0], [0 => 2, 1 => 1]);
+
+        self::assertCount(7, $avg);
+        self::assertEqualsWithDelta(150.0, $avg[0], 0.0001, '(100 + 200) / 2 lundis.');
+        self::assertEqualsWithDelta(40.0, $avg[1], 0.0001);
+        for ($w = 2; $w <= 6; $w++) {
+            self::assertNull($avg[$w], 'Jour de semaine jamais vu → null.');
+        }
+    }
+
+    public function test_weekday_averages_null_sans_donnees(): void
+    {
+        // Aucun jour écoulé : 7 null, même avec du CA cumulé.
+        $avg = SalesForecast::weekdayAverages([], []);
+        self::assertCount(7, $avg);
+        foreach ($avg as $w => $value) {
+            self::assertNull($value, "Jour $w sans occurrence → null.");
+        }
+        self::assertNull(SalesForecast::weekdayAverages([3 => 50.0], [])[3]);
+    }
+
+    public function test_hourly_profile_today_estimation_x_parts(): void
+    {
+        $profile = SalesForecast::hourlyProfileToday(240.0, [10 => 0.5, 14 => 0.5]);
+
+        self::assertCount(24, $profile);
+        self::assertEqualsWithDelta(120.0, $profile[10], 0.0001, '240 × 0,5.');
+        self::assertEqualsWithDelta(120.0, $profile[14], 0.0001);
+        self::assertEqualsWithDelta(240.0, array_sum($profile), 0.0001, 'Somme du profil = estimation.');
+    }
+
+    public function test_hourly_profile_today_heures_manquantes_zero(): void
+    {
+        $profile = SalesForecast::hourlyProfileToday(100.0, [12 => 0.25]);
+
+        self::assertSame(0.0, $profile[0]);
+        self::assertSame(0.0, $profile[13]);
+        self::assertEqualsWithDelta(25.0, $profile[12], 0.0001, '100 × 0,25.');
+        self::assertEqualsWithDelta(25.0, array_sum($profile), 0.0001);
+    }
+
+    public function test_hourly_profile_today_estimation_nulle_ou_absente(): void
+    {
+        foreach (SalesForecast::hourlyProfileToday(0.0, [10 => 0.5]) as $h => $v) {
+            self::assertSame(0.0, $v, "Estimation 0 → heure $h à 0 €.");
+        }
+        foreach (SalesForecast::hourlyProfileToday(null, [10 => 0.5]) as $h => $v) {
+            self::assertSame(0.0, $v, "Estimation absente → heure $h à 0 €.");
+        }
+    }
 }

@@ -226,6 +226,36 @@ final class AdminAnalyticsController extends AdminBaseController
 
         $weekday = Analytics::revenueByWeekday($from, $to, $category, $payment);
 
+        // Jours écoulés par jour de semaine dans la fenêtre (pour les
+        // moyennes « Par jour de semaine ») : aujourd'hui exclu, comme
+        // pour les prévisions. Itère la carte quotidienne zéro-remplie.
+        $weekdayCounts = array_fill(0, 7, 0);
+        foreach ($dailyCa as $day => $ca) {
+            if ($day >= $todayKey) {
+                continue;
+            }
+            try {
+                $weekdayCounts[(int) (new \DateTimeImmutable($day))->format('N') - 1]++;
+            } catch (\Throwable) {
+                continue;
+            }
+        }
+
+        // Moyennes horaires (CA / jours écoulés) et séries du jour pour
+        // la carte « Par heure » : profil attendu (parts de la fenêtre
+        // « estimation du jour », cohérent avec day_track) et CA réel
+        // du jour heure par heure.
+        $elapsedDays  = (int) $forecast['elapsed_days'];
+        $hourlyCaCols = array_column($hourly, 'ca');
+        $hourlyCaAvg  = array_map(
+            static fn (float $ca): float => $elapsedDays > 0 ? $ca / $elapsedDays : 0.0,
+            $hourlyCaCols
+        );
+        $todayCaSeries = array_map(
+            static fn (int $h): float => (float) ($todayHourlyCa[$h] ?? 0.0),
+            range(0, 23)
+        );
+
         // Produit suivi (sélecteur GET, défaut = produit star de la période).
         $products = Sale::distinctProducts();
         $wanted   = $this->filter('product', '');
@@ -268,16 +298,24 @@ final class AdminAnalyticsController extends AdminBaseController
             'forecast'   => $forecast,
             'day_track'  => $dayTrack,
             'weekday'    => [
-                'labels' => ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'],
-                'ca'     => array_column($weekday, 'ca'),
-                'qty'    => array_column($weekday, 'qty'),
-                'tx'     => array_column($weekday, 'tx'),
+                'labels'      => ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'],
+                'ca'          => array_column($weekday, 'ca'),
+                'qty'         => array_column($weekday, 'qty'),
+                'tx'          => array_column($weekday, 'tx'),
+                'ca_avg'      => SalesForecast::weekdayAverages(array_column($weekday, 'ca'), $weekdayCounts),
+                'days_count'  => $weekdayCounts,
+                'today_index' => (int) $now->format('N') - 1,
+                'avg_per_day' => $forecast['global_avg'],
             ],
             'hourly'     => [
-                'labels' => array_map(static fn (int $h): string => $h . 'h', range(0, 23)),
-                'ca'     => array_column($hourly, 'ca'),
-                'qty'    => array_column($hourly, 'qty'),
-                'tx'     => array_column($hourly, 'tx'),
+                'labels'         => array_map(static fn (int $h): string => $h . 'h', range(0, 23)),
+                'ca'             => $hourlyCaCols,
+                'qty'            => array_column($hourly, 'qty'),
+                'tx'             => array_column($hourly, 'tx'),
+                'ca_avg'         => $hourlyCaAvg,
+                'today_ca'       => $todayCaSeries,
+                'today_expected' => SalesForecast::hourlyProfileToday($dayEstimate, $trackShares),
+                'now_hour'       => (int) $now->format('G'),
             ],
             'product_weekly' => [
                 'labels' => array_map(

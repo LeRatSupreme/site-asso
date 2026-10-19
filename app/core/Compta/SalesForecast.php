@@ -205,6 +205,47 @@ final class SalesForecast
     }
 
     /**
+     * Moyenne du CA par jour de semaine sur les jours écoulés de la
+     * fenêtre (null = jour de semaine jamais vu, rendu comme un trou).
+     *
+     * @param array<int,float> $weekdayCa        CA cumulé par jour de semaine (0 = lundi)
+     * @param array<int,int>   $weekdayDayCounts jours écoulés par jour de semaine
+     * @return list<float|null>
+     */
+    public static function weekdayAverages(array $weekdayCa, array $weekdayDayCounts): array
+    {
+        $out = [];
+        for ($w = 0; $w <= 6; $w++) {
+            $count = (int) ($weekdayDayCounts[$w] ?? 0);
+            $out[] = $count > 0 ? (float) ($weekdayCa[$w] ?? 0.0) / $count : null;
+        }
+
+        return $out;
+    }
+
+    /**
+     * Profil horaire attendu du jour : estimation × part horaire (les
+     * heures sans part comptent pour 0). Estimation absente ou nulle →
+     * 24 zéros (courbe plate plutôt que vide).
+     *
+     * @param array<int,float> $hourlyShares [heure => part 0..1]
+     * @return list<float>
+     */
+    public static function hourlyProfileToday(?float $estimate, array $hourlyShares): array
+    {
+        if ($estimate === null || $estimate <= 0.0) {
+            return array_fill(0, 24, 0.0);
+        }
+
+        $out = [];
+        for ($h = 0; $h < 24; $h++) {
+            $out[] = $estimate * (float) ($hourlyShares[$h] ?? 0.0);
+        }
+
+        return $out;
+    }
+
+    /**
      * Libellé court français d'un jour : « Ven 16/10 ».
      */
     public static function dayLabel(\DateTimeImmutable $date): string
