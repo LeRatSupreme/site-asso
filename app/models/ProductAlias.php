@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Core\Compta\StockPublic;
+
 /**
  * Mapping libellés CSV SumUp -> produit canonique (table `product_aliases`).
  *
@@ -34,7 +36,13 @@ final class ProductAlias extends Model
     }
 
     /**
-     * Résout un libellé brut en product_key canonique (correspondance exacte).
+     * Résout un libellé brut en product_key canonique : correspondance
+     * EXACTE d'abord, puis repli par forme NORMALISÉE (casse, accents,
+     * ponctuation et espaces ignorés — StockPublic::normalizeKey).
+     *
+     * Le repli couvre les libellés dont la ligne d'alias exacte a été
+     * consolidée (doublon supprimé par consolidateFor) : l'import CSV
+     * ne recrée pas de clé fantôme pour ces orthographes.
      */
     public static function resolve(string $description): ?string
     {
@@ -44,7 +52,32 @@ final class ProductAlias extends Model
         $stmt->execute([$description]);
         $row = $stmt->fetch();
 
-        return $row ? (string) $row['product_key'] : null;
+        if ($row !== false && (string) $row['product_key'] !== '') {
+            return (string) $row['product_key'];
+        }
+
+        $norm = StockPublic::normalizeKey($description);
+        if ($norm === '') {
+            return null;
+        }
+
+        try {
+            /** @var list<array<string,mixed>> $rows */
+            $rows = self::pdo()
+                ->query('SELECT raw_description, product_key FROM product_aliases')
+                ->fetchAll();
+        } catch (\Throwable) {
+            return null;
+        }
+
+        foreach ($rows as $alias) {
+            $key = trim((string) $alias['product_key']);
+            if ($key !== '' && StockPublic::normalizeKey((string) $alias['raw_description']) === $norm) {
+                return $key;
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -157,5 +190,168 @@ final class ProductAlias extends Model
         $stmt->execute([$to, $from]);
 
         return $stmt->rowCount();
+    }
+
+    /**
+     * Consolide les DOUBLONS d'alias d'une clé canonique : les libellés
+     * de même forme normalisée (ex. « Coca cherry » / « Coca_cherry » /
+     * « Coca Cherry ») sont réduits à une seule ligne, celle du libellé
+     * le plus utilisé dans les ventes réelles (chooseSurvivor).
+     *
+     * Sans perte :
+     *  - la catégorie du survivant est comblée par la première catégorie
+     *    non vide des lignes absorbées ;
+     *  - les ventes portant un libellé absorbé reçoivent la catégorie du
+     *    survivant si la leur est vide (comblement, jamais d'écrasement) ;
+     *  - les orthographes supprimées restent résolvables grâce au repli
+     *    normalisé de resolve().
+     *
+     * Appelée dans la transaction de ProductKeyMerge::merge() (même PDO
+     * partagé) : tout est validé ou annulé ensemble.
+     *
+     * @return int Nombre de lignes d'alias supprimées.
+     */
+    public static function consolidateFor(string $productKey): int
+    {
+        $productKey = trim($productKey);
+        if ($productKey === '') {
+            return 0;
+        }
+
+        $stmt = self::pdo()->prepare(
+            'SELECT id, raw_description, category, created_at FROM product_aliases WHERE product_key = ?'
+        );
+        $stmt->execute([$productKey]);
+        /** @var list<array<string,mixed>> $rows */
+        $rows = $stmt->fetchAll();
+
+        // Groupement par forme normalisée ; un libellé irreconnaissable
+        // (forme vide) n'est jamais fusionné.
+        $groups = [];
+        foreach ($rows as $row) {
+            $norm = StockPublic::normalizeKey((string) $row['raw_description']);
+            if ($norm === '') {
+                continue;
+            }
+            $groups[$norm][] = $row;
+        }
+
+        $deleted = 0;
+        foreach ($groups as $group) {
+            if (count($group) < 2) {
+                continue;
+            }
+
+            // Occurrences réelles de chaque libellé dans les ventes.
+            $raws = [];
+            foreach ($group as $row) {
+                $raws[] = (string) $row['raw_description'];
+            }
+            $placeholders = implode(',', array_fill(0, count($raws), '?'));
+            $stmt = self::pdo()->prepare(
+                'SELECT description, COUNT(*) AS n FROM sales WHERE description IN (' . $placeholders . ') GROUP BY description'
+            );
+            $stmt->execute($raws);
+            $usage = [];
+            foreach ($stmt->fetchAll() as $u) {
+                $usage[(string) $u['description']] = (int) $u['n'];
+            }
+
+            $survivorId = self::chooseSurvivor($group, $usage, $productKey);
+            $survivor = null;
+            $losers = [];
+            foreach ($group as $row) {
+                if ((string) $row['id'] === $survivorId) {
+                    $survivor = $row;
+                } else {
+                    $losers[] = $row;
+                }
+            }
+            if ($survivor === null) {
+                continue;
+            }
+
+            // Catégorie du survivant comblée si vide.
+            $survivorCat = trim((string) ($survivor['category'] ?? ''));
+            if ($survivorCat === '') {
+                foreach ($losers as $loser) {
+                    $cat = trim((string) ($loser['category'] ?? ''));
+                    if ($cat !== '') {
+                        $survivorCat = $cat;
+                        self::pdo()->prepare('UPDATE product_aliases SET category = ? WHERE id = ?')
+                            ->execute([$cat, $survivorId]);
+                        break;
+                    }
+                }
+            }
+
+            // Comblement (jamais d'écrasement) des ventes des libellés absorbés.
+            if ($survivorCat !== '') {
+                $fill = self::pdo()->prepare(
+                    "UPDATE sales SET category = ? WHERE description = ? AND (category IS NULL OR category = '')"
+                );
+                foreach ($losers as $loser) {
+                    $fill->execute([$survivorCat, (string) $loser['raw_description']]);
+                }
+            }
+
+            $del = self::pdo()->prepare('DELETE FROM product_aliases WHERE id = ?');
+            foreach ($losers as $loser) {
+                $del->execute([(string) $loser['id']]);
+                $deleted += (int) $del->rowCount();
+            }
+        }
+
+        return $deleted;
+    }
+
+    /**
+     * Choisit la ligne d'alias survivante d'un groupe de doublons (même
+     * forme normalisée). Méthode PURE, ordre de préférence déterministe :
+     *
+     *  1. le libellé le plus VENDU (occurrences exactes dans sales) —
+     *     c'est l'orthographe que les imports utilisent réellement ;
+     *  2. à égalité, le libellé identique à la clé canonique ;
+     *  3. à égalité, le libellé dont la catégorie est renseignée ;
+     *  4. à égalité, le plus ancien (created_at) ;
+     *  5. à égalité, l'id le plus petit.
+     *
+     * @param list<array<string,mixed>>    $rows        Lignes du groupe (id, raw_description, category, created_at).
+     * @param array<string,int>            $usage       Libellé brut -> occurrences dans sales.
+     * @param string                       $productKey  Clé canonique du groupe.
+     *
+     * @return string Id de la ligne survivante.
+     */
+    public static function chooseSurvivor(array $rows, array $usage, string $productKey): string
+    {
+        usort($rows, static function (array $a, array $b) use ($usage, $productKey): int {
+            $ua = $usage[(string) $a['raw_description']] ?? 0;
+            $ub = $usage[(string) $b['raw_description']] ?? 0;
+            if ($ua !== $ub) {
+                return $ub <=> $ua;
+            }
+
+            $sa = trim((string) $a['raw_description']) === $productKey ? 1 : 0;
+            $sb = trim((string) $b['raw_description']) === $productKey ? 1 : 0;
+            if ($sa !== $sb) {
+                return $sb <=> $sa;
+            }
+
+            $ca = trim((string) ($a['category'] ?? '')) !== '' ? 1 : 0;
+            $cb = trim((string) ($b['category'] ?? '')) !== '' ? 1 : 0;
+            if ($ca !== $cb) {
+                return $cb <=> $ca;
+            }
+
+            $ta = (string) ($a['created_at'] ?? '');
+            $tb = (string) ($b['created_at'] ?? '');
+            if ($ta !== $tb) {
+                return $ta <=> $tb;
+            }
+
+            return strcmp((string) $a['id'], (string) $b['id']);
+        });
+
+        return (string) $rows[0]['id'];
     }
 }

@@ -16,6 +16,10 @@ use App\Core\Logger;
  *    losses, sales, product_aliases, inventory_counts, product_costs,
  *    promotions (product_key nullable : seules les lignes rattachées
  *    à la source sont déplacées) ;
+ *  - alias : les doublons de libellé ramenés sur la cible (même forme
+ *    normalisée) sont CONSOLIDÉS en une ligne (ProductAlias::
+ *    consolidateFor : survivant = libellé le plus vendu, catégories
+ *    comblées, orthographes supprimées toujours résolvables) ;
  *  - PK `product_key` (une ligne par produit, fusion dédiée) :
  *    product_stocks (stock ADDITIONNÉ), product_discontinued,
  *    product_infinite, product_zero_since, product_packs,
@@ -146,10 +150,11 @@ final class ProductKeyMerge extends Model
      * @param string|null $userId Auteur de la fusion (audit du drapeau).
      *
      * @return array<string,int> Nombre de lignes déplacées par table :
-     *                           purchases, losses, sales, aliases, counts,
-     *                           costs, stocks, discontinued, promotions,
-     *                           infinite, zero_since, packs, checks,
-     *                           scan_labels, order_items, fiches.
+     *                           purchases, losses, sales, aliases,
+     *                           aliases_deduped, counts, costs, stocks,
+     *                           discontinued, promotions, infinite,
+     *                           zero_since, packs, checks, scan_labels,
+     *                           order_items, fiches.
      *
      * @throws \InvalidArgumentException Clé source vide ou identique à la cible.
      * @throws \Throwable                Erreur SQL (transaction annulée).
@@ -180,6 +185,15 @@ final class ProductKeyMerge extends Model
                 $stmt->execute([$target, $source]);
                 $moved[$table] = (int) $stmt->rowCount();
             }
+
+            // 1-bis. Alias ramenés sur la cible : les doublons de libellé
+            //     (même forme normalisée, ex. « Coca cherry » /
+            //     « Coca_cherry ») sont réduits à une ligne — le survivant
+            //     est le libellé le plus vendu (ProductAlias::consolidateFor,
+            //     même PDO : dans la transaction). Les orthographes
+            //     supprimées restent résolvables via le repli normalisé
+            //     de ProductAlias::resolve().
+            $aliasesDeduped = ProductAlias::consolidateFor($target);
 
             // 8. product_stocks (PK product_key) : fusion ADDITIVE du stock
             //    de référence (source 5 + cible 7 → cible 12), puis
@@ -258,22 +272,23 @@ final class ProductKeyMerge extends Model
         StockPublic::invalidate();
 
         return [
-            'purchases'    => $moved['purchases'],
-            'losses'       => $moved['losses'],
-            'sales'        => $moved['sales'],
-            'aliases'      => $moved['product_aliases'],
-            'counts'       => $moved['inventory_counts'],
-            'costs'        => $moved['product_costs'],
-            'stocks'       => $stocks,
-            'discontinued' => $discontinued,
-            'promotions'   => $moved['promotions'],
-            'infinite'     => $flags['product_infinite'],
-            'zero_since'   => $flags['product_zero_since'],
-            'packs'        => $flags['product_packs'],
-            'checks'       => $flags['shopping_checks'],
-            'scan_labels'  => $scanPurged,
-            'order_items'  => $orderItems,
-            'fiches'       => $fiches,
+            'purchases'      => $moved['purchases'],
+            'losses'         => $moved['losses'],
+            'sales'          => $moved['sales'],
+            'aliases'        => $moved['product_aliases'],
+            'aliases_deduped' => $aliasesDeduped,
+            'counts'         => $moved['inventory_counts'],
+            'costs'          => $moved['product_costs'],
+            'stocks'         => $stocks,
+            'discontinued'   => $discontinued,
+            'promotions'     => $moved['promotions'],
+            'infinite'       => $flags['product_infinite'],
+            'zero_since'     => $flags['product_zero_since'],
+            'packs'          => $flags['product_packs'],
+            'checks'         => $flags['shopping_checks'],
+            'scan_labels'    => $scanPurged,
+            'order_items'    => $orderItems,
+            'fiches'         => $fiches,
         ];
     }
 

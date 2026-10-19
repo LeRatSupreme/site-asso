@@ -808,13 +808,17 @@ final class AdminComptaController extends AdminBaseController
             $pdo->beginTransaction();
 
             foreach ($others as $old) {
-                $salesMoved += Sale::mergeInto($keep, [$old]);
-                $lotsMoved += ProductCost::reassign($old, $keep);
-                $aliasesMoved += ProductAlias::reassign($old, $keep);
-                // Alias résiduel : tout futur import du libellé fusionné
-                // résoudra directement vers le survivant.
-                ProductAlias::save(['raw_description' => $old, 'product_key' => $keep]);
-            }
+            $salesMoved += Sale::mergeInto($keep, [$old]);
+            $lotsMoved += ProductCost::reassign($old, $keep);
+            $aliasesMoved += ProductAlias::reassign($old, $keep);
+            // Alias résiduel : tout futur import du libellé fusionné
+            // résoudra directement vers le survivant.
+            ProductAlias::save(['raw_description' => $old, 'product_key' => $keep]);
+        }
+
+        // Alias consolidés : l'alias résiduel ci-dessus peut doubler un
+        // libellé de même forme normalisée déjà rattaché au survivant.
+        $deduped = ProductAlias::consolidateFor($keep);
 
             $pdo->commit();
         } catch (\Throwable $e) {
@@ -833,14 +837,22 @@ final class AdminComptaController extends AdminBaseController
         }
 
         $this->audit('compta.product.merge', 'product', $keep, [
-            'merged'  => $others,
-            'sales'   => $salesMoved,
-            'lots'    => $lotsMoved,
-            'aliases' => $aliasesMoved,
+            'merged'   => $others,
+            'sales'    => $salesMoved,
+            'lots'     => $lotsMoved,
+            'aliases'  => $aliasesMoved,
+            'deduped'  => $deduped,
         ]);
         $this->setFlash(
             'success',
-            sprintf('Fusion effectuée vers « %s » : %d vente(s), %d lot(s), %d alias re-groupés.', $keep, $salesMoved, $lotsMoved, $aliasesMoved)
+            sprintf(
+                'Fusion effectuée vers « %s » : %d vente(s), %d lot(s), %d alias re-groupés, %d doublon(s) d\'alias consolidé(s).',
+                $keep,
+                $salesMoved,
+                $lotsMoved,
+                $aliasesMoved,
+                $deduped
+            )
         );
         redirect(url('/admin/compta/couts'));
     }
@@ -922,22 +934,23 @@ final class AdminComptaController extends AdminBaseController
         ]);
 
         $labels = [
-            'purchases'    => 'achat(s)',
-            'losses'       => 'perte(s)',
-            'sales'        => 'vente(s)',
-            'aliases'      => 'alias',
-            'counts'       => 'comptage(s)',
-            'stocks'       => 'stock additionné',
-            'discontinued' => 'drapeau « plus en vente »',
-            'costs'        => 'lots de coûts',
-            'promotions'   => 'promotion(s)',
-            'infinite'     => 'drapeau « stock infini »',
-            'zero_since'   => 'suivi « à zéro depuis »',
-            'packs'        => 'taille de pack',
-            'checks'       => 'case(s) de liste de courses',
-            'scan_labels'  => 'libellé(s) de scan purgé(s)',
-            'order_items'  => 'ligne(s) de commande caisse',
-            'fiches'       => 'fiche(s) carte',
+            'purchases'      => 'achat(s)',
+            'losses'         => 'perte(s)',
+            'sales'          => 'vente(s)',
+            'aliases'        => 'alias',
+            'aliases_deduped' => 'doublon(s) d\'alias consolidé(s)',
+            'counts'         => 'comptage(s)',
+            'stocks'         => 'stock additionné',
+            'discontinued'   => 'drapeau « plus en vente »',
+            'costs'          => 'lots de coûts',
+            'promotions'     => 'promotion(s)',
+            'infinite'       => 'drapeau « stock infini »',
+            'zero_since'     => 'suivi « à zéro depuis »',
+            'packs'          => 'taille de pack',
+            'checks'         => 'case(s) de liste de courses',
+            'scan_labels'    => 'libellé(s) de scan purgé(s)',
+            'order_items'    => 'ligne(s) de commande caisse',
+            'fiches'         => 'fiche(s) carte',
         ];
         $parts = [];
         foreach ($moved as $table => $n) {
