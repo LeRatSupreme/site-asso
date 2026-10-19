@@ -214,15 +214,13 @@ final class AdminLedgerController extends AdminBaseController
 
     /**
      * Vignette « Derniers tickets & dépenses » : dépenses et groupes
-     * d'achats FUSIONNÉS en une seule liste chronologique, de la plus
-     * récente à la plus ancienne (même lecture que le livre) — à date
-     * égale, la saisie la plus récente d'abord (created_at DESC).
-     *
-     * Chaque élément porte « type » : 'purchase' (groupe d'achats,
-     * structure de recentPurchaseGroups()) ou 'expense' (dépense,
-     * structure de Expense::recent()). Une dépense saisie aujourd'hui
-     * mais datée d'un ancien jour apparaît donc à SA place dans la
-     * liste, visible, au lieu d'être cachée sous les achats.
+     * d'achats FUSIONNÉS en une seule liste chronologique (tri partagé
+     * sortRecentItems()). Chaque élément porte « type » : 'purchase'
+     * (groupe d'achats, structure de recentPurchaseGroups()) ou
+     * 'expense' (dépense, structure de Expense::recent()). Une dépense
+     * saisie aujourd'hui mais datée d'un ancien jour apparaît donc à
+     * SA place dans la liste, visible, au lieu d'être cachée sous les
+     * achats.
      *
      * Statique publique : partagée avec la version kiosque du livre.
      *
@@ -242,9 +240,41 @@ final class AdminLedgerController extends AdminBaseController
             $items[] = $e;
         }
 
+        return array_slice(self::sortRecentItems($items), 0, $limit);
+    }
+
+    /**
+     * Jour d'affichage d'un élément de la liste fusionnée : jour
+     * d'achat pour un groupe ('purchase', clé « date »), jour de
+     * dépense sinon (clé « spent_at »). Méthode pure (aucun accès
+     * POST/DB) : testée unitairement.
+     *
+     * @param array<string,mixed> $item
+     */
+    public static function recentItemDate(array $item): string
+    {
+        $isPurchase = ($item['type'] ?? '') === 'purchase';
+
+        return trim((string) ($isPurchase ? ($item['date'] ?? '') : ($item['spent_at'] ?? '')));
+    }
+
+    /**
+     * Tri de la liste fusionnée « Derniers tickets & dépenses » : du
+     * jour le plus récent au plus ancien (même lecture que le livre) ;
+     * à date égale, la saisie la plus récente d'abord (created_at
+     * DESC). usort est stable (PHP ≥ 8) : les ex æquo complets gardent
+     * l'ordre d'insertion. Méthode pure (aucun accès POST/DB) : testée
+     * unitairement.
+     *
+     * @param list<array<string,mixed>> $items
+     *
+     * @return list<array<string,mixed>>
+     */
+    public static function sortRecentItems(array $items): array
+    {
         usort($items, static function (array $a, array $b): int {
-            $dateA = (string) ($a['type'] === 'purchase' ? $a['date'] : $a['spent_at']);
-            $dateB = (string) ($b['type'] === 'purchase' ? $b['date'] : $b['spent_at']);
+            $dateA = self::recentItemDate($a);
+            $dateB = self::recentItemDate($b);
             if ($dateA !== $dateB) {
                 return strcmp($dateB, $dateA);
             }
@@ -252,7 +282,7 @@ final class AdminLedgerController extends AdminBaseController
             return strcmp((string) ($b['created_at'] ?? ''), (string) ($a['created_at'] ?? ''));
         });
 
-        return array_slice($items, 0, $limit);
+        return $items;
     }
 
     /**
