@@ -959,6 +959,7 @@ final class AdminComptaController extends AdminBaseController
             'discontinued'   => 'drapeau « plus en vente »',
             'costs'          => 'lots de coûts',
             'promotions'     => 'promotion(s)',
+            'tablet_lines'   => 'ligne(s) de relevé tablette',
             'infinite'       => 'drapeau « stock infini »',
             'zero_since'     => 'suivi « à zéro depuis »',
             'packs'          => 'taille de pack',

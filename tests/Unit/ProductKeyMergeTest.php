@@ -36,7 +36,7 @@ final class ProductKeyMergeTest extends TestCase
         $this->pdo = $pdo;
 
         try {
-            foreach (['sales', 'purchases', 'losses', 'product_aliases', 'inventory_counts', 'product_costs', 'product_stocks', 'product_discontinued', 'product_infinite', 'product_zero_since', 'product_packs', 'shopping_checks', 'promotions', 'scan_labels', 'products', 'product_categories', 'cafeteria_orders', 'cafeteria_order_items'] as $table) {
+            foreach (['sales', 'purchases', 'losses', 'product_aliases', 'inventory_counts', 'product_costs', 'product_stocks', 'product_discontinued', 'product_infinite', 'product_zero_since', 'product_packs', 'shopping_checks', 'promotions', 'scan_labels', 'products', 'product_categories', 'cafeteria_orders', 'cafeteria_order_items', 'inventory_tablet_sessions', 'inventory_tablet_lines'] as $table) {
                 $pdo->query('SELECT 1 FROM `' . $table . '` LIMIT 1');
             }
         } catch (\Throwable) {
@@ -48,6 +48,7 @@ final class ProductKeyMergeTest extends TestCase
             'product_costs', 'inventory_counts', 'product_stocks', 'product_discontinued',
             'product_infinite', 'product_zero_since', 'product_packs', 'shopping_checks',
             'promotions', 'scan_labels', 'cafeteria_order_items', 'cafeteria_orders', 'products',
+            'inventory_tablet_sessions', 'inventory_tablet_lines',
         ]);
         Model::setTestPdo($pdo);
     }
@@ -145,6 +146,23 @@ final class ProductKeyMergeTest extends TestCase
     {
         $this->pdo->prepare('INSERT INTO scan_labels (id, label) VALUES (?, ?)')
             ->execute(['scan_' . bin2hex(random_bytes(6)), $label]);
+    }
+
+    private function addTabletSession(string $id, string $countedAt): void
+    {
+        $this->pdo->prepare(
+            'INSERT INTO inventory_tablet_sessions (id, counted_at, created_at)
+             VALUES (?, ?, NOW())'
+        )->execute([$id, $countedAt]);
+    }
+
+    private function addTabletLine(string $sessionId, string $key, ?int $gap, int $corrected = 0): void
+    {
+        $this->pdo->prepare(
+            'INSERT INTO inventory_tablet_lines
+                (id, session_id, product_key, tablet_qty, site_theoretical, gap, corrected, created_at)
+             VALUES (?, ?, ?, 4, 5, ?, ?, NOW())'
+        )->execute(['tabl_' . bin2hex(random_bytes(6)), $sessionId, $key, $gap, $corrected]);
     }
 
     private function addFiche(string $name, int $stock = 0): string
@@ -569,6 +587,26 @@ final class ProductKeyMergeTest extends TestCase
         $stmt = $this->pdo->prepare('SELECT stock FROM products WHERE id = ?');
         $stmt->execute([$tgtId]);
         self::assertSame(12, (int) $stmt->fetchColumn(), 'Le stock de la fiche source est additionné à la cible.');
+    }
+
+    public function test_merge_deplace_les_lignes_de_releve_tablette(): void
+    {
+        // Un relevé tablette en attente sur la clé source : ses lignes
+        // suivent la cible, sinon la correction future écrirait des
+        // pertes sur une clé morte.
+        $this->addTabletSession('tabt_test1', date('Y-m-d'));
+        $this->addTabletLine('tabt_test1', 'source', -1, 0);
+        $this->addTabletLine('tabt_test1', 'source', null, 0);
+
+        $moved = ProductKeyMerge::merge('source', 'cible', 'user_test');
+
+        self::assertSame(2, $moved['tablet_lines'], 'Les deux lignes de relevé tablette doivent être déplacées.');
+
+        $stmt = $this->pdo->prepare('SELECT product_key FROM inventory_tablet_lines WHERE session_id = ? ORDER BY gap');
+        $stmt->execute(['tabt_test1']);
+        /** @var list<string> $keys */
+        $keys = $stmt->fetchAll(PDO::FETCH_COLUMN);
+        self::assertSame(['cible', 'cible'], $keys, 'Toutes les lignes du relevé suivent la clé cible.');
     }
 
     public function test_fiche_source_seule_renommee(): void

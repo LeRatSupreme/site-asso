@@ -19,6 +19,7 @@ declare(strict_types=1);
  * @var array<string, array{name:string,value:float,units:int,valued:int,noCost:int,pausedValue:float,pausedUnits:int}> $stockByCategory
  *            Ventilation des métriques ci-dessus par catégorie (rayon), triée par valeur décroissante.
  * @var array{resumed:list<string>, paused:list<string>} $sweep Changements automatiques appliqués au chargement.
+ * @var list<array<string,mixed>> $pending_sessions Sessions de relevé tablette ayant encore des écarts à corriger.
  */
 ?>
 <div class="compta-head">
@@ -40,6 +41,27 @@ declare(strict_types=1);
         mis en pause (stock à 0 depuis 7 jours ou plus) : <strong><?= e(implode(', ', $sweep['paused'])) ?></strong>
     <?php endif; ?>
 </div>
+<?php endif; ?>
+
+<?php $pendingTotal = array_sum(array_map(static fn (array $s): int => (int) $s['pending_count'], $pending_sessions ?? [])); ?>
+<?php if (($pending_sessions ?? []) !== []): ?>
+<section class="card surface glass">
+    <style>
+        .releves-pending-list { margin: 0.35rem 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.35rem; }
+        .releves-pending-list .muted { font-size: 0.8rem; }
+    </style>
+    <h2 class="card-title">Relevés tablette à corriger : <?= count($pending_sessions) ?> session(s), <?= $pendingTotal ?> écart(s) en attente</h2>
+    <p class="muted">Un relevé tablette ne touche le stock qu'après « Corriger &amp; synchroniser le stock » sur sa page de détail.</p>
+    <ul class="releves-pending-list">
+        <?php foreach ($pending_sessions as $s): ?>
+            <li>
+                <a class="btn btn-primary btn-sm" href="<?= e(url('/admin/compta/inventaire-tablette/' . rawurlencode((string) $s['id']))) ?>">
+                    Détail du relevé du <?= e(formatDate((string) $s['counted_at'])) ?> (<?= (int) $s['pending_count'] ?> écart(s))
+                </a>
+            </li>
+        <?php endforeach; ?>
+    </ul>
+</section>
 <?php endif; ?>
 
 <?php $gapTotal = count($gaps); $gapShown = min(6, $gapTotal); ?>
