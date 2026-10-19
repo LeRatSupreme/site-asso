@@ -407,16 +407,19 @@ final class ProductKeyMergeTest extends TestCase
         $source = 'coca cherry';
 
         // Doublons de forme normalisée déjà sur la cible + alias de la source.
+        // NB : la collation ci de raw_description interdit deux libellés ne
+        // différant que par la casse (save() ferait un upsert) — les
+        // doublons réels ne diffèrent que par la ponctuation/séparateurs.
         ProductAlias::save(['raw_description' => 'Coca Cherry', 'product_key' => $target, 'category' => 'Boissons']);
         ProductAlias::save(['raw_description' => 'Coca_cherry', 'product_key' => $target, 'category' => 'ex: Spécial']);
-        ProductAlias::save(['raw_description' => 'Coca cherry', 'product_key' => $source]);
+        ProductAlias::save(['raw_description' => 'Coca.cherry', 'product_key' => $source]);
 
         // Le libellé le plus vendu (« Coca Cherry », 3 ventes) doit survivre.
         $this->addSale('Coca Cherry', $target, 'Boissons');
         $this->addSale('Coca Cherry', $target, 'Boissons');
         $this->addSale('Coca Cherry', $target, 'Boissons');
         $this->addSale('Coca_cherry', $target, null);
-        $this->addSale('coca cherry', $source, null);
+        $this->addSale('Coca.cherry', $source, null);
 
         $moved = ProductKeyMerge::merge($source, $target, 'user_test');
 
@@ -438,11 +441,11 @@ final class ProductKeyMergeTest extends TestCase
             $byDesc[(string) $sale['description']] = (string) ($sale['category'] ?? '');
         }
         self::assertSame('Boissons', $byDesc['Coca_cherry']);
-        self::assertSame('Boissons', $byDesc['coca cherry']);
+        self::assertSame('Boissons', $byDesc['Coca.cherry']);
 
         // Les orthographes supprimées restent résolvables (repli normalisé).
         self::assertSame('Coca Cherry', ProductAlias::resolve('Coca Cherry'));
-        self::assertSame('Coca Cherry', ProductAlias::resolve('coca cherry'));
+        self::assertSame('Coca Cherry', ProductAlias::resolve('Coca cherry'));
         self::assertSame('Coca Cherry', ProductAlias::resolve('Coca_Cherry'));
         self::assertNull(ProductAlias::resolve('Pepsi Max'));
     }

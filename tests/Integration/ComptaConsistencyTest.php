@@ -49,6 +49,13 @@ final class ComptaConsistencyTest extends IntegrationTestCase
             'product_zero_since',
             'product_infinite',
             'product_packs',
+            // La page Inventaire valorise aussi les produits établis par un
+            // achat/perte sans comptage (théoriques base 0) et reçoit les
+            // catégories du mapping : résidus de la suite Unit interdits.
+            'purchases',
+            'losses',
+            'product_aliases',
+            'product_stocks',
             'users',
         ]);
         $this->seedUser($this->rootId, 'compta-root@exemple.fr', 'Password123456', 'SUPERADMIN');
