@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Tests\Integration;
 
+use App\Models\InventoryCount;
+
 /**
  * Inventaire tablette SumUp : cycle de vie complet d'une session.
  *
@@ -155,6 +157,48 @@ final class InventoryTabletTest extends IntegrationTestCase
             0,
             (int) $this->pdo->query("SELECT COALESCE(stock, -1) FROM product_stocks WHERE product_key = 'eau'")->fetchColumn(),
             'La perte du manquant doit sortir la quantité du stock de référence (borné à 0).'
+        );
+
+        // Surplus : le théorique est rebasé — un comptage horodaté à la
+        // seconde de la session (created_at = borne ventes) est inséré
+        // pour la clé, le stock théorique repart de la quantité tablette.
+        $sess = $this->pdo->query(
+            "SELECT created_at, counted_at FROM inventory_tablet_sessions WHERE id = '$sessionId'"
+        )->fetch();
+        self::assertNotFalse($sess, 'La session corrigée doit rester en base.');
+
+        $count = $this->pdo->query(
+            "SELECT counted_qty, theoretical_qty, gap, note, created_by
+             FROM inventory_counts
+             WHERE product_key = 'redbull' AND counted_at = '" . (string) $sess['created_at'] . "'"
+        )->fetch();
+        self::assertNotFalse($count, 'Le surplus doit insérer un comptage qui rebase le théorique.');
+        self::assertSame(10, (int) $count['counted_qty'], 'Le comptage du surplus porte la quantité tablette.');
+        self::assertSame(0, (int) $count['theoretical_qty'], 'Le comptage conserve le théorique d\'origine du site.');
+        self::assertSame(10, (int) $count['gap'], 'L\'écart du comptage = tablette − théorique d\'origine.');
+        self::assertSame(
+            'Releve tablette du ' . (string) $sess['counted_at'],
+            (string) $count['note'],
+            'La note du comptage référence le relevé.'
+        );
+        self::assertSame($this->rootId, (string) $count['created_by'], 'L\'auteur du comptage est l\'utilisateur correcteur.');
+        self::assertSame(
+            10,
+            InventoryCount::theoreticalStock('redbull'),
+            'Le stock théorique du surplus repart de la quantité tablette (aucun mouvement ensuite).'
+        );
+
+        // Manquant : AUCUN comptage créé (la perte porte le théorique),
+        // seule la ligne de seed doit exister pour la clé.
+        self::assertSame(
+            1,
+            (int) $this->pdo->query("SELECT COUNT(*) FROM inventory_counts WHERE product_key = 'eau'")->fetchColumn(),
+            'Un manquant ne crée pas de comptage : la perte fait tomber le théorique.'
+        );
+        self::assertSame(
+            100,
+            InventoryCount::theoreticalStock('eau'),
+            'Le théorique du manquant est porté par la perte (150 − 50).'
         );
     }
 

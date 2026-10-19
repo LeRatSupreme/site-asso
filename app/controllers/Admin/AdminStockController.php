@@ -1427,8 +1427,11 @@ final class AdminStockController extends AdminBaseController
      *  - gap < 0 (manquant) → perte Loss::create datée du relevé
      *    (motif choisi par ligne, défaut VOL ; avis global du POST ou
      *    avis de la ligne) — la perte sort du stock théorique ;
-     *  - gap > 0 (surplus) → ProductStock::set(qty tablette) : le stock
-     *    de référence est aligné, aucune perte n'est créée.
+     *  - gap > 0 (surplus) → ProductStock::set(qty tablette) PUIS
+     *    InventoryCount::recordFromTablet : le stock de référence est
+     *    aligné ET le théorique est rebasé sur la quantité tablette
+     *    (comptage horodaté à la seconde de la session, borne ventes),
+     *    aucune perte n'est créée.
      *
      * Puis markCorrected (trace à vie) + invalidation du cache carte
      * publique + audit + flash récapitulatif.
@@ -1514,8 +1517,19 @@ final class AdminStockController extends AdminBaseController
                     $lossesCreated++;
                     $lossValue += (float) ($line['loss_value'] ?? 0);
                 } else {
-                    // Surplus : le stock de référence suit la tablette.
+                    // Surplus : le stock de référence suit la tablette et le
+                    // théorique est rebasé dessus (comptage horodaté à la
+                    // seconde de la session = borne ventes).
                     ProductStock::set($key, (int) $line['tablet_qty']);
+                    InventoryCount::recordFromTablet(
+                        $key,
+                        (int) $line['tablet_qty'],
+                        $line['site_theoretical'] !== null ? (int) $line['site_theoretical'] : null,
+                        $gap,
+                        (string) $session['created_at'],
+                        'Releve tablette du ' . (string) $session['counted_at'],
+                        (string) ($user['id'] ?? '')
+                    );
                     $surplusAligned++;
                 }
             } catch (\Throwable $e) {

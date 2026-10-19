@@ -59,6 +59,50 @@ final class InventoryCount extends Model
     }
 
     /**
+     * Rebase du stock théorique lors de la correction d'un relevé
+     * tablette (surplus).
+     *
+     * Contrairement à record(), rien n'est recalculé ici : le comptage
+     * est inséré tel quel, avec counted_at = horodatage exact de la
+     * session de relevé (created_at) pour la borne ventes — une vente
+     * postérieure au relevé reste déduite du théorique, une vente
+     * antérieure est déjà reflétée dans la quantité tablette. Le stock
+     * de référence n'est PAS touché (l'appelant aligne ProductStock
+     * lui-même) et theoreticalStock() repart de la quantité tablette.
+     *
+     * Les colonnes theoretical_qty et gap sont NOT NULL en base : une
+     * valeur null passée en argument est remplacée par sa valeur déduite
+     * cohérente avec l'écart (théorique = compté − gap, gap = compté −
+     * théorique ; tous deux null → théorique = compté, gap = 0).
+     *
+     * @param string $countedAt Horodatage exact « YYYY-MM-DD HH:MM:SS ».
+     *
+     * @return string Identifiant du comptage créé.
+     */
+    public static function recordFromTablet(
+        string $productKey,
+        int $countedQty,
+        ?int $theoreticalQty,
+        ?int $gap,
+        string $countedAt,
+        ?string $note,
+        ?string $userId
+    ): string {
+        $theoretical = $theoreticalQty ?? ($countedQty - ($gap ?? 0));
+        $gapStored = $gap ?? ($countedQty - $theoretical);
+
+        $id = 'inv_' . bin2hex(random_bytes(10));
+
+        self::pdo()->prepare(
+            'INSERT INTO inventory_counts
+                (id, counted_at, product_key, counted_qty, theoretical_qty, gap, note, created_by, created_at)
+             VALUES (?,?,?,?,?,?,?,?,NOW())'
+        )->execute([$id, $countedAt, $productKey, $countedQty, $theoretical, $gapStored, $note, $userId]);
+
+        return $id;
+    }
+
+    /**
      * Date du dernier comptage d'un produit (null si jamais compté).
      */
     public static function lastCountAt(string $productKey): ?string
