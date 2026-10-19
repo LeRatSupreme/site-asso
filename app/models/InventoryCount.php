@@ -195,7 +195,8 @@ final class InventoryCount extends Model
 
     /**
      * Comptages présentant un écart non nul sur les N derniers jours,
-     * de l'écart le plus grand au plus petit (en valeur absolue).
+     * du plus récent au plus ancien (à date égale, du plus grand écart
+     * au plus petit en valeur absolue).
      *
      * @return list<array<string,mixed>>
      */
@@ -210,7 +211,7 @@ final class InventoryCount extends Model
                     'SELECT * FROM inventory_counts
                      WHERE counted_at >= DATE_SUB(NOW(), INTERVAL ' . $days . ' DAY)
                        AND gap <> 0
-                     ORDER BY ABS(gap) DESC'
+                     ORDER BY counted_at DESC, ABS(gap) DESC'
                 )
                 ->fetchAll();
         } catch (\Throwable) {
