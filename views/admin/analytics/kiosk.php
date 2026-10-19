@@ -29,6 +29,9 @@ declare(strict_types=1);
  * @var bool $hasSales                      Vrai si au moins une vente importée
  * @var array<string,mixed> $kpis           KPI de la période (+ *_delta vs période précédente)
  * @var list<array<string,mixed>> $insights Insights automatiques (icon, tone, title, text)
+ * @var array<string,mixed> $forecast       Prévisions (today pro-rata, yesterday, reliable…)
+ * @var array<int,array{ca:float,qty:int,tx:int}> $weekday CA par jour de semaine (0 = lundi)
+ * @var array<int,array{ca:float,qty:int,tx:int}> $hourly  CA par heure (0..23)
  * @var string $json                        Payload JSON (Chart.js) injecté dans un <script>
  * @var string $token                       Jeton kiosque ADMIN (présent dans l'URL)
  */
@@ -175,6 +178,54 @@ $iconSvg = static function (string $name): string {
             <div class="ka-chart ka-chart-trend"><canvas id="ka-chart-trend"></canvas></div>
         </section>
 
+        <?php
+        // Chips de prévision : jour en cours (pro-rata) et hier — même
+        // motif que les deltas KPI, appliqué aux prévisions.
+        $fcToday = $forecast['today'];
+        $fcYday  = $forecast['yesterday'];
+        $fcChips = [];
+        if ($fcToday['forecast_so_far'] !== null) {
+            $fcChips[] = [
+                'delta' => $fcToday['delta_pct'],
+                'text'  => sprintf(
+                    "Aujourd'hui %dh : %s vs %s (pro-rata)",
+                    (int) ($forecast['now_hour'] ?? 0),
+                    formatPrice((float) $fcToday['actual']),
+                    formatPrice((float) $fcToday['forecast_so_far'])
+                ),
+            ];
+        }
+        if ($fcYday['forecast_full'] !== null) {
+            $fcChips[] = [
+                'delta' => $fcYday['delta_pct'],
+                'text'  => sprintf(
+                    'Hier : %s vs %s',
+                    formatPrice((float) $fcYday['actual']),
+                    formatPrice((float) $fcYday['forecast_full'])
+                ),
+            ];
+        }
+        ?>
+        <?php if ($fcChips !== []): ?>
+        <section class="card surface glass ka-card ka-fc">
+            <?php foreach ($fcChips as $chip):
+                $d  = $chip['delta'];
+                $up = $d === null ? null : ($d >= 0);
+            ?>
+                <?php if ($up !== null): ?>
+                    <span class="ka-kpi-delta <?= $up ? 'is-up' : 'is-down' ?>">
+                        <?= e($chip['text']) ?> <?= $up ? '↑' : '↓' ?> <?= number_format(abs($d), 1, ',', ' ') ?>%
+                    </span>
+                <?php else: ?>
+                    <span class="ka-kpi-delta is-muted"><?= e($chip['text']) ?> —</span>
+                <?php endif; ?>
+            <?php endforeach; ?>
+            <?php if (empty($forecast['reliable'])): ?>
+                <span class="ka-fc-note">Prévisions fiables à partir de 7 jours d'historique</span>
+            <?php endif; ?>
+        </section>
+        <?php endif; ?>
+
         <section class="card surface glass ka-card">
             <div class="ka-chart-head">
                 <h2 class="ka-chart-title">Top 10 produits</h2>
@@ -222,8 +273,40 @@ $iconSvg = static function (string $name): string {
         </div>
     </div>
 
-    <!-- ==================== Onglet 3 : Heures (heatmap inversée) ==================== -->
+    <!-- ==================== Onglet 3 : Heures (rythmes + heatmap inversée) ==================== -->
     <div class="compta-tabpane ka-pane" data-pane="heures" hidden>
+        <?php
+        // Meilleur jour de semaine et heure de pointe (calculs serveur).
+        $dayNames  = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
+        $wdCa      = array_column($weekday, 'ca');
+        $bestDay   = '—';
+        if ($wdCa !== [] && max($wdCa) > 0) {
+            $bestDay = $dayNames[(int) array_search(max($wdCa), $wdCa, true)];
+        }
+        $hrCa     = array_column($hourly, 'ca');
+        $peakHour = '—';
+        if ($hrCa !== [] && max($hrCa) > 0) {
+            $peakHour = ((int) array_search(max($hrCa), $hrCa, true)) . 'h';
+        }
+        ?>
+        <!-- Graphiques initialisés EN RETARDÉ à la première activation de
+             l'onglet (canvas hidden = taille nulle pour Chart.js). -->
+        <section class="card surface glass ka-card">
+            <div class="ka-chart-head">
+                <h2 class="ka-chart-title">Par jour de semaine</h2>
+                <span class="ka-sub">Meilleur jour : <?= e($bestDay) ?></span>
+            </div>
+            <div class="ka-chart ka-chart-bar"><canvas id="ka-chart-weekday"></canvas></div>
+        </section>
+
+        <section class="card surface glass ka-card">
+            <div class="ka-chart-head">
+                <h2 class="ka-chart-title">Par heure</h2>
+                <span class="ka-sub">Heure de pointe : <?= e($peakHour) ?></span>
+            </div>
+            <div class="ka-chart ka-chart-bar"><canvas id="ka-chart-hourly"></canvas></div>
+        </section>
+
         <section class="card surface glass ka-card">
             <div class="ka-chart-head">
                 <h2 class="ka-chart-title">Ventes par jour × heure</h2>
@@ -363,6 +446,7 @@ $iconSvg = static function (string $name): string {
         inited[name] = true;
         if (name === 'vue') { initVueCharts(); }
         if (name === 'repart') { initRepartCharts(); }
+        if (name === 'heures') { initHeuresCharts(); }
     }
 
     function activate(name, push) {
@@ -618,6 +702,72 @@ $iconSvg = static function (string $name): string {
         // Légendes HTML sous les donuts (les légendes Chart.js sont désactivées).
         renderCatLegend(bc, catTotal);
         renderPmLegend(pm, pmCa, pmTotal);
+    }
+
+    // ============================================================
+    // Heures : graphiques CA par jour de semaine et par heure
+    // (initialisés EN RETARDÉ à la première activation de l'onglet),
+    // puis heatmap INVERSÉE (DOM pur, construite immédiatement).
+    // ============================================================
+    function initHeuresCharts() {
+        var wd = data.weekday || { labels: [], ca: [] };
+        var elWd = document.getElementById('ka-chart-weekday');
+        if (elWd) {
+            new Chart(elWd, {
+                type: 'bar',
+                data: {
+                    labels: wd.labels,
+                    datasets: [{
+                        label: 'CA (€)',
+                        data: wd.ca,
+                        backgroundColor: 'rgba(97,80,170,.55)',
+                        borderColor: violet,
+                        borderWidth: 1,
+                        borderRadius: 4,
+                    }],
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: { callbacks: { label: function (c) { return money(c.raw); } } },
+                    },
+                    scales: { y: { beginAtZero: true, ticks: { callback: money } } },
+                },
+            });
+        }
+
+        var hr = data.hourly || { labels: [], ca: [] };
+        var elHr = document.getElementById('ka-chart-hourly');
+        if (elHr) {
+            new Chart(elHr, {
+                type: 'bar',
+                data: {
+                    labels: hr.labels,
+                    datasets: [{
+                        label: 'CA (€)',
+                        data: hr.ca,
+                        backgroundColor: 'rgba(245,158,11,.55)',
+                        borderColor: amber,
+                        borderWidth: 1,
+                        borderRadius: 3,
+                    }],
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: { callbacks: { label: function (c) { return money(c.raw); } } },
+                    },
+                    scales: {
+                        x: { ticks: { maxRotation: 0, autoSkip: true, autoSkipPadding: 4, font: { size: 9 } } },
+                        y: { beginAtZero: true, ticks: { callback: money } },
+                    },
+                },
+            });
+        }
     }
 
     // ============================================================
@@ -932,6 +1082,12 @@ $iconSvg = static function (string $name): string {
 .ka-chart-trend { height: 260px; }
 .ka-chart-top { height: 300px; }
 .ka-chart-donut { height: 250px; max-width: 280px; margin: 0 auto; }
+.ka-chart-bar { height: 210px; }
+
+/* ---- Prévisions : chips du jour (pro-rata) / d'hier ---- */
+.ka-fc { display: flex; flex-direction: column; gap: 0.2rem; padding: 0.6rem 0.7rem; }
+.ka-fc .ka-kpi-delta { font-size: 0.78rem; line-height: 1.4; }
+.ka-fc-note { font-size: 0.66rem; color: var(--muted, #9fb3c8); }
 /* Donuts empilés sur téléphone (assez larges pour être lus en 1:1),
    côte à côte uniquement sur écran large. */
 .ka-duo { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.6rem; }

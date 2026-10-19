@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Controllers\Admin;
 
+use App\Core\Compta\SalesForecast;
 use App\Models\Analytics;
 use App\Models\Sale;
 use App\Models\Setting;
@@ -64,12 +65,12 @@ final class AdminAnalyticsController extends AdminBaseController
 
     /**
      * Construit toutes les données de la page (filtres GET, fenêtre de
-     * temps, agrégats, insights, payload JSON) — partagées entre les rendus
-     * admin et kiosque.
+     * temps, agrégats, prévisions, insights, payload JSON) — partagées
+     * entre les rendus admin et kiosque.
      *
-     * @return array{filters:array<string,mixed>,periods:array<string,string>,categories:list<string>,hasSales:bool,kpis:array<string,mixed>,insights:list<array<string,mixed>>,json:string}
+     * @return array{filters:array<string,mixed>,periods:array<string,string>,categories:list<string>,hasSales:bool,kpis:array<string,mixed>,insights:list<array<string,mixed>>,forecast:array<string,mixed>,weekday:array<int,array{ca:float,qty:int,tx:int}>,hourly:array<int,array{ca:float,qty:int,tx:int}>,products:list<string>,productSelected:string,productWeekly:list<array{week:string,ca:float,qty:int}>,json:string}
      */
-    private function buildPage(string $defaultPeriod = '30d'): array
+    private function buildPage(string $defaultPeriod = '30d', ?\DateTimeImmutable $now = null): array
     {
         // ---- Lecture des filtres GET (valeurs sûres) ----
         // $defaultPeriod : le kiosque téléphone tombe sur « 7 derniers
@@ -113,6 +114,82 @@ final class AdminAnalyticsController extends AdminBaseController
         $table     = Analytics::productTable($from, $to, $category, $payment);
         $insights  = Analytics::insights($from, $to, $category, $payment);
 
+        // ---- Prévisions & rythmes (jours de semaine, heures, produit) ----
+        $now = $now ?? new \DateTimeImmutable('now', new \DateTimeZone(SalesForecast::TZ));
+
+        // CA quotidien zéro-rempli, indépendant de la granularité affichée.
+        $dayTrend = $granularity === 'day'
+            ? $trend
+            : Analytics::revenueTrend($from, $to, 'day', $category, $payment);
+
+        $dailyCa = [];
+        foreach ($dayTrend as $b) {
+            $dailyCa[$b['bucket']] = (float) $b['ca'];
+        }
+
+        $forecast = SalesForecast::forecast($dailyCa, $now);
+
+        // Historique quotidien (libellés français) + position du bar du jour.
+        $histLabels = [];
+        $histValues = [];
+        $todayKey   = $now->format('Y-m-d');
+        $todayIndex = false;
+        foreach ($dayTrend as $i => $b) {
+            if ($b['bucket'] === $todayKey) {
+                $todayIndex = $i;
+            }
+            $histLabels[] = SalesForecast::dayLabel(new \DateTimeImmutable($b['bucket']));
+            $histValues[] = (float) $b['ca'];
+        }
+        if ($todayIndex === false) {
+            $histLabels[] = SalesForecast::dayLabel($now);
+            $histValues[] = (float) ($dailyCa[$todayKey] ?? 0.0);
+            $todayIndex   = count($histValues) - 1;
+        }
+
+        // Pro-rata du jour : parts horaires réelles du CA sur la période.
+        $hourly    = Analytics::revenueByHour($from, $to, $category, $payment);
+        $hourTotal = 0.0;
+        foreach ($hourly as $row) {
+            $hourTotal += $row['ca'];
+        }
+        $hourShares = [];
+        if ($hourTotal > 0) {
+            foreach ($hourly as $h => $row) {
+                $hourShares[(int) $h] = $row['ca'] / $hourTotal;
+            }
+        }
+
+        $todayFull = $forecast['today']['forecast_full'];
+        if ($todayFull !== null && $todayFull > 0) {
+            $soFar = SalesForecast::proRatedForecast($todayFull, $hourShares, $now);
+            $forecast['today']['forecast_so_far'] = $soFar;
+            $forecast['today']['delta_pct'] = $this->pctDelta((float) $forecast['today']['actual'], $soFar);
+        }
+
+        $forecast['history']     = ['labels' => $histLabels, 'values' => $histValues];
+        $forecast['today_index'] = $todayIndex;
+        $forecast['today']['label'] = SalesForecast::dayLabel($now);
+        $forecast['now_hour']    = (int) $now->format('G');
+
+        $weekday = Analytics::revenueByWeekday($from, $to, $category, $payment);
+
+        // Produit suivi (sélecteur GET, défaut = produit star de la période).
+        $products = Sale::distinctProducts();
+        $wanted   = $this->filter('product', '');
+        if ($wanted !== '' && in_array($wanted, $products, true)) {
+            $productSelected = $wanted;
+        } elseif ($top !== []) {
+            $productSelected = (string) $top[0]['label'];
+        } elseif ($products !== []) {
+            $productSelected = (string) $products[0];
+        } else {
+            $productSelected = '';
+        }
+        $productWeekly = $productSelected !== ''
+            ? Analytics::productWeeklyTrend($productSelected, $from, $to, $category, $payment)
+            : [];
+
         // ---- Payload JSON pour Chart.js ----
         $payload = [
             'kpis'      => $this->kpisWithDelta($kpis, $kpisPrev),
@@ -136,6 +213,29 @@ final class AdminAnalyticsController extends AdminBaseController
             'stock'      => $stock,
             'table'      => $table,
             'insights'   => $insights,
+            'forecast'   => $forecast,
+            'weekday'    => [
+                'labels' => ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'],
+                'ca'     => array_column($weekday, 'ca'),
+                'qty'    => array_column($weekday, 'qty'),
+                'tx'     => array_column($weekday, 'tx'),
+            ],
+            'hourly'     => [
+                'labels' => array_map(static fn (int $h): string => $h . 'h', range(0, 23)),
+                'ca'     => array_column($hourly, 'ca'),
+                'qty'    => array_column($hourly, 'qty'),
+                'tx'     => array_column($hourly, 'tx'),
+            ],
+            'product_weekly' => [
+                'labels' => array_map(
+                    static fn (string $week): string => 'S ' . (new \DateTimeImmutable($week))->format('d/m'),
+                    array_column($productWeekly, 'week')
+                ),
+                'ca'     => array_column($productWeekly, 'ca'),
+                'qty'    => array_column($productWeekly, 'qty'),
+            ],
+            'products'        => $products,
+            'product_selected' => $productSelected,
             'filters'    => [
                 'from'        => $from,
                 'to'          => $to,
@@ -146,13 +246,19 @@ final class AdminAnalyticsController extends AdminBaseController
         ];
 
         return [
-            'filters'    => $filters,
-            'periods'    => self::PERIODS,
-            'categories' => Sale::distinctCategories(),
-            'hasSales'   => Sale::count() > 0,
-            'kpis'       => $this->kpisWithDelta($kpis, $kpisPrev),
-            'insights'   => $insights,
-            'json'       => (string) json_encode(
+            'filters'        => $filters,
+            'periods'        => self::PERIODS,
+            'categories'     => Sale::distinctCategories(),
+            'hasSales'       => Sale::count() > 0,
+            'kpis'           => $this->kpisWithDelta($kpis, $kpisPrev),
+            'insights'       => $insights,
+            'forecast'       => $forecast,
+            'weekday'        => $weekday,
+            'hourly'         => $hourly,
+            'products'       => $products,
+            'productSelected' => $productSelected,
+            'productWeekly'  => $productWeekly,
+            'json'           => (string) json_encode(
                 $payload,
                 JSON_NUMERIC_CHECK
                 | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
