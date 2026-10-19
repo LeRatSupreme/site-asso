@@ -196,6 +196,35 @@ final class StockTheoriqueTest extends TestCase
         self::assertSame(24, InventoryCount::theoreticalStock('redbull-winter'));
     }
 
+    /**
+     * Le panneau « Écarts détectés » liste le plus récent en premier
+     * (à date égale, le plus grand écart d'abord) : un gros écart ancien
+     * ne doit jamais masquer un écart récent.
+     */
+    public function test_ecarts_recents_du_plus_recent_au_plus_ancien(): void
+    {
+        if (!$this->requireDatabase()) {
+            return;
+        }
+
+        $pdo = $this->connect();
+        $ins = $pdo->prepare(
+            'INSERT INTO inventory_counts
+                (id, counted_at, product_key, counted_qty, theoretical_qty, gap, note, created_by)
+             VALUES (?,?,?,?,?,?,NULL,NULL)'
+        );
+        $ins->execute(['gap_old_big', date('Y-m-d', strtotime('-20 days')) . ' 10:00:00', 'bonbon', 0, 430, -430]);
+        $ins->execute(['gap_new_big', date('Y-m-d', strtotime('-2 days')) . ' 18:00:00', 'eau', 0, 9, -9]);
+        $ins->execute(['gap_new_small', date('Y-m-d', strtotime('-2 days')) . ' 18:00:00', 'cafe', 12, 10, 2]);
+        // Écart nul puis écart hors fenêtre 30 jours : exclus.
+        $ins->execute(['gap_zero', date('Y-m-d', strtotime('-3 days')) . ' 12:00:00', 'lion', 5, 5, 0]);
+        $ins->execute(['gap_out', '2026-01-05 10:00:00', 'mars', 0, 3, -3]);
+
+        $ids = array_column(InventoryCount::recentGaps(30), 'id');
+
+        self::assertSame(['gap_new_big', 'gap_new_small', 'gap_old_big'], $ids);
+    }
+
     public function test_produit_jamais_compte_base_zero_sur_achat(): void
     {
         if (!$this->requireDatabase()) {
