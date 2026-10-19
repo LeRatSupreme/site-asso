@@ -73,14 +73,15 @@ final class ProductKeyMergeTest extends TestCase
         )->execute(['los_' . bin2hex(random_bytes(6)), $date, $key, $qty]);
     }
 
-    private function addSale(string $description, string $productKey, ?string $category = null): void
+    private function addSale(string $description, string $productKey, ?string $category = null, ?string $soldAt = null): void
     {
         $this->pdo->prepare(
             "INSERT INTO sales (id, transaction_ref, sold_at, payment_method, quantity, description, product_key, category, price_ttc)
-             VALUES (?, ?, '2026-10-01 12:00:00', 'CARTE', 1, ?, ?, ?, 1.0)"
+             VALUES (?, ?, ?, 'CARTE', 1, ?, ?, ?, 1.0)"
         )->execute([
             'sal_' . bin2hex(random_bytes(6)),
             'tx_' . bin2hex(random_bytes(8)),
+            $soldAt ?? '2026-10-01 12:00:00',
             $description,
             $productKey,
             $category,
@@ -399,6 +400,49 @@ final class ProductKeyMergeTest extends TestCase
         /** @var list<string> $labels */
         $labels = $this->pdo->query('SELECT label FROM scan_labels ORDER BY label')->fetchAll(PDO::FETCH_COLUMN);
         self::assertSame(['CRISTALINE 50CL', 'Evian'], $labels);
+    }
+
+    public function test_merge_absorbe_le_libelle_mort_de_la_source(): void
+    {
+        // « Schweppes » seul n'est plus vendu depuis juin : sa ligne
+        // « identité » est un doublon inutile — la fusion l'absorbe.
+        $source = 'Schweppes';
+        $target = 'Schweppes Agrumes';
+
+        ProductAlias::save(['raw_description' => $source, 'product_key' => $source]);
+        ProductAlias::save(['raw_description' => 'Schweppes Agrumes', 'product_key' => $target, 'category' => 'Boissons']);
+        $this->addSale($source, $source, null, '2026-06-09 14:48:00');
+
+        $moved = ProductKeyMerge::merge($source, $target, 'user_test');
+
+        self::assertSame(1, $moved['sales'], 'La vente du libellé mort suit la cible.');
+        self::assertSame(1, $moved['aliases_absorbed'], 'La ligne identité du libellé mort est absorbée.');
+        self::assertSame(0, $moved['aliases'], 'Aucune ligne à repointer.');
+
+        $rows = $this->pdo->query('SELECT raw_description, product_key FROM product_aliases')->fetchAll();
+        self::assertCount(1, $rows, 'Une seule ligne reste : la canonique.');
+        self::assertSame('Schweppes Agrumes', (string) $rows[0]['raw_description']);
+        self::assertSame($target, (string) $rows[0]['product_key']);
+
+        self::assertNull(ProductAlias::resolve('Schweppes'), 'Le libellé mort ne pointe nulle part.');
+    }
+
+    public function test_merge_conserve_un_pointeur_pour_le_libelle_encore_vendu(): void
+    {
+        // « Schweppes » encore actif au POS (vente récente) : sa ligne
+        // suit la cible pour que le prochain import résolve vers elle.
+        $source = 'Schweppes';
+        $target = 'Schweppes Agrumes';
+
+        ProductAlias::save(['raw_description' => $source, 'product_key' => $source]);
+        $this->addSale($source, $source, null, date('Y-m-d H:i:s', strtotime('-5 days')));
+
+        $moved = ProductKeyMerge::merge($source, $target, 'user_test');
+
+        self::assertSame(1, $moved['aliases'], 'La ligne du libellé vivant est repointée.');
+        self::assertSame(0, $moved['aliases_absorbed'], 'Aucune absorption pour un libellé vivant.');
+
+        self::assertSame($target, ProductAlias::resolve('Schweppes'), 'Le libellé vivant résout vers la cible.');
     }
 
     public function test_merge_consolide_les_alias_en_doublon(): void

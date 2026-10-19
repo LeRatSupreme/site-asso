@@ -13,13 +13,17 @@ use App\Core\Logger;
  * clé source vers une clé cible conservée, sans perte :
  *
  *  - UPDATE simple (PK `id`, pas de conflit possible) : purchases,
- *    losses, sales, product_aliases, inventory_counts, product_costs,
+ *    losses, sales, inventory_counts, product_costs,
  *    promotions (product_key nullable : seules les lignes rattachées
  *    à la source sont déplacées) ;
- *  - alias : les doublons de libellé ramenés sur la cible (même forme
- *    normalisée) sont CONSOLIDÉS en une ligne (ProductAlias::
- *    consolidateFor : survivant = libellé le plus vendu, catégories
- *    comblées, orthographes supprimées toujours résolvables) ;
+ *  - alias : les libellés de la source suivent la cible SAUF la ligne
+ *    « identité » d'un libellé plus vendu (absorbée : fusion totale,
+ *    ProductAlias::absorbInto) ; les doublons de libellé ramenés sur
+ *    la cible (même forme normalisée) sont CONSOLIDÉS en une ligne
+ *    (ProductAlias::consolidateFor : survivant = libellé le plus
+ *    vendu, catégories comblées, orthographes supprimées toujours
+ *    résolvables) ; un libellé encore actif au POS garde son pointeur
+ *    (ProductAlias::ensurePointer) ;
  *  - PK `product_key` (une ligne par produit, fusion dédiée) :
  *    product_stocks (stock ADDITIONNÉ), product_discontinued,
  *    product_infinite, product_zero_since, product_packs,
@@ -51,16 +55,18 @@ final class ProductKeyMerge extends Model
     protected static string $table = 'product_stocks';
 
     /**
-     * Tables à PK `id` (sales, purchases, losses, product_aliases,
-     * inventory_counts, product_costs, promotions) : un UPDATE par table
-     * suffit — pas de conflit possible (product_aliases : PK id, UNIQUE
-     * sur raw_description ; product_costs : plusieurs lots par produit ;
+     * Tables à PK `id` (sales, purchases, losses, inventory_counts,
+     * product_costs, promotions) : un UPDATE par table suffit — pas de
+     * conflit possible (product_costs : plusieurs lots par produit ;
      * promotions : PK id, product_key nullable — l'UPDATE ne touche que
      * les lignes rattachées à la source).
      *
+     * NB : product_aliases est traité à part (absorbInto) pour absorber
+     * la ligne « identité » d'un libellé mort au lieu de la repointer.
+     *
      * @var list<string>
      */
-    private const SIMPLE_TABLES = ['purchases', 'losses', 'sales', 'product_aliases', 'inventory_counts', 'product_costs', 'promotions'];
+    private const SIMPLE_TABLES = ['purchases', 'losses', 'sales', 'inventory_counts', 'product_costs', 'promotions'];
 
     /**
      * Tables à PK `product_key` (une seule ligne par produit) fusionnées
@@ -151,10 +157,10 @@ final class ProductKeyMerge extends Model
      *
      * @return array<string,int> Nombre de lignes déplacées par table :
      *                           purchases, losses, sales, aliases,
-     *                           aliases_deduped, counts, costs, stocks,
-     *                           discontinued, promotions, infinite,
-     *                           zero_since, packs, checks, scan_labels,
-     *                           order_items, fiches.
+     *                           aliases_absorbed, aliases_deduped,
+     *                           counts, costs, stocks, discontinued,
+     *                           promotions, infinite, zero_since, packs,
+     *                           checks, scan_labels, order_items, fiches.
      *
      * @throws \InvalidArgumentException Clé source vide ou identique à la cible.
      * @throws \Throwable                Erreur SQL (transaction annulée).
@@ -186,14 +192,21 @@ final class ProductKeyMerge extends Model
                 $moved[$table] = (int) $stmt->rowCount();
             }
 
-            // 1-bis. Alias ramenés sur la cible : les doublons de libellé
-            //     (même forme normalisée, ex. « Coca cherry » /
-            //     « Coca_cherry ») sont réduits à une ligne — le survivant
-            //     est le libellé le plus vendu (ProductAlias::consolidateFor,
-            //     même PDO : dans la transaction). Les orthographes
-            //     supprimées restent résolvables via le repli normalisé
-            //     de ProductAlias::resolve().
+            // 1-bis. Alias ramenés sur la cible : les libellés de la source
+            //     suivent la cible, SAUF la ligne « identité » de la source
+            //     quand le libellé n'est plus vendu (fusion totale, pas de
+            //     doublon inutile — ProductAlias::absorbInto) ; les doublons
+            //     de libellé (même forme normalisée, ex. « Coca cherry » /
+            //     « Coca_cherry ») sont réduits à une ligne (consolidateFor :
+            //     survivant = libellé le plus vendu, orthographes supprimées
+            //     toujours résolvables via le repli normalisé de resolve()) ;
+            //     enfin un libellé absorbé encore actif au POS garde son
+            //     pointeur vers la cible (ensurePointer).
+            $absorbedAliases = ProductAlias::absorbInto($source, $target);
             $aliasesDeduped = ProductAlias::consolidateFor($target);
+            if (ProductAlias::ensurePointer($source, $target)) {
+                $absorbedAliases['repointed']++;
+            }
 
             // 8. product_stocks (PK product_key) : fusion ADDITIVE du stock
             //    de référence (source 5 + cible 7 → cible 12), puis
@@ -275,7 +288,8 @@ final class ProductKeyMerge extends Model
             'purchases'      => $moved['purchases'],
             'losses'         => $moved['losses'],
             'sales'          => $moved['sales'],
-            'aliases'        => $moved['product_aliases'],
+            'aliases'        => $absorbedAliases['repointed'],
+            'aliases_absorbed' => $absorbedAliases['absorbed'],
             'aliases_deduped' => $aliasesDeduped,
             'counts'         => $moved['inventory_counts'],
             'costs'          => $moved['product_costs'],
