@@ -187,10 +187,10 @@ final class KioskComptageController extends Controller
             'totalDebit'     => $entries['total_debit'],
             'totalCredit'    => $entries['total_credit'],
             'balance'        => $entries['balance'],
-            'recentExpenses' => Expense::recent(8),
-            // Dernières courses en achats (avec justificatif conservé) —
-            // même regroupement que la version admin du livre.
-            'recentPurchases' => \App\Controllers\Admin\AdminLedgerController::recentPurchaseGroups(8),
+            // Vignette « Derniers tickets & dépenses » : liste fusionnée
+            // chronologique (dépenses + groupes d'achats), identique à la
+            // version admin du livre.
+            'recentItems' => \App\Controllers\Admin\AdminLedgerController::recentItems(20),
             // Suggestions produit (datalist) pour les achats créés depuis
             // le scan — même fusion que la version admin du livre.
             'purchaseProductKeys' => \App\Controllers\Admin\AdminLedgerController::purchaseProductKeys(),

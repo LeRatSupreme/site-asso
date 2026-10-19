@@ -238,6 +238,43 @@ final class LedgerPurchaseGroupsDbTest extends TestCase
     }
 
     /**
+     * recentItems : vignette « Derniers tickets & dépenses » — dépenses
+     * et groupes d'achats FUSIONNÉS en une seule liste chronologique
+     * (date DESC). Une dépense saisie aujourd'hui mais datée d'un ancien
+     * jour apparaît à SA place, visible, au lieu d'être cachée sous les
+     * achats comme avec les anciennes listes séparées (8 + 8).
+     */
+    public function test_recent_items_fusionne_achats_et_depenses_chronologiquement(): void
+    {
+        $this->createPurchase('Coca 33cl', '159-10007281', 12.30, null, '2026-10-14 08:00:00', '2026-10-14');
+        $this->createPurchase('Fanta 33cl', '159-10007282', 8.50, null, '2026-10-12 08:00:00', '2026-10-12');
+        $expenseId = Expense::create([
+            'spent_at'   => '2026-10-13',
+            'category'   => 'DIVERS',
+            'label'      => 'Gobelets',
+            'amount_ttc' => 9.90,
+        ]);
+        self::assertNotSame('', $expenseId, 'Dépense créée (données valides).');
+
+        $items = AdminLedgerController::recentItems(20);
+
+        // Ordre chronologique DESC attendu : achat 10-14, dépense 10-13
+        // (datée d'un jour plus ancien, pourtant bien visible), achat 10-12.
+        $summary = array_map(
+            static fn (array $i): string => $i['type'] . ':' . ($i['type'] === 'purchase' ? $i['date'] : $i['spent_at']),
+            $items
+        );
+        self::assertSame(
+            ['purchase:2026-10-14', 'expense:2026-10-13', 'purchase:2026-10-12'],
+            $summary,
+            'Une seule liste fusionnée, triée du plus récent au plus ancien.'
+        );
+
+        // La limite borne la liste fusionnée (pas chaque type séparément).
+        self::assertCount(2, AdminLedgerController::recentItems(2));
+    }
+
+    /**
      * Facture absente : fusion par fournisseur du jour conservée (une
      * seule écriture), quel que soit le produit.
      */
@@ -265,10 +302,10 @@ final class LedgerPurchaseGroupsDbTest extends TestCase
      *
      * @param string|null $receipt Chemin de justificatif (null = aucun).
      */
-    private function createPurchase(string $key, string $invoice, float $amount, ?string $receipt, string $at = '2026-10-14 08:00:00'): string
+    private function createPurchase(string $key, string $invoice, float $amount, ?string $receipt, string $at = '2026-10-14 08:00:00', string $day = '2026-10-14'): string
     {
         $id = Purchase::create([
-            'purchased_at'   => '2026-10-14',
+            'purchased_at'   => $day,
             'product_key'    => $key,
             'quantity'       => 24,
             'total_ht'       => $amount,
