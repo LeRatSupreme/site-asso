@@ -186,6 +186,10 @@ final class PurchaseSaver
                 if ($existing !== null && (string) $existing['product_key'] === $learn['product_key']) {
                     continue;
                 }
+                // Libellé facture appris d'un scan : c'est une
+                // appellation (listée sur la page dédiée), pas un
+                // alias produit du Mapping des libellés.
+                $learn['kind'] = 'appellation';
                 if (ProductAlias::save($learn) !== '') {
                     $aliasesLearned++;
                     $aliasDetails[] = $learn;

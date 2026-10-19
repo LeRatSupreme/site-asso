@@ -307,11 +307,15 @@ CREATE TABLE IF NOT EXISTS sales (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Mapping libellés CSV -> produit canonique
+-- (kind : 'label' = alias produit court, « Mapping des libellés » ;
+--         'appellation' = libellé long de facture/scan, page
+--         « Ajouter une appellation ».)
 CREATE TABLE IF NOT EXISTS product_aliases (
     id               VARCHAR(255) NOT NULL PRIMARY KEY,
     raw_description  VARCHAR(255) NOT NULL,
     product_key      VARCHAR(255) NOT NULL,
     category         VARCHAR(100) NULL,
+    kind             VARCHAR(20) NOT NULL DEFAULT 'label',
     created_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UNIQUE KEY uniq_alias_raw (raw_description),
     KEY idx_alias_product (product_key)

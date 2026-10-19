@@ -11,12 +11,14 @@ declare(strict_types=1);
  * file) ET les fiches carte au nom de facture (« OASIS TROPICAL SLIM
  * BTE 33CL »…) : il ne reste qu'à saisir le nom court — à
  * l'enregistrement, la fiche longue est fusionnée automatiquement
- * dans le produit court. La liste complète reste consultable et
- * éditable dans la page Mapping des libellés.
+ * dans le produit court. Les appellations enregistrées sont listées
+ * EN BAS de cette page ; « Mapping des libellés » reste réservé aux
+ * alias produits courts.
  *
  * @var list<string> $categories
  * @var list<string> $products
  * @var list<array{label:string, occurrences:int, hint:string, suggested:string, category:string}> $pendingRows
+ * @var list<array<string,mixed>> $appellations
  */
 ?>
 <div class="compta-head">
@@ -87,9 +89,35 @@ declare(strict_types=1);
 
             <div class="form-actions">
                 <button type="submit" class="btn btn-primary">Enregistrer tout</button>
-                <a class="btn btn-ghost" href="<?= e(url('/admin/compta/aliases')) ?>">Voir toutes les appellations</a>
+                <a class="btn btn-ghost" href="<?= e(url('/admin/compta/aliases')) ?>">Mapping des libellés (produits)</a>
             </div>
         </form>
+
+        <?php if (($appellations ?? []) !== []): ?>
+            <h2 class="card-title" style="margin-top:1.5rem">Appellations enregistrées <span class="muted" style="font-size:0.8rem">(<?= count($appellations) ?>)</span></h2>
+            <div class="table-wrap">
+                <table class="table">
+                    <thead><tr><th>Libellé d'origine</th><th>Nom court</th><th>Catégorie</th><th></th></tr></thead>
+                    <tbody>
+                        <?php foreach ($appellations as $a): ?>
+                            <tr>
+                                <td><code><?= e((string) $a['raw_description']) ?></code></td>
+                                <td><strong><?= e((string) $a['product_key']) ?></strong></td>
+                                <td><?= e((string) ($a['category'] ?? '')) ?></td>
+                                <td>
+                                    <form method="post" action="<?= e(url('/admin/compta/aliases/' . rawurlencode((string) $a['id']) . '/delete')) ?>" data-confirm="Supprimer cette appellation ?">
+                                        <?= csrf_field() ?>
+                                        <input type="hidden" name="back" value="new">
+                                        <button type="submit" class="btn btn-destructive btn-sm">Supprimer</button>
+                                    </form>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+            <p class="muted">Ces libellés longs restent actifs pour les imports CSV et les scans ; ils n'apparaissent plus dans « Mapping des libellés » (réservé aux produits). Ressaisis un libellé ci-dessus pour le replacer ici.</p>
+        <?php endif; ?>
 
         <p class="muted">Les libellés scannés et les fiches au nom long arrivent ici ; saisis le nom court — à l'enregistrement, la fiche longue est fusionnée automatiquement dans le produit court.</p>
 
