@@ -52,18 +52,11 @@ if (!isset($opSections[$section ?? ''])) {
 }
 $opCurrent = $opSections[$section];
 
-// Onglets de niveau 1 : section → onglet actif. « pertes » et
-// « inventaire » allument le MÊME onglet « Pertes / Inventaire », dont
-// les sous-onglets de niveau 2 (nav ci-dessous) distinguent les deux
-// pages — mêmes vues, mêmes routes qu'avant.
-$opTabOf = [
-    'achats'     => 'achats',
-    'depenses'   => 'depenses',
-    'pertes'     => 'pertes',
-    'inventaire' => 'pertes',
-    'evenements' => 'evenements',
-];
-$opTabActive = $opTabOf[$section] ?? 'achats';
+// Onglet de niveau 1 actif : mapping partagé OperationsTabs (classe
+// pure testée unitairement) — « pertes » et « inventaire » allument le
+// MÊME onglet « Pertes / Inventaire », dont les sous-onglets de
+// niveau 2 (nav ci-dessous) distinguent les deux pages.
+$opTabActive = \App\Core\Compta\OperationsTabs::tabFor($section);
 
 // Vue historique de la section (même clé que l'onglet / sous-onglet).
 $opInclude = [
@@ -84,7 +77,7 @@ $opInclude = [
 
 <nav class="op-tabs" aria-label="Sections Opérations">
     <?php foreach ($opSections as $key => $s): ?>
-        <?php if (($opTabOf[$key] ?? $key) !== $key) {
+        <?php if (\App\Core\Compta\OperationsTabs::isSubSection($key)) {
             continue; // sous-section : pas d'onglet de niveau 1 propre
         } ?>
         <a class="op-tab<?= $key === $opTabActive ? ' is-active' : '' ?>" href="<?= e(url($s['url'])) ?>"><?= e($s['label']) ?></a>
