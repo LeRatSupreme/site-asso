@@ -4,16 +4,21 @@ declare(strict_types=1);
 
 /**
  * Page fusionnée « Opérations » : une seule page compta au quotidien,
- * quatre onglets de niveau 1 — Achats & stock, Dépenses, Pertes,
- * Événements. Les quatre routes historiques (/admin/compta/achats,
- * /depenses, /pertes, /evenements) rendent toutes cette page avec leur
- * section active ; le contenu de l'onglet est la vue historique de la
- * section, incluse telle quelle (période, onglets internes, formulaires
- * et routes POST inchangés).
+ * quatre onglets de niveau 1 — Achats & stock, Dépenses, Pertes /
+ * Inventaire, Événements. Le bloc « Pertes / Inventaire » porte deux
+ * sous-onglets de niveau 2 (journal des pertes · relevé tablette
+ * SumUp) : deux pages distinctes, rangées sous le même onglet. Les
+ * routes historiques (/admin/compta/achats, /depenses, /pertes,
+ * /evenements, /inventaire-tablette) rendent toutes cette page avec
+ * leur section active ; le contenu de l'onglet est la vue historique
+ * de la section, incluse telle quelle (période, onglets internes,
+ * formulaires et routes POST inchangés).
  *
  * @var string $section 'achats'|'depenses'|'pertes'|'evenements'|'inventaire'
  */
 
+// Sections affichables : description d'en-tête + vue incluse (même
+// clé que l'onglet / sous-onglet).
 $opSections = [
     'achats' => [
         'label' => 'Achats & stock',
@@ -26,7 +31,7 @@ $opSections = [
         'desc'  => 'Les charges de l\'asso (matériel, événements, frais...). Le <strong>résultat net</strong> = bénéfice cafétéria − ces dépenses.',
     ],
     'pertes' => [
-        'label' => 'Pertes',
+        'label' => 'Pertes / Inventaire',
         'url'   => '/admin/compta/pertes',
         'desc'  => 'Casse, périmé, vol, offert... Chaque perte est <strong>valorisée au coût</strong> et <strong>déduite du stock théorique</strong> : elle explique un écart d\'inventaire au lieu de le laisser mystérieux.',
     ],
@@ -47,7 +52,20 @@ if (!isset($opSections[$section ?? ''])) {
 }
 $opCurrent = $opSections[$section];
 
-// Vue historique de la section (même clé que l'onglet).
+// Onglets de niveau 1 : section → onglet actif. « pertes » et
+// « inventaire » allument le MÊME onglet « Pertes / Inventaire », dont
+// les sous-onglets de niveau 2 (nav ci-dessous) distinguent les deux
+// pages — mêmes vues, mêmes routes qu'avant.
+$opTabOf = [
+    'achats'     => 'achats',
+    'depenses'   => 'depenses',
+    'pertes'     => 'pertes',
+    'inventaire' => 'pertes',
+    'evenements' => 'evenements',
+];
+$opTabActive = $opTabOf[$section] ?? 'achats';
+
+// Vue historique de la section (même clé que l'onglet / sous-onglet).
 $opInclude = [
     'achats'     => 'purchases',
     'depenses'   => 'expenses',
@@ -66,8 +84,18 @@ $opInclude = [
 
 <nav class="op-tabs" aria-label="Sections Opérations">
     <?php foreach ($opSections as $key => $s): ?>
-        <a class="op-tab<?= $key === $section ? ' is-active' : '' ?>" href="<?= e(url($s['url'])) ?>"><?= e($s['label']) ?></a>
+        <?php if (($opTabOf[$key] ?? $key) !== $key) {
+            continue; // sous-section : pas d'onglet de niveau 1 propre
+        } ?>
+        <a class="op-tab<?= $key === $opTabActive ? ' is-active' : '' ?>" href="<?= e(url($s['url'])) ?>"><?= e($s['label']) ?></a>
     <?php endforeach; ?>
 </nav>
+
+<?php if ($opTabActive === 'pertes'): ?>
+<nav class="op-tabs op-subtabs" aria-label="Pertes / Inventaire">
+    <a class="op-tab<?= $section === 'pertes' ? ' is-active' : '' ?>" href="<?= e(url('/admin/compta/pertes')) ?>">Pertes</a>
+    <a class="op-tab<?= $section === 'inventaire' ? ' is-active' : '' ?>" href="<?= e(url('/admin/compta/inventaire-tablette')) ?>">Inventaire</a>
+</nav>
+<?php endif; ?>
 
 <?php require AEIC_VIEWS . '/admin/compta/' . $opInclude . '.php'; ?>
