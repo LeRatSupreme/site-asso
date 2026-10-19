@@ -761,8 +761,9 @@ final class AdminComptaController extends AdminBaseController
      *
      * Revalide côté serveur que le survivant fait bien partie d'un groupe de
      * doublons (même clé normalisée), puis regroupe en une transaction :
-     * ventes, lots de coûts et alias, et crée un alias pour chaque libellé
-     * fusionné afin que les prochains imports pointent au bon endroit.
+     * ventes, lots de coûts et alias — la ligne d'un libellé encore vendu
+     * reste un pointeur vers le survivant (les prochains imports résolvent
+     * au bon endroit), celle d'un libellé plus vendu est absorbée.
      */
     public function mergeProducts(): void
     {
@@ -803,6 +804,7 @@ final class AdminComptaController extends AdminBaseController
         $salesMoved = 0;
         $lotsMoved = 0;
         $aliasesMoved = 0;
+        $aliasesAbsorbed = 0;
 
         try {
             $pdo->beginTransaction();
@@ -810,15 +812,25 @@ final class AdminComptaController extends AdminBaseController
             foreach ($others as $old) {
             $salesMoved += Sale::mergeInto($keep, [$old]);
             $lotsMoved += ProductCost::reassign($old, $keep);
-            $aliasesMoved += ProductAlias::reassign($old, $keep);
-            // Alias résiduel : tout futur import du libellé fusionné
-            // résoudra directement vers le survivant.
-            ProductAlias::save(['raw_description' => $old, 'product_key' => $keep]);
+            // Alias : la ligne « identité » d'un libellé plus vendu est
+            // absorbée (fusion totale, pas de doublon) ; un libellé encore
+            // actif au POS garde son pointeur vers le survivant.
+            $abs = ProductAlias::absorbInto($old, $keep);
+            $aliasesMoved += $abs['repointed'];
+            $aliasesAbsorbed += $abs['absorbed'];
         }
 
-        // Alias consolidés : l'alias résiduel ci-dessus peut doubler un
-        // libellé de même forme normalisée déjà rattaché au survivant.
+        // Alias consolidés : les libellés ramenés sur le survivant peuvent
+        // doubler une forme normalisée déjà rattachée.
         $deduped = ProductAlias::consolidateFor($keep);
+
+        // Pointeurs des libellés encore actifs au POS (si resolve() ne
+        // les couvre pas déjà).
+        foreach ($others as $old) {
+            if (ProductAlias::ensurePointer($old, $keep)) {
+                $aliasesMoved++;
+            }
+        }
 
             $pdo->commit();
         } catch (\Throwable $e) {
@@ -841,16 +853,18 @@ final class AdminComptaController extends AdminBaseController
             'sales'    => $salesMoved,
             'lots'     => $lotsMoved,
             'aliases'  => $aliasesMoved,
+            'absorbed' => $aliasesAbsorbed,
             'deduped'  => $deduped,
         ]);
         $this->setFlash(
             'success',
             sprintf(
-                'Fusion effectuée vers « %s » : %d vente(s), %d lot(s), %d alias re-groupés, %d doublon(s) d\'alias consolidé(s).',
+                'Fusion effectuée vers « %s » : %d vente(s), %d lot(s), %d alias re-groupés, %d alias obsolète(s) absorbé(s), %d doublon(s) d\'alias consolidé(s).',
                 $keep,
                 $salesMoved,
                 $lotsMoved,
                 $aliasesMoved,
+                $aliasesAbsorbed,
                 $deduped
             )
         );
@@ -938,6 +952,7 @@ final class AdminComptaController extends AdminBaseController
             'losses'         => 'perte(s)',
             'sales'          => 'vente(s)',
             'aliases'        => 'alias',
+            'aliases_absorbed' => 'alias obsolète absorbé',
             'aliases_deduped' => 'doublon(s) d\'alias consolidé(s)',
             'counts'         => 'comptage(s)',
             'stocks'         => 'stock additionné',

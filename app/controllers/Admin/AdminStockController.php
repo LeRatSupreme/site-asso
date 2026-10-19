@@ -1105,6 +1105,7 @@ final class AdminStockController extends AdminBaseController
             'losses'         => 'perte(s)',
             'sales'          => 'vente(s)',
             'aliases'        => 'alias',
+            'aliases_absorbed' => 'alias obsolète absorbé',
             'aliases_deduped' => 'doublon(s) d\'alias consolidé(s)',
             'counts'         => 'comptage(s)',
             'stocks'         => 'stock additionné',

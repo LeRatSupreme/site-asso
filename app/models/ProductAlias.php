@@ -193,6 +193,90 @@ final class ProductAlias extends Model
     }
 
     /**
+     * Absorbe les alias d'une clé fusionnée : les libellés rattachés à la
+     * source suivent la cible, SAUF la ligne « identité » de la source
+     * (libellé = clé absorbée) quand ce libellé n'apparaît plus dans les
+     * ventes récentes — cette ligne serait un doublon sans utilité, le
+     * libellé mort ne reviendra plus dans les imports.
+     *
+     * Un libellé encore VENDU (description présente dans les ventes des
+     * `$liveDays` derniers jours) garde au contraire sa ligne : le
+     * prochain import CSV doit continuer à le résoudre vers la cible.
+     *
+     * @return array{repointed:int, absorbed:int}
+     */
+    public static function absorbInto(string $from, string $to, int $liveDays = 60): array
+    {
+        $from = trim($from);
+        $to = trim($to);
+        if ($from === '' || $to === '' || strcasecmp($from, $to) === 0) {
+            return ['repointed' => 0, 'absorbed' => 0];
+        }
+
+        $stmt = self::pdo()->prepare('SELECT id, raw_description FROM product_aliases WHERE product_key = ?');
+        $stmt->execute([$from]);
+        /** @var list<array<string,mixed>> $rows */
+        $rows = $stmt->fetchAll();
+
+        $repoint = self::pdo()->prepare('UPDATE product_aliases SET product_key = ? WHERE id = ?');
+        $repointed = 0;
+        $absorbed = 0;
+        foreach ($rows as $row) {
+            $isSelf = strcasecmp(trim((string) $row['raw_description']), $from) === 0;
+            if ($isSelf && !self::labelIsLive((string) $row['raw_description'], $liveDays)) {
+                self::deleteRow((string) $row['id']);
+                $absorbed++;
+            } else {
+                $repoint->execute([$to, (string) $row['id']]);
+                $repointed++;
+            }
+        }
+
+        return ['repointed' => $repointed, 'absorbed' => $absorbed];
+    }
+
+    /**
+     * Garantit qu'un libellé absorbé encore actif au POS (ventes
+     * récentes) continuera de résoudre vers la cible : crée la ligne
+     * d'alias manquante si resolve() ne la couvre pas déjà (ligne
+     * exacte ou repli normalisé).
+     */
+    public static function ensurePointer(string $raw, string $to, int $liveDays = 60): bool
+    {
+        $raw = trim($raw);
+        $to = trim($to);
+        if ($raw === '' || $to === '' || strcasecmp($raw, $to) === 0) {
+            return false;
+        }
+        if (!self::labelIsLive($raw, $liveDays)) {
+            return false;
+        }
+
+        $resolved = self::resolve($raw);
+        if ($resolved !== null && strcasecmp($resolved, $to) === 0) {
+            return false;
+        }
+
+        self::save(['raw_description' => $raw, 'product_key' => $to]);
+
+        return true;
+    }
+
+    /**
+     * Ce libellé apparaît-il encore dans les ventes récentes ? (comparaison
+     * ci : « schweppes » couvre la description « Schweppes »).
+     */
+    private static function labelIsLive(string $raw, int $liveDays): bool
+    {
+        $stmt = self::pdo()->prepare(
+            'SELECT 1 FROM sales WHERE description = ? AND sold_at >= DATE_SUB(NOW(), INTERVAL ' . max(1, $liveDays) . ' DAY) LIMIT 1'
+        );
+        $stmt->execute([$raw]);
+
+        return $stmt->fetch() !== false;
+    }
+
+    /**
      * Consolide les DOUBLONS d'alias d'une clé canonique : les libellés
      * de même forme normalisée (ex. « Coca cherry » / « Coca_cherry » /
      * « Coca Cherry ») sont réduits à une seule ligne, celle du libellé
