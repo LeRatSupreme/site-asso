@@ -79,4 +79,27 @@ final class GoalTest extends TestCase
         self::assertEqualsWithDelta(24.0, $h['hi'], 0.0001, 'Quantile 0.90 de [15, 25].');
         self::assertEqualsWithDelta(16.0, $h['lo'], 0.0001, 'Quantile 0.10 de [15, 25].');
     }
+
+    /**
+     * Contrat d'UNITÉ de prob_atteinte : une FRACTION dans [0, 1]
+     * (P(total ≥ objectif)), jamais un pourcentage 0–100. Les vues
+     * (carte « Objectif », chip kiosque) multiplient par 100 pour
+     * l'affichage — régression du bug « 0 % » d'octobre 2026.
+     */
+    public function test_prob_atteinte_toujours_une_fraction_0_1(): void
+    {
+        // Attendu 950 € pour un objectif intermédiaire : probabilité strictement entre 0 et 1.
+        $r = Goal::week(self::tirages(), 50.0, 900.0);
+        self::assertGreaterThanOrEqual(0.0, $r['prob_atteinte']);
+        self::assertLessThanOrEqual(1.0, $r['prob_atteinte']);
+        self::assertGreaterThan(0.0, $r['prob_atteinte'], 'Objectif 900 : les tirages 950 et 1010 l\'atteignent.');
+        self::assertLessThan(1.0, $r['prob_atteinte'], 'Objectif 900 : le tirage 890 ne l\'atteint pas.');
+
+        // Bornes et cas limite : la fraction reste dans [0, 1].
+        foreach ([500.0, 950.0, 1100.0] as $objectif) {
+            $sem = Goal::week(self::tirages(), 50.0, $objectif);
+            self::assertGreaterThanOrEqual(0.0, $sem['prob_atteinte']);
+            self::assertLessThanOrEqual(1.0, $sem['prob_atteinte']);
+        }
+    }
 }
