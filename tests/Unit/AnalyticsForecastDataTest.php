@@ -234,11 +234,12 @@ final class AnalyticsForecastDataTest extends TestCase
         sort($keys);
         self::assertSame(['Bières', 'Café', 'Snacks', 'coca'], $keys);
 
-        // Café : 4 unités, 10 €, médiane 2,5 €, coût 0 → suspect, stock inconnu.
+        // Café : 4 unités (pondérées, jours tous normaux), 10 €, médiane
+        // 2,5 €, coût 0 → suspect, stock inconnu.
         $cafe = $byKey['Café'];
         self::assertSame('Café', $cafe->label);
         self::assertSame('Non classé', $cafe->category);
-        self::assertSame(4, $cafe->qty);
+        self::assertSame(4.0, $cafe->qty);
         self::assertSame(10.0, $cafe->ca);
         self::assertSame(2.5, $cafe->unitPrice);
         self::assertSame(0.0, $cafe->unitCost);
@@ -248,7 +249,7 @@ final class AnalyticsForecastDataTest extends TestCase
         // Coca-cola : clé canonique, coût 0,60 < prix 2,50 → non suspect,
         // stock référencé = 10.
         $coca = $byKey['coca'];
-        self::assertSame(2, $coca->qty);
+        self::assertSame(2.0, $coca->qty);
         self::assertSame(5.0, $coca->ca);
         self::assertSame(0.6, $coca->unitCost);
         self::assertFalse($coca->costSuspect);
@@ -308,12 +309,13 @@ final class AnalyticsForecastDataTest extends TestCase
         }
         self::assertSame(['coca', 'Café', 'Bières'], array_map(static fn ($p) => $p->key, $stats));
 
-        // Types stricts du DTO (le moteur et les vues s'y fient).
+        // Types stricts du DTO (le moteur et les vues s'y fient). qty est
+        // FLOAT : somme pondérée par le poids d'atypie des jours.
         foreach ($stats as $p) {
             self::assertIsString($p->key);
             self::assertIsString($p->label);
             self::assertIsString($p->category);
-            self::assertIsInt($p->qty);
+            self::assertIsFloat($p->qty);
             self::assertIsFloat($p->ca);
             self::assertTrue($p->unitPrice === null || is_float($p->unitPrice), 'unitPrice : ?float.');
             self::assertTrue($p->unitCost === null || is_float($p->unitCost), 'unitCost : ?float.');
@@ -321,9 +323,10 @@ final class AnalyticsForecastDataTest extends TestCase
             self::assertTrue($p->stock === null || is_int($p->stock), 'stock : ?int.');
         }
 
-        // Ordre attendu + classifications de coût non ambiguës.
+        // Ordre attendu + classifications de coût non ambiguës. Jours tous
+        // « normaux » (aucun z > 3,5) → qty pondérée = somme brute.
         $coca = $stats[0];
-        self::assertSame(30, $coca->qty);
+        self::assertSame(30.0, $coca->qty);
         self::assertSame(75.0, $coca->ca);
         self::assertSame(2.5, $coca->unitPrice);
         self::assertFalse($coca->costSuspect, 'Coût 0,60 < prix 2,50 : sain.');
@@ -331,6 +334,86 @@ final class AnalyticsForecastDataTest extends TestCase
         self::assertTrue($stats[2]->costSuspect, 'Bières : prix 2,50 < coût 12 = suspect.');
         self::assertSame(10, $coca->stock, 'Stock référencé.');
         self::assertNull($stats[2]->stock, 'Stock infini = null.');
+    }
+
+    /**
+     * Fusion des clés quasi-doublonnes : « Café » et « cafe » partagent la
+     * même clé normalisée → UNE seule ligne : qty/ca sommés, unitPrice =
+     * moyenne pondérée par qty, stock connu conservé, 1ʳᵉ clé comme key et
+     * label le plus long. L'audit liste la fusion (« cafe ×2 ») et le
+     * produit resté sans stock.
+     */
+    public function test_product_stats_fusionne_les_cles_quasi_doublonnes(): void
+    {
+        if (!$this->requireDatabase()) {
+            return;
+        }
+        $this->importSales([
+            // 1ʳᵉ clé rencontrée : « Café » (accent) — 1 u. à 3 €.
+            $this->saleRow('fm1', '2026-10-12 10:00:00', 'Café', 1, 'Café', ['price_ttc' => 3.0]),
+            // 2ᵉ clé : « cafe » (sans accent) — 2 u. à 4 € (2 €/u).
+            $this->saleRow('fm2', '2026-10-12 11:00:00', 'Café expresso', 2, 'cafe', ['price_ttc' => 4.0]),
+            // Produit distinct SANS stock connu → cité dans l'audit.
+            $this->saleRow('fm3', '2026-10-12 12:00:00', 'Thé vert', 1, 'Thé', ['price_ttc' => 2.0]),
+        ]);
+        // Stock : seul « cafe » est connu → c'est lui qui est conservé.
+        $this->pdo->exec("INSERT INTO product_stocks (product_key, stock) VALUES ('cafe', 10)");
+
+        $stats = AnalyticsForecastData::productStats(self::FROM, self::TO);
+
+        self::assertCount(2, $stats, '« Café » et « cafe » fusionnent en une ligne ; « Thé » reste seul.');
+        $p = null;
+        foreach ($stats as $s) {
+            if ($s->key === 'Café') {
+                $p = $s;
+            }
+        }
+        self::assertNotNull($p);
+        self::assertSame('Café expresso', $p->label, 'Label le plus long conservé.');
+        self::assertSame(3.0, $p->qty, 'Quantités sommées (1 + 2).');
+        self::assertSame(7.0, $p->ca, 'CA sommé (3 + 4).');
+        self::assertEqualsWithDelta((1 * 3.0 + 2 * 2.0) / 3.0, $p->unitPrice, 0.0001, 'Prix = moyenne pondérée par qty.');
+        self::assertSame(10, $p->stock, 'Le stock connu est conservé.');
+        self::assertTrue($p->costSuspect, 'OU logique des suspects (aucun coût ici).');
+
+        // L'audit expose la fusion et les produits sans stock (label,
+        // 5 max) ; le produit fusionné a un stock → seul « Thé vert » liste.
+        $audit = AnalyticsForecastData::audit(self::FROM, self::TO);
+        self::assertSame(['cafe ×2'], $audit['cles_fusionnees']);
+        self::assertSame(['Thé vert'], $audit['produits_sans_stock']);
+        self::assertSame(1, $audit['n_produits_sans_stock']);
+    }
+
+    /**
+     * Pondération par l'atypie (F9) : un jour à pic (60 unités d'un coup)
+     * reçoit le poids 0.3 (Hyper::W_ATYPICAL) → la qty pondérée du produit
+     * reste sous la somme brute, et le CA suit la même pondération.
+     * Attendu exact : 10 + 12 + 10 + 60×0.3 = 50 unités (au lieu de 92),
+     * CA pondéré = 25 + 30 + 25 + 150×0.3 = 125 € (au lieu de 230 €).
+     */
+    public function test_product_stats_pese_les_jours_atypiques(): void
+    {
+        if (!$this->requireDatabase()) {
+            return;
+        }
+        $this->importSales([
+            // Trois jours normaux (CA 25, 30, 25 €) puis un PIC (150 €) :
+            // la MAD des CA est non nulle et |z| du pic ≫ 3.5 → poids 0.3.
+            $this->saleRow('fw1', '2026-10-12 10:00:00', 'Café', 10, 'Café', ['price_ttc' => 25.0]),
+            $this->saleRow('fw2', '2026-10-13 10:00:00', 'Café', 12, 'Café', ['price_ttc' => 30.0]),
+            $this->saleRow('fw3', '2026-10-14 10:00:00', 'Café', 10, 'Café', ['price_ttc' => 25.0]),
+            $this->saleRow('fw4', '2026-10-15 10:00:00', 'Café', 60, 'Café', ['price_ttc' => 150.0]),
+        ]);
+
+        $stats = AnalyticsForecastData::productStats(self::FROM, self::TO);
+
+        self::assertCount(1, $stats);
+        $p = $stats[0];
+        self::assertLessThan(92.0, $p->qty, 'La qty pondérée doit être sous la somme brute (92).');
+        self::assertEqualsWithDelta(10.0 + 12.0 + 10.0 + 60.0 * 0.3, $p->qty, 0.0001, 'Pic pondéré 0.3.');
+        self::assertEqualsWithDelta(25.0 + 30.0 + 25.0 + 150.0 * 0.3, $p->ca, 0.0001, 'CA pondéré comme la qty.');
+        // La médiane des prix unitaires reste inchangée (toutes lignes à 2,5 €).
+        self::assertSame(2.5, $p->unitPrice);
     }
 
     public function test_audit_ventes_zero_doublons_et_suspects(): void
