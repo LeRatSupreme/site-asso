@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Core\Compta\Forecast\Clean;
 use App\Core\Compta\Forecast\DayCurrent;
 use App\Core\Compta\Forecast\ForecastDataset;
 use App\Core\Compta\Forecast\ProductStat;
@@ -182,7 +183,11 @@ final class AnalyticsForecastData extends Model
      * Statistiques par produit sur le flux courant (clé = COALESCE(product_key,
      * description), même clé que les lots de coûts).
      *
-     * - qty / ca : sommes sur la fenêtre.
+     * - qty / ca : sommes PONDÉRÉES par le poids d'atypie des jours
+     *   (Forecast\Clean::atypicalWeights calculé sur les jours construits :
+     *   un jour à pic reçoit Hyper::W_ATYPICAL = 0.3, les autres 1.0) —
+     *   les parts et unités 7 j de réapprovisionnement ne sont plus tirées
+     *   par une journée anormale. Aucun jour atypique → sommes brutes.
      * - unitPrice : MÉDIANE exacte des couples prix×quantité observés
      *   (price_ttc / quantity par ligne de vente) — robuste aux rappels de prix.
      * - category : mode (catégorie la plus fréquente ; à égalité, la première
@@ -195,13 +200,37 @@ final class AnalyticsForecastData extends Model
      *   ATTENTION : un prix unitaire inconnu (NULL) avec un coût > 0 n'est PAS
      *   suspect (prix inconnu ≠ incohérent) — mais il est signalé si le coût
      *   est lui-même inconnu ou nul.
+     * - FUSION des clés quasi-doublonnes : deux clés de même clé normalisée
+     *   (minuscules, accents retirés, séparateurs réduits à un espace) ne
+     *   forment qu'une ligne (voir productStatsInternal).
      *
      * @return list<ProductStat>  Trié par CA décroissant.
      */
     public static function productStats(string $from, string $to): array
     {
+        return self::productStatsInternal($from, $to)['stats'];
+    }
+
+    /**
+     * Travaux de productStats() + diagnostics de fusion pour l'audit :
+     * regroupe les produits par clé normalisée, fusionne les quasi-doublons
+     * (« Cafe » et « café » → une ligne : qty/ca sommés, unitPrice et
+     * unitCost = moyennes pondérées par qty, stock connu conservé (somme si
+     * les deux connus, un produit « stock infini » compte comme inconnu),
+     * costSuspect = OU logique, 1ʳᵉ clé rencontrée comme key et label le
+     * plus long comme label.
+     *
+     * @return array{
+     *     stats:list<ProductStat>,
+     *     cles_fusionnees:list<string>,
+     *     produits_sans_stock:list<string>,
+     *     n_produits_sans_stock:int
+     * }
+     */
+    private static function productStatsInternal(string $from, string $to): array
+    {
         $sql = 'SELECT COALESCE(product_key, description) AS pkey,
-                       description, category, quantity, price_ttc
+                       description, category, quantity, price_ttc, sold_at
                 FROM sales
                 WHERE ' . self::flowWhere() . '
                   AND DATE(sold_at) >= ? AND DATE(sold_at) <= ?
@@ -218,12 +247,17 @@ final class AnalyticsForecastData extends Model
         }
 
         if ($rows === []) {
-            return [];
+            return ['stats' => [], 'cles_fusionnees' => [], 'produits_sans_stock' => [], 'n_produits_sans_stock' => 0];
         }
 
-        // Agrégation en mémoire (la médiane et le mode exigent les lignes).
-        $qty = [];
-        $ca = [];
+        // Poids d'atypie par jour (0.3 pour un pic) calculés sur les jours
+        // du flux courant déjà construits — même règle que le moteur.
+        $weights = Clean::atypicalWeights(self::currentFlowDays($from, $to));
+
+        // Agrégation par clé brute en mémoire (la médiane et le mode
+        // exigent les lignes) ; qty/ca sont les sommes PONDÉRÉES.
+        $qtyW = [];       // pkey => somme quantity × poids(jour)
+        $caW = [];        // pkey => somme price_ttc × poids(jour)
         $unitPrices = []; // pkey => list<float> price_ttc/quantity
         $labels = [];     // pkey => list<string> descriptions
         $categories = []; // pkey => list<string> catégories normalisées
@@ -234,9 +268,10 @@ final class AnalyticsForecastData extends Model
             }
             $price = (float) ($r['price_ttc'] ?? 0);
             $quantity = (int) ($r['quantity'] ?? 0);
+            $poids = (float) ($weights[substr((string) ($r['sold_at'] ?? ''), 0, 10)] ?? 1.0);
 
-            $qty[$key] = ($qty[$key] ?? 0) + $quantity;
-            $ca[$key]  = ($ca[$key] ?? 0.0) + $price;
+            $qtyW[$key] = ($qtyW[$key] ?? 0.0) + $quantity * $poids;
+            $caW[$key]  = ($caW[$key] ?? 0.0) + $price * $poids;
 
             if ($quantity > 0) {
                 $unitPrices[$key][] = $price / $quantity;
@@ -245,34 +280,110 @@ final class AnalyticsForecastData extends Model
             $categories[$key][] = (($r['category'] ?? '') !== '' ? (string) $r['category'] : 'Non classé');
         }
 
-        $costs = self::currentCostMap(array_keys($ca));
+        $costs = self::currentCostMap(array_keys($caW));
         $stocks = ProductStock::allMap();
         $infinite = ProductInfinite::keys();
 
-        $out = [];
-        foreach ($ca as $key => $productCa) {
-            $unitPrice = self::median($unitPrices[$key] ?? []);
-            $unitCost  = $costs[$key] ?? null;
-            $stock     = in_array($key, $infinite, true) ? null : ($stocks[$key] ?? null);
+        // Regroupement par clé normalisée : l'ordre des clés d'un groupe
+        // suit la première apparition dans les ventes (ORDER BY sold_at).
+        $groupes = [];
+        foreach ($caW as $key => $productCa) {
+            $groupes[self::cleNormalisee($key)][] = $key;
+        }
 
-            $out[] = new ProductStat(
-                key: $key,
-                label: self::mode($labels[$key] ?? []) ?? $key,
-                category: self::mode($categories[$key] ?? []) ?? 'Non classé',
-                qty: (int) ($qty[$key] ?? 0),
-                ca: (float) $productCa,
+        $stats = [];
+        $fusionnees = [];
+        $sansStock = [];
+        $nSansStock = 0;
+        foreach ($groupes as $norm => $keys) {
+            $cle = $keys[0];
+            $fusion = count($keys) > 1;
+            if ($fusion) {
+                $fusionnees[] = $norm . ' ×' . count($keys);
+            }
+
+            $qty = 0.0;
+            $ca = 0.0;
+            $sumQtePrix = 0.0;
+            $sumQtePrixVals = [];
+            $sumQteCout = 0.0;
+            $sumQteCoutVals = [];
+            $tousLabels = [];
+            $toutesCategories = [];
+            $stock = null;
+            $stockInfini = false;
+            $suspect = false;
+
+            foreach ($keys as $k) {
+                $q = (float) ($qtyW[$k] ?? 0.0);
+                $qty += $q;
+                $ca += (float) ($caW[$k] ?? 0.0);
+
+                $prix = self::median($unitPrices[$k] ?? []);
+                if ($prix !== null && $q > 0.0) {
+                    $sumQtePrix += $q * $prix;
+                    $sumQtePrixVals[] = $q;
+                }
+                $cout = $costs[$k] ?? null;
+                if ($cout !== null) {
+                    $sumQteCout += $q * $cout;
+                    $sumQteCoutVals[] = $q;
+                }
+
+                foreach (($labels[$k] ?? []) as $l) {
+                    $tousLabels[] = $l;
+                }
+                foreach (($categories[$k] ?? []) as $c) {
+                    $toutesCategories[] = $c;
+                }
+
+                if (in_array($k, $infinite, true)) {
+                    $stockInfini = true; // « infini » = stock non connu pour le réappro.
+                } elseif (array_key_exists($k, $stocks)) {
+                    $stock = (int) $stocks[$k] + (int) ($stock ?? 0); // somme des connus
+                }
+
+                $suspect = $suspect
+                    || $cout === null
+                    || $cout <= 0.0
+                    || ($prix !== null && $prix < $cout);
+            }
+
+            $unitPrice = $sumQtePrixVals === [] ? null : $sumQtePrix / array_sum($sumQtePrixVals);
+            $unitCost = $sumQteCoutVals === [] ? null : $sumQteCout / array_sum($sumQteCoutVals);
+
+            if ($stock === null && !$stockInfini) {
+                $nSansStock++;
+                if (count($sansStock) < 5) {
+                    $sansStock[] = $fusion
+                        ? (string) (self::plusLong($tousLabels) ?? $cle)
+                        : (string) (self::mode($tousLabels) ?? $cle);
+                }
+            }
+
+            $stats[] = new ProductStat(
+                key: $cle,
+                label: $fusion
+                    ? (string) (self::plusLong($tousLabels) ?? $cle)
+                    : (self::mode($tousLabels) ?? $cle),
+                category: self::mode($toutesCategories) ?? 'Non classé',
+                qty: $qty,
+                ca: $ca,
                 unitPrice: $unitPrice,
                 unitCost: $unitCost,
-                costSuspect: $unitCost === null
-                    || $unitCost <= 0.0
-                    || ($unitPrice !== null && $unitPrice < $unitCost),
+                costSuspect: $suspect,
                 stock: $stock,
             );
         }
 
-        usort($out, static fn (ProductStat $a, ProductStat $b): int => $b->ca <=> $a->ca);
+        usort($stats, static fn (ProductStat $a, ProductStat $b): int => $b->ca <=> $a->ca);
 
-        return $out;
+        return [
+            'stats'                 => $stats,
+            'cles_fusionnees'       => $fusionnees,
+            'produits_sans_stock'   => $sansStock,
+            'n_produits_sans_stock' => $nSansStock,
+        ];
     }
 
     /**
@@ -287,8 +398,19 @@ final class AnalyticsForecastData extends Model
      *   lot importé (DATE(imported_at)) dans la fenêtre.
      * - produits_cout_suspect : labels des produits suspects, cohérents avec
      *   productStats() (même définition de costSuspect).
+     * - cles_fusionnees : clés normalisées ayant fusionné plusieurs clés
+     *   brutes quasi-doublonnes (ex. « cafe ×2 ») — à consolider via les
+     *   alias ; cohérent avec productStats().
+     * - produits_sans_stock / n_produits_sans_stock : produits sans stock
+     *   référencé (hors « stock infini ») — suggestion de réappro = null ;
+     *   liste citée dans le bandeau qualité (5 max), compteur complet.
      *
-     * @return array{ventes_zero:int, doublons_ignores:int, produits_cout_suspect:list<string>}
+     * @return array{
+     *     ventes_zero:int, doublons_ignores:int,
+     *     produits_cout_suspect:list<string>,
+     *     cles_fusionnees:list<string>,
+     *     produits_sans_stock:list<string>, n_produits_sans_stock:int
+     * }
      */
     public static function audit(string $from, string $to): array
     {
@@ -324,9 +446,11 @@ final class AnalyticsForecastData extends Model
             $doublons = 0;
         }
 
-        // 3) Produits au coût suspect (mêmes règles que productStats).
+        // 3) Produits au coût suspect + diagnostics de fusion (mêmes règles
+        // que productStats : une seule passe interne partagée).
+        $intern = self::productStatsInternal($from, $to);
         $suspects = [];
-        foreach (self::productStats($from, $to) as $p) {
+        foreach ($intern['stats'] as $p) {
             if ($p->costSuspect) {
                 $suspects[] = $p->label;
             }
@@ -336,6 +460,9 @@ final class AnalyticsForecastData extends Model
             'ventes_zero'          => $ventesZero,
             'doublons_ignores'     => $doublons,
             'produits_cout_suspect' => $suspects,
+            'cles_fusionnees'       => $intern['cles_fusionnees'],
+            'produits_sans_stock'   => $intern['produits_sans_stock'],
+            'n_produits_sans_stock' => $intern['n_produits_sans_stock'],
         ];
     }
 
@@ -363,6 +490,59 @@ final class AnalyticsForecastData extends Model
     // -----------------------------------------------------------------
     //  Helpers privés
     // -----------------------------------------------------------------
+
+    /**
+     * Clé produit NORMALISÉE pour la fusion des quasi-doublons : minuscules,
+     * accents retirés (iconv //TRANSLIT, repli manuel FR si la translittération
+     * n'est pas portable — glibc rend « é » → « 'e »), séparateurs non
+     * alphanumériques réduits à un espace, trim. « Café », « cafe » et
+     * « CAFÉ » → « cafe » ; « cafe allonge » reste distinct.
+     */
+    private static function cleNormalisee(string $key): string
+    {
+        $ascii = @iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $key);
+        if ($ascii === false || preg_match('/[^a-z0-9 ]/i', $ascii) === 1) {
+            // Translittération indisponible ou non portable : repli manuel.
+            $ascii = strtr($key, self::ACCENTS);
+        }
+
+        return trim((string) preg_replace('/[^a-z0-9]+/', ' ', strtolower($ascii)));
+    }
+
+    /** Accents courants (latin de base + supplément) → ASCII non accentué. */
+    private const ACCENTS = [
+        'à' => 'a', 'á' => 'a', 'â' => 'a', 'ä' => 'a', 'ã' => 'a', 'å' => 'a',
+        'è' => 'e', 'é' => 'e', 'ê' => 'e', 'ë' => 'e',
+        'ì' => 'i', 'í' => 'i', 'î' => 'i', 'ï' => 'i',
+        'ò' => 'o', 'ó' => 'o', 'ô' => 'o', 'ö' => 'o', 'õ' => 'o',
+        'ù' => 'u', 'ú' => 'u', 'û' => 'u', 'ü' => 'u',
+        'ý' => 'y', 'ÿ' => 'y', 'ñ' => 'n', 'ç' => 'c',
+        'À' => 'a', 'Á' => 'a', 'Â' => 'a', 'Ä' => 'a', 'Ã' => 'a', 'Å' => 'a',
+        'È' => 'e', 'É' => 'e', 'Ê' => 'e', 'Ë' => 'e',
+        'Ì' => 'i', 'Í' => 'i', 'Î' => 'i', 'Ï' => 'i',
+        'Ò' => 'o', 'Ó' => 'o', 'Ô' => 'o', 'Ö' => 'o', 'Õ' => 'o',
+        'Ù' => 'u', 'Ú' => 'u', 'Û' => 'u', 'Ü' => 'u',
+        'Ý' => 'y', 'Ñ' => 'n', 'Ç' => 'c',
+        'œ' => 'oe', 'Œ' => 'oe', 'æ' => 'ae', 'Æ' => 'ae',
+    ];
+
+    /**
+     * Libellé le plus long d'une liste (à longueur égale, le premier
+     * rencontré) ; null si vide.
+     *
+     * @param list<string> $values
+     */
+    private static function plusLong(array $values): ?string
+    {
+        $best = null;
+        foreach ($values as $v) {
+            if ($best === null || mb_strlen($v) > mb_strlen($best)) {
+                $best = $v;
+            }
+        }
+
+        return $best;
+    }
 
     /**
      * Coût « as-of aujourd'hui » par clé produit, même priorité que
