@@ -187,9 +187,25 @@ $iconSvg = static function (string $name): string {
         </div>
 
         <?php
+        // Liens de fenêtre : GET courant (période, catégorie, paiement,
+        // granularité, produit…) avec seul « fw » surchargé. Partagé par
+        // les cartes « Prévisions » et « Estimation du jour » : une seule
+        // et même fenêtre d'analyse pour toutes les prévisions.
+        $token = $token ?? '';
+        $dtUrl = static function (int $w) use ($kiosk, $token): string {
+            $params           = $_GET;
+            $params['fw']     = (string) $w;
+            $path = $kiosk
+                ? '/kiosque/admin/analytics/' . rawurlencode($token)
+                : '/admin/analytics';
+
+            return url($path) . '?' . http_build_query($params);
+        };
+
         // Chips du jour (pro-rata) et d'hier, même motif que les deltas KPI.
         $fcToday  = $forecast['today'];
         $fcYday   = $forecast['yesterday'];
+        $fcFw     = (int) ($forecast['window'] ?? 14);
         $fcChips  = [];
         if ($fcToday['forecast_so_far'] !== null) {
             $fcChips[] = [
@@ -215,24 +231,32 @@ $iconSvg = static function (string $name): string {
         ?>
         <div class="card surface glass chart-card chart-span-2">
             <div class="chart-head">
-                <h2 class="chart-title">Prévisions</h2>
-                <div class="fc-chips">
-                    <?php foreach ($fcChips as $chip):
-                        $d  = $chip['delta'];
-                        $up = $d === null ? null : ($d >= 0);
-                    ?>
-                        <?php if ($up !== null): ?>
-                            <span class="kpi-delta <?= $up ? 'is-up' : 'is-down' ?>">
-                                <?= e($chip['text']) ?> <?= $up ? '↑' : '↓' ?> <?= number_format(abs($d), 1, ',', ' ') ?>%
-                            </span>
-                        <?php else: ?>
-                            <span class="kpi-delta is-muted"><?= e($chip['text']) ?> —</span>
-                        <?php endif; ?>
+                <div>
+                    <h2 class="chart-title">Prévisions</h2>
+                    <span class="chart-sub">Fenêtre d'analyse : <?= $fcFw ?> derniers jours</span>
+                </div>
+                <div class="af-pills dt-pills">
+                    <?php foreach ([7 => '7 j', 14 => '14 j', 30 => '30 j'] as $w => $lbl): ?>
+                        <a class="af-pill <?= $fcFw === $w ? 'is-active' : '' ?>" href="<?= e($dtUrl($w)) ?>"><?= e($lbl) ?></a>
                     <?php endforeach; ?>
                 </div>
             </div>
+            <div class="fc-chips dt-chips">
+                <?php foreach ($fcChips as $chip):
+                    $d  = $chip['delta'];
+                    $up = $d === null ? null : ($d >= 0);
+                ?>
+                    <?php if ($up !== null): ?>
+                        <span class="kpi-delta <?= $up ? 'is-up' : 'is-down' ?>">
+                            <?= e($chip['text']) ?> <?= $up ? '↑' : '↓' ?> <?= number_format(abs($d), 1, ',', ' ') ?>%
+                        </span>
+                    <?php else: ?>
+                        <span class="kpi-delta is-muted"><?= e($chip['text']) ?> —</span>
+                    <?php endif; ?>
+                <?php endforeach; ?>
+            </div>
             <?php if (($forecast['elapsed_days'] ?? 0) < 1): ?>
-                <p class="muted fc-empty">Prévisions indisponibles : aucun jour d'historique écoulé sur la période.</p>
+                <p class="muted fc-empty">Prévisions indisponibles : aucun jour d'historique écoulé sur la fenêtre.</p>
             <?php else: ?>
                 <?php if (empty($forecast['reliable'])): ?>
                     <span class="chart-sub fc-note">Prévisions fiables à partir de 7 jours d'historique</span>
@@ -243,7 +267,8 @@ $iconSvg = static function (string $name): string {
 
         <?php
         // Carte « Estimation du jour » : avance et suivi live du jour sur
-        // une fenêtre d'analyse au choix (7/14/30 j, paramètre GET « fw »).
+        // la fenêtre commune (7/14/30 j, paramètre GET « fw ») partagée
+        // avec la carte « Prévisions ».
         $dtTrack = $day_track['track'] ?? null;
         $dtFw    = (int) ($day_track['window'] ?? 14);
         $dtEst   = $day_track['estimate'] ?? null;
@@ -252,19 +277,6 @@ $iconSvg = static function (string $name): string {
         $dtUp    = $dtDelta === null ? null : ($dtDelta >= 0);
         $dtProj  = (float) ($dtTrack['projection_eod'] ?? 0.0);
         $dtHasEst = $dtEst !== null && (float) $dtEst > 0;
-
-        // Liens de fenêtre : GET courant (période, catégorie, paiement,
-        // granularité, produit…) avec seul « fw » surchargé.
-        $token = $token ?? '';
-        $dtUrl = static function (int $w) use ($kiosk, $token): string {
-            $params           = $_GET;
-            $params['fw']     = (string) $w;
-            $path = $kiosk
-                ? '/kiosque/admin/analytics/' . rawurlencode($token)
-                : '/admin/analytics';
-
-            return url($path) . '?' . http_build_query($params);
-        };
         ?>
         <div class="card surface glass chart-card chart-span-2">
             <div class="chart-head">
