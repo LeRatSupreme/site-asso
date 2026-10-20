@@ -270,6 +270,68 @@ final class AnalyticsForecastDataTest extends TestCase
         self::assertSame(3, $snacks->stock);
     }
 
+    /**
+     * Régression (fix d7d2131) : productStats() avec PLUSIEURS produits doit
+     * trier par CA décroissant via un comparateur usort valide (retour int).
+     * L'ancien comparateur typé `bool` levait un TypeError fatal dès le
+     * premier appel — invisible en local sans MySQL, 500 en production.
+     * Vérifie aussi le contrat complet du DTO ProductStat (types stricts).
+     */
+    public function test_product_stats_tri_et_dto_complet(): void
+    {
+        if (!$this->requireDatabase()) {
+            return;
+        }
+        // 3 produits du flux courant, CA nets distincts :
+        // coca 75 € (10 + 20 u.), Café 10 € (2 + 2 u.), Bières 5 € (2 u.).
+        $this->importSales([
+            $this->saleRow('ft1', '2026-10-12 10:00:00', 'Coca-cola', 10, 'coca'),
+            $this->saleRow('ft1', '2026-10-12 10:01:00', 'Coca-cola', 20, 'coca'),
+            $this->saleRow('ft2', '2026-10-12 11:00:00', 'Café', 2),
+            $this->saleRow('ft3', '2026-10-13 12:00:00', 'Café', 2),
+            $this->saleRow('ft4', '2026-10-13 12:30:00', 'Bières', 2),
+        ]);
+        $this->seedCoutsEtStocks();
+
+        $stats = AnalyticsForecastData::productStats(self::FROM, self::TO);
+
+        self::assertNotEmpty($stats, 'Au moins un produit du flux courant.');
+
+        // TRI par CA décroissant : contrat consommé par la vue Réappro.
+        for ($i = 1, $n = count($stats); $i < $n; $i++) {
+            self::assertGreaterThanOrEqual(
+                $stats[$i]->ca,
+                $stats[$i - 1]->ca,
+                'productStats doit être trié par CA décroissant.'
+            );
+        }
+        self::assertSame(['coca', 'Café', 'Bières'], array_map(static fn ($p) => $p->key, $stats));
+
+        // Types stricts du DTO (le moteur et les vues s'y fient).
+        foreach ($stats as $p) {
+            self::assertIsString($p->key);
+            self::assertIsString($p->label);
+            self::assertIsString($p->category);
+            self::assertIsInt($p->qty);
+            self::assertIsFloat($p->ca);
+            self::assertTrue($p->unitPrice === null || is_float($p->unitPrice), 'unitPrice : ?float.');
+            self::assertTrue($p->unitCost === null || is_float($p->unitCost), 'unitCost : ?float.');
+            self::assertIsBool($p->costSuspect);
+            self::assertTrue($p->stock === null || is_int($p->stock), 'stock : ?int.');
+        }
+
+        // Ordre attendu + classifications de coût non ambiguës.
+        $coca = $stats[0];
+        self::assertSame(30, $coca->qty);
+        self::assertSame(75.0, $coca->ca);
+        self::assertSame(2.5, $coca->unitPrice);
+        self::assertFalse($coca->costSuspect, 'Coût 0,60 < prix 2,50 : sain.');
+        self::assertTrue($stats[1]->costSuspect, 'Café : coût nul = suspect.');
+        self::assertTrue($stats[2]->costSuspect, 'Bières : prix 2,50 < coût 12 = suspect.');
+        self::assertSame(10, $coca->stock, 'Stock référencé.');
+        self::assertNull($stats[2]->stock, 'Stock infini = null.');
+    }
+
     public function test_audit_ventes_zero_doublons_et_suspects(): void
     {
         if (!$this->requireDatabase()) {
