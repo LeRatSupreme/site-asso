@@ -495,7 +495,7 @@ final class KioskComptageController extends Controller
         }
 
         $today = (new \DateTimeImmutable('today', new \DateTimeZone('Europe/Paris')))->format('Y-m-d');
-        $week = \App\Core\Compta\ComptaCalc::last7DaysWindow();
+        $week = \App\Core\Compta\ComptaCalc::currentWeekWindow();
         $month = \App\Core\Compta\ComptaCalc::monthToDateWindow();
         $aggToday = Sale::aggregatesBetween($today, $today);
         $aggWeek = Sale::aggregatesBetween($week['from'], $week['to']);
@@ -697,7 +697,7 @@ final class KioskComptageController extends Controller
         $top = Sale::topProductsBetween($today, $today, 10);
         $tx = Sale::transactionsBetween($today, $today);
         $aggYesterday = Sale::aggregatesBetween($yesterday, $yesterday);
-        $week = \App\Core\Compta\ComptaCalc::last7DaysWindow($todayDt);
+        $week = \App\Core\Compta\ComptaCalc::currentWeekWindow($todayDt);
         $aggWeek = Sale::aggregatesBetween($week['from'], $week['to']);
 
         // CA par heure du jour : salesByDayHour() regroupe par jour de

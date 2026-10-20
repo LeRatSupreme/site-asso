@@ -105,7 +105,7 @@ $mMoisMarge = $marge($mois['ca'], $mois['profit']);
 
     <div class="kx-pair">
         <div class="kx-card">
-            <p class="kx-card-label">7 derniers jours</p>
+            <p class="kx-card-label">Semaine actuelle</p>
             <div class="kx-card-value"><?= e(formatPrice($semaine['ca'])) ?></div>
             <p class="kx-card-sub <?= $semaine['profit'] < 0 ? 'is-loss' : '' ?>">+<?= e(formatPrice($semaine['profit'])) ?> bénéfice · <?= e($mSemMarge) ?></p>
         </div>
