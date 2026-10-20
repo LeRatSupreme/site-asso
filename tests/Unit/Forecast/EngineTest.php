@@ -5,9 +5,12 @@ declare(strict_types=1);
 namespace Tests\Unit\Forecast;
 
 use App\Core\Compta\Forecast\Clean;
+use App\Core\Compta\Forecast\DemandModel;
 use App\Core\Compta\Forecast\ForecastDataset;
 use App\Core\Compta\Forecast\ForecastEngine;
 use App\Core\Compta\Forecast\DayCurrent;
+use App\Core\Compta\Forecast\Hyper;
+use App\Core\Compta\Forecast\ProductStat;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -178,6 +181,76 @@ final class EngineTest extends TestCase
         self::assertCount(7, $r['jours_semaine']);
         self::assertCount(7, $r['jours']);
         self::assertTrue($r['anomalies']['donnees_insuffisantes']);
+    }
+
+    /**
+     * FIX A — TEST DE RÉCONCILIATION (demandé explicitement) : une seule
+     * source d'unités calibrée sur le moteur.
+     *  - |Σ CA produits − Σ CA jours| / Σ CA jours < 5 % ;
+     *  - marge catégorie = Σ marges variantes (±0,01), marge_pct = marge/ca
+     *    des MÊMES unités (comparable à la marge observée) ;
+     *  - unités totales post-calibration cohérentes avec l'échelle du
+     *    moteur (≈ caJours / prix ; tolérance large vs meanN × upT × 7).
+     */
+    public function test_reconciliation_ca_produits_egal_ca_jours(): void
+    {
+        $serie = self::serie(28);
+        $data = new ForecastDataset($serie, self::produits());
+        $r = ForecastEngine::forecast($data, self::paris('2026-10-19 23:59'), '23:59', ['seed' => 42, 'draws' => 1000]);
+
+        $caJours = 0.0;
+        foreach ($r['jours'] as $j) {
+            $caJours += $j['ca'];
+        }
+        $caProduits = 0.0;
+        $sommeMarges = 0.0;
+        $unitesTot = 0.0;
+        foreach ($r['produits'] as $p) {
+            $caProduits += (float) $p['unites'] * (float) $p['unitPrice'];
+            $sommeMarges += (float) $p['unites'] * ((float) $p['unitPrice'] - (float) $p['unitCost']);
+            $unitesTot += (float) $p['unites'];
+        }
+
+        self::assertGreaterThan(0.0, $caJours);
+        self::assertLessThan(0.05, abs($caProduits - $caJours) / $caJours, 'Σ CA produits ≈ Σ CA jours (< 5 %) : invariant de calibration.');
+
+        // Bénéfice dérivé des MÊMES unités (une seule catégorie fiable).
+        self::assertEqualsWithDelta($sommeMarges, $r['benefice']['total_marge_7j'], 0.01);
+        self::assertEqualsWithDelta($sommeMarges, $r['benefice']['par_categorie']['Energisant']['marge'], 0.01, 'Marge catégorie = Σ marges variantes (±0,01).');
+        self::assertEqualsWithDelta(50.0, $r['benefice']['par_categorie']['Energisant']['marge_pct'], 0.01, 'Marge/ca des mêmes unités (prix 2, coût 1 → 50 %).');
+        self::assertEqualsWithDelta($caProduits, $r['benefice']['par_categorie']['Energisant']['ca'], 0.01);
+
+        // Cohérence d'échelle : unités calibrées ≈ caJours / prix (2 €) ;
+        // ordre de grandeur préservé vs meanN × upT × 7 (tolérance large).
+        $m = DemandModel::fit($serie, [], Hyper::K_POOL);
+        $sumQty = 0.0;
+        foreach (self::produits() as $p) {
+            $sumQty += $p->qty;
+        }
+        $sumN = 0;
+        foreach ($serie as $day) {
+            $sumN += $day->n;
+        }
+        $brut = $m->globalN * ($sumQty / $sumN) * 7;
+        self::assertEqualsWithDelta($caJours / 2.0, $unitesTot, $caJours / 2.0 * 0.005, 'Toutes les unités sont calibrées sur le CA prévu.');
+        self::assertGreaterThan($brut * 0.2, $unitesTot, 'Ordre de grandeur préservé (pas de facteur ×2.7).');
+        self::assertLessThan($brut * 5.0, $unitesTot);
+    }
+
+    /**
+     * Produits synthétiques du test de réconciliation : quantités
+     * hétérogènes, prix 2, coût 1, même catégorie (agrégats lisibles).
+     *
+     * @return list<ProductStat>
+     */
+    private static function produits(): array
+    {
+        return [
+            new ProductStat('a', 'Boisson A', 'Energisant', 720, 1440.0, 2.0, 1.0, false, null),
+            new ProductStat('b', 'Boisson B', 'Energisant', 360, 720.0, 2.0, 1.0, false, null),
+            new ProductStat('c', 'Boisson C', 'Energisant', 240, 480.0, 2.0, 1.0, false, null),
+            new ProductStat('d', 'Boisson D', 'Energisant', 120, 240.0, 2.0, 1.0, false, null),
+        ];
     }
 
     /**

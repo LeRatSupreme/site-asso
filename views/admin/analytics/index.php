@@ -502,7 +502,7 @@ $iconSvg = static function (string $name): string {
             </div>
             <p class="benef-total">
                 <span class="kpi-value"><?= $benefTot === null ? '—' : e(formatPrice((float) $benefTot)) ?></span>
-                <span class="chart-sub">de marge prévue sur 7 jours</span>
+                <span class="chart-sub">de marge prévue — horizon 7 jours ouverts</span>
             </p>
             <?php if ($benefPctNc > 0 && $benefNote !== ''): ?>
                 <p class="fc-banner"><?= e($benefNote) ?></p>
@@ -545,7 +545,7 @@ $iconSvg = static function (string $name): string {
         <div class="card surface glass chart-card chart-span-2">
             <div class="chart-head">
                 <h2 class="chart-title">Réapprovisionnement</h2>
-                <span class="chart-sub">besoins estimés à 7 jours</span>
+                <span class="chart-sub">besoins estimés — horizon 7 jours ouverts</span>
             </div>
             <?php if ($reappro === []): ?>
                 <p class="muted fc-empty">Aucune suggestion de réapprovisionnement.</p>

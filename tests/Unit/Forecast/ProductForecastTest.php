@@ -87,6 +87,84 @@ final class ProductForecastTest extends TestCase
     }
 
     /**
+     * FIX A — CALIBRATION sur le CA prévu du moteur : un seul facteur
+     * f = caCible / Σ(unites_brut × prix) recale unites, lo, hi (safety =
+     * plafond de hi) ; INVARIANT Σ unites × prix = caCible (±0,5 %), la
+     * part de marché reste la part BRUTE, et le résultat reste déterministe.
+     */
+    public function test_calibration_sur_ca_cible_invariant(): void
+    {
+        $m = DemandModel::fit(self::serie(), [], Hyper::K_POOL);
+        $produits = [
+            new ProductStat('a', 'Eau', 'Boissons', 60, 120.0, 2.0, 1.0, false, 10),
+            new ProductStat('b', 'Chips', 'Snacks', 30, 60.0, 2.0, 1.0, false, 100),
+            new ProductStat('c', 'Pain', 'Boulangerie', 10, 20.0, 2.0, 1.0, false, 5),
+            new ProductStat('d', 'Nouveauté', 'Divers', 0, 0.0, 2.0, 1.0, false, 0),
+        ];
+
+        $brut = ProductForecast::units($produits, $m, 0.2, 7, new \Random\Randomizer(new \Random\Engine\Mt19937(7)), 1000);
+        $cal  = ProductForecast::units($produits, $m, 0.2, 7, new \Random\Randomizer(new \Random\Engine\Mt19937(7)), 1000, 70.0);
+        $cal2 = ProductForecast::units($produits, $m, 0.2, 7, new \Random\Randomizer(new \Random\Engine\Mt19937(7)), 1000, 70.0);
+
+        self::assertSame($cal, $cal2, 'Même graine + même caCible → sortie identique.');
+
+        // Invariant de réconciliation : Σ unites × prix = caCible (±0,5 %).
+        $sommeCa = 0.0;
+        foreach ($cal as $row) {
+            $sommeCa += $row['unites'] * (float) $row['unitPrice'];
+        }
+        self::assertEqualsWithDelta(70.0, $sommeCa, 70.0 * 0.005, 'Σ unites × prix calibrés = CA prévu 7 j du moteur.');
+
+        // Même facteur partout : parts brutes inchangées, hiérarchie conservée.
+        $parCleBrut = array_column($brut, null, 'key');
+        $sommeBrut = 0.0;
+        foreach ($cal as $row) {
+            $b = $parCleBrut[$row['key']];
+            $facteur = $row['unites'] / $b['unites'];
+            self::assertEqualsWithDelta(70.0 / 140.0, $facteur, 0.01, 'Facteur de calibration uniforme (Σ brut × prix = λ × 2 = 140).');
+            self::assertEqualsWithDelta($b['part'], $row['part'], 0.0, 'Part de marché brute inchangée.');
+            self::assertLessThanOrEqual($row['hi'] + 1.0e-9, $row['unites'], 'lo ≤ unites ≤ hi après calibration.');
+            self::assertGreaterThanOrEqual($row['lo'] - 1.0e-9, $row['unites']);
+            self::assertSame((int) ceil($row['hi']), $row['safety_demand'], 'Safety = plafond du hi recalé.');
+            $attendu = $row['stock'] !== null ? max(0, $row['safety_demand'] - $row['stock']) : null;
+            self::assertSame($attendu, $row['suggestion'], 'Suggestion recalculée sur la demande calibrée.');
+            $sommeBrut += $b['unites'] * (float) $b['unitPrice'];
+        }
+        self::assertEqualsWithDelta(140.0, $sommeBrut, 0.5, 'Sans calibration : Σ unites brut × prix = λ = 70 × parts × 2.');
+    }
+
+    /**
+     * Pas de CA cible (null) OU aucun prix connu → pas de calibration
+     * (unités brutes conservées telles quelles).
+     */
+    public function test_calibration_neant_sans_cible_ou_sans_prix(): void
+    {
+        $m = DemandModel::fit(self::serie(), [], Hyper::K_POOL);
+        $avecPrix = [
+            new ProductStat('a', 'Eau', 'Boissons', 60, 120.0, 2.0, 1.0, false, 10),
+            new ProductStat('b', 'Chips', 'Snacks', 30, 60.0, 2.0, 1.0, false, 100),
+        ];
+        $sansPrix = [
+            new ProductStat('a', 'Eau', 'Boissons', 60, 120.0, null, 1.0, true, 10),
+            new ProductStat('b', 'Chips', 'Snacks', 30, 60.0, null, 1.0, true, 100),
+        ];
+
+        $sansCible = ProductForecast::units($avecPrix, $m, 0.2, 7, null, 100);
+        $avecCible = ProductForecast::units($sansPrix, $m, 0.2, 7, null, 100, 999.0);
+        foreach ($avecCible as $i => $row) {
+            self::assertEqualsWithDelta($sansCible[$i]['unites'], $row['unites'], 1.0e-12, 'Aucun prix connu → facteur impossible, unités brutes.');
+        }
+
+        // À prix connus, la calibration s'applique bel et bien.
+        $calibre = ProductForecast::units($avecPrix, $m, 0.2, 7, null, 100, 70.0);
+        self::assertNotEquals($sansCible[0]['unites'], $calibre[0]['unites'], 'caCible 70 au lieu de 140 → unités divisées par 2.');
+        self::assertEqualsWithDelta($sansCible[0]['unites'] / 2.0, $calibre[0]['unites'], 1.0e-12);
+
+        $ref = ProductForecast::units($avecPrix, $m, 0.2, 7, null, 100);
+        self::assertSame($ref, $sansCible, 'caCible null = comportement historique (déterministe sans rng).');
+    }
+
+    /**
      * 10 jours ouverts (lun–ven × 2), 50 transactions/jour, panier 2.0
      * → globalN ≈ 50, λ = 50 × 0.2 × 7 = 70 unités sur 7 jours.
      *
