@@ -19,6 +19,13 @@ Monte Carlo calibrés conformalement). Principes :
 - **Une seule fenêtre d'apprentissage** (GET `fw` = 7/14/30 jours finissant
   aujourd'hui) alimente le dataset unique : prévision du jour, horaire,
   jours à venir, semaine, 30 jours, bénéfice et produits sortent du même appel.
+- **Une seule source d'unités, calibrée sur le moteur** : les unités par
+  produit du réapprovisionnement sont calibrées sur le CA prévu 7 j
+  (invariant **Σᵖ unitésᵖ × prixᵖ ≈ CA prévu 7 j**), et le bénéfice est
+  DÉRIVÉ de cette même liste — plus d'échelle indépendante entre les cartes
+  Réapprovisionnement et Bénéfice (audit : le réappro non calibré affichait
+  ×2,5 à ×2,9 le CA du moteur, cause = `meanN × unités/transaction × 7 jours
+  CALENDAIRES` — jours fermés inclus, tendance amortie ignorée).
 - **Masquage plutôt qu'invention** : trop tôt dans la journée, données
   insuffisantes ou base nulle ⇒ le % / l'écart est `null` et n'est pas affiché.
 - **Jours fermés jamais comptés 0** : un jour sans transaction du flux courant
@@ -48,6 +55,12 @@ Prévision : `exp(l_T + b_T·φ(1−φ^h)/(1−φ) + a_j)` (tendance bornée par
 Panier P : **moyenne tronquée 10 %** par dow, rétrécie vers le panier global
 pareil. Dispersion binomiale négative par **méthode des moments** :
 `r̂ = Σw·μ̂² / (Σw(x−μ̂)² − Σw·μ̂)`, clampée **[2, 200]**.
+**La dispersion est une propriété GLOBALE du modèle** : `DemandModel::fit(…, r)`
+peut IMPOSER r (clampé [2, 200]) au lieu de le recalculer. Le refit « hier »
+(réajustement sans le jour expliqué) réutilise le r du modèle principal —
+sinon son estimateur local s'effondre vers R_MAX quasi-Poisson et la
+fourchette « Hier » devient plus étroite que « Aujourd'hui » à tort
+(dump prod : r principal 18,0 vs refit sans hier 200 → ±18 % contre ±35 %).
 
 ### Étape 3 — Profil horaire (`HourlyProfile`)
 Profil de parts horaires S(h) : comptes globaux lissés **Dirichlet α = 1**
@@ -72,7 +85,16 @@ calibration (intervalles MC conservés).
 
 ### Étape 5 — Backtest et sélection (`Backtest`)
 **Origine glissante dès le 10ᵉ jour ouvert** : pour chaque jour i ≥ 9, réajustement
-sur [0..i−1] (poids atypiques recalculés) et prévision du jour i. Baselines :
+sur [0..i−1] (poids atypiques recalculés) et prévision du jour i. **Depuis la
+passe « backtest historique complet », le backtest tourne sur un 2ᵉ dataset
+HISTORIQUE COMPLET** (`Analytics::firstSaleDate()` → aujourd'hui, opts
+`backtest_days` du moteur) : `BACKTEST_START = 10` n'est plus consommé par la
+fenêtre d'apprentissage — même avec fw = 14 j (≈ 9 jours ouverts, backtest
+jamais lancé avant), le WAPE est calculé dès ≥ 2 mois de ventes. Budget temps :
+troncature aux **90 derniers jours ouverts** (`BACKTEST_MAX_DAYS`) et tirages
+plafonnés `BACKTEST_DRAWS_MAX = 2000` (défaut moteur : `min(draws, 2000)`).
+Le MODÈLE d'apprentissage reste sur la fenêtre fw (inchangé) ; le facteur de
+calibration conforme vient du backtest complet. Baselines :
 B1 = même dow la semaine précédente (sinon moyenne globale), B2 = moyenne des
 occurrences passées du dow, B3 = moyenne des 7 derniers jours ouverts.
 Métriques : **WAPE** (principal, B2…), **biais** moyen, **MASE** vs B1,
@@ -89,31 +111,64 @@ POST `/admin/analytics/objectif`. Semaine = lun-dim en cours : réel déjà
 encaissé + tirages des jours restants (restant du jour multiplié par
 `(1 − S_h)·θ`) ⇒ **P(atteindre l'objectif)** = fréquence des tirages ≥ objectif,
 **manquant/jour** = `max(0, objectif − attendu) / max(1, jours restants)`
-(null si 0 jour restant et objectif non atteint). Horizon 30 jours : attendu +
-intervalle 80 % des 29 jours ouverts suivants.
+(null si 0 jour restant et objectif non atteint). **Requis/jour** =
+`(objectif − réel) / max(1, jours restants)` : le RYTHME journalier pour
+VISER la cible, indépendant de l'attendu du modèle — affiché dès que
+réel < objectif, même si le modèle prévoit d'atteindre (les deux libellés
+sont distincts : « Requis/jour pour viser l'objectif » vs « Manque attendu
+par jour restant »). Horizon 30 jours : attendu + intervalle 80 %.
+
+**Choc de niveau commun** : chaque somme de chemin Monte Carlo (semaine et
+horizon) est multipliée chemin par chemin par `f_path ~ Gamma(8, 1/8)`
+(moyenne 1, σ ≈ 35 % — même prior que la mise à jour horaire, rng seedé du
+moteur, flux « N ») AVANT d'ajouter le réel (jamais choqué). **Le niveau ne
+se moyennise pas sur 30 jours** : une météo/affluence commune à toute la
+période déplace le total — sans ce choc, la fourchette 30 j serait
+absurdement étroite (±7 %) alors que l'incertitude de niveau domine.
+Attendu après choc : mois30 ≈ ±30-45 % (honnête), semaine élargie aussi.
 
 ### Étape 7 — Bénéfice prévu (`ProfitForecast`)
-Marge à 7 jours, **produits à coût valide uniquement** (coût inconnu, coût ≤ 0
-ou prix < coût = « suspects », exclus). Répartition du CA prévu au prorata des
-quantités fiables ; `marge_i = ca_7j × part_i × (marge_i/prix_i)` ; agrégat
-par catégorie (marge %). Bandeau « **X % du CA sans coût fiable** » : le total
-est une borne basse honnête.
+Marge à 7 jours, **dérivée des MÊMES unités que le réapprovisionnement**
+(une seule source d'unités, calibrée sur le CA prévu par le moteur, cf.
+étape 8) : `ca_p = unités_p × prix_p`, `marge_p = unités_p × (prix_p − coût_p)`
+pour les produits à coût valide uniquement (coût inconnu, coût ≤ 0 ou
+prix < coût = « suspects », exclus). Agrégats par catégorie
+(`marge_pct = marge / ca` des MÊMES unités) ⇒ **comparables à la marge
+observée** du tableau « Détail par produit ». INVARIANT : Σ caᵖ ≈ CA prévu
+7 j du moteur (±0,5 % pour les prix connus) — testé par le test de
+réconciliation du moteur. Bandeau « **X % du CA sans coût fiable** » :
+le total est une borne basse honnête.
 
 ### Étape 8 — Réapprovisionnement (`ProductForecast`)
 Parts de marché lissées **Dirichlet (+1)** : `part_i = (qty_i + 1)/(Σqty + K)`.
-**Unités 7 j** : `λ = meanN × unités/transaction × 7`, tirages **Poisson** sur
-le total répartis par parts ⇒ lo/hi = quantiles 0.10/0.90 ;
-**stock sécurité = q90** de la demande ; **suggestion = max(0, q90 − stock)**
-(null si stock inconnu ou « infini »). Tri par suggestion décroissante.
+**Unités BRUTES 7 j** : `λ = meanN × unités/transaction × 7`, tirages
+**Poisson** sur le total répartis par parts ⇒ lo/hi = quantiles 0.10/0.90.
+**CALIBRATION SUR LE MOTEUR** (une seule source d'unités) : un facteur
+unique `f = CA prévu 7 j / Σᵢ(unités_brutesᵢ × prixᵢ)` recale unités, lo, hi
+(dénominateur ≤ 0 ⇒ pas de calibration) — **INVARIANT : Σᵢ unitésᵢ × prixᵢ ≈
+CA prévu 7 j**. La part de marché `part_i` reste brute (inchangée).
+**Stock sécurité = q90** de la demande finale ; **suggestion =
+max(0, q90 − stock)** (null si stock inconnu ou « infini »). Tri par
+suggestion décroissante. Les cartes Réapprovisionnement et Bénéfice sont
+étiquetées « **horizon 7 jours ouverts** ».
 
 ### Étape 9 — Moteur et intégration (`ForecastEngine`, contrôleur, vues)
 `ForecastEngine::forecast(dataset, now, heure, opts)` enchaîne 0-8 et rend
-le contrat complet (prevision_jour, intervalle_80, horaire, jours, semaine,
-mois30, benefice, produits, anomalies, notes, métriques backtest…).
+le contrat complet (prevision_jour, intervalle_80, horaire, jours, semaine
+avec `requis_par_jour`, mois30, benefice, produits, anomalies, notes,
+métriques backtest, `dispersion_r`…). Options : `backtest_days` (historique
+complet pour le backtest, cf. étape 5), `backtest_draws`, `slow_periods`
+(périodes creuses, cf. infra), `events`, `goal_weekly`, `seed`, `draws`, `k`.
 Le contrôleur assemble le dataset (`AnalyticsForecastData::dataset`), appelle
 le moteur UNE fois, mappe vers `day_track` / `weekday` / `hourly` / payload
 JSON ; routes `/admin/analytics` (GET), `/admin/analytics/objectif` (POST,
 CSRF centralisé), `/kiosque/admin/analytics/{token}` (GET, jeton admin).
+
+**Insight « Meilleur jour »** (`Analytics::insights`, jour PARTIEL exclu) :
+le classement s'arrête HIER et n'est émis que s'il reste **≥ 2 jours
+distincts ET ≥ 2 semaines calendaires distinctes** avec CA > 0 (helper pur
+`Analytics::meilleurJourSemaine`, testé sans base). Sinon pas d'insight —
+une part « Lundi 60 % » calculée sur un jour et demi est tautologique.
 
 ## 3. Hyperparamètres FIXES (et pourquoi)
 
@@ -136,6 +191,8 @@ d'hyperparamètres sur si peu de points surapprendrait. Valeurs choisies a prior
 | `INSUFFICIENT_DAYS` | 7 | < 7 jours ouverts : aucune % d'écart affiché (« données insuffisantes »). |
 | `RARE_DOW` | 3 | < 3 occurrences d'un dow : effet non estimable ⇒ moyenne globale, confiance faible. |
 | `BACKTEST_START` | 10 | Il faut ~9 jours d'apprentissage avant le premier point de backtest honnête. |
+| `BACKTEST_MAX_DAYS` | 90 | Borne du backtest sur l'historique complet : budget temps borné. |
+| `BACKTEST_DRAWS_MAX` | 2000 | Plafond des tirages du backtest : couverture 80 % valide à 2000 tirages. |
 | `R_MIN` / `R_MAX` | 2 / 200 | Dispersion NegBin bornée : surdispersion max r=2, r=200 ≈ Poisson. |
 | `WEEKLY_GOAL_DEFAULT` | 500 € | Ordre de grandeur du CA hebdo de la cafétéria, modifiable en UI. |
 
@@ -158,6 +215,27 @@ Point d'extension prévu : `ForecastEngine::forecast(..., ['events' =>
 ['Y-m-d' => montant€, …]])` — chaque événement **saisi manuellement** est
 additionné aux tirages du jour concerné comme constante (sans incertitude)
 et signalé dans les notes. Aucune interface de saisie n'existe encore.
+
+## 5 bis. Calendrier saisi à la main (période creuse)
+
+Certaines baisses d'affluence sont **connues à l'avance mais non apprenables**
+à moins de 12 semaines d'historique (Toussaint, vacances scolaires…) : elles
+se SAISISSENT au lieu d'être devinées. Setting **`analytics_periode_creuse`**,
+format `facteur;AAAA-MM-JJ/AAAA-MM-JJ;…` (ex. `0.8;2026-10-17/2026-11-02`),
+champ éditable dans la carte Objectif du dashboard (même POST
+`/admin/analytics/objectif`, CSRF centralisé) ; validation : facteur ∈
+[0,1 ; 1], dates valides, **10 plages max** (valeur stockée invalide ⇒ ignorée).
+
+Effet moteur (`opts['slow_periods']`, helper `SlowPeriods::facteurPour`) :
+UN facteur par date multiplie `expectedN`/`expectedCa` — les tirages MC,
+les intervalles et les cumuls suivent — pour **les jours futurs, la semaine
+et le mois 30, et la projection du jour SI aujourd'hui est en plage**.
+L'« hier » (observé) n'est JAMAIS ajusté. Une note explicite est ajoutée :
+« Période creuse 17/10–02/11 : prévisions ajustées ×0,8. »
+
+Cette saisie manuelle est un PALLIATIF documenté : à ≥ 12 semaines de
+données, l'apprentissage du calendrier scolaire (variables externes)
+remplacera la saisie (cf. Évolutions prévues).
 
 ## 6. Évolutions prévues (documentées, NON implémentées)
 
@@ -195,7 +273,9 @@ Carte des fichiers (cas de la mission étape 10) :
   jour courant non compté, poids atypiques z MAD, séparation passé/aujourd'hui.
 - `tests/Unit/Forecast/DemandModelTest.php` — motif hebdo sans bruit, samedi
   fermé, croissance amortie sans explosion, jour atypique amorti, rétrécissement
-  vers le global, insuffisance/confiances, dispersion bornée.
+  vers le global, insuffisance/confiances, dispersion bornée, **dispersion
+  imposée réutilisée et clampée (réutilisation du r principal par le refit
+  « hier »)**.
 - `tests/Unit/Forecast/HourlyProfileTest.php` — profils valides, dow inconnu,
   fermeture exacte, « trop tôt », θ manuel, cas dégénérés.
 - `tests/Unit/Forecast/MonteCarloTest.php` — quantiles, somme de distributions,
@@ -205,14 +285,26 @@ Carte des fichiers (cas de la mission étape 10) :
 - `tests/Unit/Forecast/BacktestTest.php` — historique insuffisant, couverture
   sur série NegBin simulée, semaines complètes, déterminisme.
 - `tests/Unit/Forecast/GoalTest.php` — probabilité décroissante avec
-  l'objectif, manquant/jour cohérent, aucun jour restant, horizon.
-- `tests/Unit/Forecast/ProfitForecastTest.php` — répartition marge, suspects,
-  tout fiable, cas limites.
+  l'objectif, manquant/jour cohérent, **requis/jour depuis le réel (indépendant
+  de l'attendu)**, **choc de niveau commun appliqué chemin par chemin**,
+  aucun jour restant, horizon.
+- `tests/Unit/Forecast/ProfitForecastTest.php` — **bénéfice dérivé des unités
+  calibrées (marges catégories = Σ marges variantes, comparables à l'observé)**,
+  suspects, tout fiable, régimes de la note, cas limites.
 - `tests/Unit/Forecast/ProductForecastTest.php` — unités Poisson avec
-  incertitude, déterminisme sans rng, filtres qty/suggestion.
+  incertitude, **calibration sur le CA cible (invariant Σ unités × prix = cible)**,
+  déterminisme sans rng, filtres qty/suggestion.
+- `tests/Unit/Forecast/SlowPeriodsTest.php` — parsing/validation du format
+  `facteur;début/fin`, bornes du facteur, 10 plages max, facteur par date.
 - `tests/Unit/Forecast/EngineTest.php` — série plate 28 j, jour atypique,
   confiance, projection fin de journée = réel à 23 h, événements additifs,
-  déterminisme par graine, dataset vide sans erreur.
+  **réconciliation |Σ ca produits − Σ jours ca| < 5 %**, **backtest sur
+  historique complet même quand fw < 10 jours ouverts**, **période creuse
+  (futur ajusté, hier jamais)**, **choc de niveau commun (fourchette 30 j
+  plus large que celle d'un jour)**, **« hier » réutilise la dispersion
+  principale**, déterminisme par graine, dataset vide sans erreur.
+- `tests/Unit/AnalyticsMeilleurJourTest.php` — garde-fous de l'insight
+  « meilleur jour » : ≥ 2 jours ET ≥ 2 semaines calendaires avec CA > 0.
 - `tests/Unit/AnalyticsForecastDataTest.php` — extraction flux courant,
   stats produits, audit (0 €, doublons, coûts), assemblage dataset
   (skipped sans MySQL).
