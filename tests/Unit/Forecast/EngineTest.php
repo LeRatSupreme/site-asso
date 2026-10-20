@@ -238,6 +238,67 @@ final class EngineTest extends TestCase
     }
 
     /**
+     * FIX C — le backtest tourne sur l'HISTORIQUE COMPLET (opts
+     * 'backtest_days') même quand la fenêtre fw compte moins de
+     * BACKTEST_START jours ouverts : wape_backtest non null, note de
+     * sélection et facteur conforme produits. Sans 'backtest_days',
+     * l'historique court reste insuffisant (comportement préservé).
+     */
+    public function test_backtest_sur_historique_complet_quand_fenetre_courte(): void
+    {
+        $full = self::serie(28);
+        $fwCourt = array_slice($full, 20, null, true); // 8 derniers jours ouverts (< 10)
+        self::assertCount(8, $fwCourt);
+
+        $sans = ForecastEngine::forecast(new ForecastDataset($fwCourt), self::paris('2026-10-19 23:59'), '23:59', ['seed' => 5, 'draws' => 200]);
+        self::assertNull($sans['wape_backtest'], 'Fenêtre seule < 10 jours ouverts → backtest indisponible.');
+
+        $avec = ForecastEngine::forecast(new ForecastDataset($fwCourt), self::paris('2026-10-19 23:59'), '23:59', [
+            'seed' => 5, 'draws' => 200, 'backtest_days' => $full,
+        ]);
+        self::assertNotNull($avec['wape_backtest'], 'Backtest lancé sur l\'historique complet malgré fw < 10 jours ouverts.');
+        self::assertNotNull($avec['anomalies']['note_selection']);
+        self::assertNotNull($avec['facteur_conforme'], '19 points de backtest ≥ CONFORMAL_MIN → facteur conforme.');
+        self::assertNotContains('Backtest indisponible (historique trop court) : modèle principal actif par défaut.', $avec['notes']);
+    }
+
+    /**
+     * FIX D — période creuse saisie à la main : les prévisions des dates
+     * DANS la plage sont multipliées par le facteur (jours futurs, n et
+     * ca, projection du jour), l'observé « hier » reste inchangé, et la
+     * note l'explique en clair.
+     */
+    public function test_periode_creuse_ajuste_les_previsions_pas_lobserve(): void
+    {
+        $opts = ['seed' => 42, 'draws' => 500];
+        $slow = ['facteur' => 0.8, 'ranges' => [['start' => '2026-10-19', 'end' => '2026-11-30']]];
+
+        $base = ForecastEngine::forecast(new ForecastDataset(self::serie(28)), self::paris('2026-10-19 23:59'), '23:59', $opts);
+        $ajuste = ForecastEngine::forecast(new ForecastDataset(self::serie(28)), self::paris('2026-10-19 23:59'), '23:59', $opts + ['slow_periods' => $slow]);
+
+        foreach ($ajuste['jours'] as $i => $j) {
+            if ($j['is_open']) {
+                self::assertEqualsWithDelta((float) $base['jours'][$i]['ca'] * 0.8, (float) $j['ca'], 0.05, 'Jour futur en plage creuse ×0,8.');
+                self::assertEqualsWithDelta((float) $base['jours'][$i]['n'] * 0.8, (float) $j['n'], 0.05, 'Transactions attendues ×0,8.');
+            }
+        }
+        self::assertLessThan($base['semaine']['attendu'], $ajuste['semaine']['attendu'], 'La semaine restante suit l\'ajustement.');
+        self::assertLessThan($base['mois30']['attendu'], $ajuste['mois30']['attendu'], 'L\'horizon 30 j suit l\'ajustement.');
+        self::assertContains('Période creuse 19/10–30/11 : prévisions ajustées ×0,8.', $ajuste['notes']);
+        self::assertNotContains('Période creuse 19/10–30/11 : prévisions ajustées ×0,8.', $base['notes']);
+
+        // Aujourd'hui DANS la plage : projection ajustée ; hier (observé,
+        // hors plage) strictement identique entre les deux exécutions.
+        $optsJour = ['seed' => 42, 'draws' => 500];
+        $slowJour = ['facteur' => 0.5, 'ranges' => [['start' => '2026-10-02', 'end' => '2026-10-31']]];
+        $a = ForecastEngine::forecast(new ForecastDataset(self::serie(28)), self::paris('2026-10-02 12:00'), '12:00', $optsJour);
+        $b = ForecastEngine::forecast(new ForecastDataset(self::serie(28)), self::paris('2026-10-02 12:00'), '12:00', $optsJour + ['slow_periods' => $slowJour]);
+
+        self::assertEqualsWithDelta((float) $a['prevision_jour'] * 0.5, (float) $b['prevision_jour'], 0.05, 'Projection du jour ×0,5 (aujourd\'hui en plage).');
+        self::assertSame($a['hier'], $b['hier'], '« Hier » est observé : jamais ajusté.');
+    }
+
+    /**
      * Produits synthétiques du test de réconciliation : quantités
      * hétérogènes, prix 2, coût 1, même catégorie (agrégats lisibles).
      *
