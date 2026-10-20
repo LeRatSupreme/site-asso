@@ -936,7 +936,13 @@ final class Analytics extends Model
         $dayTotals = array_map('array_sum', $matrix);
         $total     = array_sum($dayTotals);
         $days      = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
-        if ($total > 0) {
+        // Garde-fou : compter les jours (de semaine) DISTINCTS avec CA > 0
+        // dans la fenêtre, depuis la même source que cet insight
+        // (salesByDayHour). Si la fenêtre ne contient qu'UN jour avec
+        // ventes, la part « 100 % » est tautologique : on n'émet PAS cet
+        // insight (les trois autres restent).
+        $joursAvecVentes = count(array_filter($dayTotals, static fn ($ca): bool => (float) $ca > 0.0));
+        if ($total > 0 && $joursAvecVentes >= 2) {
             $bestIdx = 0;
             for ($d = 1; $d < 7; $d++) {
                 if ($dayTotals[$d] > $dayTotals[$bestIdx]) {

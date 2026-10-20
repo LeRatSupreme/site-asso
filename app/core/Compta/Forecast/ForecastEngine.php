@@ -316,6 +316,9 @@ final class ForecastEngine
             'ventes_zero'           => (int) ($data->audit['ventes_zero'] ?? 0),
             'doublons_ignores'      => (int) ($data->audit['doublons_ignores'] ?? 0),
             'produits_cout_suspect' => array_values((array) ($data->audit['produits_cout_suspect'] ?? [])),
+            'cles_fusionnees'       => array_values((array) ($data->audit['cles_fusionnees'] ?? [])),
+            'produits_sans_stock'   => array_values((array) ($data->audit['produits_sans_stock'] ?? [])),
+            'n_produits_sans_stock' => (int) ($data->audit['n_produits_sans_stock'] ?? 0),
             'donnees_insuffisantes' => $insufficient,
             'note_selection'        => $bt['selection_note'],
         ];
