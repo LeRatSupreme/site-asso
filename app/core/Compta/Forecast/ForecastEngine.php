@@ -39,7 +39,17 @@ final class ForecastEngine
      * @param ?string               $nowTime Heure 'HH:MM' à considérer (défaut : heure de $now).
      * @param array<string,mixed>   $opts    horizon (int, 7), goal_weekly (?float),
      *                                        draws (int, Hyper::N_DRAWS), seed (?int),
-     *                                        events (array<string,float>), k (float).
+     *                                        events (array<string,float>), k (float),
+     *                                        backtest_days (array<string,DayCurrent>,
+     *                                        historique COMPLET pour le backtest à
+     *                                        origine glissante — défaut : la fenêtre
+     *                                        fw, borne Hyper::BACKTEST_MAX_DAYS),
+     *                                        backtest_draws (int, défaut
+     *                                        min(draws, Hyper::BACKTEST_DRAWS_MAX)),
+     *                                        slow_periods (?array{facteur:float,
+     *                                        ranges:list<array{start,end}>} périodes
+     *                                        creuses saisies à la main, cf.
+     *                                        SlowPeriods).
      *
      * @return array Forme EXACTE décrite dans la doc de classe (consommée par vues/contrôleur).
      */
@@ -58,6 +68,8 @@ final class ForecastEngine
         foreach ((array) ($opts['events'] ?? []) as $d => $v) {
             $events[(string) $d] = (float) $v;
         }
+        $slow        = is_array($opts['slow_periods'] ?? null) ? $opts['slow_periods'] : null;
+        $btDraws     = max(1, (int) ($opts['backtest_draws'] ?? min($draws, Hyper::BACKTEST_DRAWS_MAX)));
 
         // 1-4. Nettoyage, ajustements, backtest, calibration conforme.
         $split         = Clean::splitPast($data->days, $todayKey);
@@ -66,8 +78,22 @@ final class ForecastEngine
         $weights       = Clean::atypicalWeights($past);
         $model         = DemandModel::fit($past, $weights, $k);
         $hourly        = HourlyProfile::fit($past, $k);
-        $bt            = Backtest::run($past, ['seed' => $seed, 'draws' => $draws, 'k' => $k]);
+        // Backtest à origine glissante sur l'HISTORIQUE COMPLET (opts
+        // 'backtest_days', tronqué aux BACKTEST_MAX_DAYS derniers jours
+        // ouverts) : BACKTEST_START=10 n'est plus consommé par la fenêtre
+        // fw d'apprentissage. Le MODÈLE d'apprentissage reste sur fw.
+        $hist          = is_array($opts['backtest_days'] ?? null) ? $opts['backtest_days'] : $past;
+        if (count($hist) > Hyper::BACKTEST_MAX_DAYS) {
+            ksort($hist);
+            $hist = array_slice($hist, -Hyper::BACKTEST_MAX_DAYS, null, true);
+        }
+        $bt            = Backtest::run($hist, ['seed' => $seed, 'draws' => $btDraws, 'k' => $k]);
         $factor        = $bt['insufficient'] ? null : Conformal::widthFactor($bt['scores'], $bt['relative_half_widths']);
+
+        // Période creuse saisie à la main : UN facteur par date (1.0 hors
+        // plage) multiplie les prévisions — tirages MC, attendus et
+        // intervalles suivent ; l'observé n'est jamais ajusté.
+        $facteurCreux = static fn (\DateTimeImmutable $d): float => SlowPeriods::facteurPour($slow, $d);
 
         $insufficient = $model->isInsufficient() || $model->openDaysCount() < Hyper::INSUFFICIENT_DAYS;
         $dowToday     = (int) $now->format('N') - 1;
@@ -77,10 +103,18 @@ final class ForecastEngine
 
         // Loi prédictive du jour en cours (pleine journée), mise en cache par date.
         $cache = [];
-        $sampleFor = function (\DateTimeImmutable $d, string $tag) use (&$cache, $model, $seed, $draws): array {
+        $sampleFor = function (\DateTimeImmutable $d, string $tag) use (&$cache, $model, $seed, $draws, $facteurCreux): array {
             $key = $d->format('Y-m-d');
             if (!isset($cache[$key])) {
-                $cache[$key] = MonteCarlo::daySamples($model, $d, self::rng($seed, $tag . $key), $draws);
+                $s = MonteCarlo::daySamples($model, $d, self::rng($seed, $tag . $key), $draws);
+                $f = $facteurCreux($d);
+                if ($f !== 1.0) {
+                    foreach ($s as &$v) {
+                        $v *= $f;
+                    }
+                    unset($v);
+                }
+                $cache[$key] = $s;
             }
 
             return $cache[$key];
@@ -100,7 +134,7 @@ final class ForecastEngine
         // 5. Horaire du jour en cours + prévision du jour.
         $todaySamples = ($todayOpen && $today !== null) ? $sampleFor($now, 'J') : [];
         $todaySum     = MonteCarlo::summarize($todaySamples);
-        $expectedCa   = $model->expectedCa($now);
+        $expectedCa   = $model->expectedCa($now) * $facteurCreux($now);
 
         if ($todayOpen) {
             $cal        = Conformal::apply($factor, $todaySum['mean'], $todaySum['lo'], $todaySum['hi']);
@@ -126,7 +160,7 @@ final class ForecastEngine
         }
 
         if ($todayOpen) {
-            $proj     = $hourly->project($model->expectedN($now), $dowToday, $today !== null ? $today->hourlyN : [], $nowHour, Hyper::A_PRIOR);
+            $proj     = $hourly->project($model->expectedN($now) * $facteurCreux($now), $dowToday, $today !== null ? $today->hourlyN : [], $nowHour, Hyper::A_PRIOR);
             $theta    = is_numeric($proj['theta'] ?? null) && (float) $proj['theta'] >= 0.0 && is_finite((float) $proj['theta']) ? (float) $proj['theta'] : 1.0;
             $sH       = is_numeric($proj['s_h'] ?? null) && (float) $proj['s_h'] > 0.0 && (float) $proj['s_h'] <= 1.0 ? (float) $proj['s_h'] : ($nowHour + 1) / 24.0;
             $tropTot  = (bool) ($proj['trop_tot'] ?? $sH < Hyper::S_MIN);
@@ -171,7 +205,7 @@ final class ForecastEngine
             $cal = Conformal::apply($factor, $sum['mean'], $sum['lo'], $sum['hi']);
             $jours[] = [
                 'date' => $key, 'label' => self::LABELS[$dow] . ' ' . $date->format('d/m'), 'dow' => $dow,
-                'n' => $model->expectedN($date), 'ca' => $sum['mean'] + $ev,
+                'n' => $model->expectedN($date) * $facteurCreux($date), 'ca' => $sum['mean'] + $ev,
                 'lo' => $cal['lo'], 'hi' => $cal['hi'], 'is_open' => true, 'evenement' => $ev,
             ];
         }
@@ -350,6 +384,14 @@ final class ForecastEngine
             : sprintf('Modèle actif : %s — WAPE backtest %.1f %%.', $modele, (float) $bt['wape'] * 100.0);
         if ($events !== []) {
             $notes[] = sprintf('%d événement(s) planifié(s) ajouté(s) aux prévisions.', count($events));
+        }
+        foreach (SlowPeriods::plagesActives($slow, $now, $now->modify('+30 days')) as $plage) {
+            $notes[] = sprintf(
+                'Période creuse %s–%s : prévisions ajustées ×%s.',
+                (new \DateTimeImmutable($plage['start']))->format('d/m'),
+                (new \DateTimeImmutable($plage['end']))->format('d/m'),
+                SlowPeriods::facteurFr((float) ($slow['facteur'] ?? 1.0))
+            );
         }
 
         // 13. Assemblage final (forme EXACTE du contrat).

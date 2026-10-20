@@ -470,11 +470,26 @@ $iconSvg = static function (string $name): string {
                     <li><span>Horizon 30 jours</span><strong><?= $m30Att === null ? '—' : e(formatPrice((float) $m30Att) . $fcRange($m30Iv)) ?></strong></li>
                 </ul>
                 <?php if (!$kiosk): ?>
+                    <?php
+                    // Période creuse saisie à la main (calendrier non
+                    // apprenable avec < 12 semaines : Toussaint, hiver…).
+                    $creuseRaw = (string) ($periode_creuse['raw'] ?? '');
+                    $creuseActives = is_array($periode_creuse['actives'] ?? null) ? $periode_creuse['actives'] : [];
+                    ?>
+                    <?php if ($creuseActives !== []): ?>
+                        <p class="chart-sub" style="margin:-0.4rem 0 0">
+                            Période creuse active : <?= e(implode(' · ', $creuseActives)) ?> — prévisions ajustées en conséquence.
+                        </p>
+                    <?php endif; ?>
                     <form method="post" action="<?= e(url('/admin/analytics/objectif')) ?>" class="goal-form">
                         <?= csrf_field() ?>
                         <label class="af-label" for="goal-input">Objectif hebdomadaire (€)</label>
                         <input type="number" name="goal" id="goal-input" min="0" step="0.01" required
                                value="<?= e(number_format($goalVal, 2, '.', '')) ?>" class="af-input">
+                        <label class="af-label" for="creuse-input">Période creuse</label>
+                        <input type="text" name="periode_creuse" id="creuse-input" class="af-input" style="min-width:230px"
+                               placeholder="0.8;2026-10-17/2026-11-02" value="<?= e($creuseRaw) ?>"
+                               title="Facteur;début/fin — ex. 0.8;2026-10-17/2026-11-02 (facteur 0,1 à 1, 10 plages max ; vide = aucune)">
                         <button type="submit" class="btn btn-primary btn-sm">Enregistrer</button>
                     </form>
                 <?php endif; ?>

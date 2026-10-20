@@ -52,6 +52,20 @@ final class Hyper
     /** Le backtest commence au 10e jour ouvert. */
     public const BACKTEST_START = 10;
 
+    /**
+     * Borne du backtest à origine glissante : 90 derniers jours ouverts
+     * max (budget temps — l'historique complet est tronqué à cette
+     * borne, la fenêtre d'apprentissage du modèle reste inchangée).
+     */
+    public const BACKTEST_MAX_DAYS = 90;
+
+    /**
+     * Plafond des tirages Monte Carlo du BACKTEST (défaut moteur :
+     * min(draws, 2000)) : la couverture 80 % reste valide à 2000 tirages
+     * et le budget temps reste borné sur un historique long.
+     */
+    public const BACKTEST_DRAWS_MAX = 2000;
+
     /** Borne inférieure de la dispersion NegBin (surdispersion maximale admise). */
     public const R_MIN = 2.0;
 

@@ -6,6 +6,7 @@ namespace App\Controllers\Admin;
 
 use App\Core\Compta\ComptaCalc;
 use App\Core\Compta\Forecast\ForecastEngine;
+use App\Core\Compta\Forecast\SlowPeriods;
 use App\Models\Analytics;
 use App\Models\AnalyticsForecastData;
 use App\Models\Sale;
@@ -84,7 +85,10 @@ final class AdminAnalyticsController extends AdminBaseController
     }
 
     /**
-     * Enregistre l'objectif hebdomadaire (setting « analytics_weekly_goal »).
+     * Enregistre l'objectif hebdomadaire (setting « analytics_weekly_goal »)
+     * et la période creuse saisie à la main (setting
+     * « analytics_periode_creuse », champ optionnel du même formulaire ;
+     * champ vide = aucune période creuse).
      *
      * CSRF : vérifié de façon CENTRALISÉE par Router::dispatch pour toute
      * requête POST hors /kiosque/ (App\Core\Csrf::checkRequest → 403 sinon),
@@ -104,9 +108,29 @@ final class AdminAnalyticsController extends AdminBaseController
             return;
         }
 
+        // Période creuse (vacances scolaires…) : format
+        // « facteur;AAAA-MM-JJ/AAAA-MM-JJ;… » — rejet intégral si invalide.
+        $creuseRaw = trim((string) ($_POST['periode_creuse'] ?? ''));
+        if ($creuseRaw !== '') {
+            $creuse = SlowPeriods::parse($creuseRaw);
+            if ($creuse === null) {
+                $this->setFlash('error', 'Période creuse invalide : format attendu « 0.8;2026-10-17/2026-11-02 » (facteur entre 0,1 et 1, dates valides, 10 plages max).');
+                redirect(url('/admin/analytics'));
+
+                return;
+            }
+            $creuseNorm = SlowPeriods::normalise($creuse);
+            Setting::set('analytics_periode_creuse', $creuseNorm);
+            $this->audit('analytics.periode_creuse', 'setting', null, ['valeur' => $creuseNorm]);
+            $creuseFlash = ' Période creuse enregistrée.';
+        } else {
+            Setting::set('analytics_periode_creuse', '');
+            $creuseFlash = ' Période creuse effacée.';
+        }
+
         Setting::set('analytics_weekly_goal', (string) $goal);
         $this->audit('analytics.objectif', 'setting', null, ['goal' => $goal]);
-        $this->setFlash('success', 'Objectif hebdomadaire enregistré : ' . number_format($goal, 2, ',', ' ') . ' € / semaine.');
+        $this->setFlash('success', 'Objectif hebdomadaire enregistré : ' . number_format($goal, 2, ',', ' ') . ' € / semaine.' . $creuseFlash);
         redirect(url('/admin/analytics'));
     }
 
@@ -196,9 +220,24 @@ final class AdminAnalyticsController extends AdminBaseController
         $trackFrom = $now->modify('-' . ($fw - 1) . ' days')->format('Y-m-d');
 
         $dataset  = AnalyticsForecastData::dataset($trackFrom, $todayKey);
+
+        // ---- Période creuse saisie à la main (setting, ex. Toussaint) ----
+        // Config neutre si absente ; valeur stockée invalide → null (sans
+        // ajustement), cf. SlowPeriods::parse.
+        $creuseRaw = trim((string) Setting::get('analytics_periode_creuse', ''));
+        $creuse    = SlowPeriods::parse($creuseRaw);
+
+        // ---- Backtest sur l'HISTORIQUE COMPLET (première vente → hier) ----
+        // 2ᵉ dataset (jours du flux courant seulement) : BACKTEST_START=10
+        // n'est plus compté dans la fenêtre fw, le backtest à origine
+        // glissante couvre toute la vie de la cafétéria (borne 90 j).
+        $histDays = AnalyticsForecastData::currentFlowDays(AnalyticsForecastData::firstSaleDate(), $todayKey);
+
         $forecast = ForecastEngine::forecast($dataset, $now, $now->format('H:i'), [
-            'horizon'     => 7,
-            'goal_weekly' => $goal,
+            'horizon'       => 7,
+            'goal_weekly'   => $goal,
+            'backtest_days' => $histDays,
+            'slow_periods'  => $creuse,
         ]);
 
         // ---- Estimation du jour : mappage SANS recalcul métier ----
@@ -303,6 +342,13 @@ final class AdminAnalyticsController extends AdminBaseController
             'goal'       => $goal,
             'meta'       => $meta,
             'historique' => $historique,
+            'periode_creuse' => [
+                'raw'     => $creuseRaw,
+                'actives' => array_map(
+                    static fn (array $plage): string => SlowPeriods::libellePlage($plage, (float) ($creuse['facteur'] ?? 1.0)),
+                    SlowPeriods::plagesActives($creuse, $now, $now->modify('+30 days'))
+                ),
+            ],
             'product_weekly' => [
                 'labels' => array_map(
                     static fn (string $week): string => 'S ' . (new \DateTimeImmutable($week))->format('d/m'),
@@ -341,6 +387,13 @@ final class AdminAnalyticsController extends AdminBaseController
             'goal'           => $goal,
             'meta'           => $meta,
             'historique'     => $historique,
+            'periode_creuse' => [
+                'raw'     => $creuseRaw,
+                'actives' => array_map(
+                    static fn (array $plage): string => SlowPeriods::libellePlage($plage, (float) ($creuse['facteur'] ?? 1.0)),
+                    SlowPeriods::plagesActives($creuse, $now, $now->modify('+30 days'))
+                ),
+            ],
             'products'       => $products,
             'productSelected' => $productSelected,
             'productWeekly'  => $productWeekly,
