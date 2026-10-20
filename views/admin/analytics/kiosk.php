@@ -69,12 +69,10 @@ $iconSvg = static function (string $name): string {
     <form method="get" class="ka-filters" id="ka-filters">
         <div class="ka-pills">
             <?php
-            // Menu court sur le kiosque téléphone : on masque les périodes
-            // longues (90j/6 mois/12 mois/année civile). Filtrage d'affichage
-            // uniquement — le champ caché « period » et le contrôleur
-            // continuent d'accepter toutes les périodes.
-            $kioskPeriods = array_diff_key($periods, array_flip(['90d', '180d', '365d', 'ytd']));
-            foreach ($kioskPeriods as $key => $label): ?>
+            // Les périodes longues (3/6/12 mois, année civile) ont été
+            // retirées du sélecteur : le kiosque affiche la même liste
+            // courte que le dashboard admin.
+            foreach ($periods as $key => $label): ?>
                 <button type="button" class="ka-pill <?= $filters['period'] === $key ? 'is-active' : '' ?>" data-period="<?= e($key) ?>"><?= e($label) ?></button>
             <?php endforeach; ?>
         </div>

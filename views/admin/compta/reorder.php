@@ -52,11 +52,8 @@ $canInventory = \App\Core\Permissions::isSystemAdmin()
 $refShort = [
     '1d'     => '1 j',
     '7d'     => '7 j',
+    '14d'    => '14 j',
     '30d'    => '30 j',
-    '3m'     => '3 mois',
-    '6m'     => '6 mois',
-    '12m'    => '12 mois',
-    'ytd'    => 'Année',
     'all'    => 'Tout',
     'custom' => 'Perso.',
 ];

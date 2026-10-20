@@ -1893,10 +1893,6 @@ final class AdminComptaController extends AdminBaseController
             '7d'     => '7 derniers jours',
             '14d'    => '14 derniers jours',
             '30d'    => '30 derniers jours',
-            '3m'     => '3 derniers mois',
-            '6m'     => '6 derniers mois',
-            '12m'    => '12 derniers mois',
-            'ytd'    => 'Année civile',
             'all'    => 'Tout',
             'custom' => 'Personnalisé',
         ];
@@ -1919,10 +1915,6 @@ final class AdminComptaController extends AdminBaseController
             case '7d':  $fromDay = date('Y-m-d', strtotime('-6 days')); break;
             case '14d': $fromDay = date('Y-m-d', strtotime('-13 days')); break;
             case '30d': $fromDay = date('Y-m-d', strtotime('-29 days')); break;
-            case '3m':  $fromDay = date('Y-m-d', strtotime('-3 months')); break;
-            case '6m':  $fromDay = date('Y-m-d', strtotime('-6 months')); break;
-            case '12m': $fromDay = date('Y-m-d', strtotime('-12 months')); break;
-            case 'ytd': $fromDay = date('Y-01-01'); break;
             case 'all': $fromDay = Sale::firstSoldDay(); $toDay = $today; break;
             case 'custom':
                 if ($duOk) { $fromDay = $du; }

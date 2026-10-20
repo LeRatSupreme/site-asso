@@ -80,10 +80,6 @@ final class ComptaCalc
         '1d'     => '1 jour',
         '7d'     => '7 derniers jours',
         '30d'    => '30 derniers jours',
-        '3m'     => '3 derniers mois',
-        '6m'     => '6 derniers mois',
-        '12m'    => '12 derniers mois',
-        'ytd'    => 'Année civile',
         'all'    => 'Tout',
         'custom' => 'Personnalisé',
     ];
@@ -95,8 +91,6 @@ final class ComptaCalc
      * Règles :
      *  - preset inconnu/null → « 30d » ;
      *  - « Nd » → from = aujourd'hui −(N−1) jours ;
-     *  - « Nm » → from = aujourd'hui −N mois (calendaire, comme Réappro) ;
-     *  - « ytd » → 1er janvier de l'année courante ;
      *  - « all » → bornes null (toute la période disponible) ;
      *  - « custom » → from/to validés au format YYYY-MM-DD (from <= to,
      *    sinon échange) ; bornes invalides → repli sur « 30d ».
@@ -125,22 +119,6 @@ final class ComptaCalc
                 break;
             case '7d':
                 $fromDay = date('Y-m-d', strtotime('-6 days'));
-                $toDay = date('Y-m-d');
-                break;
-            case '3m':
-                $fromDay = date('Y-m-d', strtotime('-3 months'));
-                $toDay = date('Y-m-d');
-                break;
-            case '6m':
-                $fromDay = date('Y-m-d', strtotime('-6 months'));
-                $toDay = date('Y-m-d');
-                break;
-            case '12m':
-                $fromDay = date('Y-m-d', strtotime('-12 months'));
-                $toDay = date('Y-m-d');
-                break;
-            case 'ytd':
-                $fromDay = date('Y-01-01');
                 $toDay = date('Y-m-d');
                 break;
             case 'all':

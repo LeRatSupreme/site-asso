@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Controllers\Admin;
 
+use App\Core\Compta\ComptaCalc;
 use App\Core\Compta\SalesForecast;
 use App\Models\Analytics;
 use App\Models\Sale;
@@ -24,12 +25,9 @@ final class AdminAnalyticsController extends AdminBaseController
      */
     private const PERIODS = [
         '1d'   => '1 jour',
+        'week' => 'Semaine actuelle',
         '7d'   => '7 derniers jours',
         '30d'  => '30 derniers jours',
-        '90d'  => '3 derniers mois',
-        '180d' => '6 derniers mois',
-        '365d' => '12 derniers mois',
-        'ytd'  => 'Année civile',
         'all'  => 'Tout',
         'custom' => 'Personnalisé',
     ];
@@ -70,11 +68,12 @@ final class AdminAnalyticsController extends AdminBaseController
      *
      * @return array{filters:array<string,mixed>,periods:array<string,string>,categories:list<string>,hasSales:bool,kpis:array<string,mixed>,insights:list<array<string,mixed>>,forecast:array<string,mixed>,day_track:array<string,mixed>,weekday:array<int,array{ca:float,qty:int,tx:int}>,hourly:array<int,array{ca:float,qty:int,tx:int}>,products:list<string>,productSelected:string,productWeekly:list<array{week:string,ca:float,qty:int}>,json:string}
      */
-    private function buildPage(string $defaultPeriod = '30d', ?\DateTimeImmutable $now = null): array
+    private function buildPage(string $defaultPeriod = 'week', ?\DateTimeImmutable $now = null): array
     {
         // ---- Lecture des filtres GET (valeurs sûres) ----
-        // $defaultPeriod : le kiosque téléphone tombe sur « 7 derniers
-        // jours » par défaut, la page admin garde ses 30 jours.
+        // $defaultPeriod : sans « period » en GET, le dashboard ouvre sur
+        // la semaine actuelle ; le kiosque téléphone garde « 7 derniers
+        // jours » via son appel explicite.
         $period      = $this->filter('period', $defaultPeriod);
         $granularity = $this->filter('granularity', '');
         $category    = $this->filter('category', 'all');
@@ -405,6 +404,7 @@ final class AdminAnalyticsController extends AdminBaseController
 
         return match ($period) {
             '1d'   => [$today, $today],
+            'week' => array_values(ComptaCalc::currentWeekWindow()),
             '7d'   => [date('Y-m-d', strtotime('-6 days')), $today],
             '30d'  => [date('Y-m-d', strtotime('-29 days')), $today],
             '90d'  => [date('Y-m-d', strtotime('-89 days')), $today],
