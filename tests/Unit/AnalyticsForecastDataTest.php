@@ -262,11 +262,12 @@ final class AnalyticsForecastDataTest extends TestCase
         self::assertTrue($bieres->costSuspect, 'Prix unitaire < coût = suspect.');
         self::assertNull($bieres->stock, 'Produit « stock infini » = null.');
 
-        // Snacks : uniquement un lot FUTUR → coût inconnu (null) mais PAS
-        // suspect (prix connu et > 0).
+        // Snacks : uniquement un lot FUTUR → coût inconnu (null) = suspect
+        // (contrat ProductStat : coût null → signalé, à compléter ; cohérent
+        // avec test_dataset : sans lots de coûts, TOUS les produits suspects).
         $snacks = $byKey['Snacks'];
         self::assertNull($snacks->unitCost);
-        self::assertFalse($snacks->costSuspect, 'Coût inconnu + prix connu ≠ incohérent.');
+        self::assertTrue($snacks->costSuspect, 'Coût inconnu = suspect (à compléter).');
         self::assertSame(3, $snacks->stock);
     }
 
