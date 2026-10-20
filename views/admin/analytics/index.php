@@ -231,9 +231,11 @@ $iconSvg = static function (string $name): string {
         $fcInsuf    = ($fcConf === 'insuffisant') || !empty($forecast['anomalies']['donnees_insuffisantes']);
 
         // Helpers d'affichage partagés par les chips (prévisions/estimation).
-        $fcRange = static function (?array $iv): string {
+        // $label distingue les FOURCHETTES : « fourchette journée 80 % »
+        // (prévision pleine journée) vs « fourchette » (à l'heure courante).
+        $fcRange = static function (?array $iv, string $label = 'fourchette'): string {
             if ($iv === null || !isset($iv['lo'], $iv['hi']) || $iv['lo'] === null || $iv['hi'] === null) { return ''; }
-            return ' (fourchette ' . formatPrice((float) $iv['lo']) . '–' . formatPrice((float) $iv['hi']) . ')';
+            return ' (' . $label . ' ' . formatPrice((float) $iv['lo']) . '–' . formatPrice((float) $iv['hi']) . ')';
         };
         $fcSigned = static function ($v): string {
             return $v === null ? '' : (($v >= 0 ? '+' : '-') . formatPrice(abs((float) $v)));
@@ -261,7 +263,10 @@ $iconSvg = static function (string $name): string {
         // € masqué si trop tôt (règle 3) ou données insuffisantes (règle 4).
         $fcChips = [];
         if ($fcPrev !== null) {
-            $txt = "Aujourd'hui : attendu " . formatPrice((float) $fcPrev) . $fcRange($fcIv);
+            // Fourchette JOURNÉE 80 % explicitement étiquetée, pour ne pas
+            // être confondue avec la fourchette à l'heure courante de la
+            // carte « Estimation du jour ».
+            $txt = "Aujourd'hui : attendu " . formatPrice((float) $fcPrev) . $fcRange($fcIv, 'fourchette journée 80 % :');
             if (!$fcTropTot && !$fcInsuf && $fcEcart !== null) {
                 $txt .= ' · vs attendu à ' . $fcNowHour . 'h : ' . $fcSigned($fcEcart);
             }
@@ -325,7 +330,11 @@ $iconSvg = static function (string $name): string {
         // valeurs viennent du payload $day_track — delta et fourchette
         // peuvent être null (données insuffisantes / trop tôt) : on
         // n'affiche alors NI l'un NI l'autre.
+        // F1 : l'attendu affiché est celui À L'HEURE COURANTE
+        // (expected_so_far + intervalle_h), clairement distinct de la
+        // fourchette journée 80 % de la carte Prévisions.
         $dtEst   = isset($day_track['estimate']) ? $day_track['estimate'] : null;
+        $dtExp   = isset($day_track['expected_so_far']) ? $day_track['expected_so_far'] : null;
         $dtFw    = (int) ($day_track['window'] ?? 14);
         $dtHour  = (int) ($day_track['hour'] ?? ($fcHor['now_hour'] ?? 0));
         $dtTrop  = !empty($day_track['trop_tot']);
@@ -355,14 +364,18 @@ $iconSvg = static function (string $name): string {
                 <p class="muted fc-empty">Pas assez d'historique sur la fenêtre.</p>
             <?php else: ?>
                 <div class="fc-chips dt-chips">
-                    <span class="kpi-delta is-muted">Attendu aujourd'hui : <?= e(formatPrice((float) $dtEst) . $fcRange($dtIvH)) ?></span>
+                    <?php if ($dtExp !== null): ?>
+                        <span class="kpi-delta is-muted">Attendu à <?= $dtHour ?>h : <?= e(formatPrice((float) $dtExp) . $fcRange($dtIvH)) ?></span>
+                    <?php else: ?>
+                        <span class="kpi-delta is-muted">Attendu aujourd'hui : <?= e(formatPrice((float) $dtEst) . $fcRange($dtIvH)) ?></span>
+                    <?php endif; ?>
                     <span class="kpi-delta is-muted">Réel à <?= $dtHour ?>h : <?= e(formatPrice((float) ($dtReel ?? 0))) ?></span>
                     <?php if ($dtTrop): ?>
                         <span class="kpi-delta is-muted">Trop tôt pour comparer (profil &lt; 10 % de la journée)</span>
                     <?php elseif (!$dtInsuf && $dtEcart !== null): ?>
-                        <span class="kpi-delta is-muted">vs attendu à <?= $dtHour ?>h : <?= e($fcSigned($dtEcart) . $fcRange($dtIvH)) ?></span>
+                        <span class="kpi-delta is-muted">vs attendu à <?= $dtHour ?>h : <?= e($fcSigned($dtEcart)) ?><?= $dtExp !== null ? ' (attendu ' . e(formatPrice((float) $dtExp)) . ')' : '' ?></span>
                     <?php elseif (!$dtInsuf && $dtDelta !== null): ?>
-                        <span class="kpi-delta is-muted">vs attendu à <?= $dtHour ?>h : <?= $dtDelta >= 0 ? '+' : '-' ?><?= e(number_format(abs((float) $dtDelta), 1, ',', ' ')) ?> %</span>
+                        <span class="kpi-delta is-muted">vs attendu à <?= $dtHour ?>h : <?= $dtDelta >= 0 ? '+' : '-' ?><?= e(number_format(abs((float) $dtDelta), 1, ',', ' ')) ?> % (attendu <?= $dtExp === null ? '—' : e(formatPrice((float) $dtExp)) ?>)</span>
                     <?php endif; ?>
                     <?php if (!$dtTrop && $dtDans !== null): ?>
                         <?php [$stTxt, $stCls] = $fcStatut((bool) $dtDans); ?>
@@ -470,17 +483,22 @@ $iconSvg = static function (string $name): string {
 
         <?php
         // ---- Carte « Bénéfice prévu » : marge à 7 jours par catégorie ----
+        // F7 : la marge PRÉVISIONNELLE utilise le prix MÉDIAN de la fenêtre
+        // moins le coût ACTUEL (dernier lot) — étiquetée comme telle et
+        // distincte de la marge OBSERVÉE du tableau « Détail par produit »
+        // (coût à la date de vente).
         $benef      = isset($forecast['benefice']) && is_array($forecast['benefice']) ? $forecast['benefice'] : [];
         $benefCat   = isset($benef['par_categorie']) && is_array($benef['par_categorie']) ? $benef['par_categorie'] : [];
         $benefTot   = $benef['total_marge_7j'] ?? null;
         $benefPctNc = isset($benef['pct_ca_sans_cout_fiable']) ? (float) $benef['pct_ca_sans_cout_fiable'] : 0.0;
         $benefNote  = (string) ($benef['note'] ?? '');
         $benefSus   = isset($benef['suspects']) && is_array($benef['suspects']) ? $benef['suspects'] : [];
+        $benefTip   = 'Le coût ACTUEL du dernier lot peut différer du coût historique : la marge prévisionnelle reflète les conditions d\'aujourd\'hui.';
         ?>
-        <div class="card surface glass chart-card">
+        <div class="card surface glass chart-card" title="<?= e($benefTip) ?>">
             <div class="chart-head">
                 <h2 class="chart-title">Bénéfice prévu</h2>
-                <span class="chart-sub">marge à 7 jours</span>
+                <span class="chart-sub">Marge prévisionnelle (prix médian fenêtre − coût actuel)</span>
             </div>
             <p class="benef-total">
                 <span class="kpi-value"><?= $benefTot === null ? '—' : e(formatPrice((float) $benefTot)) ?></span>
@@ -568,7 +586,16 @@ $iconSvg = static function (string $name): string {
         <div class="card surface glass chart-card">
             <div class="chart-head">
                 <h2 class="chart-title">Par jour de semaine</h2>
-                <span class="chart-sub" id="weekday-sub">moyenne par jour de semaine</span>
+                <!-- F4 : UN seul chiffre — le meilleur jour du modèle. La
+                     moyenne/jour ne vit que dans la légende de la ligne
+                     tiretée (datasets JS). Pré-rendu serveur, le JS le
+                     reconstruit à l'identique depuis le payload. -->
+                <span class="chart-sub" id="weekday-sub"><?php
+                    $wdBest = isset($weekday['best']) && is_array($weekday['best']) ? $weekday['best'] : null;
+                    echo ($wdBest !== null && ($wdBest['ca'] ?? null) !== null)
+                        ? 'Meilleur jour : ' . e((string) ($wdBest['label'] ?? '—')) . ' — ' . e(formatPrice((float) $wdBest['ca'])) . '/jour (modèle, fenêtre ' . (int) ($day_track['window'] ?? 14) . ' j)'
+                        : 'moyenne par jour de semaine';
+                ?></span>
             </div>
             <div class="chart-canvas"><canvas id="chart-weekday" height="160"></canvas></div>
         </div>
@@ -613,6 +640,9 @@ $iconSvg = static function (string $name): string {
     $anomAtyp  = isset($forecast['anomalies']['jours_atypiques']) && is_array($forecast['anomalies']['jours_atypiques']) ? $forecast['anomalies']['jours_atypiques'] : [];
     $anomCout  = isset($forecast['anomalies']['produits_cout_suspect']) && is_array($forecast['anomalies']['produits_cout_suspect']) ? $forecast['anomalies']['produits_cout_suspect'] : [];
     $anomNotes = isset($forecast['notes']) && is_array($forecast['notes']) ? $forecast['notes'] : [];
+    $anomFusion = isset($forecast['anomalies']['cles_fusionnees']) && is_array($forecast['anomalies']['cles_fusionnees']) ? $forecast['anomalies']['cles_fusionnees'] : [];
+    $anomSansStock = isset($forecast['anomalies']['produits_sans_stock']) && is_array($forecast['anomalies']['produits_sans_stock']) ? $forecast['anomalies']['produits_sans_stock'] : [];
+    $anomNSansStock = (int) ($forecast['anomalies']['n_produits_sans_stock'] ?? 0);
     ?>
     <details class="card surface glass dataq">
         <summary>
@@ -621,6 +651,7 @@ $iconSvg = static function (string $name): string {
             · <?= (int) ($forecast['anomalies']['ventes_zero'] ?? 0) ?> vente(s) à 0 €
             · <?= (int) ($forecast['anomalies']['doublons_ignores'] ?? 0) ?> doublon(s) ignoré(s)
             · <?= count($anomCout) ?> produit(s) à coût suspect
+            <?= $anomNSansStock > 0 ? '· ' . $anomNSansStock . ' produit(s) sans stock' : '' ?>
         </summary>
         <div class="dataq-body">
             <?php if ($fcNoteSel !== ''): ?>
@@ -631,6 +662,12 @@ $iconSvg = static function (string $name): string {
             <?php endif; ?>
             <?php if ($anomCout !== []): ?>
                 <p><strong>Produits à coût suspect :</strong> <?= e(implode(', ', array_map('strval', $anomCout))) ?></p>
+            <?php endif; ?>
+            <?php if ($anomFusion !== []): ?>
+                <p><strong>Clés produit fusionnées (quasi-doublons) :</strong> <?= e(implode(', ', array_map('strval', $anomFusion))) ?> — à consolider via les alias.</p>
+            <?php endif; ?>
+            <?php if ($anomNSansStock > 0): ?>
+                <p><strong><?= $anomNSansStock ?> produit<?= $anomNSansStock > 1 ? 's' : '' ?> non rattaché<?= $anomNSansStock > 1 ? 's' : '' ?> au stock<?= $anomSansStock !== [] ? ' (' . e(implode(', ', array_map('strval', $anomSansStock))) . ')' : '' ?> :</strong> rattache-les via les alias/product_stocks pour des suggestions.</p>
             <?php endif; ?>
             <?php if ($anomNotes !== []): ?>
                 <ul class="dataq-notes">
@@ -705,7 +742,7 @@ $iconSvg = static function (string $name): string {
                         <th data-key="ca"       data-type="num" class="num">CA</th>
                         <th data-key="cost"     data-type="num" class="num">Coût moy.</th>
                         <th data-key="profit"   data-type="num" class="num">Bénéfice</th>
-                        <th data-key="margin"   data-type="num" class="num">Marge %</th>
+                        <th data-key="margin"   data-type="num" class="num" title="Marge observée (coût à la date de vente)">Marge observée %</th>
                     </tr>
                 </thead>
                 <tbody id="product-table-body"></tbody>
@@ -1209,14 +1246,14 @@ $iconSvg = static function (string $name): string {
 
         var wdSub = document.getElementById('weekday-sub');
         if (wdSub) {
-            var wdParts = [];
-            if (wdBest && wdBest.label) {
-                wdParts.push('Meilleur jour : ' + wdBest.label
-                    + (wdBest.ca != null ? ' — ' + money(wdBest.ca) + '/jour en moyenne (modèle'
-                        + (wdFw ? ', fenêtre ' + wdFw + ' j' : '') + ')' : ''));
+            // F4 : un SEUL chiffre dans le sous-titre (déjà pré-rendu côté
+            // serveur) — reconstruit depuis le payload, sans la moyenne.
+            if (wdBest && wdBest.label && wdBest.ca != null) {
+                wdSub.textContent = 'Meilleur jour : ' + wdBest.label + ' — ' + money(wdBest.ca)
+                    + '/jour (modèle, fenêtre ' + (wdFw || 14) + ' j)';
+            } else if (!wdBest || !wdBest.label) {
+                wdSub.textContent = 'moyenne par jour de semaine';
             }
-            if (wdAvgPerDay != null) { wdParts.push('Moyenne/jour : ' + money(wdAvgPerDay)); }
-            wdSub.textContent = wdParts.length ? wdParts.join(' · ') : 'moyenne par jour de semaine';
         }
 
         var wdBg = wdAvg.map(function (v, i) {
@@ -1235,7 +1272,7 @@ $iconSvg = static function (string $name): string {
         if (wdAvgPerDay != null) {
             wdDatasets.push({
                 type: 'line',
-                label: 'Moyenne/jour (€)',
+                label: 'Moyenne/jour (modèle)',
                 data: wdAvg.map(function () { return wdAvgPerDay; }),
                 borderColor: violet,
                 borderDash: [6, 6],

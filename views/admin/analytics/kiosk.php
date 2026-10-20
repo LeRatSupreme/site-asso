@@ -214,9 +214,11 @@ $iconSvg = static function (string $name): string {
         $fcEcart   = isset($forecast['ecart_vs_attendu']) ? $forecast['ecart_vs_attendu'] : null;
         $fcInsuf   = ($fcConf === 'insuffisant') || !empty($forecast['anomalies']['donnees_insuffisantes']);
 
-        $kRange = static function (?array $iv): string {
+        // Fourchettes étiquetées : « fourchette journée 80 % » (carte
+        // Prévisions) vs « fourchette » à l'heure courante (Estimation).
+        $kRange = static function (?array $iv, string $label = 'fourchette'): string {
             if ($iv === null || !isset($iv['lo'], $iv['hi']) || $iv['lo'] === null || $iv['hi'] === null) { return ''; }
-            return ' (fourchette ' . formatPrice((float) $iv['lo']) . '–' . formatPrice((float) $iv['hi']) . ')';
+            return ' (' . $label . ' ' . formatPrice((float) $iv['lo']) . '–' . formatPrice((float) $iv['hi']) . ')';
         };
         $kSigned = static function ($v): string {
             return $v === null ? '' : (($v >= 0 ? '+' : '-') . formatPrice(abs((float) $v)));
@@ -239,7 +241,9 @@ $iconSvg = static function (string $name): string {
 
         $kChips = [];
         if ($fcPrev !== null) {
-            $txt = "Aujourd'hui : attendu " . formatPrice((float) $fcPrev) . $kRange($fcIv);
+            // Fourchette JOURNÉE 80 % étiquetée (distincte de la fourchette
+            // à l'heure courante affichée dans l'estimation du jour).
+            $txt = "Aujourd'hui : attendu " . formatPrice((float) $fcPrev) . $kRange($fcIv, 'fourchette journée 80 % :');
             if (!$fcTropTot && !$fcInsuf && $fcEcart !== null) {
                 $txt .= ' · vs attendu à ' . $fcNowHour . 'h : ' . $kSigned($fcEcart);
             }
@@ -294,6 +298,7 @@ $iconSvg = static function (string $name): string {
         // delta, données insuffisantes sans %. Puis chip « Objectif
         // semaine » (forecast.semaine) : attendu + probabilité.
         $dtEst   = isset($day_track['estimate']) ? $day_track['estimate'] : null;
+        $dtExp   = isset($day_track['expected_so_far']) ? $day_track['expected_so_far'] : null;
         $dtHour  = (int) ($day_track['hour'] ?? ($fcHor['now_hour'] ?? 0));
         $dtTrop  = !empty($day_track['trop_tot']);
         $dtIvH   = isset($day_track['intervalle_h']) && is_array($day_track['intervalle_h']) ? $day_track['intervalle_h'] : null;
@@ -307,16 +312,23 @@ $iconSvg = static function (string $name): string {
         ?>
         <?php if ($dtEst !== null && (float) $dtEst > 0): ?>
         <section class="card surface glass ka-card ka-fc">
-            <span class="ka-kpi-delta is-muted">
-                Attendu aujourd'hui (fenêtre <?= (int) ($day_track['window'] ?? 14) ?> j) : <?= e(formatPrice((float) $dtEst) . $kRange($dtIvH)) ?>
-            </span>
+            <?php if ($dtExp !== null): ?>
+                <!-- F1 : attendu À L'HEURE COURANTE (fourchette à h), distinct de la fourchette journée 80 %. -->
+                <span class="ka-kpi-delta is-muted">
+                    Attendu à <?= $dtHour ?>h (fenêtre <?= (int) ($day_track['window'] ?? 14) ?> j) : <?= e(formatPrice((float) $dtExp) . $kRange($dtIvH)) ?>
+                </span>
+            <?php else: ?>
+                <span class="ka-kpi-delta is-muted">
+                    Attendu aujourd'hui (fenêtre <?= (int) ($day_track['window'] ?? 14) ?> j) : <?= e(formatPrice((float) $dtEst) . $kRange($dtIvH)) ?>
+                </span>
+            <?php endif; ?>
             <span class="ka-kpi-delta is-muted">Réel à <?= $dtHour ?>h : <?= e(formatPrice((float) ($day_track['actual_so_far'] ?? 0))) ?></span>
             <?php if ($dtTrop): ?>
                 <span class="ka-kpi-delta is-muted">Trop tôt pour comparer (profil &lt; 10 % de la journée)</span>
             <?php elseif (!$dtInsuf && $dtEcart !== null): ?>
-                <span class="ka-kpi-delta is-muted">vs attendu à <?= $dtHour ?>h : <?= e($kSigned($dtEcart) . $kRange($dtIvH)) ?></span>
+                <span class="ka-kpi-delta is-muted">vs attendu à <?= $dtHour ?>h : <?= e($kSigned($dtEcart)) ?><?= $dtExp !== null ? ' (attendu ' . e(formatPrice((float) $dtExp)) . ')' : '' ?></span>
             <?php elseif (!$dtInsuf && $dtDelta !== null): ?>
-                <span class="ka-kpi-delta is-muted">vs attendu à <?= $dtHour ?>h : <?= $dtDelta >= 0 ? '+' : '-' ?><?= e(number_format(abs((float) $dtDelta), 1, ',', ' ')) ?> %</span>
+                <span class="ka-kpi-delta is-muted">vs attendu à <?= $dtHour ?>h : <?= $dtDelta >= 0 ? '+' : '-' ?><?= e(number_format(abs((float) $dtDelta), 1, ',', ' ')) ?> % (attendu <?= $dtExp === null ? '—' : e(formatPrice((float) $dtExp)) ?>)</span>
             <?php endif; ?>
             <?php if (!$dtTrop && $dtDans !== null): ?>
                 <?php [$stTxt, $stCls] = $kStatut((bool) $dtDans); ?>
@@ -385,6 +397,9 @@ $iconSvg = static function (string $name): string {
         $kAnomAtyp = isset($forecast['anomalies']['jours_atypiques']) && is_array($forecast['anomalies']['jours_atypiques']) ? $forecast['anomalies']['jours_atypiques'] : [];
         $kAnomCout = isset($forecast['anomalies']['produits_cout_suspect']) && is_array($forecast['anomalies']['produits_cout_suspect']) ? $forecast['anomalies']['produits_cout_suspect'] : [];
         $kNotes    = isset($forecast['notes']) && is_array($forecast['notes']) ? $forecast['notes'] : [];
+        $kFusion   = isset($forecast['anomalies']['cles_fusionnees']) && is_array($forecast['anomalies']['cles_fusionnees']) ? $forecast['anomalies']['cles_fusionnees'] : [];
+        $kSansStock = isset($forecast['anomalies']['produits_sans_stock']) && is_array($forecast['anomalies']['produits_sans_stock']) ? $forecast['anomalies']['produits_sans_stock'] : [];
+        $kNSansStock = (int) ($forecast['anomalies']['n_produits_sans_stock'] ?? 0);
         ?>
         <details class="card surface glass ka-card ka-dataq">
             <summary>
@@ -393,10 +408,13 @@ $iconSvg = static function (string $name): string {
                 · <?= (int) ($forecast['anomalies']['ventes_zero'] ?? 0) ?> vente(s) à 0 €
                 · <?= (int) ($forecast['anomalies']['doublons_ignores'] ?? 0) ?> doublon(s)
                 · <?= count($kAnomCout) ?> coût(s) suspect(s)
+                <?= $kNSansStock > 0 ? '· ' . $kNSansStock . ' sans stock' : '' ?>
             </summary>
             <?php if ($fcNoteSel !== ''): ?><p class="ka-fc-note"><?= e($fcNoteSel) ?></p><?php endif; ?>
             <?php if ($kAnomAtyp !== []): ?><p class="ka-fc-note">Jours atypiques exclus : <?= e(implode(', ', array_map('strval', $kAnomAtyp))) ?></p><?php endif; ?>
             <?php if ($kAnomCout !== []): ?><p class="ka-fc-note">Coûts suspects : <?= e(implode(', ', array_map('strval', $kAnomCout))) ?></p><?php endif; ?>
+            <?php if ($kFusion !== []): ?><p class="ka-fc-note">Clés produit fusionnées (quasi-doublons) : <?= e(implode(', ', array_map('strval', $kFusion))) ?> — à consolider via les alias.</p><?php endif; ?>
+            <?php if ($kNSansStock > 0): ?><p class="ka-fc-note"><?= $kNSansStock ?> produit(s) non rattaché(s) au stock<?= $kSansStock !== [] ? ' (' . e(implode(', ', array_map('strval', $kSansStock))) . ')' : '' ?> : rattache-les via les alias/product_stocks pour des suggestions.</p><?php endif; ?>
             <?php foreach ($kNotes as $kNote): ?><p class="ka-fc-note">• <?= e((string) $kNote) ?></p><?php endforeach; ?>
         </details>
     </div>
@@ -429,8 +447,10 @@ $iconSvg = static function (string $name): string {
     <div class="compta-tabpane ka-pane" data-pane="heures" hidden>
         <?php
         // Meilleur jour : VALEUR DU PAYLOAD (weekday.best, calculé par le
-        // moteur — aucun recalcul local). Heure de pointe : argmax des
-        // moyennes OBSERVÉES (hourly.ca_avg), étiquetée « observé ».
+        // moteur — aucun recalcul local). Un seul chiffre dans le
+        // sous-titre ; la moyenne/jour reste dans le payload. Heure de
+        // pointe : argmax des moyennes OBSERVÉES (hourly.ca_avg), étiquetée
+        // « observé ».
         $wdBest    = isset($weekday['best']) && is_array($weekday['best']) ? $weekday['best'] : null;
         $hrAvgList = isset($hourly['ca_avg']) && is_array($hourly['ca_avg']) ? $hourly['ca_avg'] : [];
         $peakHr    = null;
@@ -444,7 +464,7 @@ $iconSvg = static function (string $name): string {
         <section class="card surface glass ka-card">
             <div class="ka-chart-head">
                 <h2 class="ka-chart-title">Par jour de semaine</h2>
-                <span class="ka-sub">Meilleur jour : <?= e((string) ($wdBest['label'] ?? '—')) ?><?= ($wdBest['ca'] ?? null) !== null ? ' — ' . e(formatPrice((float) $wdBest['ca'])) . '/j (modèle)' : '' ?></span>
+                <span class="ka-sub">Meilleur jour : <?= e((string) ($wdBest['label'] ?? '—')) ?><?= ($wdBest['ca'] ?? null) !== null ? ' — ' . e(formatPrice((float) $wdBest['ca'])) . '/jour (modèle, fenêtre ' . (int) ($day_track['window'] ?? 14) . ' j)' : '' ?></span>
             </div>
             <div class="ka-chart ka-chart-bar"><canvas id="ka-chart-weekday"></canvas></div>
         </section>
@@ -1082,7 +1102,9 @@ $iconSvg = static function (string $name): string {
     }
 
     // Une carte produit. withCat = chip catégorie (masquée en tri
-    // « Catégorie », redondante avec l'entête de section).
+    // « Catégorie », redondante avec l'entête de section). La marge est
+    // OBSERVÉE (coût à la date de vente), distincte de la marge
+    // prévisionnelle de la carte « Bénéfice prévu ».
     function cardHtml(r, withCat) {
         var pp = profitParts(r.profit);
         return '<div class="ka-pcard">'
@@ -1095,7 +1117,7 @@ $iconSvg = static function (string $name): string {
             + '<div class="ka-pcard-stats">'
             + '<span class="ka-pcard-ca">CA : ' + money(r.ca) + '</span>'
             + '<span class="ka-pcard-profit ' + pp.cls + '">Bénéfice : ' + pp.text + '</span>'
-            + '<span class="ka-pcard-margin">Marge ' + Math.round(Number(r.margin)) + ' %</span>'
+            + '<span class="ka-pcard-margin">Marge observée (coût à la date de vente) ' + Math.round(Number(r.margin)) + ' %</span>'
             + '</div>'
             + '</div>';
     }
