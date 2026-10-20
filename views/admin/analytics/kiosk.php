@@ -29,10 +29,11 @@ declare(strict_types=1);
  * @var bool $hasSales                      Vrai si au moins une vente importée
  * @var array<string,mixed> $kpis           KPI de la période (+ *_delta vs période précédente)
  * @var list<array<string,mixed>> $insights Insights automatiques (icon, tone, title, text)
- * @var array<string,mixed> $forecast       Prévisions (today pro-rata, yesterday, reliable…)
- * @var array<string,mixed> $day_track      Estimation du jour (window, estimate, reliable, track, now_hour)
- * @var array<int,array{ca:float,qty:int,tx:int}> $weekday CA par jour de semaine (0 = lundi)
- * @var array<int,array{ca:float,qty:int,tx:int}> $hourly  CA par heure (0..23)
+ * @var array<string,mixed> $forecast       Moteur ForecastEngine::forecast() TEL QUEL (prevision_jour, intervalle_80, trop_tot, ecart_vs_attendu, dans_intervalle, confiance, modele, n_jours, wape_backtest, hier, jours, horaire, semaine, mois30, benefice, produits, anomalies, notes…)
+ * @var array<string,mixed> $day_track      Estimation du jour (window, hour, trop_tot, estimate, cum_actual, cum_expected, actual_so_far, delta_pct|null, projection_eod, ecart_eur, intervalle_h|null, dans_intervalle|null, confiance)
+ * @var array<string,mixed> $weekday        Par jour de semaine {labels, ca, ca_avg, qty, tx, days_count, today_index, avg_per_day, best?{index,label,ca}}
+ * @var array<string,mixed> $hourly         Par heure {labels, ca_avg, today_ca, today_expected, today_projete, now_hour, trop_tot, s}
+ * @var float $goal                         Objectif hebdomadaire affiché (GET ?goal= ou sauvegarde)
  * @var string $json                        Payload JSON (Chart.js) injecté dans un <script>
  * @var string $token                       Jeton kiosque ADMIN (présent dans l'URL)
  */
@@ -124,6 +125,13 @@ $iconSvg = static function (string $name): string {
     <!-- ============================================================ -->
     <div class="ka-kpis">
         <?php
+        // Note de croissance du moteur (payload $json > meta) : si la
+        // période précédente est incomplète, les deltas sont null côté
+        // payload — on affiche la note, SANS recomposer de delta.
+        $payloadDecoded = is_string($json ?? null) ? json_decode($json, true) : null;
+        $payloadMeta    = is_array($payloadDecoded) ? (array) ($payloadDecoded['meta'] ?? []) : [];
+        $croissanceNote = trim((string) ($payloadMeta['croissance_note'] ?? ''));
+
         $kpiCards = [
             ['label' => 'CA',            'value' => formatPrice($kpis['ca']),          'delta' => $kpis['ca_delta'] ?? null],
             ['label' => 'Bénéfice',      'value' => formatPrice($kpis['profit']),
@@ -151,7 +159,7 @@ $iconSvg = static function (string $name): string {
                         <?= $up ? '↑' : '↓' ?> <?= number_format(abs((float) $delta), 1, ',', ' ') ?>%
                     </span>
                 <?php else: ?>
-                    <span class="ka-kpi-delta is-muted">—</span>
+                    <span class="ka-kpi-delta is-muted"><?= $croissanceNote !== '' ? e($croissanceNote) : '—' ?></span>
                 <?php endif; ?>
             </div>
         <?php endforeach; ?>
@@ -178,93 +186,172 @@ $iconSvg = static function (string $name): string {
         </section>
 
         <?php
-        // Chips de prévision : jour en cours (pro-rata) et hier — même
-        // motif que les deltas KPI, appliqué aux prévisions. La fenêtre
-        // d'analyse (7/14/30 j, GET « fw ») est COMMUNE aux prévisions et
-        // à l'estimation du jour : liens simples, le reste du GET est
-        // préservé.
+        // Chips de prévision : VALEURS DU MOTEUR uniquement (contrat
+        // ForecastEngine) — montants, fourchettes, statuts fourchette,
+        // « trop tôt », données insuffisantes. Aucun delta recomposé.
+        // La fenêtre d'apprentissage (7/14/30 j, GET « fw ») est COMMUNE
+        // aux prévisions et à l'estimation du jour, jeton préservé.
         $fcUrl = static function (int $w) use ($token): string {
             $params       = $_GET;
             $params['fw'] = (string) $w;
 
             return url('/kiosque/admin/analytics/' . rawurlencode($token)) . '?' . http_build_query($params);
         };
-        $fcFw    = (int) ($forecast['window'] ?? 14);
-        $fcToday = $forecast['today'];
-        $fcYday  = $forecast['yesterday'];
-        $fcChips = [];
-        if ($fcToday['forecast_so_far'] !== null) {
-            $fcChips[] = [
-                'delta' => $fcToday['delta_pct'],
-                'text'  => sprintf(
-                    "Aujourd'hui %dh : %s vs %s (pro-rata)",
-                    (int) ($forecast['now_hour'] ?? 0),
-                    formatPrice((float) $fcToday['actual']),
-                    formatPrice((float) $fcToday['forecast_so_far'])
-                ),
-            ];
+        $fcFw      = (int) ($day_track['window'] ?? 14);
+        $fcPrev    = isset($forecast['prevision_jour']) ? $forecast['prevision_jour'] : null;
+        $fcIv      = isset($forecast['intervalle_80']) && is_array($forecast['intervalle_80']) ? $forecast['intervalle_80'] : null;
+        $fcHier    = isset($forecast['hier']) && is_array($forecast['hier']) ? $forecast['hier'] : null;
+        $fcConf    = (string) ($forecast['confiance'] ?? 'insuffisant');
+        $fcModele  = (string) ($forecast['modele'] ?? '');
+        $fcNJours  = (int) ($forecast['n_jours'] ?? 0);
+        $fcWape    = isset($forecast['wape_backtest']) ? $forecast['wape_backtest'] : null;
+        $fcCoverage = isset($forecast['coverage_backtest']) ? $forecast['coverage_backtest'] : null;
+        $fcNoteSel = (string) ($forecast['anomalies']['note_selection'] ?? '');
+        $fcHor     = isset($forecast['horaire']) && is_array($forecast['horaire']) ? $forecast['horaire'] : [];
+        $fcNowHour = (int) ($fcHor['now_hour'] ?? 0);
+        $fcTropTot = !empty($fcHor['trop_tot']) || !empty($forecast['trop_tot']);
+        $fcDans    = isset($forecast['dans_intervalle']) ? $forecast['dans_intervalle'] : null;
+        $fcEcart   = isset($forecast['ecart_vs_attendu']) ? $forecast['ecart_vs_attendu'] : null;
+        $fcInsuf   = ($fcConf === 'insuffisant') || !empty($forecast['anomalies']['donnees_insuffisantes']);
+
+        $kRange = static function (?array $iv): string {
+            if ($iv === null || !isset($iv['lo'], $iv['hi']) || $iv['lo'] === null || $iv['hi'] === null) { return ''; }
+            return ' (fourchette ' . formatPrice((float) $iv['lo']) . '–' . formatPrice((float) $iv['hi']) . ')';
+        };
+        $kSigned = static function ($v): string {
+            return $v === null ? '' : (($v >= 0 ? '+' : '-') . formatPrice(abs((float) $v)));
+        };
+        // Neutralité : DANS la fourchette → statut neutre ; HORS → ambre.
+        $kStatut = static function ($dans): array {
+            if ($dans === true)  { return ['Dans la fourchette ✓', 'is-muted']; }
+            if ($dans === false) { return ['Hors fourchette', 'is-off']; }
+            return ['', ''];
+        };
+        $kConfLbl = ['elevee' => 'élevée', 'moyenne' => 'moyenne', 'faible' => 'faible'][$fcConf] ?? 'insuffisante';
+
+        // Info-bulle métriques (règle interface 8) : affichée en note
+        // compacte (pas de survol au doigt) + attribut title.
+        $kTooltip = 'Modèle actif : ' . ($fcModele !== '' ? $fcModele : '—')
+            . ' · WAPE backtest : ' . ($fcWape === null ? '—' : number_format((float) $fcWape, 1, ',', ' ')) . ' %'
+            . ' sur ' . $fcNJours . ' jours'
+            . ' · couverture intervalle : ' . ($fcCoverage === null ? '—' : number_format((float) $fcCoverage, 0, ',', ' ')) . ' %'
+            . ($fcNoteSel !== '' ? ' · ' . $fcNoteSel : '');
+
+        $kChips = [];
+        if ($fcPrev !== null) {
+            $txt = "Aujourd'hui : attendu " . formatPrice((float) $fcPrev) . $kRange($fcIv);
+            if (!$fcTropTot && !$fcInsuf && $fcEcart !== null) {
+                $txt .= ' · vs attendu à ' . $fcNowHour . 'h : ' . $kSigned($fcEcart);
+            }
+            $kChips[] = ['cls' => 'is-muted', 'text' => $txt];
         }
-        if ($fcYday['forecast_full'] !== null) {
-            $fcChips[] = [
-                'delta' => $fcYday['delta_pct'],
-                'text'  => sprintf(
-                    'Hier : %s vs %s',
-                    formatPrice((float) $fcYday['actual']),
-                    formatPrice((float) $fcYday['forecast_full'])
-                ),
-            ];
+        if ($fcTropTot) {
+            $kChips[] = ['cls' => 'is-muted', 'text' => 'Trop tôt pour comparer (profil < 10 % de la journée)'];
+        } elseif ($fcDans !== null) {
+            [$stTxt, $stCls] = $kStatut((bool) $fcDans);
+            $kChips[] = ['cls' => $stCls, 'text' => $stTxt];
+        }
+        if ($fcHier !== null && isset($fcHier['prevu']) && $fcHier['prevu'] !== null) {
+            $hIv = (isset($fcHier['lo'], $fcHier['hi']) && $fcHier['lo'] !== null && $fcHier['hi'] !== null)
+                ? ['lo' => $fcHier['lo'], 'hi' => $fcHier['hi']] : null;
+            $txt = 'Hier : ' . formatPrice((float) ($fcHier['reel'] ?? 0)) . ' vs ' . formatPrice((float) $fcHier['prevu']);
+            if (isset($fcHier['reel']) && $fcHier['reel'] !== null) {
+                $txt .= ' (' . $kSigned((float) $fcHier['reel'] - (float) $fcHier['prevu']) . ')';
+            }
+            $txt .= $kRange($hIv);
+            $kChips[] = ['cls' => 'is-muted', 'text' => $txt];
+            if (isset($fcHier['dans_intervalle']) && $fcHier['dans_intervalle'] !== null) {
+                [$stTxt, $stCls] = $kStatut((bool) $fcHier['dans_intervalle']);
+                $kChips[] = ['cls' => $stCls, 'text' => 'Hier — ' . $stTxt];
+            }
         }
         ?>
-        <?php if ($fcChips !== []): ?>
-        <section class="card surface glass ka-card ka-fc">
+        <section class="card surface glass ka-card ka-fc" title="<?= e($kTooltip) ?>">
             <div class="ka-fc-win">
-                <span class="ka-fc-win-label">Fenêtre d'analyse :</span>
+                <span class="ka-fc-win-label">Fenêtre d'apprentissage :</span>
                 <div class="ka-pills">
                     <?php foreach ([7 => '7 j', 14 => '14 j', 30 => '30 j'] as $w => $lbl): ?>
                         <a class="ka-fwpill <?= $fcFw === $w ? 'is-active' : '' ?>" href="<?= e($fcUrl($w)) ?>"><?= e($lbl) ?></a>
                     <?php endforeach; ?>
                 </div>
             </div>
-            <?php foreach ($fcChips as $chip):
-                $d  = $chip['delta'];
-                $up = $d === null ? null : ($d >= 0);
-            ?>
-                <?php if ($up !== null): ?>
-                    <span class="ka-kpi-delta <?= $up ? 'is-up' : 'is-down' ?>">
-                        <?= e($chip['text']) ?> <?= $up ? '↑' : '↓' ?> <?= number_format(abs($d), 1, ',', ' ') ?>%
-                    </span>
-                <?php else: ?>
-                    <span class="ka-kpi-delta is-muted"><?= e($chip['text']) ?> —</span>
-                <?php endif; ?>
+            <?php foreach ($kChips as $chip): ?>
+                <span class="ka-kpi-delta <?= e($chip['cls']) ?>"><?= e($chip['text']) ?></span>
             <?php endforeach; ?>
-            <?php if (empty($forecast['reliable'])): ?>
-                <span class="ka-fc-note">Prévisions fiables à partir de 7 jours d'historique</span>
+            <?php if ($fcModele === 'baseline_B2'): ?>
+                <span class="ka-kpi-delta is-off">Baseline naïve active (le modèle avancé ne bat pas la référence)</span>
             <?php endif; ?>
+            <?php if ($fcInsuf): ?>
+                <span class="ka-kpi-delta is-off">Données insuffisantes (&lt; 7 jours ouverts)</span>
+            <?php endif; ?>
+            <span class="ka-fc-note">ⓘ <?= e($kTooltip) ?> · Fiabilité : <?= e($kConfLbl) ?></span>
         </section>
-        <?php endif; ?>
 
         <?php
-        // Chips « Estimation du jour » : objectif (estimation sur la
-        // fenêtre) + avance/retard live à l'heure courante — pas de
-        // graphique supplémentaire sur le kiosque téléphone.
-        $dtEst   = $day_track['estimate'] ?? null;
-        $dtTrack = $day_track['track'] ?? null;
-        $dtDelta = $dtTrack['delta_pct'] ?? null;
-        $dtUp    = $dtDelta === null ? null : ($dtDelta >= 0);
+        // Chips « Estimation du jour » (payload day_track, format plat) :
+        // attendu + fourchette, réel à l'heure courante, écart avec base
+        // explicite, statut fourchette neutre/hors, « trop tôt » sans
+        // delta, données insuffisantes sans %. Puis chip « Objectif
+        // semaine » (forecast.semaine) : attendu + probabilité.
+        $dtEst   = isset($day_track['estimate']) ? $day_track['estimate'] : null;
+        $dtHour  = (int) ($day_track['hour'] ?? ($fcHor['now_hour'] ?? 0));
+        $dtTrop  = !empty($day_track['trop_tot']);
+        $dtIvH   = isset($day_track['intervalle_h']) && is_array($day_track['intervalle_h']) ? $day_track['intervalle_h'] : null;
+        $dtDans  = isset($day_track['dans_intervalle']) ? $day_track['dans_intervalle'] : null;
+        $dtDelta = isset($day_track['delta_pct']) ? $day_track['delta_pct'] : null;
+        $dtEcart = isset($day_track['ecart_eur']) ? $day_track['ecart_eur'] : null;
+        $dtProj  = isset($day_track['projection_eod']) ? $day_track['projection_eod'] : null;
+        $dtConf  = (string) ($day_track['confiance'] ?? 'insuffisant');
+        $dtInsuf = ($dtConf === 'insuffisant') || !empty($forecast['anomalies']['donnees_insuffisantes']);
+        $sem     = isset($forecast['semaine']) && is_array($forecast['semaine']) ? $forecast['semaine'] : [];
         ?>
         <?php if ($dtEst !== null && (float) $dtEst > 0): ?>
         <section class="card surface glass ka-card ka-fc">
             <span class="ka-kpi-delta is-muted">
-                Objectif du jour (fenêtre <?= (int) ($day_track['window'] ?? 14) ?> j) : <?= e(formatPrice((float) $dtEst)) ?>
+                Attendu aujourd'hui (fenêtre <?= (int) ($day_track['window'] ?? 14) ?> j) : <?= e(formatPrice((float) $dtEst) . $kRange($dtIvH)) ?>
             </span>
-            <?php if ($dtUp !== null): ?>
-                <span class="ka-kpi-delta <?= $dtUp ? 'is-up' : 'is-down' ?>">
-                    à <?= (int) ($day_track['now_hour'] ?? 0) ?>h : <?= $dtUp ? '↑' : '↓' ?> <?= number_format(abs($dtDelta), 1, ',', ' ') ?> %
-                </span>
-            <?php else: ?>
-                <span class="ka-kpi-delta is-muted">à <?= (int) ($day_track['now_hour'] ?? 0) ?>h : —</span>
+            <span class="ka-kpi-delta is-muted">Réel à <?= $dtHour ?>h : <?= e(formatPrice((float) ($day_track['actual_so_far'] ?? 0))) ?></span>
+            <?php if ($dtTrop): ?>
+                <span class="ka-kpi-delta is-muted">Trop tôt pour comparer (profil &lt; 10 % de la journée)</span>
+            <?php elseif (!$dtInsuf && $dtEcart !== null): ?>
+                <span class="ka-kpi-delta is-muted">vs attendu à <?= $dtHour ?>h : <?= e($kSigned($dtEcart) . $kRange($dtIvH)) ?></span>
+            <?php elseif (!$dtInsuf && $dtDelta !== null): ?>
+                <span class="ka-kpi-delta is-muted">vs attendu à <?= $dtHour ?>h : <?= $dtDelta >= 0 ? '+' : '-' ?><?= e(number_format(abs((float) $dtDelta), 1, ',', ' ')) ?> %</span>
+            <?php endif; ?>
+            <?php if (!$dtTrop && $dtDans !== null): ?>
+                <?php [$stTxt, $stCls] = $kStatut((bool) $dtDans); ?>
+                <span class="ka-kpi-delta <?= e($stCls) ?>"><?= e($stTxt) ?></span>
+            <?php endif; ?>
+            <?php if ($dtProj !== null): ?>
+                <span class="ka-kpi-delta is-muted">Projection fin de journée : <?= e(formatPrice((float) $dtProj)) ?></span>
+            <?php endif; ?>
+            <?php if ($dtInsuf): ?>
+                <span class="ka-kpi-delta is-off">Données insuffisantes (&lt; 7 jours ouverts)</span>
             <?php endif; ?>
         </section>
+        <?php endif; ?>
+
+        <?php if ($sem !== [] && ($sem['attendu'] ?? null) !== null): ?>
+            <?php
+            $semProb = $sem['prob_atteinte'] ?? null;
+            $semIvK  = (($sem['lo'] ?? null) !== null && ($sem['hi'] ?? null) !== null)
+                ? ['lo' => $sem['lo'], 'hi' => $sem['hi']] : null;
+            $semRestK = (int) ($sem['jours_restants'] ?? 0);
+            ?>
+            <section class="card surface glass ka-card ka-fc">
+                <span class="ka-kpi-delta is-muted">
+                    Objectif semaine : <?= e(formatPrice((float) ($sem['objectif'] ?? ($goal ?? 0)))) ?>
+                    · attendu <?= e(formatPrice((float) $sem['attendu']) . $kRange($semIvK)) ?>
+                </span>
+                <span class="ka-kpi-delta <?= $semProb === null ? 'is-muted' : ((float) $semProb >= 50 ? 'is-up' : 'is-off') ?>">
+                    Probabilité d'atteinte : <?= $semProb === null ? '—' : e(number_format((float) $semProb, 0, ',', ' ')) . ' %' ?>
+                </span>
+                <?php if (($sem['manquant_par_jour'] ?? null) !== null && $semRestK > 0): ?>
+                    <span class="ka-kpi-delta is-muted">
+                        Manque <?= e(formatPrice((float) $sem['manquant_par_jour'])) ?>/jour (<?= $semRestK ?> jour<?= $semRestK > 1 ? 's' : '' ?> restant<?= $semRestK > 1 ? 's' : '' ?>)
+                    </span>
+                <?php endif; ?>
+            </section>
         <?php endif; ?>
 
         <section class="card surface glass ka-card">
@@ -288,6 +375,27 @@ $iconSvg = static function (string $name): string {
             <?php endforeach; ?>
         </div>
         <?php endif; ?>
+
+        <?php
+        // Bandeau compact « Qualité des données » : anomalies du moteur
+        // + notes, repliable (détails accessibles au tap).
+        $kAnomAtyp = isset($forecast['anomalies']['jours_atypiques']) && is_array($forecast['anomalies']['jours_atypiques']) ? $forecast['anomalies']['jours_atypiques'] : [];
+        $kAnomCout = isset($forecast['anomalies']['produits_cout_suspect']) && is_array($forecast['anomalies']['produits_cout_suspect']) ? $forecast['anomalies']['produits_cout_suspect'] : [];
+        $kNotes    = isset($forecast['notes']) && is_array($forecast['notes']) ? $forecast['notes'] : [];
+        ?>
+        <details class="card surface glass ka-card ka-dataq">
+            <summary>
+                Qualité des données — <?= (int) ($forecast['anomalies']['n_jours_inclus'] ?? 0) ?> j inclus
+                · <?= count($kAnomAtyp) ?> atypique(s)
+                · <?= (int) ($forecast['anomalies']['ventes_zero'] ?? 0) ?> vente(s) à 0 €
+                · <?= (int) ($forecast['anomalies']['doublons_ignores'] ?? 0) ?> doublon(s)
+                · <?= count($kAnomCout) ?> coût(s) suspect(s)
+            </summary>
+            <?php if ($fcNoteSel !== ''): ?><p class="ka-fc-note"><?= e($fcNoteSel) ?></p><?php endif; ?>
+            <?php if ($kAnomAtyp !== []): ?><p class="ka-fc-note">Jours atypiques exclus : <?= e(implode(', ', array_map('strval', $kAnomAtyp))) ?></p><?php endif; ?>
+            <?php if ($kAnomCout !== []): ?><p class="ka-fc-note">Coûts suspects : <?= e(implode(', ', array_map('strval', $kAnomCout))) ?></p><?php endif; ?>
+            <?php foreach ($kNotes as $kNote): ?><p class="ka-fc-note">• <?= e((string) $kNote) ?></p><?php endforeach; ?>
+        </details>
     </div>
 
     <!-- ==================== Onglet 2 : Répartition ==================== -->
@@ -317,17 +425,15 @@ $iconSvg = static function (string $name): string {
     <!-- ==================== Onglet 3 : Heures (rythmes + heatmap inversée) ==================== -->
     <div class="compta-tabpane ka-pane" data-pane="heures" hidden>
         <?php
-        // Meilleur jour de semaine et heure de pointe (calculs serveur).
-        $dayNames  = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
-        $wdCa      = array_column($weekday, 'ca');
-        $bestDay   = '—';
-        if ($wdCa !== [] && max($wdCa) > 0) {
-            $bestDay = $dayNames[(int) array_search(max($wdCa), $wdCa, true)];
-        }
-        $hrCa     = array_column($hourly, 'ca');
-        $peakHour = '—';
-        if ($hrCa !== [] && max($hrCa) > 0) {
-            $peakHour = ((int) array_search(max($hrCa), $hrCa, true)) . 'h';
+        // Meilleur jour : VALEUR DU PAYLOAD (weekday.best, calculé par le
+        // moteur — aucun recalcul local). Heure de pointe : argmax des
+        // moyennes OBSERVÉES (hourly.ca_avg), étiquetée « observé ».
+        $wdBest    = isset($weekday['best']) && is_array($weekday['best']) ? $weekday['best'] : null;
+        $hrAvgList = isset($hourly['ca_avg']) && is_array($hourly['ca_avg']) ? $hourly['ca_avg'] : [];
+        $peakHr    = null;
+        $peakVal   = 0.0;
+        foreach ($hrAvgList as $h => $v) {
+            if ($v !== null && (float) $v > $peakVal) { $peakVal = (float) $v; $peakHr = (int) $h; }
         }
         ?>
         <!-- Graphiques initialisés EN RETARDÉ à la première activation de
@@ -335,7 +441,7 @@ $iconSvg = static function (string $name): string {
         <section class="card surface glass ka-card">
             <div class="ka-chart-head">
                 <h2 class="ka-chart-title">Par jour de semaine</h2>
-                <span class="ka-sub">Meilleur jour : <?= e($bestDay) ?></span>
+                <span class="ka-sub">Meilleur jour : <?= e((string) ($wdBest['label'] ?? '—')) ?><?= ($wdBest['ca'] ?? null) !== null ? ' — ' . e(formatPrice((float) $wdBest['ca'])) . '/j (modèle)' : '' ?></span>
             </div>
             <div class="ka-chart ka-chart-bar"><canvas id="ka-chart-weekday"></canvas></div>
         </section>
@@ -343,7 +449,7 @@ $iconSvg = static function (string $name): string {
         <section class="card surface glass ka-card">
             <div class="ka-chart-head">
                 <h2 class="ka-chart-title">Par heure</h2>
-                <span class="ka-sub">Heure de pointe : <?= e($peakHour) ?></span>
+                <span class="ka-sub">Heure de pointe : <?= $peakHr === null ? '—' : $peakHr . 'h' ?> (observé)</span>
             </div>
             <div class="ka-chart ka-chart-bar"><canvas id="ka-chart-hourly"></canvas></div>
         </section>
@@ -751,17 +857,24 @@ $iconSvg = static function (string $name): string {
     // puis heatmap INVERSÉE (DOM pur, construite immédiatement).
     // ============================================================
     function initHeuresCharts() {
-        var wd = data.weekday || { labels: [], ca: [] };
+        // Barres = moyennes du payload (ca_avg : null = jour fermé → trou,
+        // pas de barre à 0), barre du jour en ambre, tooltip « occ ».
+        var wd = data.weekday || { labels: [], ca_avg: [] };
         var elWd = document.getElementById('ka-chart-weekday');
         if (elWd) {
+            var kWdAvg = (wd.ca_avg || []).map(function (v) { return v == null ? null : Number(v); });
+            var kWdCount = (wd.days_count || []).map(function (v) { return v == null ? 0 : Number(v); });
+            var kWdTi = Number(wd.today_index);
             new Chart(elWd, {
                 type: 'bar',
                 data: {
-                    labels: wd.labels,
+                    labels: wd.labels || [],
                     datasets: [{
-                        label: 'CA (€)',
-                        data: wd.ca,
-                        backgroundColor: 'rgba(97,80,170,.55)',
+                        label: 'CA moyen (€)',
+                        data: kWdAvg,
+                        backgroundColor: kWdAvg.map(function (v, i) {
+                            return i === kWdTi ? 'rgba(245,158,11,.75)' : 'rgba(97,80,170,.55)';
+                        }),
                         borderColor: violet,
                         borderWidth: 1,
                         borderRadius: 4,
@@ -772,35 +885,95 @@ $iconSvg = static function (string $name): string {
                     maintainAspectRatio: false,
                     plugins: {
                         legend: { display: false },
-                        tooltip: { callbacks: { label: function (c) { return money(c.raw); } } },
+                        tooltip: {
+                            callbacks: {
+                                label: function (c) { return c.raw == null ? '—' : money(c.raw); },
+                                afterLabel: function (c) {
+                                    var n = kWdCount[c.dataIndex];
+                                    return 'occ : ' + (n == null || isNaN(n) ? 0 : n) + ' jour(s) observé(s)';
+                                },
+                            },
+                        },
                     },
                     scales: { y: { beginAtZero: true, ticks: { callback: money } } },
                 },
             });
         }
 
-        var hr = data.hourly || { labels: [], ca: [] };
+        // Barres ambre = CA moyen OBSERVÉ par heure ; tirets violets =
+        // attendu du jour ; pointillés verts = projeté fin de journée ;
+        // ligne sarcelle = réel du jour tronqué à l'heure courante.
+        var hr = data.hourly || { labels: [], ca_avg: [] };
         var elHr = document.getElementById('ka-chart-hourly');
         if (elHr) {
+            var kHrHour = Number(hr.now_hour == null ? 0 : hr.now_hour);
+            var kHrAvg = (hr.ca_avg || []).map(function (v) { return v == null ? null : Number(v); });
+            var kHrToday = (hr.today_ca || []).map(function (v, i) {
+                return i <= kHrHour && v != null ? Number(v) : null;
+            });
+            var kHrExpected = (hr.today_expected || []).map(function (v) { return v == null ? null : Number(v); });
+            var kHrProjete = (hr.today_projete || []).map(function (v) { return v == null ? null : Number(v); });
             new Chart(elHr, {
-                type: 'bar',
+                type: 'line',
                 data: {
-                    labels: hr.labels,
-                    datasets: [{
-                        label: 'CA (€)',
-                        data: hr.ca,
-                        backgroundColor: 'rgba(245,158,11,.55)',
-                        borderColor: amber,
-                        borderWidth: 1,
-                        borderRadius: 3,
-                    }],
+                    labels: hr.labels || [],
+                    datasets: [
+                        {
+                            type: 'bar',
+                            label: 'CA moyen observé (€)',
+                            data: kHrAvg,
+                            backgroundColor: 'rgba(245,158,11,.55)',
+                            borderColor: amber,
+                            borderWidth: 1,
+                            borderRadius: 3,
+                            order: 4,
+                        },
+                        {
+                            type: 'line',
+                            label: "Attendu aujourd'hui (€)",
+                            data: kHrExpected,
+                            borderColor: violet,
+                            borderDash: [6, 6],
+                            fill: false,
+                            tension: 0.3,
+                            pointRadius: 0,
+                            pointHitRadius: 8,
+                            order: 3,
+                        },
+                        {
+                            type: 'line',
+                            label: 'Projeté (€)',
+                            data: kHrProjete,
+                            borderColor: green,
+                            borderDash: [2, 4],
+                            fill: false,
+                            tension: 0.3,
+                            pointRadius: 0,
+                            pointHitRadius: 8,
+                            order: 2,
+                        },
+                        {
+                            type: 'line',
+                            label: "Aujourd'hui (€)",
+                            data: kHrToday,
+                            borderColor: teal,
+                            backgroundColor: 'rgba(72,189,211,.15)',
+                            fill: true,
+                            tension: 0.3,
+                            pointRadius: 2,
+                            pointBackgroundColor: teal,
+                            spanGaps: false,
+                            order: 1,
+                        },
+                    ],
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
                     plugins: {
-                        legend: { display: false },
-                        tooltip: { callbacks: { label: function (c) { return money(c.raw); } } },
+                        legend: { position: 'bottom', labels: { boxWidth: 12, padding: 8, font: { size: 10 } } },
+                        tooltip: { callbacks: { label: function (c) { return c.dataset.label + ' : ' + (c.raw == null ? '—' : money(c.raw)); } } },
                     },
                     scales: {
                         x: { ticks: { maxRotation: 0, autoSkip: true, autoSkipPadding: 4, font: { size: 9 } } },
@@ -1146,7 +1319,7 @@ $iconSvg = static function (string $name): string {
 .ka-chart-donut { height: 250px; max-width: 280px; margin: 0 auto; }
 .ka-chart-bar { height: 210px; }
 
-/* ---- Prévisions : fenêtre commune + chips du jour (pro-rata) / d'hier ---- */
+/* ---- Prévisions : fenêtre d'apprentissage + chips moteur (jour/hier) ---- */
 .ka-fc { display: flex; flex-direction: column; gap: 0.2rem; padding: 0.6rem 0.7rem; }
 .ka-fc .ka-kpi-delta { font-size: 0.78rem; line-height: 1.4; }
 .ka-fc-note { font-size: 0.66rem; color: var(--muted, #9fb3c8); }
@@ -1308,4 +1481,16 @@ $iconSvg = static function (string $name): string {
 /* ---- Divers ---- */
 .ka-nosales { margin: 0; font-size: 0.78rem; color: var(--muted, #9fb3c8); }
 .ka-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: center; margin: 0.6rem 0 1rem; }
+
+/* ---- Statut « Hors fourchette » (anomalie, ambre) + bandeau
+        « Qualité des données » repliable ---- */
+.ka-kpi-delta.is-off { color: #f59e0b; }
+.ka-dataq { padding: 0.55rem 0.7rem; }
+.ka-dataq summary {
+    cursor: pointer;
+    font-size: 0.7rem; font-weight: 700;
+    color: var(--muted, #9fb3c8);
+    line-height: 1.4;
+}
+.ka-dataq .ka-fc-note { margin-top: 0.25rem; }
 </style>

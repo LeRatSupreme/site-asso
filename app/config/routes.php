@@ -443,4 +443,7 @@ function aeic_register_routes(Router $router): void
 
     // Dashboard analytics (graphiques Chart.js).
     $router->get('/admin/analytics', [AdminAnalyticsController::class, 'index']);
+    // Objectif hebdomadaire du dashboard (setting analytics_weekly_goal) :
+    // CSRF vérifié centralement par le routeur pour tout POST hors /kiosque/.
+    $router->post('/admin/analytics/objectif', [AdminAnalyticsController::class, 'saveGoal']);
 }
