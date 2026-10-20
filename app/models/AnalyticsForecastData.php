@@ -270,7 +270,7 @@ final class AnalyticsForecastData extends Model
             );
         }
 
-        usort($out, static fn (ProductStat $a, ProductStat $b): bool => $b->ca <=> $a->ca);
+        usort($out, static fn (ProductStat $a, ProductStat $b): int => $b->ca <=> $a->ca);
 
         return $out;
     }
