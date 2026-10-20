@@ -48,10 +48,6 @@ $presets = [
     '1d'  => '1 jour',
     '7d'  => '7 derniers jours',
     '30d' => '30 derniers jours',
-    '3m'  => '3 derniers mois',
-    '6m'  => '6 derniers mois',
-    '12m' => '12 derniers mois',
-    'ytd' => 'Année civile',
     'all' => 'Tout',
 ];
 $balancePos = (float) $entries['balance'] >= 0;
