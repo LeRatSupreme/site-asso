@@ -143,6 +143,38 @@ final class AnalyticsBuildPageTest extends IntegrationTestCase
             $body,
             'La probabilité affichée doit être prob_atteinte × 100.'
         );
+
+        // ---- F1 : les deux fourchettes sont étiquetées sans ambiguïté ----
+        // « Attendu à Hh » = fourchette à l'heure courante (day_track) ;
+        // la fourchette JOURNÉE 80 % vit dans la carte Prévisions.
+        self::assertStringContainsString('Attendu à ', $body, 'La chip « Attendu à Hh » (estimation) est absente.');
+        self::assertStringContainsString('fourchette journée 80 %', $body, 'La fourchette journée de la carte Prévisions doit être étiquetée.');
+        self::assertArrayHasKey('expected_so_far', $payload['day_track']);
+        self::assertArrayHasKey('intervalle_h', $payload['day_track']);
+
+        // ---- F4 : sous-titre meilleur jour = UN seul chiffre ----
+        self::assertStringContainsString('(modèle, fenêtre ', $body, 'Le sous-titre meilleur jour doit citer la fenêtre.');
+        self::assertStringNotContainsString('/jour en moyenne', $body, 'Ancien libellé à deux chiffres encore présent.');
+        self::assertStringNotContainsString('Moyenne/jour : ', $body, 'La moyenne/jour ne doit plus vivre dans le sous-titre.');
+
+        // ---- F6 : note bénéfice en régimes (≥ 5 % ici, produits nommés) ----
+        self::assertStringContainsString(
+            'sans coût fiable (Jus de fruits)',
+            $body,
+            'La note bénéfice doit nommer le produit suspect.'
+        );
+        self::assertStringContainsString('bénéfice sous-estimé ou surestimé', $body);
+        $pctNc = (float) $payload['benefice']['pct_ca_sans_cout_fiable'];
+        self::assertGreaterThan(5.0, $pctNc, 'Le seed doit mettre le dashboard en régime ≥ 5 % (note entier).');
+
+        // ---- F7 : marge prévisionnelle vs marge observée étiquetées ----
+        self::assertStringContainsString('Marge prévisionnelle (prix médian fenêtre − coût actuel)', $body);
+        self::assertStringContainsString('Marge observée (coût à la date de vente)', $body);
+
+        // ---- F8 : contrat des nouvelles clés d'audit (bandeau qualité) ----
+        foreach (['cles_fusionnees', 'produits_sans_stock', 'n_produits_sans_stock'] as $key) {
+            self::assertArrayHasKey($key, $payload['anomalies'], "Clé « $key » absente des anomalies.");
+        }
     }
 
     public function test_kiosque_analytics_affiche_la_probabilite_echellee(): void
@@ -164,6 +196,11 @@ final class AnalyticsBuildPageTest extends IntegrationTestCase
             $body,
             'La chip kiosque doit afficher prob_atteinte × 100.'
         );
+
+        // F1/F4 kiosque : libellés compacts attendus.
+        self::assertStringContainsString('Attendu à ', $body, 'La chip kiosque « Attendu à Hh » est absente.');
+        self::assertStringContainsString('fourchette journée 80 %', $body, 'La fourchette journée doit être étiquetée dans le kiosque.');
+        self::assertStringContainsString('/jour (modèle, fenêtre ', $body, 'Le sous-titre kiosque du meilleur jour doit citer la fenêtre.');
 
         // Mauvais jeton : 403.
         self::assertSame(
