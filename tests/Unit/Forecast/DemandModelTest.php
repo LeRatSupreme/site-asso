@@ -220,6 +220,33 @@ final class DemandModelTest extends TestCase
     }
 
     /**
+     * FIX G — dispersion IMPOSÉE : le refit « hier » réutilise le r du
+     * modèle principal (dispersion = propriété globale, 4ᵉ paramètre de
+     * DemandModel::fit). Valeur clampée [R_MIN, R_MAX] ; les autres
+     * grandeurs (niveau, effets, paniers) restent strictement identiques
+     * à un fit sans paramètre.
+     */
+    public function test_dispersion_imposee_reutilisee_et_bornee(): void
+    {
+        $days = self::serie(4);
+        $m = DemandModel::fit($days, [], Hyper::K_POOL);
+
+        $impose = DemandModel::fit($days, [], Hyper::K_POOL, 18.0);
+        self::assertEqualsWithDelta(18.0, $impose->dispersionR, 0.0, 'r imposé repris tel quel (dans les bornes).');
+        self::assertEqualsWithDelta($m->globalN, $impose->globalN, 1.0e-9, 'globalN inchangé.');
+        self::assertEqualsWithDelta($m->globalP, $impose->globalP, 1.0e-9, 'globalP inchangé.');
+        self::assertEqualsWithDelta(
+            $m->expectedN(self::paris('2026-10-05 12:00')),
+            $impose->expectedN(self::paris('2026-10-05 12:00')),
+            1.0e-9,
+            'Attendus du modèle inchangés par la dispersion imposée.'
+        );
+
+        self::assertEqualsWithDelta(Hyper::R_MIN, DemandModel::fit($days, [], Hyper::K_POOL, 0.1)->dispersionR, 0.0, 'Clamp bas sur R_MIN.');
+        self::assertEqualsWithDelta(Hyper::R_MAX, DemandModel::fit($days, [], Hyper::K_POOL, 9999.0)->dispersionR, 0.0, 'Clamp haut sur R_MAX.');
+    }
+
+    /**
      * $n semaines lun–ven du motif [70,60,65,75,90], panier 1.25,
      * horaire 8h→17h. Avec $samedi : samedis ouverts à N = 72.
      *

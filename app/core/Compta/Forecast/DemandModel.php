@@ -147,13 +147,23 @@ final class DemandModel
     /**
      * Ajuste le modèle sur les jours ouverts passés.
      *
-     * @param array<string, DayCurrent> $days    jours ouverts PASSÉS uniquement
-     * @param array<string, float>      $weights 'Y-m-d' => poids (défaut 1.0 ; jour
-     *                                           atypique = Hyper::W_ATYPICAL, cf.
-     *                                           Clean::atypicalWeights)
-     * @param float                     $k       intensité du rétrécissement partial pooling
+     * @param array<string, DayCurrent> $days        jours ouverts PASSÉS uniquement
+     * @param array<string, float>      $weights     'Y-m-d' => poids (défaut 1.0 ; jour
+     *                                               atypique = Hyper::W_ATYPICAL, cf.
+     *                                               Clean::atypicalWeights)
+     * @param float                     $k           intensité du rétrécissement partial pooling
+     * @param ?float                    $dispersionR IMPOSE la dispersion NegBin (clampée
+     *                                               [R_MIN, R_MAX]) au lieu de la recalculer
+     *                                               par la méthode des moments : la dispersion
+     *                                               est une propriété GLOBALE du modèle — le
+     *                                               refit « hier » (sans le jour expliqué) doit
+     *                                               réutiliser le r du modèle principal, sinon
+     *                                               son estimateur local s'effondre vers R_MAX
+     *                                               (quasi-Poisson) et la fourchette « Hier »
+     *                                               devient absurdemment étroite vs « Aujourd'hui »
+     *                                               (dump prod : r principal 18,0 vs refit 200).
      */
-    public static function fit(array $days, array $weights = [], float $k = Hyper::K_POOL): self
+    public static function fit(array $days, array $weights = [], float $k = Hyper::K_POOL, ?float $dispersionR = null): self
     {
         // Tri chronologique (clés 'Y-m-d' triables lexicographiquement).
         $sorted = [];
@@ -284,6 +294,24 @@ final class DemandModel
             $allBaskets,
             $lastKey
         );
+
+        if ($dispersionR !== null) {
+            return new self(
+                $globalN,
+                $globalP,
+                $openWeekdays,
+                $dowEffects,
+                $level,
+                $trend,
+                min(Hyper::R_MAX, max(Hyper::R_MIN, (float) $dispersionR)),
+                $dowA,
+                $occ,
+                $dowBaskets,
+                array_values($sorted),
+                $allBaskets,
+                $lastKey
+            );
+        }
 
         return $model->withDispersion();
     }
