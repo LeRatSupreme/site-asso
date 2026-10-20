@@ -5,18 +5,27 @@ declare(strict_types=1);
 namespace App\Controllers\Admin;
 
 use App\Core\Compta\ComptaCalc;
-use App\Core\Compta\SalesForecast;
+use App\Core\Compta\Forecast\ForecastEngine;
 use App\Models\Analytics;
+use App\Models\AnalyticsForecastData;
 use App\Models\Sale;
 use App\Models\Setting;
 
 /**
- * Dashboard Analytics Pro (Fonctionnalité 14, refonte).
+ * Dashboard Analytics Pro (Fonctionnalité 14, refonte moteur étape 9).
  *
  * Tous les filtres sont passés en GET (partageables par URL) : période
- * rapide ou intervalle custom, granularité, catégorie, moyen de paiement.
+ * rapide ou intervalle custom, granularité, catégorie, moyen de paiement,
+ * fenêtre d'apprentissage « fw » et objectif hebdomadaire « goal ».
  * Le même dashboard est servi dans l'espace admin (connexion) et dans le
  * kiosque ADMIN (lien secret à jeton, sans connexion).
+ *
+ * UNE SEULE SOURCE DE VÉRITÉ pour les prévisions : la fenêtre
+ * d'apprentissage (fw jours finissant aujourd'hui) alimente
+ * AnalyticsForecastData::dataset(), et le dataset unique nourrit
+ * ForecastEngine::forecast() — aucun calcul de prévision ailleurs ; le
+ * contrôleur se borne à MAPPER les sorties du moteur vers les structures
+ * consommées par les vues (forecast tel quel, day_track, weekday, hourly).
  */
 final class AdminAnalyticsController extends AdminBaseController
 {
@@ -31,6 +40,19 @@ final class AdminAnalyticsController extends AdminBaseController
         'all'  => 'Tout',
         'custom' => 'Personnalisé',
     ];
+
+    /** Fuseau de référence de l'asso (cohérent avec le cœur de prévision). */
+    private const TZ = 'Europe/Paris';
+
+    /** Bornes de l'objectif hebdomadaire (€ / semaine). */
+    private const GOAL_MIN = 10.0;
+    private const GOAL_MAX = 100000.0;
+
+    /** Objectif par défaut si aucun paramétrage valide en base. */
+    private const GOAL_DEFAULT = 500.0;
+
+    /** Abréviations françaises des jours (0 = lundi) — libellés de charts. */
+    private const DAY_ABBR = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
 
     public function index(): void
     {
@@ -62,11 +84,38 @@ final class AdminAnalyticsController extends AdminBaseController
     }
 
     /**
-     * Construit toutes les données de la page (filtres GET, fenêtre de
-     * temps, agrégats, prévisions, insights, payload JSON) — partagées
-     * entre les rendus admin et kiosque.
+     * Enregistre l'objectif hebdomadaire (setting « analytics_weekly_goal »).
      *
-     * @return array{filters:array<string,mixed>,periods:array<string,string>,categories:list<string>,hasSales:bool,kpis:array<string,mixed>,insights:list<array<string,mixed>>,forecast:array<string,mixed>,day_track:array<string,mixed>,weekday:array<int,array{ca:float,qty:int,tx:int}>,hourly:array<int,array{ca:float,qty:int,tx:int}>,products:list<string>,productSelected:string,productWeekly:list<array{week:string,ca:float,qty:int}>,json:string}
+     * CSRF : vérifié de façon CENTRALISÉE par Router::dispatch pour toute
+     * requête POST hors /kiosque/ (App\Core\Csrf::checkRequest → 403 sinon),
+     * exactement comme les autres formulaires admin (cf.
+     * AdminSettingController::save) : le contrôleur n'a rien à faire.
+     */
+    public function saveGoal(): void
+    {
+        $this->guardCompta();
+
+        $goal = $this->parseGoal(trim((string) ($_POST['goal'] ?? '')));
+
+        if ($goal === null) {
+            $this->setFlash('error', 'Objectif invalide : saisis un montant en euros supérieur à 0.');
+            redirect(url('/admin/analytics'));
+
+            return;
+        }
+
+        Setting::set('analytics_weekly_goal', (string) $goal);
+        $this->audit('analytics.objectif', 'setting', null, ['goal' => $goal]);
+        $this->setFlash('success', 'Objectif hebdomadaire enregistré : ' . number_format($goal, 2, ',', ' ') . ' € / semaine.');
+        redirect(url('/admin/analytics'));
+    }
+
+    /**
+     * Construit toutes les données de la page (filtres GET, fenêtre de
+     * temps, agrégats, prévisions issues du moteur, insights, payload
+     * JSON) — partagées entre les rendus admin et kiosque.
+     *
+     * @return array<string,mixed>
      */
     private function buildPage(string $defaultPeriod = 'week', ?\DateTimeImmutable $now = null): array
     {
@@ -99,6 +148,16 @@ final class AdminAnalyticsController extends AdminBaseController
             'toInput'     => $toInput,
         ];
 
+        // Instant de référence (Paris) partagé par la fenêtre d'apprentissage
+        // et le moteur ; aujourd'hui est JAMAIS dans le futur.
+        $now      = $now ?? new \DateTimeImmutable('now', new \DateTimeZone(self::TZ));
+        $todayKey = $now->format('Y-m-d');
+
+        // ---- Objectif hebdomadaire (étape 6) : GET « goal » borné, sinon ----
+        // le paramétrage enregistré (Setting), sinon 500 €. Le kiosque,
+        // sans GET « goal », retombe donc sur le paramétrage lui aussi.
+        $goal = $this->weeklyGoal();
+
         // ---- Données pour la vue ----
         $kpis     = Analytics::kpis($from, $to, $category, $payment);
         $kpisPrev = Analytics::kpisPrevious($from, $to, $category, $payment);
@@ -113,158 +172,72 @@ final class AdminAnalyticsController extends AdminBaseController
         $table     = Analytics::productTable($from, $to, $category, $payment);
         $insights  = Analytics::insights($from, $to, $category, $payment);
 
-        // ---- Prévisions & rythmes (jours de semaine, heures, produit) ----
-        $now = $now ?? new \DateTimeImmutable('now', new \DateTimeZone(SalesForecast::TZ));
+        // ---- Croissance KPI (étape 9) : périodes de même longueur et ----
+        // COMPLÈTES. La période précédente est incomplète si elle mord sur
+        // l'avenir (fin >= aujourd'hui) ou si elle précède la première
+        // vente importée : les % d'évolution sont alors MASQUÉS (null) et
+        // la note explicite part dans meta.croissance_note.
+        [$prevFrom, $prevTo] = $this->previousWindow($from, $to);
+        $prevComplete = $prevTo < $todayKey && $prevFrom >= Analytics::firstSaleDate();
+        $croissanceNote = $prevComplete
+            ? ''
+            : 'Période précédente incomplète : évolution en % non affichée.';
+        $kpisDisplay = $this->kpisWithDelta($kpis, $kpisPrev, $prevComplete);
 
-        // CA quotidien zéro-rempli, indépendant de la granularité affichée.
-        $dayTrend = $granularity === 'day'
-            ? $trend
-            : Analytics::revenueTrend($from, $to, 'day', $category, $payment);
-
-        $dailyCa = [];
-        foreach ($dayTrend as $b) {
-            $dailyCa[$b['bucket']] = (float) $b['ca'];
-        }
-
-        // ---- Fenêtre COMMUNE des prévisions (GET « fw », défaut 14) ----
-        // Une seule question « sur combien de jours ? » pour TOUTES les
-        // prévisions : les cartes « Prévisions » (jour pro-rata, hier,
-        // historique) et « Estimation du jour » partagent la même fenêtre
-        // finissant aujourd'hui — moyennes par jour de semaine ET parts
-        // horaires attendues incluses.
+        // ---- Fenêtre COMMUNE d'apprentissage (GET « fw », défaut 14) ----
+        // Une seule question « sur combien de jours ? » : cette fenêtre
+        // finissant AUJOURD'HIUI INCLUS alimente le dataset unique, qui
+        // nourrit le moteur — prévision du jour, horaire, jours à venir,
+        // semaine, 30 jours, bénéfice et produits sortent tous de CE
+        // seul appel. Aucun autre calcul de prévision nulle part.
         $fwRaw = $this->filter('fw', '14');
         $fw    = in_array($fwRaw, ['7', '14', '30'], true) ? (int) $fwRaw : 14;
 
         $trackFrom = $now->modify('-' . ($fw - 1) . ' days')->format('Y-m-d');
-        $trackTo   = $now->format('Y-m-d');
 
-        $trackTrend = Analytics::revenueTrend($trackFrom, $trackTo, 'day', $category, $payment);
-        $trackDailyCa = [];
-        foreach ($trackTrend as $b) {
-            $trackDailyCa[$b['bucket']] = (float) $b['ca'];
-        }
+        $dataset  = AnalyticsForecastData::dataset($trackFrom, $todayKey);
+        $forecast = ForecastEngine::forecast($dataset, $now, $now->format('H:i'), [
+            'horizon'     => 7,
+            'goal_weekly' => $goal,
+        ]);
 
-        // Parts horaires du CA sur la fenêtre (normalisées), et CA du jour
-        // heure par heure (aujourd'hui inclus dans la fenêtre).
-        $trackHourly    = Analytics::revenueByHour($trackFrom, $trackTo, $category, $payment);
-        $trackHourTotal = 0.0;
-        foreach ($trackHourly as $row) {
-            $trackHourTotal += $row['ca'];
-        }
-        $trackShares = [];
-        if ($trackHourTotal > 0) {
-            foreach ($trackHourly as $h => $row) {
-                $trackShares[(int) $h] = $row['ca'] / $trackHourTotal;
-            }
-        }
+        // ---- Estimation du jour : mappage SANS recalcul métier ----
+        $dayTrack = $this->dayTrackFromForecast($forecast, $fw);
 
-        $todayHourlyCa = [];
-        foreach (Analytics::revenueByHour($trackTo, $trackTo, $category, $payment) as $h => $row) {
-            $todayHourlyCa[(int) $h] = (float) $row['ca'];
-        }
+        // ---- Par jour de semaine : moyennes du moteur + observé fenêtre ----
+        $weekdayObs = Analytics::revenueByWeekday($trackFrom, $todayKey, $category, $payment);
+        $weekday    = $this->weekdayFromForecast($forecast, $weekdayObs, (int) $now->format('N') - 1);
 
-        // ---- Carte « Prévisions » : calculée sur la fenêtre commune ----
-        $forecast = SalesForecast::forecast($trackDailyCa, $now);
+        // ---- Par heure : moyenne OBSERVÉE par jour ouvert de la fenêtre ----
+        // d'apprentissage + séries du jour (moteur).
+        $trackHourly = Analytics::revenueByHour($trackFrom, $todayKey, $category, $payment);
+        $hourly      = $this->hourlyFromForecast($forecast, $trackHourly, count($dataset->days));
 
-        // Historique quotidien de la fenêtre (libellés français) + position
-        // du bar du jour.
+        // ---- Historique observé du chart (barres CA passé) : données ----
+        // observées revenueTrend(..., 'day') sur la fenêtre d'apprentissage,
+        // libellés FR « Lun 16/10 » via le helper local (la classe
+        // SalesForecast est supprimée).
         $histLabels = [];
         $histValues = [];
-        $todayKey   = $now->format('Y-m-d');
-        $todayIndex = false;
-        foreach ($trackTrend as $i => $b) {
-            if ($b['bucket'] === $todayKey) {
+        $todayIndex = null;
+        foreach (Analytics::revenueTrend($trackFrom, $todayKey, 'day', $category, $payment) as $i => $b) {
+            if ((string) $b['bucket'] === $todayKey) {
                 $todayIndex = $i;
             }
-            $histLabels[] = SalesForecast::dayLabel(new \DateTimeImmutable($b['bucket']));
+            try {
+                $histLabels[] = self::dayLabelFr(new \DateTimeImmutable((string) $b['bucket']));
+            } catch (\Throwable) {
+                $histLabels[] = (string) $b['label'];
+            }
             $histValues[] = (float) $b['ca'];
         }
-        if ($todayIndex === false) {
-            $histLabels[] = SalesForecast::dayLabel($now);
-            $histValues[] = (float) ($trackDailyCa[$todayKey] ?? 0.0);
+        if ($todayIndex === null) {
+            // Aucune vente aujourd'hui : le bar du jour reste positionnable.
+            $histLabels[] = self::dayLabelFr($now);
+            $histValues[] = 0.0;
             $todayIndex   = count($histValues) - 1;
         }
-
-        // Pro-rata du jour : parts horaires de la même fenêtre commune.
-        $todayFull = $forecast['today']['forecast_full'];
-        if ($todayFull !== null && $todayFull > 0) {
-            $soFar = SalesForecast::proRatedForecast($todayFull, $trackShares, $now);
-            $forecast['today']['forecast_so_far'] = $soFar;
-            $forecast['today']['delta_pct'] = $this->pctDelta((float) $forecast['today']['actual'], $soFar);
-        }
-
-        $forecast['window']       = $fw;
-        $forecast['history']      = ['labels' => $histLabels, 'values' => $histValues];
-        $forecast['today_index']  = $todayIndex;
-        $forecast['today']['label'] = SalesForecast::dayLabel($now);
-        $forecast['now_hour']     = (int) $now->format('G');
-
-        // ---- Estimation du jour : MÊME fenêtre, même analyse ----
-        // L'estimation est la prévision pleine du jour issue de la fenêtre
-        // commune. Fiable dès min(7, fw-1) jours écoulés : fenêtre complète
-        // pour 7 j, une semaine pleine au-delà.
-        $dayEstimate = $forecast['today']['forecast_full'];
-
-        $dayTrack = [
-            'window'    => $fw,
-            'estimate'  => $dayEstimate,
-            'reliable'  => $forecast['elapsed_days'] >= min(7, $fw - 1),
-            'track'     => SalesForecast::dayTrack(
-                $todayHourlyCa,
-                (float) ($dayEstimate ?? 0.0),
-                $trackShares,
-                $now
-            ),
-            'now_hour'  => (int) $now->format('G'),
-        ];
-
-        // CA par heure sur la période AFFICHÉE (carte « Par heure ») —
-        // distinct de la fenêtre des prévisions.
-        $hourly = Analytics::revenueByHour($from, $to, $category, $payment);
-
-        $weekday = Analytics::revenueByWeekday($from, $to, $category, $payment);
-
-        // Jours écoulés par jour de semaine dans la fenêtre (pour les
-        // moyennes « Par jour de semaine ») : aujourd'hui exclu, comme
-        // pour les prévisions. Itère la carte quotidienne zéro-remplie.
-        $weekdayCounts = array_fill(0, 7, 0);
-        foreach ($dailyCa as $day => $ca) {
-            if ($day >= $todayKey) {
-                continue;
-            }
-            try {
-                $weekdayCounts[(int) (new \DateTimeImmutable($day))->format('N') - 1]++;
-            } catch (\Throwable) {
-                continue;
-            }
-        }
-
-        // Moyennes horaires (CA / jours écoulés de la période AFFICHÉE) et
-        // séries du jour pour la carte « Par heure » : profil attendu
-        // (parts de la fenêtre commune, cohérent avec day_track) et CA
-        // réel du jour heure par heure. La ligne « moyenne / jour » de la
-        // carte « Par jour de semaine » reste elle aussi liée à la
-        // période affichée.
-        $periodElapsed     = 0;
-        $periodElapsedSum  = 0.0;
-        foreach ($dailyCa as $day => $ca) {
-            if ((string) $day < $todayKey) {
-                $periodElapsed++;
-                $periodElapsedSum += (float) $ca;
-            }
-        }
-        $periodAvgPerDay = $periodElapsed > 0 ? round($periodElapsedSum / $periodElapsed, 4) : null;
-
-        $elapsedDays  = $periodElapsed;
-        $hourlyCaCols = array_column($hourly, 'ca');
-        $hourlyCaAvg  = array_map(
-            static fn (float $ca): float => $elapsedDays > 0 ? $ca / $elapsedDays : 0.0,
-            $hourlyCaCols
-        );
-        $todayCaSeries = array_map(
-            static fn (int $h): float => (float) ($todayHourlyCa[$h] ?? 0.0),
-            range(0, 23)
-        );
+        $historique = ['labels' => $histLabels, 'values' => $histValues, 'today_index' => $todayIndex];
 
         // Produit suivi (sélecteur GET, défaut = produit star de la période).
         $products = Sale::distinctProducts();
@@ -282,9 +255,22 @@ final class AdminAnalyticsController extends AdminBaseController
             ? Analytics::productWeeklyTrend($productSelected, $from, $to, $category, $payment)
             : [];
 
+        // ---- Méta du modèle (badges, notes, fiabilité) ----
+        $meta = [
+            'modele'            => $forecast['modele'],
+            'confiance'         => $forecast['confiance'],
+            'n_jours'           => $forecast['n_jours'],
+            'wape_backtest'     => $forecast['wape_backtest'],
+            'coverage_backtest' => $forecast['coverage_backtest'],
+            'facteur_conforme'  => $forecast['facteur_conforme'],
+            'dispersion_r'      => $forecast['dispersion_r'],
+            'notes'             => $forecast['notes'],
+            'croissance_note'   => $croissanceNote,
+        ];
+
         // ---- Payload JSON pour Chart.js ----
         $payload = [
-            'kpis'      => $this->kpisWithDelta($kpis, $kpisPrev),
+            'kpis'      => $kpisDisplay,
             'trend'     => [
                 'labels'  => array_column($trend, 'label'),
                 'ca'      => array_column($trend, 'ca'),
@@ -307,26 +293,16 @@ final class AdminAnalyticsController extends AdminBaseController
             'insights'   => $insights,
             'forecast'   => $forecast,
             'day_track'  => $dayTrack,
-            'weekday'    => [
-                'labels'      => ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'],
-                'ca'          => array_column($weekday, 'ca'),
-                'qty'         => array_column($weekday, 'qty'),
-                'tx'          => array_column($weekday, 'tx'),
-                'ca_avg'      => SalesForecast::weekdayAverages(array_column($weekday, 'ca'), $weekdayCounts),
-                'days_count'  => $weekdayCounts,
-                'today_index' => (int) $now->format('N') - 1,
-                'avg_per_day' => $periodAvgPerDay,
-            ],
-            'hourly'     => [
-                'labels'         => array_map(static fn (int $h): string => $h . 'h', range(0, 23)),
-                'ca'             => $hourlyCaCols,
-                'qty'            => array_column($hourly, 'qty'),
-                'tx'             => array_column($hourly, 'tx'),
-                'ca_avg'         => $hourlyCaAvg,
-                'today_ca'       => $todayCaSeries,
-                'today_expected' => SalesForecast::hourlyProfileToday($dayEstimate, $trackShares),
-                'now_hour'       => (int) $now->format('G'),
-            ],
+            'weekday'    => $weekday,
+            'hourly'     => $hourly,
+            'semaine'    => $forecast['semaine'],
+            'mois30'     => $forecast['mois30'],
+            'benefice'   => $forecast['benefice'],
+            'produits_reappro' => $forecast['produits'],
+            'anomalies'  => $forecast['anomalies'],
+            'goal'       => $goal,
+            'meta'       => $meta,
+            'historique' => $historique,
             'product_weekly' => [
                 'labels' => array_map(
                     static fn (string $week): string => 'S ' . (new \DateTimeImmutable($week))->format('d/m'),
@@ -351,12 +327,20 @@ final class AdminAnalyticsController extends AdminBaseController
             'periods'        => self::PERIODS,
             'categories'     => Sale::distinctCategories(),
             'hasSales'       => Sale::count() > 0,
-            'kpis'           => $this->kpisWithDelta($kpis, $kpisPrev),
+            'kpis'           => $kpisDisplay,
             'insights'       => $insights,
             'forecast'       => $forecast,
             'day_track'      => $dayTrack,
             'weekday'        => $weekday,
             'hourly'         => $hourly,
+            'semaine'        => $forecast['semaine'],
+            'mois30'         => $forecast['mois30'],
+            'benefice'       => $forecast['benefice'],
+            'produits_reappro' => $forecast['produits'],
+            'anomalies'      => $forecast['anomalies'],
+            'goal'           => $goal,
+            'meta'           => $meta,
+            'historique'     => $historique,
             'products'       => $products,
             'productSelected' => $productSelected,
             'productWeekly'  => $productWeekly,
@@ -401,6 +385,231 @@ final class AdminAnalyticsController extends AdminBaseController
     }
 
     /**
+     * Objectif hebdomadaire à afficher : GET « goal » (float > 0, borné
+     * [10 ; 100 000]) sinon le paramétrage enregistré, sinon 500 €.
+     */
+    private function weeklyGoal(): float
+    {
+        $asked = $this->parseGoal($this->filter('goal', ''));
+        if ($asked !== null) {
+            return $asked;
+        }
+
+        return $this->parseGoal(Setting::get('analytics_weekly_goal', '500')) ?? self::GOAL_DEFAULT;
+    }
+
+    /**
+     * Analyse un objectif saisi/demandé : nombre > 0 borné à
+     * [GOAL_MIN ; GOAL_MAX] (virgule décimale et espace de milliers
+     * acceptés), null si invalide ou non positif.
+     */
+    private function parseGoal(string $raw): ?float
+    {
+        $norm = str_replace([' ', ','], ['', '.'], trim($raw));
+        if ($norm === '' || !is_numeric($norm)) {
+            return null;
+        }
+
+        $goal = (float) $norm;
+        if ($goal <= 0.0) {
+            return null;
+        }
+
+        return min(self::GOAL_MAX, max(self::GOAL_MIN, $goal));
+    }
+
+    /**
+     * Estimation du jour : mappage DIRECT des sorties du moteur, sans
+     * aucun recalcul métier (une seule source de vérité : ForecastEngine).
+     * Les % et intervalles horaires sont masqués (null) trop tôt dans la
+     * journée, sans modèle fiable (confiance « insuffisant ») ou sans
+     * attendu exploitable.
+     *
+     * @param array<string,mixed> $forecast
+     * @return array<string,mixed>
+     */
+    private function dayTrackFromForecast(array $forecast, int $fw): array
+    {
+        $horaire = is_array($forecast['horaire'] ?? null) ? $forecast['horaire'] : [];
+        $reelCa  = array_values(is_array($horaire['reel_ca'] ?? null) ? $horaire['reel_ca'] : []);
+        $sParts  = array_values(is_array($horaire['s'] ?? null) ? $horaire['s'] : []);
+
+        $prevision = is_numeric($forecast['prevision_jour'] ?? null) ? (float) $forecast['prevision_jour'] : null;
+
+        // Cumul observé heure par heure (24 entrées).
+        $cumActual = [];
+        $run = 0.0;
+        foreach ($reelCa as $v) {
+            $run += (float) $v;
+            $cumActual[] = $run;
+        }
+
+        // Attendu cumulé : prévision pleine jour × part horaire cumulée S(h) ;
+        // sans prévision (jour fermé…) → 24 zéros.
+        $cumExpected = [];
+        if ($prevision !== null) {
+            foreach ($sParts as $sh) {
+                $cumExpected[] = $prevision * (float) $sh;
+            }
+        } else {
+            $cumExpected = array_fill(0, 24, 0.0);
+        }
+
+        $confiance = (string) ($forecast['confiance'] ?? 'insuffisant');
+        $tropTot   = (bool) ($forecast['trop_tot'] ?? true);
+        $attenduAH = is_numeric($forecast['attendu_a_h'] ?? null) ? (float) $forecast['attendu_a_h'] : null;
+
+        // AUCUN % affiché trop tôt, sans modèle fiable, ni attendu nul.
+        $deltaPct = null;
+        if (!$tropTot && $confiance !== 'insuffisant' && $attenduAH !== null && $attenduAH > 0.0) {
+            $deltaPct = round(((float) ($horaire['reel_a_h'] ?? 0.0) - $attenduAH) / $attenduAH * 100.0, 1);
+        }
+
+        // Intervalle 80 % pro-rata du jour (× s_h), masqué trop tôt.
+        $intervalle = is_array($forecast['intervalle_80'] ?? null) ? $forecast['intervalle_80'] : null;
+        $sH = is_numeric($horaire['s_h'] ?? null) ? (float) $horaire['s_h'] : 0.0;
+        $intervalleH = null;
+        if (!$tropTot && $intervalle !== null && $sH > 0.0) {
+            $intervalleH = [
+                'lo' => (float) ($intervalle['lo'] ?? 0.0) * $sH,
+                'hi' => (float) ($intervalle['hi'] ?? 0.0) * $sH,
+            ];
+        }
+
+        $dansIntervalle = ($forecast['dans_intervalle'] ?? null) === null
+            ? null
+            : (bool) $forecast['dans_intervalle'];
+
+        return [
+            'window'          => $fw,
+            'hour'            => (int) ($horaire['now_hour'] ?? 0),
+            'trop_tot'        => $tropTot,
+            'estimate'        => $prevision,
+            'cum_actual'      => $cumActual,
+            'cum_expected'    => $cumExpected,
+            'actual_so_far'   => (float) ($horaire['reel_a_h'] ?? 0.0),
+            'expected_so_far' => $attenduAH,
+            'delta_pct'       => $deltaPct,
+            'projection_eod'  => is_numeric($forecast['projection_fin_journee'] ?? null)
+                ? (float) $forecast['projection_fin_journee'] : null,
+            'ecart_eur'       => is_numeric($forecast['ecart_vs_attendu'] ?? null)
+                ? (float) $forecast['ecart_vs_attendu'] : null,
+            'intervalle_h'    => $intervalleH,
+            'dans_intervalle' => $dansIntervalle,
+            'confiance'       => $confiance,
+            'notes'           => array_values(is_array($forecast['notes'] ?? null) ? $forecast['notes'] : []),
+        ];
+    }
+
+    /**
+     * Carte « Par jour de semaine » : moyennes et occurrences issues du
+     * moteur (jours_semaine — le CA vaut null sur un jour fermé),
+     * quantités et transactions OBSERVÉES sur la fenêtre d'apprentissage
+     * (Analytics), meilleur jour depuis meilleur_jour.
+     *
+     * @param array<string,mixed>                       $forecast
+     * @param array<int,array{ca:float,qty:int,tx:int}> $observed
+     * @return array<string,mixed>
+     */
+    private function weekdayFromForecast(array $forecast, array $observed, int $todayIndex): array
+    {
+        $ca = [];
+        $qty = [];
+        $tx = [];
+        $daysCount = [];
+        $openSum = 0.0;
+        $openCount = 0;
+        $js = is_array($forecast['jours_semaine'] ?? null) ? $forecast['jours_semaine'] : [];
+
+        for ($dow = 0; $dow < 7; $dow++) {
+            $entry  = is_array($js[$dow] ?? null) ? $js[$dow] : [];
+            $isOpen = (bool) ($entry['is_open'] ?? false);
+            $ca[$dow] = $isOpen ? (float) ($entry['ca'] ?? 0.0) : null;
+            $daysCount[$dow] = (int) ($entry['occ'] ?? 0);
+            $qty[$dow] = (int) ($observed[$dow]['qty'] ?? 0);
+            $tx[$dow]  = (int) ($observed[$dow]['tx'] ?? 0);
+            if ($isOpen) {
+                $openSum += (float) ($entry['ca'] ?? 0.0);
+                $openCount++;
+            }
+        }
+
+        $best = null;
+        $meilleur = is_array($forecast['meilleur_jour'] ?? null) ? $forecast['meilleur_jour'] : null;
+        if ($meilleur !== null) {
+            $best = [
+                'index' => (int) ($meilleur['dow'] ?? 0),
+                'label' => (string) ($meilleur['label'] ?? ''),
+                'ca'    => (float) ($meilleur['ca'] ?? 0.0),
+            ];
+        }
+
+        return [
+            'labels'      => self::DAY_ABBR,
+            'ca'          => $ca,
+            'ca_avg'      => $ca, // compat JS : même série que « ca »
+            'qty'         => $qty,
+            'tx'          => $tx,
+            'days_count'  => $daysCount,
+            'today_index' => $todayIndex,
+            'avg_per_day' => $openCount > 0 ? round($openSum / $openCount, 4) : null,
+            'best'        => $best,
+        ];
+    }
+
+    /**
+     * Carte « Par heure » : CA/hour OBSERVÉ moyen sur les jours ouverts
+     * de la fenêtre d'apprentissage (Analytics ÷ jours ouverts) et séries
+     * du jour issues du moteur (réel, attendu, projeté, profil S).
+     *
+     * @param array<string,mixed>                       $forecast
+     * @param array<int,array{ca:float,qty:int,tx:int}> $trackHourly
+     * @return array<string,mixed>
+     */
+    private function hourlyFromForecast(array $forecast, array $trackHourly, int $openDays): array
+    {
+        $horaire   = is_array($forecast['horaire'] ?? null) ? $forecast['horaire'] : [];
+        $reelCa    = array_values(is_array($horaire['reel_ca'] ?? null) ? $horaire['reel_ca'] : []);
+        $attenduCa = array_values(is_array($horaire['attendu_ca'] ?? null) ? $horaire['attendu_ca'] : []);
+        $projeteCa = array_values(is_array($horaire['projete_ca'] ?? null) ? $horaire['projete_ca'] : []);
+        $s         = array_values(is_array($horaire['s'] ?? null) ? $horaire['s'] : []);
+
+        $caAvg = [];
+        for ($h = 0; $h < 24; $h++) {
+            $caAvg[] = $openDays > 0 ? (float) ($trackHourly[$h]['ca'] ?? 0.0) / $openDays : 0.0;
+        }
+
+        // Complète à 24 entrées par robustesse (le moteur en fournit 24).
+        $pad = static function (array $series): array {
+            while (count($series) < 24) {
+                $series[] = 0.0;
+            }
+
+            return array_slice($series, 0, 24);
+        };
+
+        return [
+            'labels'         => array_map(static fn (int $h): string => $h . 'h', range(0, 23)),
+            'ca_avg'         => $caAvg,
+            'today_ca'       => $pad($reelCa),
+            'today_expected' => $pad($attenduCa),
+            'today_projete'  => $pad($projeteCa),
+            'now_hour'       => (int) ($horaire['now_hour'] ?? 0),
+            'trop_tot'       => (bool) ($horaire['trop_tot'] ?? false),
+            's'              => $pad($s),
+        ];
+    }
+
+    /**
+     * Libellé court français d'un jour : « Lun 16/10 » (remplace
+     * SalesForecast::dayLabel, classe supprimée).
+     */
+    private static function dayLabelFr(\DateTimeImmutable $date): string
+    {
+        return self::DAY_ABBR[(int) $date->format('N') - 1] . ' ' . $date->format('j/n');
+    }
+
+    /**
      * Calcule l'intervalle [from, to] selon la période sélectionnée.
      *
      * @return array{0:string,1:string}
@@ -425,6 +634,28 @@ final class AdminAnalyticsController extends AdminBaseController
             'all'  => [$this->firstSaleDate(), $today],
             default => [date('Y-m-d', strtotime('-29 days')), $today],
         };
+    }
+
+    /**
+     * Fenêtre précédente équivalente (même longueur, collée juste avant
+     * $from) — mêmes conventions que Analytics::kpisPrevious().
+     *
+     * @return array{0:string,1:string} [prevFrom, prevTo]
+     */
+    private function previousWindow(string $from, string $to): array
+    {
+        try {
+            $start = new \DateTimeImmutable($from);
+            $end   = new \DateTimeImmutable($to);
+        } catch (\Throwable) {
+            return [$from, $from];
+        }
+
+        $days     = (int) $start->diff($end)->days + 1;
+        $prevTo   = $start->modify('-1 day')->format('Y-m-d');
+        $prevFrom = $start->modify('-' . $days . ' days')->format('Y-m-d');
+
+        return [$prevFrom, $prevTo];
     }
 
     private function validDate(string $d): bool
@@ -458,18 +689,19 @@ final class AdminAnalyticsController extends AdminBaseController
     }
 
     /**
-     * Ajoute à chaque KPI son delta vs période précédente.
+     * Ajoute à chaque KPI son delta vs période précédente ; deltas tous
+     * null si la période précédente est incomplète ($deltasAllowed = false,
+     * cf. meta.croissance_note) ou à base nulle.
      *
      * @return array<string,mixed>
      */
-    private function kpisWithDelta(array $current, array $previous): array
+    private function kpisWithDelta(array $current, array $previous, bool $deltasAllowed = true): array
     {
         $deltas = [];
         foreach (['ca', 'profit', 'qty', 'transactions', 'members', 'avg_basket', 'margin'] as $key) {
-            $deltas[$key . '_delta'] = $this->pctDelta(
-                (float) ($current[$key] ?? 0),
-                (float) ($previous[$key] ?? 0)
-            );
+            $deltas[$key . '_delta'] = $deltasAllowed
+                ? $this->pctDelta((float) ($current[$key] ?? 0), (float) ($previous[$key] ?? 0))
+                : null;
         }
 
         return array_merge($current, $deltas);

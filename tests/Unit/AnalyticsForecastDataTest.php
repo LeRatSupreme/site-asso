@@ -1,0 +1,351 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Tests\Unit;
+
+use App\Models\AnalyticsForecastData;
+use App\Models\ImportBatch;
+use App\Models\Model;
+use App\Models\Sale;
+use PDO;
+use PDOException;
+use PHPUnit\Framework\TestCase;
+
+/**
+ * Couche d'extraction du moteur de prévision (AnalyticsForecastData) :
+ * flux courant par jour (refs distincts, horaires, paniers), stats produits
+ * (médiane, mode, coût as-of aujourd'hui, stock/infini) et audit
+ * (ventes à 0 €, doublons d'import ignorés, coûts suspects).
+ *
+ * Grille de référence : 2026-10-12 (lundi) → 2026-10-15 (jeudi).
+ * Le 14 n'a QUE des lignes exclues (Événement, montant libre, 0 €) ;
+ * le 15 n'a aucune vente : aucun des deux ne doit sortir du flux.
+ *
+ * Saute automatiquement si la base aeic_test est indisponible.
+ */
+final class AnalyticsForecastDataTest extends TestCase
+{
+    use TestDatabaseTrait;
+
+    private const FROM = '2026-10-12';
+    private const TO = '2026-10-15';
+
+    private ?PDO $pdo = null;
+
+    private function requireDatabase(): bool
+    {
+        $pdo = $this->connect();
+        if ($pdo === null) {
+            self::markTestSkipped('Base aeic_test indisponible : test du moteur de prévision ignoré.');
+
+            return false;
+        }
+
+        try {
+            $pdo->query('SELECT 1 FROM `sales` LIMIT 1');
+        } catch (\Throwable) {
+            self::markTestSkipped('Table `sales` absente de aeic_test : importez database/schema.sql.');
+
+            return false;
+        }
+
+        $this->reset($pdo, ['sales', 'import_batches']);
+        $this->applyImportDedupMigration($pdo);
+        $this->ensureAuxTables($pdo);
+        Model::setTestPdo($pdo);
+        $this->pdo = $pdo;
+
+        return true;
+    }
+
+    protected function tearDown(): void
+    {
+        Model::setTestPdo(null);
+        $this->pdo = null;
+    }
+
+    /**
+     * Tables annexes (coûts, stocks, produits infinis) : création best effort
+     * si absentes de la base de test, puis purge pour un état propre.
+     */
+    private function ensureAuxTables(PDO $pdo): void
+    {
+        $ddl = [
+            "CREATE TABLE IF NOT EXISTS product_costs (
+                id VARCHAR(255) NOT NULL PRIMARY KEY,
+                product_key VARCHAR(255) NOT NULL,
+                cost_price DECIMAL(10,3) NOT NULL,
+                valid_from DATE NOT NULL,
+                valid_to DATE NULL,
+                supplier VARCHAR(255) NULL,
+                notes TEXT NULL,
+                purchase_id VARCHAR(255) NULL,
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                KEY idx_costs_product (product_key),
+                KEY idx_costs_period (valid_from, valid_to)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+            "CREATE TABLE IF NOT EXISTS product_stocks (
+                product_key VARCHAR(255) NOT NULL PRIMARY KEY,
+                stock INT NOT NULL DEFAULT 0,
+                updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+            "CREATE TABLE IF NOT EXISTS product_infinite (
+                product_key VARCHAR(255) NOT NULL PRIMARY KEY,
+                updated_by VARCHAR(255) NULL,
+                updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+        ];
+        foreach ($ddl as $sql) {
+            try {
+                $pdo->exec($sql);
+            } catch (PDOException) {
+                // Déjà présente : non bloquant.
+            }
+        }
+        $this->reset($pdo, ['product_costs', 'product_stocks', 'product_infinite']);
+    }
+
+    /** Ligne de vente au format importBatch (cf. AnalyticsTrendTest). */
+    private function saleRow(string $ref, string $soldAt, string $description, int $qty, ?string $productKey = null, array $override = []): array
+    {
+        return array_merge([
+            'transaction_ref'  => $ref,
+            'sold_at'          => $soldAt,
+            'payment_method'   => 'CARTE',
+            'payment_raw'      => 'Visa - Débit',
+            'quantity'         => $qty,
+            'description'      => $description,
+            'product_key'      => $productKey,
+            'category'         => null,
+            'sku'              => null,
+            'currency'         => 'EUR',
+            'price_ttc'        => 2.5 * $qty,
+            'price_ht'         => null,
+            'vat'              => null,
+            'vat_rate'         => null,
+            'seller_account'   => null,
+            'is_custom_amount' => 0,
+        ], $override);
+    }
+
+    private function importSales(array $rows): string
+    {
+        $batchId = ImportBatch::create([
+            'filename'     => 'analytics-forecast-test.csv',
+            'period_start' => self::FROM,
+            'period_end'   => self::TO,
+        ]);
+        Sale::importBatch($batchId, $rows);
+
+        return $batchId;
+    }
+
+    /** Coûts : couvrant (Coca 0,60), coût nul (Café 0), prix<coût (Bières 12), futur seul (Snacks 3 en 2027). */
+    private function seedCoutsEtStocks(): void
+    {
+        $insert = $this->pdo->prepare(
+            'INSERT INTO product_costs (id, product_key, cost_price, valid_from, valid_to) VALUES (?,?,?,?,?)'
+        );
+        $insert->execute(['pc1', 'coca', 0.6, '2026-01-01', null]);
+        $insert->execute(['pc2', 'Café', 0.0, '2026-01-01', null]);
+        $insert->execute(['pc3', 'Bières', 12.0, '2026-01-01', '2026-06-30']);
+        $insert->execute(['pc4', 'Bières', 12.0, '2027-01-01', null]);
+        $insert->execute(['pc5', 'Snacks', 3.0, '2027-01-01', null]);
+
+        $this->pdo->exec("INSERT INTO product_stocks (product_key, stock) VALUES ('coca', 10), ('Snacks', 3)");
+        $this->pdo->exec("INSERT INTO product_infinite (product_key) VALUES ('Bières')");
+    }
+
+    /**
+     * Jeu de ventes :
+     * - lun. 12/10 : fd1 = 2 lignes (Café ×2, Bières ×4), fd2 = Coca-cola ×2
+     *   (clé « coca »), fd4 = Snacks ×1 (coût uniquement futur) → 3 refs, 22,50 €.
+     * - mar. 13/10 : fd3 = Café ×2 à 18h30 → 1 ref, 5 €.
+     * - mer. 14/10 : UNIQUEMENT des lignes exclues : Événement, montant libre,
+     *   prix 0 € → jour fermé pour le flux courant.
+     * - jeu. 15/10 : aucune vente → absent.
+     */
+    private function seedDonnees(): void
+    {
+        $this->importSales([
+            // Jour 1 : une transaction à 2 lignes + 2 transactions simples.
+            $this->saleRow('fd1', '2026-10-12 10:15:00', 'Café', 2),
+            $this->saleRow('fd1', '2026-10-12 10:16:00', 'Bières', 4),
+            $this->saleRow('fd2', '2026-10-12 11:00:00', 'Coca-cola', 2, 'coca'),
+            $this->saleRow('fd4', '2026-10-12 12:00:00', 'Snacks', 1),
+            // Jour 2 : une transaction d'une ligne, le soir.
+            $this->saleRow('fd3', '2026-10-13 18:30:00', 'Café', 2),
+            // Jour 3 : exclus du flux courant.
+            $this->saleRow('fde1', '2026-10-14 20:00:00', 'Entrée soirée', 1, null, ['category' => 'Événement', 'price_ttc' => 10.0]),
+            $this->saleRow('fdc1', '2026-10-14 20:05:00', 'Don libre', 1, null, ['is_custom_amount' => 1, 'price_ttc' => 7.0]),
+            $this->saleRow('fdz1', '2026-10-14 20:10:00', 'Test gratuit', 1, null, ['price_ttc' => 0.0]),
+        ]);
+    }
+
+    public function test_current_flow_days_jours_ouverts_refs_distincts_et_paniers(): void
+    {
+        if (!$this->requireDatabase()) {
+            return;
+        }
+        $this->seedDonnees();
+
+        $days = AnalyticsForecastData::currentFlowDays(self::FROM, self::TO);
+
+        // Les jours 14 (uniquement exclus) et 15 (sans vente) n'existent pas.
+        self::assertSame(['2026-10-12', '2026-10-13'], array_keys($days));
+        self::assertArrayNotHasKey('2026-10-14', $days);
+        self::assertArrayNotHasKey('2026-10-15', $days);
+
+        // Jour 1 : 3 refs distincts (pas 4 lignes), CA 22,50 €.
+        $d1 = $days['2026-10-12'];
+        self::assertSame(3, $d1->n, 'n = refs distincts, pas de lignes.');
+        self::assertSame(22.5, $d1->ca);
+        self::assertCount(3, $d1->baskets, 'Un montant par transaction.');
+        self::assertSame(15.0, array_sum($d1->baskets) - 5.0 - 2.5, 'fd1 = 5 + 10 = 15 €.');
+        self::assertSame([10 => 1, 11 => 1, 12 => 1], $d1->hourlyN);
+
+        // Jour 2 : 1 ref, panier unique de 5 €, tranche 18h.
+        $d2 = $days['2026-10-13'];
+        self::assertSame(1, $d2->n);
+        self::assertSame(5.0, $d2->ca);
+        self::assertSame([5.0], $d2->baskets);
+        self::assertSame([18 => 1], $d2->hourlyN);
+    }
+
+    public function test_product_stats_exclusions_mediane_couts_et_stocks(): void
+    {
+        if (!$this->requireDatabase()) {
+            return;
+        }
+        $this->seedDonnees();
+        $this->seedCoutsEtStocks();
+
+        $stats = AnalyticsForecastData::productStats(self::FROM, self::TO);
+
+        $byKey = [];
+        foreach ($stats as $p) {
+            $byKey[$p->key] = $p;
+        }
+
+        // Seulement les 4 produits du flux courant (exclus : Événement,
+        // montant libre, ligne à 0 €).
+        $keys = array_keys($byKey);
+        sort($keys);
+        self::assertSame(['Bières', 'Café', 'Snacks', 'coca'], $keys);
+
+        // Café : 4 unités, 10 €, médiane 2,5 €, coût 0 → suspect, stock inconnu.
+        $cafe = $byKey['Café'];
+        self::assertSame('Café', $cafe->label);
+        self::assertSame('Non classé', $cafe->category);
+        self::assertSame(4, $cafe->qty);
+        self::assertSame(10.0, $cafe->ca);
+        self::assertSame(2.5, $cafe->unitPrice);
+        self::assertSame(0.0, $cafe->unitCost);
+        self::assertTrue($cafe->costSuspect, 'Coût nul = suspect.');
+        self::assertNull($cafe->stock, 'Stock non saisi = inconnu.');
+
+        // Coca-cola : clé canonique, coût 0,60 < prix 2,50 → non suspect,
+        // stock référencé = 10.
+        $coca = $byKey['coca'];
+        self::assertSame(2, $coca->qty);
+        self::assertSame(5.0, $coca->ca);
+        self::assertSame(0.6, $coca->unitCost);
+        self::assertFalse($coca->costSuspect);
+        self::assertSame(10, $coca->stock);
+
+        // Bières : lot couvrant terminé en 2026-06, retour au lot 12 € du
+        // 2026-01 (dernier antérieur) ; prix 2,50 < 12 → suspect ;
+        // stock infini → null.
+        $bieres = $byKey['Bières'];
+        self::assertSame(12.0, $bieres->unitCost);
+        self::assertTrue($bieres->costSuspect, 'Prix unitaire < coût = suspect.');
+        self::assertNull($bieres->stock, 'Produit « stock infini » = null.');
+
+        // Snacks : uniquement un lot FUTUR → coût inconnu (null) mais PAS
+        // suspect (prix connu et > 0).
+        $snacks = $byKey['Snacks'];
+        self::assertNull($snacks->unitCost);
+        self::assertFalse($snacks->costSuspect, 'Coût inconnu + prix connu ≠ incohérent.');
+        self::assertSame(3, $snacks->stock);
+    }
+
+    public function test_audit_ventes_zero_doublons_et_suspects(): void
+    {
+        if (!$this->requireDatabase()) {
+            return;
+        }
+        $this->seedDonnees();
+        $this->seedCoutsEtStocks();
+
+        // Ré-import identique : toutes les lignes sont écartées par l'anti-
+        // doublon (INSERT IGNORE) puis comptées via ImportBatch::finalize,
+        // comme le fait le contrôleur d'import.
+        $batchId = ImportBatch::create([
+            'filename'     => 'analytics-forecast-test-replay.csv',
+            'period_start' => self::FROM,
+            'period_end'   => self::TO,
+        ]);
+        $result = Sale::importBatch($batchId, [
+            $this->saleRow('fd1', '2026-10-12 10:15:00', 'Café', 2),
+            $this->saleRow('fd1', '2026-10-12 10:16:00', 'Bières', 4),
+            $this->saleRow('fd2', '2026-10-12 11:00:00', 'Coca-cola', 2, 'coca'),
+            $this->saleRow('fd4', '2026-10-12 12:00:00', 'Snacks', 1),
+            $this->saleRow('fd3', '2026-10-13 18:30:00', 'Café', 2),
+            $this->saleRow('fde1', '2026-10-14 20:00:00', 'Entrée soirée', 1, null, ['category' => 'Événement', 'price_ttc' => 10.0]),
+            $this->saleRow('fdc1', '2026-10-14 20:05:00', 'Don libre', 1, null, ['is_custom_amount' => 1, 'price_ttc' => 7.0]),
+            $this->saleRow('fdz1', '2026-10-14 20:10:00', 'Test gratuit', 1, null, ['price_ttc' => 0.0]),
+        ]);
+        self::assertSame(0, $result['inserted'], 'Ré-import : aucune nouvelle ligne.');
+        self::assertSame(8, $result['skipped']);
+        ImportBatch::finalize($batchId, $result['inserted'], $result['skipped']);
+
+        $audit = AnalyticsForecastData::audit(self::FROM, self::TO);
+
+        self::assertSame(1, $audit['ventes_zero'], 'La ligne de test à 0 €.');
+        self::assertSame(8, $audit['doublons_ignores'], 'Somme rows_skipped des lots de la fenêtre.');
+
+        // Cohérence avec productStats : exactement les suspects attendus.
+        $stats = AnalyticsForecastData::productStats(self::FROM, self::TO);
+        $expected = [];
+        foreach ($stats as $p) {
+            if ($p->costSuspect) {
+                $expected[] = $p->label;
+            }
+        }
+        sort($expected);
+        $actual = $audit['produits_cout_suspect'];
+        sort($actual);
+        self::assertSame($expected, $actual, 'audit et productStats cohérents.');
+        self::assertContains('Café', $actual);
+        self::assertContains('Bières', $actual);
+        self::assertNotContains('Coca-cola', $actual);
+    }
+
+    public function test_dataset_assemble_jours_produits_et_audit(): void
+    {
+        if (!$this->requireDatabase()) {
+            return;
+        }
+        $this->seedDonnees();
+
+        $dataset = AnalyticsForecastData::dataset(self::FROM, self::TO);
+
+        self::assertSame(['2026-10-12', '2026-10-13'], array_keys($dataset->days));
+        self::assertNotEmpty($dataset->products);
+        self::assertSame(1, $dataset->audit['ventes_zero']);
+        self::assertSame(0, $dataset->audit['doublons_ignores'], 'Aucun compteur finalisé → 0.');
+        // Sans lots de coûts : coût inconnu (null) → TOUS les produits suspects.
+        self::assertCount(4, $dataset->audit['produits_cout_suspect']);
+    }
+
+    public function test_first_sale_date_delegue_a_analytics(): void
+    {
+        if (!$this->requireDatabase()) {
+            return;
+        }
+        $this->seedDonnees();
+
+        self::assertSame('2026-10-12', AnalyticsForecastData::firstSaleDate());
+    }
+}

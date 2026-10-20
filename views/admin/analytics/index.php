@@ -15,10 +15,11 @@ declare(strict_types=1);
  * @var bool $hasSales
  * @var array<string,mixed> $kpis
  * @var list<array<string,mixed>> $insights
- * @var array<string,mixed> $forecast      Prévisions (days, today, yesterday, history, reliable…)
- * @var array<string,mixed> $day_track     Estimation du jour (window, estimate, reliable, track, now_hour)
- * @var array<int,array{ca:float,qty:int,tx:int}> $weekday   CA par jour de semaine (0 = lundi)
- * @var array<int,array{ca:float,qty:int,tx:int}> $hourly    CA par heure (0..23)
+ * @var array<string,mixed> $forecast      Moteur ForecastEngine::forecast() TEL QUEL (prevision_jour, intervalle_80, attendu_a_h, trop_tot, projection_fin_journee, ecart_vs_attendu, dans_intervalle, confiance, modele, n_jours, wape_backtest, hier, jours, horaire, jours_semaine, semaine, mois30, benefice, produits, anomalies, notes…)
+ * @var array<string,mixed> $day_track     Estimation du jour (window, hour, trop_tot, estimate, cum_actual, cum_expected, actual_so_far, expected_so_far, delta_pct|null, projection_eod, ecart_eur, intervalle_h|null, dans_intervalle|null, confiance, notes)
+ * @var array<string,mixed> $weekday       Par jour de semaine {labels, ca, ca_avg, qty, tx, days_count, today_index, avg_per_day, best?{index,label,ca}}
+ * @var array<string,mixed> $hourly        Par heure {labels, ca_avg, today_ca, today_expected, today_projete, now_hour, trop_tot, s}
+ * @var float $goal                        Objectif hebdomadaire affiché (GET ?goal= ou sauvegarde POST /admin/analytics/objectif)
  * @var list<string> $products             Produits distincts (sélecteur tendance)
  * @var string $productSelected            Produit suivi par la tendance hebdo
  * @var list<array{week:string,ca:float,qty:int}> $productWeekly Tendance hebdo du produit
@@ -141,6 +142,13 @@ $iconSvg = static function (string $name): string {
     <!-- ============================================================ -->
     <div class="grid grid-6 kpi-grid">
         <?php
+        // Note de croissance du moteur (payload $json > meta) : si la
+        // période précédente est incomplète, les deltas sont null côté
+        // payload — on affiche la note, SANS recomposer de delta.
+        $payloadDecoded = is_string($json ?? null) ? json_decode($json, true) : null;
+        $payloadMeta    = is_array($payloadDecoded) ? (array) ($payloadDecoded['meta'] ?? []) : [];
+        $croissanceNote = trim((string) ($payloadMeta['croissance_note'] ?? ''));
+
         $kpiCards = [
             ['label' => "Chiffre d'affaires", 'value' => formatPrice($kpis['ca']),          'delta' => $kpis['ca_delta'] ?? null],
             ['label' => 'Bénéfice net',       'value' => formatPrice($kpis['profit']),
@@ -168,7 +176,7 @@ $iconSvg = static function (string $name): string {
                         <?= $up ? '↑' : '↓' ?> <?= number_format(abs($delta), 1, ',', ' ') ?>%
                     </span>
                 <?php else: ?>
-                    <span class="kpi-delta is-muted">—</span>
+                    <span class="kpi-delta is-muted"><?= $croissanceNote !== '' ? e($croissanceNote) : '—' ?></span>
                 <?php endif; ?>
             </div>
         <?php endforeach; ?>
@@ -190,11 +198,11 @@ $iconSvg = static function (string $name): string {
         // Liens de fenêtre : GET courant (période, catégorie, paiement,
         // granularité, produit…) avec seul « fw » surchargé. Partagé par
         // les cartes « Prévisions » et « Estimation du jour » : une seule
-        // et même fenêtre d'analyse pour toutes les prévisions.
+        // et même fenêtre d'apprentissage pour toutes les prévisions.
         $token = $token ?? '';
         $dtUrl = static function (int $w) use ($kiosk, $token): string {
-            $params           = $_GET;
-            $params['fw']     = (string) $w;
+            $params       = $_GET;
+            $params['fw'] = (string) $w;
             $path = $kiosk
                 ? '/kiosque/admin/analytics/' . rawurlencode($token)
                 : '/admin/analytics';
@@ -202,38 +210,89 @@ $iconSvg = static function (string $name): string {
             return url($path) . '?' . http_build_query($params);
         };
 
-        // Chips du jour (pro-rata) et d'hier, même motif que les deltas KPI.
-        $fcToday  = $forecast['today'];
-        $fcYday   = $forecast['yesterday'];
-        $fcFw     = (int) ($forecast['window'] ?? 14);
-        $fcChips  = [];
-        if ($fcToday['forecast_so_far'] !== null) {
-            $fcChips[] = [
-                'delta' => $fcToday['delta_pct'],
-                'text'  => sprintf(
-                    "Aujourd'hui %dh : %s vs %s (pro-rata)",
-                    (int) ($forecast['now_hour'] ?? 0),
-                    formatPrice((float) $fcToday['actual']),
-                    formatPrice((float) $fcToday['forecast_so_far'])
-                ),
-            ];
+        // ---- Données du moteur (contrat ForecastEngine::forecast()) ----
+        // Source unique de vérité : AUCUN chiffre « attendu » recalculé
+        // ici ni en JS, tout vient du payload.
+        $fcFw       = (int) ($day_track['window'] ?? 14);
+        $fcPrev     = isset($forecast['prevision_jour']) ? $forecast['prevision_jour'] : null;
+        $fcIv       = isset($forecast['intervalle_80']) && is_array($forecast['intervalle_80']) ? $forecast['intervalle_80'] : null;
+        $fcHier     = isset($forecast['hier']) && is_array($forecast['hier']) ? $forecast['hier'] : null;
+        $fcConf     = (string) ($forecast['confiance'] ?? 'insuffisant');
+        $fcModele   = (string) ($forecast['modele'] ?? '');
+        $fcNJours   = (int) ($forecast['n_jours'] ?? 0);
+        $fcWape     = isset($forecast['wape_backtest']) ? $forecast['wape_backtest'] : null;
+        $fcCoverage = isset($forecast['coverage_backtest']) ? $forecast['coverage_backtest'] : null;
+        $fcHor      = isset($forecast['horaire']) && is_array($forecast['horaire']) ? $forecast['horaire'] : [];
+        $fcNowHour  = (int) ($fcHor['now_hour'] ?? 0);
+        $fcTropTot  = !empty($fcHor['trop_tot']) || !empty($forecast['trop_tot']);
+        $fcDans     = isset($forecast['dans_intervalle']) ? $forecast['dans_intervalle'] : null;
+        $fcEcart    = isset($forecast['ecart_vs_attendu']) ? $forecast['ecart_vs_attendu'] : null;
+        $fcNoteSel  = (string) ($forecast['anomalies']['note_selection'] ?? '');
+        $fcInsuf    = ($fcConf === 'insuffisant') || !empty($forecast['anomalies']['donnees_insuffisantes']);
+
+        // Helpers d'affichage partagés par les chips (prévisions/estimation).
+        $fcRange = static function (?array $iv): string {
+            if ($iv === null || !isset($iv['lo'], $iv['hi']) || $iv['lo'] === null || $iv['hi'] === null) { return ''; }
+            return ' (fourchette ' . formatPrice((float) $iv['lo']) . '–' . formatPrice((float) $iv['hi']) . ')';
+        };
+        $fcSigned = static function ($v): string {
+            return $v === null ? '' : (($v >= 0 ? '+' : '-') . formatPrice(abs((float) $v)));
+        };
+        // Neutralité : DANS la fourchette → statut neutre ; HORS fourchette
+        // → anomalie ambre ; null → pas de statut affiché.
+        $fcStatut = static function ($dans): array {
+            if ($dans === true)  { return ['Dans la fourchette ✓', 'is-muted']; }
+            if ($dans === false) { return ['Hors fourchette', 'is-off']; }
+            return ['', ''];
+        };
+        $fcConfLbl = ['elevee' => 'élevée', 'moyenne' => 'moyenne', 'faible' => 'faible'][$fcConf] ?? 'insuffisante';
+
+        // Info-bulle métriques du modèle (affichée sur les deux cartes).
+        $fcTooltip = 'Modèle actif : ' . ($fcModele !== '' ? $fcModele : '—')
+            . ' · WAPE backtest : ' . ($fcWape === null ? '—' : number_format((float) $fcWape, 1, ',', ' ')) . ' %'
+            . ' sur ' . $fcNJours . ' jours'
+            . ' · couverture intervalle : ' . ($fcCoverage === null ? '—' : number_format((float) $fcCoverage, 0, ',', ' ')) . ' %'
+            . ($fcNoteSel !== '' ? ' · ' . $fcNoteSel : '');
+
+        $fcHasChart = $fcPrev !== null || !empty($forecast['jours']);
+
+        // Chips « Aujourd'hui » / « Hier » : montants, fourchettes et
+        // statuts viennent du payload. Pas de delta recomposé ; écart en
+        // € masqué si trop tôt (règle 3) ou données insuffisantes (règle 4).
+        $fcChips = [];
+        if ($fcPrev !== null) {
+            $txt = "Aujourd'hui : attendu " . formatPrice((float) $fcPrev) . $fcRange($fcIv);
+            if (!$fcTropTot && !$fcInsuf && $fcEcart !== null) {
+                $txt .= ' · vs attendu à ' . $fcNowHour . 'h : ' . $fcSigned($fcEcart);
+            }
+            $fcChips[] = ['cls' => 'is-muted', 'text' => $txt];
         }
-        if ($fcYday['forecast_full'] !== null) {
-            $fcChips[] = [
-                'delta' => $fcYday['delta_pct'],
-                'text'  => sprintf(
-                    'Hier : %s vs %s',
-                    formatPrice((float) $fcYday['actual']),
-                    formatPrice((float) $fcYday['forecast_full'])
-                ),
-            ];
+        if ($fcTropTot) {
+            $fcChips[] = ['cls' => 'is-muted', 'text' => 'Trop tôt pour comparer (profil < 10 % de la journée)'];
+        } elseif ($fcDans !== null) {
+            [$stTxt, $stCls] = $fcStatut((bool) $fcDans);
+            $fcChips[] = ['cls' => $stCls, 'text' => $stTxt];
+        }
+        if ($fcHier !== null && isset($fcHier['prevu']) && $fcHier['prevu'] !== null) {
+            $hIv = (isset($fcHier['lo'], $fcHier['hi']) && $fcHier['lo'] !== null && $fcHier['hi'] !== null)
+                ? ['lo' => $fcHier['lo'], 'hi' => $fcHier['hi']] : null;
+            $txt = 'Hier : ' . formatPrice((float) ($fcHier['reel'] ?? 0)) . ' vs ' . formatPrice((float) $fcHier['prevu']);
+            if (isset($fcHier['reel']) && $fcHier['reel'] !== null) {
+                $txt .= ' (' . $fcSigned((float) $fcHier['reel'] - (float) $fcHier['prevu']) . ')';
+            }
+            $txt .= $fcRange($hIv);
+            $fcChips[] = ['cls' => 'is-muted', 'text' => $txt];
+            if (isset($fcHier['dans_intervalle']) && $fcHier['dans_intervalle'] !== null) {
+                [$stTxt, $stCls] = $fcStatut((bool) $fcHier['dans_intervalle']);
+                $fcChips[] = ['cls' => $stCls, 'text' => 'Hier — ' . $stTxt];
+            }
         }
         ?>
         <div class="card surface glass chart-card chart-span-2">
             <div class="chart-head">
                 <div>
-                    <h2 class="chart-title">Prévisions</h2>
-                    <span class="chart-sub">Fenêtre d'analyse : <?= $fcFw ?> derniers jours</span>
+                    <h2 class="chart-title">Prévisions<span class="fc-info" title="<?= e($fcTooltip) ?>" aria-label="<?= e($fcTooltip) ?>">ⓘ</span></h2>
+                    <span class="chart-sub">Fenêtre d'apprentissage : <?= $fcFw ?> derniers jours</span>
                 </div>
                 <div class="af-pills dt-pills">
                     <?php foreach ([7 => '7 j', 14 => '14 j', 30 => '30 j'] as $w => $lbl): ?>
@@ -242,47 +301,49 @@ $iconSvg = static function (string $name): string {
                 </div>
             </div>
             <div class="fc-chips dt-chips">
-                <?php foreach ($fcChips as $chip):
-                    $d  = $chip['delta'];
-                    $up = $d === null ? null : ($d >= 0);
-                ?>
-                    <?php if ($up !== null): ?>
-                        <span class="kpi-delta <?= $up ? 'is-up' : 'is-down' ?>">
-                            <?= e($chip['text']) ?> <?= $up ? '↑' : '↓' ?> <?= number_format(abs($d), 1, ',', ' ') ?>%
-                        </span>
-                    <?php else: ?>
-                        <span class="kpi-delta is-muted"><?= e($chip['text']) ?> —</span>
-                    <?php endif; ?>
+                <?php foreach ($fcChips as $chip): ?>
+                    <span class="kpi-delta <?= e($chip['cls']) ?>"><?= e($chip['text']) ?></span>
                 <?php endforeach; ?>
+                <?php if ($fcModele === 'baseline_B2'): ?>
+                    <span class="kpi-delta is-off">Baseline naïve active (le modèle avancé ne bat pas la référence)</span>
+                <?php endif; ?>
+                <?php if ($fcInsuf): ?>
+                    <span class="kpi-delta is-off">Données insuffisantes (&lt; 7 jours ouverts)</span>
+                <?php endif; ?>
             </div>
-            <?php if (($forecast['elapsed_days'] ?? 0) < 1): ?>
+            <?php if (!$fcHasChart): ?>
                 <p class="muted fc-empty">Prévisions indisponibles : aucun jour d'historique écoulé sur la fenêtre.</p>
             <?php else: ?>
-                <?php if (empty($forecast['reliable'])): ?>
-                    <span class="chart-sub fc-note">Prévisions fiables à partir de 7 jours d'historique</span>
-                <?php endif; ?>
+                <span class="chart-sub fc-note">Fiabilité du modèle : <?= e($fcConfLbl) ?> · <?= $fcNJours ?> jours ouverts inclus dans l'apprentissage</span>
                 <div class="chart-canvas"><canvas id="chart-forecast" height="120"></canvas></div>
             <?php endif; ?>
         </div>
 
         <?php
-        // Carte « Estimation du jour » : avance et suivi live du jour sur
-        // la fenêtre commune (7/14/30 j, paramètre GET « fw ») partagée
-        // avec la carte « Prévisions ».
-        $dtTrack = $day_track['track'] ?? null;
+        // Carte « Estimation du jour » : suivi live du jour sur la fenêtre
+        // d'apprentissage commune (7/14/30 j, GET « fw »). Toutes les
+        // valeurs viennent du payload $day_track — delta et fourchette
+        // peuvent être null (données insuffisantes / trop tôt) : on
+        // n'affiche alors NI l'un NI l'autre.
+        $dtEst   = isset($day_track['estimate']) ? $day_track['estimate'] : null;
         $dtFw    = (int) ($day_track['window'] ?? 14);
-        $dtEst   = $day_track['estimate'] ?? null;
-        $dtHour  = (int) ($day_track['now_hour'] ?? 0);
-        $dtDelta = $dtTrack['delta_pct'] ?? null;
-        $dtUp    = $dtDelta === null ? null : ($dtDelta >= 0);
-        $dtProj  = (float) ($dtTrack['projection_eod'] ?? 0.0);
+        $dtHour  = (int) ($day_track['hour'] ?? ($fcHor['now_hour'] ?? 0));
+        $dtTrop  = !empty($day_track['trop_tot']);
+        $dtIvH   = isset($day_track['intervalle_h']) && is_array($day_track['intervalle_h']) ? $day_track['intervalle_h'] : null;
+        $dtDans  = isset($day_track['dans_intervalle']) ? $day_track['dans_intervalle'] : null;
+        $dtDelta = isset($day_track['delta_pct']) ? $day_track['delta_pct'] : null;
+        $dtEcart = isset($day_track['ecart_eur']) ? $day_track['ecart_eur'] : null;
+        $dtProj  = isset($day_track['projection_eod']) ? $day_track['projection_eod'] : null;
+        $dtReel  = isset($day_track['actual_so_far']) ? $day_track['actual_so_far'] : null;
+        $dtConf  = (string) ($day_track['confiance'] ?? 'insuffisant');
+        $dtInsuf = ($dtConf === 'insuffisant') || !empty($forecast['anomalies']['donnees_insuffisantes']);
         $dtHasEst = $dtEst !== null && (float) $dtEst > 0;
         ?>
         <div class="card surface glass chart-card chart-span-2">
             <div class="chart-head">
                 <div>
-                    <h2 class="chart-title">Estimation du jour</h2>
-                    <span class="chart-sub">Fenêtre d'analyse : <?= $dtFw ?> derniers jours</span>
+                    <h2 class="chart-title">Estimation du jour<span class="fc-info" title="<?= e($fcTooltip) ?>" aria-label="<?= e($fcTooltip) ?>">ⓘ</span></h2>
+                    <span class="chart-sub">Fenêtre d'apprentissage : <?= $dtFw ?> derniers jours</span>
                 </div>
                 <div class="af-pills dt-pills">
                     <?php foreach ([7 => '7 j', 14 => '14 j', 30 => '30 j'] as $w => $lbl): ?>
@@ -294,21 +355,24 @@ $iconSvg = static function (string $name): string {
                 <p class="muted fc-empty">Pas assez d'historique sur la fenêtre.</p>
             <?php else: ?>
                 <div class="fc-chips dt-chips">
-                    <span class="kpi-delta is-muted">Estimation journée : <?= e(formatPrice((float) $dtEst)) ?></span>
-                    <span class="kpi-delta is-muted">Réel à <?= $dtHour ?>h : <?= e(formatPrice((float) ($dtTrack['actual_so_far'] ?? 0.0))) ?></span>
-                    <?php if ($dtUp !== null): ?>
-                        <span class="kpi-delta <?= $dtUp ? 'is-up' : 'is-down' ?>">
-                            <?= $dtUp ? '↑' : '↓' ?> <?= number_format(abs($dtDelta), 1, ',', ' ') ?>% vs attendu à cette heure
-                        </span>
-                    <?php else: ?>
-                        <span class="kpi-delta is-muted">— vs attendu à cette heure</span>
+                    <span class="kpi-delta is-muted">Attendu aujourd'hui : <?= e(formatPrice((float) $dtEst) . $fcRange($dtIvH)) ?></span>
+                    <span class="kpi-delta is-muted">Réel à <?= $dtHour ?>h : <?= e(formatPrice((float) ($dtReel ?? 0))) ?></span>
+                    <?php if ($dtTrop): ?>
+                        <span class="kpi-delta is-muted">Trop tôt pour comparer (profil &lt; 10 % de la journée)</span>
+                    <?php elseif (!$dtInsuf && $dtEcart !== null): ?>
+                        <span class="kpi-delta is-muted">vs attendu à <?= $dtHour ?>h : <?= e($fcSigned($dtEcart) . $fcRange($dtIvH)) ?></span>
+                    <?php elseif (!$dtInsuf && $dtDelta !== null): ?>
+                        <span class="kpi-delta is-muted">vs attendu à <?= $dtHour ?>h : <?= $dtDelta >= 0 ? '+' : '-' ?><?= e(number_format(abs((float) $dtDelta), 1, ',', ' ')) ?> %</span>
                     <?php endif; ?>
-                    <span class="kpi-delta <?= $dtProj >= (float) $dtEst ? 'is-up' : 'is-down' ?>">
-                        Projection fin de journée : <?= e(formatPrice($dtProj)) ?> ·
-                        <?= $dtProj >= (float) $dtEst ? 'au-dessus' : 'en-dessous' ?> de l'estimation
-                    </span>
-                    <?php if (empty($day_track['reliable'])): ?>
-                        <span class="kpi-delta is-muted">Historique récent — estimation indicative</span>
+                    <?php if (!$dtTrop && $dtDans !== null): ?>
+                        <?php [$stTxt, $stCls] = $fcStatut((bool) $dtDans); ?>
+                        <span class="kpi-delta <?= e($stCls) ?>"><?= e($stTxt) ?></span>
+                    <?php endif; ?>
+                    <?php if ($dtProj !== null): ?>
+                        <span class="kpi-delta is-muted">Projection fin de journée : <?= e(formatPrice((float) $dtProj)) ?></span>
+                    <?php endif; ?>
+                    <?php if ($dtInsuf): ?>
+                        <span class="kpi-delta is-off">Données insuffisantes (&lt; 7 jours ouverts)</span>
                     <?php endif; ?>
                 </div>
                 <div class="chart-canvas"><canvas id="chart-daytrack" height="120"></canvas></div>
@@ -341,15 +405,160 @@ $iconSvg = static function (string $name): string {
 
         <div class="card surface glass chart-card">
             <div class="chart-head">
-                <h2 class="chart-title">Activité de l'association</h2>
-                <span class="chart-sub">6 derniers mois</span>
+                <h2 class="chart-title">Par heure</h2>
+                <span class="chart-sub" id="hourly-sub">moyenne observée par heure</span>
             </div>
-            <div class="chart-canvas"><canvas id="chart-activity" height="160"></canvas></div>
+            <div class="chart-canvas"><canvas id="chart-hourly" height="160"></canvas></div>
         </div>
 
         <?php
-        // Totaux de la tendance produit (le meilleur jour et l'heure de
-        // pointe sont calculés côté client sur les moyennes ca_avg).
+        // ---- Carte « Objectif » : semaine en cours + horizon 30 j ----
+        // Valeurs du moteur (forecast.semaine / mois30) et de $goal.
+        // La sauvegarde POSTe champ « goal » + CSRF vers
+        // /admin/analytics/objectif (motif csrf_field() du repo).
+        $sem     = isset($forecast['semaine']) && is_array($forecast['semaine']) ? $forecast['semaine'] : [];
+        $goalVal = (float) ($goal ?? ($sem['objectif'] ?? 0));
+        $semAtt  = $sem['attendu'] ?? null;
+        $semIv   = (($sem['lo'] ?? null) !== null && ($sem['hi'] ?? null) !== null)
+            ? ['lo' => $sem['lo'], 'hi' => $sem['hi']] : null;
+        $semReel = $sem['reel'] ?? null;
+        $semProb = $sem['prob_atteinte'] ?? null;
+        $semManq = $sem['manquant_par_jour'] ?? null;
+        $semRest = (int) ($sem['jours_restants'] ?? 0);
+        $m30     = isset($forecast['mois30']) && is_array($forecast['mois30']) ? $forecast['mois30'] : [];
+        $m30Att  = $m30['attendu'] ?? null;
+        $m30Iv   = (($m30['lo'] ?? null) !== null && ($m30['hi'] ?? null) !== null)
+            ? ['lo' => $m30['lo'], 'hi' => $m30['hi']] : null;
+        $probPct = $semProb === null ? null : max(0.0, min(100.0, (float) $semProb));
+        ?>
+        <div class="card surface glass chart-card">
+            <div class="chart-head">
+                <h2 class="chart-title">Objectif</h2>
+                <span class="chart-sub">semaine en cours</span>
+            </div>
+            <div class="goal-body">
+                <div class="goal-prob">
+                    <span class="goal-prob-value"><?= $probPct === null ? '—' : e(number_format($probPct, 0, ',', ' ')) . ' %' ?></span>
+                    <span class="goal-prob-label">Probabilité d'atteindre l'objectif hebdo</span>
+                    <div class="goal-prob-bar" role="img" aria-label="<?= $probPct === null ? 'Probabilité indisponible' : 'Probabilité d\'atteinte ' . number_format($probPct, 0, ',', ' ') . ' %' ?>">
+                        <div class="goal-prob-fill" style="width:<?= $probPct === null ? 0 : (int) round($probPct) ?>%"></div>
+                    </div>
+                </div>
+                <ul class="goal-list">
+                    <li><span>Objectif hebdo</span><strong><?= e(formatPrice($goalVal)) ?></strong></li>
+                    <li><span>Déjà encaissé cette semaine</span><strong><?= $semReel === null ? '—' : e(formatPrice((float) $semReel)) ?></strong></li>
+                    <li><span>Attendu fin de semaine</span><strong><?= $semAtt === null ? '—' : e(formatPrice((float) $semAtt) . $fcRange($semIv)) ?></strong></li>
+                    <?php if ($semManq !== null && $semRest > 0): ?>
+                        <li><span>CA manquant par jour restant</span><strong><?= e(formatPrice((float) $semManq)) ?> (<?= $semRest ?> jour<?= $semRest > 1 ? 's' : '' ?> restant<?= $semRest > 1 ? 's' : '' ?>)</strong></li>
+                    <?php endif; ?>
+                    <li><span>Horizon 30 jours</span><strong><?= $m30Att === null ? '—' : e(formatPrice((float) $m30Att) . $fcRange($m30Iv)) ?></strong></li>
+                </ul>
+                <?php if (!$kiosk): ?>
+                    <form method="post" action="<?= e(url('/admin/analytics/objectif')) ?>" class="goal-form">
+                        <?= csrf_field() ?>
+                        <label class="af-label" for="goal-input">Objectif hebdomadaire (€)</label>
+                        <input type="number" name="goal" id="goal-input" min="0" step="0.01" required
+                               value="<?= e(number_format($goalVal, 2, '.', '')) ?>" class="af-input">
+                        <button type="submit" class="btn btn-primary btn-sm">Enregistrer</button>
+                    </form>
+                <?php endif; ?>
+            </div>
+        </div>
+
+        <?php
+        // ---- Carte « Bénéfice prévu » : marge à 7 jours par catégorie ----
+        $benef      = isset($forecast['benefice']) && is_array($forecast['benefice']) ? $forecast['benefice'] : [];
+        $benefCat   = isset($benef['par_categorie']) && is_array($benef['par_categorie']) ? $benef['par_categorie'] : [];
+        $benefTot   = $benef['total_marge_7j'] ?? null;
+        $benefPctNc = isset($benef['pct_ca_sans_cout_fiable']) ? (float) $benef['pct_ca_sans_cout_fiable'] : 0.0;
+        $benefNote  = (string) ($benef['note'] ?? '');
+        $benefSus   = isset($benef['suspects']) && is_array($benef['suspects']) ? $benef['suspects'] : [];
+        ?>
+        <div class="card surface glass chart-card">
+            <div class="chart-head">
+                <h2 class="chart-title">Bénéfice prévu</h2>
+                <span class="chart-sub">marge à 7 jours</span>
+            </div>
+            <p class="benef-total">
+                <span class="kpi-value"><?= $benefTot === null ? '—' : e(formatPrice((float) $benefTot)) ?></span>
+                <span class="chart-sub">de marge prévue sur 7 jours</span>
+            </p>
+            <?php if ($benefPctNc > 0 && $benefNote !== ''): ?>
+                <p class="fc-banner"><?= e($benefNote) ?></p>
+            <?php endif; ?>
+            <?php if ($benefCat !== []): ?>
+                <div class="table-wrap">
+                    <table class="data-table">
+                        <thead>
+                            <tr><th>Catégorie</th><th class="num">CA prévu</th><th class="num">Marge</th><th class="num">Marge %</th></tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($benefCat as $cat => $row): ?>
+                                <tr>
+                                    <td><?= e((string) $cat) ?></td>
+                                    <td class="num"><?= e(formatPrice((float) ($row['ca'] ?? 0))) ?></td>
+                                    <td class="num"><?= e(formatPrice((float) ($row['marge'] ?? 0))) ?></td>
+                                    <td class="num"><?= e(number_format((float) ($row['marge_pct'] ?? 0), 1, ',', ' ')) ?> %</td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            <?php else: ?>
+                <p class="muted fc-empty">Marge indisponible (coûts produits incomplets).</p>
+            <?php endif; ?>
+            <?php if ($benefSus !== []): ?>
+                <ul class="benef-suspects">
+                    <?php foreach ($benefSus as $s): ?>
+                        <li><strong><?= e((string) ($s['label'] ?? '')) ?></strong> — <?= e((string) ($s['raison'] ?? '')) ?></li>
+                    <?php endforeach; ?>
+                </ul>
+            <?php endif; ?>
+        </div>
+
+        <?php
+        // ---- Carte « Réapprovisionnement » : besoins estimés à 7 j ----
+        // Tri par suggestion décroissante déjà fait côté payload.
+        $reappro = isset($forecast['produits']) && is_array($forecast['produits']) ? $forecast['produits'] : [];
+        ?>
+        <div class="card surface glass chart-card chart-span-2">
+            <div class="chart-head">
+                <h2 class="chart-title">Réapprovisionnement</h2>
+                <span class="chart-sub">besoins estimés à 7 jours</span>
+            </div>
+            <?php if ($reappro === []): ?>
+                <p class="muted fc-empty">Aucune suggestion de réapprovisionnement.</p>
+            <?php else: ?>
+                <div class="table-wrap">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Produit</th><th>Catégorie</th>
+                                <th class="num">Unités 7 j</th><th class="num">Sécurité</th>
+                                <th class="num">Stock</th><th class="num">Suggestion</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($reappro as $p): ?>
+                                <?php $sugg = array_key_exists('suggestion', $p) && $p['suggestion'] !== null ? (float) $p['suggestion'] : null; ?>
+                                <tr>
+                                    <td><?= e((string) ($p['label'] ?? '')) ?></td>
+                                    <td><?= e((string) ($p['category'] ?? '—')) ?></td>
+                                    <td class="num"><?= e(number_format((float) ($p['unites'] ?? 0), 0, ',', ' '))
+                                        ?> (<?= e(number_format((float) ($p['lo'] ?? 0), 0, ',', ' ')) ?>–<?= e(number_format((float) ($p['hi'] ?? 0), 0, ',', ' ')) ?>)</td>
+                                    <td class="num"><?= e(number_format((float) ($p['safety_demand'] ?? 0), 1, ',', ' ')) ?></td>
+                                    <td class="num"><?= !array_key_exists('stock', $p) || $p['stock'] === null ? '—' : e(number_format((float) $p['stock'], 0, ',', ' ')) ?></td>
+                                    <td class="num<?= $sugg !== null && $sugg > 0 ? ' reappro-sugg' : '' ?>"><?= $sugg === null ? '—' : e(number_format($sugg, 0, ',', ' ')) ?></td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            <?php endif; ?>
+        </div>
+
+        <?php
+        // Totaux de la tendance produit.
         $pwCa  = array_sum(array_column($productWeekly, 'ca'));
         $pwQty = array_sum(array_column($productWeekly, 'qty'));
         ?>
@@ -359,14 +568,6 @@ $iconSvg = static function (string $name): string {
                 <span class="chart-sub" id="weekday-sub">moyenne par jour de semaine</span>
             </div>
             <div class="chart-canvas"><canvas id="chart-weekday" height="160"></canvas></div>
-        </div>
-
-        <div class="card surface glass chart-card">
-            <div class="chart-head">
-                <h2 class="chart-title">Par heure</h2>
-                <span class="chart-sub" id="hourly-sub">moyenne par heure sur la fenêtre</span>
-            </div>
-            <div class="chart-canvas"><canvas id="chart-hourly" height="160"></canvas></div>
         </div>
 
         <?php if ($products !== []): ?>
@@ -401,6 +602,42 @@ $iconSvg = static function (string $name): string {
         </div>
         <?php endif; ?>
     </div>
+
+    <!-- ============================================================ -->
+    <!--  Qualité des données : anomalies du moteur + notes (repliable) -->
+    <!-- ============================================================ -->
+    <?php
+    $anomAtyp  = isset($forecast['anomalies']['jours_atypiques']) && is_array($forecast['anomalies']['jours_atypiques']) ? $forecast['anomalies']['jours_atypiques'] : [];
+    $anomCout  = isset($forecast['anomalies']['produits_cout_suspect']) && is_array($forecast['anomalies']['produits_cout_suspect']) ? $forecast['anomalies']['produits_cout_suspect'] : [];
+    $anomNotes = isset($forecast['notes']) && is_array($forecast['notes']) ? $forecast['notes'] : [];
+    ?>
+    <details class="card surface glass dataq">
+        <summary>
+            Qualité des données — <?= (int) ($forecast['anomalies']['n_jours_inclus'] ?? 0) ?> jours inclus
+            · <?= count($anomAtyp) ?> jour<?= count($anomAtyp) > 1 ? 's' : '' ?> atypique<?= count($anomAtyp) > 1 ? 's' : '' ?> exclu(s)
+            · <?= (int) ($forecast['anomalies']['ventes_zero'] ?? 0) ?> vente(s) à 0 €
+            · <?= (int) ($forecast['anomalies']['doublons_ignores'] ?? 0) ?> doublon(s) ignoré(s)
+            · <?= count($anomCout) ?> produit(s) à coût suspect
+        </summary>
+        <div class="dataq-body">
+            <?php if ($fcNoteSel !== ''): ?>
+                <p><?= e($fcNoteSel) ?></p>
+            <?php endif; ?>
+            <?php if ($anomAtyp !== []): ?>
+                <p><strong>Jours atypiques exclus :</strong> <?= e(implode(', ', array_map('strval', $anomAtyp))) ?></p>
+            <?php endif; ?>
+            <?php if ($anomCout !== []): ?>
+                <p><strong>Produits à coût suspect :</strong> <?= e(implode(', ', array_map('strval', $anomCout))) ?></p>
+            <?php endif; ?>
+            <?php if ($anomNotes !== []): ?>
+                <ul class="dataq-notes">
+                    <?php foreach ($anomNotes as $note): ?>
+                        <li><?= e((string) $note) ?></li>
+                    <?php endforeach; ?>
+                </ul>
+            <?php endif; ?>
+        </div>
+    </details>
 
     <!-- ============================================================ -->
     <!--  Heatmap des ventes par jour × heure                          -->
@@ -628,32 +865,66 @@ $iconSvg = static function (string $name): string {
         });
     }
 
-    // ---------- 1bis. Prévisions : barres CA réalisé + ligne pointillée ----------
-    // Barres = CA quotidien réalisé (barre du jour en ambre), ligne
-    // violette en tirets = prévision (pleine au jour courant, puis 7 jours).
+    // ---------- 1bis. Prévisions : réalisé observé + courbe du modèle + bande 80 % ----------
+    // Barres = CA passé OBSERVÉ (payload historique ; barre du jour en
+    // ambre via today_index), ligne violette en tirets = prévision (point
+    // du jour + 7 jours J+1..J+7), bande violette = fourchette 80 %
+    // (lo–hi). Toutes les valeurs viennent du payload — aucun recalcul.
     var fc = data.forecast || null;
+    var hist = data.historique || { labels: [], values: [], today_index: -1 };
     var ctxFc = document.getElementById('chart-forecast');
-    if (ctxFc && fc && Number(fc.elapsed_days) > 0) {
-        var fLabels = ((fc.history || {}).labels || []).slice();
-        var fBars   = ((fc.history || {}).values || []).slice();
-        var fLine   = fBars.slice();
-        var fTi     = Number(fc.today_index);
-        if (fTi >= 0 && fTi < fLine.length) {
-            fLine[fTi] = (fc.today && fc.today.forecast_full != null) ? Number(fc.today.forecast_full) : null;
-        }
-        (fc.days || []).forEach(function (d) {
-            fLabels.push(d.label);
+    if (ctxFc && fc) {
+        var fLabels = (hist.labels || []).map(String);
+        var fBars   = (hist.values || []).map(function (v) { return v == null ? null : Number(v); });
+        var fTi     = Number(hist.today_index);
+        var fPrev   = fc.prevision_jour;
+        var fIv     = fc.intervalle_80 || null;
+        var fLine = fBars.map(function () { return null; });
+        var fLo   = fBars.map(function () { return null; });
+        var fHi   = fBars.map(function () { return null; });
+        if (fPrev != null) {
+            fLabels.push('Auj.');
             fBars.push(null);
-            fLine.push(d.value == null ? null : Number(d.value));
+            fLine.push(Number(fPrev));
+            fLo.push(fIv && fIv.lo != null ? Number(fIv.lo) : null);
+            fHi.push(fIv && fIv.hi != null ? Number(fIv.hi) : null);
+        }
+        (fc.jours || []).forEach(function (d) {
+            fLabels.push(String(d.label));
+            fBars.push(null);
+            fLine.push(d.is_open && d.ca != null ? Number(d.ca) : null);
+            fLo.push(d.is_open && d.lo != null ? Number(d.lo) : null);
+            fHi.push(d.is_open && d.hi != null ? Number(d.hi) : null);
         });
         var fBg = fBars.map(function (v, i) {
             return i === fTi ? 'rgba(245,158,11,.75)' : 'rgba(72,189,211,.55)';
         });
         new Chart(ctxFc, {
-            type: 'bar',
+            type: 'line',
             data: {
                 labels: fLabels,
                 datasets: [
+                    {
+                        // Bande 80 % : remplissage entre hi (ce dataset,
+                        // fill vers le suivant) et lo. Masquée légende/tooltips.
+                        label: 'Fourchette 80 %',
+                        data: fHi,
+                        borderColor: 'transparent',
+                        backgroundColor: 'rgba(97,80,170,.14)',
+                        fill: '+1',
+                        pointRadius: 0,
+                        pointHitRadius: 0,
+                        order: 0,
+                    },
+                    {
+                        label: 'Borne basse',
+                        data: fLo,
+                        borderColor: 'transparent',
+                        pointRadius: 0,
+                        pointHitRadius: 0,
+                        fill: false,
+                        order: 0,
+                    },
                     {
                         type: 'bar',
                         label: 'CA réalisé (€)',
@@ -665,7 +936,6 @@ $iconSvg = static function (string $name): string {
                         order: 2,
                     },
                     {
-                        type: 'line',
                         label: 'Prévision (€)',
                         data: fLine,
                         borderColor: violet,
@@ -674,6 +944,7 @@ $iconSvg = static function (string $name): string {
                         pointBackgroundColor: violet,
                         fill: false,
                         spanGaps: false,
+                        tension: 0.25,
                         order: 1,
                     },
                 ],
@@ -683,8 +954,23 @@ $iconSvg = static function (string $name): string {
                 maintainAspectRatio: false,
                 interaction: { mode: 'index', intersect: false },
                 plugins: {
-                    legend: { position: 'bottom' },
-                    tooltip: { callbacks: { label: function (c) { return c.dataset.label + ' : ' + (c.raw == null ? '—' : money(c.raw)); } } },
+                    legend: {
+                        position: 'bottom',
+                        labels: { filter: function (item) { return item.text !== 'Fourchette 80 %' && item.text !== 'Borne basse'; } },
+                    },
+                    tooltip: {
+                        filter: function (t) { return t.dataset.label !== 'Fourchette 80 %' && t.dataset.label !== 'Borne basse'; },
+                        callbacks: {
+                            label: function (c) {
+                                if (c.dataset.label === 'Prévision (€)' && c.raw != null
+                                    && fLo[c.dataIndex] != null && fHi[c.dataIndex] != null) {
+                                    return 'Prévision : ' + money(c.raw)
+                                        + ' (fourchette ' + money(fLo[c.dataIndex]) + ' – ' + money(fHi[c.dataIndex]) + ')';
+                                }
+                                return c.dataset.label + ' : ' + (c.raw == null ? '—' : money(c.raw));
+                            },
+                        },
+                    },
                 },
                 scales: { y: { beginAtZero: true, ticks: { callback: money } } },
             },
@@ -692,17 +978,20 @@ $iconSvg = static function (string $name): string {
     }
 
     // ---------- 1ter. Estimation du jour : cumul réel vs attendu ----------
-    // Le cumul du jour s'arrête à l'heure courante (null au-delà), la
-    // courbe attendue court sur 0h→23h (tirets violets).
+    // Le cumul réel s'arrête à l'heure courante (null au-delà), la
+    // courbe attendue court sur 0h→23h (tirets violets). Valeurs du
+    // payload day_track (format plat : cum_actual / cum_expected).
     var dt = data.day_track || null;
     var ctxDt = document.getElementById('chart-daytrack');
-    if (ctxDt && dt && dt.track && dt.estimate != null && Number(dt.estimate) > 0) {
-        var dtT = dt.track;
-        var dtHour = Number(dtT.hour);
+    if (ctxDt && dt && dt.estimate != null && Number(dt.estimate) > 0) {
+        var dtHour = Number(dt.hour == null ? 0 : dt.hour);
         var dtLabels = [];
         for (var di = 0; di < 24; di++) { dtLabels.push(di + 'h'); }
-        var dtToday = (dtT.cum_actual || []).map(function (v, i) {
-            return i <= dtHour ? Number(v) : null;
+        var dtToday = (dt.cum_actual || []).map(function (v, i) {
+            return i <= dtHour && v != null ? Number(v) : null;
+        });
+        var dtExpected = (dt.cum_expected || []).map(function (v) {
+            return v == null ? null : Number(v);
         });
         new Chart(ctxDt, {
             type: 'line',
@@ -722,7 +1011,7 @@ $iconSvg = static function (string $name): string {
                     },
                     {
                         label: 'Attendu (cumulé €)',
-                        data: (dtT.cum_expected || []).map(Number),
+                        data: dtExpected,
                         borderColor: violet,
                         borderDash: [6, 6],
                         fill: false,
@@ -901,25 +1190,30 @@ $iconSvg = static function (string $name): string {
     }
 
     // ---------- 5bis. CA par jour de semaine (moyennes + moyenne/jour) ----------
-    // Barres = moyenne par jour de semaine sur les jours écoulés (null =
-    // jour jamais vu, barre absente), barre du jour en ambre. Ligne
-    // violette en tirets = moyenne/jour globale de la période.
-    var wd = data.weekday || { labels: [], ca: [] };
+    // Barres = moyenne par jour de semaine du payload (ca_avg : null =
+    // jour fermé → trou sans barre), barre du jour en ambre, tirets =
+    // moyenne/jour. « Meilleur jour » vient du payload (weekday.best) —
+    // AUCUN calcul local.
+    var wd = data.weekday || { labels: [], ca_avg: [] };
     var ctxWd = document.getElementById('chart-weekday');
     if (ctxWd) {
         var wdAvg = (wd.ca_avg || []).map(function (v) { return v == null ? null : Number(v); });
+        var wdDaysCount = (wd.days_count || []).map(function (v) { return v == null ? 0 : Number(v); });
         var wdTi  = Number(wd.today_index);
         var wdAvgPerDay = wd.avg_per_day == null ? null : Number(wd.avg_per_day);
+        var wdBest = wd.best || null;
+        var wdFw = (data.day_track && data.day_track.window != null) ? Number(data.day_track.window) : null;
 
         var wdSub = document.getElementById('weekday-sub');
         if (wdSub) {
-            var bestIdx = -1, bestVal = 0;
-            wdAvg.forEach(function (v, i) {
-                if (v != null && v > bestVal) { bestVal = v; bestIdx = i; }
-            });
-            var wdParts = ['Meilleur jour : ' + (bestIdx >= 0 ? wd.labels[bestIdx] : '—')];
+            var wdParts = [];
+            if (wdBest && wdBest.label) {
+                wdParts.push('Meilleur jour : ' + wdBest.label
+                    + (wdBest.ca != null ? ' — ' + money(wdBest.ca) + '/jour en moyenne (modèle'
+                        + (wdFw ? ', fenêtre ' + wdFw + ' j' : '') + ')' : ''));
+            }
             if (wdAvgPerDay != null) { wdParts.push('Moyenne/jour : ' + money(wdAvgPerDay)); }
-            wdSub.textContent = wdParts.join(' · ');
+            wdSub.textContent = wdParts.length ? wdParts.join(' · ') : 'moyenne par jour de semaine';
         }
 
         var wdBg = wdAvg.map(function (v, i) {
@@ -950,60 +1244,77 @@ $iconSvg = static function (string $name): string {
         }
         new Chart(ctxWd, {
             type: 'bar',
-            data: { labels: wd.labels, datasets: wdDatasets },
+            data: { labels: wd.labels || [], datasets: wdDatasets },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
                 interaction: { mode: 'index', intersect: false },
                 plugins: {
                     legend: { position: 'bottom' },
-                    tooltip: { callbacks: { label: function (c) { return c.dataset.label + ' : ' + (c.raw == null ? '—' : money(c.raw)); } } },
+                    tooltip: {
+                        callbacks: {
+                            label: function (c) { return c.dataset.label + ' : ' + (c.raw == null ? '—' : money(c.raw)); },
+                            afterLabel: function (c) {
+                                var n = wdDaysCount[c.dataIndex];
+                                return 'occ : ' + (n == null || isNaN(n) ? 0 : n) + ' jour(s) observé(s)';
+                            },
+                        },
+                    },
                 },
                 scales: { y: { beginAtZero: true, ticks: { callback: money } } },
             },
         });
     }
 
-    // ---------- 5ter. CA par heure (moyennes + attendu/réel du jour) ----------
-    // Barres ambre = moyenne par heure (CA / jours écoulés). Tirets
-    // violets = profil attendu d'aujourd'hui (estimation × parts
-    // horaires) ; ligne sarcelle = CA réel du jour, arrêté à l'heure
-    // courante (null au-delà).
-    var hr = data.hourly || { labels: [], ca: [] };
+    // ---------- 5ter. CA par heure (observé + attendu/projeté du jour) ----------
+    // Barres ambre = CA moyen OBSERVÉ par heure (payload hourly.ca_avg).
+    // Tirets violets = attendu du jour ; pointillés verts = projeté fin
+    // de journée ; ligne sarcelle = réel du jour tronqué à l'heure
+    // courante. « Heure de pointe » = argmax des moyennes OBSERVÉES ;
+    // « Attendu aujourd'hui » vient du payload (jamais recalculé).
+    var hr = data.hourly || { labels: [], ca_avg: [] };
     var ctxHr = document.getElementById('chart-hourly');
     if (ctxHr) {
-        var hrAvg  = (hr.ca_avg || []).map(Number);
-        var hrHour = Number(hr.now_hour);
+        var hrAvg  = (hr.ca_avg || []).map(function (v) { return v == null ? null : Number(v); });
+        var hrHour = Number(hr.now_hour == null ? 0 : hr.now_hour);
         var hrToday = (hr.today_ca || []).map(function (v, i) {
-            return i <= hrHour ? Number(v) : null;
+            return i <= hrHour && v != null ? Number(v) : null;
         });
-        var hrExpected = (hr.today_expected || []).map(Number);
-        var hrExpTotal = hrExpected.reduce(function (a, b) { return a + b; }, 0);
+        var hrExpected = (hr.today_expected || []).map(function (v) { return v == null ? null : Number(v); });
+        var hrProjete  = (hr.today_projete || []).map(function (v) { return v == null ? null : Number(v); });
+        var hrAttTotal = (fc && fc.prevision_jour != null) ? Number(fc.prevision_jour) : null;
+        var hrAttIv    = (fc && fc.intervalle_80) ? fc.intervalle_80 : null;
 
         var hrSub = document.getElementById('hourly-sub');
         if (hrSub) {
             var peakIdx = -1, peakVal = 0;
             hrAvg.forEach(function (v, i) {
-                if (v > peakVal) { peakVal = v; peakIdx = i; }
+                if (v != null && v > peakVal) { peakVal = v; peakIdx = i; }
             });
-            hrSub.textContent = 'Heure de pointe : ' + (peakIdx >= 0 ? peakIdx + 'h' : '—')
-                + " · Attendu aujourd'hui : " + money(hrExpTotal);
+            var hrParts = ['Heure de pointe : ' + (peakIdx >= 0 ? peakIdx + 'h' : '—') + ' (observé)'];
+            if (hrAttTotal != null) {
+                var hrRng = (hrAttIv && hrAttIv.lo != null && hrAttIv.hi != null)
+                    ? ' (fourchette ' + money(hrAttIv.lo) + ' – ' + money(hrAttIv.hi) + ')' : '';
+                hrParts.push("Attendu aujourd'hui : " + money(hrAttTotal) + hrRng);
+            }
+            if (hr.trop_tot) { hrParts.push('Trop tôt pour comparer (profil < 10 % de la journée)'); }
+            hrSub.textContent = hrParts.join(' · ');
         }
 
         new Chart(ctxHr, {
             type: 'bar',
             data: {
-                labels: hr.labels,
+                labels: hr.labels || [],
                 datasets: [
                     {
                         type: 'bar',
-                        label: 'CA moyen (€)',
+                        label: 'CA moyen observé (€)',
                         data: hrAvg,
                         backgroundColor: 'rgba(245,158,11,.55)',
                         borderColor: amber,
                         borderWidth: 1,
                         borderRadius: 3,
-                        order: 3,
+                        order: 4,
                     },
                     {
                         type: 'line',
@@ -1011,6 +1322,18 @@ $iconSvg = static function (string $name): string {
                         data: hrExpected,
                         borderColor: violet,
                         borderDash: [6, 6],
+                        fill: false,
+                        tension: 0.3,
+                        pointRadius: 0,
+                        pointHitRadius: 8,
+                        order: 3,
+                    },
+                    {
+                        type: 'line',
+                        label: 'Projeté fin de journée (€)',
+                        data: hrProjete,
+                        borderColor: green,
+                        borderDash: [2, 4],
                         fill: false,
                         tension: 0.3,
                         pointRadius: 0,
@@ -1307,6 +1630,48 @@ $iconSvg = static function (string $name): string {
 .fc-note { display: block; margin: -0.6rem 0 0.75rem; }
 .fc-empty { margin: 0; padding: 0.5rem 0 1rem; }
 .pt-form { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; justify-content: flex-end; }
+/* Info-bulle métriques du modèle (règle interface 8) : native « title ». */
+.fc-info {
+    display: inline-block; margin-left: .35rem; cursor: help;
+    font-size: .68rem; font-weight: 700; color: var(--muted, #9fb3c8);
+    border: 1px solid rgba(255,255,255,.2); border-radius: 50%;
+    width: 15px; height: 15px; line-height: 13px; text-align: center;
+    vertical-align: 2px;
+}
+/* Statut « Hors fourchette » (anomalie, ambre) — le statut « Dans la
+   fourchette ✓ » reste neutre (classe is-muted existante). */
+.kpi-delta.is-off { color: #f59e0b; }
+/* Bandeau d'avertissement (données insuffisantes / coût non fiable). */
+.fc-banner {
+    margin: 0 0 .75rem; padding: .5rem .75rem; border-radius: 10px;
+    background: rgba(245,158,11,.12); border: 1px solid rgba(245,158,11,.35);
+    color: #fbbf24; font-size: .84rem;
+}
+
+/* ---- Objectif ---- */
+.goal-body { display: flex; flex-direction: column; gap: .9rem; }
+.goal-prob { display: flex; flex-direction: column; gap: .25rem; }
+.goal-prob-value { font-size: 2rem; font-weight: 800; color: var(--primary, #48bdd3); line-height: 1; }
+.goal-prob-label { font-size: .78rem; color: var(--muted, #9fb3c8); }
+.goal-prob-bar { height: 10px; border-radius: 5px; background: rgba(255,255,255,.07); overflow: hidden; }
+.goal-prob-fill { height: 100%; border-radius: 5px; background: linear-gradient(90deg, #48bdd3, #22c55e); }
+.goal-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; font-size: .88rem; }
+.goal-list li { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; border-bottom: 1px solid rgba(255,255,255,.06); padding: .3rem 0; }
+.goal-list li:last-child { border-bottom: none; }
+.goal-list li span { color: var(--muted, #9fb3c8); }
+.goal-form { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+
+/* ---- Bénéfice prévu / Réapprovisionnement ---- */
+.benef-total { display: flex; align-items: baseline; gap: .5rem; margin: 0 0 .75rem; }
+.benef-suspects { margin: .75rem 0 0; padding-left: 1.1rem; font-size: .82rem; color: var(--muted, #9fb3c8); }
+.reappro-sugg { color: #22c55e; font-weight: 800; }
+
+/* ---- Qualité des données (bandeau discret, repliable) ---- */
+.dataq { padding: .8rem 1.1rem; }
+.dataq summary { cursor: pointer; font-size: .82rem; color: var(--muted, #9fb3c8); }
+.dataq-body { margin-top: .6rem; font-size: .84rem; display: flex; flex-direction: column; gap: .35rem; }
+.dataq-body p { margin: 0; }
+.dataq-notes { margin: 0; padding-left: 1.1rem; color: var(--muted, #9fb3c8); }
 
 /* ---- Estimation du jour ---- */
 .dt-pills { gap: 0.3rem; }
