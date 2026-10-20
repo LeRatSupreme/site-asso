@@ -361,9 +361,15 @@ $iconSvg = static function (string $name): string {
                 <span class="ka-kpi-delta <?= $semProbPct === null ? 'is-muted' : ($semProbPct >= 50 ? 'is-up' : 'is-off') ?>">
                     Probabilité d'atteinte : <?= $semProbPct === null ? '—' : e($semProbFmt) . ' %' ?>
                 </span>
-                <?php if (($sem['manquant_par_jour'] ?? null) !== null && $semRestK > 0): ?>
+                <?php $semReqK = $sem['requis_par_jour'] ?? null; ?>
+                <?php if ($semReqK !== null && (float) $semReqK > 0.0 && (float) ($sem['reel'] ?? 0.0) < (float) ($sem['objectif'] ?? 0.0)): ?>
                     <span class="ka-kpi-delta is-muted">
-                        Manque <?= e(formatPrice((float) $sem['manquant_par_jour'])) ?>/jour (<?= $semRestK ?> jour<?= $semRestK > 1 ? 's' : '' ?> restant<?= $semRestK > 1 ? 's' : '' ?>)
+                        Requis <?= e(formatPrice((float) $semReqK)) ?>/jour pour viser l'objectif (<?= $semRestK ?> jour<?= $semRestK > 1 ? 's' : '' ?> restant<?= $semRestK > 1 ? 's' : '' ?>)
+                    </span>
+                <?php endif; ?>
+                <?php if (($sem['manquant_par_jour'] ?? null) !== null && (float) $sem['manquant_par_jour'] > 0.0 && $semRestK > 0): ?>
+                    <span class="ka-kpi-delta is-muted">
+                        Manque attendu <?= e(formatPrice((float) $sem['manquant_par_jour'])) ?>/jour (<?= $semRestK ?> jour<?= $semRestK > 1 ? 's' : '' ?> restant<?= $semRestK > 1 ? 's' : '' ?>)
                     </span>
                 <?php endif; ?>
             </section>

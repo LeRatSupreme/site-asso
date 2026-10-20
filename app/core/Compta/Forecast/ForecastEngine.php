@@ -25,6 +25,11 @@ namespace App\Core\Compta\Forecast;
  *    du réappro (parts Dirichlet) sont calibrées sur le CA prévu 7 j
  *    (Σ des jours), invariant Σ unites × prix ≈ CA prévu 7 j, et le
  *    bénéfice est dérivé de cette liste (ProfitForecast::compute).
+ *  - Choc de niveau commun (Goal::week/horizon) : UN facteur par chemin
+ *    MC f_path ~ Gamma(8, 1/8) (moyenne 1, σ ≈ 35 %, même prior que la
+ *    mise à jour horaire) multiplie la somme du chemin — le niveau ne
+ *    se moyennise pas sur 30 jours, la fourchette de l'horizon reste
+ *    honnête (±30-45 % au lieu de ±7 %).
  */
 final class ForecastEngine
 {
@@ -222,7 +227,12 @@ final class ForecastEngine
                     $subsetH[$key] = $day;
                 }
             }
-            $modelH = DemandModel::fit($subsetH, Clean::atypicalWeights($subsetH), $k);
+            // Dispersion = propriété GLOBALE : le refit sans hier RÉUTILISE
+            // le r du modèle principal (sinon son estimateur local des
+            // moments s'effondre vers R_MAX quasi-Poisson — dump prod :
+            // r principal 18,0 vs refit sans hier 200 → fourchette Hier
+            // ±18 % contre ±35 % pour Aujourd'hui).
+            $modelH = DemandModel::fit($subsetH, Clean::atypicalWeights($subsetH), $k, $model->dispersionR);
             $sumH   = MonteCarlo::summarize(MonteCarlo::daySamples($modelH, $hierDate, self::rng($seed, 'H' . $hierKey), $draws));
             $calH   = Conformal::apply($factor, $sumH['mean'], $sumH['lo'], $sumH['hi']);
             $refitInsuffisant = $modelH->isInsufficient() || $modelH->openDaysCount() < Hyper::INSUFFICIENT_DAYS;
@@ -259,6 +269,14 @@ final class ForecastEngine
         }
 
         // 9. Semaine courante (lun–dim) : réel + tirages restants → Goal::week.
+        // Choc de niveau commun : un facteur par chemin MC, rng seedé du
+        // moteur (flux 'N'), même prior Gamma(8, 1/8) que la mise à jour
+        // horaire — cf. docblock de classe.
+        $rngNiveau = self::rng($seed, 'N');
+        $facteursNiveau = [];
+        for ($i = 0; $i < $draws; $i++) {
+            $facteursNiveau[] = Stats::gammaSample(Hyper::A_PRIOR, 1.0 / Hyper::A_PRIOR, $rngNiveau);
+        }
         $lundiKey = $now->modify('-' . ((int) $now->format('N') - 1) . ' days')->format('Y-m-d');
         $lundi    = new \DateTimeImmutable($lundiKey);
         $reelSemaine = 0.0;
@@ -285,7 +303,7 @@ final class ForecastEngine
             $key = $date->format('Y-m-d');
             $restants[] = $withEvent($sampleFor($date, 'J'), $events[$key] ?? 0.0);
         }
-        $semaine = Goal::week($restants, $reelSemaine, $goalWeekly);
+        $semaine = Goal::week($restants, $reelSemaine, $goalWeekly, $facteursNiveau);
 
         // 10. Horizon 30 jours : restant du jour + 29 jours ouverts suivants.
         $restants30 = [];
@@ -308,7 +326,7 @@ final class ForecastEngine
             }
             $date = $date->modify('+1 day');
         }
-        $mois30 = Goal::horizon($restants30, $today !== null ? $today->ca : 0.0);
+        $mois30 = Goal::horizon($restants30, $today !== null ? $today->ca : 0.0, $facteursNiveau);
 
         // 11. Produits (UNE source d'unités) puis bénéfice dérivé des
         // MÊMES unités. Les unités brutes (parts Dirichlet × demande) sont
