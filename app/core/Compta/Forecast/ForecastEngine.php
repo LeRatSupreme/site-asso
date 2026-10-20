@@ -21,6 +21,10 @@ namespace App\Core\Compta\Forecast;
  *  - Les événements planifiés (opts['events'], 'Y-m-d' => CA) sont
  *    ADDITIONNÉS aux prévisions et cumuls comme constantes (sans
  *    incertitude) : chaque tirage du jour concerné est décalé du montant.
+ *  - Produits et bénéfice partent des MÊMES unités : les unités brutes
+ *    du réappro (parts Dirichlet) sont calibrées sur le CA prévu 7 j
+ *    (Σ des jours), invariant Σ unites × prix ≈ CA prévu 7 j, et le
+ *    bénéfice est dérivé de cette liste (ProfitForecast::compute).
  */
 final class ForecastEngine
 {
@@ -272,7 +276,11 @@ final class ForecastEngine
         }
         $mois30 = Goal::horizon($restants30, $today !== null ? $today->ca : 0.0);
 
-        // 11. Bénéfice et produits.
+        // 11. Produits (UNE source d'unités) puis bénéfice dérivé des
+        // MÊMES unités. Les unités brutes (parts Dirichlet × demande) sont
+        // CALIBRÉES sur le CA prévu 7 j du moteur (Σ jours) : invariant
+        // Σ unites × prix ≈ caPrevu7j — les tableaux Réapprovisionnement
+        // et Bénéfice prévu vivent à la même échelle que les prévisions.
         $caFenetre = 0.0;
         foreach ($data->days as $day) {
             $caFenetre += $day->ca;
@@ -281,7 +289,6 @@ final class ForecastEngine
         foreach ($jours as $j) {
             $caPrevu7j += $j['ca'];
         }
-        $benefice = ProfitForecast::compute($data->products, $caFenetre, $caPrevu7j);
 
         $sumQty = 0;
         foreach ($data->products as $p) {
@@ -300,8 +307,10 @@ final class ForecastEngine
             $upT,
             7,
             self::rng($seed, 'P'),
-            $draws
+            $draws,
+            $caPrevu7j
         );
+        $benefice = ProfitForecast::compute($produits, $caFenetre);
 
         // 12. Anomalies et notes.
         $joursAtypiques = [];

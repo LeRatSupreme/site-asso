@@ -5,79 +5,84 @@ declare(strict_types=1);
 namespace App\Core\Compta\Forecast;
 
 /**
- * Étape 7 : projection de bénéfice à 7 jours.
+ * Étape 7 : projection de bénéfice à 7 jours — DÉRIVÉE DES MÊMES UNITÉS
+ * que le réapprovisionnement (une seule source d'unités, calibrée sur le
+ * CA prévu par le moteur, cf. ProductForecast::units).
  *
- * La marge unitaire d'un produit fiable vaut (unitPrice − unitCost).
- * Le CA prévu sur 7 jours est réparti au prorata des quantités vendues
- * sur la fenêtre (produits NON suspects uniquement) :
+ * Pour chaque produit NON suspect à prix et coût connus :
  *
- *     part_i   = qty_i / Σ qty(non suspects)
- *     benef_i  = caPrevu7j × part_i × (marge_i / unitPrice_i)
+ *     ca_p    = unites_p × prix_p
+ *     marge_p = unites_p × (prix_p − coût_p)
  *
- * Les produits sans coût fiable (coût inconnu, coût <= 0 ou prix <
- * coût) sont listés à part et ne contribuent à aucune marge : le
- * bénéfice est donc une borne basse, ce que rappelle la note UI.
+ * Les agrégats par catégorie (ca, marge, marge_pct = marge/ca) sont donc
+ * COMPARABLES à la marge observée du tableau « Détail par produit » : les
+ * deux colonnes vivent à la même échelle (unités calibrées, plus de mélange
+ * CA observé fenêtre / marge prévue 7 j). INVARIANT : Σ_p ca_p ≈ CA prévu
+ * 7 j du moteur (±0,5 % pour les prix connus).
+ *
+ * Les produits sans coût fiable (coût inconnu, coût <= 0 ou prix < coût)
+ * sont listés à part et ne contribuent à aucune marge : le bénéfice est
+ * donc une borne basse, ce que rappelle la note UI.
+ * pct_ca_sans_cout_fiable = Σ ca des suspects / CA de la fenêtre observée.
  * Toutes les méthodes sont statiques et pures.
  */
 final class ProfitForecast
 {
     /**
-     * Calcule la répartition du bénéfice par catégorie.
+     * Calcule la répartition du bénéfice par catégorie depuis les unités
+     * calibrées du réapprovisionnement.
      *
-     * @param list<ProductStat> $products         Statistiques produits de la fenêtre.
+     * @param list<array{category:string,unites:float,unitPrice:?float,unitCost:?float,costSuspect:bool,label?:string,key?:string}> $unites           Unités 7 j calibrées (sortie ProductForecast::units).
      * @param float             $caCourantFenetre CA total de la fenêtre analysée (dénominateur du %).
-     * @param float             $caPrevu7j        CA total prévu sur les 7 prochains jours (événements inclus).
      *
      * @return array{par_categorie:array<string,array{ca:float,marge:float,marge_pct:float}>,total_marge_7j:float,pct_ca_sans_cout_fiable:float,suspects:list<array{key:string,label:string,raison:string}>,note:string}
      */
-    public static function compute(array $products, float $caCourantFenetre, float $caPrevu7j): array
+    public static function compute(array $unites, float $caCourantFenetre): array
     {
         $parCategorie = [];
         $suspects     = [];
-        $qtyFiables   = 0;
         $caSuspects   = 0.0;
 
-        // Passe 1 : classification, CA par catégorie, total des quantités fiables.
-        foreach ($products as $p) {
-            if (!$p instanceof ProductStat) {
+        // Passe 1 : classification, CA prévu par catégorie (unites × prix).
+        foreach ($unites as $p) {
+            if (!is_array($p) || !isset($p['category'])) {
                 continue;
             }
-            if (!isset($parCategorie[$p->category])) {
-                $parCategorie[$p->category] = ['ca' => 0.0, 'marge' => 0.0, 'marge_pct' => 0.0];
+            $cat = (string) $p['category'];
+            if (!isset($parCategorie[$cat])) {
+                $parCategorie[$cat] = ['ca' => 0.0, 'marge' => 0.0, 'marge_pct' => 0.0];
             }
-            $parCategorie[$p->category]['ca'] += $p->ca;
+            $prix  = isset($p['unitPrice']) && is_numeric($p['unitPrice']) ? (float) $p['unitPrice'] : null;
+            $caP   = ($prix !== null && $prix > 0.0) ? (float) ($p['unites'] ?? 0.0) * $prix : 0.0;
+            $parCategorie[$cat]['ca'] += $caP;
 
-            if ($p->costSuspect) {
-                $caSuspects += $p->ca;
+            if (!empty($p['costSuspect'])) {
+                $caSuspects += $caP;
                 $suspects[] = [
-                    'key'    => $p->key,
-                    'label'  => $p->label,
-                    'raison' => self::raison($p),
+                    'key'    => (string) ($p['key'] ?? ''),
+                    'label'  => (string) ($p['label'] ?? ($p['key'] ?? '')),
+                    'raison' => self::raison($prix, isset($p['unitCost']) && is_numeric($p['unitCost']) ? (float) $p['unitCost'] : null),
                 ];
-                continue;
             }
-            $qtyFiables += $p->qty;
         }
 
-        // Passe 2 : répartition du CA prévu et marge par produit fiable.
+        // Passe 2 : marge prévue par produit fiable (unites × (prix − coût)).
         $totalMarge = 0.0;
-        foreach ($products as $p) {
-            if (!$p instanceof ProductStat || $p->costSuspect) {
+        foreach ($unites as $p) {
+            if (!is_array($p) || !empty($p['costSuspect']) || !isset($p['category'])) {
                 continue;
             }
-            $part = $qtyFiables > 0 ? $p->qty / $qtyFiables : 0.0;
-            if ($part <= 0.0 || $p->unitPrice === null || $p->unitPrice <= 0.0 || $p->unitCost === null) {
+            $prix = isset($p['unitPrice']) && is_numeric($p['unitPrice']) ? (float) $p['unitPrice'] : null;
+            $cout = isset($p['unitCost']) && is_numeric($p['unitCost']) ? (float) $p['unitCost'] : null;
+            if ($prix === null || $prix <= 0.0 || $cout === null) {
                 continue;
             }
-            $margeUnitaire = $p->unitPrice - $p->unitCost;
-            $benef         = $caPrevu7j * $part * ($margeUnitaire / $p->unitPrice);
-            $totalMarge   += $benef;
-            if (isset($parCategorie[$p->category])) {
-                $parCategorie[$p->category]['marge'] += $benef;
-            }
+            $margeP = (float) ($p['unites'] ?? 0.0) * ($prix - $cout);
+            $totalMarge += $margeP;
+            $parCategorie[(string) $p['category']]['marge'] += $margeP;
         }
 
-        // Pourcentages de marge par catégorie (CA de la fenêtre).
+        // Pourcentages de marge par catégorie (CA prévu des MÊMES unités).
         foreach ($parCategorie as $cat => $row) {
             $parCategorie[$cat]['marge_pct'] = $row['ca'] > 0.0 ? $row['marge'] / $row['ca'] * 100.0 : 0.0;
         }
@@ -128,15 +133,15 @@ final class ProfitForecast
      * Raison du coût suspect, dans l'ordre de diagnostic :
      * coût inconnu (null), coût <= 0, prix inférieur au coût.
      */
-    private static function raison(ProductStat $p): string
+    private static function raison(?float $prix, ?float $cout): string
     {
-        if ($p->unitCost === null) {
+        if ($cout === null) {
             return 'cout_inconnu';
         }
-        if ($p->unitCost <= 0.0) {
+        if ($cout <= 0.0) {
             return 'cout_zero';
         }
-        if ($p->unitPrice !== null && $p->unitPrice < $p->unitCost) {
+        if ($prix !== null && $prix < $cout) {
             return 'prix_inferieur_au_cout';
         }
 
