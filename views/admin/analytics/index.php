@@ -429,7 +429,10 @@ $iconSvg = static function (string $name): string {
         $m30Att  = $m30['attendu'] ?? null;
         $m30Iv   = (($m30['lo'] ?? null) !== null && ($m30['hi'] ?? null) !== null)
             ? ['lo' => $m30['lo'], 'hi' => $m30['hi']] : null;
-        $probPct = $semProb === null ? null : max(0.0, min(100.0, (float) $semProb));
+        // prob_atteinte est une FRACTION 0–1 (P(total ≥ objectif)) : le
+        // moteur ne renvoie jamais 0–100 — l'affichage fait le ×100.
+        $probPct = $semProb === null ? null : max(0.0, min(100.0, (float) $semProb * 100.0));
+        $probFmt = $probPct === null ? '' : number_format($probPct, $probPct < 10 ? 1 : 0, ',', ' ');
         ?>
         <div class="card surface glass chart-card">
             <div class="chart-head">
@@ -438,9 +441,9 @@ $iconSvg = static function (string $name): string {
             </div>
             <div class="goal-body">
                 <div class="goal-prob">
-                    <span class="goal-prob-value"><?= $probPct === null ? '—' : e(number_format($probPct, 0, ',', ' ')) . ' %' ?></span>
+                    <span class="goal-prob-value"><?= $probPct === null ? '—' : e($probFmt) . ' %' ?></span>
                     <span class="goal-prob-label">Probabilité d'atteindre l'objectif hebdo</span>
-                    <div class="goal-prob-bar" role="img" aria-label="<?= $probPct === null ? 'Probabilité indisponible' : 'Probabilité d\'atteinte ' . number_format($probPct, 0, ',', ' ') . ' %' ?>">
+                    <div class="goal-prob-bar" role="img" aria-label="<?= $probPct === null ? 'Probabilité indisponible' : 'Probabilité d\'atteinte ' . e($probFmt) . ' %' ?>">
                         <div class="goal-prob-fill" style="width:<?= $probPct === null ? 0 : (int) round($probPct) ?>%"></div>
                     </div>
                 </div>
