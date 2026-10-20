@@ -34,6 +34,26 @@ final class ComptaCalc
     }
 
     /**
+     * Fenêtre « semaine actuelle » (lundi → J, bornes incluses) en heure
+     * de Paris. $today injectable pour les tests.
+     *
+     * @return array{from:string,to:string}
+     */
+    public static function currentWeekWindow(?\DateTimeImmutable $today = null): array
+    {
+        $tz = new \DateTimeZone(self::TZ);
+        $today = ($today ?? new \DateTimeImmutable('today', $tz))->setTimezone($tz);
+
+        // N : 1 = lundi … 7 = dimanche → recul jusqu'au lundi de la semaine.
+        $monday = $today->modify('-' . ((int) $today->format('N') - 1) . ' days');
+
+        return [
+            'from' => $monday->format('Y-m-d'),
+            'to'   => $today->format('Y-m-d'),
+        ];
+    }
+
+    /**
      * Fenêtre « mois en cours » (1er du mois → J, bornes incluses) en
      * heure de Paris. $today injectable pour les tests.
      *

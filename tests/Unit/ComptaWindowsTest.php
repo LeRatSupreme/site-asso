@@ -8,10 +8,11 @@ use App\Core\Compta\ComptaCalc;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Fenêtres de dates du kiosque admin : « 7 derniers jours » et « mois en
- * cours ». Garantit notamment que « Ce mois » commence bien le 1er du mois
- * (heure de Paris), même quand la semaine glissante couvre les mêmes dates
- * (ex. le 7 du mois : J-6 = 1er).
+ * Fenêtres de dates du kiosque admin : « 7 derniers jours », « semaine
+ * actuelle » et « mois en cours ». Garantit notamment que « Ce mois »
+ * commence bien le 1er du mois (heure de Paris) et que « Semaine
+ * actuelle » commence le lundi, même quand la semaine glissante couvre
+ * les mêmes dates (ex. le 7 du mois : J-6 = 1er).
  */
 final class ComptaWindowsTest extends TestCase
 {
@@ -49,6 +50,44 @@ final class ComptaWindowsTest extends TestCase
         $w = ComptaCalc::last7DaysWindow($this->paris('2026-10-07 08:00:00'));
 
         self::assertSame('2026-10-01', $w['from'], 'J-6 du 7 octobre = 1er octobre.');
+        self::assertSame('2026-10-07', $w['to']);
+    }
+
+    public function test_semaine_actuelle_commence_le_lundi(): void
+    {
+        // Mercredi 7 octobre 2026 → lundi 5 octobre.
+        $w = ComptaCalc::currentWeekWindow($this->paris('2026-10-07 08:00:00'));
+
+        self::assertSame('2026-10-05', $w['from'], 'La semaine actuelle démarre le lundi.');
+        self::assertSame('2026-10-07', $w['to']);
+    }
+
+    public function test_semaine_actuelle_le_dimanche_reste_sur_la_meme_semaine(): void
+    {
+        // Dimanche 11 octobre 2026 → lundi 5 octobre (semaine ISO lundi→dimanche).
+        $w = ComptaCalc::currentWeekWindow($this->paris('2026-10-11 20:00:00'));
+
+        self::assertSame('2026-10-05', $w['from']);
+        self::assertSame('2026-10-11', $w['to']);
+    }
+
+    public function test_semaine_actuelle_le_lundi_fenetre_d_un_jour(): void
+    {
+        // Lundi 5 octobre 2026 : la semaine vient de commencer.
+        $w = ComptaCalc::currentWeekWindow($this->paris('2026-10-05 09:00:00'));
+
+        self::assertSame('2026-10-05', $w['from']);
+        self::assertSame('2026-10-05', $w['to']);
+    }
+
+    public function test_semaine_actuelle_instable_utc_bascule_au_jour_paris(): void
+    {
+        // 22 h UTC le 6 oct = 0 h Paris le 7 oct (mercredi) → lundi 5.
+        $utc = new \DateTimeImmutable('2026-10-06 22:00:00', new \DateTimeZone('UTC'));
+
+        $w = ComptaCalc::currentWeekWindow($utc);
+
+        self::assertSame('2026-10-05', $w['from']);
         self::assertSame('2026-10-07', $w['to']);
     }
 
