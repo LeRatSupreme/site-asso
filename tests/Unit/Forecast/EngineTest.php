@@ -5,11 +5,13 @@ declare(strict_types=1);
 namespace Tests\Unit\Forecast;
 
 use App\Core\Compta\Forecast\Clean;
+use App\Core\Compta\Forecast\Conformal;
 use App\Core\Compta\Forecast\DemandModel;
 use App\Core\Compta\Forecast\ForecastDataset;
 use App\Core\Compta\Forecast\ForecastEngine;
 use App\Core\Compta\Forecast\DayCurrent;
 use App\Core\Compta\Forecast\Hyper;
+use App\Core\Compta\Forecast\MonteCarlo;
 use App\Core\Compta\Forecast\ProductStat;
 use PHPUnit\Framework\TestCase;
 
@@ -299,6 +301,69 @@ final class EngineTest extends TestCase
     }
 
     /**
+     * FIX E — choc de niveau commun : la largeur RELATIVE de la
+     * fourchette 30 j dépasse celle d'un jour (le niveau ne se
+     * moyennise pas sur 30 jours) et prob_atteinte reste une fraction.
+     */
+    public function test_choc_de_niveau_commun_elargit_l_horizon_30j(): void
+    {
+        $r = ForecastEngine::forecast(new ForecastDataset(self::serie(28)), self::paris('2026-10-19 23:59'), '23:59', ['seed' => 42, 'draws' => 1000]);
+
+        self::assertNotNull($r['intervalle_80']);
+        $relJour = ((float) $r['intervalle_80']['hi'] - (float) $r['intervalle_80']['lo']) / max(0.01, (float) $r['prevision_jour']);
+        $rel30 = ((float) $r['mois30']['hi'] - (float) $r['mois30']['lo']) / max(0.01, (float) $r['mois30']['attendu']);
+
+        self::assertGreaterThan($relJour, $rel30, 'Fourchette 30 j plus large RELATIVEMENT que celle d\'un jour.');
+        self::assertGreaterThan(0.20, $rel30, 'Horizon 30 j : largeur honnête (choc Gamma(8, 1/8) non moyennisé).');
+        self::assertGreaterThanOrEqual(0.0, $r['semaine']['prob_atteinte']);
+        self::assertLessThanOrEqual(1.0, $r['semaine']['prob_atteinte']);
+    }
+
+    /**
+     * FIX G — « Hier » : le refit RÉUTILISE la dispersion r du modèle
+     * principal (propriété globale). Scénario du dump prod reproduit sur
+     * série bruitée : le r local du refit sans hier diffère du r principal
+     * (28,2 vs 14,8). La fourchette du payload doit être ÉGALE au
+     * recalcul déterministe avec le r principal imposé — elle ne l'est
+     * PAS avec l'ancien comportement (r local du refit).
+     */
+    public function test_hier_reutilise_la_dispersion_principale(): void
+    {
+        $days = self::serieBruitee(28);
+        $now = self::paris('2026-10-15 23:59'); // hier = dernier jour de la série (mer 14/10)
+        $r = ForecastEngine::forecast(new ForecastDataset($days), $now, '23:59', ['seed' => 42, 'draws' => 1000]);
+
+        self::assertNotNull($r['hier'], 'Hier (mercredi) est dans le dataset.');
+
+        $hierKey = '2026-10-14';
+        $subsetH = array_filter($days, static fn (string $k): bool => $k !== $hierKey, ARRAY_FILTER_USE_KEY);
+        $main  = DemandModel::fit($days, Clean::atypicalWeights($days), Hyper::K_POOL);
+        $refit = DemandModel::fit($subsetH, Clean::atypicalWeights($subsetH), Hyper::K_POOL);
+        self::assertNotEqualsWithDelta(
+            $main->dispersionR,
+            $refit->dispersionR,
+            0.5,
+            'Scénario du dump : le r local du refit sans hier diffère du r principal.'
+        );
+
+        // Recalcul déterministe de la fourchette attendue avec le r
+        // principal (même graine que le moteur : Mt19937(seed + crc32 tag)).
+        $modelH = DemandModel::fit($subsetH, Clean::atypicalWeights($subsetH), Hyper::K_POOL, $main->dispersionR);
+        $rng = new \Random\Randomizer(new \Random\Engine\Mt19937(42 + crc32('H' . $hierKey)));
+        $sum = MonteCarlo::summarize(MonteCarlo::daySamples($modelH, new \DateTimeImmutable($hierKey), $rng, 1000));
+        $cal = Conformal::apply(
+            is_numeric($r['facteur_conforme'] ?? null) ? (float) $r['facteur_conforme'] : null,
+            $sum['mean'],
+            $sum['lo'],
+            $sum['hi']
+        );
+
+        self::assertEqualsWithDelta($sum['mean'], (float) $r['hier']['prevu'], 1.0e-9, 'Prévu : refit identique au moteur.');
+        self::assertEqualsWithDelta($cal['lo'], (float) $r['hier']['lo'], 1.0e-9, 'Fourchette « Hier » : r du modèle PRINCIPAL réutilisé (pas le r local).');
+        self::assertEqualsWithDelta($cal['hi'], (float) $r['hier']['hi'], 1.0e-9, 'Fourchette « Hier » : r du modèle PRINCIPAL réutilisé (pas le r local).');
+    }
+
+    /**
      * Produits synthétiques du test de réconciliation : quantités
      * hétérogènes, prix 2, coût 1, même catégorie (agrégats lisibles).
      *
@@ -330,6 +395,33 @@ final class EngineTest extends TestCase
                 $n = self::MOTIF[$dow];
                 $key = $d->format('Y-m-d');
                 $days[$key] = new DayCurrent($key, $n * 1.25, $n, self::horaire($n), array_fill(0, $n, 1.25));
+            }
+            $d = $d->modify('+1 day');
+        }
+
+        return $days;
+    }
+
+    /**
+     * Série du motif avec bruit déterministe en zigzag (jours ouverts
+     * pairs ×1,25, impairs ×0,8) : surdispersion réaliste — le r du
+     * modèle principal diffère du r local du refit sans le dernier jour
+     * (scénario du dump prod, test du FIX G).
+     *
+     * @return array<string,DayCurrent>
+     */
+    private static function serieBruitee(int $jours): array
+    {
+        $days = [];
+        $d = new \DateTimeImmutable('2026-09-07'); // lundi
+        $i = 0;
+        while (count($days) < $jours) {
+            $dow = (int) $d->format('N') - 1;
+            if ($dow <= 4) {
+                $n = (int) round(self::MOTIF[$dow] * ($i % 2 === 0 ? 1.25 : 0.8));
+                $key = $d->format('Y-m-d');
+                $days[$key] = new DayCurrent($key, $n * 1.25, $n, self::horaire($n), array_fill(0, $n, 1.25));
+                $i++;
             }
             $d = $d->modify('+1 day');
         }

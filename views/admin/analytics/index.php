@@ -464,8 +464,20 @@ $iconSvg = static function (string $name): string {
                     <li><span>Objectif hebdo</span><strong><?= e(formatPrice($goalVal)) ?></strong></li>
                     <li><span>Déjà encaissé cette semaine</span><strong><?= $semReel === null ? '—' : e(formatPrice((float) $semReel)) ?></strong></li>
                     <li><span>Attendu fin de semaine</span><strong><?= $semAtt === null ? '—' : e(formatPrice((float) $semAtt) . $fcRange($semIv)) ?></strong></li>
-                    <?php if ($semManq !== null && $semRest > 0): ?>
-                        <li><span>CA manquant par jour restant</span><strong><?= e(formatPrice((float) $semManq)) ?> (<?= $semRest ?> jour<?= $semRest > 1 ? 's' : '' ?> restant<?= $semRest > 1 ? 's' : '' ?>)</strong></li>
+                    <?php
+                    // FIX F : « Requis/jour » = rythme pour VISER la cible
+                    // (objectif − réel)/jours restants, TOUJOURS affiché
+                    // quand le réel est sous l'objectif — même si le
+                    // modèle prévoit d'atteindre. Le « manque attendu »
+                    // (modèle) ne s'affiche que si attendu < objectif.
+                    $semReq = $sem['requis_par_jour'] ?? null;
+                    $joursLbl = static fn (int $n): string => $n . ' jour' . ($n > 1 ? 's' : '') . ' restant' . ($n > 1 ? 's' : '');
+                    ?>
+                    <?php if ($semReq !== null && (float) $semReq > 0.0 && $semReel !== null && (float) $semReel < $goalVal): ?>
+                        <li><span>Requis/jour pour viser l'objectif</span><strong><?= e(formatPrice((float) $semReq)) ?> (<?= $joursLbl($semRest) ?>)</strong></li>
+                    <?php endif; ?>
+                    <?php if ($semManq !== null && (float) $semManq > 0.0 && $semRest > 0): ?>
+                        <li><span>Manque attendu par jour restant</span><strong><?= e(formatPrice((float) $semManq)) ?> (<?= $joursLbl($semRest) ?>)</strong></li>
                     <?php endif; ?>
                     <li><span>Horizon 30 jours</span><strong><?= $m30Att === null ? '—' : e(formatPrice((float) $m30Att) . $fcRange($m30Iv)) ?></strong></li>
                 </ul>
