@@ -126,70 +126,23 @@ final class AdminAnalyticsController extends AdminBaseController
             $dailyCa[$b['bucket']] = (float) $b['ca'];
         }
 
-        $forecast = SalesForecast::forecast($dailyCa, $now);
-
-        // Historique quotidien (libellés français) + position du bar du jour.
-        $histLabels = [];
-        $histValues = [];
-        $todayKey   = $now->format('Y-m-d');
-        $todayIndex = false;
-        foreach ($dayTrend as $i => $b) {
-            if ($b['bucket'] === $todayKey) {
-                $todayIndex = $i;
-            }
-            $histLabels[] = SalesForecast::dayLabel(new \DateTimeImmutable($b['bucket']));
-            $histValues[] = (float) $b['ca'];
-        }
-        if ($todayIndex === false) {
-            $histLabels[] = SalesForecast::dayLabel($now);
-            $histValues[] = (float) ($dailyCa[$todayKey] ?? 0.0);
-            $todayIndex   = count($histValues) - 1;
-        }
-
-        // Pro-rata du jour : parts horaires réelles du CA sur la période.
-        $hourly    = Analytics::revenueByHour($from, $to, $category, $payment);
-        $hourTotal = 0.0;
-        foreach ($hourly as $row) {
-            $hourTotal += $row['ca'];
-        }
-        $hourShares = [];
-        if ($hourTotal > 0) {
-            foreach ($hourly as $h => $row) {
-                $hourShares[(int) $h] = $row['ca'] / $hourTotal;
-            }
-        }
-
-        $todayFull = $forecast['today']['forecast_full'];
-        if ($todayFull !== null && $todayFull > 0) {
-            $soFar = SalesForecast::proRatedForecast($todayFull, $hourShares, $now);
-            $forecast['today']['forecast_so_far'] = $soFar;
-            $forecast['today']['delta_pct'] = $this->pctDelta((float) $forecast['today']['actual'], $soFar);
-        }
-
-        $forecast['history']     = ['labels' => $histLabels, 'values' => $histValues];
-        $forecast['today_index'] = $todayIndex;
-        $forecast['today']['label'] = SalesForecast::dayLabel($now);
-        $forecast['now_hour']    = (int) $now->format('G');
-
-        // ---- Estimation du jour (fenêtre d'analyse au choix) ----
-        // Indépendante de la période affichée : la fenêtre fw (7/14/30 j,
-        // GET « fw », défaut 14) finit aujourd'hui et sert à la fois à
-        // l'estimation (moyenne par jour de semaine sur la fenêtre) et aux
-        // parts horaires attendues. Fiable dès min(7, fw-1) jours écoulés :
-        // fenêtre complète pour 7 j, une semaine pleine au-delà.
+        // ---- Fenêtre COMMUNE des prévisions (GET « fw », défaut 14) ----
+        // Une seule question « sur combien de jours ? » pour TOUTES les
+        // prévisions : les cartes « Prévisions » (jour pro-rata, hier,
+        // historique) et « Estimation du jour » partagent la même fenêtre
+        // finissant aujourd'hui — moyennes par jour de semaine ET parts
+        // horaires attendues incluses.
         $fwRaw = $this->filter('fw', '14');
         $fw    = in_array($fwRaw, ['7', '14', '30'], true) ? (int) $fwRaw : 14;
 
         $trackFrom = $now->modify('-' . ($fw - 1) . ' days')->format('Y-m-d');
         $trackTo   = $now->format('Y-m-d');
 
+        $trackTrend = Analytics::revenueTrend($trackFrom, $trackTo, 'day', $category, $payment);
         $trackDailyCa = [];
-        foreach (Analytics::revenueTrend($trackFrom, $trackTo, 'day', $category, $payment) as $b) {
+        foreach ($trackTrend as $b) {
             $trackDailyCa[$b['bucket']] = (float) $b['ca'];
         }
-
-        $trackForecast = SalesForecast::forecast($trackDailyCa, $now);
-        $dayEstimate   = $trackForecast['today']['forecast_full'];
 
         // Parts horaires du CA sur la fenêtre (normalisées), et CA du jour
         // heure par heure (aujourd'hui inclus dans la fenêtre).
@@ -210,10 +163,52 @@ final class AdminAnalyticsController extends AdminBaseController
             $todayHourlyCa[(int) $h] = (float) $row['ca'];
         }
 
+        // ---- Carte « Prévisions » : calculée sur la fenêtre commune ----
+        $forecast = SalesForecast::forecast($trackDailyCa, $now);
+
+        // Historique quotidien de la fenêtre (libellés français) + position
+        // du bar du jour.
+        $histLabels = [];
+        $histValues = [];
+        $todayKey   = $now->format('Y-m-d');
+        $todayIndex = false;
+        foreach ($trackTrend as $i => $b) {
+            if ($b['bucket'] === $todayKey) {
+                $todayIndex = $i;
+            }
+            $histLabels[] = SalesForecast::dayLabel(new \DateTimeImmutable($b['bucket']));
+            $histValues[] = (float) $b['ca'];
+        }
+        if ($todayIndex === false) {
+            $histLabels[] = SalesForecast::dayLabel($now);
+            $histValues[] = (float) ($trackDailyCa[$todayKey] ?? 0.0);
+            $todayIndex   = count($histValues) - 1;
+        }
+
+        // Pro-rata du jour : parts horaires de la même fenêtre commune.
+        $todayFull = $forecast['today']['forecast_full'];
+        if ($todayFull !== null && $todayFull > 0) {
+            $soFar = SalesForecast::proRatedForecast($todayFull, $trackShares, $now);
+            $forecast['today']['forecast_so_far'] = $soFar;
+            $forecast['today']['delta_pct'] = $this->pctDelta((float) $forecast['today']['actual'], $soFar);
+        }
+
+        $forecast['window']       = $fw;
+        $forecast['history']      = ['labels' => $histLabels, 'values' => $histValues];
+        $forecast['today_index']  = $todayIndex;
+        $forecast['today']['label'] = SalesForecast::dayLabel($now);
+        $forecast['now_hour']     = (int) $now->format('G');
+
+        // ---- Estimation du jour : MÊME fenêtre, même analyse ----
+        // L'estimation est la prévision pleine du jour issue de la fenêtre
+        // commune. Fiable dès min(7, fw-1) jours écoulés : fenêtre complète
+        // pour 7 j, une semaine pleine au-delà.
+        $dayEstimate = $forecast['today']['forecast_full'];
+
         $dayTrack = [
             'window'    => $fw,
             'estimate'  => $dayEstimate,
-            'reliable'  => $trackForecast['elapsed_days'] >= min(7, $fw - 1),
+            'reliable'  => $forecast['elapsed_days'] >= min(7, $fw - 1),
             'track'     => SalesForecast::dayTrack(
                 $todayHourlyCa,
                 (float) ($dayEstimate ?? 0.0),
@@ -222,6 +217,10 @@ final class AdminAnalyticsController extends AdminBaseController
             ),
             'now_hour'  => (int) $now->format('G'),
         ];
+
+        // CA par heure sur la période AFFICHÉE (carte « Par heure ») —
+        // distinct de la fenêtre des prévisions.
+        $hourly = Analytics::revenueByHour($from, $to, $category, $payment);
 
         $weekday = Analytics::revenueByWeekday($from, $to, $category, $payment);
 
@@ -240,11 +239,23 @@ final class AdminAnalyticsController extends AdminBaseController
             }
         }
 
-        // Moyennes horaires (CA / jours écoulés) et séries du jour pour
-        // la carte « Par heure » : profil attendu (parts de la fenêtre
-        // « estimation du jour », cohérent avec day_track) et CA réel
-        // du jour heure par heure.
-        $elapsedDays  = (int) $forecast['elapsed_days'];
+        // Moyennes horaires (CA / jours écoulés de la période AFFICHÉE) et
+        // séries du jour pour la carte « Par heure » : profil attendu
+        // (parts de la fenêtre commune, cohérent avec day_track) et CA
+        // réel du jour heure par heure. La ligne « moyenne / jour » de la
+        // carte « Par jour de semaine » reste elle aussi liée à la
+        // période affichée.
+        $periodElapsed     = 0;
+        $periodElapsedSum  = 0.0;
+        foreach ($dailyCa as $day => $ca) {
+            if ((string) $day < $todayKey) {
+                $periodElapsed++;
+                $periodElapsedSum += (float) $ca;
+            }
+        }
+        $periodAvgPerDay = $periodElapsed > 0 ? round($periodElapsedSum / $periodElapsed, 4) : null;
+
+        $elapsedDays  = $periodElapsed;
         $hourlyCaCols = array_column($hourly, 'ca');
         $hourlyCaAvg  = array_map(
             static fn (float $ca): float => $elapsedDays > 0 ? $ca / $elapsedDays : 0.0,
@@ -304,7 +315,7 @@ final class AdminAnalyticsController extends AdminBaseController
                 'ca_avg'      => SalesForecast::weekdayAverages(array_column($weekday, 'ca'), $weekdayCounts),
                 'days_count'  => $weekdayCounts,
                 'today_index' => (int) $now->format('N') - 1,
-                'avg_per_day' => $forecast['global_avg'],
+                'avg_per_day' => $periodAvgPerDay,
             ],
             'hourly'     => [
                 'labels'         => array_map(static fn (int $h): string => $h . 'h', range(0, 23)),

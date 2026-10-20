@@ -179,7 +179,17 @@ $iconSvg = static function (string $name): string {
 
         <?php
         // Chips de prévision : jour en cours (pro-rata) et hier — même
-        // motif que les deltas KPI, appliqué aux prévisions.
+        // motif que les deltas KPI, appliqué aux prévisions. La fenêtre
+        // d'analyse (7/14/30 j, GET « fw ») est COMMUNE aux prévisions et
+        // à l'estimation du jour : liens simples, le reste du GET est
+        // préservé.
+        $fcUrl = static function (int $w) use ($token): string {
+            $params       = $_GET;
+            $params['fw'] = (string) $w;
+
+            return url('/kiosque/admin/analytics/' . rawurlencode($token)) . '?' . http_build_query($params);
+        };
+        $fcFw    = (int) ($forecast['window'] ?? 14);
         $fcToday = $forecast['today'];
         $fcYday  = $forecast['yesterday'];
         $fcChips = [];
@@ -207,6 +217,14 @@ $iconSvg = static function (string $name): string {
         ?>
         <?php if ($fcChips !== []): ?>
         <section class="card surface glass ka-card ka-fc">
+            <div class="ka-fc-win">
+                <span class="ka-fc-win-label">Fenêtre d'analyse :</span>
+                <div class="ka-pills">
+                    <?php foreach ([7 => '7 j', 14 => '14 j', 30 => '30 j'] as $w => $lbl): ?>
+                        <a class="ka-fwpill <?= $fcFw === $w ? 'is-active' : '' ?>" href="<?= e($fcUrl($w)) ?>"><?= e($lbl) ?></a>
+                    <?php endforeach; ?>
+                </div>
+            </div>
             <?php foreach ($fcChips as $chip):
                 $d  = $chip['delta'];
                 $up = $d === null ? null : ($d >= 0);
@@ -237,7 +255,7 @@ $iconSvg = static function (string $name): string {
         <?php if ($dtEst !== null && (float) $dtEst > 0): ?>
         <section class="card surface glass ka-card ka-fc">
             <span class="ka-kpi-delta is-muted">
-                Objectif du jour : <?= e(formatPrice((float) $dtEst)) ?>
+                Objectif du jour (fenêtre <?= (int) ($day_track['window'] ?? 14) ?> j) : <?= e(formatPrice((float) $dtEst)) ?>
             </span>
             <?php if ($dtUp !== null): ?>
                 <span class="ka-kpi-delta <?= $dtUp ? 'is-up' : 'is-down' ?>">
@@ -1052,6 +1070,27 @@ $iconSvg = static function (string $name): string {
     border-color: var(--primary, #48bdd3);
     color: #08172d;
 }
+/* Pastilles de fenêtre des prévisions : mêmes styles que .ka-pill mais
+   classe distincte (liens <a>) pour ne pas capter le handler JS du
+   sélecteur de période. */
+.ka-fwpill {
+    appearance: none; cursor: pointer; white-space: nowrap;
+    font-family: inherit; text-decoration: none;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: var(--muted, #9fb3c8);
+    padding: 0.3rem 0.6rem;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    transition: all 0.15s;
+}
+.ka-fwpill:hover { border-color: rgba(72, 189, 211, 0.4); color: var(--foreground); }
+.ka-fwpill.is-active {
+    background: var(--primary, #48bdd3);
+    border-color: var(--primary, #48bdd3);
+    color: #08172d;
+}
 .ka-custom { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; }
 /* Le display:flex ci-dessus écraserait l'attribut hidden sinon. */
 .ka-custom[hidden] { display: none; }
@@ -1107,10 +1146,12 @@ $iconSvg = static function (string $name): string {
 .ka-chart-donut { height: 250px; max-width: 280px; margin: 0 auto; }
 .ka-chart-bar { height: 210px; }
 
-/* ---- Prévisions : chips du jour (pro-rata) / d'hier ---- */
+/* ---- Prévisions : fenêtre commune + chips du jour (pro-rata) / d'hier ---- */
 .ka-fc { display: flex; flex-direction: column; gap: 0.2rem; padding: 0.6rem 0.7rem; }
 .ka-fc .ka-kpi-delta { font-size: 0.78rem; line-height: 1.4; }
 .ka-fc-note { font-size: 0.66rem; color: var(--muted, #9fb3c8); }
+.ka-fc-win { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; margin-bottom: 0.2rem; }
+.ka-fc-win-label { font-size: 0.68rem; font-weight: 700; color: var(--muted, #9fb3c8); }
 /* Donuts empilés sur téléphone (assez larges pour être lus en 1:1),
    côte à côte uniquement sur écran large. */
 .ka-duo { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.6rem; }
