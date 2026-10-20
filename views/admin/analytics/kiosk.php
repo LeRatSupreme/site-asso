@@ -334,6 +334,9 @@ $iconSvg = static function (string $name): string {
         <?php if ($sem !== [] && ($sem['attendu'] ?? null) !== null): ?>
             <?php
             $semProb = $sem['prob_atteinte'] ?? null;
+            // prob_atteinte est une FRACTION 0–1 : l'affichage fait le ×100.
+            $semProbPct = $semProb === null ? null : max(0.0, min(100.0, (float) $semProb * 100.0));
+            $semProbFmt = $semProbPct === null ? '' : number_format($semProbPct, $semProbPct < 10 ? 1 : 0, ',', ' ');
             $semIvK  = (($sem['lo'] ?? null) !== null && ($sem['hi'] ?? null) !== null)
                 ? ['lo' => $sem['lo'], 'hi' => $sem['hi']] : null;
             $semRestK = (int) ($sem['jours_restants'] ?? 0);
@@ -343,8 +346,8 @@ $iconSvg = static function (string $name): string {
                     Objectif semaine : <?= e(formatPrice((float) ($sem['objectif'] ?? ($goal ?? 0)))) ?>
                     · attendu <?= e(formatPrice((float) $sem['attendu']) . $kRange($semIvK)) ?>
                 </span>
-                <span class="ka-kpi-delta <?= $semProb === null ? 'is-muted' : ((float) $semProb >= 50 ? 'is-up' : 'is-off') ?>">
-                    Probabilité d'atteinte : <?= $semProb === null ? '—' : e(number_format((float) $semProb, 0, ',', ' ')) . ' %' ?>
+                <span class="ka-kpi-delta <?= $semProbPct === null ? 'is-muted' : ($semProbPct >= 50 ? 'is-up' : 'is-off') ?>">
+                    Probabilité d'atteinte : <?= $semProbPct === null ? '—' : e($semProbFmt) . ' %' ?>
                 </span>
                 <?php if (($sem['manquant_par_jour'] ?? null) !== null && $semRestK > 0): ?>
                     <span class="ka-kpi-delta is-muted">
