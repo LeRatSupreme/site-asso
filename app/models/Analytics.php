@@ -932,36 +932,103 @@ final class Analytics extends Model
         }
 
         // 4) Meilleur jour de la semaine (% du CA).
-        $matrix = self::salesByDayHour($from, $to, $category, $payment);
-        $dayTotals = array_map('array_sum', $matrix);
-        $total     = array_sum($dayTotals);
-        $days      = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
-        // Garde-fou : compter les jours (de semaine) DISTINCTS avec CA > 0
-        // dans la fenêtre, depuis la même source que cet insight
-        // (salesByDayHour). Si la fenêtre ne contient qu'UN jour avec
-        // ventes, la part « 100 % » est tautologique : on n'émet PAS cet
-        // insight (les trois autres restent).
-        $joursAvecVentes = count(array_filter($dayTotals, static fn ($ca): bool => (float) $ca > 0.0));
-        if ($total > 0 && $joursAvecVentes >= 2) {
-            $bestIdx = 0;
-            for ($d = 1; $d < 7; $d++) {
-                if ($dayTotals[$d] > $dayTotals[$bestIdx]) {
-                    $bestIdx = $d;
-                }
+        //
+        // Garde-fous (le jour PARTIEL « aujourd'hui » est EXCLU du
+        // classement — sinon une fenêtre « Semaine actuelle » affiche
+        // « Lundi 60 % du CA » à partir d'un jour et demi) :
+        //  - fenêtre effective arrêtée HIER ;
+        //  - ≥ 2 JOURS distincts avec CA > 0 ;
+        //  - ≥ 2 SEMAINES calendaires distinctes avec CA > 0.
+        // Sinon la part « X % » serait tautologique : pas d'insight.
+        $todayKey = date('Y-m-d');
+        try {
+            $hierKey = (new \DateTimeImmutable($todayKey))->modify('-1 day')->format('Y-m-d');
+        } catch (\Throwable) {
+            $hierKey = $to;
+        }
+        $toEffectif = $to < $hierKey ? $to : $hierKey;
+        $parDate = [];
+        if ($from <= $toEffectif) {
+            foreach (self::revenueTrend($from, $toEffectif, 'day', $category, $payment) as $b) {
+                $parDate[(string) $b['bucket']] = (float) $b['ca'];
             }
+        }
+        $meilleur = self::meilleurJourSemaine($parDate);
+        if ($meilleur !== null) {
+            $jours = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
             $insights[] = [
                 'icon'  => 'clock',
                 'title' => 'Meilleur jour',
                 'text'  => sprintf(
                     'Le %s représente %d%% du CA.',
-                    $days[$bestIdx],
-                    (int) round(($dayTotals[$bestIdx] / $total) * 100)
+                    $jours[$meilleur['dow']],
+                    (int) round($meilleur['pct'])
                 ),
                 'tone'  => 'amber',
             ];
         }
 
         return $insights;
+    }
+
+    /**
+     * Meilleur jour de semaine à partir des CA PAR DATE (aujourd'hui
+     * déjà exclu par l'appelant). Garde-fou : ≥ 2 jours distincts ET
+     * ≥ 2 semaines calendaires distinctes avec CA > 0, sinon null (pas
+     * d'insight — une part calculée sur moins n'a pas de sens).
+     * Méthode pure : testable sans base.
+     *
+     * @param array<string,float> $parDate 'Y-m-d' => CA du jour.
+     * @return ?array{dow:int,label:string,pct:float}
+     */
+    public static function meilleurJourSemaine(array $parDate): ?array
+    {
+        $joursAvecVentes = [];
+        $semaines = [];
+        foreach ($parDate as $dateKey => $ca) {
+            if ((float) $ca <= 0.0) {
+                continue;
+            }
+            try {
+                $d = new \DateTimeImmutable((string) $dateKey);
+            } catch (\Throwable) {
+                continue;
+            }
+            $joursAvecVentes[$d->format('Y-m-d')] = $d;
+            $semaines[$d->modify('-' . ((int) $d->format('N') - 1) . ' days')->format('Y-m-d')] = true;
+        }
+        if (count($joursAvecVentes) < 2 || count($semaines) < 2) {
+            return null;
+        }
+
+        $dayTotals = array_fill(0, 7, 0.0);
+        $total = 0.0;
+        foreach ($parDate as $dateKey => $ca) {
+            try {
+                $dow = (int) (new \DateTimeImmutable((string) $dateKey))->format('N') - 1;
+            } catch (\Throwable) {
+                continue;
+            }
+            $dayTotals[$dow] += (float) $ca;
+            $total += (float) $ca;
+        }
+        if ($total <= 0.0) {
+            return null;
+        }
+
+        $bestIdx = 0;
+        for ($d = 1; $d < 7; $d++) {
+            if ($dayTotals[$d] > $dayTotals[$bestIdx]) {
+                $bestIdx = $d;
+            }
+        }
+        $labels = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
+
+        return [
+            'dow'   => $bestIdx,
+            'label' => $labels[$bestIdx],
+            'pct'   => $dayTotals[$bestIdx] / $total * 100.0,
+        ];
     }
 
     private static function prevFrom(string $from, string $to): string
