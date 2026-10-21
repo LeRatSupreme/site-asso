@@ -8,12 +8,13 @@ use App\Core\Compta\Reco\Recommendation;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Sérialisation canonique : toArray expose EXACTEMENT les 13 clés
- * imposées, dans l'ordre.
+ * Sérialisation canonique : toArray expose EXACTEMENT les 16 clés
+ * imposées, dans l'ordre — dont bloc ('idee'|'correction') et la
+ * fenêtre de validité debut/fin ('Y-m-d', null si non datée).
  */
 final class RecommendationTest extends TestCase
 {
-    public function test_toarray_expose_exactement_13_cles(): void
+    public function test_toarray_expose_exactement_16_cles(): void
     {
         $r = new Recommendation(
             id: 'R2_P1_20261021',
@@ -28,11 +29,14 @@ final class RecommendationTest extends TestCase
             produits: [['key' => 'P1', 'label' => 'Sirop menthe']],
             gardeFousOk: true,
             commentMesurer: 'CA hebdomadaire 14 jours avant / après',
-            statut: 'proposée'
+            statut: 'proposée',
+            bloc: 'correction',
+            debut: '2026-10-22',
+            fin: '2026-10-23'
         );
 
         $a = $r->toArray();
-        self::assertCount(13, $a);
+        self::assertCount(16, $a);
         self::assertSame([
             'id',
             'regle',
@@ -47,6 +51,9 @@ final class RecommendationTest extends TestCase
             'garde_fous_ok',
             'comment_mesurer',
             'statut',
+            'bloc',
+            'debut',
+            'fin',
         ], array_keys($a));
         self::assertSame('R2', $a['regle']);
         self::assertSame(['bas' => 5.0, 'median' => 10.0, 'haut' => 15.0], $a['gain_hebdo']);
@@ -54,5 +61,33 @@ final class RecommendationTest extends TestCase
         self::assertSame(1, $a['effort']);
         self::assertTrue($a['garde_fous_ok']);
         self::assertSame('proposée', $a['statut']);
+        self::assertSame('correction', $a['bloc']);
+        self::assertSame('2026-10-22', $a['debut']);
+        self::assertSame('2026-10-23', $a['fin']);
+    }
+
+    public function test_bloc_idee_et_dates_nulles_par_defaut(): void
+    {
+        $r = new Recommendation(
+            id: 'R5_PA_PB',
+            regle: 'R5',
+            titre: 'Duo promo : Ananas + Biscuits',
+            pourquoi: 'lift 4,0',
+            action: 'Proposez le duo',
+            gainHebdo: ['bas' => 0.0, 'median' => 1.0, 'haut' => 2.0],
+            confiance: 'faible',
+            effort: 2,
+            hypotheses: [],
+            produits: [],
+            gardeFousOk: true,
+            commentMesurer: 'Duos vendus',
+            statut: 'proposée'
+        );
+
+        $a = $r->toArray();
+        self::assertSame('idee', $a['bloc']);
+        self::assertNull($a['debut']);
+        self::assertNull($a['fin']);
+        self::assertSame(16, count($a));
     }
 }

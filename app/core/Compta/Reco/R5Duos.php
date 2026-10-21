@@ -13,13 +13,23 @@ namespace App\Core\Compta\Reco;
  *  (a) ANALYSE DES ASSOCIATIONS (si ≥ « reco_assoc_paniers_min » (30)
  *      paniers multi-articles) : pour chaque paire de produits
  *      co-occurrents — support = co-occurrences ÷ nPaniers(), confiance
- *      = co ÷ paniers(a), lift = confiance ÷ P(b). Sont retenues les
- *      paires avec lift > « reco_assoc_lift_min » (1,2), support ≥ «
- *      reco_assoc_support_min » (0,02) et confiance ≥ «
- *      reco_assoc_conf_min » (0,05) ; meilleure paire par lift
- *      décroissant (départages : support, confiance, clés —
- *      déterministe) ; a = accroche = plus fort volume désaisonnalisé
- *      des deux, b = cible.
+ *      = co ÷ paniers(a), lift = confiance ÷ P(b). Paires toujours
+ *      soumises aux contraintes : deux produits à coût utilisable de
+ *      catégories DIFFÉRENTES, lift > 1,0 strict (anti-association :
+ *      une paire dont le lift ≤ 1 n'est jamais retenue). Deux niveaux
+ *      de portes :
+ *       - FORTE : lift > « reco_assoc_lift_min » (1,2) ET support ≥ «
+ *         reco_assoc_support_min » (0,02) ET confiance ≥ «
+ *         reco_assoc_conf_min » (0,05) → confiance « moyenne » ;
+ *       - VARIANTE (sinon) : lift > « reco_r5_lift_variante_min »
+ *         (1,0) ET support ≥ « reco_r5_support_variante_min » (0,005)
+ *         ET confiance ≥ « reco_r5_conf_variante_min » (0,03) →
+ *         confiance « faible » + hypothèse « Association rare mais
+ *         cohérente : hypothèse ».
+ *      Choix : meilleure FORTE par lift décroissant (départages :
+ *      support, confiance, clés), SINON meilleure VARIANTE — une FORTE
+ *      est toujours préférée à une VARIANTE ; a = accroche = plus fort
+ *      volume désaisonnalisé des deux, b = cible.
  *  (b) HEURISTIQUE (sinon) : accroche = produit à coût utilisable de
  *      plus fort volume ; cible = produit à coût utilisable de plus
  *      fort taux de marge, de stock non géré ou > STOCK_CIBLE_MIN, et
@@ -51,6 +61,9 @@ final class R5Duos implements RecoRule
     /** Unités — stock minimal de la cible en heuristique (au-delà, réserve insuffisante). */
     public const STOCK_CIBLE_MIN = 10;
 
+    /** Sans unité — lift strictement supérieur requis (anti-association : lift ≤ 1 = indépendance). */
+    public const LIFT_ANTI_ASSOCIATION = 1.0;
+
     /** Facteur — borne basse du gain = 0,5 × gain médian. */
     public const FACTEUR_BAS = 0.5;
 
@@ -77,7 +90,7 @@ final class R5Duos implements RecoRule
     }
 
     /**
-     * Chemin (a) : meilleure paire d'après les paniers (lift, support, confiance).
+     * Chemin (a) : meilleure paire FORTE, sinon meilleure VARIANTE.
      *
      * @return list<array<string,mixed>>
      */
@@ -90,6 +103,9 @@ final class R5Duos implements RecoRule
         $liftMin = (float) $ctx->param('assoc_lift_min', Hyper::ASSOC_LIFT_MIN);
         $supportMin = (float) $ctx->param('assoc_support_min', Hyper::ASSOC_SUPPORT_MIN);
         $confMin = (float) $ctx->param('assoc_conf_min', Hyper::ASSOC_CONF_MIN);
+        $liftVarMin = (float) $ctx->param('r5_lift_variante_min', Hyper::R5_LIFT_VARIANTE_MIN);
+        $supportVarMin = (float) $ctx->param('r5_support_variante_min', Hyper::R5_SUPPORT_VARIANTE_MIN);
+        $confVarMin = (float) $ctx->param('r5_conf_variante_min', Hyper::R5_CONF_VARIANTE_MIN);
 
         // Produits ciblables : filtrés et à coût utilisable (le duo est tarifaire, garde-fou 2).
         $eligibles = [];
@@ -123,7 +139,8 @@ final class R5Duos implements RecoRule
             }
         }
 
-        $retenues = [];
+        $fortes = [];
+        $variantes = [];
         foreach ($co as $paire => $nb) {
             [$a, $b] = explode('|', $paire);
             $na = $nbPaniers[$a] ?? 0;
@@ -131,27 +148,29 @@ final class R5Duos implements RecoRule
             if ($na === 0 || $nbB === 0) {
                 continue;
             }
+            if ($eligibles[$a]->category === $eligibles[$b]->category) {
+                continue; // Duo = deux catégories différentes, toujours.
+            }
             $support = $nb / $n;
             $conf = $nb / $na;
             $lift = $conf / ($nbB / $n);
             if ($lift > $liftMin && $support >= $supportMin && $conf >= $confMin) {
-                $retenues[] = ['a' => $a, 'b' => $b, 'support' => $support, 'conf' => $conf, 'lift' => $lift, 'co' => $nb];
+                $fortes[] = ['a' => $a, 'b' => $b, 'support' => $support, 'conf' => $conf, 'lift' => $lift, 'co' => $nb];
+            } elseif ($lift > self::LIFT_ANTI_ASSOCIATION
+                && $lift > $liftVarMin
+                && $support >= $supportVarMin
+                && $conf >= $confVarMin) {
+                $variantes[] = ['a' => $a, 'b' => $b, 'support' => $support, 'conf' => $conf, 'lift' => $lift, 'co' => $nb];
             }
         }
-        if ($retenues === []) {
+        $fortes = self::trierPaires($fortes);
+        $variantes = self::trierPaires($variantes);
+        if ($fortes === [] && $variantes === []) {
             return [];
         }
-        usort($retenues, static function (array $x, array $y): int {
-            foreach (['lift', 'support', 'conf'] as $crit) {
-                if ($x[$crit] != $y[$crit]) {
-                    return $y[$crit] <=> $x[$crit];
-                }
-            }
 
-            return [$x['a'], $x['b']] <=> [$y['a'], $y['b']];
-        });
-
-        $meilleure = $retenues[0];
+        $niveau = $fortes !== [] ? 'forte' : 'variante';
+        $meilleure = ($niveau === 'forte' ? $fortes : $variantes)[0];
         $aKey = $meilleure['a'];
         $bKey = $meilleure['b'];
         if ($ctx->qtyDesaison($bKey) > $ctx->qtyDesaison($aKey)) {
@@ -166,9 +185,31 @@ final class R5Duos implements RecoRule
             'support' => $meilleure['support'],
             'lift'    => $meilleure['lift'],
         ];
-        $c = self::candidatDuo($ctx, $eligibles[$aKey], $eligibles[$bKey], $stats);
+        $c = self::candidatDuo($ctx, $eligibles[$aKey], $eligibles[$bKey], $stats, $niveau);
 
         return $c !== null ? [$c] : [];
+    }
+
+    /**
+     * Trie des paires : lift décroissant, départages support, confiance, clés (déterministe).
+     *
+     * @param list<array<string,mixed>> $paires
+     *
+     * @return list<array<string,mixed>>
+     */
+    private static function trierPaires(array $paires): array
+    {
+        usort($paires, static function (array $x, array $y): int {
+            foreach (['lift', 'support', 'conf'] as $crit) {
+                if ($x[$crit] != $y[$crit]) {
+                    return $y[$crit] <=> $x[$crit];
+                }
+            }
+
+            return [$x['a'], $x['b']] <=> [$y['a'], $y['b']];
+        });
+
+        return $paires;
     }
 
     /**
@@ -210,20 +251,21 @@ final class R5Duos implements RecoRule
             return [];
         }
 
-        $c = self::candidatDuo($ctx, $accroche, $cible, null);
+        $c = self::candidatDuo($ctx, $accroche, $cible, null, 'heuristique');
 
         return $c !== null ? [$c] : [];
     }
 
     /**
-     * Candidat duo commun aux deux chemins, ou null si aucune remise
+     * Candidat duo commun aux trois niveaux, ou null si aucune remise
      * saine n'est possible (garde-fous 1 et 4).
      *
      * @param array{na:float,co:float,support:float,lift:float}|null $stats Statistiques d'association (chemin a), null en heuristique.
+     * @param string $niveau 'forte' | 'variante' | 'heuristique'.
      *
      * @return array<string,mixed>|null
      */
-    private static function candidatDuo(RecoContext $ctx, RecoProduct $accroche, RecoProduct $cible, ?array $stats): ?array
+    private static function candidatDuo(RecoContext $ctx, RecoProduct $accroche, RecoProduct $cible, ?array $stats, string $niveau): ?array
     {
         $pa = (float) $accroche->prix;
         $ca = (float) $accroche->cout;
@@ -254,15 +296,20 @@ final class R5Duos implements RecoRule
         $margeDuoPct = $margeDuo / ($total * (1.0 - $r));
         $margeSeparePct = $coutTotal / $total;
 
+        $conversion = 'Conversion de ' . self::pct(self::CONVERSION_ANALYSE, 0)
+            . ' des paniers « accroche sans cible » vers le duo (hypothèse)';
         if ($stats !== null) {
             $sansB = max($stats['na'] - $stats['co'], 0.0);
             $median = self::CONVERSION_ANALYSE * ($sansB / self::SEMAINES_PAR_MOIS) * $margeDuo;
             $pourquoi = 'Présents ensemble dans ' . self::pct($stats['support']) . ' % des paniers · lift ' . self::nombre($stats['lift'], 2)
                 . ' · marge duo ' . self::pct($margeDuoPct) . ' % vs ' . self::pct($margeSeparePct) . ' % vendus séparément';
-            $confiance = 'moyenne';
-            $hypotheses = [
-                'Conversion de ' . self::pct(self::CONVERSION_ANALYSE, 0) . ' des paniers « accroche sans cible » vers le duo (hypothèse)',
-            ];
+            if ($niveau === 'forte') {
+                $confiance = 'moyenne';
+                $hypotheses = [$conversion];
+            } else {
+                $confiance = 'faible';
+                $hypotheses = ['Association rare mais cohérente : hypothèse', $conversion];
+            }
         } else {
             $median = self::CONVERSION_HEURISTIQUE * $accroche->unitesPrevues7j * $margeDuo;
             $pourquoi = 'Marge duo ' . self::pct($margeDuoPct) . ' % vs ' . self::pct($margeSeparePct) . ' % vendus séparément';
@@ -282,7 +329,9 @@ final class R5Duos implements RecoRule
             ],
             'titre'           => 'Duo promo : ' . $accroche->label . ' + ' . $cible->label,
             'pourquoi'        => $pourquoi,
-            'action'          => 'Proposer le duo ' . $accroche->label . ' + ' . $cible->label . ' à ' . self::eur($total * (1.0 - $r)) . ' € (au lieu de ' . self::eur($total) . ' €)',
+            'action'          => 'Proposez le duo ' . $accroche->label . ' + ' . $cible->label . ' à ' . self::eur($total * (1.0 - $r))
+                . ' € au lieu de ' . self::eur($total) . ' € (-' . self::pct($r) . ' %) — marge duo ' . self::eur($margeDuo)
+                . ' € contre ' . self::eur($pb - $cb) . ' € pour ' . $cible->label . ' seul. Affichez-le en caisse pendant 2 semaines.',
             'gain'            => $gain,
             'confiance'       => $confiance,
             'effort'          => Hyper::EFFORTS['R5'],

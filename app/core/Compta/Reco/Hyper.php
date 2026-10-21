@@ -100,8 +100,32 @@ final class Hyper
     /** Probabilité — atteinte de l'objectif minimale déclenchant l'urgence (R9). */
     public const PROB_OBJECTIF_MIN = 0.50;
 
-    /** Recommandations — nombre maximal d'actives simultanées (toutes règles). */
+    /** Recommandations — nombre maximal d'actives simultanées. Obsolète (remplacé par MAX_IDEES/MAX_CORRECTIONS). */
     public const MAX_ACTIVES = 5;
+
+    /** Idées — nombre maximal de recommandations « idée » (consignes commerciales) actives simultanément. */
+    public const MAX_IDEES = 3;
+
+    /** Corrections — nombre maximal de recommandations « correction » (données/rupture) actives simultanément. */
+    public const MAX_CORRECTIONS = 5;
+
+    /** Sans unité — lift minimal d'une association au niveau VARIANTE de R5 (portes assouplies, confiance « faible »). */
+    public const R5_LIFT_VARIANTE_MIN = 1.0;
+
+    /** Fraction des paniers — support minimal d'une association au niveau VARIANTE de R5. */
+    public const R5_SUPPORT_VARIANTE_MIN = 0.005;
+
+    /** P(B|A) — confiance minimale d'une association au niveau VARIANTE de R5. */
+    public const R5_CONF_VARIANTE_MIN = 0.03;
+
+    /** Fraction — part de paniers à 1 article déclenchant la VARIANTE de R6 (majorité simple, confiance « faible »). */
+    public const R6_PART1_VARIANTE_MIN = 0.5;
+
+    /** Fraction du prix — remise cible de la promo heure creuse (R7). */
+    public const R7_REMISE_CIBLE = 0.15;
+
+    /** Fraction du prix — remise minimale en dessous de laquelle la promo heure creuse (R7) ne vaut pas le coup. */
+    public const R7_REMISE_MIN = 0.05;
 
     /** Jours — une reco refusée ne revient pas avant ce délai. */
     public const REFUS_JOURS = 30;

@@ -7,13 +7,20 @@ namespace App\Core\Compta\Reco;
 use App\Core\Compta\Forecast\Stats;
 
 /**
- * R6 — Structuration du panier : seuil cadeau.
+ * R6 — Structuration du panier : seuil cadeau (consigne affichée en
+ * caisse pendant 2 semaines).
  *
  * Contexte : trop de paniers ne contiennent qu'une seule ligne. On
  * propose d'offrir un petit cadeau au-delà d'un seuil de montant (le
  * quantile choisi des montants) pour inciter au franchissement.
  *
- * Déclenchement : part de paniers à 1 ligne > « reco_panier_1article_seuil ».
+ * Deux niveaux de portes sur la part de paniers à 1 ligne :
+ *  - FORTE : part > « reco_panier_1article_seuil » (0,85) → confiance
+ *    « moyenne » (ou « faible » si < 30 paniers, inchangé) ;
+ *  - VARIANTE (sinon) : part > « reco_r6_part1_variante_min » (0,5,
+ *    majorité simple) → confiance « faible » + hypothèse « Majorité
+ *    simple de paniers à 1 article : hypothèse ».
+ *
  * Seuil : quantile « reco_panier_percentile » des montants de TOUS les
  * paniers. Cadeau : produit filtré le moins cher dont le coût est connu
  * et ≤ « reco_cout_cadeau_max », avec stock non géré (null) ou > 10.
@@ -62,7 +69,10 @@ final class R6Panier
             }
         }
         $part = $aUneLigne / $n;
-        if (!($part > (float) $ctx->param('panier_1article_seuil', Hyper::PANIER_1ARTICLE_SEUIL))) {
+        $niveauForte = $part > (float) $ctx->param('panier_1article_seuil', Hyper::PANIER_1ARTICLE_SEUIL);
+        $niveauVariante = !$niveauForte
+            && $part > (float) $ctx->param('r6_part1_variante_min', Hyper::R6_PART1_VARIANTE_MIN);
+        if (!$niveauForte && !$niveauVariante) {
             return [];
         }
 
@@ -80,13 +90,20 @@ final class R6Panier
             - $parSemaine * self::TAUX_FRANCHISSEMENT * $coutCadeau;
         $gain = GuardRails::fourchette($median * 0.5, $median, $median * 1.5);
 
-        $confiance = $n >= Hyper::ASSOC_PANIERS_MIN ? 'moyenne' : 'faible';
+        if ($niveauForte) {
+            $confiance = $n >= Hyper::ASSOC_PANIERS_MIN ? 'moyenne' : 'faible';
+        } else {
+            $confiance = 'faible';
+        }
         $hypotheses = [
             'Taux de franchissement +' . number_format(self::TAUX_FRANCHISSEMENT * 100.0, 0, ',', '')
                 . ' % des paniers proches du seuil (hypothèse)',
             'Fenêtre de proximité ±' . self::eur(self::FENETRE_PROXIMITE_EUR) . ' € autour du seuil (constante)',
             'Conversion mois → semaine : ÷ ' . number_format(self::SEMAINES_PAR_MOIS, 2, ',', ''),
         ];
+        if ($niveauVariante) {
+            $hypotheses[] = 'Majorité simple de paniers à 1 article : hypothèse';
+        }
         if ($confiance === 'faible') {
             $hypotheses[] = 'Moins de ' . Hyper::ASSOC_PANIERS_MIN . ' paniers observés : estimation peu fiable (hypothèse)';
         }
@@ -97,7 +114,8 @@ final class R6Panier
             'produits'        => [['key' => $cadeau->key, 'label' => $cadeau->label]],
             'titre'           => 'Seuil cadeau pour enrichir les paniers',
             'pourquoi'        => self::pct($part) . ' % des paniers n\'ont qu\'une seule ligne · seuil cadeau proposé : ' . self::eur($seuil) . ' €',
-            'action'          => 'Offrir ' . $cadeau->label . ' au-delà de ' . self::eur($seuil) . ' € d\'achat',
+            'action'          => 'Au-delà de ' . self::eur($seuil) . ' € d\'achat : offrez un(e) ' . $cadeau->label . ' (coût '
+                . self::eur($coutCadeau) . ' €). Affichez le seuil près de la caisse pendant 2 semaines.',
             'gain'            => $gain,
             'confiance'       => $confiance,
             'effort'          => Hyper::EFFORTS['R6'],
