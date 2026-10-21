@@ -19,13 +19,22 @@ final class Clean
      * déduits des seules données (jours ouverts observés).
      *
      * Couverture calendaire (choix simple documenté) :
-     * n_weeks = nombre de LUNDIS entre la première date du dataset et
-     * la dernière date STRICTEMENT avant $todayKey, bornes incluses
-     * (au moins 1). Un dow est « ouvert habituel » si son nombre de
-     * jours ouverts observés AVANT $todayKey atteint
-     * max(1, ceil(0.5 × n_weeks)) — au moins une occurrence, sinon la
-     * moitié des semaines. Le jour en cours (partiel) ne compte ni
+     * n_weeks = nombre de SEMAINES lun–dim comptant AU MOINS UN jour
+     * ouvert observé avant $todayKey (au moins 1). Un dow est « ouvert
+     * habituel » si son nombre de jours ouverts observés AVANT $todayKey
+     * atteint max(1, ceil(0.5 × n_weeks)) — au moins une occurrence, sinon
+     * la moitié des semaines. Le jour en cours (partiel) ne compte ni
      * dans la couverture ni dans les effectifs par dow.
+     *
+     * Correctif du 21/10/2026 (WAPE modèle 94 % en prod) : n_weeks
+     * comptait auparavant toutes les semaines calendaires entre la
+     * première et la dernière date — une fermeture COMPLÈTE (vacances
+     * d'été) gonflait le seuil (Juin→Octobre : 21 semaines → 11
+     * occurrences/dow exigées, plus qu'aucun dow n'en avait) et
+     * openWeekdays revenait VIDE : expectedN = 0 sur chaque dow,
+     * prédictions de backtest nulles. Les semaines de fermeture totale ne
+     * comptent plus : seules les semaines où l'activité a eu lieu
+     * définissent « habituel ».
      *
      * @param array<string,DayCurrent> $days     Jours ouverts (aujourd'hui pouvant y figurer).
      * @param string                   $todayKey 'Y-m-d' du jour en cours.
@@ -56,11 +65,13 @@ final class Clean
             return [];
         }
 
-        $first = min($past);
-        $last  = max($past);
-
-        // Nb de lundis dans [first, last] inclus, au moins 1.
-        $nWeeks = self::mondaysBetween($first, $last);
+        // Nb de semaines lun–dim AVEC au moins un jour ouvert observé,
+        // au moins 1.
+        $openMondays = [];
+        foreach ($past as $d) {
+            $openMondays[$d->modify('-' . ((int) $d->format('N') - 1) . ' days')->format('Y-m-d')] = true;
+        }
+        $nWeeks = count($openMondays);
         $needed = max(1, (int) ceil(0.5 * $nWeeks));
 
         $counts = array_fill(0, 7, 0);
@@ -132,19 +143,5 @@ final class Clean
         }
 
         return ['past' => $past, 'today' => $today];
-    }
-
-    /**
-     * Nombre de lundis entre $a et $b incluses ($a <= $b), 0 si aucun.
-     */
-    private static function mondaysBetween(\DateTimeImmutable $a, \DateTimeImmutable $b): int
-    {
-        $offset = (8 - (int) $a->format('N')) % 7; // jours jusqu'au 1er lundi >= a
-        $diff   = (int) $a->diff($b)->format('%a');
-        if ($offset > $diff) {
-            return 0;
-        }
-
-        return intdiv($diff - $offset, 7) + 1;
     }
 }

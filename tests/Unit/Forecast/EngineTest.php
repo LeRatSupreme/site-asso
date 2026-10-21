@@ -319,7 +319,12 @@ final class EngineTest extends TestCase
      */
     public function test_backtest_sur_historique_complet_quand_fenetre_courte(): void
     {
-        $full = self::serie(28);
+        // Série BRUITÉE : les intervalles par méthode (B2 = empirique sur
+        // SES résidus) exigent des résidus non nuls pour calibrer le
+        // facteur conforme — sur une série sans bruit, tous les résidus
+        // valent 0, l'intervalle empirique est ponctuel et l'absence de
+        // calibration (facteur null) est le résultat honnête.
+        $full = self::serieBruitee(28);
         $fwCourt = array_slice($full, 20, null, true); // 8 derniers jours ouverts (< 10)
         self::assertCount(8, $fwCourt);
 
@@ -522,6 +527,9 @@ final class EngineTest extends TestCase
         self::assertEqualsWithDelta($bt['wape_b2'] * 100.0, (float) $r['anomalies']['wape_baseline'], 1.0e-9, 'wape_baseline = WAPE de B2.');
         $sel = ($r['modele'] === 'baseline_B2') ? $bt['wape_b2'] : $bt['wape_main'];
         self::assertEqualsWithDelta($sel * 100.0, (float) $r['wape_backtest'], 1.0e-9, 'wape_backtest reste le WAPE du modèle sélectionné.');
+        self::assertEqualsWithDelta($bt['coverage_main'], $r['coverage_main_backtest'], 1.0e-12, 'coverage_main_backtest = couverture du main avec SES intervalles MC.');
+        self::assertEqualsWithDelta($bt['wape_main_recent'] * 100.0, (float) $r['anomalies']['wape_modele_recent'], 1.0e-9, 'wape_modele_recent = WAPE main sur les 20 derniers points.');
+        self::assertEqualsWithDelta($bt['wape_b2_recent'] * 100.0, (float) $r['anomalies']['wape_baseline_recent'], 1.0e-9, 'wape_baseline_recent = WAPE B2 sur les 20 derniers points.');
 
         // Historique insuffisant → les deux restent null.
         $court = array_slice(self::serie(28), 0, 8, true);

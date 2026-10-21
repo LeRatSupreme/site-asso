@@ -23,6 +23,27 @@ namespace App\Core\Compta\Forecast;
  * Le modèle principal n'est retenu que si WAPE_main < WAPE_B2
  * (strict ; à égalité la baseline B2 gagne). Toutes les méthodes sont
  * statiques et pures.
+ *
+ * INTERVALLES PAR MÉTHODE (correctif du 21/10/2026 — l'ancienne
+ * convention « demi-largeur MC du main recentrée sur le sélectionné »
+ * est supprimée) : chaque méthode est mesurée avec SES propres
+ * intervalles —
+ *  - modèle principal : intervalle Monte Carlo (quantiles 0.10/0.90 des
+ *    tirages NegBin × bootstrap) ;
+ *  - B2 et B3 : intervalle empirique déterministe, pred ± q0.80 des
+ *    |résidus| PASSÉS de la méthode (rolling, à chaque origine ; aucun
+ *    résidu passé → intervalle ponctuel assumé, borne basse clampée à 0).
+ * `coverage` = couverture de la méthode SÉLECTIONNÉE avec ses propres
+ * intervalles ; `coverage_main` / `coverage_b2` / `coverage_b3` exposent
+ * chacune des méthodes (transparence : la couverture 11,6 % de prod du
+ * 21/10/2026 venait des intervalles récents dégénérés [b2 ; b2] quand le
+ * main prévoyait 0). Les scores conformes et demi-largeurs relatives
+ * restent ceux du modèle SÉLECTIONNÉ avec SES intervalles.
+ *
+ * Robustesse des premières origines : BACKTEST_START = 10 est conservé
+ * (choix de mission), et `wape_main_recent` / `wape_b2_recent` exposent
+ * le WAPE sur les 20 DERNIERS points pour vérifier que les origines
+ * précoces ne pèsent pas artificiellement sur la moyenne.
  */
 final class Backtest
 {
@@ -39,13 +60,15 @@ final class Backtest
      *
      * NB : la pinball loss utilise les quantiles des tirages du modèle
      * principal (seule loi prédictive disponible) quelle que soit la
-     * sélection ; les intervalles rapportés dans details sont recentrés
-     * sur la prévision du modèle sélectionné (même demi-largeur MC).
+     * sélection ; les intervalles rapportés dans details sont ceux de la
+     * méthode sélectionnée (MC pour le main, empiriques pour B2), et
+     * pred_main / pred_b2 / lo_main / hi_main / lo_b2 / hi_b2 y sont
+     * exposés pour chaque méthode (transparence du diagnostic).
      *
      * @param array<string,DayCurrent> $days Jours ouverts observés (tous passés, journée complète).
      * @param array<string,mixed>      $opts
      *
-     * @return array{insufficient:bool,n_points:int,use_main_model:bool,selection_note:?string,wape:?float,wape_b2:?float,wape_main:?float,bias:?float,mase:?float,coverage:?float,pinball:?float,wape_weekly:?float,n_points_weekly:int,scores:list<float>,relative_half_widths:list<float>,details:list<array{date:string,y:float,pred:float,lo:float,hi:float,model:string}>}
+     * @return array{insufficient:bool,n_points:int,use_main_model:bool,selection_note:?string,wape:?float,wape_b2:?float,wape_main:?float,wape_main_recent:?float,wape_b2_recent:?float,n_points_recent:int,bias:?float,mase:?float,coverage:?float,coverage_main:?float,coverage_b2:?float,coverage_b3:?float,pinball:?float,wape_weekly:?float,n_points_weekly:int,scores:list<float>,relative_half_widths:list<float>,details:list<array{date:string,y:float,pred:float,lo:float,hi:float,model:string,pred_main:float,pred_b2:float,lo_main:float,hi_main:float,lo_b2:float,hi_b2:float}>}
      */
     public static function run(array $days, array $opts = []): array
     {
@@ -148,26 +171,60 @@ final class Backtest
         $mase    = $maeB1 > 0.0 ? $maeSel / $maeB1 : null;
         $bias    = $sumY > 0.0 ? ($useMain ? $sumDiff['main'] : $sumDiff['b2']) / $sumY : null;
 
-        // Intervalles rapportés : demi-largeur MC (modèle principal),
-        // recentrée sur la prévision du modèle sélectionné.
+        // Intervalles PAR MÉTHODE (cf. docblock de classe) : le modèle
+        // sélectionné rapporte SES propres bornes ; chaque méthode est
+        // comptée avec les siennes. Demi-largeur relative et scores
+        // conformes : méthode sélectionnée.
         $scores   = [];
         $relHalf  = [];
         $hits     = 0;
+        $hitsMain = 0;
+        $hitsB2   = 0;
+        $hitsB3   = 0;
         $details  = [];
         $pinSum   = 0.0;
         $pinCount = 0;
         $taus     = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9];
+        $pastB2   = [];
+        $pastB3   = [];
         foreach ($points as $p) {
             $pred = $useMain ? $p['pred_main'] : $p['b2'];
-            $half = ($p['hi'] - $p['lo']) / 2.0;
-            $lo   = $pred - $half;
-            $hi   = $pred + $half;
+
+            // Modèle principal : intervalle MC (quantiles des tirages).
+            $loMain = $p['lo'];
+            $hiMain = $p['hi'];
+            // B2 / B3 : intervalle empirique rolling, pred ± q0.80 des
+            // |résidus| passés de la méthode (déterministe ; aucun résidu
+            // passé → intervalle ponctuel assumé).
+            $q80B2 = $pastB2 === [] ? 0.0 : Stats::quantile($pastB2, 0.80);
+            $loB2  = max(0.0, $p['b2'] - $q80B2);
+            $hiB2  = $p['b2'] + $q80B2;
+            $q80B3 = $pastB3 === [] ? 0.0 : Stats::quantile($pastB3, 0.80);
+            $loB3  = max(0.0, $p['b3'] - $q80B3);
+            $hiB3  = $p['b3'] + $q80B3;
+
+            if ($useMain) {
+                $lo = $loMain;
+                $hi = $hiMain;
+            } else {
+                $lo = $loB2;
+                $hi = $hiB2;
+            }
             if ($p['y'] >= $lo && $p['y'] <= $hi) {
                 $hits++;
             }
+            if ($p['y'] >= $loMain && $p['y'] <= $hiMain) {
+                $hitsMain++;
+            }
+            if ($p['y'] >= $loB2 && $p['y'] <= $hiB2) {
+                $hitsB2++;
+            }
+            if ($p['y'] >= $loB3 && $p['y'] <= $hiB3) {
+                $hitsB3++;
+            }
             $denom    = max($pred, 1.0);
             $scores[] = abs($p['y'] - $pred) / $denom;
-            $relHalf[] = $half / $denom;
+            $relHalf[] = ($hi - $lo) / 2.0 / $denom;
 
             foreach ($taus as $tau) {
                 $q = Stats::quantile($p['samples'], $tau);
@@ -176,16 +233,42 @@ final class Backtest
             }
 
             $details[] = [
-                'date'  => $p['date'],
-                'y'     => $p['y'],
-                'pred'  => $pred,
-                'lo'    => $lo,
-                'hi'    => $hi,
-                'model' => $useMain ? 'negbin_dow_damped' : 'baseline_B2',
+                'date'      => $p['date'],
+                'y'         => $p['y'],
+                'pred'      => $pred,
+                'lo'        => $lo,
+                'hi'        => $hi,
+                'model'     => $useMain ? 'negbin_dow_damped' : 'baseline_B2',
+                'pred_main' => $p['pred_main'],
+                'pred_b2'   => $p['b2'],
+                'lo_main'   => $loMain,
+                'hi_main'   => $hiMain,
+                'lo_b2'     => $loB2,
+                'hi_b2'     => $hiB2,
             ];
+            $pastB2[] = abs($p['y'] - $p['b2']);
+            $pastB3[] = abs($p['y'] - $p['b3']);
         }
-        $coverage = $hits / count($points);
+        $coverage     = $hits / count($points);
+        $coverageMain = $hitsMain / count($points);
+        $coverageB2   = $hitsB2 / count($points);
+        $coverageB3   = $hitsB3 / count($points);
         $pinball  = $pinCount > 0 ? $pinSum / $pinCount : null;
+
+        // WAPE sur les 20 DERNIERS points (robustesse : les origines
+        // précoces — sous-ensembles courts — ne doivent pas peser seuls
+        // sur la moyenne ; < 20 points → série entière).
+        $recent    = array_slice($points, -20);
+        $sumYRec   = 0.0;
+        $sumMainRec = 0.0;
+        $sumB2Rec  = 0.0;
+        foreach ($recent as $p) {
+            $sumYRec += $p['y'];
+            $sumMainRec += abs($p['y'] - $p['pred_main']);
+            $sumB2Rec += abs($p['y'] - $p['b2']);
+        }
+        $wapeMainRecent = $sumYRec > 0.0 ? $sumMainRec / $sumYRec : 0.0;
+        $wapeB2Recent   = $sumYRec > 0.0 ? $sumB2Rec / $sumYRec : 0.0;
 
         // Semaines complètes : tous les dows ouverts habituels du fit final observés.
         $weightsAll = Clean::atypicalWeights($sorted);
@@ -237,9 +320,15 @@ final class Backtest
             'wape'                => $wapeSel,
             'wape_b2'             => $wapeB2,
             'wape_main'           => $wapeMain,
+            'wape_main_recent'    => $wapeMainRecent,
+            'wape_b2_recent'      => $wapeB2Recent,
+            'n_points_recent'     => count($recent),
             'bias'                => $bias,
             'mase'                => $mase,
             'coverage'            => $coverage,
+            'coverage_main'       => $coverageMain,
+            'coverage_b2'         => $coverageB2,
+            'coverage_b3'         => $coverageB3,
             'pinball'             => $pinball,
             'wape_weekly'         => $wapeWeekly,
             'n_points_weekly'     => $nWeekly,
@@ -252,7 +341,7 @@ final class Backtest
     /**
      * Résultat « historique insuffisant » ( < Hyper::BACKTEST_START jours).
      *
-     * @return array{insufficient:bool,n_points:int,use_main_model:bool,selection_note:null,wape:null,wape_b2:null,wape_main:null,bias:null,mase:null,coverage:null,pinball:null,wape_weekly:null,n_points_weekly:int,scores:array{},relative_half_widths:array{},details:array{}}
+     * @return array{insufficient:bool,n_points:int,use_main_model:bool,selection_note:null,wape:null,wape_b2:null,wape_main:null,wape_main_recent:null,wape_b2_recent:null,n_points_recent:int,bias:null,mase:null,coverage:null,coverage_main:null,coverage_b2:null,coverage_b3:null,pinball:null,wape_weekly:null,n_points_weekly:int,scores:array{},relative_half_widths:array{},details:array{}}
      */
     private static function emptyResult(): array
     {
@@ -264,9 +353,15 @@ final class Backtest
             'wape'                => null,
             'wape_b2'             => null,
             'wape_main'           => null,
+            'wape_main_recent'    => null,
+            'wape_b2_recent'      => null,
+            'n_points_recent'     => 0,
             'bias'                => null,
             'mase'                => null,
             'coverage'            => null,
+            'coverage_main'       => null,
+            'coverage_b2'         => null,
+            'coverage_b3'         => null,
             'pinball'             => null,
             'wape_weekly'         => null,
             'n_points_weekly'     => 0,

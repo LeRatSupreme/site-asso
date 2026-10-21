@@ -258,6 +258,22 @@ final class DemandModelTest extends TestCase
     }
 
     /**
+     * Correctif 21/10/2026 (WAPE modèle 94 % en prod) : après une
+     * fermeture complète (été), les dows vus ~5 fois doivent rester des
+     * dows ouverts habituels — sinon expectedN = 0 et chaque prévision
+     * de backtest vaut 0 €.
+     */
+    public function test_dow_apres_fermeture_complete_prevision_vivante(): void
+    {
+        $days = self::serieFermetureEte();
+        $model = DemandModel::fit($days, [], Hyper::K_POOL);
+
+        self::assertSame([0, 1, 2, 3, 4], $model->openWeekdays, 'Lun-ven tous vivants malgré le trou calendaire juin→septembre.');
+        self::assertGreaterThan(0.0, $model->expectedN(self::paris('2026-09-21 12:00')), 'Lundi post-fermeture prévu > 0.');
+        self::assertGreaterThan(0.0, $model->expectedN(self::paris('2026-09-25 12:00')), 'Vendredi post-fermeture prévu > 0.');
+    }
+
+    /**
      * $n semaines lun–ven du motif [70,60,65,75,90], panier 1.25,
      * horaire 8h→17h. Avec $samedi : samedis ouverts à N = 72.
      *
@@ -301,5 +317,34 @@ final class DemandModelTest extends TestCase
     private static function paris(string $datetime): \DateTimeImmutable
     {
         return new \DateTimeImmutable($datetime, new \DateTimeZone(Hyper::TZ));
+    }
+
+    /**
+     * Série du motif avec fermeture complète : 3 semaines en juin
+     * (01/06→19/06), puis reprise le 01/09 pour 2 semaines. Même forme
+     * que l'historique prod qui a révélé le bug (WAPE 94 %).
+     *
+     * @return array<string,DayCurrent>
+     */
+    private static function serieFermetureEte(): array
+    {
+        $days = [];
+        foreach (['2026-06-01' => 15, '2026-09-01' => 10] as $start => $count) {
+            $d = new \DateTimeImmutable($start);
+            $vus = 0;
+            while ($vus < $count) {
+                $dow = (int) $d->format('N') - 1;
+                if ($dow <= 4) {
+                    $n = self::MOTIF[$dow];
+                    $key = $d->format('Y-m-d');
+                    $days[$key] = new DayCurrent($key, $n * 1.25, $n, self::horaire($n), array_fill(0, $n, 1.25));
+                    $vus++;
+                }
+                $d = $d->modify('+1 day');
+            }
+        }
+        ksort($days);
+
+        return $days;
     }
 }
