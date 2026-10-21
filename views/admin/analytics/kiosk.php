@@ -469,13 +469,36 @@ $iconSvg = static function (string $name): string {
         // moteur — aucun recalcul local). Un seul chiffre dans le
         // sous-titre ; la moyenne/jour reste dans le payload. Heure de
         // pointe : argmax des moyennes OBSERVÉES (hourly.ca_avg), étiquetée
-        // « observé ».
+        // « observé ». Sous-titre « Par heure » identique à la vue admin :
+        // « Attendu aujourd'hui » = JOURNÉE (prevision_jour + intervalle_80) ;
+        // partie horaire DISTINCTE « Attendu à Nh » depuis day_track
+        // (expected_so_far/intervalle_h) ou « — (trop tôt) ». Jour fermé →
+        // « Fermé aujourd'hui », jamais « 0,00 € ».
         $wdBest    = isset($weekday['best']) && is_array($weekday['best']) ? $weekday['best'] : null;
         $hrAvgList = isset($hourly['ca_avg']) && is_array($hourly['ca_avg']) ? $hourly['ca_avg'] : [];
         $peakHr    = null;
         $peakVal   = 0.0;
         foreach ($hrAvgList as $h => $v) {
             if ($v !== null && (float) $v > $peakVal) { $peakVal = (float) $v; $peakHr = (int) $h; }
+        }
+        $phPrev  = isset($forecast['prevision_jour']) ? $forecast['prevision_jour'] : null;
+        $phIv    = isset($forecast['intervalle_80']) && is_array($forecast['intervalle_80']) ? $forecast['intervalle_80'] : null;
+        $phFerme = $phPrev === null
+            && in_array("Fermé aujourd'hui.", (array) ($forecast['notes'] ?? []), true);
+        $phH    = (int) ($day_track['hour'] ?? 0);
+        $phTrop = !empty($day_track['trop_tot']);
+        $phExp  = isset($day_track['expected_so_far']) ? $day_track['expected_so_far'] : null;
+        $phIvH  = isset($day_track['intervalle_h']) && is_array($day_track['intervalle_h']) ? $day_track['intervalle_h'] : null;
+        $phParts = ['Heure de pointe : ' . ($peakHr === null ? '—' : $peakHr . 'h') . ' (observé)'];
+        if ($phPrev !== null) {
+            $phParts[] = "Attendu aujourd'hui : " . formatPrice((float) $phPrev) . $kRange($phIv);
+            if ($phTrop) {
+                $phParts[] = 'Attendu à ' . $phH . 'h : — (trop tôt)';
+            } elseif ($phExp !== null) {
+                $phParts[] = 'Attendu à ' . $phH . 'h : ' . formatPrice((float) $phExp) . $kRange($phIvH);
+            }
+        } elseif ($phFerme) {
+            $phParts[] = "Fermé aujourd'hui";
         }
         ?>
         <!-- Graphiques initialisés EN RETARDÉ à la première activation de
@@ -491,7 +514,7 @@ $iconSvg = static function (string $name): string {
         <section class="card surface glass ka-card">
             <div class="ka-chart-head">
                 <h2 class="ka-chart-title">Par heure</h2>
-                <span class="ka-sub">Heure de pointe : <?= $peakHr === null ? '—' : $peakHr . 'h' ?> (observé)</span>
+                <span class="ka-sub"><?= e(implode(' · ', $phParts)) ?></span>
             </div>
             <div class="ka-chart ka-chart-bar"><canvas id="ka-chart-hourly"></canvas></div>
         </section>

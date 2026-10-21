@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace Tests\Integration;
 
+use App\Controllers\Admin\AdminAnalyticsController;
+use App\Models\Model;
+use ReflectionMethod;
+
 /**
  * Filet anti-500 du dashboard Analytics : la page complète (contrôleur +
  * moteur de prévision + vues admin et kiosque) doit se construire sans
@@ -211,7 +215,7 @@ final class AnalyticsBuildPageTest extends IntegrationTestCase
     }
 
     /**
-     * Extrait le payload JSON injecté dans la vue (« var data = {…}; »).
+     * Extraction du payload JSON injecté dans la vue (« var data = {…}; »).
      *
      * @return array<string,mixed>
      */
@@ -222,5 +226,102 @@ final class AnalyticsBuildPageTest extends IntegrationTestCase
         self::assertIsArray($data, 'Le payload JSON de la page est invalide.');
 
         return $data;
+    }
+
+    /**
+     * REND le fichier de vue avec les variables de buildPage (mécanisme
+     * identique au contrôleur : extract + include), sans layout.
+     *
+     * @param array<string,mixed> $vars
+     */
+    private function renderView(string $file, array $vars): string
+    {
+        $_SESSION = $_SESSION ?? [];
+        extract($vars, EXTR_SKIP);
+        ob_start();
+
+        try {
+            include $file;
+        } catch (\Throwable $e) {
+            ob_end_clean();
+
+            throw $e;
+        }
+
+        return (string) ob_get_clean();
+    }
+
+    /**
+     * RÉGRESSION « Attendu aujourd'hui : 0,00 € (fourchette 0,00 €–0,00 €) »
+     * (incident du mercredi ~08:11, jour ouvré sans vente encore) : à 8h le
+     * profil horaire couvre < 10 % de la journée (trop_tot), l'attendu
+     * HORAIRE est masqué (expected_so_far / intervalle_h null) — mais le
+     * sous-titre de la carte « Par heure » doit afficher l'attendu
+     * JOURNÉE (prevision_jour + intervalle_80), côté admin COMME kiosque,
+     * et JAMAIS « 0,00 € » de null.
+     */
+    public function test_sous_titre_par_heure_affiche_attendu_journee_a_8h_trop_tot(): void
+    {
+        // 08:00 Europe/Paris : identique au fuseau du contrôleur, jamais
+        // à cheval sur deux jours UTC (06:00/07:00 UTC le même jour).
+        $now = new \DateTimeImmutable('today 08:00', new \DateTimeZone('Europe/Paris'));
+
+        // Incident exact : aujourd'hui est ABSENT du dataset (aucune vente
+        // importée à 8h) — on retire les ventes du jour seedées.
+        $this->pdo->prepare('DELETE FROM sales WHERE DATE(sold_at) = ?')->execute([$now->format('Y-m-d')]);
+
+        // Le contrôleur lit la base via Model::pdo() : on branche la base
+        // de test DANS le processus phpunit (Modèle prévu pour ça), puis
+        // buildPage('week', $now) via réflexion (méthode privée).
+        Model::setTestPdo($this->pdo);
+
+        try {
+            $ctrl  = new AdminAnalyticsController();
+            $build = new ReflectionMethod($ctrl, 'buildPage');
+            $build->setAccessible(true);
+            $page = $build->invoke($ctrl, 'week', $now);
+        } finally {
+            Model::setTestPdo(null);
+        }
+
+        // Contrat moteur à 8h sans vente : attendu JOURNÉE non null et > 0,
+        // fourchette journée présente, trop_tot (profil < 10 %), intervalle
+        // horaire masqué (null — jamais 0–0). expected_so_far reste un
+        // float du modèle (S(h) lissé, non null) : la VUE choisit
+        // « — (trop tôt) » via trop_tot, jamais « 0,00 € » de null.
+        $prev = $page['forecast']['prevision_jour'] ?? null;
+        self::assertNotNull($prev, 'prevision_jour doit être calculé même sans vente du jour (fix 4265b21).');
+        self::assertGreaterThan(0.0, (float) $prev, 'L\'attendu JOURNÉE doit être strictement positif à 8h.');
+        self::assertNotNull($page['forecast']['intervalle_80'] ?? null, 'intervalle_80 doit être calculé même sans vente du jour.');
+        self::assertTrue((bool) ($page['day_track']['trop_tot'] ?? false), 'À 8h le profil horaire est < 10 % → trop_tot.');
+        self::assertNull($page['day_track']['intervalle_h'] ?? null, 'Intervalle horaire masqué trop tôt (null, jamais 0–0).');
+
+        $montant = formatPrice((float) $prev);
+        // Le sous-titre passe dans e() : l'apostrophe est échappée
+        // (aujourd&apos;hui) — les attendus sont comparés via e() également.
+        $attenduJour = e("Attendu aujourd'hui : ") . $montant;
+        $attenduJourZero = e("Attendu aujourd'hui : ") . '0,00';
+
+        // ---- Vue ADMIN : sous-titre « Par heure » rendu serveur ----
+        $htmlAdmin = $this->renderView(AEIC_VIEWS . '/admin/analytics/index.php', $page + ['title' => 'Analytics', 'kiosk' => false, 'token' => '']);
+        self::assertStringContainsString(
+            $attenduJour,
+            $htmlAdmin,
+            'Le sous-titre « Par heure » doit afficher l\'attendu JOURNÉE à 8h.'
+        );
+        self::assertStringContainsString('trop tôt', $htmlAdmin, 'La mention « trop tôt » (partie horaire) doit être présente.');
+        self::assertStringContainsString('Attendu à 8h : — (trop tôt)', $htmlAdmin, 'La partie horaire doit être libellée « — (trop tôt) » à 8h.');
+        self::assertStringNotContainsString($attenduJourZero, $htmlAdmin, 'JAMAIS « 0,00 € » de null dans le sous-titre.');
+        self::assertStringNotContainsString('0,00 €–0,00 €', $htmlAdmin, 'JAMAIS de fourchette « 0,00 €–0,00 € » de null.');
+
+        // ---- Vue KIOSQUE : même contrat ----
+        $htmlKiosque = $this->renderView(AEIC_VIEWS . '/admin/analytics/kiosk.php', $page + ['title' => 'Analytique', 'kiosk' => true, 'token' => 'jeton-test']);
+        self::assertStringContainsString(
+            $attenduJour,
+            $htmlKiosque,
+            'Le sous-titre kiosque « Par heure » doit afficher l\'attendu JOURNÉE à 8h.'
+        );
+        self::assertStringContainsString('Attendu à 8h : — (trop tôt)', $htmlKiosque, 'Partie horaire kiosque libellée « — (trop tôt) ».');
+        self::assertStringNotContainsString($attenduJourZero, $htmlKiosque, 'JAMAIS « 0,00 € » de null (kiosque).');
     }
 }
