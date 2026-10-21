@@ -108,3 +108,18 @@ php scripts/sync_sumup_sales.php             # exécution réelle
 tail -5 logs/sumup-sync.log
 ```
 
+## `reco_report.php` — Rapport des idées de recommandations (lecture seule)
+
+Génère les idées du moteur de recommandations (R1–R11) sur les données
+réelles — dump AVANT/APRÈS pour la mission Reco. **Strictement lecture
+seule** : aucun INSERT/UPDATE/DELETE (moteur pur + seuls SELECT
+`Recommendation::proposees()`/`historique()`). Options : `--json`,
+`--fenetre=N` (défaut 30), `--statuts` (lignes de la table
+`recommendations` + effets mesurés), `--limit=N` (taille historique,
+défaut 20).
+
+```bash
+php scripts/reco_report.php --statuts
+```
+
+

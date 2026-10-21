@@ -90,6 +90,13 @@ final class AdminKiosquesController extends AdminBaseController
                 'kiosk' => true,
             ],
             [
+                'emoji' => '💡',
+                'label' => 'Idées du moment',
+                'desc'  => 'Recommandations commerciales du moteur : appliquer, reporter ou ignorer — un humain décide, rien n\'est automatique. Lien kiosque, sans connexion.',
+                'url'   => Kiosk::adminUrl('/kiosque/admin/reco/'),
+                'kiosk' => true,
+            ],
+            [
                 'emoji' => '🧾',
                 'label' => 'Livre comptable',
                 'desc'  => 'Date | Objet | Débit | Crédit avec tickets et équilibrage — et saisie express des dépenses en 30 s depuis le téléphone. Lien kiosque, sans connexion.',

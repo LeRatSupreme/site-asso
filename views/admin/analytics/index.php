@@ -609,6 +609,15 @@ $iconSvg = static function (string $name): string {
         </div>
 
         <?php
+        // ---- Carte « Idées du moment » (moteur de recommandations) : ----
+        // partiel partagé avec la vue kiosque ; $reco vient du payload
+        // buildPage ('reco'), $kiosk/$token sont déjà dans le scope.
+        // Toute panne est déjà avalée côté contrôleur : le partiel rend
+        // au pire « Recommandations indisponibles ».
+        require AEIC_VIEWS . '/admin/reco/carte.php';
+        ?>
+
+        <?php
         // ---- Carte « Bénéfice prévu » : marge à 7 jours par catégorie ----
         // F7 : la marge PRÉVISIONNELLE utilise le prix MÉDIAN de la fenêtre
         // moins le coût ACTUEL (dernier lot) — étiquetée comme telle et

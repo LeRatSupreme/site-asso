@@ -449,6 +449,15 @@ $iconSvg = static function (string $name): string {
             </section>
         <?php endif; ?>
 
+        <?php
+        // ---- Carte « Idées du moment » (moteur de recommandations) : ----
+        // partiel partagé avec la vue admin ; $reco vient du payload
+        // buildPage ('reco'). Le rendu est TOUJOURS kiosque ici : $kiosk
+        // est posé avant l'inclusion, $token est dans le scope.
+        $kiosk = true;
+        require AEIC_VIEWS . '/admin/reco/carte.php';
+        ?>
+
         <section class="card surface glass ka-card">
             <div class="ka-chart-head">
                 <h2 class="ka-chart-title">Top 10 produits</h2>
