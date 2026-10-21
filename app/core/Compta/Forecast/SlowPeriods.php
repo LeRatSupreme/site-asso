@@ -16,7 +16,10 @@ namespace App\Core\Compta\Forecast;
  * Le facteur (∈ [0,1 ; 1]) multiplie les prévisions (expectedN/expectedCa
  * → tirages MC et intervalles suivent) pour les dates DANS une plage ;
  * l'observé (« hier », réel du jour) n'est jamais ajusté. 10 plages max.
- * Toutes les méthodes sont statiques et pures.
+ * Le moteur désaisonnalise aussi À L'ENTRÉE les jours passés en plage
+ * (ca, n, hourlyN ÷ facteur) avant l'apprentissage : le facteur ne compte
+ * l'effet creuse qu'une seule fois. Toutes les méthodes sont statiques
+ * et pures.
  */
 final class SlowPeriods
 {
@@ -115,30 +118,6 @@ final class SlowPeriods
         }
 
         return $out;
-    }
-
-    /**
-     * Vrai si une plage creuse (facteur < 1) intersecte la fenêtre
-     * [$debut, $fin] ('Y-m-d', bornes inclusives). Utilisé par le moteur
-     * pour prévenir d'un possible DOUBLE-COMPTAGE : la fenêtre
-     * d'apprentissage contient déjà les journées basses de la plage ET le
-     * facteur réduit encore les prévisions. Facteur 1 (ou config
-     * neutre/nulle) → faux : rien n'est réduit, rien à signaler.
-     *
-     * @param ?array{facteur:float,ranges:list<array{start:string,end:string}>} $slow
-     */
-    public static function chevaucheFenetre(?array $slow, string $debut, string $fin): bool
-    {
-        if ($slow === null || (float) ($slow['facteur'] ?? 1.0) >= 1.0) {
-            return false;
-        }
-        foreach ((array) ($slow['ranges'] ?? []) as $r) {
-            if ((string) $r['end'] >= $debut && (string) $r['start'] <= $fin) {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     /**

@@ -107,33 +107,4 @@ final class SlowPeriodsTest extends TestCase
         self::assertNotNull($fr);
         self::assertSame('0.8;2026-10-17/2026-11-02', SlowPeriods::normalise($fr));
     }
-
-    /**
-     * Détection de chevauchement plage creuse × fenêtre (note moteur de
-     * double-comptage vacances) : bornes inclusives, facteur 1 = jamais
-     * vrai, config nulle/vide = jamais vrai.
-     */
-    public function test_chevauche_fenetre_bornes_inclusives_et_config_neutre(): void
-    {
-        $slow = SlowPeriods::parse('0.8;2026-10-17/2026-11-02');
-
-        // Chevauchements : partiel, borne début, borne fin, englobant.
-        self::assertTrue(SlowPeriods::chevaucheFenetre($slow, '2026-10-20', '2026-10-31'), 'Fenêtre dans la plage.');
-        self::assertTrue(SlowPeriods::chevaucheFenetre($slow, '2026-10-01', '2026-10-17'), 'Le premier jour de la plage compte.');
-        self::assertTrue(SlowPeriods::chevaucheFenetre($slow, '2026-11-02', '2026-12-01'), 'Le dernier jour de la plage compte.');
-        self::assertTrue(SlowPeriods::chevaucheFenetre($slow, '2026-10-01', '2026-12-01'), 'Fenêtre englobant la plage.');
-
-        // Hors plage : fenêtre avant ou après.
-        self::assertFalse(SlowPeriods::chevaucheFenetre($slow, '2026-09-01', '2026-10-16'));
-        self::assertFalse(SlowPeriods::chevaucheFenetre($slow, '2026-11-03', '2026-12-01'));
-
-        // Facteur 1 = aucune réduction → rien à signaler.
-        $neutre = SlowPeriods::parse('1.0;2026-10-17/2026-11-02');
-        self::assertNotNull($neutre);
-        self::assertFalse(SlowPeriods::chevaucheFenetre($neutre, '2026-10-20', '2026-10-25'));
-
-        // Config nulle ou sans plage.
-        self::assertFalse(SlowPeriods::chevaucheFenetre(null, '2026-10-20', '2026-10-25'));
-        self::assertFalse(SlowPeriods::chevaucheFenetre(SlowPeriods::parse(''), '2026-10-20', '2026-10-25'));
-    }
 }

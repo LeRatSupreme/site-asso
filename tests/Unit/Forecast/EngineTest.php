@@ -503,30 +503,29 @@ final class EngineTest extends TestCase
     }
 
     /**
-     * FIX P5 — note honnête de double-comptage : quand une plage creuse
-     * (facteur < 1) chevauche la fenêtre d'apprentissage (données passées
-     * du dataset), le facteur ×0,8 peut compter DEUX FOIS l'effet vacances
-     * → la note l'explique. Plage strictement future ou facteur 1 : pas de
-     * note.
+     * FIX P5 (v2) — note de désaisonnalisation : quand des jours passés de
+     * la fenêtre d'apprentissage sont DANS une plage creuse (facteur < 1),
+     * ils sont ramenés au niveau normal avant l'apprentissage → la note
+     * l'explique avec le BON nombre de jours, et l'ancien avertissement
+     * « double-comptage » (obsolète) n'apparaît plus. Plage strictement
+     * future ou sans drapeau : pas de note.
      */
-    public function test_note_double_comptage_quand_fenetre_chevauche_periode_creuse(): void
+    public function test_note_desaisonnalisation_avec_le_bon_nombre_de_jours(): void
     {
         $opts = ['seed' => 42, 'draws' => 300];
-        // Dataset 07/09 → 14/10 ; fenêtre d'apprentissage = 07/09 → hier 18/10.
-        $msg = 'Attention : la fenêtre d\'apprentissage chevauche la période creuse ; '
-            . 'le facteur ×0,8 peut double-compter l\'effet vacances '
-            . '(réduis-le si les journées observées sont déjà basses).';
+        // Dataset 07/09 → 14/10 (ouvrés) ; plage à partir du 10/10 →
+        // 3 jours ouverts passés en plage (lun 12, mar 13, mer 14/10).
+        $msg = 'Historique désaisonnalisé avant apprentissage : 3 jours de période creuse ramenés au niveau normal (÷0,8).';
 
-        // Plage mordant sur les données passées → note présente.
         $chevauche = ForecastEngine::forecast(
             new ForecastDataset(self::serie(28)),
             self::paris('2026-10-19 23:59'),
             '23:59',
             $opts + ['slow_periods' => ['facteur' => 0.8, 'ranges' => [['start' => '2026-10-10', 'end' => '2026-11-30']]]]
         );
-        self::assertContains($msg, $chevauche['notes']);
+        self::assertContains($msg, $chevauche['notes'], json_encode($chevauche['notes'], JSON_UNESCAPED_UNICODE));
 
-        // Plage strictement FUTURE (après hier) → pas de double-comptage.
+        // Plage strictement FUTURE (après hier) → aucun jour passé en plage.
         $future = ForecastEngine::forecast(
             new ForecastDataset(self::serie(28)),
             self::paris('2026-10-19 23:59'),
@@ -536,13 +535,18 @@ final class EngineTest extends TestCase
         self::assertNotContains($msg, $future['notes']);
         self::assertContains('Période creuse 20/10–30/11 : prévisions ajustées ×0,8.', $future['notes']);
 
-        // Facteur 1 (aucune réduction) → jamais de note.
+        // Sans drapeau : jamais de note (et jamais l'ancien message).
         $neutre = ForecastEngine::forecast(
             new ForecastDataset(self::serie(28)),
             self::paris('2026-10-19 23:59'),
             '23:59',
-            $opts + ['slow_periods' => ['facteur' => 1.0, 'ranges' => [['start' => '2026-10-10', 'end' => '2026-11-30']]]]
+            $opts
         );
+        foreach ([$chevauche, $future, $neutre] as $r) {
+            foreach ($r['notes'] as $note) {
+                self::assertStringNotContainsString('double-compter', (string) $note, 'La note double-comptage obsolète ne doit plus apparaître.');
+            }
+        }
         self::assertNotContains($msg, $neutre['notes']);
     }
 

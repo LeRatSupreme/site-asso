@@ -44,7 +44,7 @@ final class HourlyProfile
      */
     public static function fit(array $days, float $k = Hyper::K_POOL, float $alphaDir = 1.0): self
     {
-        $global = array_fill(0, 24, 0);
+        $global = array_fill(0, 24, 0.0);
         $counts = [];
         foreach ($days as $day) {
             if (!$day instanceof DayCurrent) {
@@ -56,9 +56,11 @@ final class HourlyProfile
                 if ($h < 0 || $h >= 24) {
                     continue;
                 }
-                $c = max(0, (int) $count);
+                // Comptes FLOAT : le moteur désaisonnalise les jours en
+                // période creuse (hourlyN ÷ facteur) — aucune troncature.
+                $c = max(0.0, (float) $count);
                 $global[$h] += $c;
-                $counts[$dow][$h] = ($counts[$dow][$h] ?? 0) + $c;
+                $counts[$dow][$h] = ($counts[$dow][$h] ?? 0.0) + $c;
             }
         }
 

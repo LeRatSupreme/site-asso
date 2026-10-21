@@ -35,13 +35,32 @@ namespace App\Core\Compta\Forecast;
  *    dataset) : la prévision pleine journée vient du modèle, jamais
  *    des données partielles du jour ; null uniquement si le jour est
  *    fermé (les vues affichent « Fermé aujourd'hui », jamais 0,00 €).
+ *  - Période creuse (slow_periods) : les jours passés DONT la date est
+ *    en plage sont DÉSAISONNALISÉS À L'ENTRÉE (ca, n, hourlyN ÷ facteur ;
+ *    paniers INVARIANTS — le drapeau modélise moins de passages, pas un
+ *    panier différent ; n arrondi au transaction près, DTO entier) avant
+ *    DEMANDMODEL/HOURLYPROFILE/BACKTEST — le niveau et la tendance
+ *    n'apprennent JAMAIS la baisse des vacances. L'application ×facteur
+ *    reste uniquement côté prévisions (jours, semaine, mois30, projection
+ *    du jour) ; « hier » compare la prévision ×f(hier) au réel BRUT.
+ *    Le backtest mesure sur l'échelle normalisée : le facteur conforme
+ *    s'applique à des intervalles normalisés, re-multipliés par f à
+ *    l'affichage des dates en plage. SANS la désaisonnalisation, la baisse
+ *    compterait DEUX FOIS (niveau appris bas × facteur) — sous-estimation
+ *    ~50 % observée en prod pendant les vacances (21/10/2026).
+ *  - debug : niveau_eur = exp(lastLevel) × panier global (€ par jour
+ *    MOYEN, hors effet dow, sur données désaisonnalisées) ; tendance_
+ *    pct_jour = (exp(lastTrend) − 1) × 100 (%/jour, échelle log du SES) ;
+ *    dispersion_r (sans unité).
  *  - Carte « Par jour de semaine » : jours_semaine.ca = attendu de la
  *    PROCHAINE occurrence de chaque dow ouvert (expectedCa, niveau +
  *    tendance amortie + ×creuse si la date prochaine est en plage) —
  *    cohérent avec « jours » et la semaine ; obs_ca = moyenne brute
- *    observée du dow (null sans occurrence), se = sqrt(μ + μ²/r)/√occ ;
- *    meilleur_jour désigné SEULEMENT si ca_best − ca_second > 2 ×
- *    sqrt(se_best² + se_second²), sinon null + note « indiscernables ».
+ *    observée du dow (null sans occurrence), obs_ca_creuse/obs_n_creuse
+ *    = moyenne et nb des jours observés du dow EN plage creuse (null si
+ *    aucun), se = sqrt(μ + μ²/r)/√occ ; meilleur_jour désigné SEULEMENT
+ *    si ca_best − ca_second > 2 × sqrt(se_best² + se_second²), sinon
+ *    null + note « indiscernables ».
  */
 final class ForecastEngine
 {
@@ -89,22 +108,75 @@ final class ForecastEngine
         $btDraws     = max(1, (int) ($opts['backtest_draws'] ?? min($draws, Hyper::BACKTEST_DRAWS_MAX)));
 
         // 1-4. Nettoyage, ajustements, backtest, calibration conforme.
-        $split         = Clean::splitPast($data->days, $todayKey);
-        $past          = $split['past'];
-        $today         = $split['today'];
-        $weights       = Clean::atypicalWeights($past);
-        $model         = DemandModel::fit($past, $weights, $k);
-        $hourly        = HourlyProfile::fit($past, $k);
+        $split   = Clean::splitPast($data->days, $todayKey);
+        $past    = $split['past'];
+        $today   = $split['today'];
+        // Poids d'atypie calculés sur les CA BRUTS (avant désaisonnali-
+        // sation) : c'est le CA réel qui définit l'atypie.
+        $weights = Clean::atypicalWeights($past);
+
+        // Période creuse saisie à la main : UN facteur par date (1.0 hors
+        // plage), DEUX usages strictement séparés :
+        //  - à l'ENTRÉE : les jours passés en plage sont DÉSAISONNALISÉS
+        //    (ca, n, hourlyN ÷ f — paniers inchangés, n arrondi au
+        //    transaction près) avant tout fit et le backtest : le niveau
+        //    et la tendance apprennent sur l'échelle « normale » ;
+        //  - en SORTIE : les prévisions des dates en plage sont ×f
+        //    (tirages MC, attendus et intervalles suivent) ; l'observé
+        //    (« hier », réel du jour) n'est jamais ajusté.
+        // Le facteur ne doit donc JAMAIS s'appliquer deux fois au même
+        // effet : sans désaisonnalisation, le niveau apprend les jours
+        // bas de la période creuse PUIS ×f réduit encore les prévisions
+        // (double comptage → −50 % environ pendant les vacances).
+        $facteurCreux = static fn (\DateTimeImmutable $d): float => SlowPeriods::facteurPour($slow, $d);
+
+        $desaison = static function (array $jours) use ($facteurCreux): array {
+            $out = [];
+            foreach ($jours as $key => $day) {
+                $f = $facteurCreux(new \DateTimeImmutable($day->date));
+                if ($f >= 1.0 || $f <= 0.0) {
+                    $out[$key] = $day;
+                    continue;
+                }
+                $hourly = [];
+                foreach ($day->hourlyN as $h => $c) {
+                    $hourly[$h] = ((float) $c) / $f;
+                }
+                $out[$key] = new DayCurrent(
+                    $day->date,
+                    $day->ca / $f,
+                    (int) round($day->n / $f),
+                    $hourly,
+                    $day->baskets, // INVARIANTS : moins de passages, pas un panier différent
+                    $day->weight
+                );
+            }
+
+            return $out;
+        };
+        $pastNorm = $desaison($past);
+        $nJoursCreux = 0;
+        foreach ($past as $day) {
+            if ($facteurCreux(new \DateTimeImmutable($day->date)) < 1.0) {
+                $nJoursCreux++;
+            }
+        }
+
+        $model  = DemandModel::fit($pastNorm, $weights, $k);
+        $hourly = HourlyProfile::fit($pastNorm, $k);
         // Backtest à origine glissante sur l'HISTORIQUE COMPLET (opts
         // 'backtest_days', tronqué aux BACKTEST_MAX_DAYS derniers jours
         // ouverts) : BACKTEST_START=10 n'est plus consommé par la fenêtre
         // fw d'apprentissage. Le MODÈLE d'apprentissage reste sur fw.
+        // Le backtest tourne sur les jours DÉSAISONNALISÉS : il mesure
+        // sur l'échelle normalisée (cohérent avec les prévisions, le
+        // facteur f étant ré-appliqué côté affichage des dates en plage).
         $hist          = is_array($opts['backtest_days'] ?? null) ? $opts['backtest_days'] : $past;
         if (count($hist) > Hyper::BACKTEST_MAX_DAYS) {
             ksort($hist);
             $hist = array_slice($hist, -Hyper::BACKTEST_MAX_DAYS, null, true);
         }
-        $bt            = Backtest::run($hist, ['seed' => $seed, 'draws' => $btDraws, 'k' => $k]);
+        $bt            = Backtest::run($desaison($hist), ['seed' => $seed, 'draws' => $btDraws, 'k' => $k]);
         $factor        = $bt['insufficient'] ? null : Conformal::widthFactor($bt['scores'], $bt['relative_half_widths']);
 
         // Composantes de la calibration (diagnostic « largeur » : résidus
@@ -118,11 +190,6 @@ final class ForecastEngine
                 $confMhw = (float) $meanRel;
             }
         }
-
-        // Période creuse saisie à la main : UN facteur par date (1.0 hors
-        // plage) multiplie les prévisions — tirages MC, attendus et
-        // intervalles suivent ; l'observé n'est jamais ajusté.
-        $facteurCreux = static fn (\DateTimeImmutable $d): float => SlowPeriods::facteurPour($slow, $d);
 
         $insufficient = $model->isInsufficient() || $model->openDaysCount() < Hyper::INSUFFICIENT_DAYS;
         $dowToday     = (int) $now->format('N') - 1;
@@ -247,29 +314,36 @@ final class ForecastEngine
         }
 
         // 7. Hier : réajustement SANS hier (prévision honnête) puis intervalle calibré.
+        // Le refit tourne sur les jours DÉSAISONNALISÉS (comme le modèle
+        // principal) ; la prévision et sa fourchette sont re-multipliées
+        // par f(hier) — 1.0 hors plage — pour être comparées au RÉEL BRUT
+        // (l'observé n'est jamais ajusté).
         $hier = null;
         $hierDate = $now->modify('-1 day');
         $hierKey = $hierDate->format('Y-m-d');
         if (isset($data->days[$hierKey])) {
             $hierReel = $data->days[$hierKey]->ca;
-            $subsetH = [];
+            $subsetHBrut = [];
             foreach ($past as $key => $day) {
                 if ($key !== $hierKey) {
-                    $subsetH[$key] = $day;
+                    $subsetHBrut[$key] = $day;
                 }
             }
+            $subsetH = $desaison($subsetHBrut);
             // Dispersion = propriété GLOBALE : le refit sans hier RÉUTILISE
             // le r du modèle principal (sinon son estimateur local des
             // moments s'effondre vers R_MAX quasi-Poisson — dump prod :
             // r principal 18,0 vs refit sans hier 200 → fourchette Hier
-            // ±18 % contre ±35 % pour Aujourd'hui).
-            $modelH = DemandModel::fit($subsetH, Clean::atypicalWeights($subsetH), $k, $model->dispersionR);
+            // ±18 % contre ±35 % pour Aujourd'hui). Poids atypiques
+            // recalculés sur les CA BRUTS du sous-ensemble.
+            $modelH = DemandModel::fit($subsetH, Clean::atypicalWeights($subsetHBrut), $k, $model->dispersionR);
             $sumH   = MonteCarlo::summarize(MonteCarlo::daySamples($modelH, $hierDate, self::rng($seed, 'H' . $hierKey), $draws));
-            $calH   = Conformal::apply($factor, $sumH['mean'], $sumH['lo'], $sumH['hi']);
+            $fHier  = $facteurCreux($hierDate);
+            $calH   = Conformal::apply($factor, $sumH['mean'] * $fHier, $sumH['lo'] * $fHier, $sumH['hi'] * $fHier);
             $refitInsuffisant = $modelH->isInsufficient() || $modelH->openDaysCount() < Hyper::INSUFFICIENT_DAYS;
             $hier = [
                 'reel'            => $hierReel,
-                'prevu'           => $sumH['mean'],
+                'prevu'           => $sumH['mean'] * $fHier,
                 'lo'              => $calH['lo'],
                 'hi'              => $calH['hi'],
                 'dans_intervalle' => ($insufficient || $refitInsuffisant) ? null : ($hierReel >= $calH['lo'] && $hierReel <= $calH['hi']),
@@ -284,27 +358,49 @@ final class ForecastEngine
         // exactement une fois) et avec la semaine — plus jamais le profil
         // dow pur (dowEffects) décorrélé du niveau. Série OBSERVÉE :
         // obs_ca = moyenne brute des CA des jours passés du dow (null sans
-        // occurrence), occ = nb de jours vus. Incertitude du modèle :
-        // se = sqrt(μ + μ²/r) / sqrt(max(1, occ)) — approximation
+        // occurrence), occ = nb de jours vus ; obs_ca_creuse/obs_n_creuse
+        // = moyenne brute et nb des SEULS jours passés du dow DONT la date
+        // est en plage creuse (null si aucun) — le tooltip distingue
+        // l'observé global de l'observé « en vacances ». Incertitude du
+        // modèle : se = sqrt(μ + μ²/r) / sqrt(max(1, occ)) — approximation
         // documentée : écart-type d'une moyenne de `occ` jours NegBin(μ, r).
         $occByDow = array_fill(0, 7, 0);
         $caByDow  = array_fill(0, 7, []);
+        $occCreuseByDow = array_fill(0, 7, 0);
+        $caCreuseByDow  = array_fill(0, 7, []);
         foreach ($past as $day) {
-            $dow = (int) (new \DateTimeImmutable($day->date))->format('N') - 1;
+            $dateJour = new \DateTimeImmutable($day->date);
+            $dow = (int) $dateJour->format('N') - 1;
             $occByDow[$dow]++;
             $caByDow[$dow][] = (float) $day->ca;
+            if ($facteurCreux($dateJour) < 1.0) {
+                $occCreuseByDow[$dow]++;
+                $caCreuseByDow[$dow][] = (float) $day->ca;
+            }
         }
         $rDisp = max(0.01, $model->dispersionR);
+        $obsCreuse = static function (int $dow) use ($occCreuseByDow, $caCreuseByDow): array {
+            if ($occCreuseByDow[$dow] === 0) {
+                return [null, null];
+            }
+
+            return [
+                array_sum($caCreuseByDow[$dow]) / $occCreuseByDow[$dow],
+                $occCreuseByDow[$dow],
+            ];
+        };
         $joursSemaine = [];
         $candidats = []; // dow => {ca, se} (dows ouverts avec occ ≥ 1)
         for ($dow = 0; $dow < 7; $dow++) {
             $isOpen = in_array($dow, $openWeekdays, true);
             $occ = $occByDow[$dow];
+            [$obsCaCreuse, $obsNCreuse] = $obsCreuse($dow);
             if (!$isOpen) {
                 $joursSemaine[] = [
                     'dow' => $dow, 'label' => self::LABELS[$dow], 'n' => 0.0, 'ca' => 0.0,
                     'occ' => $occ, 'is_open' => false,
                     'obs_ca' => $occ > 0 ? array_sum($caByDow[$dow]) / $occ : null,
+                    'obs_ca_creuse' => $obsCaCreuse, 'obs_n_creuse' => $obsNCreuse,
                     'se' => null, 'next_date' => null,
                 ];
                 continue;
@@ -323,6 +419,7 @@ final class ForecastEngine
                 'dow' => $dow, 'label' => self::LABELS[$dow], 'n' => $n, 'ca' => $mu,
                 'occ' => $occ, 'is_open' => true,
                 'obs_ca' => $occ > 0 ? array_sum($caByDow[$dow]) / $occ : null,
+                'obs_ca_creuse' => $obsCaCreuse, 'obs_n_creuse' => $obsNCreuse,
                 'se' => sqrt($mu + $mu * $mu / $rDisp) / sqrt(max(1, $occ)),
                 'next_date' => $next->format('Y-m-d'),
             ];
@@ -521,17 +618,17 @@ final class ForecastEngine
                 SlowPeriods::facteurFr((float) ($slow['facteur'] ?? 1.0))
             );
         }
-        // Double-comptage éventuel : si la fenêtre d'apprentissage (les
-        // données passées du dataset — le jour en cours n'y entre pas)
-        // chevauche une plage creuse, ses journées basses sont DÉJÀ dans
-        // les moyennes ET le facteur réduit encore les prévisions.
-        $clesFenetre = array_keys($data->days);
-        $finFenetre  = $now->modify('-1 day')->format('Y-m-d');
-        if ($clesFenetre !== [] && $finFenetre >= (string) min($clesFenetre)
-            && SlowPeriods::chevaucheFenetre($slow, (string) min($clesFenetre), $finFenetre)
-        ) {
+        // Désaisonnalisation de l'entrée : les journées creuses passées ont
+        // été ramenées au niveau normal AVANT l'apprentissage — le facteur
+        // ne compte donc l'effet vacances qu'UNE SEULE FOIS (aux dates en
+        // plage). Cette note remplace l'ancien avertissement « double-
+        // comptage », devenu obsolète.
+        if ($nJoursCreux > 0) {
             $notes[] = sprintf(
-                'Attention : la fenêtre d\'apprentissage chevauche la période creuse ; le facteur ×%s peut double-compter l\'effet vacances (réduis-le si les journées observées sont déjà basses).',
+                'Historique désaisonnalisé avant apprentissage : %d jour%s de période creuse ramené%s au niveau normal (÷%s).',
+                $nJoursCreux,
+                $nJoursCreux > 1 ? 's' : '',
+                $nJoursCreux > 1 ? 's' : '',
                 SlowPeriods::facteurFr((float) ($slow['facteur'] ?? 1.0))
             );
         }
@@ -570,6 +667,16 @@ final class ForecastEngine
             'produits'       => $produits,
             'anomalies'      => $anomalies,
             'notes'          => $notes,
+            'debug'          => [
+                // Échelles documentées : niveau = € par jour MOYEN (hors
+                // effet dow, données désaisonnalisées) — exp(lastLevel) est
+                // un nombre de transactions, multiplié par le panier global
+                // pour l'exprimer en € ; tendance = %/jour, (exp(b) − 1) × 100
+                // sur l'échelle log du SES ; r = dispersion NegBin.
+                'niveau_eur'        => exp($model->lastLevel) * $model->globalP,
+                'tendance_pct_jour' => (exp($model->lastTrend) - 1.0) * 100.0,
+                'dispersion_r'      => (float) $model->dispersionR,
+            ],
             'dispersion_r'   => (float) $model->dispersionR,
             'facteur_conforme' => $factor,
             'coverage_backtest' => $bt['coverage'],
