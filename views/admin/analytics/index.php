@@ -958,14 +958,16 @@ $iconSvg = static function (string $name): string {
             fLabels.push('Auj.');
             fBars.push(null);
             fLine.push(Number(fPrev));
-            fLo.push(fIv && fIv.lo != null ? Number(fIv.lo) : null);
+            // Bande plancher 0 : un CA négatif n'existe pas (le lo PHP est
+            // déjà clampé ; ce clamp JS garantit l'axe côté client).
+            fLo.push(fIv && fIv.lo != null ? Math.max(0, Number(fIv.lo)) : null);
             fHi.push(fIv && fIv.hi != null ? Number(fIv.hi) : null);
         }
         (fc.jours || []).forEach(function (d) {
             fLabels.push(String(d.label));
             fBars.push(null);
             fLine.push(d.is_open && d.ca != null ? Number(d.ca) : null);
-            fLo.push(d.is_open && d.lo != null ? Number(d.lo) : null);
+            fLo.push(d.is_open && d.lo != null ? Math.max(0, Number(d.lo)) : null);
             fHi.push(d.is_open && d.hi != null ? Number(d.hi) : null);
         });
         var fBg = fBars.map(function (v, i) {

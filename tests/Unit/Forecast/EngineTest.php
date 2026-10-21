@@ -430,6 +430,37 @@ final class EngineTest extends TestCase
     }
 
     /**
+     * FIX P2 — AUCUNE borne basse négative (régression « Hier : −45,53 € »,
+     * fourchettes J+1 négatives en prod le 21/10/2026) : sur série bruitée
+     * avec backtest complet (facteur conforme calculé, souvent saturé à 3),
+     * toutes les bornes lo (aujourd'hui, hier, jours, semaine, 30 j)
+     * restent ≥ 0 — balayé sur plusieurs graines seedées.
+     */
+    public function test_aucune_borne_basse_negative_sur_plusieurs_graines(): void
+    {
+        foreach ([1, 7, 42] as $seed) {
+            $r = ForecastEngine::forecast(
+                new ForecastDataset(self::serieBruitee(28)),
+                self::paris('2026-10-15 23:59'), // hier = dernier jour (mer 14/10)
+                '23:59',
+                ['seed' => $seed, 'draws' => 400, 'backtest_days' => self::serieBruitee(28)]
+            );
+
+            self::assertNotNull($r['facteur_conforme'], "Graine $seed : le backtest produit un facteur conforme.");
+            self::assertNotNull($r['intervalle_80']);
+            self::assertGreaterThanOrEqual(0.0, (float) $r['intervalle_80']['lo'], "Graine $seed : lo du jour ≥ 0.");
+            self::assertNotNull($r['hier']);
+            self::assertGreaterThanOrEqual(0.0, (float) $r['hier']['lo'], "Graine $seed : lo d'hier ≥ 0 (était −45,53 € en prod).");
+            foreach ($r['jours'] as $j) {
+                self::assertGreaterThanOrEqual(0.0, (float) $j['lo'], "Graine $seed : lo de {$j['label']} ≥ 0.");
+                self::assertGreaterThanOrEqual(0.0, (float) $j['ca'], "Graine $seed : CA prévu de {$j['label']} ≥ 0.");
+            }
+            self::assertGreaterThanOrEqual(0.0, (float) $r['semaine']['lo'], "Graine $seed : lo semaine ≥ 0.");
+            self::assertGreaterThanOrEqual(0.0, (float) $r['mois30']['lo'], "Graine $seed : lo 30 j ≥ 0.");
+        }
+    }
+
+    /**
      * Produits synthétiques du test de réconciliation : quantités
      * hétérogènes, prix 2, coût 1, même catégorie (agrégats lisibles).
      *

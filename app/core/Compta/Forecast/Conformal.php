@@ -48,16 +48,20 @@ final class Conformal
      * Applique le facteur autour de la prévision centrale $pred.
      * Facteur null → intervalles inchangés. $factor <= 0 est traité
      * comme une absence de calibration (intervalles inchangés).
+     * La borne basse est TOUJOURS bornée à 0 : un CA ne peut pas être
+     * négatif (le facteur conforme élargit assez pour passer sous zéro
+     * sur les jours à faible prévision — ex. hier −45 €, fourchettes
+     * J+1 négatives sur la prod d'octobre 2026).
      *
      * @return array{lo:float,hi:float}
      */
     public static function apply(?float $factor, float $pred, float $lo, float $hi): array
     {
         if ($factor === null || $factor <= 0.0) {
-            return ['lo' => $lo, 'hi' => $hi];
+            return ['lo' => max(0.0, $lo), 'hi' => $hi];
         }
         $half = ($hi - $lo) / 2.0;
 
-        return ['lo' => $pred - $factor * $half, 'hi' => $pred + $factor * $half];
+        return ['lo' => max(0.0, $pred - $factor * $half), 'hi' => $pred + $factor * $half];
     }
 }
