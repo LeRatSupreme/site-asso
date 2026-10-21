@@ -18,8 +18,13 @@ final class DayCurrent
      * @param string        $date     Clé 'Y-m-d' (Europe/Paris).
      * @param float         $ca       Chiffre d'affaires du jour (flux courant).
      * @param int           $n        Nombre de transactions (références distincts).
-     * @param array<int,int> $hourlyN [heure => nb transactions] pour 0..23 (éventuellement partiel).
-     * @param list<float>   $baskets  Montants par transaction.
+     * @param array<int,int|float> $hourlyN [heure => nb transactions] pour 0..23
+     *                               (éventuellement partiel ; FLOAT possible quand le
+     *                               moteur désaisonnalise un jour de période creuse,
+     *                               hourlyN ÷ facteur).
+     * @param list<float>   $baskets  Montants par transaction (INVARIANTS dans la
+     *                               désaisonnalisation : le drapeau creuse modélise
+     *                               moins de passages, pas un panier différent).
      * @param float         $weight   Poids du jour : 1.0, ou Hyper::W_ATYPICAL si atypique
      *                                (z robuste calculé par Clean::atypicalWeights — c'est
      *                                l'appelant qui reporte le poids ici).
