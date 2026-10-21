@@ -61,7 +61,17 @@ namespace App\Core\Compta\Forecast;
  *  - WAPE détaillé dans anomalies : wape_modele (main) et wape_baseline
  *    (B2) en plus de wape_backtest (sélectionné) — la vue explique
  *    POURQUOI la baseline est retenue (règle : le modèle actif doit
- *    battre la naïve) ;
+ *    battre la naïve) ; wape_modele_recent / wape_baseline_recent =
+ *    WAPE sur les 20 DERNIERS points du backtest (robustesse des
+ *    premières origines, sous-ensembles courts) ;
+ *  - intervalles du backtest PAR MÉTHODE (correctif 21/10/2026) : le
+ *    main rapporte ses intervalles MC, B2/B3 leurs intervalles
+ *    empiriques rolling (pred ± q0,80 des |résidus| passés) — l'ancienne
+ *    convention « demi-largeur MC recentrée sur le sélectionné » est
+ *    supprimée (elle produisait des fourchettes dégénérées [b2 ; b2]
+ *    quand le main prévoyait 0, d'où la couverture 11,6 % de prod).
+ *    coverage_backtest = méthode sélectionnée avec SES intervalles ;
+ *    coverage_main_backtest = main avec les siennes ;
  *  - debug : niveau_eur = exp(lastLevel) × panier global (€ par jour
  *    MOYEN, hors effet dow, sur données désaisonnalisées) ; tendance_
  *    pct_jour = (exp(lastTrend) − 1) × 100 (%/jour, échelle log du SES) ;
@@ -635,9 +645,14 @@ final class ForecastEngine
             // WAPE détaillé : le SÉLECTIONNÉ (wape_backtest, top-level)
             // ne dit pas POURQUOI la baseline gagne — on expose aussi le
             // modèle (main) et la baseline B2, tous deux déjà produits
-            // par Backtest::run (nulls si historique insuffisant).
+            // par Backtest::run (nulls si historique insuffisant), plus
+            // le WAPE sur les 20 DERNIERS points (robustesse : les
+            // premières origines du backtest, sous-ensembles courts,
+            // ne doivent pas peser seuls sur la moyenne).
             'wape_modele'           => $bt['wape_main'] !== null ? $bt['wape_main'] * 100.0 : null,
             'wape_baseline'         => $bt['wape_b2'] !== null ? $bt['wape_b2'] * 100.0 : null,
+            'wape_modele_recent'    => $bt['wape_main_recent'] !== null ? $bt['wape_main_recent'] * 100.0 : null,
+            'wape_baseline_recent'  => $bt['wape_b2_recent'] !== null ? $bt['wape_b2_recent'] * 100.0 : null,
             'conformal_q90'         => $confQ90,
             'conformal_mean_hw'     => $confMhw,
         ];
@@ -745,6 +760,10 @@ final class ForecastEngine
             'dispersion_r'   => (float) $model->dispersionR,
             'facteur_conforme' => $factor,
             'coverage_backtest' => $bt['coverage'],
+            // Couverture du modèle principal avec SES intervalles MC,
+            // à côté de coverage_backtest (méthode sélectionnée, SES
+            // intervalles — cf. Backtest, intervalles par méthode).
+            'coverage_main_backtest' => $bt['coverage_main'],
         ];
     }
 

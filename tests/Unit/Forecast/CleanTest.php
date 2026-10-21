@@ -49,6 +49,33 @@ final class CleanTest extends TestCase
         self::assertSame([], Clean::openWeekdays(['2026-10-04' => new DayCurrent('2026-10-04', 10.0, 5)], '2026-10-04'), 'Aucun jour passé → aucun dow.');
     }
 
+    /**
+     * Correctif 21/10/2026 (WAPE modèle 94 % en prod) : une fermeture
+     * COMPLÈTE (été) ne doit pas gonfler le seuil de couverture. Avec le
+     * span calendaire (16 semaines Juin→Septembre), le seuil montait à
+     * ceil(0,5×16) = 8 occurrences/dow — plus qu'aucun dow n'en avait —
+     * et openWeekdays revenait VIDE : expectedN = 0, prédictions de
+     * backtest nulles. Le seuil compte désormais les semaines LUN-DIM
+     * comptant au moins un jour ouvert.
+     */
+    public function test_open_weekdays_fermeture_complete_compte_semaines_ouvertes(): void
+    {
+        $days = self::joursLunVen('2026-06-01', 15) + self::joursLunVen('2026-09-01', 10);
+
+        self::assertSame(
+            [0, 1, 2, 3, 4],
+            Clean::openWeekdays($days, '2026-09-15'),
+            '5 semaines ouvertes → seuil 3 ; chaque dow vu 5 fois → inclus malgré le trou calendaire.'
+        );
+
+        // Fenêtre dense SANS fermeture : comportement inchangé (garde-fou).
+        self::assertSame(
+            [0, 1, 2, 3, 4],
+            Clean::openWeekdays(self::joursLunVen('2026-06-01', 15), '2026-06-20'),
+            'Sous-période dense : la règle de couverture ne change pas.'
+        );
+    }
+
     public function test_atypical_weights_ca_10x(): void
     {
         // 21 jours à CA variant 90/100/110 (MAD non nulle) + un jour à
@@ -114,6 +141,28 @@ final class CleanTest extends TestCase
         $days = [];
         $d = new \DateTimeImmutable('2026-09-07');
         while (count($days) < 5 * $n) {
+            if ((int) $d->format('N') - 1 <= 4) {
+                $key = $d->format('Y-m-d');
+                $days[$key] = new DayCurrent($key, 100.0, 50, [], array_fill(0, 50, 2.0));
+            }
+            $d = $d->modify('+1 day');
+        }
+
+        return $days;
+    }
+
+    /**
+     * $n premiers jours lun–ven À PARTIR de $start (dense, sans trou) —
+     * permet de construire un historique avec fermeture complète entre
+     * deux blocs (ex. juin puis septembre).
+     *
+     * @return array<string,DayCurrent>
+     */
+    private static function joursLunVen(string $start, int $n): array
+    {
+        $days = [];
+        $d = new \DateTimeImmutable($start);
+        while (count($days) < $n) {
             if ((int) $d->format('N') - 1 <= 4) {
                 $key = $d->format('Y-m-d');
                 $days[$key] = new DayCurrent($key, 100.0, 50, [], array_fill(0, 50, 2.0));

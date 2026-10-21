@@ -41,7 +41,13 @@ courant ssi `is_custom_amount = 0` ET catégorie hors `Événement`
 (`AnalyticsForecastData::EXCEPTIONAL_CATEGORIES`) ET `price_ttc > 0`
 (les lignes ≤ 0 sont des tests, comptées dans l'audit uniquement).
 Jours de semaine ouverts habituels : un dow est ouvert si observé sur
-≥ `max(1, ceil(0.5 × n_semaines))` lundis couverts. Jours atypiques :
+≥ `max(1, ceil(0.5 × n_semaines))` occurrences, où **n_semaines compte les
+semaines lun–dim ayant AU MOINS UN jour ouvert** — correctif du 21/10/2026
+(WAPE modèle 94 % en prod) : le comptage par span calendaire gonflait le
+seuil avec une fermeture complète (été : juin→octobre = 21 semaines ⇒ 11
+occurrences/dow exigées, plus qu'aucun dow n'en avait) et `openWeekdays`
+revenait vide ⇒ `expectedN = 0`, prédictions de backtest nulles. Les
+semaines de fermeture totale ne comptent plus. Jours atypiques :
 z robuste MAD `z = (CA − médiane) / (1.4826 × MAD)`, `|z| > 3.5` ⇒ poids 0.3
 (la chaîne de niveau n'absorbe qu'un tiers de l'écart du jour).
 
@@ -91,7 +97,8 @@ modèle). Résumé : moyenne + quantiles 0.10/0.90 (intervalle central 80 %).
 **Calibration conforme** : sur les résidus de backtest
 `score = |y − pred| / max(pred, 1)`, facteur
 `f = quantile(scores, 0.90) / demi-largeur relative moyenne`, clampé **[0.5, 3]**,
-appliqué autour de la prévision centrale. Moins de **15** résidus ⇒ pas de
+appliqué autour de la prévision centrale (scores et demi-largeurs = méthode
+sélectionnée avec SES intervalles, cf. étape 5). Moins de **15** résidus ⇒ pas de
 calibration (intervalles MC conservés).
 
 ### Étape 5 — Backtest et sélection (`Backtest`)
@@ -111,6 +118,21 @@ occurrences passées du dow, B3 = moyenne des 7 derniers jours ouverts.
 Métriques : **WAPE** (principal, B2…), **biais** moyen, **MASE** vs B1,
 **couverture** des intervalles (cible 70-90 %), **pinball loss** sur les
 quantiles, WAPE hebdomadaire sur semaines lun-dim complètes (5 jours ouverts).
+**Intervalles PAR MÉTHODE** (correctif du 21/10/2026 — l'ancienne convention
+« demi-largeur MC du main recentrée sur le sélectionné » est supprimée : elle
+produisait des fourchettes dégénérées `[b2 ; b2]` quand le main prévoyait 0,
+d'où la couverture 11,6 % observée en prod) : le modèle principal rapporte SES
+intervalles **MC** (quantiles 0.10/0.90 des tirages) ; **B2 et B3** rapportent
+un intervalle **empirique déterministe**, `pred ± q0.80` des `|résidus|`
+PASSÉS de la méthode (rolling à chaque origine ; aucun résidu passé ⇒
+intervalle ponctuel assumé, borne basse clampée à 0). `coverage` = couverture
+de la méthode **sélectionnée** avec SES intervalles ; `coverage_main`,
+`coverage_b2`, `coverage_b3` (résultat du backtest) et
+`coverage_main_backtest` (payload moteur) exposent chaque méthode.
+**Robustesse des premières origines** : `BACKTEST_START = 10` conservé (choix
+de mission), et `wape_modele_recent` / `wape_baseline_recent` (anomalies)
+exposent le WAPE sur les **20 derniers points** pour vérifier que les origines
+précoces (sous-ensembles courts) ne pèsent pas seuls sur la moyenne.
 **Règle de sélection** : le modèle principal reste actif ssi
 `WAPE_main < WAPE_B2` **strictement** ; sinon baseline B2 affichée
 (`modele = baseline_B2`, bandeau visible).
@@ -240,8 +262,8 @@ d'hyperparamètres sur si peu de points surapprendrait. Valeurs choisies a prior
   (`n_points ≥ BACKTEST_START`), **modèle principal retenu** et **couverture
   ∈ [0,70 ; 0,90]** — sinon plafond « moyenne ». « faible » (dow < 3) et
   « insuffisant » restent inchangés et prioritaires. La confiance reflète la
-  qualité MESURÉE, pas seulement le volume d'historique (prod : baseline_B2
-  retenue + coverage 0,12 → « moyenne », même avec 21 jours ouverts).
+  qualité MESURÉE, pas seulement le volume d'historique (ex. prod 21/10/2026
+  avant correctif : baseline retenue + couverture hors bornes → « moyenne »).
 - **Jours fermés** : jamais comptés 0 (absents du dataset) ; un jour fermé
   prévu affiche des zéros explicites (`is_open = false`) dans les graphiques.
 - Sans historique du tout : prévisions nulles, cartes vides, aucune erreur.
@@ -357,7 +379,10 @@ Carte des fichiers (cas de la mission étape 10) :
 - `tests/Unit/Forecast/Conformal` — couvert via MonteCarloTest (facteur clampé,
   apply autour de pred).
 - `tests/Unit/Forecast/BacktestTest.php` — historique insuffisant, couverture
-  sur série NegBin simulée, semaines complètes, déterminisme.
+  sur série NegBin simulée, semaines complètes, déterminisme, **régression
+  fermeture estivale** (prédictions vivantes après un trou d'historique,
+  correctif 21/10/2026), **couverture par méthode + intervalles B2 non
+  dégénérés**, WAPE 20 derniers points.
 - `tests/Unit/Forecast/GoalTest.php` — probabilité décroissante avec
   l'objectif, manquant/jour cohérent, **requis/jour depuis le réel (indépendant
   de l'attendu)**, **choc de niveau commun appliqué chemin par chemin**,
