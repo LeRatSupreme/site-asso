@@ -334,7 +334,8 @@ final class RecoData extends Model
             'reco_echantillon_min_unites' => '20',
             'reco_duo_remise_max'         => '0.10',
             'reco_immobilise_seuil_eur'   => '30',
-            'reco_max_actives'            => '5',
+            'reco_max_idees'              => '3',
+            'reco_max_corrections'        => '5',
         ];
 
         $out = [];

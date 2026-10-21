@@ -61,7 +61,8 @@ $niceLabels = [
     'reco_echantillon_min_unites' => 'Échantillon minimal par règle (unités / 30 j)',
     'reco_duo_remise_max'         => "Remise max d'un duo (fraction)",
     'reco_immobilise_seuil_eur'   => 'Seuil stock immobilisé gamme (€)',
-    'reco_max_actives'            => "Nombre max d'idées actives",
+    'reco_max_idees'              => "Nombre max d'idées commerciales",
+    'reco_max_corrections'        => 'Nombre max de corrections affichées',
 ];
 
 $boolKeys = ['maintenance_mode', 'orders_enabled', 'registrations_enabled', 'sumup_enabled', 'discord_enabled', 'membership_enabled'];

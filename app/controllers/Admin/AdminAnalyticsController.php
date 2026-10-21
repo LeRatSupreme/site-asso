@@ -321,6 +321,7 @@ final class AdminAnalyticsController extends AdminBaseController
         // page analytics doit toujours se rendre.
         $recoPayload = [
             'idees'        => [],
+            'corrections'  => [],
             'meta'         => ['indisponible' => true, 'raison' => 'non initialisé'],
             'insuffisant'  => false,
             'indisponible' => true,
@@ -329,7 +330,11 @@ final class AdminAnalyticsController extends AdminBaseController
         ];
         try {
             $recoPayload = AdminRecoController::payloadPourAnalytics();
-            AdminRecoController::persistIdees($recoPayload['idees'], $recoPayload['meta'], $recoPayload['fenetre']);
+            AdminRecoController::persistIdees(
+                array_merge($recoPayload['idees'], $recoPayload['corrections']),
+                $recoPayload['meta'],
+                $recoPayload['fenetre']
+            );
         } catch (\Throwable) {
             // indisponible : cf. payload par défaut ci-dessus
         }

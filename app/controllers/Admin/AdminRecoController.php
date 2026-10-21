@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Controllers\Admin;
 
+use App\Core\Compta\Kiosk;
 use App\Core\Compta\Reco\EffetMesure;
 use App\Core\Compta\Reco\RecommendationEngine;
 use App\Models\RecoData;
@@ -37,7 +38,8 @@ final class AdminRecoController extends AdminBaseController
         'reco_echantillon_min_unites' => 10000.0,
         'reco_duo_remise_max'         => 1.0,   // fraction ≤ 1
         'reco_immobilise_seuil_eur'   => 100000.0,
-        'reco_max_actives'            => 10.0,
+        'reco_max_idees'              => 10.0,
+        'reco_max_corrections'        => 20.0,
     ];
 
     /** Redirects autorisés après décision (whitelist anti open-redirect). */
@@ -54,12 +56,19 @@ final class AdminRecoController extends AdminBaseController
      * échec) renvoie un payload « indisponible » — la page analytics doit
      * TOUJOURS se rendre.
      *
-     * @return array{idees:list<array<string,mixed>>,meta:array<string,mixed>,insuffisant:bool,indisponible:bool,raison:string,fenetre:array{from:string,to:string,jours_ouverts:int}}
+     * Les recommandations sont séparées en DEUX listes par bloc du cœur :
+     *   - 'idees'       : consignes commerciales (bloc 'idee', ≤ 3) ;
+     *   - 'corrections' : données/stock (bloc 'correction', ≤ 5).
+     * Chaque entrée est le toArray() du cœur (16 clés) + 'lien' résolu
+     * par lienPour() selon le contexte (admin ou kiosque).
+     *
+     * @return array{idees:list<array<string,mixed>>,corrections:list<array<string,mixed>>,meta:array<string,mixed>,insuffisant:bool,indisponible:bool,raison:string,fenetre:array{from:string,to:string,jours_ouverts:int}}
      */
-    public static function payloadPourAnalytics(): array
+    public static function payloadPourAnalytics(bool $kiosk = false): array
     {
         $vide = [
             'idees'        => [],
+            'corrections'  => [],
             'meta'         => ['indisponible' => true, 'raison' => ''],
             'insuffisant'  => false,
             'indisponible' => true,
@@ -72,8 +81,21 @@ final class AdminRecoController extends AdminBaseController
             ['reco' => $reco, 'forecast' => $forecast, 'fenetre' => $fenetre] = RecoData::dataset($now->format('Y-m-d'), $now);
             ['idees' => $idees, 'meta' => $meta] = RecommendationEngine::recommend($reco, $now);
 
+            $tabIdees = [];
+            $tabCorrections = [];
+            foreach ($idees as $i) {
+                $tab = $i->toArray();
+                $tab['lien'] = self::lienPour($tab, $kiosk);
+                if (($tab['bloc'] ?? 'idee') === 'correction') {
+                    $tabCorrections[] = $tab;
+                } else {
+                    $tabIdees[] = $tab;
+                }
+            }
+
             return [
-                'idees'        => array_map(static fn ($i): array => $i->toArray(), $idees),
+                'idees'        => $tabIdees,
+                'corrections'  => $tabCorrections,
                 'meta'         => $meta,
                 'insuffisant'  => (bool) ($meta['historique_insuffisant'] ?? false),
                 'indisponible' => false,
@@ -88,13 +110,74 @@ final class AdminRecoController extends AdminBaseController
     }
 
     /**
-     * Persiste les idées AFFICHÉES (statut « proposee » par défaut du
-     * upsert) pour que les boutons Appliquer / Plus tard / Ignorer aient
-     * un id. Le upsert ne touche JAMAIS aux décisions déjà prises.
-     * Les $idees sont des tableaux toArray() du cœur ; un échec lève
-     * (l'appelant enveloppe dans un try/catch silencieux).
+     * Lien admin de la fiche concernée par une reco (bouton « Ouvrir la
+     * fiche ↗ »), résolu UNE FOIS côté contrôleur pour toutes les vues.
      *
-     * @param list<array<string,mixed>> $idees
+     * Mapping (clé = premier produit, préfixe « sans_stock: » des clés
+     * hors catalogue R11 retiré ; doublons = groupe R11 sans fiche
+     * produit unique) :
+     *   - R11 « Renseigner le coût » → fiche coûts du produit (ancre formulaire) ;
+     *   - R11 « Fusionner »          → page des alias (doublons ≥ 2 produits) ;
+     *   - R11 « Vérifier le stock » / R8 / R9 → inventaire ;
+     *   - R2 → liste des ventes.
+     * En KIOSQUE : les pages compta n'ont pas d'équivalent — seulement
+     * R2 vers la liste publique du kiosque, null ailleurs.
+     *
+     * @param array<string,mixed> $idee  toArray() du cœur (+ 'lien' ajouté par l'appelant).
+     */
+    private static function lienPour(array $idee, bool $kiosk = false): ?string
+    {
+        $regle = (string) ($idee['regle'] ?? '');
+        if ($regle === '') {
+            return null;
+        }
+
+        if ($kiosk) {
+            return $regle === 'R2' ? Kiosk::url('/kiosque/liste/') : null;
+        }
+
+        $produits = is_array($idee['produits'] ?? null) ? $idee['produits'] : [];
+        $cle = '';
+        foreach ($produits as $p) {
+            if (is_array($p) && is_string($p['key'] ?? null) && $p['key'] !== '') {
+                $cle = $p['key'];
+                break;
+            }
+        }
+        $cle = (string) preg_replace('/^sans_stock:/', '', $cle);
+        $titre = (string) ($idee['titre'] ?? '');
+
+        if ($regle === 'R11') {
+            if (str_contains($titre, 'Renseigner le coût') && $cle !== '') {
+                return url('/admin/compta/couts') . '?product_key=' . rawurlencode($cle) . '#costs-form';
+            }
+            if (str_contains($titre, 'Fusionner')) {
+                return url('/admin/compta/aliases');
+            }
+            if (str_contains($titre, 'Vérifier le stock')) {
+                return url('/admin/compta/inventaire');
+            }
+
+            return null;
+        }
+
+        return match ($regle) {
+            'R2'    => url('/admin/compta/liste'),
+            'R8', 'R9' => url('/admin/compta/inventaire'),
+            default => null,
+        };
+    }
+
+    /**
+     * Persiste les recommandations AFFICHÉES — idées ET corrections (les
+     * appelants fusionnent les deux listes du payload) — statut
+     * « proposee » par défaut du upsert, pour que les boutons Appliquer /
+     * Plus tard / Ignorer aient un id. Le payload stocké est le toArray()
+     * complet du cœur (16 clés, bloc inclus) ; le upsert ne touche JAMAIS
+     * aux décisions déjà prises. Un échec lève (l'appelant enveloppe dans
+     * un try/catch silencieux).
+     *
+     * @param list<array<string,mixed>> $idees Recommandations des deux blocs (idées + corrections).
      * @param array<string,mixed>       $meta    (réservé : les idées d'un payload indisponible ne sont jamais persistées)
      * @param array{from:string,to:string,jours_ouverts:int} $fenetre
      */
@@ -212,9 +295,13 @@ final class AdminRecoController extends AdminBaseController
 
         self::mesurerEffetsEnAttente();
 
-        $payload = self::payloadPourAnalytics();
+        $payload = self::payloadPourAnalytics(true);
         try {
-            self::persistIdees($payload['idees'], $payload['meta'], $payload['fenetre']);
+            self::persistIdees(
+                array_merge($payload['idees'], $payload['corrections']),
+                $payload['meta'],
+                $payload['fenetre']
+            );
         } catch (\Throwable) {
             // Table non migrée : les boutons resteront sans effet, la
             // page doit quand même se rendre.
@@ -322,6 +409,11 @@ final class AdminRecoController extends AdminBaseController
                 Recommendation::decision($id, 'ignoree', $motif !== '' ? $motif : null);
             } elseif ($decision === 'plus_tard') {
                 Recommendation::decision($id, 'plus_tard', $motif !== '' ? $motif : null);
+            } elseif (self::estCorrection($id)) {
+                // Correction (données/stock) : PAS de baseline — reconstruire
+                // RecoData/ForecastEngine n'a de sens que pour une idée
+                // appliquée à une offre datée. On se contente de dater.
+                Recommendation::decision($id, 'appliquee');
             } else {
                 // Appliquer : baseline AVANT toute écriture de statut.
                 $now      = new \DateTimeImmutable('now', new \DateTimeZone(self::TZ));
@@ -368,6 +460,22 @@ final class AdminRecoController extends AdminBaseController
             is_array($dec) ? array_column($dec, 'key') : [],
             static fn ($k): bool => is_string($k) && $k !== ''
         ));
+    }
+
+    /**
+     * Vrai si la reco persistée est une CORRECTION (bloc 'correction' du
+     * payload_json) : son application ne pose PAS de baseline d'effet.
+     * Lignes d'avant l'itération 2 (payload sans bloc) : idée.
+     */
+    private static function estCorrection(string $id): bool
+    {
+        $row = Recommendation::find($id);
+        if ($row === null) {
+            return false;
+        }
+        $dec = json_decode((string) ($row['payload_json'] ?? '{}'), true);
+
+        return is_array($dec) && ($dec['bloc'] ?? 'idee') === 'correction';
     }
 
     // -----------------------------------------------------------------
