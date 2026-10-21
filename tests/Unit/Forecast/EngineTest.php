@@ -503,6 +503,51 @@ final class EngineTest extends TestCase
     }
 
     /**
+     * Mission « pourquoi baseline_B2 ? » — anomalies expose wape_modele
+     * (modèle principal) et wape_baseline (B2) en plus de wape_backtest
+     * (sélectionné), valeurs déterministes issues de Backtest::run avec
+     * la même graine. Nulls quand le backtest est indisponible.
+     */
+    public function test_wape_modele_et_baseline_exposes_dans_anomalies(): void
+    {
+        $days = self::serieBruitee(28);
+        $r = ForecastEngine::forecast(new ForecastDataset($days), self::paris('2026-10-15 23:59'), '23:59', [
+            'seed' => 3, 'draws' => 200, 'backtest_days' => $days,
+        ]);
+
+        self::assertNotNull($r['anomalies']['wape_modele'], 'WAPE du modèle principal exposé.');
+        self::assertNotNull($r['anomalies']['wape_baseline'], 'WAPE de la baseline B2 exposé.');
+        $bt = \App\Core\Compta\Forecast\Backtest::run($days, ['seed' => 3, 'draws' => min(200, Hyper::BACKTEST_DRAWS_MAX)]);
+        self::assertEqualsWithDelta($bt['wape_main'] * 100.0, (float) $r['anomalies']['wape_modele'], 1.0e-9, 'wape_modele = WAPE du modèle principal.');
+        self::assertEqualsWithDelta($bt['wape_b2'] * 100.0, (float) $r['anomalies']['wape_baseline'], 1.0e-9, 'wape_baseline = WAPE de B2.');
+        $sel = ($r['modele'] === 'baseline_B2') ? $bt['wape_b2'] : $bt['wape_main'];
+        self::assertEqualsWithDelta($sel * 100.0, (float) $r['wape_backtest'], 1.0e-9, 'wape_backtest reste le WAPE du modèle sélectionné.');
+
+        // Historique insuffisant → les deux restent null.
+        $court = array_slice(self::serie(28), 0, 8, true);
+        $sans = ForecastEngine::forecast(new ForecastDataset($court), self::paris('2026-10-19 23:59'), '23:59', ['seed' => 3, 'draws' => 100]);
+        self::assertNull($sans['anomalies']['wape_modele']);
+        self::assertNull($sans['anomalies']['wape_baseline']);
+    }
+
+    /**
+     * Mission « r = 200 signalé » — debug.dispersion_r_borne : vrai quand
+     * l'estimateur sature la borne R_MAX (quasi-Poisson), faux sinon.
+     */
+    public function test_debug_dispersion_r_borne(): void
+    {
+        // Fit saturé : dataset vide → dispersion R_MAX par construction.
+        $vide = ForecastEngine::forecast(new ForecastDataset([]), self::paris('2026-10-19 12:00'), '12:00', ['seed' => 1, 'draws' => 50]);
+        self::assertSame(Hyper::R_MAX, $vide['debug']['dispersion_r']);
+        self::assertTrue($vide['debug']['dispersion_r_borne'], 'r = R_MAX → drapeau borne vrai.');
+
+        // Série bruitée : r estimé < R_MAX → pas de drapeau.
+        $r = ForecastEngine::forecast(new ForecastDataset(self::serieBruitee(28)), self::paris('2026-10-15 23:59'), '23:59', ['seed' => 1, 'draws' => 100]);
+        self::assertLessThan(Hyper::R_MAX, $r['debug']['dispersion_r']);
+        self::assertFalse($r['debug']['dispersion_r_borne'], 'r < R_MAX → drapeau borne faux.');
+    }
+
+    /**
      * FIX P5 (v2) — note de désaisonnalisation : quand des jours passés de
      * la fenêtre d'apprentissage sont DANS une plage creuse (facteur < 1),
      * ils sont ramenés au niveau normal avant l'apprentissage → la note
