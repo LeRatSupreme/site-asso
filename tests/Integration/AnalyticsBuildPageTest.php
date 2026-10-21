@@ -156,10 +156,36 @@ final class AnalyticsBuildPageTest extends IntegrationTestCase
         self::assertArrayHasKey('expected_so_far', $payload['day_track']);
         self::assertArrayHasKey('intervalle_h', $payload['day_track']);
 
-        // ---- F4 : sous-titre meilleur jour = UN seul chiffre ----
-        self::assertStringContainsString('(modèle, fenêtre ', $body, 'Le sous-titre meilleur jour doit citer la fenêtre.');
+        // ---- F4 : sous-titre meilleur jour = significatif UNIQUEMENT ----
+        // Soit un meilleur jour désigné (avec n = occurrences observées),
+        // soit la mention honnête « Pas de différence significative ».
+        // Deux séries étiquetées : Observé (barres) + Modèle (points).
+        $wd = $payload['weekday'];
+        foreach (['labels', 'ca', 'obs', 'se', 'next_date', 'days_count', 'best'] as $wdKey) {
+            self::assertArrayHasKey($wdKey, $wd, "Clé « $wdKey » absente du payload weekday.");
+        }
+        self::assertCount(7, $wd['ca'], 'weekday.ca : 7 entrées (une par dow).');
+        self::assertCount(7, $wd['obs'], 'weekday.obs : 7 entrées (une par dow).');
+        if (is_array($wd['best']) && $wd['best'] !== []) {
+            self::assertStringContainsString('Meilleur jour : ', $body, 'Le meilleur jour désigné doit être affiché.');
+            self::assertStringContainsString(
+                '/jour attendu (modèle, n=' . (int) ($wd['best']['n'] ?? -1) . ')',
+                $body,
+                'Le sous-titre meilleur jour doit citer n (occurrences observées).'
+            );
+        } else {
+            self::assertNull($wd['best'] ?? null);
+            self::assertStringContainsString(
+                'Pas de différence significative entre les jours',
+                $body,
+                'Sans meilleur jour significatif, le sous-titre doit le dire honnêtement.'
+            );
+        }
         self::assertStringNotContainsString('/jour en moyenne', $body, 'Ancien libellé à deux chiffres encore présent.');
         self::assertStringNotContainsString('Moyenne/jour : ', $body, 'La moyenne/jour ne doit plus vivre dans le sous-titre.');
+        self::assertStringNotContainsString('CA moyen (€)', $body, 'L\'étiquette trompeuse « CA moyen » doit avoir disparu.');
+        self::assertStringContainsString('Modèle (prochaine occurrence)', $body, 'La série modèle doit être étiquetée.');
+        self::assertStringContainsString("'Observé'", $body, 'La série observée doit être étiquetée.');
 
         // ---- F6 : note bénéfice en régimes (≥ 5 % ici, produits nommés) ----
         self::assertStringContainsString(
@@ -204,7 +230,13 @@ final class AnalyticsBuildPageTest extends IntegrationTestCase
         // F1/F4 kiosque : libellés compacts attendus.
         self::assertStringContainsString('Attendu à ', $body, 'La chip kiosque « Attendu à Hh » est absente.');
         self::assertStringContainsString('fourchette journée 80 %', $body, 'La fourchette journée doit être étiquetée dans le kiosque.');
-        self::assertStringContainsString('/jour (modèle, fenêtre ', $body, 'Le sous-titre kiosque du meilleur jour doit citer la fenêtre.');
+        $wdK = $payload['weekday']['best'] ?? null;
+        if (is_array($wdK) && $wdK !== []) {
+            self::assertStringContainsString('/jour attendu (modèle, n=', $body, 'Le sous-titre kiosque du meilleur jour doit citer n.');
+        } else {
+            self::assertStringContainsString('Pas de différence significative entre les jours', $body, 'Kiosque : sous-titre honnête sans meilleur jour significatif.');
+        }
+        self::assertStringNotContainsString('CA moyen (€)', $body, 'Kiosque : étiquette « CA moyen » supprimée.');
 
         // Mauvais jeton : 403.
         self::assertSame(

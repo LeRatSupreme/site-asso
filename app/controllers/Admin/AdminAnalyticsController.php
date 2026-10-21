@@ -243,9 +243,15 @@ final class AdminAnalyticsController extends AdminBaseController
         // ---- Estimation du jour : mappage SANS recalcul métier ----
         $dayTrack = $this->dayTrackFromForecast($forecast, $fw);
 
-        // ---- Par jour de semaine : moyennes du moteur + observé fenêtre ----
+        // ---- Par jour de semaine : séries du moteur (modèle ré-normalisé
+        // sur la prochaine occurrence + observé) ; mention de l'ajustement
+        // période creuse quand une plage mord sur les 7 prochains jours
+        // (les prochaines occurrences des dows ouverts).
         $weekdayObs = Analytics::revenueByWeekday($trackFrom, $todayKey, $category, $payment);
         $weekday    = $this->weekdayFromForecast($forecast, $weekdayObs, (int) $now->format('N') - 1);
+        $weekday['creuse_note'] = SlowPeriods::plagesActives($creuse, $now, $now->modify('+7 days')) !== []
+            ? 'Prévisions incluant la période creuse active (×' . SlowPeriods::facteurFr((float) ($creuse['facteur'] ?? 1.0)) . ')'
+            : null;
 
         // ---- Par heure : moyenne OBSERVÉE par jour ouvert de la fenêtre ----
         // d'apprentissage + séries du jour (moteur).
@@ -555,10 +561,13 @@ final class AdminAnalyticsController extends AdminBaseController
     }
 
     /**
-     * Carte « Par jour de semaine » : moyennes et occurrences issues du
-     * moteur (jours_semaine — le CA vaut null sur un jour fermé),
-     * quantités et transactions OBSERVÉES sur la fenêtre d'apprentissage
-     * (Analytics), meilleur jour depuis meilleur_jour.
+     * Carte « Par jour de semaine » : séries du MOTEUR mappées telles
+     * quelles — ca = CA attendu de la prochaine occurrence (modèle),
+     * obs = moyenne brute observée du dow (null sans occurrence),
+     * days_count = occ (jours passés vus), se/next_date tels quels,
+     * meilleur jour depuis meilleur_jour (null = non significatif, la
+     * vue affiche « Pas de différence significative ») ; quantités et
+     * transactions OBSERVÉES sur la fenêtre d'apprentissage (Analytics).
      *
      * @param array<string,mixed>                       $forecast
      * @param array<int,array{ca:float,qty:int,tx:int}> $observed
@@ -567,45 +576,51 @@ final class AdminAnalyticsController extends AdminBaseController
     private function weekdayFromForecast(array $forecast, array $observed, int $todayIndex): array
     {
         $ca = [];
+        $obs = [];
+        $se = [];
+        $nextDate = [];
         $qty = [];
         $tx = [];
         $daysCount = [];
-        $openSum = 0.0;
-        $openCount = 0;
         $js = is_array($forecast['jours_semaine'] ?? null) ? $forecast['jours_semaine'] : [];
 
         for ($dow = 0; $dow < 7; $dow++) {
             $entry  = is_array($js[$dow] ?? null) ? $js[$dow] : [];
             $isOpen = (bool) ($entry['is_open'] ?? false);
             $ca[$dow] = $isOpen ? (float) ($entry['ca'] ?? 0.0) : null;
+            $obsRaw = $entry['obs_ca'] ?? null;
+            $obs[$dow] = ($isOpen && $obsRaw !== null) ? (float) $obsRaw : null;
+            $seRaw = $entry['se'] ?? null;
+            $se[$dow] = ($isOpen && $seRaw !== null) ? (float) $seRaw : null;
+            $nextRaw = $entry['next_date'] ?? null;
+            $nextDate[$dow] = ($isOpen && $nextRaw !== null) ? (string) $nextRaw : null;
             $daysCount[$dow] = (int) ($entry['occ'] ?? 0);
             $qty[$dow] = (int) ($observed[$dow]['qty'] ?? 0);
             $tx[$dow]  = (int) ($observed[$dow]['tx'] ?? 0);
-            if ($isOpen) {
-                $openSum += (float) ($entry['ca'] ?? 0.0);
-                $openCount++;
-            }
         }
 
         $best = null;
         $meilleur = is_array($forecast['meilleur_jour'] ?? null) ? $forecast['meilleur_jour'] : null;
         if ($meilleur !== null) {
+            $bestDow = (int) ($meilleur['dow'] ?? 0);
             $best = [
-                'index' => (int) ($meilleur['dow'] ?? 0),
+                'index' => $bestDow,
                 'label' => (string) ($meilleur['label'] ?? ''),
                 'ca'    => (float) ($meilleur['ca'] ?? 0.0),
+                'n'     => $daysCount[$bestDow],
             ];
         }
 
         return [
             'labels'      => self::DAY_ABBR,
-            'ca'          => $ca,
-            'ca_avg'      => $ca, // compat JS : même série que « ca »
+            'ca'          => $ca,          // modèle : attendu prochaine occurrence
+            'obs'         => $obs,         // observé : moyenne brute (null sans occ)
+            'se'          => $se,
+            'next_date'   => $nextDate,
             'qty'         => $qty,
             'tx'          => $tx,
             'days_count'  => $daysCount,
             'today_index' => $todayIndex,
-            'avg_per_day' => $openCount > 0 ? round($openSum / $openCount, 4) : null,
             'best'        => $best,
         ];
     }

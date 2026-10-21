@@ -31,7 +31,7 @@ declare(strict_types=1);
  * @var list<array<string,mixed>> $insights Insights automatiques (icon, tone, title, text)
  * @var array<string,mixed> $forecast       Moteur ForecastEngine::forecast() TEL QUEL (prevision_jour, intervalle_80, trop_tot, ecart_vs_attendu, dans_intervalle, confiance, modele, n_jours, wape_backtest, hier, jours, horaire, semaine, mois30, benefice, produits, anomalies, notes…)
  * @var array<string,mixed> $day_track      Estimation du jour (window, hour, trop_tot, estimate, cum_actual, cum_expected, actual_so_far, delta_pct|null, projection_eod, ecart_eur, intervalle_h|null, dans_intervalle|null, confiance)
- * @var array<string,mixed> $weekday        Par jour de semaine {labels, ca, ca_avg, qty, tx, days_count, today_index, avg_per_day, best?{index,label,ca}}
+ * @var array<string,mixed> $weekday        Par jour de semaine {labels, ca (modèle : attendu prochaine occurrence), obs (moyenne brute observée|null), se, next_date, qty, tx, days_count (occ), today_index, best?{index,label,ca,n}|null, creuse_note?string|null}
  * @var array<string,mixed> $hourly         Par heure {labels, ca_avg, today_ca, today_expected, today_projete, now_hour, trop_tot, s}
  * @var float $goal                         Objectif hebdomadaire affiché (GET ?goal= ou sauvegarde)
  * @var string $json                        Payload JSON (Chart.js) injecté dans un <script>
@@ -466,15 +466,14 @@ $iconSvg = static function (string $name): string {
     <div class="compta-tabpane ka-pane" data-pane="heures" hidden>
         <?php
         // Meilleur jour : VALEUR DU PAYLOAD (weekday.best, calculé par le
-        // moteur — aucun recalcul local). Un seul chiffre dans le
-        // sous-titre ; la moyenne/jour reste dans le payload. Heure de
-        // pointe : argmax des moyennes OBSERVÉES (hourly.ca_avg), étiquetée
-        // « observé ». Sous-titre « Par heure » identique à la vue admin :
-        // « Attendu aujourd'hui » = JOURNÉE (prevision_jour + intervalle_80) ;
-        // partie horaire DISTINCTE « Attendu à Nh » depuis day_track
+        // moteur — aucun recalcul local, null si non significatif). Un seul
+        // chiffre dans le sous-titre. Heure de pointe : argmax des moyennes
+        // OBSERVÉES (hourly.ca_avg), étiquetée « observé ». Sous-titre
+        // « Par heure » identique à la vue admin : « Attendu aujourd'hui »
+        // = JOURNÉE (prevision_jour + intervalle_80) ; partie horaire
+        // DISTINCTE « Attendu à Nh » depuis day_track
         // (expected_so_far/intervalle_h) ou « — (trop tôt) ». Jour fermé →
         // « Fermé aujourd'hui », jamais « 0,00 € ».
-        $wdBest    = isset($weekday['best']) && is_array($weekday['best']) ? $weekday['best'] : null;
         $hrAvgList = isset($hourly['ca_avg']) && is_array($hourly['ca_avg']) ? $hourly['ca_avg'] : [];
         $peakHr    = null;
         $peakVal   = 0.0;
@@ -506,7 +505,19 @@ $iconSvg = static function (string $name): string {
         <section class="card surface glass ka-card">
             <div class="ka-chart-head">
                 <h2 class="ka-chart-title">Par jour de semaine</h2>
-                <span class="ka-sub">Meilleur jour : <?= e((string) ($wdBest['label'] ?? '—')) ?><?= ($wdBest['ca'] ?? null) !== null ? ' — ' . e(formatPrice((float) $wdBest['ca'])) . '/jour (modèle, fenêtre ' . (int) ($day_track['window'] ?? 14) . ' j)' : '' ?></span>
+                <?php
+                // Meilleur jour UNIQUEMENT si significatif (payload), sinon
+                // mention honnête ; l'ajustement période creuse est cité
+                // quand une plage est active.
+                $wdBest = isset($weekday['best']) && is_array($weekday['best']) ? $weekday['best'] : null;
+                $wdSub = ($wdBest !== null && ($wdBest['ca'] ?? null) !== null)
+                    ? 'Meilleur jour : ' . e((string) ($wdBest['label'] ?? '—')) . ' — ' . e(formatPrice((float) $wdBest['ca'])) . '/jour attendu (modèle, n=' . (int) ($wdBest['n'] ?? 0) . ')'
+                    : 'Pas de différence significative entre les jours (historique court)';
+                if (!empty($weekday['creuse_note'])) {
+                    $wdSub .= ' · ' . e((string) $weekday['creuse_note']);
+                }
+                ?>
+                <span class="ka-sub"><?= $wdSub ?></span>
             </div>
             <div class="ka-chart ka-chart-bar"><canvas id="ka-chart-weekday"></canvas></div>
         </section>
@@ -922,28 +933,46 @@ $iconSvg = static function (string $name): string {
     // puis heatmap INVERSÉE (DOM pur, construite immédiatement).
     // ============================================================
     function initHeuresCharts() {
-        // Barres = moyennes du payload (ca_avg : null = jour fermé → trou,
-        // pas de barre à 0), barre du jour en ambre, tooltip « occ ».
-        var wd = data.weekday || { labels: [], ca_avg: [] };
+        // Barres PLEINES = OBSERVÉ (obs : null = pas de barre), points/
+        // ligne = MODÈLE (prochaine occurrence) ; tooltip des deux séries.
+        var wd = data.weekday || { labels: [], ca: [], obs: [] };
         var elWd = document.getElementById('ka-chart-weekday');
         if (elWd) {
-            var kWdAvg = (wd.ca_avg || []).map(function (v) { return v == null ? null : Number(v); });
+            var kWdObs = (wd.obs || []).map(function (v) { return v == null ? null : Number(v); });
+            var kWdModel = (wd.ca || []).map(function (v) { return v == null ? null : Number(v); });
             var kWdCount = (wd.days_count || []).map(function (v) { return v == null ? 0 : Number(v); });
             var kWdTi = Number(wd.today_index);
             new Chart(elWd, {
                 type: 'bar',
                 data: {
                     labels: wd.labels || [],
-                    datasets: [{
-                        label: 'CA moyen (€)',
-                        data: kWdAvg,
-                        backgroundColor: kWdAvg.map(function (v, i) {
-                            return i === kWdTi ? 'rgba(245,158,11,.75)' : 'rgba(97,80,170,.55)';
-                        }),
-                        borderColor: violet,
-                        borderWidth: 1,
-                        borderRadius: 4,
-                    }],
+                    datasets: [
+                        {
+                            type: 'bar',
+                            label: 'Observé',
+                            data: kWdObs,
+                            backgroundColor: kWdObs.map(function (v, i) {
+                                return i === kWdTi ? 'rgba(245,158,11,.75)' : 'rgba(97,80,170,.55)';
+                            }),
+                            borderColor: violet,
+                            borderWidth: 1,
+                            borderRadius: 4,
+                            order: 2,
+                        },
+                        {
+                            type: 'line',
+                            label: 'Modèle (prochaine occurrence)',
+                            data: kWdModel,
+                            borderColor: violet,
+                            borderDash: [4, 4],
+                            backgroundColor: violet,
+                            pointRadius: 3,
+                            pointHitRadius: 10,
+                            tension: 0,
+                            fill: false,
+                            order: 1,
+                        },
+                    ],
                 },
                 options: {
                     responsive: true,
@@ -952,10 +981,12 @@ $iconSvg = static function (string $name): string {
                         legend: { display: false },
                         tooltip: {
                             callbacks: {
-                                label: function (c) { return c.raw == null ? '—' : money(c.raw); },
-                                afterLabel: function (c) {
-                                    var n = kWdCount[c.dataIndex];
-                                    return 'occ : ' + (n == null || isNaN(n) ? 0 : n) + ' jour(s) observé(s)';
+                                label: function (c) {
+                                    if (c.dataset.type === 'bar') {
+                                        return 'Observé : ' + (c.raw == null ? '—' : money(c.raw))
+                                            + ' (n=' + (kWdCount[c.dataIndex] || 0) + ')';
+                                    }
+                                    return 'Modèle : ' + (c.raw == null ? '—' : money(c.raw));
                                 },
                             },
                         },
