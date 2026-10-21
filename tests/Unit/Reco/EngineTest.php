@@ -22,8 +22,9 @@ use PHPUnit\Framework\TestCase;
 /**
  * RecommendationEngine (cœur pur) : cohérence avec le VRAI ForecastEngine
  * (test mission), historique insuffisant, période creuse, format de
- * sortie, garde-fous globaux, cap 5 + dédoublonnage + refus 30 j,
- * assemblage R10.
+ * sortie (16 clés), garde-fous globaux, blocs séparés idées (cap 3) /
+ * corrections (cap 5, R11 prioritaire), R3 écartée et comptée, messages
+ * d'honnêteté, dédoublonnage + refus 30 j, assemblage R10.
  */
 final class EngineTest extends TestCase
 {
@@ -109,7 +110,7 @@ final class EngineTest extends TestCase
         self::assertLessThan($g['haut'] - 1.0e-9, $g['median'], 'médian strictement sous haut = surplus(prevLo).');
     }
 
-    public function test_historique_insuffisant_limite_aux_regles_r2_r8_r11(): void
+    public function test_historique_insuffisant_corrections_r2_r11_sans_idees(): void
     {
         $produits = [
             self::produitR1('P1', 30.0),
@@ -122,8 +123,13 @@ final class EngineTest extends TestCase
         $regles10 = self::regles($out10);
         self::assertNotSame([], $regles10, 'R11 reste évaluable à 10 jours ouverts.');
         foreach ($regles10 as $r) {
-            self::assertContains($r, ['R2', 'R8', 'R11'], 'Historique insuffisant : R2/R8/R11 seulement.');
+            self::assertContains($r, ['R2', 'R11'], 'Historique insuffisant : corrections R2/R11 seulement (R8 écartée du mode restreint).');
         }
+        foreach ($out10['idees'] as $idee) {
+            self::assertSame('correction', $idee->bloc, 'AUCUNE idée en mode restreint : tout est correction.');
+        }
+        self::assertSame(0, $out10['meta']['idees_fiables']);
+        self::assertStringContainsString('corrigez d\'abord les données', (string) $out10['meta']['message'], '0 idée → message honnête avec consigne de correction.');
 
         $out30 = RecommendationEngine::recommend(RecoScenario::dataset($produits, [], [], 1.0, false, 30, self::forecastProb(0.9)), $now);
         self::assertFalse($out30['meta']['historique_insuffisant']);
@@ -156,17 +162,20 @@ final class EngineTest extends TestCase
         self::assertNotContains('R9', self::regles($outCreuse));
     }
 
-    public function test_format_sortie_13_cles_et_fingerprint(): void
+    public function test_format_sortie_16_cles_et_fingerprint(): void
     {
         $produits = [self::produitR1('P1', 30.0), self::produitR1('P2', 24.0)];
         $now = new \DateTimeImmutable('2026-10-21T10:00:00+00:00'); // 12:00 à Paris
         $out = RecommendationEngine::recommend(RecoScenario::dataset($produits, [], [], 1.0, false, 30, self::forecastProb(0.9)), $now);
 
         self::assertNotSame([], $out['idees']);
-        $attendues = ['id', 'regle', 'titre', 'pourquoi', 'action', 'gain_hebdo', 'confiance', 'effort', 'hypotheses', 'produits', 'garde_fous_ok', 'comment_mesurer', 'statut'];
+        $attendues = ['id', 'regle', 'titre', 'pourquoi', 'action', 'gain_hebdo', 'confiance', 'effort', 'hypotheses', 'produits', 'garde_fous_ok', 'comment_mesurer', 'statut', 'bloc', 'debut', 'fin'];
         foreach ($out['idees'] as $idee) {
             self::assertInstanceOf(Recommendation::class, $idee);
-            self::assertSame($attendues, array_keys($idee->toArray()), 'EXACTEMENT les 13 clés de Recommendation::toArray(), dans l\'ordre.');
+            self::assertSame($attendues, array_keys($idee->toArray()), 'EXACTEMENT les 16 clés de Recommendation::toArray(), dans l\'ordre.');
+            self::assertSame('idee', $idee->bloc, 'R1 est une idée (consigne).');
+            self::assertMatchesRegularExpression('/^\d{4}-\d{2}-\d{2}$/', (string) $idee->debut, 'Consigne R1 datée (jeudi).');
+            self::assertMatchesRegularExpression('/^\d{4}-\d{2}-\d{2}$/', (string) $idee->fin, 'Consigne R1 datée (vendredi).');
             self::assertMatchesRegularExpression('/^[0-9a-f]{40}$/', $idee->id, 'id = fingerprint sha1 hexadécimal 40.');
             self::assertTrue($idee->gardeFousOk);
             self::assertSame('proposée', $idee->statut);
@@ -175,7 +184,7 @@ final class EngineTest extends TestCase
 
         // meta : audit complet.
         $meta = $out['meta'];
-        foreach (['creuse_active', 'facteur_creuse', 'historique_insuffisant', 'jours_ouverts_fenetre', 'n_paniers', 'genere_le', 'parametres', 'rejets'] as $k) {
+        foreach (['creuse_active', 'facteur_creuse', 'historique_insuffisant', 'jours_ouverts_fenetre', 'n_paniers', 'genere_le', 'parametres', 'rejets', 'idees_fiables', 'message', 'ecartees'] as $k) {
             self::assertArrayHasKey($k, $meta);
         }
         self::assertSame('2026-10-21 12:00', $meta['genere_le'], 'Horodatage converti en Europe/Paris.');
@@ -183,6 +192,72 @@ final class EngineTest extends TestCase
         self::assertSame(30, $meta['jours_ouverts_fenetre']);
         self::assertSame(0, $meta['n_paniers']);
         self::assertIsInt($meta['rejets']);
+        self::assertSame(2, $meta['idees_fiables'], 'Deux idées R1 retenues.');
+        self::assertNull($meta['message'], '≥ 2 idées : pas de message.');
+        self::assertSame(['R3' => 0], $meta['ecartees'], 'R3 absente du top CA à marge saine : rien d\'écarté.');
+    }
+
+    /**
+     * BLOCS SÉPARÉS : 3 idées max (R1×3 ici, R7 évincée), corrections
+     * R11 d'abord (cap R11_MAX) puis R2, R3 absente des deux blocs mais
+     * comptée dans meta['ecartees']['R3'], et consignes impératives.
+     */
+    public function test_blocs_separees_caps_r11_prioritaire_et_r3_ecartee(): void
+    {
+        $now = self::paris('2026-10-21 12:00');
+        $produits = [];
+        for ($i = 1; $i <= 5; $i++) {
+            $produits[] = self::produitR1('P' . $i, 20.0 + (float) $i); // 5 idées R1 possibles, cap 3
+        }
+        for ($i = 6; $i <= 9; $i++) {
+            $produits[] = new RecoProduct('P' . $i, 'Produit P' . $i, 'Boissons', 50.0, 100.0, null, null, 'cout_inconnu', null, 10.0, 8.0, 12.0); // R11 ×4
+        }
+        $produits[] = new RecoProduct('P10', 'Rupture X', 'Snacks', 50.0, 100.0, 2.0, 1.0, null, 0, 10.0, 8.0, 12.0); // R2 (stock 0)
+        $produits[] = new RecoProduct('P11', 'Soda top CA', 'Boissons', 400.0, 800.0, 2.0, 1.6, null, null, 100.0, 80.0, 120.0); // R3 (marge 20 %, top CA)
+
+        $out = RecommendationEngine::recommend(RecoScenario::dataset($produits, [], [], 1.0, false, 30, self::forecastProb(0.9)), $now);
+
+        $idees = array_values(array_filter($out['idees'], static fn (Recommendation $r): bool => $r->bloc === 'idee'));
+        $corrections = array_values(array_filter($out['idees'], static fn (Recommendation $r): bool => $r->bloc === 'correction'));
+        self::assertCount(3, $idees, 'Cap MAX_IDEES = 3.');
+        self::assertCount(4, $corrections, 'Cap 5 : 3 R11 (R11_MAX) + 1 R2.');
+        self::assertSame(['R11', 'R11', 'R11', 'R2'], array_column($corrections, 'regle'), 'R11 d\'abord dans les corrections.');
+        self::assertSame(['R1', 'R1', 'R1'], array_column($idees, 'regle'));
+
+        // R3 : ni idée ni correction, mais comptée comme écartée.
+        foreach ($out['idees'] as $idee) {
+            self::assertNotSame('R3', $idee->regle, 'R3 n\'est plus émise.');
+        }
+        self::assertSame(1, $out['meta']['ecartees']['R3'], 'Le candidat R3 (Soda top CA à 20 % de marge) est compté puis écarté.');
+        self::assertSame(3, $out['meta']['idees_fiables']);
+        self::assertNull($out['meta']['message']);
+
+        // Consignes impératives : l'ensemble des idées contient au moins un ordre d'affichage/promo.
+        $actions = implode(' | ', array_map(static fn (Recommendation $r): string => $r->action, $idees));
+        self::assertSame(1, preg_match('/Affichez|Proposez|Entre .*h|offrez/u', $actions), 'Consignes attendues dans les idées : ' . $actions);
+        foreach ($idees as $idee) {
+            self::assertStringContainsString('Affichez', $idee->action, 'Consigne R1 : affichage caisse.');
+        }
+    }
+
+    public function test_message_honnete_selon_le_nombre_d_idees(): void
+    {
+        $now = self::paris('2026-10-21 12:00');
+        $f = self::forecastProb(0.9);
+
+        // 0 idée : uniquement un coût suspect (R11 en correction).
+        $pauvre = new RecoProduct('PX', 'Produit PX', 'Boissons', 50.0, 100.0, null, null, 'cout_inconnu', null, 10.0, 8.0, 12.0);
+        $out0 = RecommendationEngine::recommend(RecoScenario::dataset([$pauvre], [], [], 1.0, false, 30, $f), $now);
+        self::assertSame(0, $out0['meta']['idees_fiables']);
+        self::assertSame(
+            'Peu d\'idées fiables pour l\'instant — corrigez d\'abord les données ci-dessous.',
+            $out0['meta']['message']
+        );
+
+        // 1 idée : R1 seule (R7 dédoublonnée sur le même produit).
+        $out1 = RecommendationEngine::recommend(RecoScenario::dataset([self::produitR1('P1', 30.0)], [], [], 1.0, false, 30, $f), $now);
+        self::assertSame(1, $out1['meta']['idees_fiables']);
+        self::assertSame('Peu d\'idées fiables pour l\'instant.', $out1['meta']['message']);
     }
 
     /**
@@ -293,7 +368,7 @@ final class EngineTest extends TestCase
         self::assertGreaterThanOrEqual(1.0 * (1.0 + Hyper::MARGE_MIN) - 1.0e-9, 2.0 * (1.0 - $remisePct / 100.0), 'Prix remisé ≥ plancher de marge.');
     }
 
-    public function test_max_cinq_dedoublonnage_et_refus_trente_jours(): void
+    public function test_cap_trois_idees_dedoublonnage_et_refus_trente_jours(): void
     {
         $now = self::paris('2026-10-21 12:00');
         $produits = [];
@@ -304,9 +379,10 @@ final class EngineTest extends TestCase
         $fp = static fn (string $key): string => (new RecoContext($ds, $now))->fingerprint('R1', [$key]);
 
         $out = RecommendationEngine::recommend($ds, $now);
-        self::assertCount(5, $out['idees'], 'Cap MAX_ACTIVES = 5.');
+        $idees = array_values(array_filter($out['idees'], static fn (Recommendation $r): bool => $r->bloc === 'idee' && $r->regle === 'R1'));
+        self::assertCount(3, $idees, 'Cap MAX_IDEES = 3 sur les idées R1.');
         $cles = [];
-        foreach ($out['idees'] as $idee) {
+        foreach ($idees as $idee) {
             foreach (array_column($idee->produits, 'key') as $k) {
                 self::assertNotContains($k, $cles, 'Dédoublonnage : un produit dans une seule idée.');
                 $cles[] = $k;
@@ -321,13 +397,14 @@ final class EngineTest extends TestCase
             'appliquees' => [],
         ]);
         $out29 = RecommendationEngine::recommend($dsRefus, $now);
-        self::assertCount(5, $out29['idees']);
+        $idees29 = array_values(array_filter($out29['idees'], static fn (Recommendation $r): bool => $r->bloc === 'idee' && $r->regle === 'R1'));
+        self::assertCount(3, $idees29);
         $cles29 = [];
-        foreach ($out29['idees'] as $idee) {
+        foreach ($idees29 as $idee) {
             $cles29 = array_merge($cles29, array_column($idee->produits, 'key'));
         }
         self::assertNotContains('P8', $cles29, 'Refus < 30 j : l\'idée ne revient pas.');
-        self::assertContains('P3', $cles29, 'Le candidat suivant (P3) entre au cap.');
+        self::assertContains('P5', $cles29, 'Le candidat suivant (P5) entre au cap.');
 
         // Refus daté now−31 j : expiré, P8 revient.
         $dsExpire = RecoScenario::dataset($produits, [], [], 1.0, false, 30, self::forecastProb(0.9), [
@@ -336,12 +413,13 @@ final class EngineTest extends TestCase
             'appliquees' => [],
         ]);
         $out31 = RecommendationEngine::recommend($dsExpire, $now);
+        $idees31 = array_values(array_filter($out31['idees'], static fn (Recommendation $r): bool => $r->bloc === 'idee' && $r->regle === 'R1'));
         $cles31 = [];
-        foreach ($out31['idees'] as $idee) {
+        foreach ($idees31 as $idee) {
             $cles31 = array_merge($cles31, array_column($idee->produits, 'key'));
         }
         self::assertContains('P8', $cles31, 'Refus > 30 j : expiré, l\'idée revient.');
-        self::assertCount(5, $out31['idees']);
+        self::assertCount(3, $idees31);
     }
 
     public function test_r10_assemble_gain_somme_et_titres(): void
@@ -358,8 +436,9 @@ final class EngineTest extends TestCase
             1.0e-9,
             'gain_hebdo R10 = somme des 2 sources.'
         );
-        self::assertStringContainsString('Écouler le stock dormant de Produit P1', $r10->action, 'Action contenant le titre 1.');
-        self::assertStringContainsString('Écouler le stock dormant de Produit P2', $r10->action, 'Action contenant le titre 2.');
+        self::assertSame('idee', $r10->bloc, 'R10 est une idée.');
+        self::assertStringContainsString('Offre fin de semaine : Produit P1', $r10->action, 'Action contenant le titre 1.');
+        self::assertStringContainsString('Offre fin de semaine : Produit P2', $r10->action, 'Action contenant le titre 2.');
         self::assertSame(['P1', 'P2'], array_column($r10->produits, 'key'));
 
         // Contrôle : probabilité d'atteinte ≥ seuil → pas de R10, les 2 R1 restent.

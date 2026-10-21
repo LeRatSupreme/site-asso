@@ -12,9 +12,11 @@ use App\Core\Compta\Reco\RecoProduct;
 use PHPUnit\Framework\TestCase;
 
 /**
- * R7 — Rythme horaire : détection stricte des creux (< 0,4 × moyenne)
- * et des pics (> 1,5 × moyenne), candidat unique combiné, gain exact,
- * cas plat / absent, secours du taux de marge.
+ * R7 — Rythme horaire : UN produit au meilleur taux de marge (stock
+ * géré > 0 ou non géré) remisé sur la fenêtre creuse (plage contiguë
+ * < 0,4 × moyenne la plus large, repli = 2 heures les plus faibles),
+ * pic = heure de part max, remise = min(15 %, plafond plancher) et
+ * AUCUN candidat si remiseMax < 5 %.
  */
 final class R7RythmeTest extends TestCase
 {
@@ -75,7 +77,7 @@ final class R7RythmeTest extends TestCase
         return $map;
     }
 
-    public function test_profil_realiste_emet_un_seul_candidat_combine(): void
+    public function test_profil_realiste_consigne_produit_prix_fenetre_et_pic(): void
     {
         $ctx = $this->ctx($this->produits(), $this->partsRealistes());
         $c = R7Rythme::evaluer($ctx);
@@ -83,16 +85,21 @@ final class R7RythmeTest extends TestCase
         self::assertCount(1, $c);
         $cand = $c[0];
         self::assertSame('R7', $cand['regle']);
+        self::assertSame(['P2'], $cand['keys'], 'Le produit promu est le meilleur taux de marge (Thé 66,7 %).');
         self::assertSame(Hyper::EFFORTS['R7'], $cand['effort']);
         self::assertSame('moyenne', $cand['confiance']);
-        self::assertStringContainsString('Happy hour 0–3', $cand['action']);
-        self::assertStringContainsString('Thé, Café, Eau', $cand['action']);
-        self::assertStringContainsString('aux pics (20, 21, 22, 23)', $cand['action']);
-        self::assertStringContainsString('3,7', $cand['pourquoi']);
+        // Consigne : fenêtre creuse 0h–3h, Thé à 2,55 € (-15 %), pic à 20h.
+        self::assertSame(
+            'Entre 0h et 3h : Thé à 2,55 € au lieu de 3,00 € (-15,0 %). Préparez les duos avant le pic de 20h.',
+            $cand['action']
+        );
+        self::assertSame('Happy hour : Thé en heure creuse', $cand['titre']);
+        self::assertEqualsWithDelta(2.55, $cand['prix_effectifs'][0]['prix'], 1.0e-9);
+        self::assertSame('P2', $cand['prix_effectifs'][0]['key']);
         self::assertStringContainsString('170,00', $cand['pourquoi']);
-        self::assertArrayNotHasKey('prix_effectifs', $cand);
 
-        $median = 170.0 * 40.0 * R7Rythme::UPLIFT_CREUX * 0.5;
+        // Gain : CA 7 j (170) × part creuse (40) × remise (0,15) × taux médian (0,5).
+        $median = 170.0 * 40.0 * 0.15 * 0.5;
         self::assertEqualsWithDelta($median, $cand['gain']['median'], 1.0e-9);
         self::assertEqualsWithDelta($median * 0.5, $cand['gain']['bas'], 1.0e-9);
         self::assertEqualsWithDelta($median * 1.5, $cand['gain']['haut'], 1.0e-9);
@@ -100,32 +107,64 @@ final class R7RythmeTest extends TestCase
         self::assertTrue(GuardRails::candidatValide($cand, $this->parCle($ctx), Hyper::MARGE_MIN));
     }
 
-    public function test_part_exactement_au_seuil_de_creux_n_est_pas_un_creux(): void
+    public function test_aucune_plage_contigue_repli_deux_heures_les_plus_faibles(): void
     {
+        // Creux isolés à 3h et 17h (aucune plage contiguë de ≥ 2 h) : repli sur les 2 heures les plus faibles.
         $parts = array_fill(0, 24, 59.0);
-        $parts[0] = 23.0; // exactement 0,4 × 57,5 (moyenne)
-
-        $ctx = $this->ctx($this->produits(), $parts);
-        self::assertSame([], R7Rythme::evaluer($ctx));
-    }
-
-    public function test_part_juste_en_dessous_du_seuil_declenche_avec_pic(): void
-    {
-        $parts = array_fill(0, 24, 59.0);
-        $parts[0] = 22.9;   // creux (22,9 < 23,0)
-        $parts[23] = 90.0;  // pic (90 > 86,25)
+        $parts[3] = 10.0;
+        $parts[17] = 10.0;
+        $parts[23] = 120.0;
 
         $ctx = $this->ctx($this->produits(), $parts);
         $c = R7Rythme::evaluer($ctx);
 
         self::assertCount(1, $c);
-        self::assertStringContainsString('Happy hour 0', $c[0]['action']);
-        self::assertStringContainsString('aux pics (23)', $c[0]['action']);
+        self::assertStringContainsString('Entre 3h et 17h : Thé à 2,55 €', $c[0]['action']);
+        self::assertStringContainsString('pic de 23h', $c[0]['action']);
+        // Gain : CA 7 j (170) × part creuse (10 + 10) × 0,15 × 0,5.
+        self::assertEqualsWithDelta(170.0 * 20.0 * 0.15 * 0.5, $c[0]['gain']['median'], 1.0e-9);
     }
 
-    public function test_profil_plat_aucun_candidat(): void
+    public function test_profil_plat_fenetre_sur_les_deux_premieres_heures(): void
     {
-        $ctx = new RecoContext(RecoScenario::dataset($this->produits()), new \DateTimeImmutable(self::NOW));
+        // Profil plat : aucune plage sous 0,4 × moyenne → repli h0–h1, pic = première heure max.
+        $ctx = $this->ctx($this->produits(), array_fill(0, 24, 59.0));
+        $c = R7Rythme::evaluer($ctx);
+
+        self::assertCount(1, $c, 'Le repli « 2 heures les plus faibles » permet un candidat même sans creux marqué.');
+        self::assertStringContainsString('Entre 0h et 1h', $c[0]['action']);
+        self::assertStringContainsString('pic de 0h', $c[0]['action']);
+    }
+
+    public function test_part_exactement_au_seuil_de_creux_repli_assume(): void
+    {
+        $parts = array_fill(0, 24, 59.0);
+        $parts[0] = 23.0; // exactement 0,4 × 57,5 (moyenne) : PAS un creux.
+
+        $ctx = $this->ctx($this->produits(), $parts);
+        $c = R7Rythme::evaluer($ctx);
+
+        self::assertCount(1, $c);
+        self::assertStringContainsString('Entre 0h et 1h', $c[0]['action'], 'Repli : 0h (23) et 1h (59) sont les 2 heures les plus faibles.');
+        self::assertStringContainsString('pic de 1h', $c[0]['action']);
+    }
+
+    public function test_stock_zero_exclu_du_produit_promu(): void
+    {
+        // Soda au meilleur taux (80 %) mais stock 0 : promu = Thé (stock non géré).
+        $soda = RecoScenario::produit('P5', 'Soda', qty30: 100.0, ca30: 500.0, prix: 5.0, cout: 1.0, stock: 0, unitesPrevues7j: 20.0);
+        $ctx = $this->ctx([$soda, ...array_slice($this->produits(), 0, 2)], $this->partsRealistes());
+        $c = R7Rythme::evaluer($ctx);
+
+        self::assertCount(1, $c);
+        self::assertSame(['P2'], $c[0]['keys']);
+    }
+
+    public function test_remise_plafonnee_par_le_plancher_aucun_candidat(): void
+    {
+        // Prix 2 €, coût 1,72 € : remiseMax = 1 − 1,15×1,72/2 = 0,011 < R7_REMISE_MIN (5 %) → rien.
+        $p = RecoScenario::produit('P1', 'Yaourt', qty30: 100.0, ca30: 200.0, prix: 2.0, cout: 1.72, unitesPrevues7j: 50.0);
+        $ctx = $this->ctx([$p], $this->partsRealistes());
         self::assertSame([], R7Rythme::evaluer($ctx));
     }
 
@@ -148,7 +187,8 @@ final class R7RythmeTest extends TestCase
         $c = R7Rythme::evaluer($ctx);
 
         self::assertCount(1, $c);
-        $median = 130.0 * 40.0 * R7Rythme::UPLIFT_CREUX * R7Rythme::TAUX_MARGE_SECOURS;
+        // CA 7 j (50×2 + 10×3 = 130) × part creuse (40) × remise (0,15) × secours (0,30).
+        $median = 130.0 * 40.0 * 0.15 * R7Rythme::TAUX_MARGE_SECOURS;
         self::assertEqualsWithDelta($median, $c[0]['gain']['median'], 1.0e-9);
         $hyp = implode(' | ', $c[0]['hypotheses']);
         self::assertStringContainsString('0,30', $hyp);

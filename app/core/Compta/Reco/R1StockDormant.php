@@ -6,7 +6,9 @@ namespace App\Core\Compta\Reco;
 
 /**
  * R1 — Stock dormant : écouler un stock immobilisé dont la demande
- * PRÉVUE (sortie Forecast, jamais recalculée) est trop faible.
+ * PRÉVUE (sortie Forecast, jamais recalculée) est trop faible, via une
+ * OFFRE DE FIN DE SEMAINE DATÉE (consigne : produit, prix, dates,
+ * emplacement caisse).
  *
  * Déclenchement (par produit à coût utilisable) :
  *  - stock géré > « reco_stock_dormant_min » (10) ;
@@ -28,6 +30,11 @@ namespace App\Core\Compta\Reco;
  *    plancher de marge : AUCUN candidat. Mathématiquement, remiseMax
  *    < bas (0,10 par défaut) implique (1+marge_min)×coût/prix > 0,90
  *    > 2/3, donc le lot 3 pour 2 est exclu lui aussi.
+ *
+ * Dates de l'offre (Europe/Paris, depuis l'horloge du contexte) : si le
+ * jour courant est ≤ jeudi, l'offre porte sur le jeudi/vendredi de la
+ * semaine courante, sinon sur ceux de la semaine suivante — exposées
+ * dans « debut »/« fin » ('Y-m-d').
  *
  * Gain hebdomadaire (€) : surplus = max(stock − semaines_seuil ×
  * prévision, 0), supposé écoulé en DUREE_ECOULEMENT_SEMAINES au prix
@@ -54,7 +61,7 @@ final class R1StockDormant implements RecoRule
     }
 
     /**
-     * Candidats R1 (0..n) : promo « −X % » ou « lot 3 pour 2 » sur les stocks dormants.
+     * Candidats R1 (0..n) : offre de fin de semaine (promo −X % ou lot 3 pour 2) sur les stocks dormants.
      *
      * @return list<array<string,mixed>>
      */
@@ -65,6 +72,7 @@ final class R1StockDormant implements RecoRule
         $echMin = (float) $ctx->param('echantillon_min_unites', Hyper::SAMPLE_MIN_UNITES_30J);
         $remiseBas = (float) $ctx->param('remise_dormant_bas', Hyper::REMISE_DORMANT_BAS);
         $remiseHaut = (float) $ctx->param('remise_dormant_haut', Hyper::REMISE_DORMANT_HAUT);
+        [$debut, $fin] = self::fenetreFinDeSemaine($ctx->now());
 
         $candidats = [];
         foreach ($ctx->produitsFiltres() as $p) {
@@ -86,7 +94,7 @@ final class R1StockDormant implements RecoRule
             if (!($qty >= $echMin)) {
                 continue;
             }
-            $c = self::candidat($p, $semaines, $prev, $qty, $semMin, $remiseBas, $remiseHaut);
+            $c = self::candidat($ctx, $p, $semaines, $prev, $qty, $semMin, $remiseBas, $remiseHaut, $debut, $fin);
             if ($c !== null) {
                 $candidats[] = $c;
             }
@@ -102,13 +110,16 @@ final class R1StockDormant implements RecoRule
      * @return array<string,mixed>|null
      */
     private static function candidat(
+        RecoContext $ctx,
         RecoProduct $p,
         ?float $semaines,
         float $prev,
         float $qty,
         float $semMin,
         float $remiseBas,
-        float $remiseHaut
+        float $remiseHaut,
+        string $debut,
+        string $fin
     ): ?array {
         $cout = (float) $p->cout;
         $prix = (float) $p->prix;
@@ -118,14 +129,19 @@ final class R1StockDormant implements RecoRule
         $cible = min($remiseHaut, max($remiseBas, self::REMISE_CIBLE));
         $remiseMax = 1.0 - $cout * (1.0 + $margeMin) / $prix;
 
+        [$jeudi, $vendredi] = self::joursAffiches($debut, $fin);
         if ($remiseMax >= $remiseBas) {
             $remise = min($remiseMax, $cible);
             $prixEffectif = $prix * (1.0 - $remise);
-            $action = 'Lancer une promo « -' . self::pct($remise) . ' % » sur ' . $p->label . ' pour écouler le stock avant péremption';
+            $action = 'Du jeu. ' . $jeudi . ' au ven. ' . $vendredi . ' : ' . $p->label . ' à ' . self::eur($prixEffectif)
+                . ' € au lieu de ' . self::eur($prix) . ' € (-' . self::pct($remise) . ' %) — marge '
+                . self::eur($prixEffectif - $cout) . ' €/unité. Affichez-le près de la caisse.';
         } elseif (self::PRIX_LOT_3POUR2 >= (1.0 + $margeMin) * $cout / $prix) {
             // Remise refusée par le garde-fou 1, mais le lot 3 pour 2 reste au-dessus du plancher.
             $prixEffectif = self::PRIX_LOT_3POUR2 * $prix;
-            $action = 'Proposer un « lot 3 pour 2 » sur ' . $p->label . ' pour écouler le stock avant péremption';
+            $action = 'Du jeu. ' . $jeudi . ' au ven. ' . $vendredi . ' : ' . $p->label . ' en lot « 3 pour 2 » ('
+                . self::eur($prixEffectif) . ' € l\'unité au lieu de ' . self::eur($prix) . ' €) — marge '
+                . self::eur($prixEffectif - $cout) . ' €/unité. Affichez-le près de la caisse.';
         } else {
             // Ni remise ni lot possibles sans casser le plancher : aucun candidat.
             return null;
@@ -148,7 +164,7 @@ final class R1StockDormant implements RecoRule
             'regle'           => self::regle(),
             'keys'            => [$p->key],
             'produits'        => [['key' => $p->key, 'label' => $p->label]],
-            'titre'           => 'Écouler le stock dormant de ' . $p->label,
+            'titre'           => 'Offre fin de semaine : ' . $p->label,
             'pourquoi'        => $semaines !== null
                 ? self::nombre($semaines) . ' sem de stock · ' . self::nombre($prev) . ' u./sem prévues'
                 : 'Stock de ' . $p->stock . ' u. sans demande prévue · ' . self::nombre($qty) . ' u./30 j',
@@ -159,7 +175,35 @@ final class R1StockDormant implements RecoRule
             'hypotheses'      => $hypotheses,
             'comment_mesurer' => 'Marge hebdo du produit pendant la promo vs baseline 30 j désaisonnalisée',
             'prix_effectifs'  => [['key' => $p->key, 'prix' => $prixEffectif]],
+            'debut'           => $debut,
+            'fin'             => $fin,
         ];
+    }
+
+    /**
+     * Fenêtre jeudi → vendredi de l'offre : jeudi de la semaine courante
+     * si le jour courant est ≤ jeudi (dow ≤ 4), sinon jeudi de la semaine
+     * suivante — calculée en Europe/Paris.
+     *
+     * @return array{0:string,1:string} Dates 'Y-m-d' [debut, fin].
+     */
+    private static function fenetreFinDeSemaine(\DateTimeImmutable $now): array
+    {
+        $now = $now->setTimezone(new \DateTimeZone('Europe/Paris'));
+        $dow = (int) $now->format('N');
+        $decal = $dow <= 4 ? 4 - $dow : 11 - $dow;
+        $jeudi = $now->modify('+' . $decal . ' day');
+
+        return [$jeudi->format('Y-m-d'), $jeudi->modify('+1 day')->format('Y-m-d')];
+    }
+
+    /** Jours formatés « jj/mm » pour l'action affichée, depuis les dates 'Y-m-d'. */
+    private static function joursAffiches(string $debut, string $fin): array
+    {
+        $j = \DateTimeImmutable::createFromFormat('Y-m-d', $debut);
+        $v = \DateTimeImmutable::createFromFormat('Y-m-d', $fin);
+
+        return [$j !== false ? $j->format('d/m') : $debut, $v !== false ? $v->format('d/m') : $fin];
     }
 
     /** Excédent au-dessus de la couverture seuil, pour une prévision hebdomadaire donnée. */
@@ -178,5 +222,11 @@ final class R1StockDormant implements RecoRule
     private static function pct(float $part, int $dec = 1): string
     {
         return number_format($part * 100.0, $dec, ',', '');
+    }
+
+    /** Montant en € (2 décimales, virgule décimale). */
+    private static function eur(float $x): string
+    {
+        return number_format($x, 2, ',', '');
     }
 }

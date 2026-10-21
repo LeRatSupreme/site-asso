@@ -65,7 +65,13 @@ final class R4MargeSousVenduTest extends TestCase
         self::assertEqualsWithDelta(0.3, $g['bas'], 1.0e-9);
         self::assertEqualsWithDelta(0.6, $g['median'], 1.0e-9);
         self::assertEqualsWithDelta(0.9, $g['haut'], 1.0e-9);
-        self::assertStringContainsString('en avant', $c[0]['action']);
+        // Consigne datée : affichage caisse une semaine, marge vs médiane du catalogue.
+        self::assertSame('2026-10-21', $c[0]['debut']);
+        self::assertSame('2026-10-28', $c[0]['fin']);
+        self::assertStringContainsString(
+            'Cette semaine : affichez Truffes près de la caisse (affiche + suggestion du jour) — marge 1,50 €/unité contre 1,00 € en médiane du catalogue.',
+            $c[0]['action']
+        );
         self::assertStringContainsString('60,0 %', $c[0]['pourquoi']);
         $hyp = implode(' | ', $c[0]['hypotheses']);
         self::assertStringContainsString('+20 % de volume = hypothèse', $hyp);

@@ -15,7 +15,8 @@ use PHPUnit\Framework\TestCase;
  * R1 — Stock dormant : déclenchement d'après la PRÉVISION (pas du
  * passé), limites de seuils (8,0 / 8,05 semaines ; stock 10 / 11),
  * échantillon minimal, garde-fou 1 (remise plafonnée, lot 3 pour 2,
- * aucun candidat).
+ * aucun candidat), consigne datée jeudi→vendredi (semaine courante ou
+ * suivante selon le jour de l'horloge figée).
  */
 final class R1StockDormantTest extends TestCase
 {
@@ -54,6 +55,10 @@ final class R1StockDormantTest extends TestCase
         self::assertCount(1, $c);
         self::assertSame('R1', $c[0]['regle']);
         self::assertSame(['P1'], $c[0]['keys']);
+        self::assertSame('Offre fin de semaine : Coca', $c[0]['titre']);
+        // Mercredi 21/10 → offre jeudi 22/10 au vendredi 23/10 (semaine courante).
+        self::assertSame('2026-10-22', $c[0]['debut']);
+        self::assertSame('2026-10-23', $c[0]['fin']);
         $g = $c[0]['gain'];
         // Surplus 20 − 8×1 = 12 u. → 12/4 semaines × (1,70 − 1) = 2,1 €/sem.
         self::assertEqualsWithDelta(0.7, $g['bas'], 1.0e-9);
@@ -61,7 +66,12 @@ final class R1StockDormantTest extends TestCase
         self::assertEqualsWithDelta(2.8, $g['haut'], 1.0e-9);
         self::assertEqualsWithDelta(1.7, $c[0]['prix_effectifs'][0]['prix'], 1.0e-9);
         self::assertSame('P1', $c[0]['prix_effectifs'][0]['key']);
+        // Consigne : produit, prix promo, ancien prix, remise, marge, emplacement.
         self::assertStringContainsString('-15,0 %', $c[0]['action']);
+        self::assertStringContainsString('Du jeu. 22/10 au ven. 23/10', $c[0]['action']);
+        self::assertStringContainsString('Coca à 1,70 € au lieu de 2,00 €', $c[0]['action']);
+        self::assertStringContainsString('marge 0,70 €/unité', $c[0]['action']);
+        self::assertStringContainsString('Affichez-le près de la caisse', $c[0]['action']);
         self::assertStringContainsString('20,0 sem de stock', $c[0]['pourquoi']);
         self::assertStringContainsString('1,0 u./sem prévues', $c[0]['pourquoi']);
         $hyp = implode(' | ', $c[0]['hypotheses']);
@@ -71,6 +81,36 @@ final class R1StockDormantTest extends TestCase
         self::assertSame('moyenne', $c[0]['confiance']);
         self::assertSame(Hyper::EFFORTS['R1'], $c[0]['effort']);
         self::assertTrue(GuardRails::candidatValide($c[0], $this->parCle($ctx), Hyper::MARGE_MIN));
+    }
+
+    public function test_mardi_offre_sur_la_semaine_courante(): void
+    {
+        // Mardi 20/10/2026 (dow 2 ≤ 4) → jeudi 22/10, vendredi 23/10.
+        $ctx = new RecoContext(
+            RecoScenario::dataset([$this->dormant()]),
+            RecoScenario::horloge('2026-10-20 09:00:00')
+        );
+        $c = R1StockDormant::evaluer($ctx);
+
+        self::assertCount(1, $c);
+        self::assertSame('2026-10-22', $c[0]['debut']);
+        self::assertSame('2026-10-23', $c[0]['fin']);
+        self::assertStringContainsString('Du jeu. 22/10 au ven. 23/10', $c[0]['action']);
+    }
+
+    public function test_samedi_offre_sur_la_semaine_suivante(): void
+    {
+        // Samedi 24/10/2026 (dow 6 > 4) → jeudi 29/10, vendredi 30/10.
+        $ctx = new RecoContext(
+            RecoScenario::dataset([$this->dormant()]),
+            RecoScenario::horloge('2026-10-24 09:00:00')
+        );
+        $c = R1StockDormant::evaluer($ctx);
+
+        self::assertCount(1, $c);
+        self::assertSame('2026-10-29', $c[0]['debut']);
+        self::assertSame('2026-10-30', $c[0]['fin']);
+        self::assertStringContainsString('Du jeu. 29/10 au ven. 30/10', $c[0]['action']);
     }
 
     public function test_semaines_exactement_8_ne_declenchent_pas(): void

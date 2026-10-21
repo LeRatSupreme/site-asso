@@ -14,6 +14,12 @@ use App\Core\Compta\Reco\RecoProduct;
  */
 final class RecoScenario
 {
+    /** Horloge figée en Europe/Paris (dates des consignes R1/R4, refus, fingerprints…). */
+    public static function horloge(string $datetime): \DateTimeImmutable
+    {
+        return new \DateTimeImmutable($datetime, new \DateTimeZone('Europe/Paris'));
+    }
+
     /** Produit par défaut : P1, 100 u/30 j, 200 €/30 j, prix 2 €, coût 1 € (marge 50 %). */
     public static function produit(
         string $key = 'P1',

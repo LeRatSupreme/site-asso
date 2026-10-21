@@ -6,7 +6,7 @@ namespace App\Core\Compta\Reco;
 
 /**
  * Recommandation produite par une règle du moteur : DTO de sortie
- * readonly, sérialisable tel quel (toArray = les 13 clés imposées,
+ * readonly, sérialisable tel quel (toArray = les 16 clés imposées,
  * consommées par la couche d'affichage/persistance).
  */
 final class Recommendation
@@ -25,6 +25,9 @@ final class Recommendation
      * @param bool                                              $gardeFousOk true si tous les garde-fous passent.
      * @param string                                            $commentMesurer Protocole de mesure de l'effet.
      * @param string                                            $statut      Statut ('proposée', 'refusée', …).
+     * @param string                                            $bloc        'idee' (consigne commerciale R1/R4/R5/R6/R7/R10) | 'correction' (données/rupture R2/R8/R9/R11).
+     * @param ?string                                           $debut       Début de validité de la consigne ('Y-m-d'), null si non datée.
+     * @param ?string                                           $fin         Fin de validité de la consigne ('Y-m-d'), null si non datée.
      */
     public function __construct(
         public readonly string $id,
@@ -39,14 +42,17 @@ final class Recommendation
         public readonly array $produits,
         public readonly bool $gardeFousOk,
         public readonly string $commentMesurer,
-        public readonly string $statut
+        public readonly string $statut,
+        public readonly string $bloc = 'idee',
+        public readonly ?string $debut = null,
+        public readonly ?string $fin = null
     ) {
     }
 
     /**
-     * Sérialisation canonique : EXACTEMENT ces 13 clés, dans cet ordre.
+     * Sérialisation canonique : EXACTEMENT ces 16 clés, dans cet ordre.
      *
-     * @return array{id:string,regle:string,titre:string,pourquoi:string,action:string,gain_hebdo:array{bas:float,median:float,haut:float},confiance:string,effort:int,hypotheses:list<string>,produits:list<array{key:string,label:string}>,garde_fous_ok:bool,comment_mesurer:string,statut:string}
+     * @return array{id:string,regle:string,titre:string,pourquoi:string,action:string,gain_hebdo:array{bas:float,median:float,haut:float},confiance:string,effort:int,hypotheses:list<string>,produits:list<array{key:string,label:string}>,garde_fous_ok:bool,comment_mesurer:string,statut:string,bloc:string,debut:?string,fin:?string}
      */
     public function toArray(): array
     {
@@ -64,6 +70,9 @@ final class Recommendation
             'garde_fous_ok'   => $this->gardeFousOk,
             'comment_mesurer' => $this->commentMesurer,
             'statut'          => $this->statut,
+            'bloc'            => $this->bloc,
+            'debut'           => $this->debut,
+            'fin'             => $this->fin,
         ];
     }
 }

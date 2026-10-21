@@ -8,7 +8,8 @@ namespace App\Core\Compta\Reco;
  * Score et ordonnancement des candidats de recommandations (statique,
  * pur) : score = gain médian × facteur de confiance ÷ effort, puis
  * classement tenant compte de l'historique (actifs, refus récents),
- * du cap R11 et du dédoublonnage par produit.
+ * du cap R11 en mode corrections et du dédoublonnage par produit.
+ * Idées et corrections sont classées SÉPARÉMENT (caps distincts).
  */
 final class Scoring
 {
@@ -35,20 +36,27 @@ final class Scoring
      *  1) exclut ceux dont fingerprint ∈ historique['actifs'] ou ∈
      *     historique['refus'] avec date_refus + REFUS_JOURS > now
      *     (date 'Y-m-d') ;
-     *  2) tri : R11 d'abord (cap R11_MAX candidats R11), puis score
-     *     décroissant, égalités par numéro de règle croissant ;
+     *  2) tri — $correctionsPrioritaires = true (bloc correction) :
+     *     R11 d'abord (cap R11_MAX candidats R11) puis score décroissant ;
+     *     $correctionsPrioritaires = false (bloc idée) : tri score pur ;
+     *     égalités départagées par numéro de règle croissant ;
      *  3) dédoublonnage par produit : un produit (key) n'apparaît que
      *     dans la première reco retenue qui le contient (les clés déjà
      *     prises sont retirées du candidat ; coupé si plus rien d'unique) ;
-     *  4) cap MAX_ACTIVES au total.
+     *  4) cap $cap au total (Hyper::MAX_IDEES par défaut : 3 idées).
      *
      * @param list<array<string,mixed>> $candidats
      * @param array{actifs:list<string>,refus:list<array{fingerprint:string,date:string}>,appliquees:list<array{fingerprint:string,produits:list<string>}>} $historique
      *
      * @return list<array<string,mixed>>
      */
-    public static function classe(array $candidats, array $historique, \DateTimeImmutable $now): array
-    {
+    public static function classe(
+        array $candidats,
+        array $historique,
+        \DateTimeImmutable $now,
+        int $cap = Hyper::MAX_IDEES,
+        bool $correctionsPrioritaires = false
+    ): array {
         // 1) Historique : actifs bloquent, refus récents bloquent.
         $actifs = [];
         foreach ($historique['actifs'] ?? [] as $fp) {
@@ -81,7 +89,7 @@ final class Scoring
             $restants[] = $c;
         }
 
-        // 2) Tri : R11 en tête (cap R11_MAX), puis score desc, règle croissante.
+        // 2) Tri : corrections → R11 en tête (cap R11_MAX) ; idées → score pur.
         $cmp = static function (array $a, array $b): int {
             $s = self::score($b) <=> self::score($a);
             if ($s !== 0) {
@@ -91,18 +99,22 @@ final class Scoring
             return self::numeroRegle(is_string($a['regle'] ?? null) ? $a['regle'] : '')
                 <=> self::numeroRegle(is_string($b['regle'] ?? null) ? $b['regle'] : '');
         };
-        $r11 = [];
-        $autres = [];
-        foreach ($restants as $c) {
-            if (($c['regle'] ?? null) === 'R11') {
-                $r11[] = $c;
-            } else {
-                $autres[] = $c;
+        if ($correctionsPrioritaires) {
+            $r11 = [];
+            $autres = [];
+            foreach ($restants as $c) {
+                if (($c['regle'] ?? null) === 'R11') {
+                    $r11[] = $c;
+                } else {
+                    $autres[] = $c;
+                }
             }
+            usort($r11, $cmp);
+            usort($autres, $cmp);
+            $restants = array_merge(array_slice($r11, 0, Hyper::R11_MAX), $autres);
+        } else {
+            usort($restants, $cmp);
         }
-        usort($r11, $cmp);
-        usort($autres, $cmp);
-        $restants = array_merge(array_slice($r11, 0, Hyper::R11_MAX), $autres);
 
         // 3) Dédoublonnage par produit (on retire les clés déjà prises).
         $utilises = [];
@@ -128,8 +140,8 @@ final class Scoring
             $retenus[] = $c;
         }
 
-        // 4) Cap global.
-        return array_slice($retenus, 0, Hyper::MAX_ACTIVES);
+        // 4) Cap du bloc (idées ou corrections).
+        return array_slice($retenus, 0, max(0, $cap));
     }
 
     /** Numéro de règle ('R11' → 11) pour le départage ; inconnu → très grand. */

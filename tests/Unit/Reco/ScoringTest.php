@@ -4,12 +4,15 @@ declare(strict_types=1);
 
 namespace Tests\Unit\Reco;
 
+use App\Core\Compta\Reco\Hyper;
 use App\Core\Compta\Reco\Scoring;
 use PHPUnit\Framework\TestCase;
 
 /**
  * Score exact, filtrage par historique (actifs, refus 29/31 jours),
- * dédoublonnage par produit, cap MAX_ACTIVES et priorité R11.
+ * dédoublonnage par produit, caps SÉPARÉS par bloc : idées (cap 3,
+ * score pur) et corrections (cap 5, R11 prioritaire dans la limite de
+ * R11_MAX).
  */
 final class ScoringTest extends TestCase
 {
@@ -90,45 +93,61 @@ final class ScoringTest extends TestCase
         self::assertSame([['key' => 'P3', 'label' => 'P3']], $retenus[1]['produits']);
     }
 
-    public function test_cap_cinq_recommandations(): void
+    public function test_bloc_idee_cap_trois_score_pur(): void
     {
         $cands = [
             self::c('R1', ['P1'], 60.0),
-            self::c('R2', ['P2'], 50.0),
-            self::c('R3', ['P3'], 40.0),
-            self::c('R4', ['P4'], 30.0),
-            self::c('R5', ['P5'], 20.0),
-            self::c('R6', ['P6'], 10.0),
+            self::c('R4', ['P2'], 50.0),
+            self::c('R5', ['P3'], 40.0),
+            self::c('R6', ['P4'], 30.0),
+            self::c('R7', ['P5'], 20.0),
+            self::c('R10', ['P6'], 10.0),
         ];
 
         $retenus = Scoring::classe($cands, [], $this->now);
-        self::assertCount(5, $retenus);
-        self::assertSame('R5', $retenus[4]['regle']);
-        self::assertSame(['P5'], $retenus[4]['keys']);
-        foreach ($retenus as $r) {
-            self::assertNotSame('R6', $r['regle']);
-        }
+        self::assertCount(3, $retenus, 'Cap MAX_IDEES = 3 (défaut).');
+        self::assertSame(['R1', 'R4', 'R5'], array_column($retenus, 'regle'), 'Tri score pur, aucun cap R11 appliqué.');
+
+        $retenus5 = Scoring::classe($cands, [], $this->now, 5);
+        self::assertCount(5, $retenus5, 'Cap lisible (paramètre).');
     }
 
-    public function test_r11_en_tete_avec_cap_trois(): void
+    public function test_bloc_correction_cap_cinq_avec_r11_en_tete(): void
     {
         $cands = [
-            self::c('R1', ['PX'], 10000.0),
+            self::c('R2', ['PX'], 10000.0),
             self::c('R11', ['G1'], 400.0),
             self::c('R11', ['G2'], 300.0),
             self::c('R11', ['G3'], 200.0),
             self::c('R11', ['G4'], 100.0),
         ];
 
-        $retenus = Scoring::classe($cands, [], $this->now);
-        self::assertCount(4, $retenus);
+        $retenus = Scoring::classe($cands, [], $this->now, Hyper::MAX_CORRECTIONS, true);
+        self::assertCount(4, $retenus, 'Cap 5 : 3 R11 (R11_MAX) puis le meilleur non-R11.');
         self::assertSame('R11', $retenus[0]['regle']);
         self::assertSame('R11', $retenus[1]['regle']);
         self::assertSame('R11', $retenus[2]['regle']);
         self::assertSame(['G1'], $retenus[0]['keys']);
         self::assertSame(['G2'], $retenus[1]['keys']);
         self::assertSame(['G3'], $retenus[2]['keys']);
-        self::assertSame('R1', $retenus[3]['regle']);
+        self::assertSame('R2', $retenus[3]['regle'], 'R2 à gros gain vient APRÈS les R11 en mode corrections.');
+    }
+
+    public function test_cap_corrections_cinq_et_departage_regle_croissante(): void
+    {
+        $cands = [
+            self::c('R8', ['P1'], 60.0),
+            self::c('R2', ['P2'], 50.0),
+            self::c('R9', ['P3'], 40.0),
+            self::c('R2', ['P4'], 30.0),
+            self::c('R8', ['P5'], 20.0),
+            self::c('R9', ['P6'], 10.0),
+        ];
+
+        $retenus = Scoring::classe($cands, [], $this->now, Hyper::MAX_CORRECTIONS, true);
+        self::assertCount(5, $retenus, 'Cap MAX_CORRECTIONS = 5.');
+        self::assertSame(['R8', 'R2', 'R9', 'R2', 'R8'], array_column($retenus, 'regle'), 'Tri score pur : le second R9 (score 10) est coupé par le cap.');
+        self::assertSame(['P5'], $retenus[4]['keys']);
     }
 
     public function test_egalite_de_score_departagee_par_numero_de_regle(): void
