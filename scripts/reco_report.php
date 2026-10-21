@@ -15,6 +15,7 @@ declare(strict_types=1);
  * Usage :
  *   php scripts/reco_report.php                       # rapport texte
  *   php scripts/reco_report.php --json                # même contenu en JSON
+ *   php scripts/reco_report.php --diag                # ajoute la section « Diagnostic R5/R6/R7 » (stats descriptives)
  *   php scripts/reco_report.php --fenetre=30          # fenêtre d'analyse en jours (défaut 30)
  *   php scripts/reco_report.php --statuts             # ajoute les lignes de la table recommendations
  *   php scripts/reco_report.php --statuts --limit=20  # taille de l'historique affiché (défaut 20)
@@ -33,15 +34,19 @@ require_once __DIR__ . '/../vendor/autoload.php';
 require_once __DIR__ . '/../app/config/database.php';
 
 use App\Core\Compta\Reco\EffetMesure;
+use App\Core\Compta\Reco\Hyper;
+use App\Core\Compta\Reco\RecoContext;
+use App\Core\Compta\Reco\RecoProduct;
 use App\Core\Compta\Reco\RecommendationEngine;
 use App\Core\Compta\Reco\Scoring;
 use App\Models\Recommendation;
 use App\Models\RecoData;
 
 // ── Options CLI ──────────────────────────────────────────────────────────────
-$opts = getopt('', ['json', 'statuts', 'fenetre::', 'limit::']);
+$opts = getopt('', ['json', 'statuts', 'diag', 'fenetre::', 'limit::']);
 $asJson = array_key_exists('json', $opts);
 $avecStatuts = array_key_exists('statuts', $opts);
+$avecDiag = array_key_exists('diag', $opts);
 $fenetre = max(1, (int) ($opts['fenetre'] ?? 30));
 $limitHist = max(1, min(200, (int) ($opts['limit'] ?? 20)));
 
@@ -134,9 +139,258 @@ try {
         $rapport['statuts'] = ['proposees' => $proposees, 'historique' => $historique];
     }
 
+    // ── Diagnostic R5/R6/R7 (--diag) : stats descriptives, LECTURE SEULE ──────
+    // Toutes les valeurs proviennent du dataset/moteur existants (aucune
+    // logique métier nouvelle, aucune écriture) : portes des règles,
+    // co-occurrences, parts horaires, relance par règle du moteur.
+    $diag = [];
+    if ($avecDiag) {
+        $ctxD = new RecoContext($ds, $now);
+        $paniersD = $ds->paniers;
+        $nD = count($paniersD);
+        $pctD = static fn (float $p, int $dec = 1): string => number_format($p * 100.0, $dec, ',', '');
+        $nb2D = static fn (float $v, int $dec = 2): string => number_format($v, $dec, ',', '');
+        $truncD = static fn (string $s, int $t = 30): string => mb_strlen($s) > $t ? mb_substr($s, 0, $t - 1) . '…' : $s;
+        $coutTxt = static function (RecoProduct $p): string {
+            if ($p->coutUtilisable()) {
+                return 'coût ' . number_format((float) $p->cout, 2, ',', '') . ' € / prix ' . number_format((float) $p->prix, 2, ',', '') . ' €';
+            }
+
+            return 'coût inconnu [' . ($p->coutRaison ?? ($p->prix === null ? 'prix_inconnu' : 'non_eligible')) . ']';
+        };
+
+        // Produits filtrés (comme les règles) + éligibles à coût utilisable.
+        $prodFD = $ctxD->produitsFiltres();
+        $parCleD = [];
+        $eligD = [];
+        foreach ($prodFD as $p) {
+            $parCleD[$p->key] = $p;
+            if ($p->coutUtilisable()) {
+                $eligD[$p->key] = $p;
+            }
+        }
+
+        // Paniers : 1 ligne / multi / distribution.
+        $uneLigneD = 0;
+        $distD = ['1' => 0, '2' => 0, '3+' => 0];
+        foreach ($paniersD as $b) {
+            $mL = count($b->lignes);
+            if ($mL === 1) {
+                ++$uneLigneD;
+                ++$distD['1'];
+            } elseif ($mL === 2) {
+                ++$distD['2'];
+            } else {
+                ++$distD['3+'];
+            }
+        }
+        $multiD = $ctxD->paniersMulti();
+
+        // Co-occurrences par paire (même comptage que R5, sans filtre de coût).
+        $nbPD = [];
+        $coD = [];
+        foreach ($paniersD as $b) {
+            $cles = [];
+            foreach ($b->lignes as $l) {
+                $k = $l['key'] ?? null;
+                if (is_string($k) && isset($parCleD[$k])) {
+                    $cles[$k] = true;
+                }
+            }
+            $cles = array_keys($cles);
+            sort($cles);
+            foreach ($cles as $k) {
+                $nbPD[$k] = ($nbPD[$k] ?? 0) + 1;
+            }
+            $mC = count($cles);
+            for ($i = 0; $i < $mC; ++$i) {
+                for ($j = $i + 1; $j < $mC; ++$j) {
+                    $pkD = $cles[$i] . '|' . $cles[$j];
+                    $coD[$pkD] = ($coD[$pkD] ?? 0) + 1;
+                }
+            }
+        }
+        arsort($coD);
+
+        $statsD = [];
+        foreach ($coD as $paire => $nbc) {
+            [$aP, $bP] = explode('|', $paire);
+            $naP = $nbPD[$aP] ?? 0;
+            $nP2 = $nbPD[$bP] ?? 0;
+            if ($nD === 0 || $naP === 0 || $nP2 === 0) {
+                continue;
+            }
+            $supD = $nbc / $nD;
+            $confD = $nbc / $naP;
+            $statsD[] = ['a' => $aP, 'b' => $bP, 'co' => $nbc, 'support' => $supD, 'conf' => $confD, 'lift' => $confD / ($nP2 / $nD)];
+        }
+        usort($statsD, static fn (array $x, array $y): int => $y['co'] <=> $x['co']);
+
+        // Verdicts R5 : seuils actuels vs assouplis, blocages coût.
+        $passCourantD = 0;
+        $passAssoupliD = 0;
+        $nonEligAssoupliD = 0;
+        $bloqueCoutInconnuD = 0;
+        foreach ($statsD as $sp) {
+            $bothE = isset($eligD[$sp['a']], $eligD[$sp['b']]);
+            if ($sp['lift'] > 1.2 && $sp['support'] >= 0.02 && $sp['conf'] >= 0.05 && $bothE) {
+                ++$passCourantD;
+            }
+            if ($sp['lift'] > 1.0 && $sp['support'] >= 0.01 && $sp['conf'] >= 0.03) {
+                ++$passAssoupliD;
+                if (!$bothE) {
+                    ++$nonEligAssoupliD;
+                    $raisons = [];
+                    foreach ([$sp['a'], $sp['b']] as $kP) {
+                        if (!$parCleD[$kP]->coutUtilisable()) {
+                            $raisons[] = $parCleD[$kP]->coutRaison ?? 'prix_inconnu';
+                        }
+                    }
+                    if (!in_array('cout_zero', $raisons, true)
+                        && !in_array('prix_inferieur_au_cout', $raisons, true)
+                        && !in_array('prix_inconnu', $raisons, true)) {
+                        ++$bloqueCoutInconnuD;
+                    }
+                }
+            }
+        }
+
+        // Top paire à coûts utilisables + paniers multi qui la contiennent.
+        $topPairElig = null;
+        foreach ($coD as $paire => $nbc) {
+            [$aP, $bP] = explode('|', $paire);
+            if (isset($eligD[$aP], $eligD[$bP])) {
+                $topPairElig = [$aP, $bP, $nbc];
+                break;
+            }
+        }
+        $multiTopPair = 0;
+        if ($topPairElig !== null) {
+            foreach ($multiD as $b) {
+                $ks = array_column($b->lignes, 'key');
+                if (in_array($topPairElig[0], $ks, true) && in_array($topPairElig[1], $ks, true)) {
+                    ++$multiTopPair;
+                }
+            }
+        }
+
+        $diag[] = '-- Paniers --';
+        $diag[] = 'total : ' . $nD . ' · à 1 ligne : ' . $uneLigneD . ' (' . ($nD > 0 ? $pctD($uneLigneD / $nD) : '—') . ' %)'
+            . ' · multi (≥2 lignes) : ' . count($multiD) . ' (seuil R5 chemin associations : ≥ 30) '
+            . '→ porte paniers-multi R5 : ' . (count($multiD) >= (int) $ctxD->param('assoc_paniers_min', Hyper::ASSOC_PANIERS_MIN) ? 'PASSÉE' : 'NON PASSÉE');
+        $diag[] = 'multi où les 2 produits du top co-occurrence (coût utilisable) figurent : ' . $multiTopPair
+            . ($topPairElig !== null
+                ? ' — paire « ' . $truncD($parCleD[$topPairElig[0]]->label) . ' » + « ' . $truncD($parCleD[$topPairElig[1]]->label) . ' » (' . $topPairElig[2] . ' paniers communs)'
+                : ' — aucune paire éligible à coûts utilisables');
+
+        $diag[] = '-- R5 (duos) : top 10 paires co-occurrentes --';
+        foreach (array_slice($statsD, 0, 10) as $sp) {
+            $pa = $parCleD[$sp['a']];
+            $pb = $parCleD[$sp['b']];
+            $diag[] = '  ' . $truncD($pa->label) . ' + ' . $truncD($pb->label)
+                . ' | communs ' . $sp['co']
+                . ' | support ' . $pctD($sp['support']) . ' %'
+                . ' | confiance ' . $pctD($sp['conf']) . ' %'
+                . ' | lift ' . $nb2D($sp['lift'])
+                . ' | A : ' . $coutTxt($pa)
+                . ' | B : ' . $coutTxt($pb);
+        }
+        $diag[] = 'verdict : ' . $passCourantD . ' paire(s) passent les seuils ACTUELS (lift>1,2 · support≥2 % · confiance≥5 % · 2 coûts utilisables)';
+        $diag[] = 'seuils ASSOUPLIS (lift>1,0 · support≥1 % · confiance≥3 %, coût inconnu toléré) : ' . $passAssoupliD . ' paire(s)';
+        $diag[] = 'paires assouplissables à coût non utilisable : ' . $nonEligAssoupliD . ' · dont bloquées par le SEUL coût inconnu : ' . $bloqueCoutInconnuD;
+
+        $diag[] = '-- R6 (seuil cadeau) --';
+        $seuil1D = (float) $ctxD->param('panier_1article_seuil', Hyper::PANIER_1ARTICLE_SEUIL);
+        $part1D = $nD > 0 ? $uneLigneD / $nD : 0.0;
+        $cadeauMaxD = (float) $ctxD->param('cout_cadeau_max', Hyper::COUT_CADEAU_MAX);
+        $cadeauxD = [];
+        foreach ($prodFD as $p) {
+            if ($p->cout === null || $p->cout > $cadeauMaxD) {
+                continue;
+            }
+            if (!($p->stock === null || $p->stock > 10)) {
+                continue;
+            }
+            $cadeauxD[] = $p;
+        }
+        usort($cadeauxD, static fn (RecoProduct $x, RecoProduct $y): int => (float) $x->cout <=> (float) $y->cout);
+        $cadeauxOkD = count(array_filter($cadeauxD, static fn (RecoProduct $p): bool => $p->coutUtilisable()));
+        $diag[] = 'part réelle paniers 1 ligne : ' . $pctD($part1D) . ' % vs seuil ' . $pctD($seuil1D) . ' % → porte : ' . ($part1D > $seuil1D ? 'PASSÉE' : 'NON PASSÉE');
+        $diag[] = 'candidats cadeaux (coût ≤ ' . $nb2D($cadeauMaxD) . ' €, stock > 10 ou non géré) : ' . count($cadeauxD)
+            . ' · dont coût utilisable (garde-fou 2) : ' . $cadeauxOkD;
+        foreach (array_slice($cadeauxD, 0, 3) as $cg) {
+            $diag[] = '  cadeau : ' . $truncD($cg->label) . ' | coût ' . $nb2D((float) $cg->cout) . ' €'
+                . ' | stock ' . ($cg->stock === null ? 'non géré' : (string) $cg->stock)
+                . ($cg->coutUtilisable() ? '' : ' — rejet garde-fou 2 (coût suspect)');
+        }
+        $diag[] = 'distribution lignes/panier : 1 → ' . $distD['1'] . ' · 2 → ' . $distD['2'] . ' · 3+ → ' . $distD['3+'];
+
+        $diag[] = '-- R7 (happy hour) --';
+        $sH = $ds->forecast['horaire']['s'] ?? null;
+        $partsD = $ctxD->partsHoraires();
+        if (!is_array($sH) || $sH === []) {
+            $diag[] = 'forecast[horaire][s] ABSENT → porte non passée (aucune part horaire)';
+        } elseif ($partsD === null) {
+            $diag[] = 'forecast[horaire][s] présent mais PLAT (somme des parts ≤ 0) → porte non passée';
+        } else {
+            $posD = array_values(array_filter($partsD, static fn ($v): bool => (float) $v > 0.0));
+            $moyD = $posD !== [] ? array_sum($posD) / count($posD) : 0.0;
+            $creuxD = 0;
+            $picsD = 0;
+            foreach ($partsD as $hD => $pD) {
+                if ((float) $pD < 0.4 * $moyD) {
+                    ++$creuxD;
+                }
+                if ((float) $pD > 1.5 * $moyD) {
+                    ++$picsD;
+                }
+            }
+            $triD = $partsD;
+            asort($triD);
+            $plusBas = array_slice($triD, 0, 3, true);
+            $plusHaut = array_slice($triD, -3, 3, true);
+            krsort($plusHaut);
+            $fmtH = static fn (array $m): string => implode(' · ', array_map(
+                static fn ($h, $v): string => $h . 'h → ' . number_format((float) $v * 100.0, 2, ',', '') . ' %',
+                array_keys($m),
+                array_values($m)
+            ));
+            $ecartD = (float) max($partsD) - (float) min($partsD);
+            $diag[] = 'heures : ' . count($partsD) . ' · moyenne parts positives : ' . number_format($moyD * 100.0, 2, ',', '') . ' %';
+            $diag[] = 'creux (<0,4×moy) : ' . $creuxD . ' · pics (>1,5×moy) : ' . $picsD
+                . ' → porte creux+pic : ' . ($creuxD > 0 && $picsD > 0 ? 'PASSÉE' : 'NON PASSÉE');
+            $diag[] = '3 parts les plus faibles : ' . $fmtH($plusBas);
+            $diag[] = '3 parts les plus fortes : ' . $fmtH($plusHaut);
+            $diag[] = 'écart max parts : ' . number_format($ecartD * 100.0, 2, ',', '') . ' points → S(h) ' . ($ecartD <= 0.0 ? 'PLAT' : 'non plat');
+        }
+        $diag[] = 'produits à coût utilisable (porte produits de R7, ≥1 requis) : ' . count($eligD);
+
+        $diag[] = '-- Candidats écartés (relance moteur PAR RÈGLE = variante sans cap global) --';
+        $diag[] = 'note : le cap MAX_ACTIVES=5 (Scoring::classe) n\'est pas désactivable → une relance par règle contourne le cap ; rejets = garde-fous.';
+        $joD = (int) $ds->joursOuvertsFenetre;
+        $diag[] = 'jours ouverts fenêtre : ' . $joD . ' → ' . ($joD < Hyper::HIST_MIN_JOURS_OUVERTS
+            ? 'historique INSUFFISANT : le moteur n\'évalue que R2/R8/R11 — R5/R6/R7 JAMAIS évaluées'
+            : 'historique suffisant (toutes règles évaluées)');
+        foreach (['R1', 'R2', 'R3', 'R4', 'R5', 'R6', 'R7', 'R8', 'R9', 'R11'] as $rD) {
+            $runD = RecommendationEngine::recommend($ds, $now, ['regles' => [$rD]]);
+            $diag[] = '  ' . $rD . ' : ' . count($runD['idees']) . ' idée(s) retenue(s) · '
+                . (int) ($runD['meta']['rejets'] ?? 0) . ' candidat(s) rejeté(s) (garde-fous)';
+        }
+    }
+
+    $printDiag = static function () use ($diag): void {
+        echo "\n=== Diagnostic R5/R6/R7 ===\n";
+        foreach ($diag as $ligneD) {
+            echo $ligneD, "\n";
+        }
+    };
+
     // ── Sortie ───────────────────────────────────────────────────────────────
     if ($asJson) {
         echo json_encode($rapport, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE), "\n";
+        if ($avecDiag) {
+            $printDiag();
+        }
         exit(0);
     }
 
@@ -189,6 +443,10 @@ try {
                 . ($h['conclusion'] !== null ? ' (' . $h['conclusion'] . ')' : '')
                 . "\n";
         }
+    }
+
+    if ($avecDiag) {
+        $printDiag();
     }
 
     exit(0);

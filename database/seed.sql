@@ -77,7 +77,9 @@ INSERT INTO settings (id, `key`, value, type, label, `group`) VALUES
     ('set_reco_echantillon_min_unites', 'reco_echantillon_min_unites',  '20',   'text', 'Échantillon minimal par règle (unités / 30 j)',    'recommandations'),
     ('set_reco_duo_remise_max',         'reco_duo_remise_max',          '0.10', 'text', 'Remise max d''un duo (fraction)',                  'recommandations'),
     ('set_reco_immobilise_seuil_eur',   'reco_immobilise_seuil_eur',    '30',   'text', 'Seuil stock immobilisé gamme (€)',                 'recommandations'),
-    ('set_reco_max_actives',            'reco_max_actives',             '5',    'text', 'Nombre max d''idées actives',                      'recommandations')
+    ('set_reco_max_actives',            'reco_max_actives',             '5',    'text', 'Nombre max d''idées actives',                      'recommandations'),
+    ('set_reco_max_idees',              'reco_max_idees',               '3',    'text', 'Nombre max d''idées commerciales',                 'recommandations'),
+    ('set_reco_max_corrections',        'reco_max_corrections',         '5',    'text', 'Nombre max de corrections affichées',              'recommandations')
 ON DUPLICATE KEY UPDATE value = VALUES(value);
 
 -- -------------------------------------------------------------------

@@ -7,11 +7,17 @@ declare(strict_types=1);
  * effet mesuré par le cœur (EffetMesure), « Ce qui a marché », idées en
  * attente de décision et seuils modifiables du moteur.
  *
+ * Les lignes appliquées sont groupées en DEUX sections selon le bloc
+ * décodé du payload (json_decode payload_json['bloc'] ?? 'idee') :
+ *  - « Idées appliquées » (bloc 'idee') : effet mesuré ~4 semaines ;
+ *  - « Corrections traitées » (bloc 'correction') : données/stock,
+ *    appliquées SANS baseline (rien à mesurer).
+ *
  * @var string $title
  * @var list<array<string,mixed>> $lignes    Idées appliquées (Recommendation::historique()).
  * @var list<array<string,mixed>> $reussies  Mesures concluantes à effet > 0.
  * @var list<array<string,mixed>> $proposees Idées en attente (Recommendation::proposees()).
- * @var array<string,string>      $seuils    Valeurs courantes des 7 seuils « reco_* ».
+ * @var array<string,string>      $seuils    Valeurs courantes des seuils « reco_* ».
  */
 
 use App\Core\Compta\Reco\EffetMesure;
@@ -23,9 +29,23 @@ $libellesSeuils = [
     'reco_echantillon_min_unites' => 'Échantillon minimal par règle (unités / 30 j)',
     'reco_duo_remise_max'         => 'Remise max d\'un duo (fraction)',
     'reco_immobilise_seuil_eur'   => 'Seuil stock immobilisé gamme (€)',
-    'reco_max_actives'            => 'Nombre max d\'idées actives',
-
+    'reco_max_idees'              => 'Nombre max d\'idées commerciales',
+    'reco_max_corrections'        => 'Nombre max de corrections affichées',
 ];
+
+// Groupement par bloc décodé du payload stocké ('idee' par défaut :
+// lignes d'avant l'itération 2 sans bloc = idées).
+$lignesIdee = [];
+$lignesCorrection = [];
+foreach ($lignes as $l) {
+    $dec = json_decode((string) ($l['payload_json'] ?? '{}'), true);
+    $bloc = is_array($dec) ? (string) ($dec['bloc'] ?? 'idee') : 'idee';
+    if ($bloc === 'correction') {
+        $lignesCorrection[] = $l;
+    } else {
+        $lignesIdee[] = $l;
+    }
+}
 
 $badgeConclusion = static function (array $l): string {
     $conclusion = (string) ($l['effet_conclusion'] ?? '');
@@ -53,14 +73,14 @@ $badgeConclusion = static function (array $l): string {
     </div>
 
     <!-- ============================================================ -->
-    <!--  Idées appliquées : effet mesuré                               -->
+    <!--  Idées appliquées (bloc 'idee') : effet mesuré                -->
     <!-- ============================================================ -->
     <div class="card surface glass chart-card">
         <div class="chart-head">
             <h2 class="chart-title">Idées appliquées</h2>
             <span class="chart-sub">effet mesuré ~4 semaines après l'application</span>
         </div>
-        <?php if ($lignes === []): ?>
+        <?php if ($lignesIdee === []): ?>
             <p class="muted fc-empty">Aucune idée appliquée pour l'instant. Les idées du moment sont sur le dashboard <a href="<?= e(url('/admin/analytics')) ?>">Analytics</a>.</p>
         <?php else: ?>
             <div class="table-wrap">
@@ -69,7 +89,7 @@ $badgeConclusion = static function (array $l): string {
                         <tr><th>Idée</th><th>Règle</th><th>Appliquée le</th><th>Effet mesuré</th><th>Statut</th></tr>
                     </thead>
                     <tbody>
-                        <?php foreach ($lignes as $l): ?>
+                        <?php foreach ($lignesIdee as $l): ?>
                             <?php
                             // $l['effet'] : tableau déjà décodé/normalisé par
                             // le contrôleur (prêt pour EffetMesure::libelle).
@@ -82,6 +102,36 @@ $badgeConclusion = static function (array $l): string {
                                 <td><?= e((string) ($l['applied_at'] ?? '') !== '' ? formatDate(substr((string) $l['applied_at'], 0, 10), 'd/m/Y') : '—') ?></td>
                                 <td><?= e($libelle) ?></td>
                                 <td><?= $badgeConclusion($l) ?></td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        <?php endif; ?>
+    </div>
+
+    <!-- ============================================================ -->
+    <!--  Corrections traitées (bloc 'correction') : sans baseline     -->
+    <!-- ============================================================ -->
+    <div class="card surface glass chart-card">
+        <div class="chart-head">
+            <h2 class="chart-title">Corrections traitées</h2>
+            <span class="chart-sub">données / stock — appliquées sans mesure d'effet</span>
+        </div>
+        <?php if ($lignesCorrection === []): ?>
+            <p class="muted fc-empty">Aucune correction traitée pour l'instant.</p>
+        <?php else: ?>
+            <div class="table-wrap">
+                <table class="data-table">
+                    <thead>
+                        <tr><th>Correction</th><th>Règle</th><th>Traitée le</th></tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($lignesCorrection as $l): ?>
+                            <tr>
+                                <td><?= e((string) ($l['titre'] ?? '')) ?></td>
+                                <td><span class="reco-badge is-rule"><?= e((string) ($l['regle'] ?? '')) ?></span></td>
+                                <td><?= e((string) ($l['applied_at'] ?? '') !== '' ? formatDate(substr((string) $l['applied_at'], 0, 10), 'd/m/Y') : '—') ?></td>
                             </tr>
                         <?php endforeach; ?>
                     </tbody>

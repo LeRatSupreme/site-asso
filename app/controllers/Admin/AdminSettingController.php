@@ -32,7 +32,7 @@ final class AdminSettingController extends AdminBaseController
         'membership_price', 'membership_enabled', 'membership_season',
         'reco_marge_min', 'reco_stock_dormant_semaines', 'reco_stock_dormant_min',
         'reco_echantillon_min_unites', 'reco_duo_remise_max',
-        'reco_immobilise_seuil_eur', 'reco_max_actives',
+        'reco_immobilise_seuil_eur', 'reco_max_idees', 'reco_max_corrections',
     ];
 
     /**
@@ -81,7 +81,8 @@ final class AdminSettingController extends AdminBaseController
         'reco_echantillon_min_unites' => ['recommandations', '20'],
         'reco_duo_remise_max'         => ['recommandations', '0.10'],
         'reco_immobilise_seuil_eur'   => ['recommandations', '30'],
-        'reco_max_actives'            => ['recommandations', '5'],
+        'reco_max_idees'              => ['recommandations', '3'],
+        'reco_max_corrections'        => ['recommandations', '5'],
     ];
 
     public function index(): void
