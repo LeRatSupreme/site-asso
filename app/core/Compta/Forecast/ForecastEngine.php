@@ -35,6 +35,13 @@ namespace App\Core\Compta\Forecast;
  *    dataset) : la prévision pleine journée vient du modèle, jamais
  *    des données partielles du jour ; null uniquement si le jour est
  *    fermé (les vues affichent « Fermé aujourd'hui », jamais 0,00 €).
+ *  - Carte « Par jour de semaine » : jours_semaine.ca = attendu de la
+ *    PROCHAINE occurrence de chaque dow ouvert (expectedCa, niveau +
+ *    tendance amortie + ×creuse si la date prochaine est en plage) —
+ *    cohérent avec « jours » et la semaine ; obs_ca = moyenne brute
+ *    observée du dow (null sans occurrence), se = sqrt(μ + μ²/r)/√occ ;
+ *    meilleur_jour désigné SEULEMENT si ca_best − ca_second > 2 ×
+ *    sqrt(se_best² + se_second²), sinon null + note « indiscernables ».
  */
 final class ForecastEngine
 {
@@ -269,27 +276,97 @@ final class ForecastEngine
             ];
         }
 
-        // 8. Jours de la semaine courante (dowEffects du fit complet) + meilleur jour.
+        // 8. Jours de la semaine courante : pour chaque dow OUVERT, la
+        // valeur modèle est l'attendu de la PROCHAINE OCCURRENCE de ce
+        // jour — expectedCa(date) = niveau + tendance amortie + effet dow,
+        // multiplié par le facteur période creuse si la date prochaine est
+        // en plage. Cohérent avec « jours » (J+1..J+7 couvre chaque dow
+        // exactement une fois) et avec la semaine — plus jamais le profil
+        // dow pur (dowEffects) décorrélé du niveau. Série OBSERVÉE :
+        // obs_ca = moyenne brute des CA des jours passés du dow (null sans
+        // occurrence), occ = nb de jours vus. Incertitude du modèle :
+        // se = sqrt(μ + μ²/r) / sqrt(max(1, occ)) — approximation
+        // documentée : écart-type d'une moyenne de `occ` jours NegBin(μ, r).
         $occByDow = array_fill(0, 7, 0);
+        $caByDow  = array_fill(0, 7, []);
         foreach ($past as $day) {
-            $d = new \DateTimeImmutable($day->date);
-            $occByDow[(int) $d->format('N') - 1]++;
+            $dow = (int) (new \DateTimeImmutable($day->date))->format('N') - 1;
+            $occByDow[$dow]++;
+            $caByDow[$dow][] = (float) $day->ca;
         }
+        $rDisp = max(0.01, $model->dispersionR);
         $joursSemaine = [];
-        $meilleur = null;
+        $candidats = []; // dow => {ca, se} (dows ouverts avec occ ≥ 1)
         for ($dow = 0; $dow < 7; $dow++) {
             $isOpen = in_array($dow, $openWeekdays, true);
-            $st = self::dowStats($model->dowEffects, $dow);
-            $n  = $isOpen ? $st['n'] : 0.0;
-            $p  = $isOpen ? $st['p'] : 0.0;
-            $ca = $n * $p;
-            $joursSemaine[] = [
-                'dow' => $dow, 'label' => self::LABELS[$dow], 'n' => $n, 'ca' => $ca,
-                'occ' => $occByDow[$dow], 'is_open' => $isOpen,
-            ];
-            if ($isOpen && $occByDow[$dow] >= 1 && ($meilleur === null || $ca > $meilleur['ca'])) {
-                $meilleur = ['dow' => $dow, 'label' => self::LABELS[$dow], 'ca' => $ca];
+            $occ = $occByDow[$dow];
+            if (!$isOpen) {
+                $joursSemaine[] = [
+                    'dow' => $dow, 'label' => self::LABELS[$dow], 'n' => 0.0, 'ca' => 0.0,
+                    'occ' => $occ, 'is_open' => false,
+                    'obs_ca' => $occ > 0 ? array_sum($caByDow[$dow]) / $occ : null,
+                    'se' => null, 'next_date' => null,
+                ];
+                continue;
             }
+            // Prochaine occurrence STRICTEMENT après aujourd'hui : la carte
+            // « Aujourd'hui » a déjà son attendu ; J+1..J+7 couvre chaque
+            // dow une fois → la somme des barres == somme des jours prévus.
+            $next = $now->modify('+1 day');
+            while ((int) $next->format('N') - 1 !== $dow) {
+                $next = $next->modify('+1 day');
+            }
+            $f  = $facteurCreux($next);
+            $n  = $model->expectedN($next) * $f;
+            $mu = $model->expectedCa($next) * $f;
+            $joursSemaine[] = [
+                'dow' => $dow, 'label' => self::LABELS[$dow], 'n' => $n, 'ca' => $mu,
+                'occ' => $occ, 'is_open' => true,
+                'obs_ca' => $occ > 0 ? array_sum($caByDow[$dow]) / $occ : null,
+                'se' => sqrt($mu + $mu * $mu / $rDisp) / sqrt(max(1, $occ)),
+                'next_date' => $next->format('Y-m-d'),
+            ];
+            if ($occ >= 1) {
+                $candidats[$dow] = ['ca' => $mu, 'se' => (float) $joursSemaine[$dow]['se']];
+            }
+        }
+
+        // « Meilleur jour » UNIQUEMENT si significatif : l'écart avec le
+        // second doit dépasser 2 × sqrt(se_best² + se_second²) (règle ≈
+        // intervalle de confiance à ~95 % de la différence). Avec ~2
+        // occurrences/jour et un partial pooling k=2, les barres sont
+        // statistiquement indiscernables → null + note honnête, jamais un
+        // « Meilleur jour : Ven » fondé sur quelques euros d'écart.
+        $meilleur = null;
+        $bestDow = null;
+        $secondDow = null;
+        foreach ($candidats as $dow => $st) {
+            if ($bestDow === null || $st['ca'] > $candidats[$bestDow]['ca']) {
+                $secondDow = $bestDow;
+                $bestDow = $dow;
+            } elseif ($secondDow === null || $st['ca'] > $candidats[$secondDow]['ca']) {
+                $secondDow = $dow;
+            }
+        }
+        if ($bestDow !== null && $secondDow !== null) {
+            $ecartJs = $candidats[$bestDow]['ca'] - $candidats[$secondDow]['ca'];
+            $seDiff = 2.0 * sqrt($candidats[$bestDow]['se'] ** 2 + $candidats[$secondDow]['se'] ** 2);
+            if ($ecartJs > $seDiff) {
+                $meilleur = ['dow' => $bestDow, 'label' => self::LABELS[$bestDow], 'ca' => $candidats[$bestDow]['ca']];
+            }
+        }
+        // Non désigné alors qu'au moins un dow ouvert a été vu → note
+        // honnête (occurrences moyennes par dow ouvert, arrondies).
+        $jsIndiscernables = $meilleur === null && $candidats !== [];
+        $occMoyenJs = 1;
+        if ($jsIndiscernables) {
+            $sommeOcc = 0;
+            $nbDowJs = 0;
+            foreach ($candidats as $dow => $st) {
+                $sommeOcc += $occByDow[$dow];
+                $nbDowJs++;
+            }
+            $occMoyenJs = max(1, (int) round($nbDowJs > 0 ? $sommeOcc / $nbDowJs : 0));
         }
 
         // 9. Semaine courante (lun–dim) : réel + tirages restants → Goal::week.
@@ -420,6 +497,13 @@ final class ForecastEngine
         if (!$todayOpen) {
             $notes[] = 'Fermé aujourd\'hui.';
         }
+        if ($jsIndiscernables) {
+            $notes[] = sprintf(
+                'Jours de semaine statistiquement indiscernables pour l\'instant (≈ %d occurrence%s/jour) — le classement apparaîtra avec plus d\'historique.',
+                $occMoyenJs,
+                $occMoyenJs > 1 ? 's' : ''
+            );
+        }
         if ($bt['insufficient']) {
             $notes[] = 'Backtest indisponible (historique trop court) : modèle principal actif par défaut.';
         }
@@ -545,27 +629,5 @@ final class ForecastEngine
         }
 
         return $u;
-    }
-
-    /**
-     * Lecture tolérante de dowEffects : forme idéale
-     * array<int(dow), array{n:float,p:float,occ:int}> ; clés manquantes → 0.0
-     * (les occurrences sont recalculées côté moteur depuis les jours passés).
-     *
-     * @return array{n:float,p:float}
-     */
-    private static function dowStats(array $dowEffects, int $dow): array
-    {
-        $e = $dowEffects[$dow] ?? null;
-        if (!is_array($e)) {
-            return ['n' => 0.0, 'p' => 0.0];
-        }
-        $n = $e['n'] ?? ($e['mean_n'] ?? null);
-        $p = $e['p'] ?? ($e['mean_p'] ?? null);
-
-        return [
-            'n' => is_numeric($n) ? (float) $n : 0.0,
-            'p' => is_numeric($p) ? (float) $p : 0.0,
-        ];
     }
 }

@@ -59,8 +59,13 @@ final class EngineTest extends TestCase
         self::assertCount(7, $r['jours_semaine']);
         self::assertSame('Lun', $r['jours_semaine'][0]['label']);
         self::assertSame('Dim', $r['jours_semaine'][6]['label']);
-        self::assertNotNull($r['meilleur_jour'], 'Vendredi = meilleur jour (90 transactions).');
-        self::assertSame(4, $r['meilleur_jour']['dow']);
+        // Règle de significativité : ven (90 tx) vs jeu (75 tx) ≈ +12,75 €
+        // d'écart pour 4-6 occurrences/jour, se ≈ 5 € → inférieur à
+        // 2 × sqrt(se² + se²) : AUCUN meilleur jour désigné (note honnête).
+        self::assertNull($r['meilleur_jour'], 'Écart ven/jeu non significatif → pas de meilleur jour.');
+        $jsVen = $r['jours_semaine'][4];
+        self::assertGreaterThan((float) $r['jours_semaine'][3]['ca'], (float) $jsVen['ca'], 'Vendredi reste la barre modèle la plus haute.');
+        self::assertSame('2026-10-23', $jsVen['next_date'], 'Prochaine occurrence du vendredi (strictement après aujourd\'hui).');
     }
 
     public function test_jour_atypique_poids_0_3_prevision_stable(): void
