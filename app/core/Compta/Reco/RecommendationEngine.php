@@ -9,7 +9,9 @@ namespace App\Core\Compta\Reco;
  * règles en DEUX BLOCS indépendants —
  *  - IDÉES (consignes commerciales datées/affichables) : R1, R4, R5,
  *    R6, R7, plus R10 ASSEMBLÉE à part via R10Objectif quand
- *    l'objectif hebdomadaire est en risque — cap « reco_max_idees » (3) ;
+ *    l'objectif hebdomadaire est en risque — cap « reco_max_idees » (3)
+ *    avec DIVERSITÉ « reco_idees_max_par_regle » (2) : au plus 2 idées
+ *    par règle dans le cap (une règle prolifique n'évince pas les autres) ;
  *  - CORRECTIONS (données/réappro, ordres opérables) : R2, R8, R9, R11
  *    — cap « reco_max_corrections » (5), R11 prioritaire.
  * R3 (micro-optimisation tarifaire) N'EST PLUS ÉMISE : ses candidats
@@ -89,6 +91,7 @@ final class RecommendationEngine
         $probMin = (float) $ctx->param('prob_objectif_min', Hyper::PROB_OBJECTIF_MIN);
         $maxIdees = (int) $ctx->param('max_idees', Hyper::MAX_IDEES);
         $maxCorrections = (int) $ctx->param('max_corrections', Hyper::MAX_CORRECTIONS);
+        $maxParRegle = (int) $ctx->param('idees_max_par_regle', Hyper::IDEES_MAX_PAR_REGLE);
 
         $produitsParCle = [];
         foreach ($ds->produits as $p) {
@@ -175,9 +178,11 @@ final class RecommendationEngine
             }
         }
 
-        // 4. Coupes SÉPARÉES : historique (actifs/refus), tri, dédoublonnage, cap par bloc.
+        // 4. Coupes SÉPARÉES : historique (actifs/refus), tri, dédoublonnage,
+        //    DIVERSITÉ idées (≤ IDEES_MAX_PAR_REGLE par règle, AVANT le cap :
+        //    le slot libéré va à la règle suivante), cap par bloc.
         $retenuesCorrections = Scoring::classe($candidatsCorrections, $ds->historique, $now, $maxCorrections, true);
-        $retenuesIdees = Scoring::classe($candidatsIdees, $ds->historique, $now, $maxIdees, false);
+        $retenuesIdees = Scoring::classe($candidatsIdees, $ds->historique, $now, $maxIdees, false, $maxParRegle);
 
         // 5. Mapping en Recommendation (garde-fous déjà passés → garde_fous_ok = true).
         $idees = [];
@@ -194,10 +199,11 @@ final class RecommendationEngine
             'n_paniers'              => $ctx->nPaniers(),
             'genere_le'              => $now->setTimezone(new \DateTimeZone('Europe/Paris'))->format('Y-m-d H:i'),
             'parametres'             => [
-                'marge_min'         => $margeMin,
-                'prob_objectif_min' => $probMin,
-                'max_idees'         => $maxIdees,
-                'max_corrections'   => $maxCorrections,
+                'marge_min'            => $margeMin,
+                'prob_objectif_min'    => $probMin,
+                'max_idees'            => $maxIdees,
+                'max_corrections'      => $maxCorrections,
+                'idees_max_par_regle'  => $maxParRegle,
             ],
             'rejets'                 => $rejets,
             'idees_fiables'          => $nbIdees,

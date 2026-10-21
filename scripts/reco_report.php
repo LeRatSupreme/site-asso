@@ -226,17 +226,26 @@ try {
         }
         usort($statsD, static fn (array $x, array $y): int => $y['co'] <=> $x['co']);
 
-        // Verdicts R5 : seuils actuels vs assouplis, blocages coût.
+        // Verdicts R5 : seuils FORTE vs VARIANTE (lus depuis Hyper via les
+        // MÊMES clés de surcharge que R5Duos — plus de valeurs hardcodées
+        // pré-itération-2), blocages coût.
+        $liftFD = (float) $ctxD->param('assoc_lift_min', Hyper::ASSOC_LIFT_MIN);
+        $supportFD = (float) $ctxD->param('assoc_support_min', Hyper::ASSOC_SUPPORT_MIN);
+        $confFD = (float) $ctxD->param('assoc_conf_min', Hyper::ASSOC_CONF_MIN);
+        $liftVD = (float) $ctxD->param('r5_lift_variante_min', Hyper::R5_LIFT_VARIANTE_MIN);
+        $supportVD = (float) $ctxD->param('r5_support_variante_min', Hyper::R5_SUPPORT_VARIANTE_MIN);
+        $confVD = (float) $ctxD->param('r5_conf_variante_min', Hyper::R5_CONF_VARIANTE_MIN);
+        $part1VD = (float) $ctxD->param('r6_part1_variante_min', Hyper::R6_PART1_VARIANTE_MIN);
         $passCourantD = 0;
         $passAssoupliD = 0;
         $nonEligAssoupliD = 0;
         $bloqueCoutInconnuD = 0;
         foreach ($statsD as $sp) {
             $bothE = isset($eligD[$sp['a']], $eligD[$sp['b']]);
-            if ($sp['lift'] > 1.2 && $sp['support'] >= 0.02 && $sp['conf'] >= 0.05 && $bothE) {
+            if ($sp['lift'] > $liftFD && $sp['support'] >= $supportFD && $sp['conf'] >= $confFD && $bothE) {
                 ++$passCourantD;
             }
-            if ($sp['lift'] > 1.0 && $sp['support'] >= 0.01 && $sp['conf'] >= 0.03) {
+            if ($sp['lift'] > $liftVD && $sp['support'] >= $supportVD && $sp['conf'] >= $confVD) {
                 ++$passAssoupliD;
                 if (!$bothE) {
                     ++$nonEligAssoupliD;
@@ -295,8 +304,10 @@ try {
                 . ' | A : ' . $coutTxt($pa)
                 . ' | B : ' . $coutTxt($pb);
         }
-        $diag[] = 'verdict : ' . $passCourantD . ' paire(s) passent les seuils ACTUELS (lift>1,2 · support≥2 % · confiance≥5 % · 2 coûts utilisables)';
-        $diag[] = 'seuils ASSOUPLIS (lift>1,0 · support≥1 % · confiance≥3 %, coût inconnu toléré) : ' . $passAssoupliD . ' paire(s)';
+        $diag[] = 'verdict : ' . $passCourantD . ' paire(s) passent les seuils FORTE (lift>' . $nb2D($liftFD)
+            . ' · support≥' . $pctD($supportFD) . ' % · confiance≥' . $pctD($confFD) . ' % · 2 coûts utilisables)';
+        $diag[] = 'seuils VARIANTES (lift>' . $nb2D($liftVD) . ' · support≥' . $pctD($supportVD)
+            . ' % · confiance≥' . $pctD($confVD) . ' %, coût inconnu toléré) : ' . $passAssoupliD . ' paire(s)';
         $diag[] = 'paires assouplissables à coût non utilisable : ' . $nonEligAssoupliD . ' · dont bloquées par le SEUL coût inconnu : ' . $bloqueCoutInconnuD;
 
         $diag[] = '-- R6 (seuil cadeau) --';
@@ -315,7 +326,9 @@ try {
         }
         usort($cadeauxD, static fn (RecoProduct $x, RecoProduct $y): int => (float) $x->cout <=> (float) $y->cout);
         $cadeauxOkD = count(array_filter($cadeauxD, static fn (RecoProduct $p): bool => $p->coutUtilisable()));
-        $diag[] = 'part réelle paniers 1 ligne : ' . $pctD($part1D) . ' % vs seuil ' . $pctD($seuil1D) . ' % → porte : ' . ($part1D > $seuil1D ? 'PASSÉE' : 'NON PASSÉE');
+        $diag[] = 'part réelle paniers 1 ligne : ' . $pctD($part1D) . ' % vs seuils forte > ' . $pctD($seuil1D)
+            . ' % / variante > ' . $pctD($part1VD) . ' % → porte : '
+            . ($part1D > $seuil1D ? 'FORTE PASSÉE' : ($part1D > $part1VD ? 'VARIANTE PASSÉE' : 'NON PASSÉE'));
         $diag[] = 'candidats cadeaux (coût ≤ ' . $nb2D($cadeauMaxD) . ' €, stock > 10 ou non géré) : ' . count($cadeauxD)
             . ' · dont coût utilisable (garde-fou 2) : ' . $cadeauxOkD;
         foreach (array_slice($cadeauxD, 0, 3) as $cg) {
@@ -366,7 +379,11 @@ try {
         $diag[] = 'produits à coût utilisable (porte produits de R7, ≥1 requis) : ' . count($eligD);
 
         $diag[] = '-- Candidats écartés (relance moteur PAR RÈGLE = variante sans cap global) --';
-        $diag[] = 'note : le cap MAX_ACTIVES=5 (Scoring::classe) n\'est pas désactivable → une relance par règle contourne le cap ; rejets = garde-fous.';
+        $maxIdeesD = (int) $ctxD->param('max_idees', Hyper::MAX_IDEES);
+        $maxCorrectionsD = (int) $ctxD->param('max_corrections', Hyper::MAX_CORRECTIONS);
+        $diag[] = 'note : relance PAR RÈGLE, caps blocs courants reco_max_idees=' . $maxIdeesD
+            . ' / reco_max_corrections=' . $maxCorrectionsD . ' (MAX_ACTIVES obsolète, DIVERSITÉ ≤ '
+            . Hyper::IDEES_MAX_PAR_REGLE . ' idées par règle) ; rejets = garde-fous.';
         $joD = (int) $ds->joursOuvertsFenetre;
         $diag[] = 'jours ouverts fenêtre : ' . $joD . ' → ' . ($joD < Hyper::HIST_MIN_JOURS_OUVERTS
             ? 'historique INSUFFISANT : le moteur n\'évalue que R2/R8/R11 — R5/R6/R7 JAMAIS évaluées'

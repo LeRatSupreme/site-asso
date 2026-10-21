@@ -106,6 +106,9 @@ final class Hyper
     /** Idées — nombre maximal de recommandations « idée » (consignes commerciales) actives simultanément. */
     public const MAX_IDEES = 3;
 
+    /** Idées — DIVERSITÉ : nombre maximal de recommandations d'UNE MÊME règle dans le cap « max_idees » (une règle prolifique — ex. R4 — n'évince plus les autres ; appliqué AVANT le cap global pour que le slot libéré aille à la règle suivante). */
+    public const IDEES_MAX_PAR_REGLE = 2;
+
     /** Corrections — nombre maximal de recommandations « correction » (données/rupture) actives simultanément. */
     public const MAX_CORRECTIONS = 5;
 

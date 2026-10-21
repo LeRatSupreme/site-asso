@@ -43,7 +43,12 @@ final class Scoring
      *  3) dédoublonnage par produit : un produit (key) n'apparaît que
      *     dans la première reco retenue qui le contient (les clés déjà
      *     prises sont retirées du candidat ; coupé si plus rien d'unique) ;
-     *  4) cap $cap au total (Hyper::MAX_IDEES par défaut : 3 idées).
+     *  4) DIVERSITÉ (idées) : $maxParRegle > 0 limite le nombre de
+     *     candidats retenus PAR règle (Hyper::IDEES_MAX_PAR_REGLE pour le
+     *     bloc idées : une règle prolifique n'évince pas les autres) ;
+     *     appliqué AVANT le cap global pour que le slot libéré aille à la
+     *     règle suivante ; 0 = pas de limite (corrections) ;
+     *  5) cap $cap au total (Hyper::MAX_IDEES par défaut : 3 idées).
      *
      * @param list<array<string,mixed>> $candidats
      * @param array{actifs:list<string>,refus:list<array{fingerprint:string,date:string}>,appliquees:list<array{fingerprint:string,produits:list<string>}>} $historique
@@ -55,7 +60,8 @@ final class Scoring
         array $historique,
         \DateTimeImmutable $now,
         int $cap = Hyper::MAX_IDEES,
-        bool $correctionsPrioritaires = false
+        bool $correctionsPrioritaires = false,
+        int $maxParRegle = 0
     ): array {
         // 1) Historique : actifs bloquent, refus récents bloquent.
         $actifs = [];
@@ -116,14 +122,22 @@ final class Scoring
             usort($restants, $cmp);
         }
 
-        // 3) Dédoublonnage par produit (on retire les clés déjà prises).
+        // 3) Dédoublonnage par produit + 4) diversité par règle (AVANT le cap).
         $utilises = [];
+        $parRegle = [];
         $retenus = [];
         foreach ($restants as $c) {
             $keys = is_array($c['keys'] ?? null) ? array_values(array_filter($c['keys'], 'is_string')) : [];
             $uniques = array_values(array_diff($keys, array_keys($utilises)));
             if ($uniques === []) {
                 continue;
+            }
+            if ($maxParRegle > 0) {
+                $regle = is_string($c['regle'] ?? null) ? $c['regle'] : '';
+                $parRegle[$regle] = ($parRegle[$regle] ?? 0) + 1;
+                if ($parRegle[$regle] > $maxParRegle) {
+                    continue;
+                }
             }
             if (count($uniques) !== count($keys)) {
                 $c['keys'] = $uniques;
@@ -140,7 +154,7 @@ final class Scoring
             $retenus[] = $c;
         }
 
-        // 4) Cap du bloc (idées ou corrections).
+        // 5) Cap du bloc (idées ou corrections).
         return array_slice($retenus, 0, max(0, $cap));
     }
 

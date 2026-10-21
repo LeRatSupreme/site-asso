@@ -130,8 +130,10 @@ final class Recommendation extends Model
     }
 
     /**
-     * Empreintes encore « actives » : proposées, repoussées, ou appliquées
-     * depuis moins de FENETRE_BLOCAGE_JOURS (le cœur s'en sert pour ne pas
+     * Empreintes encore « actives » : proposées/repoussées depuis moins
+     * de FENETRE_BLOCAGE_JOURS (créées depuis — une vieille ligne jamais
+     * décidée n'étouffe pas les idées futures), ou appliquées depuis
+     * moins de FENETRE_BLOCAGE_JOURS (le cœur s'en sert pour ne pas
      * re-proposer une idée déjà connue).
      *
      * @return list<string>
@@ -143,8 +145,10 @@ final class Recommendation extends Model
             $rows = self::pdo()
                 ->query(
                     "SELECT id FROM recommendations
-                     WHERE statut IN ('proposee', 'plus_tard')
-                        OR (statut = 'appliquee' AND applied_at >= NOW() - INTERVAL {$jours} DAY)"
+                     WHERE ((statut IN ('proposee', 'plus_tard')
+                               AND created_at >= NOW() - INTERVAL {$jours} DAY)
+                         OR (statut = 'appliquee'
+                               AND applied_at >= NOW() - INTERVAL {$jours} DAY))"
                 )
                 ->fetchAll(\PDO::FETCH_COLUMN);
         } catch (\Throwable) {
