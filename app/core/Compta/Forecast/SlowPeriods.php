@@ -118,6 +118,30 @@ final class SlowPeriods
     }
 
     /**
+     * Vrai si une plage creuse (facteur < 1) intersecte la fenêtre
+     * [$debut, $fin] ('Y-m-d', bornes inclusives). Utilisé par le moteur
+     * pour prévenir d'un possible DOUBLE-COMPTAGE : la fenêtre
+     * d'apprentissage contient déjà les journées basses de la plage ET le
+     * facteur réduit encore les prévisions. Facteur 1 (ou config
+     * neutre/nulle) → faux : rien n'est réduit, rien à signaler.
+     *
+     * @param ?array{facteur:float,ranges:list<array{start:string,end:string}>} $slow
+     */
+    public static function chevaucheFenetre(?array $slow, string $debut, string $fin): bool
+    {
+        if ($slow === null || (float) ($slow['facteur'] ?? 1.0) >= 1.0) {
+            return false;
+        }
+        foreach ((array) ($slow['ranges'] ?? []) as $r) {
+            if ((string) $r['end'] >= $debut && (string) $r['start'] <= $fin) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * Libellé court d'une plage pour la vue : « 17/10 → 02/11 (×0,8) ».
      *
      * @param array{start:string,end:string} $range

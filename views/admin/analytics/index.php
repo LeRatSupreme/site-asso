@@ -248,12 +248,17 @@ $iconSvg = static function (string $name): string {
             return ['', ''];
         };
         $fcConfLbl = ['elevee' => 'élevée', 'moyenne' => 'moyenne', 'faible' => 'faible'][$fcConf] ?? 'insuffisante';
+        $fcFacteur = isset($forecast['facteur_conforme']) && is_numeric($forecast['facteur_conforme'])
+            ? (float) $forecast['facteur_conforme'] : null;
 
         // Info-bulle métriques du modèle (affichée sur les deux cartes).
+        // La correction conforme explique la largeur des fourchettes
+        // (résidus de backtest × demi-largeur Monte Carlo).
         $fcTooltip = 'Modèle actif : ' . ($fcModele !== '' ? $fcModele : '—')
             . ' · WAPE backtest : ' . ($fcWape === null ? '—' : number_format((float) $fcWape, 1, ',', ' ')) . ' %'
             . ' sur ' . $fcNJours . ' jours'
             . ' · couverture intervalle : ' . ($fcCoverage === null ? '—' : number_format((float) $fcCoverage, 0, ',', ' ')) . ' %'
+            . ($fcFacteur !== null ? ' · Correction conforme : ×' . number_format($fcFacteur, 1, ',', ' ') : '')
             . ($fcNoteSel !== '' ? ' · ' . $fcNoteSel : '');
 
         $fcHasChart = $fcPrev !== null || !empty($forecast['jours']);

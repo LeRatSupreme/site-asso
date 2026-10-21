@@ -230,13 +230,17 @@ $iconSvg = static function (string $name): string {
             return ['', ''];
         };
         $kConfLbl = ['elevee' => 'élevée', 'moyenne' => 'moyenne', 'faible' => 'faible'][$fcConf] ?? 'insuffisante';
+        $kFacteur = isset($forecast['facteur_conforme']) && is_numeric($forecast['facteur_conforme'])
+            ? (float) $forecast['facteur_conforme'] : null;
 
         // Info-bulle métriques (règle interface 8) : affichée en note
-        // compacte (pas de survol au doigt) + attribut title.
+        // compacte (pas de survol au doigt) + attribut title. La
+        // correction conforme explique la largeur des fourchettes.
         $kTooltip = 'Modèle actif : ' . ($fcModele !== '' ? $fcModele : '—')
             . ' · WAPE backtest : ' . ($fcWape === null ? '—' : number_format((float) $fcWape, 1, ',', ' ')) . ' %'
             . ' sur ' . $fcNJours . ' jours'
             . ' · couverture intervalle : ' . ($fcCoverage === null ? '—' : number_format((float) $fcCoverage, 0, ',', ' ')) . ' %'
+            . ($kFacteur !== null ? ' · Correction conforme : ×' . number_format($kFacteur, 1, ',', ' ') : '')
             . ($fcNoteSel !== '' ? ' · ' . $fcNoteSel : '');
 
         $kChips = [];
