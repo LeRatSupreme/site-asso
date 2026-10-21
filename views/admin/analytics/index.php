@@ -17,7 +17,7 @@ declare(strict_types=1);
  * @var list<array<string,mixed>> $insights
  * @var array<string,mixed> $forecast      Moteur ForecastEngine::forecast() TEL QUEL (prevision_jour, intervalle_80, attendu_a_h, trop_tot, projection_fin_journee, ecart_vs_attendu, dans_intervalle, confiance, modele, n_jours, wape_backtest, hier, jours, horaire, jours_semaine, semaine, mois30, benefice, produits, anomalies, notes…)
  * @var array<string,mixed> $day_track     Estimation du jour (window, hour, trop_tot, estimate, cum_actual, cum_expected, actual_so_far, expected_so_far, delta_pct|null, projection_eod, ecart_eur, intervalle_h|null, dans_intervalle|null, confiance, notes)
- * @var array<string,mixed> $weekday       Par jour de semaine {labels, ca, ca_avg, qty, tx, days_count, today_index, avg_per_day, best?{index,label,ca}}
+ * @var array<string,mixed> $weekday       Par jour de semaine {labels, ca (modèle : attendu prochaine occurrence), obs (moyenne brute observée|null), se, next_date, qty, tx, days_count (occ), today_index, best?{index,label,ca,n}|null, creuse_note?string|null}
  * @var array<string,mixed> $hourly        Par heure {labels, ca_avg, today_ca, today_expected, today_projete, now_hour, trop_tot, s}
  * @var float $goal                        Objectif hebdomadaire affiché (GET ?goal= ou sauvegarde POST /admin/analytics/objectif)
  * @var list<string> $products             Produits distincts (sélecteur tendance)
@@ -659,15 +659,20 @@ $iconSvg = static function (string $name): string {
         <div class="card surface glass chart-card">
             <div class="chart-head">
                 <h2 class="chart-title">Par jour de semaine</h2>
-                <!-- F4 : UN seul chiffre — le meilleur jour du modèle. La
-                     moyenne/jour ne vit que dans la légende de la ligne
-                     tiretée (datasets JS). Pré-rendu serveur, le JS le
-                     reconstruit à l'identique depuis le payload. -->
+                <!-- F4 : UN seul chiffre — le meilleur jour, UNIQUEMENT si
+                     significatif (meilleur_jour du moteur, sinon la carte
+                     dit honnêtement que les jours sont indiscernables).
+                     Pré-rendu serveur, le JS le reconstruit à l'identique
+                     depuis le payload. -->
                 <span class="chart-sub" id="weekday-sub"><?php
                     $wdBest = isset($weekday['best']) && is_array($weekday['best']) ? $weekday['best'] : null;
-                    echo ($wdBest !== null && ($wdBest['ca'] ?? null) !== null)
-                        ? 'Meilleur jour : ' . e((string) ($wdBest['label'] ?? '—')) . ' — ' . e(formatPrice((float) $wdBest['ca'])) . '/jour (modèle, fenêtre ' . (int) ($day_track['window'] ?? 14) . ' j)'
-                        : 'moyenne par jour de semaine';
+                    $wdSub = ($wdBest !== null && ($wdBest['ca'] ?? null) !== null)
+                        ? 'Meilleur jour : ' . e((string) ($wdBest['label'] ?? '—')) . ' — ' . e(formatPrice((float) $wdBest['ca'])) . '/jour attendu (modèle, n=' . (int) ($wdBest['n'] ?? 0) . ')'
+                        : 'Pas de différence significative entre les jours (historique court)';
+                    if (!empty($weekday['creuse_note'])) {
+                        $wdSub .= ' · ' . e((string) $weekday['creuse_note']);
+                    }
+                    echo $wdSub;
                 ?></span>
             </div>
             <div class="chart-canvas"><canvas id="chart-weekday" height="160"></canvas></div>
@@ -1304,62 +1309,70 @@ $iconSvg = static function (string $name): string {
         });
     }
 
-    // ---------- 5bis. CA par jour de semaine (moyennes + moyenne/jour) ----------
-    // Barres = moyenne par jour de semaine du payload (ca_avg : null =
-    // jour fermé → trou sans barre), barre du jour en ambre, tirets =
-    // moyenne/jour. « Meilleur jour » vient du payload (weekday.best) —
-    // AUCUN calcul local.
-    var wd = data.weekday || { labels: [], ca_avg: [] };
+    // ---------- 5bis. CA par jour de semaine : OBSERVÉ (barres) + MODÈLE (points/ligne) ----------
+    // Barres PLEINES = moyenne OBSERVÉE par dow (obs : null = pas de
+    // barre), points/ligne tiretée = MODÈLE (attendu de la prochaine
+    // occurrence). « Meilleur jour » (seulement s'il est significatif) et
+    // la mention période creuse viennent du payload — AUCUN calcul local.
+    var wd = data.weekday || { labels: [], ca: [], obs: [] };
     var ctxWd = document.getElementById('chart-weekday');
     if (ctxWd) {
-        var wdAvg = (wd.ca_avg || []).map(function (v) { return v == null ? null : Number(v); });
+        var wdObs = (wd.obs || []).map(function (v) { return v == null ? null : Number(v); });
+        var wdModel = (wd.ca || []).map(function (v) { return v == null ? null : Number(v); });
         var wdDaysCount = (wd.days_count || []).map(function (v) { return v == null ? 0 : Number(v); });
         var wdTi  = Number(wd.today_index);
-        var wdAvgPerDay = wd.avg_per_day == null ? null : Number(wd.avg_per_day);
         var wdBest = wd.best || null;
-        var wdFw = (data.day_track && data.day_track.window != null) ? Number(data.day_track.window) : null;
+        var wdCreuse = wd.creuse_note || null;
 
         var wdSub = document.getElementById('weekday-sub');
         if (wdSub) {
             // F4 : un SEUL chiffre dans le sous-titre (déjà pré-rendu côté
-            // serveur) — reconstruit depuis le payload, sans la moyenne.
+            // serveur) — reconstruit depuis le payload, jamais un meilleur
+            // jour non significatif.
             if (wdBest && wdBest.label && wdBest.ca != null) {
                 wdSub.textContent = 'Meilleur jour : ' + wdBest.label + ' — ' + money(wdBest.ca)
-                    + '/jour (modèle, fenêtre ' + (wdFw || 14) + ' j)';
-            } else if (!wdBest || !wdBest.label) {
-                wdSub.textContent = 'moyenne par jour de semaine';
+                    + '/jour attendu (modèle, n=' + Number(wdBest.n || 0) + ')';
+            } else {
+                wdSub.textContent = 'Pas de différence significative entre les jours (historique court)';
+            }
+            if (wdCreuse) {
+                wdSub.textContent += ' · ' + wdCreuse;
             }
         }
 
-        var wdBg = wdAvg.map(function (v, i) {
+        var wdBg = wdObs.map(function (v, i) {
             return i === wdTi ? 'rgba(245,158,11,.75)' : 'rgba(97,80,170,.55)';
         });
-        var wdDatasets = [{
-            type: 'bar',
-            label: 'CA moyen (€)',
-            data: wdAvg,
-            backgroundColor: wdBg,
-            borderColor: violet,
-            borderWidth: 1,
-            borderRadius: 4,
-            order: 2,
-        }];
-        if (wdAvgPerDay != null) {
-            wdDatasets.push({
-                type: 'line',
-                label: 'Moyenne/jour (modèle)',
-                data: wdAvg.map(function () { return wdAvgPerDay; }),
-                borderColor: violet,
-                borderDash: [6, 6],
-                pointRadius: 0,
-                pointHitRadius: 8,
-                fill: false,
-                order: 1,
-            });
-        }
         new Chart(ctxWd, {
             type: 'bar',
-            data: { labels: wd.labels || [], datasets: wdDatasets },
+            data: {
+                labels: wd.labels || [],
+                datasets: [
+                    {
+                        type: 'bar',
+                        label: 'Observé',
+                        data: wdObs,
+                        backgroundColor: wdBg,
+                        borderColor: violet,
+                        borderWidth: 1,
+                        borderRadius: 4,
+                        order: 2,
+                    },
+                    {
+                        type: 'line',
+                        label: 'Modèle (prochaine occurrence)',
+                        data: wdModel,
+                        borderColor: violet,
+                        borderDash: [4, 4],
+                        backgroundColor: violet,
+                        pointRadius: 3,
+                        pointHitRadius: 10,
+                        tension: 0,
+                        fill: false,
+                        order: 1,
+                    },
+                ],
+            },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
@@ -1368,10 +1381,12 @@ $iconSvg = static function (string $name): string {
                     legend: { position: 'bottom' },
                     tooltip: {
                         callbacks: {
-                            label: function (c) { return c.dataset.label + ' : ' + (c.raw == null ? '—' : money(c.raw)); },
-                            afterLabel: function (c) {
-                                var n = wdDaysCount[c.dataIndex];
-                                return 'occ : ' + (n == null || isNaN(n) ? 0 : n) + ' jour(s) observé(s)';
+                            label: function (c) {
+                                if (c.dataset.type === 'bar') {
+                                    return 'Observé : ' + (c.raw == null ? '—' : money(c.raw))
+                                        + ' (n=' + (wdDaysCount[c.dataIndex] || 0) + ')';
+                                }
+                                return 'Modèle : ' + (c.raw == null ? '—' : money(c.raw));
                             },
                         },
                     },
