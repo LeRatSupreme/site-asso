@@ -84,6 +84,31 @@ final class EngineTest extends TestCase
         self::assertEqualsWithDelta($medianAttendu, $r1->gainHebdo['median'], 1.0e-9, 'Gain médian = surplus/4 × (prix×(1−X) − coût).');
     }
 
+    /**
+     * Fourchette de gain non plate sur un RecoDataset complet : dès que
+     * prevLo < prevHi, l'idée R1 doit vérifier bas < median < haut
+     * (garde-fou 6 — dump prod : « 9,91–9,91–9,91 €/sem » quand
+     * l'intervalle du forecast n'était pas propagé).
+     */
+    public function test_fourchette_r1_non_plate_quand_prev_lo_inf_prev_hi(): void
+    {
+        $out = RecommendationEngine::recommend(
+            RecoScenario::dataset([self::produitR1('P1', 30.0)], [], [], 1.0, false, 30, self::forecastProb(0.9)),
+            self::paris('2026-10-21 12:00')
+        );
+        $r1 = null;
+        foreach ($out['idees'] as $idee) {
+            if ($idee->regle === 'R1') {
+                $r1 = $idee;
+                break;
+            }
+        }
+        self::assertNotNull($r1, 'produitR1 (prevLo 24 < prevHi 36) : R1 déclenché.');
+        $g = $r1->gainHebdo;
+        self::assertLessThan($g['median'] - 1.0e-9, $g['bas'], 'bas = surplus(prevHi), strictement sous le médian.');
+        self::assertLessThan($g['haut'] - 1.0e-9, $g['median'], 'médian strictement sous haut = surplus(prevLo).');
+    }
+
     public function test_historique_insuffisant_limite_aux_regles_r2_r8_r11(): void
     {
         $produits = [
