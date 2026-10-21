@@ -429,7 +429,43 @@ $iconSvg = static function (string $name): string {
         <div class="card surface glass chart-card">
             <div class="chart-head">
                 <h2 class="chart-title">Par heure</h2>
-                <span class="chart-sub" id="hourly-sub">moyenne observée par heure</span>
+                <span class="chart-sub" id="hourly-sub"><?php
+                // Sous-titre 100 % serveur (une seule source : le payload du
+                // moteur). « Attendu aujourd'hui » = JOURNÉE (prevision_jour +
+                // intervalle_80) ; la partie horaire reste DISTINCTE :
+                // « Attendu à Nh » depuis day_track.expected_so_far /
+                // intervalle_h, ou « — (trop tôt) » quand le profil horaire
+                // couvre < 10 % de la journée (attendu horaire masqué).
+                // Jour fermé → « Fermé aujourd'hui », jamais « 0,00 € ».
+                $phPrev  = isset($forecast['prevision_jour']) ? $forecast['prevision_jour'] : null;
+                $phIv    = isset($forecast['intervalle_80']) && is_array($forecast['intervalle_80']) ? $forecast['intervalle_80'] : null;
+                $phFerme = $phPrev === null
+                    && in_array("Fermé aujourd'hui.", (array) ($forecast['notes'] ?? []), true);
+                $phH    = (int) ($day_track['hour'] ?? 0);
+                $phTrop = !empty($day_track['trop_tot']);
+                $phExp  = isset($day_track['expected_so_far']) ? $day_track['expected_so_far'] : null;
+                $phIvH  = isset($day_track['intervalle_h']) && is_array($day_track['intervalle_h']) ? $day_track['intervalle_h'] : null;
+                $phPeak  = null;
+                $phPeakV = 0.0;
+                foreach ((isset($hourly['ca_avg']) && is_array($hourly['ca_avg']) ? $hourly['ca_avg'] : []) as $phHr => $phVal) {
+                    if ($phVal !== null && (float) $phVal > $phPeakV) {
+                        $phPeakV = (float) $phVal;
+                        $phPeak  = (int) $phHr;
+                    }
+                }
+                $phParts = ['Heure de pointe : ' . ($phPeak === null ? '—' : $phPeak . 'h') . ' (observé)'];
+                if ($phPrev !== null) {
+                    $phParts[] = "Attendu aujourd'hui : " . formatPrice((float) $phPrev) . $fcRange($phIv);
+                    if ($phTrop) {
+                        $phParts[] = 'Attendu à ' . $phH . 'h : — (trop tôt)';
+                    } elseif ($phExp !== null) {
+                        $phParts[] = 'Attendu à ' . $phH . 'h : ' . formatPrice((float) $phExp) . $fcRange($phIvH);
+                    }
+                } elseif ($phFerme) {
+                    $phParts[] = "Fermé aujourd'hui";
+                }
+                echo e(implode(' · ', $phParts));
+                ?></span>
             </div>
             <div class="chart-canvas"><canvas id="chart-hourly" height="160"></canvas></div>
         </div>
@@ -1349,8 +1385,9 @@ $iconSvg = static function (string $name): string {
     // Barres ambre = CA moyen OBSERVÉ par heure (payload hourly.ca_avg).
     // Tirets violets = attendu du jour ; pointillés verts = projeté fin
     // de journée ; ligne sarcelle = réel du jour tronqué à l'heure
-    // courante. « Heure de pointe » = argmax des moyennes OBSERVÉES ;
-    // « Attendu aujourd'hui » vient du payload (jamais recalculé).
+    // courante. Le SOUS-TITRE (heure de pointe, attendu JOURNÉE, attendu
+    // à Nh / trop tôt) est rendu côté serveur (#hourly-sub) — aucune
+    // reconstruction JS, une seule source de vérité.
     var hr = data.hourly || { labels: [], ca_avg: [] };
     var ctxHr = document.getElementById('chart-hourly');
     if (ctxHr) {
@@ -1361,24 +1398,6 @@ $iconSvg = static function (string $name): string {
         });
         var hrExpected = (hr.today_expected || []).map(function (v) { return v == null ? null : Number(v); });
         var hrProjete  = (hr.today_projete || []).map(function (v) { return v == null ? null : Number(v); });
-        var hrAttTotal = (fc && fc.prevision_jour != null) ? Number(fc.prevision_jour) : null;
-        var hrAttIv    = (fc && fc.intervalle_80) ? fc.intervalle_80 : null;
-
-        var hrSub = document.getElementById('hourly-sub');
-        if (hrSub) {
-            var peakIdx = -1, peakVal = 0;
-            hrAvg.forEach(function (v, i) {
-                if (v != null && v > peakVal) { peakVal = v; peakIdx = i; }
-            });
-            var hrParts = ['Heure de pointe : ' + (peakIdx >= 0 ? peakIdx + 'h' : '—') + ' (observé)'];
-            if (hrAttTotal != null) {
-                var hrRng = (hrAttIv && hrAttIv.lo != null && hrAttIv.hi != null)
-                    ? ' (fourchette ' + money(hrAttIv.lo) + ' – ' + money(hrAttIv.hi) + ')' : '';
-                hrParts.push("Attendu aujourd'hui : " + money(hrAttTotal) + hrRng);
-            }
-            if (hr.trop_tot) { hrParts.push('Trop tôt pour comparer (profil < 10 % de la journée)'); }
-            hrSub.textContent = hrParts.join(' · ');
-        }
 
         new Chart(ctxHr, {
             type: 'bar',
