@@ -246,12 +246,33 @@ $iconSvg = static function (string $name): string {
         // explicite au lieu d'un « Tendance ≈ 0,0 %/jour ». Absent du
         // debug (payload ancien) → affichage historique du %.
         $kTrendActive = array_key_exists('tendance_active', $kDebug) ? (bool) $kDebug['tendance_active'] : null;
+        // WAPE détaillé : modèle (main) vs baseline B2 — la vue explique
+        // la sélection (« pourquoi baseline_B2 ? »).
+        $kAnom       = isset($forecast['anomalies']) && is_array($forecast['anomalies']) ? $forecast['anomalies'] : [];
+        $kWapeModele = isset($kAnom['wape_modele']) && is_numeric($kAnom['wape_modele']) ? (float) $kAnom['wape_modele'] : null;
+        $kWapeBasis  = isset($kAnom['wape_baseline']) && is_numeric($kAnom['wape_baseline']) ? (float) $kAnom['wape_baseline'] : null;
+        $kWapeTxt = $fcWape === null
+            ? 'WAPE backtest : —'
+            : ($fcModele === 'baseline_B2' && $kWapeBasis !== null
+                ? 'WAPE modèle ' . number_format((float) ($kWapeModele ?? $fcWape), 1, ',', ' ')
+                    . ' % vs baseline B2 ' . number_format($kWapeBasis, 1, ',', ' ')
+                    . ' % → baseline retenue (règle : le modèle actif doit battre la naïve)'
+                : 'WAPE modèle ' . number_format((float) $fcWape, 1, ',', ' ') . ' %'
+                    . ($kWapeBasis !== null ? ' (bat la baseline ' . number_format($kWapeBasis, 1, ',', ' ') . ' %)' : ''));
+        // Dispersion NegBin : valeur + mention de la borne R_MAX quand
+        // l'estimateur a saturé (r = 200 ≈ Poisson — pas un choix).
+        $kR      = isset($kDebug['dispersion_r']) && is_numeric($kDebug['dispersion_r']) ? (float) $kDebug['dispersion_r'] : null;
+        $kRBorne = array_key_exists('dispersion_r_borne', $kDebug) ? (bool) $kDebug['dispersion_r_borne'] : null;
+        $kRTxt = $kR !== null
+            ? ' · dispersion r = ' . number_format($kR, 0, ',', ' ') . ($kRBorne === true ? ' (borne quasi-Poisson)' : '')
+            : '';
         $kTooltip = 'Modèle actif : ' . ($fcModele !== '' ? $fcModele : '—')
-            . ' · WAPE backtest : ' . ($fcWape === null ? '—' : number_format((float) $fcWape, 1, ',', ' ')) . ' %'
+            . ' · ' . $kWapeTxt
             . ' sur ' . $fcNJours . ' jours'
             . ' · couverture intervalle : ' . ($fcCoverage === null ? '—' : number_format((float) $fcCoverage, 0, ',', ' ')) . ' %'
             . ($kFacteur !== null ? ' · Correction conforme : ×' . number_format($kFacteur, 1, ',', ' ') : '')
             . ($kNiveau !== null ? ' · Niveau ≈ ' . number_format($kNiveau, 0, ',', ' ') . ' €' : '')
+            . $kRTxt
             . ($kTrendActive === false
                 ? ' · Tendance désactivée (historique < 6 semaines)'
                 : ($kTendance !== null ? ' · Tendance ≈ ' . number_format($kTendance, 1, ',', ' ') . ' %/jour' : ''))
@@ -398,6 +419,32 @@ $iconSvg = static function (string $name): string {
                     <span class="ka-kpi-delta is-muted">
                         Manque attendu <?= e(formatPrice((float) $sem['manquant_par_jour'])) ?>/jour (<?= $semRestK ?> jour<?= $semRestK > 1 ? 's' : '' ?> restant<?= $semRestK > 1 ? 's' : '' ?>)
                     </span>
+                <?php endif; ?>
+                <?php
+                // Horizon 30 jours CALENDAIRES : libellé honnête (debut →
+                // fin, occurrences de vente, dont période creuse) —
+                // l'ancienne boucle comptait 30 jours OUVERTS ≈ 42 dates.
+                $m30K = isset($forecast['mois30']) && is_array($forecast['mois30']) ? $forecast['mois30'] : [];
+                if (isset($m30K['attendu']) && $m30K['attendu'] !== null):
+                    $m30IvK = (($m30K['lo'] ?? null) !== null && ($m30K['hi'] ?? null) !== null)
+                        ? ['lo' => $m30K['lo'], 'hi' => $m30K['hi']] : null;
+                    $m30LblK = 'Horizon 30 jours';
+                    if (isset($m30K['debut'], $m30K['fin'], $m30K['jours_ouverts'])) {
+                        try {
+                            $m30LblK = 'Horizon 30 jours (du ' . (new \DateTimeImmutable((string) $m30K['debut']))->format('d/m')
+                                . ' au ' . (new \DateTimeImmutable((string) $m30K['fin']))->format('d/m')
+                                . ' · ' . (int) $m30K['jours_ouverts'] . ' jours ouverts'
+                                . (isset($m30K['jours_creuse']) && (int) $m30K['jours_creuse'] > 0
+                                    ? ', dont ' . (int) $m30K['jours_creuse'] . ' en période creuse' : '')
+                                . ')';
+                        } catch (\Throwable) {
+                            // dates invalides : libellé simple
+                        }
+                    }
+                ?>
+                <span class="ka-kpi-delta is-muted">
+                    <?= e($m30LblK) ?> : attendu <?= e(formatPrice((float) $m30K['attendu']) . $kRange($m30IvK)) ?>
+                </span>
                 <?php endif; ?>
             </section>
         <?php endif; ?>

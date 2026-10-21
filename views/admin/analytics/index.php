@@ -264,12 +264,33 @@ $iconSvg = static function (string $name): string {
         // la mention explicite au lieu d'un « Tendance ≈ 0,0 %/jour ».
         // Absent du debug (payload ancien) → affichage historique du %.
         $fcTrendActive = array_key_exists('tendance_active', $fcDebug) ? (bool) $fcDebug['tendance_active'] : null;
+        // WAPE détaillé : modèle (main) vs baseline B2 — explique la
+        // sélection (« pourquoi baseline_B2 ? ») au lieu d'un seul chiffre.
+        $fcAnom       = isset($forecast['anomalies']) && is_array($forecast['anomalies']) ? $forecast['anomalies'] : [];
+        $fcWapeModele = isset($fcAnom['wape_modele']) && is_numeric($fcAnom['wape_modele']) ? (float) $fcAnom['wape_modele'] : null;
+        $fcWapeBasis  = isset($fcAnom['wape_baseline']) && is_numeric($fcAnom['wape_baseline']) ? (float) $fcAnom['wape_baseline'] : null;
+        $fcWapeTxt = $fcWape === null
+            ? 'WAPE backtest : —'
+            : ($fcModele === 'baseline_B2' && $fcWapeBasis !== null
+                ? 'WAPE modèle ' . number_format((float) ($fcWapeModele ?? $fcWape), 1, ',', ' ')
+                    . ' % vs baseline B2 ' . number_format($fcWapeBasis, 1, ',', ' ')
+                    . ' % → baseline retenue (règle : le modèle actif doit battre la naïve)'
+                : 'WAPE modèle ' . number_format((float) $fcWape, 1, ',', ' ') . ' %'
+                    . ($fcWapeBasis !== null ? ' (bat la baseline ' . number_format($fcWapeBasis, 1, ',', ' ') . ' %)' : ''));
+        // Dispersion NegBin : valeur + mention de la borne R_MAX quand
+        // l'estimateur a saturé (r = 200 ≈ Poisson — pas un choix).
+        $fcR      = isset($fcDebug['dispersion_r']) && is_numeric($fcDebug['dispersion_r']) ? (float) $fcDebug['dispersion_r'] : null;
+        $fcRBorne = array_key_exists('dispersion_r_borne', $fcDebug) ? (bool) $fcDebug['dispersion_r_borne'] : null;
+        $fcRTxt = $fcR !== null
+            ? ' · dispersion r = ' . number_format($fcR, 0, ',', ' ') . ($fcRBorne === true ? ' (borne quasi-Poisson)' : '')
+            : '';
         $fcTooltip = 'Modèle actif : ' . ($fcModele !== '' ? $fcModele : '—')
-            . ' · WAPE backtest : ' . ($fcWape === null ? '—' : number_format((float) $fcWape, 1, ',', ' ')) . ' %'
+            . ' · ' . $fcWapeTxt
             . ' sur ' . $fcNJours . ' jours'
             . ' · couverture intervalle : ' . ($fcCoverage === null ? '—' : number_format((float) $fcCoverage, 0, ',', ' ')) . ' %'
             . ($fcFacteur !== null ? ' · Correction conforme : ×' . number_format($fcFacteur, 1, ',', ' ') : '')
             . ($fcNiveau !== null ? ' · Niveau ≈ ' . number_format($fcNiveau, 0, ',', ' ') . ' €' : '')
+            . $fcRTxt
             . ($fcTrendActive === false
                 ? ' · Tendance désactivée (historique < 6 semaines)'
                 : ($fcTendance !== null ? ' · Tendance ≈ ' . number_format($fcTendance, 1, ',', ' ') . ' %/jour' : ''))
@@ -502,6 +523,25 @@ $iconSvg = static function (string $name): string {
         $m30Att  = $m30['attendu'] ?? null;
         $m30Iv   = (($m30['lo'] ?? null) !== null && ($m30['hi'] ?? null) !== null)
             ? ['lo' => $m30['lo'], 'hi' => $m30['hi']] : null;
+        // Libellé honnête : fenêtre de 30 jours CALENDAIRES (debut → fin)
+        // avec ses occurrences de vente (jours ouverts, dont période
+        // creuse) — l'ancien « Horizon 30 jours » masquait une boucle de
+        // 30 jours OUVERTS ≈ 42 dates. Repli sur le libellé simple si le
+        // payload est ancien (sans debut/fin).
+        $m30Lbl = 'Horizon 30 jours';
+        if (isset($m30['debut'], $m30['fin'], $m30['jours_ouverts'])) {
+            try {
+                $debut30 = (new \DateTimeImmutable((string) $m30['debut']))->format('d/m');
+                $fin30   = (new \DateTimeImmutable((string) $m30['fin']))->format('d/m');
+                $m30Lbl  = 'Horizon 30 jours (du ' . $debut30 . ' au ' . $fin30
+                    . ' · ' . (int) $m30['jours_ouverts'] . ' jours ouverts'
+                    . (isset($m30['jours_creuse']) && (int) $m30['jours_creuse'] > 0
+                        ? ', dont ' . (int) $m30['jours_creuse'] . ' en période creuse' : '')
+                    . ')';
+            } catch (\Throwable) {
+                // dates invalides : libellé simple
+            }
+        }
         // prob_atteinte est une FRACTION 0–1 (P(total ≥ objectif)) : le
         // moteur ne renvoie jamais 0–100 — l'affichage fait le ×100.
         $probPct = $semProb === null ? null : max(0.0, min(100.0, (float) $semProb * 100.0));
@@ -539,7 +579,7 @@ $iconSvg = static function (string $name): string {
                     <?php if ($semManq !== null && (float) $semManq > 0.0 && $semRest > 0): ?>
                         <li><span>Manque attendu par jour restant</span><strong><?= e(formatPrice((float) $semManq)) ?> (<?= $joursLbl($semRest) ?>)</strong></li>
                     <?php endif; ?>
-                    <li><span>Horizon 30 jours</span><strong><?= $m30Att === null ? '—' : e(formatPrice((float) $m30Att) . $fcRange($m30Iv)) ?></strong></li>
+                    <li><span><?= e($m30Lbl) ?></span><strong><?= $m30Att === null ? '—' : e(formatPrice((float) $m30Att) . $fcRange($m30Iv)) ?></strong></li>
                 </ul>
                 <?php if (!$kiosk): ?>
                     <?php

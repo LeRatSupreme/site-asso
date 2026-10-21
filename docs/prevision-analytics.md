@@ -127,7 +127,15 @@ encaissé + tirages des jours restants (restant du jour multiplié par
 VISER la cible, indépendant de l'attendu du modèle — affiché dès que
 réel < objectif, même si le modèle prévoit d'atteindre (les deux libellés
 sont distincts : « Requis/jour pour viser l'objectif » vs « Manque attendu
-par jour restant »). Horizon 30 jours : attendu + intervalle 80 %.
+par jour restant »). **Horizon 30 jours = 30 jours CALENDAIRES** : restant
+du jour (si ouvert) + jours ouverts des 29 jours suivants — JAMAIS 30
+jours ouverts (l'ancienne boucle couvrait ≈ 42 dates : dump prod 21/10 →
+01/12, mois30 = 2 924 € au lieu de ~1 871 €). Payload `mois30` :
+`{attendu, lo, hi, debut, fin, jours_ouverts, jours_creuse}` — debut/fin
+bornent une fenêtre d'exactement 30 dates, `jours_ouverts`/`jours_creuse`
+comptent les occurrences de vente dans la fenêtre (aujourd'hui inclus s'il
+est ouvert). Libellé de vue : « Horizon 30 jours (du 21/10 au 19/11 ·
+21 jours ouverts, dont 9 en période creuse) » (index + kiosque).
 
 **Choc de niveau commun** : chaque somme de chemin Monte Carlo (semaine et
 horizon) est multipliée chemin par chemin par `f_path ~ Gamma(8, 1/8)`
@@ -166,7 +174,8 @@ suggestion décroissante. Les cartes Réapprovisionnement et Bénéfice sont
 ### Étape 9 — Moteur et intégration (`ForecastEngine`, contrôleur, vues)
 `ForecastEngine::forecast(dataset, now, heure, opts)` enchaîne 0-8 et rend
 le contrat complet (prevision_jour, intervalle_80, horaire, jours, semaine
-avec `requis_par_jour`, mois30, benefice, produits, anomalies, notes,
+avec `requis_par_jour`, mois30 {attendu, lo, hi, debut, fin, jours_ouverts,
+jours_creuse}, benefice, produits, anomalies, notes,
 métriques backtest, `dispersion_r`…). Options : `backtest_days` (historique
 complet pour le backtest, cf. étape 5), `backtest_draws`, `slow_periods`
 (périodes creuses, cf. infra), `events`, `goal_weekly`, `seed`, `draws`, `k`.
@@ -174,6 +183,15 @@ Le contrôleur assemble le dataset (`AnalyticsForecastData::dataset`), appelle
 le moteur UNE fois, mappe vers `day_track` / `weekday` / `hourly` / payload
 JSON ; routes `/admin/analytics` (GET), `/admin/analytics/objectif` (POST,
 CSRF centralisé), `/kiosque/admin/analytics/{token}` (GET, jeton admin).
+
+**Transparence de la sélection** : `anomalies` expose `wape_modele` (modèle
+principal) et `wape_baseline` (B2) en plus de `wape_backtest` (sélectionné) —
+l'info-bulle des cartes explique POURQUOI la baseline gagne :
+« WAPE modèle X % vs baseline B2 Y % → baseline retenue (règle : le modèle
+actif doit battre la naïve) », ou « WAPE modèle X % (bat la baseline Y %) »
+(index + kiosque). Le bloc `debug` expose aussi `dispersion_r_borne` (vrai
+quand l'estimateur a saturé `R_MAX` quasi-Poisson) : l'info-bulle affiche
+« dispersion r = 200 (borne quasi-Poisson) » au lieu d'une valeur choisie.
 
 **Insight « Meilleur jour »** (`Analytics::insights`, jour PARTIEL exclu) :
 le classement s'arrête HIER et n'est émis que s'il reste **≥ 2 jours
@@ -216,6 +234,14 @@ d'hyperparamètres sur si peu de points surapprendrait. Valeurs choisies a prior
   aucun statut fourchette.
 - **Jour de semaine < 3 occurrences** : effet dow = moyenne globale, confiance
   **faible** (badge dans l'info-bulle du modèle).
+- **Règle de confiance finale** (`ForecastEngine::confianceFinale`, APRÈS le
+  backtest) : la « élevée » du modèle (≥ 14 jours ouverts ET dow vu ≥ 3 fois)
+  est **conditionnée à un backtest validé** — backtest **actif**
+  (`n_points ≥ BACKTEST_START`), **modèle principal retenu** et **couverture
+  ∈ [0,70 ; 0,90]** — sinon plafond « moyenne ». « faible » (dow < 3) et
+  « insuffisant » restent inchangés et prioritaires. La confiance reflète la
+  qualité MESURÉE, pas seulement le volume d'historique (prod : baseline_B2
+  retenue + coverage 0,12 → « moyenne », même avec 21 jours ouverts).
 - **Jours fermés** : jamais comptés 0 (absents du dataset) ; un jour fermé
   prévu affiche des zéros explicites (`is_open = false`) dans les graphiques.
 - Sans historique du tout : prévisions nulles, cartes vides, aucune erreur.
@@ -336,6 +362,11 @@ Carte des fichiers (cas de la mission étape 10) :
   l'objectif, manquant/jour cohérent, **requis/jour depuis le réel (indépendant
   de l'attendu)**, **choc de niveau commun appliqué chemin par chemin**,
   aucun jour restant, horizon.
+- `tests/Unit/Forecast/HorizonMois30Test.php` — **horizon 30 j CALENDAIRE**
+  : span debut→fin exactement 30 dates (19/10 → 17/11), ensemble des jours
+  ouverts inclus sans un de plus (22 occurrences, sam/dim exclus),
+  `jours_creuse` (plage 26/10 → 08/11 → 10), somme ≈ Σ prévisions ± MC,
+  aujourd'hui fermé sans effet sur la fenêtre.
 - `tests/Unit/Forecast/ProfitForecastTest.php` — **bénéfice dérivé des unités
   calibrées (marges catégories = Σ marges variantes, comparables à l'observé)**,
   suspects, tout fiable, régimes de la note, cas limites.
@@ -358,6 +389,11 @@ Carte des fichiers (cas de la mission étape 10) :
   **sensibilité** : retirer l'extrême ne crée pas de tendance sous le seuil
   et ne change pas le signe de b au-dessus ; tendance active en croissance
   douce (+1 %/jour) ; défaut fw = 30 (helper contrôleur).
+- `tests/Unit/Forecast/ConfianceTest.php` — **confiance finale conditionnée
+  au backtest** : backtest inactif/baseline retenue/coverage hors
+  [0,70 ; 0,90] → max « moyenne » ; backtest validé → « elevee » conservée ;
+  « faible » prioritaire ; niveau moteur (14 jours → backtest 5 points <
+  BACKTEST_START → « moyenne » ; cohérence payload/confiance).
 - `tests/Unit/Forecast/EngineTest.php` — série plate 28 j, jour atypique,
   confiance, projection fin de journée = réel à 23 h, événements additifs,
   **réconciliation |Σ ca produits − Σ jours ca| < 5 %**, **backtest sur
