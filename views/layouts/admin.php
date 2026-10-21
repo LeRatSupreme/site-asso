@@ -63,6 +63,7 @@ $sections = [
         ],
         'Analyse' => [
             'Analytics' => '/admin/analytics',
+            'Idées appliquées (reco)' => '/admin/reco/historique',
             'Budgets'   => '/admin/compta/budgets',
         ],
         'Stock' => [

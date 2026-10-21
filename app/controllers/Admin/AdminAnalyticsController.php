@@ -314,6 +314,26 @@ final class AdminAnalyticsController extends AdminBaseController
             'croissance_note'   => $croissanceNote,
         ];
 
+        // ---- Recommandations commerciales (moteur Reco) : carte « Idées ----
+        // du moment », partagée par les rendus admin ET kiosque. Toute panne
+        // du moteur Reco (table non migrée, cœur en échec) est SILENCIEUSE :
+        // la carte affiche alors « Recommandations indisponibles » et la
+        // page analytics doit toujours se rendre.
+        $recoPayload = [
+            'idees'        => [],
+            'meta'         => ['indisponible' => true, 'raison' => 'non initialisé'],
+            'insuffisant'  => false,
+            'indisponible' => true,
+            'raison'       => 'non initialisé',
+            'fenetre'      => ['from' => '', 'to' => '', 'jours_ouverts' => 0],
+        ];
+        try {
+            $recoPayload = AdminRecoController::payloadPourAnalytics();
+            AdminRecoController::persistIdees($recoPayload['idees'], $recoPayload['meta'], $recoPayload['fenetre']);
+        } catch (\Throwable) {
+            // indisponible : cf. payload par défaut ci-dessus
+        }
+
         // ---- Payload JSON pour Chart.js ----
         $payload = [
             'kpis'      => $kpisDisplay,
@@ -393,6 +413,7 @@ final class AdminAnalyticsController extends AdminBaseController
             'anomalies'      => $forecast['anomalies'],
             'goal'           => $goal,
             'meta'           => $meta,
+            'reco'           => $recoPayload,
             'historique'     => $historique,
             'periode_creuse' => [
                 'raw'     => $creuseRaw,

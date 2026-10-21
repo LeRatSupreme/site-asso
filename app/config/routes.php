@@ -22,6 +22,7 @@ use App\Controllers\Admin\AdminNotificationController;
 use App\Controllers\Admin\AdminPageController;
 use App\Controllers\Admin\AdminPollController;
 use App\Controllers\Admin\AdminPromotionController;
+use App\Controllers\Admin\AdminRecoController;
 use App\Controllers\Admin\AdminReportingController;
 use App\Controllers\Admin\AdminSettingController;
 use App\Controllers\Admin\AdminStockController;
@@ -446,4 +447,18 @@ function aeic_register_routes(Router $router): void
     // Objectif hebdomadaire du dashboard (setting analytics_weekly_goal) :
     // CSRF vérifié centralement par le routeur pour tout POST hors /kiosque/.
     $router->post('/admin/analytics/objectif', [AdminAnalyticsController::class, 'saveGoal']);
+
+    // =====================================================================
+    //  Recommandations commerciales (moteur Reco) : carte « Idées du
+    //  moment » dans Analytics + kiosque admin, historique avec effet
+    //  mesuré. Le site PROPOSE, un humain DÉCIDE — aucune écriture
+    //  automatique de prix/stock. Routes littérales déclarées avant tout
+    //  {token} générique ; les POST /kiosque/* sont sans CSRF (le jeton
+    //  admin EST l'authentification, cf. Router::dispatch).
+    // =====================================================================
+    $router->get('/admin/reco/historique', [AdminRecoController::class, 'historique']);
+    $router->post('/admin/reco/decision', [AdminRecoController::class, 'decision']);
+    $router->post('/admin/reco/parametres', [AdminRecoController::class, 'saveParametres']);
+    $router->get('/kiosque/admin/reco/{token}', [AdminRecoController::class, 'kiosk']);
+    $router->post('/kiosque/admin/reco/decision/{token}', [AdminRecoController::class, 'kioskDecision']);
 }
