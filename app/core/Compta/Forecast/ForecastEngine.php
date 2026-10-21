@@ -48,12 +48,27 @@ namespace App\Core\Compta\Forecast;
  *    l'affichage des dates en plage. SANS la désaisonnalisation, la baisse
  *    compterait DEUX FOIS (niveau appris bas × facteur) — sous-estimation
  *    ~50 % observée en prod pendant les vacances (21/10/2026).
+ *  - Horizon 30 j = 30 jours CALENDAIRES (aujourd'hui restant + les jours
+ *    ouverts des 29 jours suivants — JAMAIS 29 jours ouverts ≈ 42 jours
+ *    calendaires) ; plages creuses ×f par date, choc de niveau commun
+ *    conservé. mois30 = {attendu, lo, hi, debut, fin, jours_ouverts,
+ *    jours_creuse} — debut/fin bornent une fenêtre d'exactement 30 dates ;
+ *  - Confiance FINALE (confianceFinale) : « élevée » exige le volume du
+ *    modèle (≥ 14 jours ouverts, dow ≥ 3 occurrences) ET un backtest
+ *    VALIDÉ : actif (n_points ≥ BACKTEST_START), modèle principal retenu
+ *    ET coverage ∈ [0,70 ; 0,90] — sinon plafond « moyenne ». « faible »
+ *    (dow < 3) et « insuffisant » (< 7 jours) inchangés et prioritaires ;
+ *  - WAPE détaillé dans anomalies : wape_modele (main) et wape_baseline
+ *    (B2) en plus de wape_backtest (sélectionné) — la vue explique
+ *    POURQUOI la baseline est retenue (règle : le modèle actif doit
+ *    battre la naïve) ;
  *  - debug : niveau_eur = exp(lastLevel) × panier global (€ par jour
  *    MOYEN, hors effet dow, sur données désaisonnalisées) ; tendance_
  *    pct_jour = (exp(lastTrend) − 1) × 100 (%/jour, échelle log du SES) ;
  *    tendance_active = openDaysCount() ≥ Hyper::TREND_MIN_OPEN_DAYS
  *    (sous 30 jours ouverts la tendance est désactivée — b forcé à 0,
- *    le % affiché est 0 par construction) ; dispersion_r (sans unité).
+ *    le % affiché est 0 par construction) ; dispersion_r (sans unité)
+ *    et dispersion_r_borne (vrai quand r a saturé R_MAX quasi-Poisson).
  *  - Carte « Par jour de semaine » : jours_semaine.ca = attendu de la
  *    PROCHAINE occurrence de chaque dow ouvert (expectedCa, niveau +
  *    tendance amortie + ×creuse si la date prochaine est en plage) —
@@ -198,6 +213,25 @@ final class ForecastEngine
         $openWeekdays = $model->openWeekdays;
         $todayOpen    = in_array($dowToday, $openWeekdays, true);
         $modele       = (!$bt['insufficient'] && !$bt['use_main_model']) ? 'baseline_B2' : 'negbin_dow_damped';
+
+        // Confiance FINALE (règle du moteur, APRÈS le backtest) : la
+        // « élevée » du modèle (≥ 14 jours ouverts ET dow vu ≥ 3 fois,
+        // cf. DemandModel::confidenceFor) est CONDITIONNÉE à un backtest
+        // VALIDÉ — la confiance reflète la qualité mesurée, pas seulement
+        // le volume d'historique. « élevée » exige donc : backtest actif
+        // (n_points ≥ BACKTEST_START), modèle principal retenu par le
+        // backtest ET couverture des intervalles ∈ [0,70 ; 0,90]. Sinon
+        // plafond « moyenne ». « faible » (dow < 3 occurrences) et
+        // « insuffisant » (< 7 jours ouverts) restent inchangés et
+        // prioritaires.
+        $confiance = $insufficient
+            ? 'insuffisant'
+            : self::confianceFinale(
+                $model->confidenceFor($now),
+                !$bt['insufficient'] && $bt['n_points'] >= Hyper::BACKTEST_START,
+                (bool) $bt['use_main_model'],
+                $bt['coverage'] !== null ? (float) $bt['coverage'] : null
+            );
 
         // Loi prédictive du jour en cours (pleine journée), mise en cache par date.
         $cache = [];
@@ -505,7 +539,16 @@ final class ForecastEngine
         }
         $semaine = Goal::week($restants, $reelSemaine, $goalWeekly, $facteursNiveau);
 
-        // 10. Horizon 30 jours : restant du jour + 29 jours ouverts suivants.
+        // 10. Horizon 30 jours CALENDAIRES : restant du jour (si ouvert) +
+        // les jours ouverts des 29 jours suivants. L'ancienne boucle
+        // comptait 29 jours OUVERTS ≈ 41-42 jours calendaires (dump prod :
+        // 21/10 → 01/12, mois30 = 2 924 € au lieu de ~1 871 €) — l'horizon
+        // « mois » est une fenêtre de 30 dates, pas 30 journées de vente.
+        // Plages creuses appliquées par date (×f), choc de niveau commun
+        // conservé (facteursNiveau, cf. section 9). Payload enrichi :
+        // debut/fin ('Y-m-d', span exactement 30 jours calendaires) et
+        // jours_ouverts/jours_creuse (occurrences de vente dans la fenêtre,
+        // aujourd'hui inclus s'il est ouvert).
         $restants30 = [];
         if ($todayOpen) {
             $mult = max(0.0, 1.0 - $sH) * ($theta ?? 1.0);
@@ -515,18 +558,25 @@ final class ForecastEngine
             }
             $restants30[] = $withEvent($arr, $events[$todayKey] ?? 0.0);
         }
-        $count = 0;
-        $date  = $now->modify('+1 day');
-        for ($guard = 0; $count < 29 && $guard < 400; $guard++) {
-            $dow = (int) $date->format('N') - 1;
-            if (in_array($dow, $openWeekdays, true)) {
-                $key = $date->format('Y-m-d');
-                $restants30[] = $withEvent($sampleFor($date, 'J'), $events[$key] ?? 0.0);
-                $count++;
+        $m30Debut    = $todayKey;
+        $m30Fin      = $now->modify('+29 days')->format('Y-m-d');
+        $m30Ouverts  = $todayOpen ? 1 : 0;
+        $m30Creuse   = ($todayOpen && $facteurCreux($now) < 1.0) ? 1 : 0;
+        for ($d = 1; $d <= 29; $d++) {
+            $date = $now->modify('+' . $d . ' days');
+            $dow  = (int) $date->format('N') - 1;
+            if (!in_array($dow, $openWeekdays, true)) {
+                continue;
             }
-            $date = $date->modify('+1 day');
+            $key = $date->format('Y-m-d');
+            if ($facteurCreux($date) < 1.0) {
+                $m30Creuse++;
+            }
+            $m30Ouverts++;
+            $restants30[] = $withEvent($sampleFor($date, 'J'), $events[$key] ?? 0.0);
         }
-        $mois30 = Goal::horizon($restants30, $today !== null ? $today->ca : 0.0, $facteursNiveau);
+        $mois30 = Goal::horizon($restants30, $today !== null ? $today->ca : 0.0, $facteursNiveau)
+            + ['debut' => $m30Debut, 'fin' => $m30Fin, 'jours_ouverts' => $m30Ouverts, 'jours_creuse' => $m30Creuse];
 
         // 11. Produits (UNE source d'unités) puis bénéfice dérivé des
         // MÊMES unités. Les unités brutes (parts Dirichlet × demande) sont
@@ -582,6 +632,12 @@ final class ForecastEngine
             'n_produits_sans_stock' => (int) ($data->audit['n_produits_sans_stock'] ?? 0),
             'donnees_insuffisantes' => $insufficient,
             'note_selection'        => $bt['selection_note'],
+            // WAPE détaillé : le SÉLECTIONNÉ (wape_backtest, top-level)
+            // ne dit pas POURQUOI la baseline gagne — on expose aussi le
+            // modèle (main) et la baseline B2, tous deux déjà produits
+            // par Backtest::run (nulls si historique insuffisant).
+            'wape_modele'           => $bt['wape_main'] !== null ? $bt['wape_main'] * 100.0 : null,
+            'wape_baseline'         => $bt['wape_b2'] !== null ? $bt['wape_b2'] * 100.0 : null,
             'conformal_q90'         => $confQ90,
             'conformal_mean_hw'     => $confMhw,
         ];
@@ -644,7 +700,7 @@ final class ForecastEngine
             'projection_fin_journee' => $projectionFinJournee,
             'ecart_vs_attendu'       => $ecart,
             'dans_intervalle'        => $dansIntervalle,
-            'confiance'              => $insufficient ? 'insuffisant' : $model->confidenceFor($now),
+            'confiance'              => $confiance,
             'modele'                 => $modele,
             'n_jours'                => $model->openDaysCount(),
             'wape_backtest'          => $bt['wape'] !== null ? $bt['wape'] * 100.0 : null,
@@ -681,11 +737,46 @@ final class ForecastEngine
                 'tendance_pct_jour' => (exp($model->lastTrend) - 1.0) * 100.0,
                 'tendance_active'   => $model->openDaysCount() >= Hyper::TREND_MIN_OPEN_DAYS,
                 'dispersion_r'      => (float) $model->dispersionR,
+                // Vrai quand l'estimateur a saturé la borne R_MAX (quasi-
+                // Poisson) : le client peut signaler la borne au lieu
+                // d'une valeur « choisie ».
+                'dispersion_r_borne' => $model->dispersionR >= Hyper::R_MAX,
             ],
             'dispersion_r'   => (float) $model->dispersionR,
             'facteur_conforme' => $factor,
             'coverage_backtest' => $bt['coverage'],
         ];
+    }
+
+    /**
+     * Règle de confiance finale (pure, testée isolément) : le plafond
+     * « élevée » du modèle est conditionné à un backtest VALIDÉ.
+     *
+     *  - 'faible' (dow vu < RARE_DOW fois) : prioritaire, inchangé —
+     *    jamais upgradé, même avec un excellent backtest ;
+     *  - 'elevee' (≥ 14 jours ouverts ET dow ≥ RARE_DOW, donné par
+     *    DemandModel::confidenceFor) n'est conservée que si le backtest
+     *    est ACTIF ($backtestActif : n_points ≥ Hyper::BACKTEST_START),
+     *    que le modèle principal est RETENU ($useMainModel) et que la
+     *    couverture des intervalles est $coverage ∈ [0,70 ; 0,90] —
+     *    sinon plafond 'moyenne' ;
+     *  - 'moyenne' : inchangé.
+     *
+     * « insuffisant » est géré par l'appelant (openDays < INSUFFICIENT_
+     * DAYS, avant tout backtest exploitable).
+     */
+    public static function confianceFinale(string $confianceModele, bool $backtestActif, bool $useMainModel, ?float $coverage): string
+    {
+        if ($confianceModele === 'faible') {
+            return 'faible';
+        }
+        if ($confianceModele === 'elevee') {
+            $couvertureOk = $coverage !== null && $coverage >= 0.70 && $coverage <= 0.90;
+
+            return ($backtestActif && $useMainModel && $couvertureOk) ? 'elevee' : 'moyenne';
+        }
+
+        return 'moyenne';
     }
 
     /**

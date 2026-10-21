@@ -393,9 +393,16 @@ final class DemandModel
     }
 
     /**
-     * Confiance de la prévision pour $date : 'faible' si le dow a été
-     * vu moins de RARE_DOW fois ; 'elevee' si ≥ 14 jours ouverts ET dow
-     * vu au moins RARE_DOW fois ; 'moyenne' sinon.
+     * Confiance de la prévision pour $date (VOLUME d'historique seul) :
+     * 'faible' si le dow a été vu moins de RARE_DOW fois ; 'elevee' si
+     * ≥ 14 jours ouverts ET dow vu au moins RARE_DOW fois ; 'moyenne'
+     * sinon.
+     *
+     * C'est un PLAFOND, pas la confiance affichée : ForecastEngine::
+     * confianceFinale conditionne ensuite « élevée » à un backtest validé
+     * (actif, modèle principal retenu, couverture ∈ [0,70 ; 0,90]) — la
+     * confiance affichée reflète la qualité mesurée, pas seulement le
+     * nombre de jours.
      */
     public function confidenceFor(\DateTimeImmutable $date): string
     {
