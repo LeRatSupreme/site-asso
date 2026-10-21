@@ -208,14 +208,15 @@ final class AdminAnalyticsController extends AdminBaseController
             : 'Période précédente incomplète : évolution en % non affichée.';
         $kpisDisplay = $this->kpisWithDelta($kpis, $kpisPrev, $prevComplete);
 
-        // ---- Fenêtre COMMUNE d'apprentissage (GET « fw », défaut 14) ----
+        // ---- Fenêtre COMMUNE d'apprentissage (GET « fw », défaut 30) ----
         // Une seule question « sur combien de jours ? » : cette fenêtre
-        // finissant AUJOURD'HIUI INCLUS alimente le dataset unique, qui
+        // finissant AUJOURD'HUI INCLUS alimente le dataset unique, qui
         // nourrit le moteur — prévision du jour, horaire, jours à venir,
         // semaine, 30 jours, bénéfice et produits sortent tous de CE
-        // seul appel. Aucun autre calcul de prévision nulle part.
-        $fwRaw = $this->filter('fw', '14');
-        $fw    = in_array($fwRaw, ['7', '14', '30'], true) ? (int) $fwRaw : 14;
+        // seul appel. Défaut 30 j (~20 jours ouverts) : au-delà du seuil
+        // TREND_MIN_OPEN_DAYS de la porte de tendance, la fenêtre la plus
+        // large donne un niveau plus stable (fw=7 reste possible).
+        $fw = self::fenetreApprentissage($this->filter('fw', ''));
 
         $trackFrom = $now->modify('-' . ($fw - 1) . ' days')->format('Y-m-d');
 
@@ -441,6 +442,21 @@ final class AdminAnalyticsController extends AdminBaseController
         $val = trim((string) ($_GET[$key] ?? ''));
 
         return $val !== '' ? $val : $default;
+    }
+
+    /**
+     * Fenêtre d'apprentissage (jours calendaires) : whitelist ['7','14','30'],
+     * défaut 30 (≈ 20 jours ouverts — au-dessus du seuil d'activation de la
+     * tendance Hyper::TREND_MIN_OPEN_DAYS, niveau plus stable ; fw=7 reste
+     * possible). GET invalide ou absent → défaut. Public statique : testable
+     * en unitaire sans base (source unique de la règle, consommée par
+     * buildPage).
+     */
+    public static function fenetreApprentissage(?string $fwRaw): int
+    {
+        $raw = trim((string) $fwRaw);
+
+        return in_array($raw, ['7', '14', '30'], true) ? (int) $raw : 30;
     }
 
     /**
