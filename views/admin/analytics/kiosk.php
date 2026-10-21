@@ -240,6 +240,9 @@ $iconSvg = static function (string $name): string {
             . ($fcNoteSel !== '' ? ' · ' . $fcNoteSel : '');
 
         $kChips = [];
+        // Jour fermé (prevision null + note du moteur) : JAMAIS « 0,00 € ».
+        $kFerme = $fcPrev === null
+            && in_array("Fermé aujourd'hui.", (array) ($forecast['notes'] ?? []), true);
         if ($fcPrev !== null) {
             // Fourchette JOURNÉE 80 % étiquetée (distincte de la fourchette
             // à l'heure courante affichée dans l'estimation du jour).
@@ -248,6 +251,8 @@ $iconSvg = static function (string $name): string {
                 $txt .= ' · vs attendu à ' . $fcNowHour . 'h : ' . $kSigned($fcEcart);
             }
             $kChips[] = ['cls' => 'is-muted', 'text' => $txt];
+        } elseif ($kFerme) {
+            $kChips[] = ['cls' => 'is-muted', 'text' => "Fermé aujourd'hui"];
         }
         if ($fcTropTot) {
             $kChips[] = ['cls' => 'is-muted', 'text' => 'Trop tôt pour comparer (profil < 10 % de la journée)'];
@@ -340,6 +345,10 @@ $iconSvg = static function (string $name): string {
             <?php if ($dtInsuf): ?>
                 <span class="ka-kpi-delta is-off">Données insuffisantes (&lt; 7 jours ouverts)</span>
             <?php endif; ?>
+        </section>
+        <?php elseif ($kFerme): ?>
+        <section class="card surface glass ka-card ka-fc">
+            <span class="ka-kpi-delta is-muted">Fermé aujourd'hui</span>
         </section>
         <?php endif; ?>
 

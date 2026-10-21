@@ -261,6 +261,9 @@ $iconSvg = static function (string $name): string {
         // Chips « Aujourd'hui » / « Hier » : montants, fourchettes et
         // statuts viennent du payload. Pas de delta recomposé ; écart en
         // € masqué si trop tôt (règle 3) ou données insuffisantes (règle 4).
+        // Jour fermé (prevision null + note du moteur) : JAMAIS « 0,00 € ».
+        $fcFerme = $fcPrev === null
+            && in_array("Fermé aujourd'hui.", (array) ($forecast['notes'] ?? []), true);
         $fcChips = [];
         if ($fcPrev !== null) {
             // Fourchette JOURNÉE 80 % explicitement étiquetée, pour ne pas
@@ -271,6 +274,8 @@ $iconSvg = static function (string $name): string {
                 $txt .= ' · vs attendu à ' . $fcNowHour . 'h : ' . $fcSigned($fcEcart);
             }
             $fcChips[] = ['cls' => 'is-muted', 'text' => $txt];
+        } elseif ($fcFerme) {
+            $fcChips[] = ['cls' => 'is-muted', 'text' => "Fermé aujourd'hui"];
         }
         if ($fcTropTot) {
             $fcChips[] = ['cls' => 'is-muted', 'text' => 'Trop tôt pour comparer (profil < 10 % de la journée)'];
@@ -361,7 +366,7 @@ $iconSvg = static function (string $name): string {
                 </div>
             </div>
             <?php if (!$dtHasEst): ?>
-                <p class="muted fc-empty">Pas assez d'historique sur la fenêtre.</p>
+                <p class="muted fc-empty"><?= $fcFerme ? "Fermé aujourd'hui" : 'Pas assez d\'historique sur la fenêtre.' ?></p>
             <?php else: ?>
                 <div class="fc-chips dt-chips">
                     <?php if ($dtExp !== null): ?>

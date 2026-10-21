@@ -30,6 +30,11 @@ namespace App\Core\Compta\Forecast;
  *    mise à jour horaire) multiplie la somme du chemin — le niveau ne
  *    se moyennise pas sur 30 jours, la fourchette de l'horizon reste
  *    honnête (±30-45 % au lieu de ±7 %).
+ *  - Attendu du jour TOUJOURS calculé sur un jour ouvré habituel,
+ *    même sans aucune vente encore enregistrée (aujourd'hui absent du
+ *    dataset) : la prévision pleine journée vient du modèle, jamais
+ *    des données partielles du jour ; null uniquement si le jour est
+ *    fermé (les vues affichent « Fermé aujourd'hui », jamais 0,00 €).
  */
 final class ForecastEngine
 {
@@ -137,7 +142,14 @@ final class ForecastEngine
         };
 
         // 5. Horaire du jour en cours + prévision du jour.
-        $todaySamples = ($todayOpen && $today !== null) ? $sampleFor($now, 'J') : [];
+        // L'attendu du jour (prévision PLEINE journée) vient du modèle :
+        // il ne dépend PAS des données partielles du jour — à 8h sans
+        // aucune vente, aujourd'hui est absent du dataset ($today null)
+        // et la prévision reste celle des mêmes jours de semaine.
+        // Les données partielles ne conditionnent que l'horaire
+        // (réel/θ/projection) et le restant (tirages × (1−s_h) × θ,
+        // reel = 0 quand le jour est absent).
+        $todaySamples = $todayOpen ? $sampleFor($now, 'J') : [];
         $todaySum     = MonteCarlo::summarize($todaySamples);
         $expectedCa   = $model->expectedCa($now) * $facteurCreux($now);
 
@@ -286,7 +298,7 @@ final class ForecastEngine
             }
         }
         $restants = [];
-        if ($todayOpen && $today !== null) {
+        if ($todayOpen) {
             $mult = max(0.0, 1.0 - $sH) * ($theta ?? 1.0);
             $arr = [];
             foreach ($todaySamples as $v) {
@@ -307,7 +319,7 @@ final class ForecastEngine
 
         // 10. Horizon 30 jours : restant du jour + 29 jours ouverts suivants.
         $restants30 = [];
-        if ($todayOpen && $today !== null) {
+        if ($todayOpen) {
             $mult = max(0.0, 1.0 - $sH) * ($theta ?? 1.0);
             $arr = [];
             foreach ($todaySamples as $v) {
