@@ -11,8 +11,8 @@ use PHPUnit\Framework\TestCase;
 /**
  * Score exact, filtrage par historique (actifs, refus 29/31 jours),
  * dédoublonnage par produit, caps SÉPARÉS par bloc : idées (cap 3,
- * score pur) et corrections (cap 5, R11 prioritaire dans la limite de
- * R11_MAX).
+ * score pur, DIVERSITÉ ≤ 2 par règle) et corrections (cap 5, R11
+ * prioritaire dans la limite de R11_MAX).
  */
 final class ScoringTest extends TestCase
 {
@@ -158,5 +158,31 @@ final class ScoringTest extends TestCase
         $retenus = Scoring::classe([$r7, $r2], [], $this->now);
         self::assertSame('R2', $retenus[0]['regle']);
         self::assertSame('R7', $retenus[1]['regle']);
+    }
+
+    /**
+     * DIVERSITÉ des idées : au plus IDEES_MAX_PAR_REGLE (2) candidats par
+     * règle, appliqué AVANT le cap global (le slot libéré va à la règle
+     * suivante) ; 0 = pas de limite (comportement précédent).
+     */
+    public function test_diversite_idees_max_deux_par_regle(): void
+    {
+        // 3 candidats R4 dominants + 1 R7 moins bien notée.
+        $cands = [
+            self::c('R4', ['PA'], 100.0),
+            self::c('R4', ['PB'], 90.0),
+            self::c('R4', ['PC'], 80.0),
+            self::c('R7', ['PD'], 70.0),
+        ];
+
+        // Sans limite (0) : le cap 3 garde R4×3, la R7 est évincée.
+        $sans = Scoring::classe($cands, [], $this->now, 3, false, 0);
+        self::assertSame(['R4', 'R4', 'R4'], array_column($sans, 'regle'));
+
+        // Avec diversité : au plus 2 R4, la R7 prend le slot libéré.
+        $retenus = Scoring::classe($cands, [], $this->now, 3, false, Hyper::IDEES_MAX_PAR_REGLE);
+        self::assertSame(['R4', 'R4', 'R7'], array_column($retenus, 'regle'), 'Au plus 2 R4 puis la meilleure autre règle.');
+        self::assertSame([['key' => 'PA', 'label' => 'PA']], $retenus[0]['produits']);
+        self::assertSame([['key' => 'PD', 'label' => 'PD']], $retenus[2]['produits']);
     }
 }

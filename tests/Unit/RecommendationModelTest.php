@@ -122,6 +122,22 @@ final class RecommendationModelTest extends TestCase
         self::assertNotContains('fp_vieille', Recommendation::actifs());
     }
 
+    public function test_proposee_vieille_de_40_jours_nest_plus_active_recente_si(): void
+    {
+        Recommendation::upsert($this->reco('fp_proposee_vieille'), $this->fenetre());
+        Recommendation::upsert($this->reco('fp_proposee_recente'), $this->fenetre());
+        self::assertContains('fp_proposee_vieille', Recommendation::actifs());
+
+        // Vieillissement artificiel : proposée il y a 40 jours (> 30 j), jamais décidée.
+        $this->pdo->prepare(
+            "UPDATE recommendations SET created_at = DATE_SUB(NOW(), INTERVAL 40 DAY) WHERE id = 'fp_proposee_vieille'"
+        )->execute();
+
+        $actifs = Recommendation::actifs();
+        self::assertNotContains('fp_proposee_vieille', $actifs, 'Vieille proposee jamais decidee : ne bloque plus.');
+        self::assertContains('fp_proposee_recente', $actifs, 'Proposee recente : bloque toujours.');
+    }
+
     public function test_save_effet_ecrit_effet_checked_at_et_sort_des_en_cours(): void
     {
         Recommendation::upsert($this->reco('fp_effet'), $this->fenetre());

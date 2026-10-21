@@ -22,9 +22,10 @@ use PHPUnit\Framework\TestCase;
 /**
  * RecommendationEngine (cœur pur) : cohérence avec le VRAI ForecastEngine
  * (test mission), historique insuffisant, période creuse, format de
- * sortie (16 clés), garde-fous globaux, blocs séparés idées (cap 3) /
- * corrections (cap 5, R11 prioritaire), R3 écartée et comptée, messages
- * d'honnêteté, dédoublonnage + refus 30 j, assemblage R10.
+ * sortie (16 clés), garde-fous globaux, blocs séparés idées (cap 3,
+ * diversité ≤ 2 par règle) / corrections (cap 5, R11 prioritaire), R3
+ * écartée et comptée, messages d'honnêteté, dédoublonnage + refus 30 j,
+ * assemblage R10.
  */
 final class EngineTest extends TestCase
 {
@@ -222,7 +223,7 @@ final class EngineTest extends TestCase
         self::assertCount(3, $idees, 'Cap MAX_IDEES = 3.');
         self::assertCount(4, $corrections, 'Cap 5 : 3 R11 (R11_MAX) + 1 R2.');
         self::assertSame(['R11', 'R11', 'R11', 'R2'], array_column($corrections, 'regle'), 'R11 d\'abord dans les corrections.');
-        self::assertSame(['R1', 'R1', 'R1'], array_column($idees, 'regle'));
+        self::assertSame(['R1', 'R1', 'R7'], array_column($idees, 'regle'), 'Diversité : au plus 2 R1, la R7 prend le 3e slot.');
 
         // R3 : ni idée ni correction, mais comptée comme écartée.
         foreach ($out['idees'] as $idee) {
@@ -236,7 +237,9 @@ final class EngineTest extends TestCase
         $actions = implode(' | ', array_map(static fn (Recommendation $r): string => $r->action, $idees));
         self::assertSame(1, preg_match('/Affichez|Proposez|Entre .*h|offrez/u', $actions), 'Consignes attendues dans les idées : ' . $actions);
         foreach ($idees as $idee) {
-            self::assertStringContainsString('Affichez', $idee->action, 'Consigne R1 : affichage caisse.');
+            if ($idee->regle === 'R1') {
+                self::assertStringContainsString('Affichez', $idee->action, 'Consigne R1 : affichage caisse.');
+            }
         }
     }
 
@@ -380,7 +383,7 @@ final class EngineTest extends TestCase
 
         $out = RecommendationEngine::recommend($ds, $now);
         $idees = array_values(array_filter($out['idees'], static fn (Recommendation $r): bool => $r->bloc === 'idee' && $r->regle === 'R1'));
-        self::assertCount(3, $idees, 'Cap MAX_IDEES = 3 sur les idées R1.');
+        self::assertCount(2, $idees, 'Cap MAX_IDEES = 3 MAIS diversité ≤ IDEES_MAX_PAR_REGLE (2) par règle : 2 R1 seulement.');
         $cles = [];
         foreach ($idees as $idee) {
             foreach (array_column($idee->produits, 'key') as $k) {
@@ -398,13 +401,13 @@ final class EngineTest extends TestCase
         ]);
         $out29 = RecommendationEngine::recommend($dsRefus, $now);
         $idees29 = array_values(array_filter($out29['idees'], static fn (Recommendation $r): bool => $r->bloc === 'idee' && $r->regle === 'R1'));
-        self::assertCount(3, $idees29);
+        self::assertCount(2, $idees29);
         $cles29 = [];
         foreach ($idees29 as $idee) {
             $cles29 = array_merge($cles29, array_column($idee->produits, 'key'));
         }
         self::assertNotContains('P8', $cles29, 'Refus < 30 j : l\'idée ne revient pas.');
-        self::assertContains('P5', $cles29, 'Le candidat suivant (P5) entre au cap.');
+        self::assertContains('P6', $cles29, 'Le candidat suivant (P6) entre dans la limite diversité.');
 
         // Refus daté now−31 j : expiré, P8 revient.
         $dsExpire = RecoScenario::dataset($produits, [], [], 1.0, false, 30, self::forecastProb(0.9), [
@@ -419,7 +422,44 @@ final class EngineTest extends TestCase
             $cles31 = array_merge($cles31, array_column($idee->produits, 'key'));
         }
         self::assertContains('P8', $cles31, 'Refus > 30 j : expiré, l\'idée revient.');
-        self::assertCount(3, $idees31);
+        self::assertCount(2, $idees31);
+    }
+
+    /**
+     * DIVERSITÉ des idées (constat prod : R4×3 évinçait une R7 plus
+     * riche) — 3 candidats R4 dominent le scoring + 1 candidat R7 moins
+     * bien noté : le top 3 final contient au PLUS Hyper::IDEES_MAX_PAR_REGLE
+     * (2) R4 et inclut la R7 ; avec la diversité désactivée (surcharge
+     * « reco_idees_max_par_regle » = 0), l'ancien comportement R4×3
+     * réapparaît.
+     */
+    public function test_diversite_idees_max_deux_r4_s_evacuent_pas_la_r7(): void
+    {
+        $now = self::paris('2026-10-21 12:00');
+        $produits = [
+            self::produitR4('P1'),
+            self::produitR4('P2'),
+            self::produitR4('P3'), // 3 candidats R4 (forte marge, sous-vendus)
+        ];
+        for ($i = 4; $i <= 7; $i++) {
+            $produits[] = self::produitVolume('P' . $i); // fort volume, faible marge : ni R4 ni R7
+        }
+        $produits[] = self::produitVolume('P8', 0.2); // meilleur taux de marge : cible R7 (volume trop fort pour R4)
+
+        $ds = RecoScenario::dataset($produits, [], [], 1.0, false, 30, self::forecastProb(0.9));
+
+        $out = RecommendationEngine::recommend($ds, $now);
+        $idees = array_values(array_filter($out['idees'], static fn (Recommendation $r): bool => $r->bloc === 'idee'));
+        self::assertCount(3, $idees, 'Cap MAX_IDEES = 3.');
+        self::assertSame(['R4', 'R4', 'R7'], array_column($idees, 'regle'), 'Au plus 2 R4 (diversité) : la R7 entre au cap.');
+        $r7 = $idees[2];
+        self::assertSame(['P8'], array_column($r7->produits, 'key'), 'La R7 retenue est bien celle du produit dédié.');
+        self::assertSame(2, $out['meta']['parametres']['idees_max_par_regle'], 'Diversité lisible dans les paramètres audités.');
+
+        // Contrôle : diversité désactivée → comportement précédent (R4×3, R7 évincée).
+        $outSans = RecommendationEngine::recommend($ds, $now, ['parametres' => ['reco_idees_max_par_regle' => 0]]);
+        $ideesSans = array_values(array_filter($outSans['idees'], static fn (Recommendation $r): bool => $r->bloc === 'idee'));
+        self::assertSame(['R4', 'R4', 'R4'], array_column($ideesSans, 'regle'), 'Sans diversité : R4×3 évince la R7.');
     }
 
     public function test_r10_assemble_gain_somme_et_titres(): void
@@ -445,6 +485,18 @@ final class EngineTest extends TestCase
         $outCtrl = RecommendationEngine::recommend(RecoScenario::dataset($produits, [], [], 1.0, false, 30, self::forecastProb(0.80)), $now);
         self::assertNotContains('R10', self::regles($outCtrl));
         self::assertSame(['R1', 'R1'], self::regles($outCtrl));
+    }
+
+    /** Produit R4-qualifiant : faible volume (10 ≥ sample 8), taux 0,6, stock non géré. */
+    private static function produitR4(string $key): RecoProduct
+    {
+        return new RecoProduct($key, 'Produit ' . $key, 'Boissons', 10.0, 20.0, 2.0, 0.8, null, null, 10.0, 8.0, 12.0);
+    }
+
+    /** Produit fort volume (100, hors R4), prix 2 ; coût 1,8 par défaut (taux 0,1). */
+    private static function produitVolume(string $key, float $cout = 1.8): RecoProduct
+    {
+        return new RecoProduct($key, 'Produit ' . $key, 'Boissons', 100.0, 200.0, 2.0, $cout, null, null, 20.0, 16.0, 24.0);
     }
 
     /** Gain médian R1 recalculé pour un produit produitR1($key, $unites). */
