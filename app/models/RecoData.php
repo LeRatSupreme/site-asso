@@ -189,6 +189,29 @@ final class RecoData extends Model
     }
 
     /**
+     * Index de la prévision produits PAR CLÉ : la sortie « produits » du
+     * ForecastEngine est une LISTE de lignes (chacune porte sa clé « key »,
+     * cf. ProductForecast::units) — la ré-indexation en map clé => ligne
+     * {unites, lo, hi, …} alimente unitesPrevues7j/prevLo/prevHi des
+     * RecoProduct. Les lignes mal formées (pas de clé texte) sont ignorées.
+     *
+     * @param list<mixed> $produitsForecast
+     *
+     * @return array<string,array<string,mixed>>
+     */
+    public static function prevParCle(array $produitsForecast): array
+    {
+        $out = [];
+        foreach ($produitsForecast as $ligne) {
+            if (is_array($ligne) && is_string($ligne['key'] ?? null) && $ligne['key'] !== '') {
+                $out[$ligne['key']] = $ligne;
+            }
+        }
+
+        return $out;
+    }
+
+    /**
      * Orchestration complète : assemble le RecoDataset du moteur de
      * recommandations du jour — fenêtre de 30 jours calendaires finissant
      * $todayKey, prévision issue du SEUL ForecastEngine (aucun second
@@ -220,7 +243,7 @@ final class RecoData extends Model
         // Produits : TOUS les ProductStat de la fenêtre, même sans ligne
         // de prévision (unités prévues à 0). coutRaison explique pourquoi
         // le coût n'est PAS utilisable pour une règle tarifaire.
-        $prevParCle = is_array($forecast['produits'] ?? null) ? $forecast['produits'] : [];
+        $prevParCle = self::prevParCle(is_array($forecast['produits'] ?? null) ? $forecast['produits'] : []);
         $produits = [];
         foreach (AnalyticsForecastData::productStats($from, $todayKey) as $ps) {
             $cout   = $ps->unitCost;

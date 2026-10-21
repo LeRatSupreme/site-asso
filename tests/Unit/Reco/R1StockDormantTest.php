@@ -194,4 +194,46 @@ final class R1StockDormantTest extends TestCase
         self::assertTrue($g['bas'] <= $g['median'] + 1.0e-12);
         self::assertTrue($g['median'] <= $g['haut'] + 1.0e-12);
     }
+
+    public function test_fourchette_non_plate_avec_prev_lo_hi(): void
+    {
+        // 100 u. en stock, 5 u./sem prévues (20 sem), intervalle [3 ; 8] :
+        // surplus 76/60/36 u. ÷ 4 sem × 0,70 € (prix remisé 1,70 − coût 1).
+        $p = RecoScenario::produit('P1', 'Coca', qty30: 200.0, ca30: 400.0, prix: 2.0, cout: 1.0, stock: 100, unitesPrevues7j: 5.0, prevLo: 3.0, prevHi: 8.0);
+        $ctx = $this->ctx([$p]);
+        $c = R1StockDormant::evaluer($ctx);
+
+        self::assertCount(1, $c);
+        $g = $c[0]['gain'];
+        self::assertLessThan($g['median'] - 1.0e-9, $g['bas'], 'bas = surplus(prevHi) < surplus(prev).');
+        self::assertLessThan($g['haut'] - 1.0e-9, $g['median'], 'median < haut = surplus(prevLo).');
+        self::assertEqualsWithDelta(6.3, $g['bas'], 1.0e-9);
+        self::assertEqualsWithDelta(10.5, $g['median'], 1.0e-9);
+        self::assertEqualsWithDelta(13.3, $g['haut'], 1.0e-9);
+        self::assertStringNotContainsString(
+            'Fourchette non différenciée',
+            implode(' | ', $c[0]['hypotheses']),
+            'Intervalle disponible : pas de note de dégradation.'
+        );
+        self::assertTrue(GuardRails::candidatValide($c[0], $this->parCle($ctx), Hyper::MARGE_MIN));
+    }
+
+    public function test_prev_lo_egale_prev_hi_fourchette_plate_et_hypothese(): void
+    {
+        // Intervalle dégénéré [5 ; 5] : fourchette plate assumée + hypothèse explicite.
+        $p = RecoScenario::produit('P1', 'Coca', qty30: 200.0, ca30: 400.0, prix: 2.0, cout: 1.0, stock: 100, unitesPrevues7j: 5.0, prevLo: 5.0, prevHi: 5.0);
+        $ctx = $this->ctx([$p]);
+        $c = R1StockDormant::evaluer($ctx);
+
+        self::assertCount(1, $c);
+        $g = $c[0]['gain'];
+        self::assertEqualsWithDelta(10.5, $g['median'], 1.0e-9);
+        self::assertEqualsWithDelta($g['median'], $g['bas'], 1.0e-9);
+        self::assertEqualsWithDelta($g['median'], $g['haut'], 1.0e-9);
+        self::assertStringContainsString(
+            'Fourchette non différenciée : intervalle de prévision indisponible',
+            implode(' | ', $c[0]['hypotheses'])
+        );
+        self::assertTrue(GuardRails::candidatValide($c[0], $this->parCle($ctx), Hyper::MARGE_MIN));
+    }
 }

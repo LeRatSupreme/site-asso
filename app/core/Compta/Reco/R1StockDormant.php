@@ -32,7 +32,10 @@ namespace App\Core\Compta\Reco;
  * Gain hebdomadaire (€) : surplus = max(stock − semaines_seuil ×
  * prévision, 0), supposé écoulé en DUREE_ECOULEMENT_SEMAINES au prix
  * remisé ; médian avec unitesPrevues7j, bas avec prevHi (moins
- * d'excédent), haut avec prevLo.
+ * d'excédent), haut avec prevLo. Intervalle de prévision absent ou
+ * dégénéré (prevLo ≥ prevHi) : fourchette plate assumée, signalée par
+ * l'hypothèse « Fourchette non différenciée : intervalle de prévision
+ * indisponible ».
  */
 final class R1StockDormant implements RecoRule
 {
@@ -133,6 +136,14 @@ final class R1StockDormant implements RecoRule
         $median = self::surplus($p->stock, $semMin, $prev) / self::DUREE_ECOULEMENT_SEMAINES * $margeRemise;
         $haut = self::surplus($p->stock, $semMin, $p->prevLo) / self::DUREE_ECOULEMENT_SEMAINES * $margeRemise;
 
+        $hypotheses = [
+            'Vérifier les dates de péremption avant écoulement',
+            'Surplus supposé vendu en ' . self::nombre(self::DUREE_ECOULEMENT_SEMAINES, 0) . ' semaines grâce à la remise (hypothèse)',
+        ];
+        if (!($p->prevLo < $p->prevHi)) {
+            $hypotheses[] = 'Fourchette non différenciée : intervalle de prévision indisponible';
+        }
+
         return [
             'regle'           => self::regle(),
             'keys'            => [$p->key],
@@ -145,10 +156,7 @@ final class R1StockDormant implements RecoRule
             'gain'            => GuardRails::fourchette($bas, $median, $haut),
             'confiance'       => 'moyenne',
             'effort'          => Hyper::EFFORTS['R1'],
-            'hypotheses'      => [
-                'Vérifier les dates de péremption avant écoulement',
-                'Surplus supposé vendu en ' . self::nombre(self::DUREE_ECOULEMENT_SEMAINES, 0) . ' semaines grâce à la remise (hypothèse)',
-            ],
+            'hypotheses'      => $hypotheses,
             'comment_mesurer' => 'Marge hebdo du produit pendant la promo vs baseline 30 j désaisonnalisée',
             'prix_effectifs'  => [['key' => $p->key, 'prix' => $prixEffectif]],
         ];
