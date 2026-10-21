@@ -100,6 +100,18 @@ final class ForecastEngine
         $bt            = Backtest::run($hist, ['seed' => $seed, 'draws' => $btDraws, 'k' => $k]);
         $factor        = $bt['insufficient'] ? null : Conformal::widthFactor($bt['scores'], $bt['relative_half_widths']);
 
+        // Composantes de la calibration (diagnostic « largeur » : résidus
+        // × demi-largeur relative) — mêmes gardes que widthFactor.
+        $confQ90 = null;
+        $confMhw = null;
+        if (!$bt['insufficient'] && count($bt['scores']) >= Hyper::CONFORMAL_MIN) {
+            $meanRel = Stats::mean($bt['relative_half_widths']);
+            if ($meanRel > 0.0) {
+                $confQ90 = (float) Stats::quantile($bt['scores'], 0.90);
+                $confMhw = (float) $meanRel;
+            }
+        }
+
         // Période creuse saisie à la main : UN facteur par date (1.0 hors
         // plage) multiplie les prévisions — tirages MC, attendus et
         // intervalles suivent ; l'observé n'est jamais ajusté.
@@ -394,6 +406,8 @@ final class ForecastEngine
             'n_produits_sans_stock' => (int) ($data->audit['n_produits_sans_stock'] ?? 0),
             'donnees_insuffisantes' => $insufficient,
             'note_selection'        => $bt['selection_note'],
+            'conformal_q90'         => $confQ90,
+            'conformal_mean_hw'     => $confMhw,
         ];
 
         $notes = [];
@@ -420,6 +434,20 @@ final class ForecastEngine
                 'Période creuse %s–%s : prévisions ajustées ×%s.',
                 (new \DateTimeImmutable($plage['start']))->format('d/m'),
                 (new \DateTimeImmutable($plage['end']))->format('d/m'),
+                SlowPeriods::facteurFr((float) ($slow['facteur'] ?? 1.0))
+            );
+        }
+        // Double-comptage éventuel : si la fenêtre d'apprentissage (les
+        // données passées du dataset — le jour en cours n'y entre pas)
+        // chevauche une plage creuse, ses journées basses sont DÉJÀ dans
+        // les moyennes ET le facteur réduit encore les prévisions.
+        $clesFenetre = array_keys($data->days);
+        $finFenetre  = $now->modify('-1 day')->format('Y-m-d');
+        if ($clesFenetre !== [] && $finFenetre >= (string) min($clesFenetre)
+            && SlowPeriods::chevaucheFenetre($slow, (string) min($clesFenetre), $finFenetre)
+        ) {
+            $notes[] = sprintf(
+                'Attention : la fenêtre d\'apprentissage chevauche la période creuse ; le facteur ×%s peut double-compter l\'effet vacances (réduis-le si les journées observées sont déjà basses).',
                 SlowPeriods::facteurFr((float) ($slow['facteur'] ?? 1.0))
             );
         }

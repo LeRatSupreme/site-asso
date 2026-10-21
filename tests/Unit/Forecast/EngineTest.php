@@ -461,6 +461,87 @@ final class EngineTest extends TestCase
     }
 
     /**
+     * FIX P3 — composantes de la calibration conforme exposées dans
+     * anomalies (conformal_q90 = quantile 90 % des scores de backtest,
+     * conformal_mean_hw = demi-largeur relative moyenne) : elles
+     * expliquent la largeur des fourchettes (résidus × demi-largeur).
+     * Null ensemble quand le backtest est indisponible.
+     */
+    public function test_composantes_conformes_exposees_dans_anomalies(): void
+    {
+        $avec = ForecastEngine::forecast(
+            new ForecastDataset(self::serieBruitee(28)),
+            self::paris('2026-10-15 23:59'),
+            '23:59',
+            ['seed' => 3, 'draws' => 200, 'backtest_days' => self::serieBruitee(28)]
+        );
+        self::assertNotNull($avec['facteur_conforme']);
+        self::assertNotNull($avec['anomalies']['conformal_q90'], 'q90 des scores exposé.');
+        self::assertNotNull($avec['anomalies']['conformal_mean_hw'], 'Demi-largeur relative moyenne exposée.');
+        self::assertGreaterThan(0.0, (float) $avec['anomalies']['conformal_q90']);
+        self::assertGreaterThan(0.0, (float) $avec['anomalies']['conformal_mean_hw']);
+
+        // Recalcul déterministe : mêmes valeurs que Conformal/Stats.
+        $bt = \App\Core\Compta\Forecast\Backtest::run(self::serieBruitee(28), ['seed' => 3, 'draws' => min(200, \App\Core\Compta\Forecast\Hyper::BACKTEST_DRAWS_MAX)]);
+        self::assertEqualsWithDelta(
+            \App\Core\Compta\Forecast\Stats::quantile($bt['scores'], 0.90),
+            (float) $avec['anomalies']['conformal_q90'],
+            1.0e-9
+        );
+
+        // Backtest indisponible → les deux composantes restent null.
+        $court = array_slice(self::serie(28), 0, 8, true);
+        $sans = ForecastEngine::forecast(new ForecastDataset($court), self::paris('2026-10-19 23:59'), '23:59', ['seed' => 3, 'draws' => 200]);
+        self::assertNull($sans['facteur_conforme']);
+        self::assertNull($sans['anomalies']['conformal_q90']);
+        self::assertNull($sans['anomalies']['conformal_mean_hw']);
+    }
+
+    /**
+     * FIX P5 — note honnête de double-comptage : quand une plage creuse
+     * (facteur < 1) chevauche la fenêtre d'apprentissage (données passées
+     * du dataset), le facteur ×0,8 peut compter DEUX FOIS l'effet vacances
+     * → la note l'explique. Plage strictement future ou facteur 1 : pas de
+     * note.
+     */
+    public function test_note_double_comptage_quand_fenetre_chevauche_periode_creuse(): void
+    {
+        $opts = ['seed' => 42, 'draws' => 300];
+        // Dataset 07/09 → 14/10 ; fenêtre d'apprentissage = 07/09 → hier 18/10.
+        $msg = 'Attention : la fenêtre d\'apprentissage chevauche la période creuse ; '
+            . 'le facteur ×0,8 peut double-compter l\'effet vacances '
+            . '(réduis-le si les journées observées sont déjà basses).';
+
+        // Plage mordant sur les données passées → note présente.
+        $chevauche = ForecastEngine::forecast(
+            new ForecastDataset(self::serie(28)),
+            self::paris('2026-10-19 23:59'),
+            '23:59',
+            $opts + ['slow_periods' => ['facteur' => 0.8, 'ranges' => [['start' => '2026-10-10', 'end' => '2026-11-30']]]]
+        );
+        self::assertContains($msg, $chevauche['notes']);
+
+        // Plage strictement FUTURE (après hier) → pas de double-comptage.
+        $future = ForecastEngine::forecast(
+            new ForecastDataset(self::serie(28)),
+            self::paris('2026-10-19 23:59'),
+            '23:59',
+            $opts + ['slow_periods' => ['facteur' => 0.8, 'ranges' => [['start' => '2026-10-20', 'end' => '2026-11-30']]]]
+        );
+        self::assertNotContains($msg, $future['notes']);
+        self::assertContains('Période creuse 20/10–30/11 : prévisions ajustées ×0,8.', $future['notes']);
+
+        // Facteur 1 (aucune réduction) → jamais de note.
+        $neutre = ForecastEngine::forecast(
+            new ForecastDataset(self::serie(28)),
+            self::paris('2026-10-19 23:59'),
+            '23:59',
+            $opts + ['slow_periods' => ['facteur' => 1.0, 'ranges' => [['start' => '2026-10-10', 'end' => '2026-11-30']]]]
+        );
+        self::assertNotContains($msg, $neutre['notes']);
+    }
+
+    /**
      * Produits synthétiques du test de réconciliation : quantités
      * hétérogènes, prix 2, coût 1, même catégorie (agrégats lisibles).
      *
