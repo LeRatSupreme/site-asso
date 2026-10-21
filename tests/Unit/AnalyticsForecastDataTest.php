@@ -197,6 +197,13 @@ final class AnalyticsForecastDataTest extends TestCase
         self::assertArrayNotHasKey('2026-10-14', $days);
         self::assertArrayNotHasKey('2026-10-15', $days);
 
+        // CONTRAT MOTEUR : un jour présent a TOUJOURS n ≥ 1 (un jour sans
+        // vente du flux = absent, jamais présent avec ca=0/n=0).
+        foreach ($days as $day) {
+            self::assertGreaterThanOrEqual(1, $day->n, 'Jour présent avec n=0 interdit : il aurait contaminé les moyennes.');
+            self::assertGreaterThan(0.0, $day->ca);
+        }
+
         // Jour 1 : 3 refs distincts (pas 4 lignes), CA 22,50 €.
         $d1 = $days['2026-10-12'];
         self::assertSame(3, $d1->n, 'n = refs distincts, pas de lignes.');

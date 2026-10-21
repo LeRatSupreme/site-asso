@@ -54,7 +54,7 @@ final class EngineTest extends TestCase
         self::assertNotNull($r['intervalle_80']);
         self::assertContains($r['modele'], ['negbin_dow_damped', 'baseline_B2']);
         self::assertNotNull($r['semaine']);
-        self::assertSame(4, $r['semaine']['jours_restants'], 'Lundi 19/10 hors dataset (série finie le 14) : restent mar..ven.');
+        self::assertSame(5, $r['semaine']['jours_restants'], 'Lundi 19/10 ouvert mais sans vente importée : il reste un jour restant (restant ≈ 0 à 23h59) + mar..ven.');
         self::assertGreaterThan(0.0, $r['mois30']['attendu']);
         self::assertCount(7, $r['jours_semaine']);
         self::assertSame('Lun', $r['jours_semaine'][0]['label']);
@@ -183,6 +183,72 @@ final class EngineTest extends TestCase
         self::assertCount(7, $r['jours_semaine']);
         self::assertCount(7, $r['jours']);
         self::assertTrue($r['anomalies']['donnees_insuffisantes']);
+    }
+
+    /**
+     * FIX P1 — « Aujourd'hui : attendu 0,00 € » à 8h sans vente (mercredi
+     * 21/10/2026). À 8h09 un jour ouvré SANS AUCUNE vente, aujourd'hui est
+     * ABSENT du dataset ($today null) : la prévision pleine journée doit
+     * rester celle du modèle (≈ expectedCa du jour), la fourchette être
+     * exploitable, et les jours suivants STRICTEMENT identiques à ceux
+     * d'un dataset où aujourd'hui a des ventes partielles (le jour en
+     * cours ne conditionne que horaire/θ/projection et restants).
+     */
+    public function test_aujourdhui_sans_vente_prevision_quand_meme_au_niveau_du_modele(): void
+    {
+        $sansAuj = self::serie(27); // finit mardi 13/10 : mercredi 14 absent
+        $now = self::paris('2026-10-14 08:09'); // mercredi, jour ouvré habituel
+        $opts = ['seed' => 42, 'draws' => 3000];
+
+        $r = ForecastEngine::forecast(new ForecastDataset($sansAuj), $now, '08:09', $opts);
+        self::assertNotNull($r['prevision_jour'], 'Jour ouvré sans vente : la prévision du jour reste calculée.');
+        self::assertGreaterThan(0.0, (float) $r['prevision_jour'], 'JAMAIS 0,00 € pour un jour ouvré.');
+
+        // prevision_jour ≈ expectedCa du jour (moyenne des mêmes jours de
+        // semaine, mission) à ±1 % — la loi MC converge vers le modèle.
+        $model = DemandModel::fit($sansAuj, Clean::atypicalWeights($sansAuj), Hyper::K_POOL);
+        $attendu = $model->expectedCa(new \DateTimeImmutable('2026-10-14', new \DateTimeZone(Hyper::TZ)));
+        self::assertEqualsWithDelta($attendu, (float) $r['prevision_jour'], $attendu * 0.01);
+
+        // Fourchette exploitable (jamais 0–0).
+        self::assertIsArray($r['intervalle_80']);
+        self::assertGreaterThanOrEqual(0.0, (float) $r['intervalle_80']['lo']);
+        self::assertGreaterThan((float) $r['intervalle_80']['lo'], (float) $r['intervalle_80']['hi']);
+
+        // Dataset jumeau avec un jour PARTIEL (6 ventes matinales) : les
+        // prévisions des jours suivants sont STRICTEMENT identiques.
+        $partiel = $sansAuj;
+        $partiel['2026-10-14'] = new DayCurrent('2026-10-14', 7.5, 6, [8 => 2, 9 => 4], array_fill(0, 6, 1.25));
+        $rP = ForecastEngine::forecast(new ForecastDataset($partiel), $now, '08:09', $opts);
+
+        self::assertSame($r['jours'], $rP['jours'], 'Les jours J+1..J+7 ne dépendent pas des données partielles du jour.');
+        self::assertSame($r['prevision_jour'], $rP['prevision_jour'], 'L\'attendu du jour ne dépend pas des données partielles.');
+        self::assertSame($r['intervalle_80'], $rP['intervalle_80']);
+    }
+
+    /**
+     * FIX P1 (c) — jour FERMÉ (samedi) : prevision_jour et fourchette
+     * null (jamais 0,00 € — les vues affichent « Fermé aujourd'hui »),
+     * note explicite, et le reste du moteur (semaine, 30 j) reste calculé.
+     */
+    public function test_jour_ferme_prevision_null_jamais_zero(): void
+    {
+        $r = ForecastEngine::forecast(
+            new ForecastDataset(self::serie(28)),
+            self::paris('2026-10-17 12:00'), // samedi, non ouvert
+            '12:00',
+            ['seed' => 42, 'draws' => 300]
+        );
+
+        self::assertNull($r['prevision_jour'], 'Jour fermé : prevision null (pas 0,00 €).');
+        self::assertNull($r['intervalle_80']);
+        self::assertNull($r['attendu_a_h']);
+        self::assertNull($r['dans_intervalle']);
+        self::assertNull($r['ecart_vs_attendu']);
+        self::assertContains("Fermé aujourd'hui.", $r['notes']);
+        self::assertNotNull($r['semaine'], 'La semaine reste calculée un jour fermé.');
+        self::assertGreaterThan(0.0, (float) $r['mois30']['attendu']);
+        self::assertTrue($r['trop_tot']);
     }
 
     /**
