@@ -253,12 +253,19 @@ $iconSvg = static function (string $name): string {
 
         // Info-bulle métriques du modèle (affichée sur les deux cartes).
         // La correction conforme explique la largeur des fourchettes
-        // (résidus de backtest × demi-largeur Monte Carlo).
+        // (résidus de backtest × demi-largeur Monte Carlo). Niveau et
+        // tendance viennent du bloc debug du moteur (échelles documentées :
+        // niveau = € par jour moyen désaisonnalisé, tendance = %/jour).
+        $fcDebug    = isset($forecast['debug']) && is_array($forecast['debug']) ? $forecast['debug'] : [];
+        $fcNiveau   = isset($fcDebug['niveau_eur']) && is_numeric($fcDebug['niveau_eur']) ? (float) $fcDebug['niveau_eur'] : null;
+        $fcTendance = isset($fcDebug['tendance_pct_jour']) && is_numeric($fcDebug['tendance_pct_jour']) ? (float) $fcDebug['tendance_pct_jour'] : null;
         $fcTooltip = 'Modèle actif : ' . ($fcModele !== '' ? $fcModele : '—')
             . ' · WAPE backtest : ' . ($fcWape === null ? '—' : number_format((float) $fcWape, 1, ',', ' ')) . ' %'
             . ' sur ' . $fcNJours . ' jours'
             . ' · couverture intervalle : ' . ($fcCoverage === null ? '—' : number_format((float) $fcCoverage, 0, ',', ' ')) . ' %'
             . ($fcFacteur !== null ? ' · Correction conforme : ×' . number_format($fcFacteur, 1, ',', ' ') : '')
+            . ($fcNiveau !== null ? ' · Niveau ≈ ' . number_format($fcNiveau, 0, ',', ' ') . ' €' : '')
+            . ($fcTendance !== null ? ' · Tendance ≈ ' . number_format($fcTendance, 1, ',', ' ') . ' %/jour' : '')
             . ($fcNoteSel !== '' ? ' · ' . $fcNoteSel : '');
 
         $fcHasChart = $fcPrev !== null || !empty($forecast['jours']);
@@ -1320,6 +1327,10 @@ $iconSvg = static function (string $name): string {
         var wdObs = (wd.obs || []).map(function (v) { return v == null ? null : Number(v); });
         var wdModel = (wd.ca || []).map(function (v) { return v == null ? null : Number(v); });
         var wdDaysCount = (wd.days_count || []).map(function (v) { return v == null ? 0 : Number(v); });
+        // Observé « dont période creuse » (moyenne + nb des jours du dow en
+        // plage creuse, null si aucun) — ajouté au tooltip de la barre.
+        var wdObsCreuse = (wd.obs_creuse || []).map(function (v) { return v == null ? null : Number(v); });
+        var wdObsNCreuse = (wd.obs_n_creuse || []).map(function (v) { return v == null ? 0 : Number(v); });
         var wdTi  = Number(wd.today_index);
         var wdBest = wd.best || null;
         var wdCreuse = wd.creuse_note || null;
@@ -1383,8 +1394,14 @@ $iconSvg = static function (string $name): string {
                         callbacks: {
                             label: function (c) {
                                 if (c.dataset.type === 'bar') {
-                                    return 'Observé : ' + (c.raw == null ? '—' : money(c.raw))
+                                    var t = 'Observé : ' + (c.raw == null ? '—' : money(c.raw))
                                         + ' (n=' + (wdDaysCount[c.dataIndex] || 0) + ')';
+                                    if (wdObsNCreuse[c.dataIndex] > 0) {
+                                        t += ' · dont période creuse : '
+                                            + (wdObsCreuse[c.dataIndex] == null ? '—' : money(wdObsCreuse[c.dataIndex]))
+                                            + ' (n=' + wdObsNCreuse[c.dataIndex] + ')';
+                                    }
+                                    return t;
                                 }
                                 return 'Modèle : ' + (c.raw == null ? '—' : money(c.raw));
                             },
