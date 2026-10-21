@@ -213,7 +213,7 @@ $iconSvg = static function (string $name): string {
         // ---- Données du moteur (contrat ForecastEngine::forecast()) ----
         // Source unique de vérité : AUCUN chiffre « attendu » recalculé
         // ici ni en JS, tout vient du payload.
-        $fcFw       = (int) ($day_track['window'] ?? 14);
+        $fcFw       = (int) ($day_track['window'] ?? 30);
         $fcPrev     = isset($forecast['prevision_jour']) ? $forecast['prevision_jour'] : null;
         $fcIv       = isset($forecast['intervalle_80']) && is_array($forecast['intervalle_80']) ? $forecast['intervalle_80'] : null;
         $fcHier     = isset($forecast['hier']) && is_array($forecast['hier']) ? $forecast['hier'] : null;
@@ -259,13 +259,20 @@ $iconSvg = static function (string $name): string {
         $fcDebug    = isset($forecast['debug']) && is_array($forecast['debug']) ? $forecast['debug'] : [];
         $fcNiveau   = isset($fcDebug['niveau_eur']) && is_numeric($fcDebug['niveau_eur']) ? (float) $fcDebug['niveau_eur'] : null;
         $fcTendance = isset($fcDebug['tendance_pct_jour']) && is_numeric($fcDebug['tendance_pct_jour']) ? (float) $fcDebug['tendance_pct_jour'] : null;
+        // Porte d'activation de la tendance (debug du moteur) : sous
+        // 30 jours ouverts elle est désactivée (b forcé à 0) — on affiche
+        // la mention explicite au lieu d'un « Tendance ≈ 0,0 %/jour ».
+        // Absent du debug (payload ancien) → affichage historique du %.
+        $fcTrendActive = array_key_exists('tendance_active', $fcDebug) ? (bool) $fcDebug['tendance_active'] : null;
         $fcTooltip = 'Modèle actif : ' . ($fcModele !== '' ? $fcModele : '—')
             . ' · WAPE backtest : ' . ($fcWape === null ? '—' : number_format((float) $fcWape, 1, ',', ' ')) . ' %'
             . ' sur ' . $fcNJours . ' jours'
             . ' · couverture intervalle : ' . ($fcCoverage === null ? '—' : number_format((float) $fcCoverage, 0, ',', ' ')) . ' %'
             . ($fcFacteur !== null ? ' · Correction conforme : ×' . number_format($fcFacteur, 1, ',', ' ') : '')
             . ($fcNiveau !== null ? ' · Niveau ≈ ' . number_format($fcNiveau, 0, ',', ' ') . ' €' : '')
-            . ($fcTendance !== null ? ' · Tendance ≈ ' . number_format($fcTendance, 1, ',', ' ') . ' %/jour' : '')
+            . ($fcTrendActive === false
+                ? ' · Tendance désactivée (historique < 6 semaines)'
+                : ($fcTendance !== null ? ' · Tendance ≈ ' . number_format($fcTendance, 1, ',', ' ') . ' %/jour' : ''))
             . ($fcNoteSel !== '' ? ' · ' . $fcNoteSel : '');
 
         $fcHasChart = $fcPrev !== null || !empty($forecast['jours']);
@@ -352,7 +359,7 @@ $iconSvg = static function (string $name): string {
         // fourchette journée 80 % de la carte Prévisions.
         $dtEst   = isset($day_track['estimate']) ? $day_track['estimate'] : null;
         $dtExp   = isset($day_track['expected_so_far']) ? $day_track['expected_so_far'] : null;
-        $dtFw    = (int) ($day_track['window'] ?? 14);
+        $dtFw    = (int) ($day_track['window'] ?? 30);
         $dtHour  = (int) ($day_track['hour'] ?? ($fcHor['now_hour'] ?? 0));
         $dtTrop  = !empty($day_track['trop_tot']);
         $dtIvH   = isset($day_track['intervalle_h']) && is_array($day_track['intervalle_h']) ? $day_track['intervalle_h'] : null;

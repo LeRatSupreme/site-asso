@@ -51,7 +51,9 @@ namespace App\Core\Compta\Forecast;
  *  - debug : niveau_eur = exp(lastLevel) × panier global (€ par jour
  *    MOYEN, hors effet dow, sur données désaisonnalisées) ; tendance_
  *    pct_jour = (exp(lastTrend) − 1) × 100 (%/jour, échelle log du SES) ;
- *    dispersion_r (sans unité).
+ *    tendance_active = openDaysCount() ≥ Hyper::TREND_MIN_OPEN_DAYS
+ *    (sous 30 jours ouverts la tendance est désactivée — b forcé à 0,
+ *    le % affiché est 0 par construction) ; dispersion_r (sans unité).
  *  - Carte « Par jour de semaine » : jours_semaine.ca = attendu de la
  *    PROCHAINE occurrence de chaque dow ouvert (expectedCa, niveau +
  *    tendance amortie + ×creuse si la date prochaine est en plage) —
@@ -672,9 +674,12 @@ final class ForecastEngine
                 // effet dow, données désaisonnalisées) — exp(lastLevel) est
                 // un nombre de transactions, multiplié par le panier global
                 // pour l'exprimer en € ; tendance = %/jour, (exp(b) − 1) × 100
-                // sur l'échelle log du SES ; r = dispersion NegBin.
+                // sur l'échelle log du SES, avec la porte d'activation
+                // TREND_MIN_OPEN_DAYS (b forcé à 0 sous 30 jours ouverts) ;
+                // r = dispersion NegBin.
                 'niveau_eur'        => exp($model->lastLevel) * $model->globalP,
                 'tendance_pct_jour' => (exp($model->lastTrend) - 1.0) * 100.0,
+                'tendance_active'   => $model->openDaysCount() >= Hyper::TREND_MIN_OPEN_DAYS,
                 'dispersion_r'      => (float) $model->dispersionR,
             ],
             'dispersion_r'   => (float) $model->dispersionR,

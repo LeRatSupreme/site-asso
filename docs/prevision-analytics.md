@@ -17,8 +17,10 @@ Monte Carlo calibrés conformalement). Principes :
   vers le payload JSON. Les vues n'affichent que des valeurs du payload —
   aucun widget ne recalcule un chiffre « attendu ».
 - **Une seule fenêtre d'apprentissage** (GET `fw` = 7/14/30 jours finissant
-  aujourd'hui) alimente le dataset unique : prévision du jour, horaire,
-  jours à venir, semaine, 30 jours, bénéfice et produits sortent du même appel.
+  aujourd'hui, **défaut 30** — ≈ 20 jours ouverts, au-dessus du seuil
+  d'activation de la tendance) alimente le dataset unique : prévision du
+  jour, horaire, jours à venir, semaine, 30 jours, bénéfice et produits
+  sortent du même appel.
 - **Une seule source d'unités, calibrée sur le moteur** : les unités par
   produit du réapprovisionnement sont calibrées sur le CA prévu 7 j
   (invariant **Σᵖ unitésᵖ × prixᵖ ≈ CA prévu 7 j**), et le bénéfice est
@@ -51,6 +53,15 @@ pooling) : `e_j = (w_j·m_j + k·m_g) / (w_j + k)` avec `k = 2` ; moins de
 Niveau local : SES `α = 0.3` sur la série démeanée par la **médiane** du dow
 (base robuste), tendance amortie `φ = 0.9` :
 `l_t = α·w·ỹ_t + (1−α·w)(l_{t−1} + φ·b_{t−1})`, `b_t = φ·(l_t−l_{t−1}) + (1−φ)·b_{t−1}`.
+**Porte anti-bruit sur la tendance** : tant que `openDaysCount()` <
+`TREND_MIN_OPEN_DAYS` (30 jours ouverts ≈ 6 semaines lun–ven), `b` est
+**forcé à 0 à chaque pas** — SES niveau seul. Une tendance estimée sur
+~9 jours ouverts est du pur bruit (dump prod : −5,26 %/jour appris sur du
+bruit alterné, qui amputait toutes les prévisions) ; l'erreur est
+asymétrique — sous-estimer coûte quelques euros de préparation,
+sur-estimer fait jeter — et le niveau seul est le choix classique à faible
+effectif. Au-delà du seuil, `b` est **plafonné** à ±`TREND_CAP_DAILY`
+(±1 %/jour, échelle log) après chaque mise à jour.
 Prévision : `exp(l_T + b_T·φ(1−φ^h)/(1−φ) + a_j)` (tendance bornée par `b_T/(1−φ)`).
 Panier P : **moyenne tronquée 10 %** par dow, rétrécie vers le panier global
 pareil. Dispersion binomiale négative par **méthode des moments** :
@@ -180,6 +191,8 @@ d'hyperparamètres sur si peu de points surapprendrait. Valeurs choisies a prior
 | `K_POOL` (rétrécissement) | 2 | 2 pseudo-observations : un dow rare reste proche de la moyenne globale sans l'écraser. |
 | `ALPHA_SES` | 0.3 | SES lent : le niveau bouge doucement, robuste au bruit de petit volume. |
 | `PHI_DAMP` | 0.9 | Tendance amortie : extrapolation prudente, converge vers b/(1−φ). |
+| `TREND_MIN_OPEN_DAYS` | 30 | Porte anti-bruit : < 30 jours ouverts, tendance DÉSACTIVÉE (b forcé à 0, SES niveau seul) — une pente estimée sur ~9 jours ouverts est du bruit (prod : −5,26 %/jour fictifs) et l'erreur est asymétrique (sous-commander ≪ sur-commander). |
+| `TREND_CAP_DAILY` | 0.01 | Plafond de la tendance ACTIVE : b clampé à ±1 %/jour (échelle log) après chaque mise à jour — toute pente réaliste passe, l'extrapolation reste bornée. |
 | `A_PRIOR` (Gamma θ) | 8 | Prior θ ~ Gamma(8,8) : moyenne 1, écart-type ≈ 35 % — assez informative pour ~8 h d'historique. |
 | `Z_ATYPICAL` | 3.5 | Seuil d'Iglewicz-Hoaglin sur le z robuste MAD : flag standard des outliers. |
 | `W_ATYPICAL` | 0.3 | Un jour atypique ne transmet que ~30 % de son écart au niveau. |
@@ -258,8 +271,11 @@ niveau normal (÷0,8). » — remplace l'ancien avertissement « double-comptage
 **Transparence** : le bloc `debug` du contrat moteur expose le niveau et la
 tendance appris — `niveau_eur` = exp(lastLevel) × panier global (€ par jour
 MOYEN, hors effet dow, sur données désaisonnalisées), `tendance_pct_jour` =
-(exp(lastTrend) − 1) × 100 (%/jour), `dispersion_r` — affichés dans
-l'info-bulle des cartes prévisions (« Niveau ≈ X € · Tendance ≈ Y %/jour »).
+(exp(lastTrend) − 1) × 100 (%/jour), `tendance_active` (bool :
+openDaysCount ≥ TREND_MIN_OPEN_DAYS — sous 30 jours ouverts le % vaut 0 par
+construction), `dispersion_r` — affichés dans l'info-bulle des cartes
+prévisions (« Niveau ≈ X € · Tendance ≈ Y %/jour » ou, tendance désactivée,
+« Tendance désactivée (historique < 6 semaines) »).
 La carte « Par jour de semaine » distingue l'observé global de l'observé en
 vacances : `obs_ca_creuse`/`obs_n_creuse` = moyenne et nb des jours du dow
 dont la date est en plage (null si aucun) — tooltip : « Observé : 105,60 €
@@ -335,6 +351,13 @@ Carte des fichiers (cas de la mission étape 10) :
   courant absent/partiel pendant une plage sans effet sur les jours
   suivants, note désaisonnalisation avec le bon N, `debug` cohérent,
   `obs_ca_creuse`/`obs_n_creuse` sur dataset à la main.
+- `tests/Unit/Forecast/TendanceTest.php` — **porte anti-bruit** : bruit
+  alterné ±15 € sur 20 jours ouverts → `lastTrend == 0` et prévision à
+  10 jours ∈ [90 ; 110] ; **plafond** : déclin fort (−8 %/jour) sur ≥ 30
+  jours ouverts → |b| ≤ 1 %/jour et décroissement inter-jours ≤ ~1 % ;
+  **sensibilité** : retirer l'extrême ne crée pas de tendance sous le seuil
+  et ne change pas le signe de b au-dessus ; tendance active en croissance
+  douce (+1 %/jour) ; défaut fw = 30 (helper contrôleur).
 - `tests/Unit/Forecast/EngineTest.php` — série plate 28 j, jour atypique,
   confiance, projection fin de journée = réel à 23 h, événements additifs,
   **réconciliation |Σ ca produits − Σ jours ca| < 5 %**, **backtest sur

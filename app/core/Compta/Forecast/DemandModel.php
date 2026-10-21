@@ -32,6 +32,15 @@ namespace App\Core\Compta\Forecast;
  *    w_t = 0.3 ne laisse passer qu'un tiers de l'écart du jour (α×w =
  *    0.09) — la tendance b, pilotée par l'écart de l, est amortie
  *    d'autant ;
+ *  - PORTE DE LA TENDANCE (Hyper::TREND_MIN_OPEN_DAYS) : tant que
+ *    openDaysCount() < 30 jours ouverts, b est FORCÉ à 0 à chaque pas
+ *    (SES niveau seul). Une tendance estimée sur ~9 jours ouverts est du
+ *    pur bruit (dump prod : −5,26 %/jour appris sur du bruit alterné) ;
+ *    l'erreur est asymétrique (sous-commander coûte quelques euros,
+ *    sur-commander fait jeter) et le niveau seul est le choix classique à
+ *    faible effectif. Au-delà du seuil, b est PLAFONNÉ à
+ *    ±Hyper::TREND_CAP_DAILY (±1 %/jour, échelle log) après chaque mise à
+ *    jour : toute pente réaliste passe, l'extrapolation est bornée ;
  *  - init l_1 = ỹ_1, b_1 = 0.
  *
  * Prévision : h = nb de jours calendaires entre le DERNIER jour de
@@ -68,7 +77,11 @@ final class DemandModel
     /** Niveau final de la chaîne SES (log, démeané). */
     public readonly float $lastLevel;
 
-    /** Tendance finale amortie de la chaîne SES (log par jour). */
+    /**
+     * Tendance finale amortie de la chaîne SES (log par jour) : 0.0 sous
+     * TREND_MIN_OPEN_DAYS (porte anti-bruit), clampée ±TREND_CAP_DAILY
+     * ensuite.
+     */
     public readonly float $lastTrend;
 
     /**
@@ -241,6 +254,12 @@ final class DemandModel
         }
 
         // Passe 2 : niveau + tendance amortis sur la série démeanée.
+        // Porte de tendance : b reste 0 sous TREND_MIN_OPEN_DAYS (SES
+        // niveau seul — l'innovation du niveau ne propage aucune pente),
+        // clampé à ±TREND_CAP_DAILY ensuite (après CHAQUE mise à jour, le
+        // b clampé alimentant le pas suivant).
+        $trendActive = $nDays >= Hyper::TREND_MIN_OPEN_DAYS;
+        $cap = Hyper::TREND_CAP_DAILY;
         $level = 0.0;
         $trend = 0.0;
         $first = true;
@@ -257,6 +276,11 @@ final class DemandModel
             $innov  = Hyper::ALPHA_SES * $w;
             $levelNew = $innov * $yT + (1.0 - $innov) * ($level + Hyper::PHI_DAMP * $trend);
             $trend    = Hyper::PHI_DAMP * ($levelNew - $level) + (1.0 - Hyper::PHI_DAMP) * $trend;
+            if ($trendActive) {
+                $trend = max(-$cap, min($cap, $trend));
+            } else {
+                $trend = 0.0;
+            }
             $level    = $levelNew;
         }
 

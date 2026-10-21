@@ -197,7 +197,7 @@ $iconSvg = static function (string $name): string {
 
             return url('/kiosque/admin/analytics/' . rawurlencode($token)) . '?' . http_build_query($params);
         };
-        $fcFw      = (int) ($day_track['window'] ?? 14);
+        $fcFw      = (int) ($day_track['window'] ?? 30);
         $fcPrev    = isset($forecast['prevision_jour']) ? $forecast['prevision_jour'] : null;
         $fcIv      = isset($forecast['intervalle_80']) && is_array($forecast['intervalle_80']) ? $forecast['intervalle_80'] : null;
         $fcHier    = isset($forecast['hier']) && is_array($forecast['hier']) ? $forecast['hier'] : null;
@@ -241,13 +241,20 @@ $iconSvg = static function (string $name): string {
         $kDebug     = isset($forecast['debug']) && is_array($forecast['debug']) ? $forecast['debug'] : [];
         $kNiveau    = isset($kDebug['niveau_eur']) && is_numeric($kDebug['niveau_eur']) ? (float) $kDebug['niveau_eur'] : null;
         $kTendance  = isset($kDebug['tendance_pct_jour']) && is_numeric($kDebug['tendance_pct_jour']) ? (float) $kDebug['tendance_pct_jour'] : null;
+        // Porte d'activation de la tendance (debug du moteur) : sous
+        // 30 jours ouverts elle est désactivée (b forcé à 0) — mention
+        // explicite au lieu d'un « Tendance ≈ 0,0 %/jour ». Absent du
+        // debug (payload ancien) → affichage historique du %.
+        $kTrendActive = array_key_exists('tendance_active', $kDebug) ? (bool) $kDebug['tendance_active'] : null;
         $kTooltip = 'Modèle actif : ' . ($fcModele !== '' ? $fcModele : '—')
             . ' · WAPE backtest : ' . ($fcWape === null ? '—' : number_format((float) $fcWape, 1, ',', ' ')) . ' %'
             . ' sur ' . $fcNJours . ' jours'
             . ' · couverture intervalle : ' . ($fcCoverage === null ? '—' : number_format((float) $fcCoverage, 0, ',', ' ')) . ' %'
             . ($kFacteur !== null ? ' · Correction conforme : ×' . number_format($kFacteur, 1, ',', ' ') : '')
             . ($kNiveau !== null ? ' · Niveau ≈ ' . number_format($kNiveau, 0, ',', ' ') . ' €' : '')
-            . ($kTendance !== null ? ' · Tendance ≈ ' . number_format($kTendance, 1, ',', ' ') . ' %/jour' : '')
+            . ($kTrendActive === false
+                ? ' · Tendance désactivée (historique < 6 semaines)'
+                : ($kTendance !== null ? ' · Tendance ≈ ' . number_format($kTendance, 1, ',', ' ') . ' %/jour' : ''))
             . ($fcNoteSel !== '' ? ' · ' . $fcNoteSel : '');
 
         $kChips = [];
@@ -331,11 +338,11 @@ $iconSvg = static function (string $name): string {
             <?php if ($dtExp !== null): ?>
                 <!-- F1 : attendu À L'HEURE COURANTE (fourchette à h), distinct de la fourchette journée 80 %. -->
                 <span class="ka-kpi-delta is-muted">
-                    Attendu à <?= $dtHour ?>h (fenêtre <?= (int) ($day_track['window'] ?? 14) ?> j) : <?= e(formatPrice((float) $dtExp) . $kRange($dtIvH)) ?>
+                    Attendu à <?= $dtHour ?>h (fenêtre <?= (int) ($day_track['window'] ?? 30) ?> j) : <?= e(formatPrice((float) $dtExp) . $kRange($dtIvH)) ?>
                 </span>
             <?php else: ?>
                 <span class="ka-kpi-delta is-muted">
-                    Attendu aujourd'hui (fenêtre <?= (int) ($day_track['window'] ?? 14) ?> j) : <?= e(formatPrice((float) $dtEst) . $kRange($dtIvH)) ?>
+                    Attendu aujourd'hui (fenêtre <?= (int) ($day_track['window'] ?? 30) ?> j) : <?= e(formatPrice((float) $dtEst) . $kRange($dtIvH)) ?>
                 </span>
             <?php endif; ?>
             <span class="ka-kpi-delta is-muted">Réel à <?= $dtHour ?>h : <?= e(formatPrice((float) ($day_track['actual_so_far'] ?? 0))) ?></span>

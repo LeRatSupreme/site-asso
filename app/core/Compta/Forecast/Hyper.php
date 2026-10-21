@@ -22,6 +22,24 @@ final class Hyper
     /** Amortissement de la tendance (phi). Beta implicite = 1 - phi. */
     public const PHI_DAMP = 0.9;
 
+    /**
+     * Jours ouverts minimaux pour ACTIVER la tendance : en dessous, b est
+     * forcé à 0 à chaque pas (SES niveau seul). À ~9 jours ouverts, une
+     * tendance estimée est du PUR BRUIT (le dump prod montrait −5,26 %/jour
+     * appris sur du bruit alterné) ; l'erreur est asymétrique — sous-estimer
+     * coûte quelques euros de préparation, sur-estimer fait jeter — et le
+     * SES niveau seul est le choix classique à faible effectif.
+     */
+    public const TREND_MIN_OPEN_DAYS = 30;
+
+    /**
+     * Plafond de la tendance active (échelle log ≈ ±%/jour) : b est clampé
+     * à [−TREND_CAP_DAILY ; +TREND_CAP_DAILY] après chaque mise à jour.
+     * ±1 %/jour laisse passer toute croissance/déclin réaliste de la
+     * cafétéria tout en bornant l'extrapolation (converge vers b/(1−φ)).
+     */
+    public const TREND_CAP_DAILY = 0.01;
+
     /** Prior Gamma(a, a) de la mise à jour horaire (moyenne 1, écart-type ~35 %). */
     public const A_PRIOR = 8.0;
 

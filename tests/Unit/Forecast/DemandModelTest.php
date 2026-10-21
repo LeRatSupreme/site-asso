@@ -71,12 +71,17 @@ final class DemandModelTest extends TestCase
 
     public function test_croissance_amortie_sans_explosion(): void
     {
-        // Croissance linéaire de +50 % sur 4 semaines (motif multiplié
-        // par 1, 7/6, 4/3, 1.5).
+        // Croissance linéaire sur 6 SEMAINES (30 jours ouverts) : la
+        // tendance est DÉSACTIVÉE sous Hyper::TREND_MIN_OPEN_DAYS et
+        // PLAFONNÉE à ±1 %/jour au-delà — l'ancienne version à 4 semaines
+        // (20 jours) ne teste plus la tendance (porte anti-bruit) et son
+        // assertion « au-dessus de la moyenne de la dernière semaine »
+        // dépendait d'une tendance NON plafonnée. Motif multiplié par
+        // 1, 7/6, 4/3, 1.5, 1.6, 1.7.
         $days = [];
         $d = new \DateTimeImmutable('2026-09-07');
-        $mult = [1.0, 7.0 / 6.0, 4.0 / 3.0, 1.5];
-        while (count($days) < 20) {
+        $mult = [1.0, 7.0 / 6.0, 4.0 / 3.0, 1.5, 1.6, 1.7];
+        while (count($days) < 30) {
             $dow = (int) $d->format('N') - 1;
             if ($dow <= 4) {
                 $semaine = intdiv(count($days), 5);
@@ -88,14 +93,20 @@ final class DemandModelTest extends TestCase
         }
         $model = DemandModel::fit($days, [], Hyper::K_POOL);
 
-        $derniereSemaine = [105.0, 90.0, 97.5, 112.5, 135.0];
-        $moyDerniere = array_sum($derniereSemaine) / 5.0; // 108
-        $maxHist = 135.0;
+        $derniereSemaine = [119.0, 102.0, 110.5, 127.5, 153.0];
+        $maxHist = 153.0;
 
-        $demain = $model->expectedN(self::paris('2026-10-05 12:00')); // lundi suivant (h = 1)
+        self::assertGreaterThan(0.0, $model->lastTrend, '30 jours ouverts : tendance active et positive.');
+        self::assertLessThanOrEqual(Hyper::TREND_CAP_DAILY, $model->lastTrend, 'Tendance plafonnée à ±1 %/jour.');
 
-        self::assertGreaterThan($moyDerniere, $demain, 'La tendance amortie projette au-dessus de la moyenne de la dernière semaine.');
-        self::assertLessThan(1.5 * $maxHist, $demain, 'La tendance amortie n\'explose pas (< 1.5 × max historique).');
+        $demain = $model->expectedN(self::paris('2026-10-19 12:00')); // lundi suivant (h = 1)
+
+        // La projection suit la croissance : elle reste dans la plage de
+        // la dernière semaine (le plafond limite le RYTHME, pas le niveau
+        // appris), et l'explosion est bornée par construction (cumul de
+        // tendance ≤ b/(1−φ) = +10 %) : < 1.15 × max historique.
+        self::assertGreaterThanOrEqual(min($derniereSemaine), $demain, 'La projection suit le niveau de la dernière semaine.');
+        self::assertLessThan(1.15 * $maxHist, $demain, 'La tendance plafonnée n\'explose pas (< 1.15 × max historique).');
     }
 
     public function test_jour_atypique_amorti(): void

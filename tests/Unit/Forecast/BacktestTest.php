@@ -33,13 +33,20 @@ final class BacktestTest extends TestCase
     public function test_coverage_sur_serie_negbin_simulee(): void
     {
         // Série simulée : N ~ NegBin(mean 62, r 10), panier constant 1.25,
-        // 30 jours ouverts (lun–ven × 6). Le modèle « vrai » est retrouvé
+        // 40 jours ouverts (lun–ven × 8). Le modèle « vrai » est retrouvé
         // par le backtest : la couverture des intervalles 80 % doit rester
         // dans [0.65, 0.95]. Draws réduits à 800 (budget de test).
-        $r = Backtest::run(self::serieNegBin(30), ['seed' => 7, 'draws' => 800]);
+        // 40 jours ouverts (et non 30) : sous TREND_MIN_OPEN_DAYS la
+        // tendance est DÉSACTIVÉE (porte anti-bruit) et les intervalles ne
+        // sont plus gonflés par des tendances fictives — sur les préfixes
+        // courts la couverture de CETTE série passe à ~0.62 (21 points,
+        // granularité 1/21) alors qu'elle remonte au-dessus de 0.65 dès
+        // 35 jours ouverts (0.654) et vaut 0.71 à 40 : le test mesure la
+        // calibration dans le régime ≥ 30 jours où le modèle est déployé.
+        $r = Backtest::run(self::serieNegBin(40), ['seed' => 7, 'draws' => 800]);
 
         self::assertFalse($r['insufficient']);
-        self::assertSame(21, $r['n_points'], 'Indices 9..29 → 21 points.');
+        self::assertSame(31, $r['n_points'], 'Indices 9..39 → 31 points.');
         self::assertNotNull($r['coverage']);
         self::assertGreaterThanOrEqual(0.65, $r['coverage']);
         self::assertLessThanOrEqual(0.95, $r['coverage']);
@@ -47,9 +54,9 @@ final class BacktestTest extends TestCase
         self::assertNotNull($r['wape_main']);
         self::assertNotNull($r['wape_b2']);
         self::assertIsString($r['selection_note']);
-        self::assertCount(21, $r['details']);
-        self::assertCount(21, $r['scores']);
-        self::assertCount(21, $r['relative_half_widths']);
+        self::assertCount(31, $r['details']);
+        self::assertCount(31, $r['scores']);
+        self::assertCount(31, $r['relative_half_widths']);
     }
 
     public function test_semaines_completes_et_determinisme(): void
