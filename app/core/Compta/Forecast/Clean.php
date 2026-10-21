@@ -19,22 +19,23 @@ final class Clean
      * déduits des seules données (jours ouverts observés).
      *
      * Couverture calendaire (choix simple documenté) :
-     * n_weeks = nombre de SEMAINES lun–dim comptant AU MOINS UN jour
-     * ouvert observé avant $todayKey (au moins 1). Un dow est « ouvert
-     * habituel » si son nombre de jours ouverts observés AVANT $todayKey
-     * atteint max(1, ceil(0.5 × n_weeks)) — au moins une occurrence, sinon
-     * la moitié des semaines. Le jour en cours (partiel) ne compte ni
-     * dans la couverture ni dans les effectifs par dow.
+     * n_weeks = nombre de LUNDIS dans [première date, dernière date]
+     * observés dont la semaine lun-dim compte AU MOINS UN jour ouvert —
+     * en pratique, le nombre de semaines d'ACTIVITÉ dans le span. Un dow
+     * est « ouvert habituel » si son nombre de jours ouverts observés
+     * AVANT $todayKey atteint max(1, ceil(0.5 × n_weeks)) — au moins une
+     * occurrence, sinon la moitié des semaines. Le jour en cours (partiel)
+     * ne compte ni dans la couverture ni dans les effectifs par dow.
      *
      * Correctif du 21/10/2026 (WAPE modèle 94 % en prod) : n_weeks
-     * comptait auparavant toutes les semaines calendaires entre la
-     * première et la dernière date — une fermeture COMPLÈTE (vacances
-     * d'été) gonflait le seuil (Juin→Octobre : 21 semaines → 11
-     * occurrences/dow exigées, plus qu'aucun dow n'en avait) et
+     * comptait auparavant TOUS les lundis du span — une fermeture
+     * COMPLÈTE (vacances d'été) les gonflait (juin→octobre : 21 semaines
+     * → 11 occurrences/dow exigées, plus qu'aucun dow n'en avait) et
      * openWeekdays revenait VIDE : expectedN = 0 sur chaque dow,
      * prédictions de backtest nulles. Les semaines de fermeture totale ne
-     * comptent plus : seules les semaines où l'activité a eu lieu
-     * définissent « habituel ».
+     * comptent plus ; sans fermeture, la règle est IDENTIQUE à l'ancienne
+     * (lundis du span, semaines partielles de tête exclues — le seuil ne
+     * monte jamais au-delà de la règle d'origine).
      *
      * @param array<string,DayCurrent> $days     Jours ouverts (aujourd'hui pouvant y figurer).
      * @param string                   $todayKey 'Y-m-d' du jour en cours.
@@ -65,11 +66,18 @@ final class Clean
             return [];
         }
 
-        // Nb de semaines lun–dim AVEC au moins un jour ouvert observé,
-        // au moins 1.
+        // Lundis des semaines AVEC au moins un jour ouvert ; on ne compte
+        // que ceux situés dans le span observé [première, dernière] (la
+        // semaine partielle de tête n'entre pas dans le seuil — sémantique
+        // d'origine conservée).
+        $firstKey = min(array_keys($past));
+        $lastKey  = max(array_keys($past));
         $openMondays = [];
         foreach ($past as $d) {
-            $openMondays[$d->modify('-' . ((int) $d->format('N') - 1) . ' days')->format('Y-m-d')] = true;
+            $mondayKey = $d->modify('-' . ((int) $d->format('N') - 1) . ' days')->format('Y-m-d');
+            if ($mondayKey >= $firstKey && $mondayKey <= $lastKey) {
+                $openMondays[$mondayKey] = true;
+            }
         }
         $nWeeks = count($openMondays);
         $needed = max(1, (int) ceil(0.5 * $nWeeks));
