@@ -226,12 +226,44 @@ champ éditable dans la carte Objectif du dashboard (même POST
 `/admin/analytics/objectif`, CSRF centralisé) ; validation : facteur ∈
 [0,1 ; 1], dates valides, **10 plages max** (valeur stockée invalide ⇒ ignorée).
 
-Effet moteur (`opts['slow_periods']`, helper `SlowPeriods::facteurPour`) :
-UN facteur par date multiplie `expectedN`/`expectedCa` — les tirages MC,
-les intervalles et les cumuls suivent — pour **les jours futurs, la semaine
-et le mois 30, et la projection du jour SI aujourd'hui est en plage**.
-L'« hier » (observé) n'est JAMAIS ajusté. Une note explicite est ajoutée :
-« Période creuse 17/10–02/11 : prévisions ajustées ×0,8. »
+**Sémantique du drapeau : « ces journées-là tournent à f × le niveau
+normal ».** Il est appliqué EXACTEMENT UNE FOIS, en deux moitiés :
+
+1. **À l'ENTRÉE (désaisonnalisation)** — dans `ForecastEngine`, après
+   `Clean::splitPast` et le calcul des poids d'atypie (qui restent calculés
+   sur les CA BRUTS : c'est le CA réel qui définit l'atypie), chaque jour
+   passé DONT la date est en plage est ramené au niveau normal AVANT tout
+   fit : `ca ÷ f`, `n ÷ f` (arrondi au transaction près), `hourlyN[h] ÷ f`
+   (les parts horaires sont invariantes) ; les **paniers restent INCHANGÉS**
+   — le drapeau modélise moins de PASSAGES, pas un panier différent. Le
+   dataset désaisonnalisé nourrit `DemandModel::fit`, `HourlyProfile::fit`
+   ET `Backtest::run` : le niveau et la tendance n'apprennent **jamais** la
+   baisse des vacances, et le backtest mesure sur l'échelle normalisée.
+2. **En SORTIE (prévisions)** — ×f UNIQUEMENT si la date cible est en
+   plage : jours J+1..J+7, semaine restante, mois 30, projection du jour
+   (tirages MC et intervalles suivent) ; les dates hors plage restent à
+   l'échelle normale. « Hier » compare la prévision ×f(hier) au réel BRUT
+   (l'observé n'est jamais ajusté) ; le facteur conforme s'applique à des
+   intervalles normalisés, re-multipliés par f à l'affichage des dates en
+   plage.
+
+SANS la moitié « entrée », la baisse comptait DEUX FOIS (le niveau appris
+voyait les jours bas, puis ×f réduisait encore les prévisions) :
+sous-estimation ~50 % en prod pendant les vacances du 21/10/2026
+(prevision_jour mercredi 60,39 € au lieu de ~80 €, jours_semaine modèle
+36-55 € contre ~64-84 € attendus). Note moteur : « Historique
+désaisonnalisé avant apprentissage : N jours de période creuse ramenés au
+niveau normal (÷0,8). » — remplace l'ancien avertissement « double-comptage ».
+
+**Transparence** : le bloc `debug` du contrat moteur expose le niveau et la
+tendance appris — `niveau_eur` = exp(lastLevel) × panier global (€ par jour
+MOYEN, hors effet dow, sur données désaisonnalisées), `tendance_pct_jour` =
+(exp(lastTrend) − 1) × 100 (%/jour), `dispersion_r` — affichés dans
+l'info-bulle des cartes prévisions (« Niveau ≈ X € · Tendance ≈ Y %/jour »).
+La carte « Par jour de semaine » distingue l'observé global de l'observé en
+vacances : `obs_ca_creuse`/`obs_n_creuse` = moyenne et nb des jours du dow
+dont la date est en plage (null si aucun) — tooltip : « Observé : 105,60 €
+(n=2) · dont période creuse : 79,60 € (n=1) ».
 
 Cette saisie manuelle est un PALLIATIF documenté : à ≥ 12 semaines de
 données, l'apprentissage du calendrier scolaire (variables externes)
@@ -296,6 +328,13 @@ Carte des fichiers (cas de la mission étape 10) :
   déterminisme sans rng, filtres qty/suggestion.
 - `tests/Unit/Forecast/SlowPeriodsTest.php` — parsing/validation du format
   `facteur;début/fin`, bornes du facteur, 10 plages max, facteur par date.
+- `tests/Unit/Forecast/DesaisonnalisationTest.php` — **T1** série plate
+  sans drapeau ≈ 100 € (verrou anti-45 €), **T2** 6 jours à 100 € + 6 jours
+  de vacances à 80 € flagués → EN plage ≈ 80 € / HORS plage ≈ 100 € /
+  tendance ≈ 0 (le test qui échoue sans désaisonnalisation), **T3** jour
+  courant absent/partiel pendant une plage sans effet sur les jours
+  suivants, note désaisonnalisation avec le bon N, `debug` cohérent,
+  `obs_ca_creuse`/`obs_n_creuse` sur dataset à la main.
 - `tests/Unit/Forecast/EngineTest.php` — série plate 28 j, jour atypique,
   confiance, projection fin de journée = réel à 23 h, événements additifs,
   **réconciliation |Σ ca produits − Σ jours ca| < 5 %**, **backtest sur

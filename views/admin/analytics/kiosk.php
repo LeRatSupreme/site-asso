@@ -235,12 +235,19 @@ $iconSvg = static function (string $name): string {
 
         // Info-bulle métriques (règle interface 8) : affichée en note
         // compacte (pas de survol au doigt) + attribut title. La
-        // correction conforme explique la largeur des fourchettes.
+        // correction conforme explique la largeur des fourchettes ; le
+        // bloc debug du moteur fournit niveau (€ par jour moyen
+        // désaisonnalisé) et tendance (%/jour).
+        $kDebug     = isset($forecast['debug']) && is_array($forecast['debug']) ? $forecast['debug'] : [];
+        $kNiveau    = isset($kDebug['niveau_eur']) && is_numeric($kDebug['niveau_eur']) ? (float) $kDebug['niveau_eur'] : null;
+        $kTendance  = isset($kDebug['tendance_pct_jour']) && is_numeric($kDebug['tendance_pct_jour']) ? (float) $kDebug['tendance_pct_jour'] : null;
         $kTooltip = 'Modèle actif : ' . ($fcModele !== '' ? $fcModele : '—')
             . ' · WAPE backtest : ' . ($fcWape === null ? '—' : number_format((float) $fcWape, 1, ',', ' ')) . ' %'
             . ' sur ' . $fcNJours . ' jours'
             . ' · couverture intervalle : ' . ($fcCoverage === null ? '—' : number_format((float) $fcCoverage, 0, ',', ' ')) . ' %'
             . ($kFacteur !== null ? ' · Correction conforme : ×' . number_format($kFacteur, 1, ',', ' ') : '')
+            . ($kNiveau !== null ? ' · Niveau ≈ ' . number_format($kNiveau, 0, ',', ' ') . ' €' : '')
+            . ($kTendance !== null ? ' · Tendance ≈ ' . number_format($kTendance, 1, ',', ' ') . ' %/jour' : '')
             . ($fcNoteSel !== '' ? ' · ' . $fcNoteSel : '');
 
         $kChips = [];
@@ -941,6 +948,10 @@ $iconSvg = static function (string $name): string {
             var kWdObs = (wd.obs || []).map(function (v) { return v == null ? null : Number(v); });
             var kWdModel = (wd.ca || []).map(function (v) { return v == null ? null : Number(v); });
             var kWdCount = (wd.days_count || []).map(function (v) { return v == null ? 0 : Number(v); });
+            // Observé « dont période creuse » (moyenne + nb des jours du dow
+            // en plage creuse, null si aucun) — ajouté au tooltip de la barre.
+            var kWdObsCreuse = (wd.obs_creuse || []).map(function (v) { return v == null ? null : Number(v); });
+            var kWdObsNCreuse = (wd.obs_n_creuse || []).map(function (v) { return v == null ? 0 : Number(v); });
             var kWdTi = Number(wd.today_index);
             new Chart(elWd, {
                 type: 'bar',
@@ -983,8 +994,14 @@ $iconSvg = static function (string $name): string {
                             callbacks: {
                                 label: function (c) {
                                     if (c.dataset.type === 'bar') {
-                                        return 'Observé : ' + (c.raw == null ? '—' : money(c.raw))
+                                        var t = 'Observé : ' + (c.raw == null ? '—' : money(c.raw))
                                             + ' (n=' + (kWdCount[c.dataIndex] || 0) + ')';
+                                        if (kWdObsNCreuse[c.dataIndex] > 0) {
+                                            t += ' · dont période creuse : '
+                                                + (kWdObsCreuse[c.dataIndex] == null ? '—' : money(kWdObsCreuse[c.dataIndex]))
+                                                + ' (n=' + kWdObsNCreuse[c.dataIndex] + ')';
+                                        }
+                                        return t;
                                     }
                                     return 'Modèle : ' + (c.raw == null ? '—' : money(c.raw));
                                 },

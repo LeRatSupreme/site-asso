@@ -577,6 +577,8 @@ final class AdminAnalyticsController extends AdminBaseController
     {
         $ca = [];
         $obs = [];
+        $obsCreuse = [];
+        $obsNCreuse = [];
         $se = [];
         $nextDate = [];
         $qty = [];
@@ -590,6 +592,13 @@ final class AdminAnalyticsController extends AdminBaseController
             $ca[$dow] = $isOpen ? (float) ($entry['ca'] ?? 0.0) : null;
             $obsRaw = $entry['obs_ca'] ?? null;
             $obs[$dow] = ($isOpen && $obsRaw !== null) ? (float) $obsRaw : null;
+            // Observé « dont période creuse » : moyenne et nb des jours du
+            // dow dont la date est en plage creuse (null si aucun) — le
+            // tooltip de la vue les ajoute à la ligne Observé.
+            $obsCreuseRaw = $entry['obs_ca_creuse'] ?? null;
+            $obsCreuse[$dow] = ($isOpen && $obsCreuseRaw !== null) ? (float) $obsCreuseRaw : null;
+            $obsNRaw = $entry['obs_n_creuse'] ?? null;
+            $obsNCreuse[$dow] = ($isOpen && $obsNRaw !== null) ? (int) $obsNRaw : null;
             $seRaw = $entry['se'] ?? null;
             $se[$dow] = ($isOpen && $seRaw !== null) ? (float) $seRaw : null;
             $nextRaw = $entry['next_date'] ?? null;
@@ -615,6 +624,8 @@ final class AdminAnalyticsController extends AdminBaseController
             'labels'      => self::DAY_ABBR,
             'ca'          => $ca,          // modèle : attendu prochaine occurrence
             'obs'         => $obs,         // observé : moyenne brute (null sans occ)
+            'obs_creuse'  => $obsCreuse,   // observé EN plage creuse (null si aucun)
+            'obs_n_creuse' => $obsNCreuse, // nb de jours observés en plage creuse
             'se'          => $se,
             'next_date'   => $nextDate,
             'qty'         => $qty,
