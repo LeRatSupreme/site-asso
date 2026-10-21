@@ -30,6 +30,9 @@ final class AdminSettingController extends AdminBaseController
         'facebook_url', 'instagram_url', 'linkedin_url',
         'discord_webhook_url', 'discord_enabled',
         'membership_price', 'membership_enabled', 'membership_season',
+        'reco_marge_min', 'reco_stock_dormant_semaines', 'reco_stock_dormant_min',
+        'reco_echantillon_min_unites', 'reco_duo_remise_max',
+        'reco_immobilise_seuil_eur', 'reco_max_actives',
     ];
 
     /**
@@ -72,6 +75,13 @@ final class AdminSettingController extends AdminBaseController
         'membership_price'       => ['cafeteria', ''],
         'membership_enabled'     => ['cafeteria', '0'],
         'membership_season'      => ['cafeteria', ''],
+        'reco_marge_min'              => ['recommandations', '0.15'],
+        'reco_stock_dormant_semaines' => ['recommandations', '8'],
+        'reco_stock_dormant_min'      => ['recommandations', '10'],
+        'reco_echantillon_min_unites' => ['recommandations', '20'],
+        'reco_duo_remise_max'         => ['recommandations', '0.10'],
+        'reco_immobilise_seuil_eur'   => ['recommandations', '30'],
+        'reco_max_actives'            => ['recommandations', '5'],
     ];
 
     public function index(): void

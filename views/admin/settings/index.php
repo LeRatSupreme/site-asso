@@ -17,6 +17,7 @@ $groupConfig = [
     'cafeteria' => ['label' => 'Cafétéria'],
     'events'    => ['label' => 'Événements'],
     'social'    => ['label' => 'Réseaux sociaux & Discord'],
+    'recommandations' => ['label' => 'Recommandations commerciales'],
 ];
 
 // Libellés lisibles par clé technique.
@@ -54,6 +55,13 @@ $niceLabels = [
     'membership_price'    => 'Prix de la cotisation (€)',
     'membership_enabled'  => 'Activer la gestion des adhésions',
     'membership_season'   => 'Saison courante (vide = auto, ex: 2026-2027)',
+    'reco_marge_min'              => "Marge minimale (fraction, ex. 0.15 = 15 %)",
+    'reco_stock_dormant_semaines' => 'Seuil stock dormant (semaines)',
+    'reco_stock_dormant_min'      => 'Stock minimum pour stock dormant (unités)',
+    'reco_echantillon_min_unites' => 'Échantillon minimal par règle (unités / 30 j)',
+    'reco_duo_remise_max'         => "Remise max d'un duo (fraction)",
+    'reco_immobilise_seuil_eur'   => 'Seuil stock immobilisé gamme (€)',
+    'reco_max_actives'            => "Nombre max d'idées actives",
 ];
 
 $boolKeys = ['maintenance_mode', 'orders_enabled', 'registrations_enabled', 'sumup_enabled', 'discord_enabled', 'membership_enabled'];
@@ -82,6 +90,11 @@ $passwordKeys = ['smtp_pass', 'brevo_api_key', 'discord_webhook_url'];
                 </p>
             <?php elseif ($group === 'contact'): ?>
                 <p class="settings-help">Coordonnées affichées sur le site et la carte interactive.</p>
+            <?php elseif ($group === 'recommandations'): ?>
+                <p class="settings-help">
+                    Seuils du moteur de recommandations commerciales (page Opérations).
+                    Les fractions s'expriment entre 0 et 1 (0.15 = 15 %).
+                </p>
             <?php endif; ?>
 
             <div class="settings-grid">
