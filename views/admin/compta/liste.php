@@ -146,7 +146,6 @@ use App\Models\Setting;
     .shop-by:empty { display: none; }
 
     .shop-empty { text-align: center; padding: 3.5rem 1rem; }
-    .shop-empty-emoji { font-size: 3rem; margin-bottom: 0.6rem; }
     .shop-empty-title { font-size: 1.25rem; font-weight: 900; margin: 0 0 0.3rem; }
     .shop-empty-sub { color: var(--muted, #8892a6); margin: 0; }
 
@@ -186,6 +185,14 @@ use App\Models\Setting;
         .shop-seg, details, .compta-head .eyebrow { display: none !important; }
         body { background: #fff !important; color: #111 !important; }
         .card, .shop-item { background: #fff !important; border-color: #ddd !important; }
+    }
+
+    /* Téléphone étroit (360 px) : la grille de tuiles reste sur 2 colonnes,
+       les pastilles « Couvrir pour » deviennent des cibles tactiles. */
+    @media (max-width: 400px) {
+        .shop-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .shop-seg a { display: inline-flex; align-items: center; min-height: 44px; }
+        .shop-by { font-size: 0.72rem; }
     }
 </style>
 
@@ -246,7 +253,6 @@ use App\Models\Setting;
 
 <?php if ($items === []): ?>
 <section class="card surface glass shop-empty">
-    <div class="shop-empty-emoji">🎉</div>
     <p class="shop-empty-title">Rien à racheter !</p>
     <p class="shop-empty-sub">Le stock couvre la période choisie. essaie « Couvrir pour » plus long.</p>
 </section>
@@ -287,8 +293,8 @@ use App\Models\Setting;
 <p class="shop-footnote">
     <nav>
         <a class="btn btn-ghost btn-sm" href="<?= e(($hubUrl ?? '') !== '' ? $hubUrl : url('/kiosque/comptage/' . rawurlencode($kioskToken))) ?>">← Retour au comptage</a>
-        <a class="btn btn-outline btn-sm" href="<?= e(url('/kiosque/comptage/caisse/' . rawurlencode($kioskToken))) ?>">💵 Comptage caisse</a>
-        <a class="btn btn-outline btn-sm" href="<?= e(url('/kiosque/comptage/inventaire/' . rawurlencode($kioskToken))) ?>">📦 Comptage inventaire</a>
+<a class="btn btn-outline btn-sm" href="<?= e(url('/kiosque/comptage/caisse/' . rawurlencode($kioskToken))) ?>">Comptage caisse</a>
+<a class="btn btn-outline btn-sm" href="<?= e(url('/kiosque/comptage/inventaire/' . rawurlencode($kioskToken))) ?>">Comptage inventaire</a>
     </nav>
 </p>
 <?php endif; ?>
@@ -299,7 +305,7 @@ use App\Models\Setting;
 
 <?php if (!$kiosk && ($user['role'] ?? '') === 'SUPERADMIN'): ?>
 <details class="card surface glass" style="padding: 0.85rem 1.1rem; margin-top: 1.25rem;">
-    <summary style="cursor: pointer; font-weight: 800;">📱 Accès téléphone sans connexion</summary>
+    <summary style="cursor: pointer; font-weight: 800;">Accès téléphone sans connexion</summary>
     <p class="muted" style="margin: 0.6rem 0 0.4rem;">
         Copie ce lien secret sur ton téléphone : il ouvre cette liste directement,
         <strong>sans jamais demander de connexion</strong> (même jeton que la page Réappro — le régénérer révoque les deux).

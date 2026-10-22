@@ -47,14 +47,14 @@ declare(strict_types=1);
             <?php if (!empty($r['paused'])): continue; endif; ?>
             <tr>
                 <td><code><?= e($r['key']) ?></code></td>
-                <td><input type="number" name="count[<?= e($r['key']) ?>]" min="0" step="1" placeholder="—" inputmode="numeric" style="width:90px" form="blind-count-form"></td>
+                <td><input type="number" name="count[<?= e($r['key']) ?>]" min="0" step="1" placeholder="—" inputmode="numeric" style="width:90px" form="blind-count-form" aria-label="Quantité comptée de <?= e($r['key']) ?>"></td>
                 <td>
                     <form method="post" action="<?= e(url('/admin/compta/inventaire/comptage/' . rawurlencode($r['key']) . '/discontinue')) ?>"
                           data-confirm="Marquer « <?= e($r['key']) ?> » plus en vente pour l'instant ? Rien n'est supprimé : il passe en pause, sort de cette liste et restera rétablissable en un clic (page Inventaire)."
                           data-confirm-button="Plus en vente"
                           data-preserve-scroll>
                         <?= csrf_field() ?>
-                        <button type="submit" class="btn btn-outline btn-sm" title="Plus en vente pour l'instant (saisonnier…) : met en pause, rien n'est supprimé">Mettre en pause</button>
+                        <button type="submit" class="btn btn-outline" title="Plus en vente pour l'instant (saisonnier…) : met en pause, rien n'est supprimé">Mettre en pause</button>
                     </form>
                 </td>
             </tr>
@@ -62,7 +62,7 @@ declare(strict_types=1);
         </tbody>
     </table>
     <div class="form-actions">
-        <button type="submit" class="btn btn-primary" form="blind-count-form">Enregistrer le comptage</button>
+        <button type="submit" class="btn btn-primary btn-lg" form="blind-count-form">Enregistrer le comptage</button>
         <button type="button" class="btn btn-ghost" form="blind-count-form" onclick="if (confirm('Effacer les quantités saisies ?')) this.form.reset();">Annuler</button>
     </div>
     <?php endif; ?>
@@ -70,23 +70,23 @@ declare(strict_types=1);
 
 <?php if (($user['role'] ?? '') === 'SUPERADMIN'): ?>
 <details class="card surface glass" style="padding: 0.85rem 1.1rem; margin-top: 1.25rem;">
-    <summary style="cursor: pointer; font-weight: 800;">📱 Accès téléphone sans connexion</summary>
+    <summary style="cursor: pointer; font-weight: 800;">Accès téléphone sans connexion</summary>
     <p class="muted" style="margin: 0.6rem 0 0.4rem;">
         Copie ces liens secrets sur ton téléphone : ils ouvrent le comptage directement,
         <strong>sans jamais demander de connexion</strong> (même jeton que Réappro/Liste — le régénérer sur la page Réappro révoque tout).
     </p>
     <p style="margin: 0.4rem 0 0.2rem;"><strong>Les deux comptages</strong> (hub) :</p>
     <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; margin-bottom: 0.6rem;">
-        <input type="text" readonly value="<?= e($kioskHub) ?>" id="kiosk-hub" onclick="this.select()"
+        <input type="text" readonly value="<?= e($kioskHub) ?>" id="kiosk-hub" onclick="this.select()" aria-label="Lien secret du kiosque — hub des deux comptages"
                style="flex: 1 1 260px; padding: 0.5rem 0.7rem; border: 1px solid var(--border); border-radius: 8px; background: rgba(255,255,255,0.04); color: var(--foreground); font-size: 0.85rem;">
-        <button type="button" class="btn btn-outline btn-sm"
+        <button type="button" class="btn btn-outline"
                 onclick="(function (b) { var i = document.getElementById('kiosk-hub'); i.select(); try { document.execCommand('copy'); } catch (e) {} if (navigator.clipboard) { navigator.clipboard.writeText(i.value); } b.textContent = 'Copié ✓'; setTimeout(function () { b.textContent = 'Copier'; }, 1500); })(this)">Copier</button>
     </div>
     <p style="margin: 0.4rem 0 0.2rem;"><strong>Comptage inventaire</strong> directement :</p>
     <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
-        <input type="text" readonly value="<?= e($kioskInventaire) ?>" id="kiosk-inventaire" onclick="this.select()"
+        <input type="text" readonly value="<?= e($kioskInventaire) ?>" id="kiosk-inventaire" onclick="this.select()" aria-label="Lien secret du kiosque — comptage inventaire"
                style="flex: 1 1 260px; padding: 0.5rem 0.7rem; border: 1px solid var(--border); border-radius: 8px; background: rgba(255,255,255,0.04); color: var(--foreground); font-size: 0.85rem;">
-        <button type="button" class="btn btn-outline btn-sm"
+        <button type="button" class="btn btn-outline"
                 onclick="(function (b) { var i = document.getElementById('kiosk-inventaire'); i.select(); try { document.execCommand('copy'); } catch (e) {} if (navigator.clipboard) { navigator.clipboard.writeText(i.value); } b.textContent = 'Copié ✓'; setTimeout(function () { b.textContent = 'Copier'; }, 1500); })(this)">Copier</button>
     </div>
 </details>
