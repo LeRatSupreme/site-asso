@@ -191,6 +191,20 @@ final class ForecastEngine
 
         $model  = DemandModel::fit($pastNorm, $weights, $k);
         $hourly = HourlyProfile::fit($pastNorm, $k);
+
+        // Premier jour d'exploitation : AUCUNE vente passée dans la fenêtre,
+        // uniquement la journée en cours. Le modèle ne peut rien apprendre
+        // sur du vide — sans repli, toutes les prévisions (et le besoin de
+        // réapprovisionnement) restent à zéro alors que des ventes existent
+        // (bug « cola absent de la liste de courses », 22/10/2026). On
+        // réajuste le modèle sur la fenêtre ENTIÈRE, journée en cours
+        // comprise : ses données sont partielles, la confiance reste donc
+        // « insuffisant » ($insufficient, calculé plus bas, est inchangé).
+        if ($model->openDaysCount() === 0 && $today !== null) {
+            $avecAujourdhui = $pastNorm;
+            $avecAujourdhui[$todayKey] = $desaison([$todayKey => $today])[$todayKey] ?? $today;
+            $model = DemandModel::fit($avecAujourdhui, Clean::atypicalWeights($avecAujourdhui), $k);
+        }
         // Backtest à origine glissante sur l'HISTORIQUE COMPLET (opts
         // 'backtest_days', tronqué aux BACKTEST_MAX_DAYS derniers jours
         // ouverts) : BACKTEST_START=10 n'est plus consommé par la fenêtre
