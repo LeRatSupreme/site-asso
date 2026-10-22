@@ -71,7 +71,12 @@ html.ds {
     background: var(--n-50);
 }
 
-/* Thème sombre sobre : mêmes variables, valeurs adaptées. */
+/* Thème sombre sobre : mêmes variables, valeurs adaptées.
+   Deux déclencheurs, mêmes valeurs (à garder synchronisées) :
+   1. choix manuel : html.ds[data-theme="dark"] ;
+   2. réglage système : @media (prefers-color-scheme: dark) — s'applique
+      tant que l'utilisateur n'a PAS choisi explicitement le thème clair
+      (html.ds:not([data-theme="light"])). */
 html.ds[data-theme="dark"] {
     --n-0: #161d26;
     --n-50: #0f141a;
@@ -97,6 +102,37 @@ html.ds[data-theme="dark"] {
     --ko-border: rgba(229, 115, 110, .4);
 
     color-scheme: dark;
+}
+
+/* Sombre automatique selon le réglage du système (A6) : mêmes valeurs
+   que le thème manuel ci-dessus, sauf si « clair » est choisi. */
+@media (prefers-color-scheme: dark) {
+    html.ds:not([data-theme="light"]) {
+        --n-0: #161d26;
+        --n-50: #0f141a;
+        --n-100: #1c242f;
+        --n-200: #2a3340;
+        --n-300: #3a4552;
+        --n-500: #9aa3ad;
+        --n-700: #c3cad3;
+        --n-900: #e6eaf0;
+
+        --accent: #4aa3c2;
+        --accent-strong: #6cb8d3;
+        --accent-soft: rgba(74, 163, 194, .14);
+
+        --ok: #4caf7d;
+        --ok-bg: rgba(76, 175, 125, .12);
+        --ok-border: rgba(76, 175, 125, .4);
+        --warn: #d29a3a;
+        --warn-bg: rgba(210, 154, 58, .12);
+        --warn-border: rgba(210, 154, 58, .4);
+        --ko: #e5736e;
+        --ko-bg: rgba(229, 115, 110, .12);
+        --ko-border: rgba(229, 115, 110, .4);
+
+        color-scheme: dark;
+    }
 }
 
 /* Chiffres tabulaires : toute valeur numérique porte la classe .num. */

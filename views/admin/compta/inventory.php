@@ -285,17 +285,18 @@ declare(strict_types=1);
                         </td>
                         <td>
                             <input type="number" name="count[<?= e($r['key']) ?>]"
-                                   min="0" step="1" placeholder="—" style="width:90px" inputmode="numeric">
+                                   min="0" step="1" placeholder="—" style="width:90px" inputmode="numeric"
+                                   aria-label="Quantité physiquement comptée pour <?= e($r['key']) ?>">
                         </td>
                         <td>
                             <?php if ($r['gap'] === null): ?>
                                 <span class="muted">—</span>
                             <?php elseif ($r['gap'] < 0): ?>
-                                <span class="badge badge-danger"><?= (int) $r['gap'] ?></span>
+                                <span class="badge badge-danger" aria-label="Écart négatif : il manque <?= (int) abs((int) $r['gap']) ?> en stock par rapport au théorique"><?= (int) $r['gap'] ?></span>
                             <?php elseif ($r['gap'] === 0): ?>
-                                <span class="badge badge-success">0</span>
+                                <span class="badge badge-success" aria-label="Écart nul : le comptage correspond au stock théorique">0</span>
                             <?php else: ?>
-                                <span class="badge badge-warning">+<?= (int) $r['gap'] ?></span>
+                                <span class="badge badge-warning" aria-label="Écart positif : <?= (int) $r['gap'] ?> de plus que le stock théorique">+<?= (int) $r['gap'] ?></span>
                             <?php endif; ?>
                         </td>
                         <td>
