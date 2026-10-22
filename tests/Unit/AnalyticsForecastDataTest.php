@@ -50,7 +50,15 @@ final class AnalyticsForecastDataTest extends TestCase
             return false;
         }
 
-        $this->reset($pdo, ['sales', 'import_batches']);
+        // ATTENTION ORDRE ALÉATOIRE : productStats()/audit() lisent le stock
+        // THÉORIQUE via StockBook (AnalyticsForecastData::stockBook()), donc
+        // inventory_counts + purchases + losses + product_aliases en plus de
+        // `sales`. Sans purge, les lignes semées par les autres classes de
+        // test (ComptaConsistencyTest, OperationsLedgerPagesTest, etc.)
+        // contaminaient le stock (« Failed asserting that -3 is null »,
+        // flake 1 run sur ~4 selon l'ordre aléatoire). Même pattern que
+        // PurchaseTest : on vide TOUTES les sources du livre + les annexes.
+        $this->reset($pdo, ['sales', 'import_batches', 'inventory_counts', 'purchases', 'losses', 'product_aliases']);
         $this->applyImportDedupMigration($pdo);
         $this->ensureAuxTables($pdo);
         Model::setTestPdo($pdo);
