@@ -12,7 +12,7 @@ use PDO;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Tests de la gestion des comptes en admin : rÃ´les, activation, audit.
+ * Tests de la gestion des comptes en admin : rôles, activation, audit.
  *
  * Saute si la base aeic_test est indisponible.
  */

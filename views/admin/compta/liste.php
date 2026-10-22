@@ -54,7 +54,7 @@ use App\Models\Setting;
     .shop-total {
         display: flex; align-items: center; gap: 1.4rem; flex-wrap: wrap;
         padding: 0.75rem 1.2rem; margin-bottom: 1.2rem;
-        background: linear-gradient(135deg, rgba(72, 189, 211, 0.28), rgba(72, 189, 211, 0.08));
+        background: rgba(72, 189, 211, 0.12);
         border: 1px solid rgba(72, 189, 211, 0.35);
         border-radius: 14px; font-size: 0.95rem;
     }

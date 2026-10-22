@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Tests\Integration;
 
 /**
- * Tests d'intÃ©gration du flux de connexion (route POST /login + session).
+ * Tests d'intégration du flux de connexion (route POST /login + session).
  */
 final class LoginTest extends IntegrationTestCase
 {
@@ -22,7 +22,7 @@ final class LoginTest extends IntegrationTestCase
 
         $response = $this->login('login@exemple.fr', 'Password123456');
 
-        // SuccÃ¨s : redirection vers l'accueil (callback par dÃ©faut).
+        // Succès : redirection vers l'accueil (callback par défaut).
         self::assertStringContainsString('//example.test/', $this->location($response));
         self::assertSame('u_login_ok', $response['session']['user_id'] ?? null);
         self::assertSame('ELEVE', $response['session']['user_role'] ?? null);

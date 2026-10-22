@@ -5,11 +5,11 @@ declare(strict_types=1);
 namespace Tests\Integration;
 
 /**
- * Tests d'intÃ©gration de l'import de ventes SumUp
- * (route POST /admin/compta/import â†’ parseur + Sale::importBatch + base).
+ * Tests d'intégration de l'import de ventes SumUp
+ * (route POST /admin/compta/import → parseur + Sale::importBatch + base).
  *
- * Le login admin est forcÃ© (bypass 2FA via APP_TESTING) pour isoler le test
- * du flux d'authentification, dÃ©jÃ  couvert par ailleurs.
+ * Le login admin est forcé (bypass 2FA via APP_TESTING) pour isoler le test
+ * du flux d'authentification, déjà couvert par ailleurs.
  */
 final class ComptaImportTest extends IntegrationTestCase
 {
@@ -51,7 +51,7 @@ final class ComptaImportTest extends IntegrationTestCase
         self::assertStringContainsString('/admin/compta/import', $this->location($r1));
         self::assertSame(3, (int) $this->pdo->query('SELECT COUNT(*) FROM sales')->fetchColumn());
 
-        // RÃ©import du mÃªme fichier : aucune ligne en double (dÃ©duplication).
+        // Réimport du même fichier : aucune ligne en double (déduplication).
         $this->request('POST', '/admin/compta/import', [], $files, $this->adminId);
         self::assertSame(3, (int) $this->pdo->query('SELECT COUNT(*) FROM sales')->fetchColumn());
     }

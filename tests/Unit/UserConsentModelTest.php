@@ -12,7 +12,7 @@ use PDO;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Tests des modÃ¨les User & Consent sur la base `aeic_test`.
+ * Tests des modèles User & Consent sur la base `aeic_test`.
  *
  * Saute automatiquement si la base n'est pas joignable (voir TestDatabaseTrait).
  */
@@ -40,7 +40,7 @@ final class UserConsentModelTest extends TestCase
 
     public function test_find_by_email_trouve_l_utilisateur(): void
     {
-        $user = User::findByEmail('ALEX@EXEMPLE.FR'); // insensible Ã  la casse
+        $user = User::findByEmail('ALEX@EXEMPLE.FR'); // insensible à la casse
 
         self::assertNotNull($user);
         self::assertSame('alex@exemple.fr', $user['email']);
@@ -76,7 +76,7 @@ final class UserConsentModelTest extends TestCase
         $user = User::find('u_existing');
 
         self::assertSame('Compte supprimé', $user['prenom']);
-        // email NOT NULL/UNIQUE en base : anonymisÃ© en sentinelle invalide.
+        // email NOT NULL/UNIQUE en base : anonymisé en sentinelle invalide.
         self::assertNotSame('alex@exemple.fr', $user['email']);
         self::assertSame('deleted_u_existing@invalid.local', $user['email']);
         self::assertNull($user['password']);
