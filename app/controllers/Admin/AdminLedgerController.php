@@ -290,10 +290,15 @@ final class AdminLedgerController extends AdminBaseController
      */
     public function periodFromRequest(): array
     {
+        // Défaut du livre : « 30 derniers jours » — le livre doit montrer
+        // des saisies datées de ~10 jours sans réglage (contrat du test
+        // OperationsLedgerPagesTest « période par défaut 30 jours ») ;
+        // les autres pages compta restent sur « Semaine en cours ».
         $period = ComptaCalc::resolvePeriod(
             $_GET['period'] ?? null,
             $_GET['du'] ?? null,
-            $_GET['au'] ?? null
+            $_GET['au'] ?? null,
+            '30d'
         );
 
         return [$period['from'], $period['to'], $period['preset']];

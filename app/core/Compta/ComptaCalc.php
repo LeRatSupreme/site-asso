@@ -89,7 +89,9 @@ final class ComptaCalc
      * avec la même sémantique que la page Réappro.
      *
      * Règles :
-     *  - preset inconnu/null → « week » (semaine en cours, lundi → J) ;
+     *  - preset inconnu/null → $defaut (« week » par défaut : semaine en
+     *    cours, lundi → J ; le livre comptable passe « 30d », contrat du
+     *    test OperationsLedgerPagesTest « période par défaut 30 jours ») ;
      *  - « Nd » → from = aujourd'hui −(N−1) jours ;
      *  - « week » → from = lundi de la semaine en cours ;
      *  - « all » → bornes null (toute la période disponible) ;
@@ -99,15 +101,17 @@ final class ComptaCalc
      * @param string|null $preset Clé de PERIOD_OPTIONS (« period » en GET).
      * @param string|null $from   Jour de début saisi (« from » en GET).
      * @param string|null $to     Jour de fin saisi (« to » en GET).
+     * @param string      $defaut Preset appliqué quand $preset est inconnu
+     *                            ou null (clé de PERIOD_OPTIONS).
      *
      * @return array{preset:string, from:?string, to:?string} Dates « YYYY-MM-DD »
      *                                                          (null pour « all »).
      */
-    public static function resolvePeriod(?string $preset, ?string $from, ?string $to): array
+    public static function resolvePeriod(?string $preset, ?string $from, ?string $to, string $defaut = 'week'): array
     {
         $preset = (string) $preset;
         if (!array_key_exists($preset, self::PERIOD_OPTIONS)) {
-            $preset = 'week';
+            $preset = array_key_exists($defaut, self::PERIOD_OPTIONS) ? $defaut : 'week';
         }
 
         $fromDay = null;
