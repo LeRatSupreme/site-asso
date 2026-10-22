@@ -41,6 +41,30 @@ abstract class Controller
     }
 
     /**
+     * Rend une vue SANS layout et renvoie le HTML généré.
+     *
+     * Pour les pages autonomes : le document HTML complet (doctype, <html>,
+     * <head>...) est porté par la vue elle-même, ex. la page de
+     * démonstration du design system.
+     *
+     * @param array<string,mixed> $data Variables injectées dans la vue.
+     */
+    protected function renderBare(string $view, array $data = []): string
+    {
+        $viewFile = AEIC_VIEWS . '/' . $view . '.php';
+        if (!is_file($viewFile)) {
+            throw new \RuntimeException(sprintf('Vue introuvable : %s', $view));
+        }
+
+        extract($data, EXTR_SKIP);
+
+        ob_start();
+        require $viewFile;
+
+        return (string) ob_get_clean();
+    }
+
+    /**
      * Rend une vue dans le layout « kiosque » (accès par lien secret,
      * ex. Réappro/Liste/Comptage sur téléphone) : coquille minimale SANS
      * navigation — rien d'autre que la vue n'est visible.

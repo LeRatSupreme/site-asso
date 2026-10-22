@@ -39,4 +39,16 @@ final class AdminController extends AdminBaseController
             'user'  => Auth::user(),
         ]);
     }
+
+    /**
+     * Page de démonstration du design system (document HTML autonome,
+     * sans layout admin). Accessible par URL directe uniquement : aucune
+     * entrée de menu tant que la navigation n'a pas été refaite (lot 2).
+     */
+    public function designSystem(): void
+    {
+        $this->guardAdminArea();
+
+        echo $this->renderBare('admin/design_system');
+    }
 }

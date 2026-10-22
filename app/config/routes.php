@@ -158,6 +158,11 @@ function aeic_register_routes(Router $router): void
     // Administration (rôle ADMIN requis — vérifié par chaque contrôleur).
     $router->get('/admin', [AdminController::class, 'index']);
 
+    // Design system : page de démonstration des composants (garde de
+    // l'espace admin, accès par URL directe — hors menu, la navigation
+    // est refaite au lot 2).
+    $router->get('/admin/design-system', [AdminController::class, 'designSystem']);
+
     $router->get('/admin/events', [AdminEventController::class, 'index']);
     $router->get('/admin/events/new', [AdminEventController::class, 'form']);
     $router->get('/admin/events/{slug}', [AdminEventController::class, 'form']);
