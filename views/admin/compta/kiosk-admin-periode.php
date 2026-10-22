@@ -13,7 +13,7 @@ declare(strict_types=1);
  * @var string $p 'semaine'|'14j'|'30j'|'mois'
  * @var int $calDays
  * @var string $rangeLabel
- * @var array<string,mixed> $stats
+ * @var array<string,mixed> $stats — marge déjà calculée (« margin », en %)
  */
 $isMois = $p === 'mois';
 $options = [
@@ -174,13 +174,12 @@ $to = (string) $stats['to'];
     </div>
 
     <div class="kx-pair">
-        <?php $mPct = (float) $stats['ca'] > 0 ? round((float) $stats['profit'] / (float) $stats['ca'] * 100, 1) : 0.0; ?>
         <div class="kx-card">
             <p class="kx-card-label">Bénéfice</p>
             <div class="kx-card-value <?= (float) $stats['profit'] >= 0 ? 'is-profit' : 'is-loss' ?>">
                 <?= e(formatPrice((float) $stats['profit'])) ?>
             </div>
-            <p class="kx-card-sub">Marge : <?= e(number_format($mPct, 1, ',', ' ')) ?> % · perso exclus</p>
+            <p class="kx-card-sub">Marge : <?= e(number_format((float) ($stats['margin'] ?? 0), 1, ',', ' ')) ?> % · perso exclus</p>
         </div>
         <div class="kx-card">
             <p class="kx-card-label">Produits vendus</p>
@@ -190,17 +189,17 @@ $to = (string) $stats['to'];
 
     <div class="kx-pair">
         <div class="kx-card">
-            <p class="kx-card-label">💵 Liquide</p>
+            <p class="kx-card-label">Liquide</p>
             <div class="kx-card-value"><?= e(formatPrice((float) $stats['liquide'])) ?></div>
         </div>
         <div class="kx-card">
-            <p class="kx-card-label">💳 Carte</p>
+            <p class="kx-card-label">Carte</p>
             <div class="kx-card-value"><?= e(formatPrice((float) $stats['carte'])) ?></div>
         </div>
     </div>
 
     <div class="kx-list-card">
-        <p class="kx-card-label">📅 Détail jour par jour</p>
+        <p class="kx-card-label">Détail jour par jour</p>
         <ul class="kx-days">
             <?php foreach ($stats['days'] as $d): ?>
             <li>
@@ -214,7 +213,7 @@ $to = (string) $stats['to'];
     </div>
 
     <div class="kx-list-card">
-        <p class="kx-card-label">🏆 Top produits</p>
+        <p class="kx-card-label">Top produits</p>
         <ul class="kx-list">
             <?php foreach ($stats['top'] as $i => $t): ?>
             <li>
@@ -234,7 +233,7 @@ $to = (string) $stats['to'];
 
     <div class="kday-actions">
         <a class="btn btn-ghost btn-sm" href="<?= e(url('/kiosque/admin/' . rawurlencode($token))) ?>">← Kiosque admin</a>
-        <a class="btn btn-ghost btn-sm" href="<?= e(url('/kiosque/comptage/jour/' . rawurlencode($token))) ?>">📊 Récap du jour</a>
+        <a class="btn btn-ghost btn-sm" href="<?= e(url('/kiosque/comptage/jour/' . rawurlencode($token))) ?>">Récap du jour</a>
     </div>
 </div>
 

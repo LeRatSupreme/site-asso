@@ -5,20 +5,14 @@ declare(strict_types=1);
 /**
  * Kiosque ADMIN — hub : menu de tuiles avec données financières
  * complètes, totalement détaché du hub membres (jeton dédié).
+ * AUCUN calcul ici : la marge de chaque période (« marge », en %)
+ * arrive prête du contrôleur (adminHub → margePct).
  *
  * @var string $token
- * @var array{ca:float,profit:float} $jour
- * @var array{ca:float,profit:float} $semaine
- * @var array{ca:float,profit:float} $mois
+ * @var array{ca:float,profit:float,marge:float} $jour
+ * @var array{ca:float,profit:float,marge:float} $semaine
+ * @var array{ca:float,profit:float,marge:float} $mois
  */
-$marge = static function (float $ca, float $profit): string {
-    $pct = $ca > 0 ? round($profit / $ca * 100, 1) : 0.0;
-
-    return number_format($pct, 1, ',', ' ') . ' %';
-};
-$mJourMarge = $marge($jour['ca'], $jour['profit']);
-$mSemMarge = $marge($semaine['ca'], $semaine['profit']);
-$mMoisMarge = $marge($mois['ca'], $mois['profit']);
 ?>
 <style>
     .kx-wrap { max-width: 44rem; margin: 0 auto; }
@@ -72,8 +66,7 @@ $mMoisMarge = $marge($mois['ca'], $mois['profit']);
         transition: border-color 0.15s ease, background 0.15s ease;
     }
     .kah-grid a:hover { border-color: var(--primary, #48bdd3); background: rgba(72, 189, 211, 0.07); }
-    .kah-grid .kiosk-emoji { font-size: 2.3rem; }
-    .kah-grid .kiosk-tile-title { font-size: 0.98rem; font-weight: 900; }
+    .kah-grid .kiosk-tile-title { font-size: 0.98rem; font-weight: 900; padding: 0 0.4rem; }
     /* Tuile seule sur la 2e rangée : même taille, centrée. */
     .kah-grid a:last-child:nth-child(odd) {
         grid-column: 1 / -1;
@@ -100,53 +93,45 @@ $mMoisMarge = $marge($mois['ca'], $mois['profit']);
     <div class="kx-hero">
         <p class="kx-hero-label">Aujourd'hui</p>
         <div class="kx-hero-value"><?= e(formatPrice($jour['ca'])) ?></div>
-        <p class="kx-hero-sub">Bénéfice : <strong class="<?= $jour['profit'] >= 0 ? '' : 'is-loss' ?>"><?= e(formatPrice($jour['profit'])) ?> (<?= e($mJourMarge) ?>)</strong></p>
+        <p class="kx-hero-sub">Bénéfice : <strong class="<?= $jour['profit'] >= 0 ? '' : 'is-loss' ?>"><?= e(formatPrice($jour['profit'])) ?> (<?= e(number_format((float) $jour['marge'], 1, ',', ' ')) ?> %)</strong></p>
     </div>
 
     <div class="kx-pair">
         <div class="kx-card">
             <p class="kx-card-label">Semaine actuelle</p>
             <div class="kx-card-value"><?= e(formatPrice($semaine['ca'])) ?></div>
-            <p class="kx-card-sub <?= $semaine['profit'] < 0 ? 'is-loss' : '' ?>">+<?= e(formatPrice($semaine['profit'])) ?> bénéfice · <?= e($mSemMarge) ?></p>
+            <p class="kx-card-sub <?= $semaine['profit'] < 0 ? 'is-loss' : '' ?>">+<?= e(formatPrice($semaine['profit'])) ?> bénéfice · <?= e(number_format((float) $semaine['marge'], 1, ',', ' ')) ?> %</p>
         </div>
         <div class="kx-card">
             <p class="kx-card-label">Ce mois</p>
             <div class="kx-card-value"><?= e(formatPrice($mois['ca'])) ?></div>
-            <p class="kx-card-sub <?= $mois['profit'] < 0 ? 'is-loss' : '' ?>">+<?= e(formatPrice($mois['profit'])) ?> bénéfice · <?= e($mMoisMarge) ?></p>
+            <p class="kx-card-sub <?= $mois['profit'] < 0 ? 'is-loss' : '' ?>">+<?= e(formatPrice($mois['profit'])) ?> bénéfice · <?= e(number_format((float) $mois['marge'], 1, ',', ' ')) ?> %</p>
         </div>
     </div>
 
 <div class="kah-grid">
     <a href="<?= e(url('/kiosque/comptage/jour/' . rawurlencode($token))) ?>">
-        <span class="kiosk-emoji">📊</span>
         <span class="kiosk-tile-title">Récap du jour</span>
     </a>
     <a href="<?= e(url('/kiosque/admin/ledger/' . rawurlencode($token))) ?>">
-        <span class="kiosk-emoji">🧾</span>
         <span class="kiosk-tile-title">Livre comptable</span>
     </a>
     <a href="<?= e(url('/kiosque/admin/analytics/' . rawurlencode($token))) ?>">
-        <span class="kiosk-emoji">📈</span>
         <span class="kiosk-tile-title">Analytique</span>
     </a>
     <a href="<?= e(url('/kiosque/admin/reco/' . rawurlencode($token))) ?>">
-        <span class="kiosk-emoji">💡</span>
         <span class="kiosk-tile-title">Idées du moment</span>
     </a>
     <a href="<?= e(url('/kiosque/liste/' . rawurlencode($token))) ?>">
-        <span class="kiosk-emoji">🛒</span>
         <span class="kiosk-tile-title">Liste de courses</span>
     </a>
     <a href="<?= e(url('/kiosque/comptage/caisse/' . rawurlencode($token))) ?>">
-        <span class="kiosk-emoji">💵</span>
         <span class="kiosk-tile-title">Comptage caisse</span>
     </a>
     <a href="<?= e(url('/kiosque/comptage/inventaire/' . rawurlencode($token))) ?>">
-        <span class="kiosk-emoji">📦</span>
         <span class="kiosk-tile-title">Comptage inventaire</span>
     </a>
     <a href="<?= e(url('/kiosque/reappro/' . rawurlencode($token))) ?>">
-        <span class="kiosk-emoji">📈</span>
         <span class="kiosk-tile-title">Réappro</span>
     </a>
 </div>

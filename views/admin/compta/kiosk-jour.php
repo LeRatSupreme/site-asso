@@ -6,7 +6,10 @@ declare(strict_types=1);
  * Kiosque ADMIN — récap du jour : CA, bénéfice, paiements, top produits
  * de la journée en cours (heure de Paris). Mêmes calculs que le dashboard
  * analytics (perso inclus dans le CA, exclus du bénéfice). Lecture seule,
- * auto-actualisée toutes les 60 s.
+ * auto-actualisée toutes les 60 s. AUCUN calcul ici : panier moyen
+ * (cartMean), delta vs hier (deltaCa), marge (margin), max horaire
+ * (hoursMax) et largeurs de barres (pct) arrivent prêts du contrôleur
+ * (jourStats) — le JS du rafraîchissement lit les mêmes clés.
  *
  * @var string $token
  * @var array<string,mixed> $stats
@@ -126,35 +129,29 @@ $dateLabel = $jours[(int) $dt->format('N') - 1] . ' ' . $dt->format('j') . ' ' .
 
 <div class="kx-wrap">
     <?php
-    // ---- Valeurs dérivées (jour, Europe/Paris) ----
+    // Valeurs du jour : uniquement des lectures du payload — panier moyen,
+    // delta vs hier, marge, max horaire et largeurs de barres sont
+    // calculés côté contrôleur (jourStats).
     $fJour = (float) $stats['ca'];
     $fTransactions = (int) $stats['transactions'];
-    $fPanier = $fTransactions > 0 ? round($fJour / $fTransactions, 2) : 0.0;
     $fYesterday = (float) ($stats['yesterday_ca'] ?? 0);
-    $fDelta = $fYesterday > 0 ? (int) round(($fJour - $fYesterday) / $fYesterday * 100) : null;
+    $fDelta = ($stats['deltaCa'] ?? null) === null ? null : (int) $stats['deltaCa'];
     $fWeek = $stats['week'] ?? [];
     $fHours = $stats['hours'] ?? [];
-    $fHoursMax = 0.0;
-    foreach ($fHours as $row) {
-        if ((float) $row['ca'] > $fHoursMax) {
-            $fHoursMax = (float) $row['ca'];
-        }
-    }
     ?>
     <div class="kx-hero">
         <p class="kx-hero-label">Chiffre d'affaires du jour (TTC)</p>
         <div class="kx-hero-value" id="kdayCa"><?= e(formatPrice($fJour)) ?></div>
-        <p class="kx-hero-sub"><strong><?= e(formatPrice((float) $stats['ca_products'])) ?></strong> produits · <strong><?= $fTransactions ?></strong> transactions · panier moyen <strong id="kdayBasket"><?= e(formatPrice($fPanier)) ?></strong></p>
+        <p class="kx-hero-sub"><strong><?= e(formatPrice((float) $stats['ca_products'])) ?></strong> produits · <strong><?= $fTransactions ?></strong> transactions · panier moyen <strong id="kdayBasket"><?= e(formatPrice((float) ($stats['cartMean'] ?? 0))) ?></strong></p>
     </div>
 
     <div class="kx-pair">
-        <?php $mJour = $fJour > 0 ? round((float) $stats['profit'] / $fJour * 100, 1) : 0.0; ?>
         <div class="kx-card">
             <p class="kx-card-label">Bénéfice</p>
             <div class="kx-card-value <?= (float) $stats['profit'] >= 0 ? 'is-profit' : 'is-loss' ?>" id="kdayProfit">
                 <?= e(formatPrice((float) $stats['profit'])) ?>
             </div>
-            <p class="kx-card-sub"><span id="kdayMargin"><?= e(number_format($mJour, 1, ',', ' ')) ?> %</span> de marge · perso exclus</p>
+            <p class="kx-card-sub"><span id="kdayMargin"><?= e(number_format((float) ($stats['margin'] ?? 0), 1, ',', ' ')) ?> %</span> de marge · perso exclus</p>
             <?php if ($fDelta === null): ?>
             <p class="kx-card-sub" id="kdayYesterday">Hier : <?= e(formatPrice($fYesterday)) ?></p>
             <?php else: ?>
@@ -171,12 +168,12 @@ $dateLabel = $jours[(int) $dt->format('N') - 1] . ' ' . $dt->format('j') . ' ' .
 
     <div class="kx-pair">
         <div class="kx-card">
-            <p class="kx-card-label">💵 Liquide</p>
+            <p class="kx-card-label">Liquide</p>
             <div class="kx-card-value" id="kdayLiquide"><?= e(formatPrice((float) $stats['liquide'])) ?></div>
             <p class="kx-card-sub" id="kdayLiquideTx"><?= (int) ($stats['liquide_tx'] ?? 0) ?> transaction<?= (int) ($stats['liquide_tx'] ?? 0) > 1 ? 's' : '' ?></p>
         </div>
         <div class="kx-card">
-            <p class="kx-card-label">💳 Carte</p>
+            <p class="kx-card-label">Carte</p>
             <div class="kx-card-value" id="kdayCarte"><?= e(formatPrice((float) $stats['carte'])) ?></div>
             <p class="kx-card-sub" id="kdayCarteTx"><?= (int) ($stats['carte_tx'] ?? 0) ?> transaction<?= (int) ($stats['carte_tx'] ?? 0) > 1 ? 's' : '' ?></p>
         </div>
@@ -185,7 +182,7 @@ $dateLabel = $jours[(int) $dt->format('N') - 1] . ' ' . $dt->format('j') . ' ' .
     <?php $fWeekFrom = isset($fWeek['from']) ? \DateTimeImmutable::createFromFormat('Y-m-d', (string) $fWeek['from']) : false; ?>
     <?php $fWeekTo = isset($fWeek['to']) ? \DateTimeImmutable::createFromFormat('Y-m-d', (string) $fWeek['to']) : false; ?>
     <div class="kx-card is-wide" style="margin-bottom: 0.7rem;">
-        <p class="kx-card-label">📅 Semaine en cours</p>
+        <p class="kx-card-label">Semaine en cours</p>
         <div class="kx-card-value" id="kdayWeekCa"><?= e(formatPrice((float) ($fWeek['ca'] ?? 0))) ?></div>
         <p class="kx-card-sub">
             <?php if ($fWeekFrom !== false && $fWeekTo !== false): ?>du <?= $fWeekFrom->format('d/m') ?> au <?= $fWeekTo->format('d/m') ?> · <?php endif; ?>bénéfice
@@ -194,7 +191,7 @@ $dateLabel = $jours[(int) $dt->format('N') - 1] . ' ' . $dt->format('j') . ' ' .
     </div>
 
     <div class="kx-list-card">
-        <p class="kx-card-label">🏆 Top produits du jour</p>
+        <p class="kx-card-label">Top produits du jour</p>
         <ul class="kx-list" id="kdayTop">
             <?php foreach ($stats['top'] as $i => $t): ?>
             <li>
@@ -211,12 +208,12 @@ $dateLabel = $jours[(int) $dt->format('N') - 1] . ' ' . $dt->format('j') . ' ' .
     </div>
 
     <div class="kx-list-card">
-        <p class="kx-card-label">⏰ Ventes par heure</p>
+        <p class="kx-card-label">Ventes par heure</p>
         <div class="kday-hours" id="kdayHours">
             <?php foreach ($fHours as $row): ?>
             <div class="kday-hour-row">
                 <span class="kday-hour-label"><?= sprintf('%02dh', (int) $row['h']) ?></span>
-                <span class="kday-hour-track"><span class="kday-hour-fill" style="width:<?= $fHoursMax > 0 ? round((float) $row['ca'] / $fHoursMax * 100, 2) : 0 ?>%"></span></span>
+                <span class="kday-hour-track"><span class="kday-hour-fill" style="width:<?= (float) ($row['pct'] ?? 0) ?>%"></span></span>
                 <span class="kday-hour-val"><?= e(formatPrice((float) $row['ca'])) ?></span>
             </div>
             <?php endforeach; ?>
@@ -249,9 +246,10 @@ $dateLabel = $jours[(int) $dt->format('N') - 1] . ' ' . $dt->format('j') . ' ' .
         set('kdayCarte', price(j.carte));
         set('kdayAt', j.computed_at);
 
-        // Hero : produits + transactions + panier moyen (CA / transactions).
+        // Hero : produits + transactions + panier moyen — valeur fournie
+        // par le contrôleur (« cartMean »), jamais recalculée ici.
         var tx = Number(j.transactions) || 0;
-        var panier = tx > 0 ? Math.round(Number(j.ca) / tx * 100) / 100 : 0;
+        var panier = Number(j.cartMean) || 0;
         var sub = document.querySelector('.kx-hero-sub');
         if (sub) {
             sub.innerHTML = '<strong>' + price(j.ca_products) + '</strong> produits · <strong>' + tx + '</strong> transactions'
@@ -267,16 +265,16 @@ $dateLabel = $jours[(int) $dt->format('N') - 1] . ' ' . $dt->format('j') . ' ' .
 
         var marge = document.getElementById('kdayMargin');
         if (marge) {
-            var pct = Number(j.ca) > 0 ? Math.round(Number(j.profit) / Number(j.ca) * 1000) / 10 : 0;
-            marge.textContent = String(pct).replace('.', ',') + ' %';
+            marge.textContent = (Number(j.margin) || 0).toFixed(1).replace('.', ',') + ' %';
         }
 
-        // Comparaison avec hier : delta % coloré (base nulle → sans delta).
+        // Comparaison avec hier : delta % coloré, valeur fournie par le
+        // contrôleur (« deltaCa », null si hier est sans CA).
         var yd = document.getElementById('kdayYesterday');
         if (yd) {
             var hier = Number(j.yesterday_ca) || 0;
-            if (hier > 0) {
-                var d = Math.round((Number(j.ca) - hier) / hier * 100);
+            var d = (j.deltaCa === null || j.deltaCa === undefined) ? null : Number(j.deltaCa);
+            if (d !== null) {
                 yd.innerHTML = 'Hier : ' + price(hier)
                     + ' <span class="kday-delta ' + (d >= 0 ? 'is-up' : 'is-down') + '">'
                     + (d >= 0 ? '↑ +' : '↓ ') + d + ' %</span>';
@@ -339,19 +337,18 @@ $dateLabel = $jours[(int) $dt->format('N') - 1] . ' ' . $dt->format('j') . ' ' .
             }
         }
 
-        // Ventes par heure : barres, pleine = max du jour (heures > 0,
-        // triées par heure croissante — déjà garanties côté serveur).
+        // Ventes par heure : barres — max du jour (« hoursMax ») et
+        // largeur de chaque barre (« pct ») fournis par le contrôleur
+        // (heures > 0, triées par heure croissante — garanties serveur).
         var hoursWrap = document.getElementById('kdayHours');
         if (hoursWrap) {
             var hours = j.hours || [];
             if (hours.length === 0) {
                 hoursWrap.innerHTML = '<p class="kday-hour-empty">Aucune vente pour le moment.</p>';
             } else {
-                var hMax = 0;
-                hours.forEach(function (row) { if (Number(row.ca) > hMax) hMax = Number(row.ca); });
                 hoursWrap.innerHTML = hours.map(function (row) {
                     var ca = Number(row.ca) || 0;
-                    var width = hMax > 0 ? Math.round(ca / hMax * 10000) / 100 : 0;
+                    var width = Number(row.pct) || 0;
                     var label = String(row.h).padStart(2, '0') + 'h';
                     return '<div class="kday-hour-row">'
                         + '<span class="kday-hour-label">' + label + '</span>'
