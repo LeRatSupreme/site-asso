@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Core\Compta\Reappro\PackResolver;
+
 /**
  * Taille de pack d'achat par produit (table `product_packs`).
  *
@@ -47,6 +49,33 @@ final class ProductPack extends Model
         }
 
         return $out;
+    }
+
+    /** @var ?PackResolver cache du résolveur (une construction par requête) */
+    private static ?PackResolver $resolverCache = null;
+
+    /**
+     * Résolveur de pack partagé : exact → normalisé → alias, sur la clé
+     * ET le libellé (les packs sont saisis sous les product_key du
+     * Réappro, les lignes moteur portent des libellés de vente parfois
+     * différents — sans ceci, la liste de courses commande à l'unité).
+     */
+    public static function resolver(): PackResolver
+    {
+        if (self::$resolverCache !== null) {
+            return self::$resolverCache;
+        }
+
+        return self::$resolverCache = new PackResolver(
+            self::sizesMap(),
+            array_map(
+                static fn (array $a): array => [
+                    'raw_description' => (string) ($a['raw_description'] ?? ''),
+                    'product_key'     => (string) ($a['product_key'] ?? ''),
+                ],
+                ProductAlias::all()
+            )
+        );
     }
 
     /**

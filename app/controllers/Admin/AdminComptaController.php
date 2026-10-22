@@ -2029,7 +2029,12 @@ final class AdminComptaController extends AdminBaseController
         };
 
         // Packs d'achat (12, 24, 32…) : arrondi au multiple supérieur.
-        $packs = ProductPack::sizesMap();
+        // Résolution exacte → normalisée → alias sur la clé ET le libellé :
+        // les packs sont saisis sous les product_key du Réappro, les lignes
+        // moteur portent des libellés de vente parfois différents (casse,
+        // accents, alias) — sinon la liste commanderait à l'unité (ex. 5
+        // cannettes au lieu d'un pack de 6), régression du 22/10/2026.
+        $packs = ProductPack::resolver();
 
         $items    = []; // à commander (stock connu)
         $aCompter = []; // sans AUCUNE donnée d'inventaire → à compter
@@ -2039,7 +2044,7 @@ final class AdminComptaController extends AdminBaseController
                 continue;
             }
             $name = (string) $p['label'];
-            $pack = (int) ($packs[strtolower(trim($name))] ?? 0);
+            $pack = $packs->resolve((string) $p['key'], $name);
 
             $ligne  = BesoinListe::ligne($p, $facteur, $pack);
             $besoin = $ligne['besoin'];
