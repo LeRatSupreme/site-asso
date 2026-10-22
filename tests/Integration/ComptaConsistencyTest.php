@@ -333,8 +333,11 @@ final class ComptaConsistencyTest extends IntegrationTestCase
         self::assertStringContainsString('Liste de courses', $body);
 
         // Base de calcul énoncée (exigence : la page dit sur quoi elle repose).
-        self::assertStringContainsString('Base : demande', $body, 'La base « demande » doit être énoncée.');
-        self::assertStringContainsString('théorique inventaire', $body, 'La base « stock » doit être énoncée.');
+        // Lot 5 : l'ancien énoncé « Base : demande = … » est remplacé par
+        // l'encart partagé « Base de calcul », identique à la page Réappro —
+        // ajustement de test imposé par la mission (§8, même présentation).
+        self::assertStringContainsString('Base de calcul', $body, 'L\'encart « Base de calcul » doit être énoncé.');
+        self::assertStringContainsString('stock théorique (comptages, achats, ventes, pertes)', $body, 'La base « stock » doit être énoncée.');
 
         // Tuiles de commande : cola (survente, reste commandable) et pulco.
         self::assertMatchesRegularExpression('/data-key="cola"/', $body, 'cola (stock négatif) doit rester dans la liste.');

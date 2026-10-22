@@ -52,8 +52,9 @@ $isAdminRole = in_array($user['role'] ?? null, Permissions::adminRoles(), true);
 // Journal d'audit : visible seulement Fondateur/ADMIN (garde actuelle).
 $isFondateurOuAdmin = in_array($user['role'] ?? null, [Auth::ROLE_SUPERADMIN, Auth::ROLE_ADMIN], true);
 
-// Bénévole (nouveau rôle) : aucun module, uniquement l'accueil et les
-// pages de comptage. La constante Auth::ROLE_BENEVOL est posée par le
+// Bénévole (nouveau rôle) : aucun module, uniquement l'accueil, les pages
+// de comptage et la liste de courses (sans chiffre financier, cf. lot 5).
+// La constante Auth::ROLE_BENEVOL est posée par le
 // lot rôles ; repli sur la clé littérale si le lot n'est pas encore
 // déployé (le fallback disparaît de lui-même une fois la constante là).
 $benevolRole = defined('App\Core\Auth::ROLE_BENEVOL') ? Auth::ROLE_BENEVOL : 'BENEVOL';
@@ -77,6 +78,7 @@ if ($isFondateurOuAdmin) {
 if ($isBenevol) {
     $accueil['Comptage caisse']     = '/admin/compta/caisse';
     $accueil['Comptage inventaire'] = '/admin/compta/inventaire/comptage';
+    $accueil['Liste de courses']    = '/admin/compta/liste';
 }
 $sections['Accueil'] = $accueil;
 

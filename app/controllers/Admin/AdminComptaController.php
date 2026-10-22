@@ -16,6 +16,7 @@ use App\Core\Compta\ScanCatalogMatcher;
 use App\Core\Compta\StockPublic;
 use App\Core\Compta\SumUpCsvParser;
 use App\Core\Logger;
+use App\Core\Permissions;
 use App\Models\ImportBatch;
 use App\Models\Product;
 use App\Models\ProductAlias;
@@ -49,6 +50,12 @@ final class AdminComptaController extends AdminBaseController
 {
     /** Taille maximale d'un CSV importé (5 Mo). */
     private const MAX_CSV_SIZE = 5_242_880;
+
+    /**
+     * Encart « Base de calcul » (réappro + liste de courses, admin et
+     * kiosque) : source du stock, énoncée à l'identique sur les 4 rendus.
+     */
+    private const BASE_CALCUL_SOURCE = 'stock théorique (comptages, achats, ventes, pertes)';
 
     // -----------------------------------------------------------------
     //  Dashboard
@@ -1533,7 +1540,7 @@ final class AdminComptaController extends AdminBaseController
     {
         $user = $this->guardCompta();
 
-        $this->renderReorderPage(false, $user);
+        $this->renderReorderPage(false, $user, null, true);
     }
 
     /**
@@ -1550,7 +1557,9 @@ final class AdminComptaController extends AdminBaseController
             return;
         }
 
-        $this->renderReorderPage(true, null, $token);
+        // Jeton « membres » = bénévole : aucun chiffre financier. Jeton
+        // « admin » (bureau sur téléphone) : tout est visible.
+        $this->renderReorderPage(true, null, $token, $this->kioskTokenIsAdmin($token));
     }
 
     /**
@@ -1575,12 +1584,17 @@ final class AdminComptaController extends AdminBaseController
      * Liste de courses : uniquement les produits à acheter, avec arrondi
      * aux packs d'achat. Analyse FIXE sur 14 jours (non affichée) ; seule
      * la couverture (« Couvrir pour ») est choisissable.
+     *
+     * Ouverte au bénévole de caisse (guardComptaOuBenevol) : le flag
+     * $showMoney masque TOUT chiffre financier pour les rôles sans le
+     * module compta (mission : « le bénévole ne voit AUCUN chiffre
+     * financier »).
      */
     public function liste(): void
     {
-        $user = $this->guardCompta();
+        $user = $this->guardComptaOuBenevol();
 
-        $this->renderListePage(false, $user);
+        $this->renderListePage(false, $user, null, Permissions::allows(Auth::role(), Permissions::MODULE_COMPTA));
     }
 
     /**
@@ -1596,7 +1610,9 @@ final class AdminComptaController extends AdminBaseController
             return;
         }
 
-        $this->renderListePage(true, null, $token);
+        // Jeton « membres » = bénévole : aucun chiffre financier. Jeton
+        // « admin » (bureau sur téléphone) : tout est visible.
+        $this->renderListePage(true, null, $token, $this->kioskTokenIsAdmin($token));
     }
 
     // -----------------------------------------------------------------
@@ -1629,19 +1645,25 @@ final class AdminComptaController extends AdminBaseController
     }
 
     /**
+     * Le jeton fourni est-il le jeton « admin » (espace bureau du kiosque) ?
+     * Opposé du jeton « membres » (bénévole) : détermine le masquage des
+     * chiffres financiers sur les pages outils (liste, réappro).
+     */
+    private function kioskTokenIsAdmin(string $token): bool
+    {
+        $expected = trim((string) Setting::get('admin_kiosk_token', ''));
+
+        return $expected !== '' && hash_equals($expected, trim($token));
+    }
+
+    /**
      * Jeton MEMBRES ou ADMIN accepté : les pages outils (liste, réappro)
      * sont accessibles depuis les deux espaces kiosque, l'URL conservant
      * le contexte d'origine (les liens de retour y restent).
      */
     private function kioskAnyTokenOk(string $token): bool
     {
-        if ($this->kioskTokenOk($token)) {
-            return true;
-        }
-
-        $expected = trim((string) Setting::get('admin_kiosk_token', ''));
-
-        return $expected !== '' && hash_equals($expected, trim($token));
+        return $this->kioskTokenOk($token) || $this->kioskTokenIsAdmin($token);
     }
 
     /**
@@ -1650,9 +1672,7 @@ final class AdminComptaController extends AdminBaseController
      */
     private function listeHubUrl(string $token): string
     {
-        $admin = trim((string) Setting::get('admin_kiosk_token', ''));
-
-        return $admin !== '' && hash_equals($admin, trim($token))
+        return $this->kioskTokenIsAdmin(trim($token))
             ? url('/kiosque/admin/' . trim($token))
             : url('/kiosque/comptage/' . trim($token));
     }
@@ -1673,7 +1693,7 @@ final class AdminComptaController extends AdminBaseController
     /** État des cases (JSON) — version connectée. */
     public function listeState(): void
     {
-        $this->guardCompta();
+        $this->guardComptaOuBenevol();
         header('Content-Type: application/json; charset=utf-8');
         echo json_encode($this->listeStatePayload());
     }
@@ -1694,7 +1714,7 @@ final class AdminComptaController extends AdminBaseController
     /** Cocher / décocher (JSON) — version connectée. */
     public function listeCheck(): void
     {
-        $this->guardCompta();
+        $this->guardComptaOuBenevol();
         $this->handleListeCheck();
     }
 
@@ -1752,7 +1772,7 @@ final class AdminComptaController extends AdminBaseController
      *
      * @param array<string,mixed>|null $user Utilisateur connecté (null en kiosque).
      */
-    private function renderListePage(bool $kiosk, ?array $user = null, ?string $kioskToken = null): void
+    private function renderListePage(bool $kiosk, ?array $user = null, ?string $kioskToken = null, bool $showMoney = true): void
     {
         // ---- Demande UNIQUE : le moteur ForecastEngine, via ReapproDemande ----
         // (exigence du 21/10/2026). La liste ne recalculait PLUS la même
@@ -1763,7 +1783,6 @@ final class AdminComptaController extends AdminBaseController
         // « besoin(N) − stock » seulement, cf. BesoinListe.
         $demande  = ReapproDemande::calculer();
         $produits = is_array($demande['forecast']['produits'] ?? null) ? $demande['forecast']['produits'] : [];
-        $meta     = $demande['meta'];
 
         // Couverture (« Couvrir pour »), défaut 1 semaine. La prévision du
         // moteur couvre 7 jours ouverts : le facteur la met à l'échelle de
@@ -1903,9 +1922,16 @@ final class AdminComptaController extends AdminBaseController
             'totalUnits'  => $totalUnits,
             'totalCost'   => round($totalCost, 2),
             'missingCost' => $missingCost,
-            // Base de calcul affichée (exigence : « la page doit énoncer
-            // la base utilisée ») — même énoncé que la carte Analytics.
-            'meta'        => $meta,
+            // Encart « Base de calcul » (identique à la page Réappro) :
+            // valeurs factuelles issues du payload ReapproDemande (fw) et
+            // de la couverture choisie — jamais recalculées en vue.
+            'basis'       => [
+                'ventes'      => sprintf('%d derniers jours', (int) ($demande['fw'] ?? 30)),
+                'couverture'  => (string) $covers[$coverKey]['label'],
+                'source'      => self::BASE_CALCUL_SOURCE,
+            ],
+            // Faux = masque TOUT chiffre financier (bénévole, jeton membres).
+            'showMoney'   => $showMoney,
             // Produits sans aucune donnée d'inventaire : à compter d'abord.
             'aCompter'    => $aCompter,
             // Stocks théoriques négatifs (survente) : anomalies à recompter.
@@ -1935,7 +1961,7 @@ final class AdminComptaController extends AdminBaseController
      *
      * @param array<string,mixed>|null $user Utilisateur connecté (null en kiosque).
      */
-    private function renderReorderPage(bool $kiosk, ?array $user = null, ?string $kioskToken = null): void
+    private function renderReorderPage(bool $kiosk, ?array $user = null, ?string $kioskToken = null, bool $showMoney = true): void
     {
         // Lien kiosque : généré à la première visite (connecté uniquement).
         $kioskUrl = '';
@@ -2016,6 +2042,25 @@ final class AdminComptaController extends AdminBaseController
 
         $data = $this->reorderData($targetDays, $fromDay, $toDay, $calDays);
 
+        // Encart « Base de calcul » (identique à la liste de courses) :
+        // période réellement analysée + horizon de couverture choisis.
+        $ventes = (string) $refOptions[$ref];
+        if ($fromDay !== null || $toDay !== null) {
+            $bornes = [];
+            if ($fromDay !== null) {
+                $bornes[] = date('d/m/Y', strtotime($fromDay));
+            }
+            if ($toDay !== null) {
+                $bornes[] = date('d/m/Y', strtotime($toDay));
+            }
+            $ventes .= $bornes !== [] ? ' (' . implode(' → ', $bornes) . ')' : '';
+        }
+        $basis = [
+            'ventes'     => $ventes,
+            'couverture' => (string) $periods[$periodKey]['label'],
+            'source'     => self::BASE_CALCUL_SOURCE,
+        ];
+
         if ($kiosk) {
             // Layout kiosque : aucune navigation, rien d'autre que la page.
             $this->renderKiosk('admin/compta/reorder', [
@@ -2037,6 +2082,9 @@ final class AdminComptaController extends AdminBaseController
                 'kioskUrl'      => '',
                 // Bouton retour flottant : hub du bon espace (admin/membres).
                 'kioskHubUrl'   => $kioskHubUrl,
+                // Faux = masque TOUT chiffre financier (jeton membres).
+                'showMoney'     => $showMoney,
+                'basis'         => $basis,
             ]);
 
             return;
@@ -2059,6 +2107,8 @@ final class AdminComptaController extends AdminBaseController
             'au'            => $auOk ? $au : '',
             'kiosk'         => false,
             'kioskUrl'      => $kioskUrl,
+            'showMoney'     => $showMoney,
+            'basis'         => $basis,
         ]);
     }
 

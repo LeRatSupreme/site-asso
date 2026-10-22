@@ -13,6 +13,10 @@ namespace Tests\Integration;
  *    « Bénéfice », ni « Argent encaissé », ni les libellés du menu compta),
  *    refusé sur les pages module (compta, analytics), admis sur les deux
  *    pages de comptage (guardAdminArea) ;
+ *  - BENEVOL (lot 5) : la liste de courses rejoint ses pages, rendue sans
+ *    AUCUN chiffre financier (ni « € », ni « Coût », ni « Total estimé »),
+ *    avec l'entrée « Liste de courses » dans le menu Accueil ; un rôle
+ *    compta voit les coûts sur la même page ;
  *  - PRESIDENT : lecture générale (accueil, compta), jamais le groupe
  *    Système (settings), et toute écriture POST /admin/* reçue en 403 par
  *    le routeur — le contrôleur n'est jamais atteint (l'objectif hebdo ne
@@ -88,6 +92,76 @@ final class RolesMenuTest extends IntegrationTestCase
         }
     }
 
+    /**
+     * Lot 5 : la liste de courses rejoint les pages du bénévole, SANS
+     * aucun chiffre financier (mission : « le bénévole ne voit AUCUN
+     * chiffre financier »). La page ne montre que produit, stock restant,
+     * quantité à acheter, case à cocher ; le menu Accueil propose l'entrée.
+     */
+    public function test_benevol_liste_de_courses_sans_chiffre_financier(): void
+    {
+        $this->seedProduitListe();
+
+        $r    = $this->request('GET', '/admin/compta/liste', [], [], $this->benevolId);
+        $code = (int) ($r['code'] ?? 0);
+        $body = (string) ($r['body'] ?? '');
+
+        self::assertSame(200, $code, 'La liste de courses est accessible au bénévole (lot 5).');
+
+        foreach (['€', 'Coût', 'Total estimé'] as $interdit) {
+            self::assertStringNotContainsString($interdit, $body, sprintf('« %s » ne doit pas apparaître pour un bénévole sur la liste.', $interdit));
+        }
+
+        // Contenu utile conservé : produit, stock restant, à commander,
+        // base de calcul (sans montant) et entrée de menu.
+        self::assertStringContainsString('Liste de courses', $body);
+        self::assertStringContainsString('data-key="colalistetest"', $body, 'La tuile du produit à acheter reste visible.');
+        self::assertStringContainsString('stock restant', $body, 'Le stock restant reste affiché (vocabulaire unifié).');
+        self::assertStringContainsString('Base de calcul', $body, 'L\'encart « Base de calcul » est affiché, sans montant.');
+        self::assertStringContainsString('/admin/compta/liste', $body, 'L\'entrée « Liste de courses » doit figurer dans le menu du bénévole.');
+
+        // Cases partagées : le bénévole coche via le MÊME endpoint que la
+        // compta (mécanisme inchangé, garde élargie à son rôle).
+        $rc    = $this->request('POST', '/admin/compta/liste/check', [
+            'key'        => 'colalistetest',
+            'state'      => '1',
+            'who_prenom' => 'Ben',
+            'who_nom'    => 'Volontaire',
+            'who_alias'  => 'bénévole',
+        ], [], $this->benevolId);
+        $check = json_decode((string) ($rc['body'] ?? ''), true);
+        self::assertSame(200, (int) ($rc['code'] ?? 0), 'Le POST de coche du bénévole est accepté.');
+        self::assertTrue(is_array($check) && ($check['ok'] ?? false), 'Le bénévole coche via le même endpoint que la compta.');
+        $ru    = $this->request('POST', '/admin/compta/liste/check', [
+            'key'        => 'colalistetest',
+            'state'      => '0',
+            'who_prenom' => 'Ben',
+            'who_nom'    => 'Volontaire',
+            'who_alias'  => 'bénévole',
+        ], [], $this->benevolId);
+        $uncheck = json_decode((string) ($ru['body'] ?? ''), true);
+        self::assertTrue(is_array($uncheck) && ($uncheck['ok'] ?? false), 'Le décochage du bénévole est accepté.');
+    }
+
+    /**
+     * Miroir du test précédent : un rôle compta (module ouvert) voit les
+     * coûts sur la MÊME page — le masquage est bien par rôle, pas global.
+     */
+    public function test_role_compta_voit_les_couts_sur_la_liste(): void
+    {
+        $this->seedProduitListe();
+        $tresorierId = 'u_roles_tresorerie';
+        $this->seedUser($tresorierId, 'roles-tresorerie@exemple.fr', 'Password123456', 'TRESORERIE');
+
+        $r    = $this->request('GET', '/admin/compta/liste', [], [], $tresorierId);
+        $code = (int) ($r['code'] ?? 0);
+        $body = (string) ($r['body'] ?? '');
+
+        self::assertSame(200, $code, 'Un rôle compta accède à la liste de courses.');
+        self::assertStringContainsString('€', $body, 'Un rôle compta voit le coût estimé du panier sur la liste.');
+        self::assertStringContainsString('Base de calcul', $body, 'L\'encart « Base de calcul » est aussi présent pour un rôle compta.');
+    }
+
     // -----------------------------------------------------------------
     //  PRESIDENT : lecture générale, écriture impossible
     // -----------------------------------------------------------------
@@ -152,6 +226,51 @@ final class RolesMenuTest extends IntegrationTestCase
     // -----------------------------------------------------------------
     //  Helpers
     // -----------------------------------------------------------------
+
+    /**
+     * Donne à la liste de courses un produit commandable avec un coût
+     * connu : ventes du jour, comptage 0 (théorique 0) et coût de revient
+     * saisi — la tuile apparaît et le panier compta affiche un montant
+     * en euros. Les tables produit sont vidées pour isoler chaque test.
+     */
+    private function seedProduitListe(): void
+    {
+        $this->reset([
+            'sales',
+            'inventory_counts',
+            'product_costs',
+            'product_discontinued',
+            'product_infinite',
+            'product_packs',
+        ]);
+
+        for ($i = 1; $i <= 3; $i++) {
+            $this->pdo->prepare(
+                'INSERT INTO sales (id, transaction_ref, sold_at, payment_method, payment_raw, quantity, description, price_ttc, is_custom_amount, category)
+                 VALUES (?,?,?,?,?,1,?,?,0,?)'
+            )->execute([
+                's_roles_lst_' . $i,
+                'TROLST00' . $i,
+                date('Y-m-d ') . sprintf('08:0%d:00', $i),
+                'CARTE',
+                'Visa - Débit',
+                'colalistetest',
+                '1.50',
+                'Boissons',
+            ]);
+        }
+
+        $this->pdo->prepare(
+            'INSERT INTO inventory_counts (id, counted_at, product_key, counted_qty, theoretical_qty, gap, created_by)
+             VALUES (?,?,?,?,?,?,?)'
+        )->execute(['inv_roles_lst', '2026-01-01 08:00:00', 'colalistetest', 0, 0, 0, 'test']);
+        $this->pdo->prepare(
+            'INSERT INTO product_costs (id, product_key, cost_price, valid_from) VALUES (?,?,?,?)'
+        )->execute(['pc_roles_lst', 'colalistetest', '1.500', '2026-01-01']);
+        $this->pdo->prepare(
+            'INSERT INTO product_packs (product_key, pack_size, updated_by) VALUES (?,?,?)'
+        )->execute(['colalistetest', 12, 'test']);
+    }
 
     /**
      * Vérifie un refus d'accès : 403 brut (élève, routeur) ou redirection
