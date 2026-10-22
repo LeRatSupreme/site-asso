@@ -1,0 +1,127 @@
+/*
+ * AEIC — Design system : tokens (variables uniquement).
+ *
+ * Portée : tout est défini sous html.ds — les pages migrées ajoutent
+ * class="ds" sur <html> et chargent ce fichier puis components.css.
+ * Thème sombre : html.ds[data-theme="dark"] (surcharges des mêmes variables).
+ * Aucune règle de composant ici : voir components.css.
+ */
+
+html.ds {
+    /* Neutres */
+    --n-0: #ffffff;
+    --n-50: #f7f8f9;   /* fond de page */
+    --n-100: #eef0f2;
+    --n-200: #dfe3e8;  /* bordures */
+    --n-300: #c7ccd3;
+    --n-500: #6b7280;  /* texte secondaire (AA sur blanc) */
+    --n-700: #3a4149;
+    --n-900: #1a202c;  /* texte principal */
+
+    /* Accent unique */
+    --accent: #1f7a99;
+    --accent-strong: #185f79; /* survol */
+    --accent-soft: #e8f3f7;   /* fond discret */
+
+    /* États : réservés au sens bon / à surveiller / problème */
+    --ok: #1e7d46;
+    --ok-bg: #e8f5ec;
+    --ok-border: #bfe3cc;
+    --warn: #935400;
+    --warn-bg: #fcf3e2;
+    --warn-border: #eedeb8;
+    --ko: #b3261e;
+    --ko-bg: #fbeceb;
+    --ko-border: #f2c6c3;
+
+    /* Typographie */
+    --font: "Segoe UI", -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
+    --fs-1: .8125rem;  /* 13px : texte secondaire */
+    --fs-2: .9375rem;  /* 15px : texte courant */
+    --fs-3: 1.1875rem; /* 19px : titres de bloc */
+    --fs-4: 1.5rem;    /* 24px : titres de page et KPI */
+    --lh: 1.45;
+
+    /* Espacements */
+    --sp-1: 4px;
+    --sp-2: 8px;
+    --sp-3: 12px;
+    --sp-4: 16px;
+    --sp-6: 24px;
+    --sp-8: 32px;
+
+    /* Formes */
+    --radius-s: 6px;
+    --radius-m: 10px;
+    --border: 1px solid var(--n-200);
+
+    /* Ombre unique, réservée aux popovers et dialogues */
+    --shadow: 0 1px 2px rgba(16, 24, 40, .08), 0 4px 12px rgba(16, 24, 40, .08);
+
+    /* Largeur bornée */
+    --maxw: 1160px;
+
+    color-scheme: light;
+
+    /* Réglages globaux */
+    font-family: var(--font);
+    font-size: var(--fs-2);
+    line-height: var(--lh);
+    color: var(--n-900);
+    background: var(--n-50);
+}
+
+/* Thème sombre sobre : mêmes variables, valeurs adaptées. */
+html.ds[data-theme="dark"] {
+    --n-0: #161d26;
+    --n-50: #0f141a;
+    --n-100: #1c242f;
+    --n-200: #2a3340;
+    --n-300: #3a4552;
+    --n-500: #9aa3ad;
+    --n-700: #c3cad3;
+    --n-900: #e6eaf0;
+
+    --accent: #4aa3c2;
+    --accent-strong: #6cb8d3;
+    --accent-soft: rgba(74, 163, 194, .14);
+
+    --ok: #4caf7d;
+    --ok-bg: rgba(76, 175, 125, .12);
+    --ok-border: rgba(76, 175, 125, .4);
+    --warn: #d29a3a;
+    --warn-bg: rgba(210, 154, 58, .12);
+    --warn-border: rgba(210, 154, 58, .4);
+    --ko: #e5736e;
+    --ko-bg: rgba(229, 115, 110, .12);
+    --ko-border: rgba(229, 115, 110, .4);
+
+    color-scheme: dark;
+}
+
+/* Chiffres tabulaires : toute valeur numérique porte la classe .num. */
+html.ds .num {
+    font-variant-numeric: tabular-nums;
+}
+
+/* Focus visible net, uniforme sur tous les éléments interactifs. */
+html.ds :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+html.ds body {
+    margin: 0;
+}
+
+/* Respect du réglage « animations réduites » : tout est figé. */
+@media (prefers-reduced-motion: reduce) {
+    html.ds *,
+    html.ds *::before,
+    html.ds *::after {
+        animation-duration: .01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: .01ms !important;
+        scroll-behavior: auto !important;
+    }
+}

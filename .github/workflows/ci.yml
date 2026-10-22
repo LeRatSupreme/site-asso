@@ -2,89 +2,100 @@ name: CI
 
 on:
   push:
+    branches: [experiments, main]
   pull_request:
-  workflow_dispatch:
-
-concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
 
 jobs:
-  phpunit:
-    name: PHPUnit (MariaDB)
+  # Suite de tests : PHPUnit (Unit + Integration) sur base MySQL 8 dédiée CI.
+  tests:
+    name: Tests (PHP 8.3 / MySQL 8)
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
     services:
-      mariadb:
-        image: mariadb:10.11
+      mysql:
+        image: mysql:8
         env:
-          MYSQL_ROOT_PASSWORD: root
+          MYSQL_ROOT_PASSWORD: ci_root
           MYSQL_DATABASE: aeic_test
           MYSQL_USER: aeic
-          MYSQL_PASSWORD: aeic
+          MYSQL_PASSWORD: ci_password
         ports:
           - 3306:3306
         options: >-
-          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-cmd="mysqladmin ping --user=root --password=ci_root"
           --health-interval=10s
           --health-timeout=5s
           --health-retries=10
 
+    # Mêmes noms de variables que phpunit.xml / TestDatabaseTrait / IntegrationTestCase.
+    # APP_ENV, APP_DEBUG, APP_URL et APP_TESTING sont déjà fixés par phpunit.xml.
     env:
       DB_HOST: 127.0.0.1
       DB_NAME: aeic_test
       DB_USER: aeic
-      DB_PASS: aeic
+      DB_PASS: ci_password
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: PHP 8.2
+      - name: PHP 8.3
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.2'
-          extensions: mbstring, pdo_mysql, gd
+          php-version: '8.3'
+          extensions: pdo_mysql, mbstring, gd, intl
           coverage: none
+          cache: composer
 
       - name: Installer les dépendances Composer
-        run: |
-          php -v
-          composer --version
-          if ! composer install --prefer-dist --no-progress --no-interaction; then
-            echo "::warning::composer install a échoué — repli sur composer update (verrou régénéré)."
-            composer update --prefer-dist --no-progress --no-interaction --with-all-dependencies
-          fi
+        run: composer install --no-interaction --prefer-dist --no-progress
 
-      - name: Créer la base aeic_test (schéma + migrations)
+      # Le bootstrap ne crée pas le schéma : les tests sautent si la base est vide.
+      # Installation fraîche = database/schema.sql uniquement (les migrations sont
+      # déjà intégrées au schéma canonique, voir database/migrations/README.md).
+      - name: Préparer la base aeic_test
         run: |
-          mysql -h127.0.0.1 -uaeic -paeic -e "CREATE DATABASE IF NOT EXISTS aeic_test CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
-          mysql --force -h127.0.0.1 -uaeic -paeic aeic_test < database/schema.sql
-          # Migrations idempotentes : --force saute les ALTER déjà appliqués par le schéma.
-          for f in database/migrations/*.sql; do
-            mysql --force -h127.0.0.1 -uaeic -paeic aeic_test < "$f" || true
-          done
+          mysql -h127.0.0.1 -uroot -pci_root -e "
+            CREATE DATABASE IF NOT EXISTS aeic_test CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+            CREATE USER IF NOT EXISTS 'aeic'@'%' IDENTIFIED BY 'ci_password';
+            GRANT ALL PRIVILEGES ON aeic_test.* TO 'aeic'@'%';
+            FLUSH PRIVILEGES;"
+          mysql -h127.0.0.1 -uroot -pci_root --default-character-set=utf8mb4 aeic_test < database/schema.sql
 
-      - name: Lancer la suite PHPUnit
-        run: vendor/bin/phpunit --no-coverage --log-junit junit.xml
+      - name: Lancer PHPUnit
+        run: vendor/bin/phpunit --no-coverage
 
-      - name: Signaler les échecs en annotations
-        if: failure()
+  # Lint : syntaxe PHP de tous les sources + tests JS (sans dépendance npm).
+  lint:
+    name: Lint PHP + JS
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          coverage: none
+
+      - name: php -l sur tous les fichiers PHP
         run: |
-          php -r '
-            $f = @file_get_contents("junit.xml");
-            if ($f === false) { exit(0); }
-            $x = @simplexml_load_string($f);
-            if ($x === false) { exit(0); }
-            foreach ($x->xpath("//testcase") as $tc) {
-              foreach ($tc->xpath("failure|error|warning") as $p) {
-                $type = (string) ($p["type"] ?? "ko");
-                $msg = trim((string) $p);
-                $msg = str_replace(["\r", "\n"], " | ", $msg);
-                $msg = mb_substr($msg, 0, 500);
-                $label = $tc["classname"] . "::" . $tc["name"];
-                echo "::error ::" . $label . " [" . $type . "] " . $msg . "\n";
-              }
-            }
-          '
+          fail=0
+          while IFS= read -r -d '' f; do
+            php -l "$f" >/dev/null || { echo "::error::Syntaxe PHP invalide : $f"; fail=1; }
+          done < <(find app views public tests -name '*.php' -print0)
+          exit $fail
+
+      - name: Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Tests JS (assert natif, aucune dépendance)
+        run: |
+          node tests/js/compta-saisie.test.js
+          node tests/js/inventaire-tablette.test.js

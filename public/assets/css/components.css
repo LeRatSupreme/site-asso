@@ -1,0 +1,783 @@
+/*
+ * AEIC — Design system : composants.
+ *
+ * Règle absolue : aucune couleur littérale ici (aucun hex, aucun dégradé) —
+ * uniquement des var(--...) définies dans tokens.css. Décoration interdite.
+ */
+
+/* ------------------------------------------------------------------ */
+/*  Typographie de page                                                */
+/* ------------------------------------------------------------------ */
+
+.ds-page h1 {
+    font-size: var(--fs-4);
+    font-weight: 600;
+    margin: 0 0 var(--sp-2);
+}
+
+.ds-page h2 {
+    font-size: var(--fs-3);
+    font-weight: 600;
+    margin: var(--sp-8) 0 var(--sp-3);
+}
+
+.ds-page p {
+    margin: 0 0 var(--sp-3);
+}
+
+/* ------------------------------------------------------------------ */
+/*  Conteneur de page                                                  */
+/* ------------------------------------------------------------------ */
+
+.ds-page {
+    max-width: var(--maxw);
+    margin: 0 auto;
+    padding: var(--sp-4);
+}
+
+@media (min-width: 720px) {
+    .ds-page {
+        padding: var(--sp-6);
+    }
+}
+
+/* Grille responsive générique (cartes KPI, exemples). */
+.ds-grid {
+    display: grid;
+    gap: var(--sp-4);
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+/* Barre d'outils (filtre, recherche, export). */
+.ds-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--sp-2);
+    margin: 0 0 var(--sp-3);
+}
+
+/* Pied de page de démonstration. */
+.ds-footer {
+    color: var(--n-500);
+    font-size: var(--fs-1);
+    border-top: var(--border);
+    margin-top: var(--sp-8);
+    padding-top: var(--sp-4);
+}
+
+/* ------------------------------------------------------------------ */
+/*  Fil d'Ariane                                                       */
+/* ------------------------------------------------------------------ */
+
+.ds-breadcrumb ol {
+    list-style: none;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--sp-2);
+    margin: 0 0 var(--sp-4);
+    padding: 0;
+    font-size: var(--fs-1);
+}
+
+.ds-breadcrumb li {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+}
+
+.ds-breadcrumb li + li::before {
+    content: "/";
+    color: var(--n-300);
+}
+
+.ds-breadcrumb a {
+    color: var(--n-500);
+    text-decoration: none;
+}
+
+.ds-breadcrumb a:hover {
+    color: var(--accent);
+    text-decoration: underline;
+}
+
+.ds-breadcrumb [aria-current="page"] {
+    color: var(--n-900);
+    font-weight: 600;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Carte KPI                                                          */
+/* ------------------------------------------------------------------ */
+
+.kpi {
+    background: var(--n-0);
+    border: var(--border);
+    border-radius: var(--radius-m);
+    padding: var(--sp-4);
+}
+
+.kpi-label {
+    display: block;
+    font-size: var(--fs-1);
+    color: var(--n-500);
+}
+
+.kpi-value {
+    display: block;
+    font-size: var(--fs-4);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    margin-top: var(--sp-1);
+}
+
+.kpi-hint {
+    display: block;
+    font-size: var(--fs-1);
+    color: var(--n-500);
+    margin-top: var(--sp-1);
+}
+
+.kpi--ok {
+    border-left: 3px solid var(--ok);
+}
+
+.kpi--warn {
+    border-left: 3px solid var(--warn);
+}
+
+.kpi--ko {
+    border-left: 3px solid var(--ko);
+}
+
+/* ------------------------------------------------------------------ */
+/*  Carte générique                                                    */
+/* ------------------------------------------------------------------ */
+
+.card {
+    background: var(--n-0);
+    border: var(--border);
+    border-radius: var(--radius-m);
+    padding: var(--sp-4);
+}
+
+.card-title {
+    font-size: var(--fs-3);
+    font-weight: 600;
+    margin: 0 0 var(--sp-3);
+}
+
+.card-body {
+    font-size: var(--fs-2);
+}
+
+/* ------------------------------------------------------------------ */
+/*  Tableau                                                            */
+/* ------------------------------------------------------------------ */
+
+.table-wrap {
+    overflow-x: auto;
+}
+
+.table-wrap--sticky {
+    max-height: 70vh;
+    overflow-y: auto;
+}
+
+.table-wrap--sticky thead th {
+    position: sticky;
+    top: 0;
+    background: var(--n-0);
+    z-index: 1;
+}
+
+.ds-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--fs-2);
+}
+
+.ds-table th,
+.ds-table td {
+    text-align: left;
+    padding: var(--sp-2) var(--sp-3);
+    border-bottom: 1px solid var(--n-200);
+}
+
+.ds-table thead th {
+    color: var(--n-700);
+    font-size: var(--fs-1);
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.ds-table th.num,
+.ds-table td.num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.ds-table th[aria-sort] {
+    cursor: pointer;
+    user-select: none;
+}
+
+.ds-table th[aria-sort="ascending"]::after {
+    content: " \25B2";
+    font-size: var(--fs-1);
+    color: var(--accent);
+}
+
+.ds-table th[aria-sort="descending"]::after {
+    content: " \25BC";
+    font-size: var(--fs-1);
+    color: var(--accent);
+}
+
+.ds-table tfoot th,
+.ds-table tfoot td {
+    border-top: 2px solid var(--n-300);
+    border-bottom: 0;
+    font-weight: 700;
+}
+
+.ds-table tfoot .total {
+    font-weight: 700;
+}
+
+/* Ligne de détail extensible (masquée par le JS au chargement). */
+tr.ds-row-detail > td {
+    background: var(--n-50);
+    font-size: var(--fs-1);
+}
+
+tr.ds-row-detail[hidden] {
+    display: none;
+}
+
+button.ds-expand {
+    appearance: none;
+    background: none;
+    border: 0;
+    padding: var(--sp-1) var(--sp-2);
+    margin: 0;
+    color: var(--accent);
+    font: inherit;
+    font-size: var(--fs-1);
+    font-weight: 600;
+    cursor: pointer;
+}
+
+button.ds-expand:hover {
+    text-decoration: underline;
+}
+
+/* Vue mobile : les lignes deviennent des cartes, uniquement pour les
+   tables marquées data-mobile-cards. */
+@media (max-width: 640px) {
+    .ds-table[data-mobile-cards] thead {
+        display: none;
+    }
+
+    .ds-table[data-mobile-cards] tr {
+        display: block;
+        background: var(--n-0);
+        border: var(--border);
+        border-radius: var(--radius-m);
+        margin-bottom: var(--sp-2);
+        padding: var(--sp-2);
+    }
+
+    .ds-table[data-mobile-cards] tr[hidden] {
+        display: none;
+    }
+
+    .ds-table[data-mobile-cards] td {
+        display: block;
+        border-bottom: 1px solid var(--n-100);
+        padding: var(--sp-1) var(--sp-2);
+    }
+
+    .ds-table[data-mobile-cards] td:last-child {
+        border-bottom: 0;
+    }
+
+    .ds-table[data-mobile-cards] td::before {
+        content: attr(data-label);
+        display: block;
+        color: var(--n-500);
+        font-size: var(--fs-1);
+    }
+
+    .ds-table[data-mobile-cards] td.num {
+        text-align: left;
+    }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Badge d'état                                                       */
+/* ------------------------------------------------------------------ */
+
+.badge {
+    display: inline-block;
+    padding: 1px var(--sp-2);
+    border-radius: 999px;
+    border: 1px solid transparent;
+    font-size: var(--fs-1);
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.badge--ok {
+    background: var(--ok-bg);
+    color: var(--ok);
+    border-color: var(--ok-border);
+}
+
+.badge--warn {
+    background: var(--warn-bg);
+    color: var(--warn);
+    border-color: var(--warn-border);
+}
+
+.badge--ko {
+    background: var(--ko-bg);
+    color: var(--ko);
+    border-color: var(--ko-border);
+}
+
+.badge--neutral {
+    background: var(--n-100);
+    color: var(--n-700);
+    border-color: var(--n-200);
+}
+
+.badge--accent {
+    background: var(--accent-soft);
+    color: var(--accent);
+}
+
+/* ------------------------------------------------------------------ */
+/*  Bandeau d'alerte                                                   */
+/* ------------------------------------------------------------------ */
+
+.alert {
+    border: var(--border);
+    border-left: 3px solid var(--n-500);
+    border-radius: var(--radius-s);
+    background: var(--n-0);
+    padding: var(--sp-3) var(--sp-4);
+    font-size: var(--fs-2);
+    margin: 0 0 var(--sp-3);
+}
+
+.alert--ok {
+    border-left-color: var(--ok);
+    background: var(--ok-bg);
+}
+
+.alert--warn {
+    border-left-color: var(--warn);
+    background: var(--warn-bg);
+}
+
+.alert--ko {
+    border-left-color: var(--ko);
+    background: var(--ko-bg);
+}
+
+.alert--info {
+    border-left-color: var(--accent);
+    background: var(--accent-soft);
+}
+
+/* ------------------------------------------------------------------ */
+/*  Boutons                                                            */
+/* ------------------------------------------------------------------ */
+
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--sp-2);
+    min-height: 44px;
+    padding: var(--sp-2) var(--sp-4);
+    border: var(--border);
+    border-radius: var(--radius-s);
+    background: var(--n-0);
+    color: var(--n-900);
+    font: inherit;
+    font-size: var(--fs-2);
+    font-weight: 600;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.btn:hover {
+    background: var(--n-100);
+}
+
+.btn--primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--n-0);
+}
+
+.btn--primary:hover {
+    background: var(--accent-strong);
+    border-color: var(--accent-strong);
+}
+
+.btn--secondary {
+    background: var(--n-0);
+    border-color: var(--n-300);
+    color: var(--n-900);
+}
+
+.btn--secondary:hover {
+    background: var(--n-100);
+}
+
+.btn--ghost {
+    background: transparent;
+    border-color: transparent;
+    color: var(--accent);
+}
+
+.btn--ghost:hover {
+    background: var(--accent-soft);
+}
+
+.btn--danger {
+    background: var(--ko);
+    border-color: var(--ko);
+    color: var(--n-0);
+}
+
+.btn--danger:hover {
+    filter: brightness(.92);
+}
+
+.btn--sm {
+    min-height: 32px;
+    padding: var(--sp-1) var(--sp-3);
+    font-size: var(--fs-1);
+}
+
+.btn:disabled {
+    background: var(--n-100);
+    border-color: var(--n-200);
+    color: var(--n-500);
+    cursor: not-allowed;
+}
+
+/* Boutons du modal de confirmation créé par confirm.js
+   (classes historiques btn-outline / btn-primary / btn-danger,
+   scoping limité au modal pour ne pas polluer le namespace .btn--*). */
+.confirm-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--sp-4);
+    background: rgba(15, 20, 26, .5);
+}
+
+.confirm-overlay[hidden] {
+    display: none;
+}
+
+.confirm-box {
+    background: var(--n-0);
+    color: var(--n-900);
+    border: var(--border);
+    border-radius: var(--radius-m);
+    box-shadow: var(--shadow);
+    padding: var(--sp-6);
+    max-width: 420px;
+    width: 100%;
+}
+
+.confirm-text {
+    margin: 0 0 var(--sp-4);
+    font-size: var(--fs-2);
+}
+
+.confirm-buttons {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--sp-2);
+}
+
+.confirm-buttons .btn-outline {
+    background: var(--n-0);
+    border: 1px solid var(--n-300);
+    color: var(--n-900);
+}
+
+.confirm-buttons .btn-primary {
+    background: var(--accent);
+    border: 1px solid var(--accent);
+    color: var(--n-0);
+}
+
+.confirm-buttons .btn-danger {
+    background: var(--ko);
+    border: 1px solid var(--ko);
+    color: var(--n-0);
+}
+
+/* ------------------------------------------------------------------ */
+/*  Formulaire                                                         */
+/* ------------------------------------------------------------------ */
+
+.ds-form {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: var(--sp-4);
+    align-items: end;
+}
+
+.field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-1);
+}
+
+.field__label {
+    font-size: var(--fs-2);
+    font-weight: 600;
+}
+
+.field__hint {
+    font-size: var(--fs-1);
+    color: var(--n-500);
+}
+
+.field__error {
+    font-size: var(--fs-1);
+    color: var(--ko);
+}
+
+.ds-form input:not([type="checkbox"]):not([type="radio"]),
+.ds-form select,
+.ds-form textarea {
+    width: 100%;
+    min-height: 44px;
+    padding: var(--sp-2) var(--sp-3);
+    border: 1px solid var(--n-300);
+    border-radius: var(--radius-s);
+    background: var(--n-0);
+    color: var(--n-900);
+    font: inherit;
+    font-size: var(--fs-2);
+}
+
+.ds-form input:not([type="checkbox"]):not([type="radio"]):focus,
+.ds-form select:focus,
+.ds-form textarea:focus {
+    outline: 2px solid var(--accent);
+    outline-offset: 0;
+    border-color: var(--accent);
+}
+
+.ds-form input[type="checkbox"],
+.ds-form input[type="radio"] {
+    width: auto;
+    min-height: 0;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Onglets                                                            */
+/* ------------------------------------------------------------------ */
+
+.ds-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--sp-2);
+    border-bottom: var(--border);
+    margin: 0 0 var(--sp-4);
+    padding: 0;
+}
+
+.ds-tabs [role="tab"] {
+    appearance: none;
+    background: none;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    padding: var(--sp-2) var(--sp-3);
+    color: var(--n-500);
+    font: inherit;
+    font-size: var(--fs-2);
+    cursor: pointer;
+}
+
+.ds-tabs [role="tab"]:hover {
+    color: var(--n-900);
+}
+
+.ds-tabs [role="tab"][aria-selected="true"] {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+    font-weight: 600;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Menu déroulant                                                     */
+/* ------------------------------------------------------------------ */
+
+.ds-menu {
+    position: relative;
+    display: inline-block;
+}
+
+.ds-menu-list {
+    position: absolute;
+    top: calc(100% + var(--sp-1));
+    left: 0;
+    min-width: 200px;
+    margin: 0;
+    padding: var(--sp-1) 0;
+    list-style: none;
+    background: var(--n-0);
+    border: var(--border);
+    border-radius: var(--radius-s);
+    box-shadow: var(--shadow);
+    z-index: 30;
+}
+
+.ds-menu-list[hidden] {
+    display: none;
+}
+
+.ds-menu-item {
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: var(--sp-2) var(--sp-4);
+    background: none;
+    border: 0;
+    color: var(--n-900);
+    font: inherit;
+    font-size: var(--fs-2);
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.ds-menu-item:hover {
+    background: var(--n-100);
+}
+
+/* ------------------------------------------------------------------ */
+/*  Info-bulle « ? »                                                   */
+/* ------------------------------------------------------------------ */
+
+.ds-help {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    border: 1px solid var(--n-300);
+    border-radius: 50%;
+    background: var(--n-0);
+    color: var(--n-700);
+    font-size: var(--fs-1);
+    font-weight: 700;
+    line-height: 1;
+    vertical-align: middle;
+    cursor: help;
+}
+
+.ds-help-tip {
+    position: absolute;
+    bottom: calc(100% + var(--sp-2));
+    left: 50%;
+    transform: translateX(-50%);
+    display: none;
+    width: max-content;
+    max-width: 280px;
+    padding: var(--sp-2) var(--sp-3);
+    background: var(--n-900);
+    color: var(--n-50);
+    font-size: var(--fs-1);
+    font-weight: 400;
+    line-height: var(--lh);
+    text-align: left;
+    border-radius: var(--radius-s);
+    box-shadow: var(--shadow);
+    z-index: 40;
+}
+
+.ds-help:hover .ds-help-tip,
+.ds-help:focus-visible .ds-help-tip {
+    display: block;
+}
+
+/* ------------------------------------------------------------------ */
+/*  État vide                                                          */
+/* ------------------------------------------------------------------ */
+
+.ds-empty {
+    text-align: center;
+    padding: var(--sp-8);
+    color: var(--n-500);
+}
+
+.ds-empty-title {
+    color: var(--n-900);
+    font-size: var(--fs-3);
+    font-weight: 600;
+    margin: 0 0 var(--sp-2);
+}
+
+/* ------------------------------------------------------------------ */
+/*  Squelette de chargement                                            */
+/* ------------------------------------------------------------------ */
+
+.ds-skeleton {
+    display: block;
+    height: 16px;
+    border-radius: var(--radius-s);
+    background: var(--n-100);
+    animation: ds-pulse 1.6s ease-in-out infinite;
+}
+
+.ds-skeleton + .ds-skeleton {
+    margin-top: var(--sp-2);
+}
+
+@keyframes ds-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: .5; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .ds-skeleton {
+        animation: none;
+        opacity: .6;
+    }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Fenêtre de confirmation (élément <dialog>)                         */
+/* ------------------------------------------------------------------ */
+
+.ds-dialog {
+    border: var(--border);
+    border-radius: var(--radius-m);
+    padding: var(--sp-6);
+    background: var(--n-0);
+    color: var(--n-900);
+    max-width: 420px;
+    box-shadow: var(--shadow);
+}
+
+.ds-dialog::backdrop {
+    background: rgba(15, 20, 26, .5);
+}
