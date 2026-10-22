@@ -640,6 +640,10 @@ final class ForecastEngine
             'cles_fusionnees'       => array_values((array) ($data->audit['cles_fusionnees'] ?? [])),
             'produits_sans_stock'   => array_values((array) ($data->audit['produits_sans_stock'] ?? [])),
             'n_produits_sans_stock' => (int) ($data->audit['n_produits_sans_stock'] ?? 0),
+            // Stocks théoriques NÉGATIFS (survente : plus de ventes que
+            // comptage + achats) : anomalie d'inventaire à recompter —
+            // ils ne majorent JAMAIS le besoin (max(0, stock) déduit).
+            'stocks_negatifs'       => [],
             'donnees_insuffisantes' => $insufficient,
             'note_selection'        => $bt['selection_note'],
             // WAPE détaillé : le SÉLECTIONNÉ (wape_backtest, top-level)
@@ -656,6 +660,16 @@ final class ForecastEngine
             'conformal_q90'         => $confQ90,
             'conformal_mean_hw'     => $confMhw,
         ];
+
+        // Stocks négatifs parmi les produits retenus (survente) :
+        // {label, stock} pour affichage « à recompter » côté vues.
+        $stocksNegatifs = [];
+        foreach ($produits as $p) {
+            if (!empty($p['stock_negatif'])) {
+                $stocksNegatifs[] = ['label' => (string) $p['label'], 'stock' => (int) $p['stock']];
+            }
+        }
+        $anomalies['stocks_negatifs'] = $stocksNegatifs;
 
         $notes = [];
         if ($bt['selection_note'] !== null) {
@@ -676,6 +690,12 @@ final class ForecastEngine
         }
         if ($bt['insufficient']) {
             $notes[] = 'Backtest indisponible (historique trop court) : modèle principal actif par défaut.';
+        }
+        if ($stocksNegatifs !== []) {
+            $notes[] = sprintf(
+                'Anomalie d\'inventaire : %d produit(s) en stock théorique négatif (survente) — non comptés dans le besoin, à recompter.',
+                count($stocksNegatifs)
+            );
         }
         $notes[] = $bt['insufficient']
             ? sprintf('Modèle actif : %s.', $modele)

@@ -14,7 +14,8 @@ use PHPUnit\Framework\TestCase;
 /**
  * Prévision d'unités par produit : parts de Dirichlet (produits rares
  * non nuls), incertitude Poisson (lo ≤ unites ≤ hi), safety_demand au
- * quantile 0.90, suggestion = max(0, safety − stock), filtre
+ * quantile 0.90, suggestion = max(0, safety − max(0, stock)) (un stock
+ * négatif est une anomalie, jamais un supplément), filtre
  * qty > 0 OU suggestion > 0, tri suggestion desc puis label,
  * déterminisme par graine.
  */
@@ -84,6 +85,40 @@ final class ProductForecastTest extends TestCase
     {
         $m = DemandModel::fit([], [], Hyper::K_POOL);
         self::assertSame([], ProductForecast::units([], $m, 1.0, 7, new \Random\Randomizer(new \Random\Engine\Mt19937(1)), 100));
+    }
+
+    /**
+     * Stock théorique NÉGATIF (survente, ex. « Bueno white −5 » du
+     * 21/10/2026) : ANOMALIE d'inventaire — la suggestion ne majore
+     * JAMAIS la commande (max(0, stock) déduit), le flag stock_negatif
+     * est posé pour l'affichage « à recompter » et la date du comptage
+     * (stock_at) est transportée jusqu'aux vues.
+     */
+    public function test_stock_negatif_anomalie_non_majoree(): void
+    {
+        $m = DemandModel::fit(self::serie(), [], Hyper::K_POOL);
+        $produits = [
+            new ProductStat('a', 'Eau', 'Boissons', 60, 120.0, 2.0, 1.0, false, -5, '2026-10-21 18:00:00'),
+            new ProductStat('b', 'Chips', 'Snacks', 30, 60.0, 2.0, 1.0, false, 100, null),
+        ];
+
+        $r = ProductForecast::units($produits, $m, 0.2, 7, null, 100);
+        $parCle = array_column($r, null, 'key');
+
+        $neg = $parCle['a'];
+        self::assertTrue($neg['stock_negatif']);
+        self::assertSame(-5, $neg['stock'], 'Le stock négatif reste visible (à recompter).');
+        self::assertSame('2026-10-21 18:00:00', $neg['stock_at']);
+        self::assertSame(
+            max(0, $neg['safety_demand'] - max(0, -5)),
+            $neg['suggestion'],
+            'Suggestion = safety − max(0, stock) : la survente n\'augmente pas la commande.'
+        );
+
+        $ok = $parCle['b'];
+        self::assertFalse($ok['stock_negatif']);
+        self::assertNull($ok['stock_at']);
+        self::assertSame(max(0, $ok['safety_demand'] - 100), $ok['suggestion']);
     }
 
     /**

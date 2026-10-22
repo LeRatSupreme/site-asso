@@ -8,6 +8,7 @@ use App\Core\Compta\Forecast\Clean;
 use App\Core\Compta\Forecast\DayCurrent;
 use App\Core\Compta\Forecast\ForecastDataset;
 use App\Core\Compta\Forecast\ProductStat;
+use App\Core\Compta\Reappro\StockBook;
 
 /**
  * Couche d'EXTRACTION de données pour le moteur de prévision du dashboard
@@ -212,12 +213,43 @@ final class AnalyticsForecastData extends Model
     }
 
     /**
+     * Livre de stock UNIQUE du réapprovisionnement : stocks THÉORIQUES
+     * d'inventaire (dernier comptage + achats − ventes − pertes, dates
+     * incluses) + rapprochement par alias. Toutes les pages réappro
+     * (liste de courses, carte Analytics, page Réappro, RecoData)
+     * consomment ce livre — l'ancienne lecture « product_stocks » (photo
+     * non décrémentée des ventes, bornée à 0) est abandonnée.
+     */
+    /** @var ?StockBook cache du livre de stock (une construction par requête) */
+    private static ?StockBook $stockBookCache = null;
+
+    public static function stockBook(): StockBook
+    {
+        if (self::$stockBookCache !== null) {
+            return self::$stockBookCache;
+        }
+
+        return self::$stockBookCache = new StockBook(
+            InventoryCount::theoreticalStocksMap(),
+            InventoryCount::lastCountsMap(),
+            array_map(
+                static fn (array $a): array => [
+                    'raw_description' => (string) ($a['raw_description'] ?? ''),
+                    'product_key'     => (string) ($a['product_key'] ?? ''),
+                ],
+                ProductAlias::all()
+            )
+        );
+    }
+
+    /**
      * Travaux de productStats() + diagnostics de fusion pour l'audit :
      * regroupe les produits par clé normalisée, fusionne les quasi-doublons
      * (« Cafe » et « café » → une ligne : qty/ca sommés, unitPrice et
-     * unitCost = moyennes pondérées par qty, stock connu conservé (somme si
-     * les deux connus, un produit « stock infini » compte comme inconnu),
-     * costSuspect = OU logique, 1ʳᵉ clé rencontrée comme key et label le
+     * unitCost = moyennes pondérées par qty, stock théorique résolu par
+     * StockBook (somme si plusieurs clés du groupe connues, un produit
+     * « stock infini » compte comme inconnu), costSuspect = OU logique,
+     * 1ʳᵉ clé rencontrée comme key et label le
      * plus long comme label.
      *
      * @return array{
@@ -281,7 +313,7 @@ final class AnalyticsForecastData extends Model
         }
 
         $costs = self::currentCostMap(array_keys($caW));
-        $stocks = ProductStock::allMap();
+        $book = self::stockBook();
         $infinite = ProductInfinite::keys();
 
         // Regroupement par clé normalisée : l'ordre des clés d'un groupe
@@ -311,6 +343,7 @@ final class AnalyticsForecastData extends Model
             $tousLabels = [];
             $toutesCategories = [];
             $stock = null;
+            $stockAt = null;
             $stockInfini = false;
             $suspect = false;
 
@@ -339,8 +372,18 @@ final class AnalyticsForecastData extends Model
 
                 if (in_array($k, $infinite, true)) {
                     $stockInfini = true; // « infini » = stock non connu pour le réappro.
-                } elseif (array_key_exists($k, $stocks)) {
-                    $stock = (int) $stocks[$k] + (int) ($stock ?? 0); // somme des connus
+                } else {
+                    // Source UNIQUE : stock théorique inventaire, résolu par
+                    // StockBook (exact → normalisé → alias) — même source que
+                    // la liste de courses (exigence du 21/10/2026 : une seule
+                    // vérité, « pepsi Zero » etc. rapprochés par alias).
+                    $e = $book->resolve($k);
+                    if ($e !== null) {
+                        $stock = ($stock ?? 0) + $e['stock']; // somme des clés connues du groupe
+                        if ($e['at'] !== null && ($stockAt === null || $e['at'] > $stockAt)) {
+                            $stockAt = $e['at'];
+                        }
+                    }
                 }
 
                 $suspect = $suspect
@@ -373,6 +416,7 @@ final class AnalyticsForecastData extends Model
                 unitCost: $unitCost,
                 costSuspect: $suspect,
                 stock: $stock,
+                stockAt: $stockAt,
             );
         }
 

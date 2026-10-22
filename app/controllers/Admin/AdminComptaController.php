@@ -15,6 +15,7 @@ use App\Core\Compta\Dashboard\Hyper;
 use App\Core\Compta\Dashboard\Verdict;
 use App\Core\Compta\Kiosk;
 use App\Core\Compta\ProductAutoSync;
+use App\Core\Compta\Reappro\BesoinListe;
 use App\Core\Compta\ScanCatalogMatcher;
 use App\Core\Compta\StockPublic;
 use App\Core\Compta\SumUpCsvParser;
@@ -33,6 +34,7 @@ use App\Models\ProductDiscontinued;
 use App\Models\ProductInfinite;
 use App\Models\ProductKeyMerge;
 use App\Models\ProductPack;
+use App\Models\ReapproDemande;
 use App\Models\Sale;
 use App\Models\SaleAdjustment;
 use App\Models\ScanLabel;
@@ -1976,12 +1978,20 @@ final class AdminComptaController extends AdminBaseController
      */
     private function renderListePage(bool $kiosk, ?array $user = null, ?string $kioskToken = null): void
     {
-        // Analyse FIXE : 14 derniers jours glissants (masquée de l'interface).
-        $fromDay = date('Y-m-d', strtotime('-13 days'));
-        $toDay   = date('Y-m-d');
-        $calDays = ComptaCalc::calendarDaysBetween($fromDay, $toDay);
+        // ---- Demande UNIQUE : le moteur ForecastEngine, via ReapproDemande ----
+        // (exigence du 21/10/2026). La liste ne recalculait PLUS la même
+        // chose que la carte Réappro Analytics : consommation observée 14 j
+        // + stock d'une autre table → deux pages, deux vérités. Désormais
+        // demande (prévision 7 j, calibration CA) et stock (théorique
+        // inventaire, rapprochement par alias) viennent du MÊME appel —
+        // « besoin(N) − stock » seulement, cf. BesoinListe.
+        $demande  = ReapproDemande::calculer();
+        $produits = is_array($demande['forecast']['produits'] ?? null) ? $demande['forecast']['produits'] : [];
+        $meta     = $demande['meta'];
 
-        // Couverture (« Couvrir pour »), défaut 1 semaine.
+        // Couverture (« Couvrir pour »), défaut 1 semaine. La prévision du
+        // moteur couvre 7 jours ouverts : le facteur la met à l'échelle de
+        // la couverture choisie (1w = ×1 → besoin == suggestion Réappro).
         $covers = [
             '1w' => ['label' => '1 semaine',  'days' => 7],
             '2w' => ['label' => '2 semaines', 'days' => 14],
@@ -1993,45 +2003,91 @@ final class AdminComptaController extends AdminBaseController
         if (!isset($covers[$coverKey])) {
             $coverKey = '1w';
         }
+        $facteur = $covers[$coverKey]['days'] / 7.0;
 
-        $data = $this->reorderData($covers[$coverKey]['days'], $fromDay, $toDay, $calDays);
-
-        // Uniquement ce qu'il faut acheter pour l'horizon choisi :
-        // les « À racheter » du réappro (stock épuisé / autonomie < 7 j)
-        // ET tout produit dont la quantité à commander devient positive
-        // quand on allonge la couverture (ex. autonomie 20 j + couvrir
-        // 1 mois → commander). Les « à compter » (jamais comptés, ex.
-        // Mister Freeze) et les artefacts SumUp sont exclus.
+        // Exclusions partagées avec le Réappro : artefacts SumUp (« Divers »
+        // à montant libre), produits « plus en vente » et « stock infini ».
         $parser = new SumUpCsvParser();
-        $isArtifact = static fn(string $k): bool => $parser->isCustomAmount($k);
-
-        $items = array_values(array_filter(
-            $data['rows'],
-            static fn(array $r): bool =>
-                !($isArtifact)((string) ($r['name'] ?? ''))
-                && (
-                    ($r['state'] ?? '') === 'reorder'
-                    || (
-                        (int) ($r['to_order'] ?? 0) > 0
-                        && ($r['state'] ?? '') !== 'unknown'
-                    )
-                )
+        $isArtifact = static fn (string $k): bool => $parser->isCustomAmount($k);
+        $discontinued = array_flip(array_map(
+            static fn (string $k): string => strtolower(trim($k)),
+            ProductDiscontinued::keys()
         ));
-
-        // Tri comme le Réappro : autonomie croissante (les plus critiques
-        // en premier, « inconnue » en dernier), puis quantité, puis nom.
-        usort($items, static function (array $a, array $b): int {
-            $aa = $a['autonomy'] ?? PHP_INT_MAX;
-            $bb = $b['autonomy'] ?? PHP_INT_MAX;
-            if ($aa !== $bb) {
-                return $aa <=> $bb;
+        $infinite = array_flip(array_map(
+            static fn (string $k): string => strtolower(trim($k)),
+            ProductInfinite::keys()
+        ));
+        $exclu = static function (array $p) use ($isArtifact, $discontinued, $infinite): bool {
+            foreach ([(string) $p['label'], (string) $p['key']] as $k) {
+                $lk = strtolower(trim($k));
+                if ($lk === '' || $isArtifact($k) || isset($discontinued[$lk]) || isset($infinite[$lk])) {
+                    return true;
+                }
             }
-            if ((int) $a['to_order'] !== (int) $b['to_order']) {
-                return (int) $b['to_order'] <=> (int) $a['to_order'];
+
+            return false;
+        };
+
+        // Packs d'achat (12, 24, 32…) : arrondi au multiple supérieur.
+        $packs = ProductPack::sizesMap();
+
+        $items    = []; // à commander (stock connu)
+        $aCompter = []; // sans AUCUNE donnée d'inventaire → à compter
+        $negatifs = []; // stock théorique négatif → anomalie, recompter
+        foreach ($produits as $p) {
+            if ($exclu($p)) {
+                continue;
+            }
+            $name = (string) $p['label'];
+            $pack = (int) ($packs[strtolower(trim($name))] ?? 0);
+
+            $ligne  = BesoinListe::ligne($p, $facteur, $pack);
+            $besoin = $ligne['besoin'];
+
+            if ($ligne['stock'] === null) {
+                // Jamais compté, ni achat, ni perte : listé à part — on
+                // ne commande pas au doigt mouillé un stock inconnu.
+                if ($besoin > 0) {
+                    $aCompter[] = ['name' => $name, 'besoin' => $besoin];
+                }
+                continue;
+            }
+
+            if ($ligne['negatif']) {
+                $negatifs[] = ['name' => $name, 'stock' => $ligne['stock']];
+                // Le produit reste dans la liste : le besoin est calculé
+                // SANS le stock négatif (max(0, stock) déduit).
+            }
+
+            $toOrder = (int) $ligne['to_order'];
+            if ($toOrder <= 0) {
+                continue;
+            }
+
+            $items[] = [
+                'name'       => $name,
+                'to_order'   => $toOrder,
+                'besoin'     => $besoin,
+                'stock'      => $ligne['stock'],
+                'prev_week'  => $ligne['prev_semaine'],
+                'pack'       => $pack,
+                'order_cost' => $p['unitCost'] !== null && $p['unitCost'] > 0.0
+                    ? round($toOrder * (float) $p['unitCost'], 2)
+                    : null,
+                'negatif'    => $ligne['negatif'],
+            ];
+        }
+
+        // Tri : quantité à commander décroissante (les plus critiques
+        // d'abord), puis nom.
+        usort($items, static function (array $a, array $b): int {
+            if ($a['to_order'] !== $b['to_order']) {
+                return $b['to_order'] <=> $a['to_order'];
             }
 
             return strcasecmp((string) $a['name'], (string) $b['name']);
         });
+        usort($aCompter, static fn (array $a, array $b): int => strcasecmp((string) $a['name'], (string) $b['name']));
 
         // Totaux sur les quantités arrondies au pack (= ce qu'on achète).
         $totalUnits  = 0;
@@ -2066,6 +2122,13 @@ final class AdminComptaController extends AdminBaseController
             'totalUnits'  => $totalUnits,
             'totalCost'   => round($totalCost, 2),
             'missingCost' => $missingCost,
+            // Base de calcul affichée (exigence : « la page doit énoncer
+            // la base utilisée ») — même énoncé que la carte Analytics.
+            'meta'        => $meta,
+            // Produits sans aucune donnée d'inventaire : à compter d'abord.
+            'aCompter'    => $aCompter,
+            // Stocks théoriques négatifs (survente) : anomalies à recompter.
+            'negatifs'    => $negatifs,
             'kiosk'       => $kiosk,
             'kioskUrl'    => $kioskUrl,
             'kioskToken'  => (string) $kioskToken,

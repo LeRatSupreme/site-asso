@@ -25,6 +25,11 @@ final class ProductStat
      * @param ?float $unitCost    Coût unitaire courant ; null si aucun lot connu.
      * @param bool   $costSuspect Coût null, coût <= 0, ou prix < coût.
      * @param ?int   $stock       Stock actuel ; null = inconnu ou non géré (infini).
+     *                             PEUT être négatif (stock théorique en survente) :
+     *                             anomalie d'inventaire à signaler, jamais un
+     *                             supplément de besoin.
+     * @param ?string $stockAt    Date ('Y-m-d H:i:s') du dernier comptage ayant
+     *                             produit ce stock ; null = non daté/inconnu.
      */
     public function __construct(
         public readonly string $key,
@@ -36,6 +41,7 @@ final class ProductStat
         public readonly ?float $unitCost,
         public readonly bool $costSuspect,
         public readonly ?int $stock,
+        public readonly ?string $stockAt = null,
     ) {
     }
 }

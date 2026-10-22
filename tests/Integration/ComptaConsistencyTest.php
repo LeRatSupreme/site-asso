@@ -286,10 +286,11 @@ final class ComptaConsistencyTest extends IntegrationTestCase
         );
     }
 
-    public function test_liste_courses_uniquement_a_acheter_avec_packs(): void
+    public function test_liste_courses_sur_la_prevision_avec_coherence_reappro(): void
     {
-        // cola : compté 0 puis 3 ventes du jour (théorique −3) → à racheter,
-        // besoin 2 + reconstitution 3 = 5 → pack 12 → commander 12.
+        // cola : compté 0 puis 3 ventes du jour (théorique −3) → anomalie
+        // de survente : le stock négatif NE MAJORE PAS la commande, mais
+        // le produit reste achetable (besoin − 0) et signalé à recompter.
         for ($i = 1; $i <= 3; $i++) {
             $this->insertSale('s_lst_' . $i, 'TLST0' . $i, date('Y-m-d ') . sprintf('09:0%d:00', $i), '1.50', 'cola');
         }
@@ -297,39 +298,78 @@ final class ComptaConsistencyTest extends IntegrationTestCase
         $this->pdo->prepare('INSERT INTO product_packs (product_key, pack_size, updated_by) VALUES (?,?,?)')
             ->execute(['cola', 12, 'test']);
 
-        // misterfreeze : jamais compté (« à compter ») → PAS dans la liste.
+        // misterfreeze : jamais compté (« à compter ») → PAS une tuile de
+        // commande, mais listé à part (exigence du 21/10/2026 : les produits
+        // sans stock apparaissent dans une section séparée).
         for ($i = 1; $i <= 2; $i++) {
             $this->insertSale('s_lst_mf' . $i, 'TLSTM' . $i, date('Y-m-d ') . sprintf('10:0%d:00', $i), '2.00', 'misterfreeze');
         }
 
-        // eau : gros stock compté → rien à acheter, absent de la liste.
+        // eau : gros stock compté, AUCUNE vente → hors périmètre moteur,
+        // absent de la liste.
         $this->insertCount('inv_lst_1', '2026-01-01 09:00:00', 'eau', 100);
 
-        // pulco : compté 8, 4 ventes du jour → autonomie ~28 j : absent en
-        // couverture 1 semaine, PRÉSENT en couverture 1 mois.
+        // pulco : compté 8, 4 ventes du jour → théorique 4, besoin > stock :
+        // présent dès la couverture 1 semaine (demande = prévision moteur).
         for ($i = 1; $i <= 4; $i++) {
             $this->insertSale('s_lst_p' . $i, 'TLSTP' . $i, date('Y-m-d ') . sprintf('11:0%d:00', $i), '1.00', 'pulco');
         }
         $this->insertCount('inv_lst_3', '2026-01-01 09:10:00', 'pulco', 8);
 
-        // chips : compté 0 mais AUCUNE vente → pas dans la liste (produit
-        // sans consommation, ex. saisonnier écoulé).
+        // chips : compté 0 mais AUCUNE vente → absent (pas de ProductStat).
         $this->insertCount('inv_lst_2', '2026-01-01 09:05:00', 'chips', 0);
 
         $r = $this->request('GET', '/admin/compta/liste', [], [], $this->rootId);
         self::assertSame(200, (int) ($r['code'] ?? 0), 'La page Liste de courses doit répondre.');
         $body = (string) ($r['body'] ?? '');
         self::assertStringContainsString('Liste de courses', $body);
-        self::assertStringContainsString('cola', $body, 'Le produit à racheter (cola) doit figurer dans la liste.');
-        self::assertStringNotContainsString('pulco', $body, 'pulco couvre 1 semaine : absent par défaut.');
-        self::assertStringNotContainsString('chips', $body, 'Un produit sans aucune vente ne doit pas apparaître dans la liste.');
-        self::assertStringNotContainsString('misterfreeze', $body, 'Un produit « à compter » ne doit pas apparaître dans la liste.');
-        self::assertStringNotContainsString('>eau<', $body, 'Un produit avec du stock ne doit pas apparaître dans la liste.');
 
-        // Couverture 1 mois : pulco (autonomie ~28 j) doit maintenant apparaître.
+        // Base de calcul énoncée (exigence : la page dit sur quoi elle repose).
+        self::assertStringContainsString('Base : demande', $body, 'La base « demande » doit être énoncée.');
+        self::assertStringContainsString('théorique inventaire', $body, 'La base « stock » doit être énoncée.');
+
+        // Tuiles de commande : cola (survente, reste commandable) et pulco.
+        self::assertMatchesRegularExpression('/data-key="cola"/', $body, 'cola (stock négatif) doit rester dans la liste.');
+        self::assertMatchesRegularExpression('/data-key="pulco"/', $body, 'pulco (besoin > stock) doit figurer dès 1 semaine.');
+        self::assertStringNotContainsString('chips', $body, 'Un produit sans vente ne doit pas apparaître.');
+        self::assertStringNotContainsString('>eau<', $body, 'Un produit sans vente ne doit pas apparaître.');
+        self::assertDoesNotMatchRegularExpression('/data-key="misterfreeze"/', $body, '« À compter » : pas de tuile de commande.');
+
+        // Anomalie de survente : bandeau + bulle négative sur la tuile.
+        self::assertMatchesRegularExpression('/Anomalie d.inventaire.*?cola/s', $body, 'Le stock négatif de cola doit être signalé.');
+        self::assertStringContainsString('is-neg', $body, 'La bulle stock négatif doit être stylée.');
+
+        // Section « sans donnée d'inventaire » : misterfreeze listé à part.
+        self::assertStringContainsString('Sans donnée d\'inventaire', $body);
+        self::assertStringContainsString('misterfreeze', $body, 'Le produit jamais compté doit être listé « à compter ».');
+
+        // ---- COHÉRENCE exigée : besoin(liste, 1 semaine) ≡ suggestion du ----
+        // Réappro Analytics — même moteur, même stock (ReapproDemande).
+        $ra = $this->request('GET', '/admin/analytics', [], [], $this->rootId);
+        self::assertSame(200, (int) ($ra['code'] ?? 0), 'La page Analytics doit répondre.');
+        self::assertSame(1, preg_match('/var data = (\{.*?\});\r?\n/s', (string) ($ra['body'] ?? ''), $m), 'Payload Analytics introuvable.');
+        $payload = json_decode((string) $m[1], true);
+        $suggestion = null;
+        foreach ((array) ($payload['produits_reappro'] ?? []) as $p) {
+            if (($p['key'] ?? '') === 'cola') {
+                $suggestion = (int) ($p['suggestion'] ?? 0);
+            }
+        }
+        self::assertNotNull($suggestion, 'cola doit figurer dans les suggestions Analytics.');
+        self::assertGreaterThan(0, $suggestion, 'cola (stock −3, besoin > 0) doit avoir une suggestion positive.');
+
+        self::assertSame(1, preg_match('/data-key="cola".*?shop-qty[^>]*>(\d+)</s', $body, $mq), 'Quantité de cola introuvable dans la liste.');
+        $attendu = (int) (ceil($suggestion / 12) * 12); // pack de 12
+        self::assertSame(
+            $attendu,
+            (int) $mq[1],
+            'À 1 semaine, la liste commande la suggestion Réappro arrondie au pack (max(0, stock) déduit).'
+        );
+
+        // Couverture plus longue : la page répond et garde la cohérence de base.
         $rm = $this->request('GET', '/admin/compta/liste?c=1m', [], [], $this->rootId);
         self::assertSame(200, (int) ($rm['code'] ?? 0));
-        self::assertStringContainsString('pulco', (string) ($rm['body'] ?? ''), 'Allonger la couverture doit ajouter les produits à acheter.');
+        self::assertStringContainsString('cola', (string) ($rm['body'] ?? ''), 'cola reste présent en couverture 1 mois.');
 
         // Kiosque sans session : 200 lecture seule, sans navigation.
         $token = (string) $this->pdo->query(

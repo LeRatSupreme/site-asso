@@ -48,9 +48,14 @@ final class ProductForecast
      * @param ?float                 $caCible              CA prévu 7 j du moteur (calibration ;
      *                                                     null = pas de calibration).
      *
-     * @return list<array{key:string,label:string,category:string,part:float,unites:float,lo:float,hi:float,safety_demand:int,stock:?int,suggestion:?int,unitPrice:?float,unitCost:?float,costSuspect:bool}>
+     * @return list<array{key:string,label:string,category:string,part:float,unites:float,lo:float,hi:float,safety_demand:int,stock:?int,stock_at:?string,stock_negatif:bool,suggestion:?int,unitPrice:?float,unitCost:?float,costSuspect:bool}>
      *              Triée par suggestion décroissante (nulls en fin) puis label ; ne
      *              contient que les produits avec qty > 0 OU suggestion > 0.
+     *              suggestion = max(0, safety_demand − max(0, stock)) : un stock
+     *              THÉORIQUE NÉGATIF (survente) est une anomalie d'inventaire —
+     *              il ne majore JAMAIS la commande ; il est signalé par
+     *              stock_negatif (et remonté dans les anomalies du moteur).
+     *              stock_at = date du dernier comptage ayant produit le stock.
      *              unitPrice/unitCost/costSuspect portent le contrat consommé
      *              par ProfitForecast::compute() (bénéfice dérivé des mêmes unités).
      */
@@ -116,6 +121,7 @@ final class ProductForecast
                 'lo'            => $lo,
                 'hi'            => $hi,
                 'stock'         => $p->stock,
+                'stock_at'      => $p->stockAt,
                 'unitPrice'     => $p->unitPrice,
                 'unitCost'      => $p->unitCost,
                 'costSuspect'   => $p->costSuspect,
@@ -149,11 +155,15 @@ final class ProductForecast
         foreach ($rows as $r) {
             $qty = (float) $r['_qty'];
             $safety = (int) ceil($r['hi']);
-            $suggestion = $r['stock'] !== null ? max(0, $safety - (int) $r['stock']) : null;
+            $negatif = $r['stock'] !== null && (int) $r['stock'] < 0;
+            // Stock négatif = anomalie d'inventaire (survente) : le stock
+            // déduit vaut max(0, stock) — jamais un supplément de commande.
+            $suggestion = $r['stock'] !== null ? max(0, $safety - max(0, (int) $r['stock'])) : null;
 
             if ($qty > 0.0 || ($suggestion !== null && $suggestion > 0)) {
                 unset($r['_qty']);
                 $r['safety_demand'] = $safety;
+                $r['stock_negatif'] = $negatif;
                 $r['suggestion']    = $suggestion;
                 $out[] = $r;
             }

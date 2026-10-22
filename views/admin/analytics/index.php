@@ -676,12 +676,25 @@ $iconSvg = static function (string $name): string {
         <?php
         // ---- Carte « Réapprovisionnement » : besoins estimés à 7 j ----
         // Tri par suggestion décroissante déjà fait côté payload.
+        // Base énoncée (21/10/2026) : même demande (moteur) et même stock
+        // (théorique inventaire) que la liste de courses — cohérence
+        // garantie par ReapproDemande, partagé par les deux pages.
         $reappro = isset($forecast['produits']) && is_array($forecast['produits']) ? $forecast['produits'] : [];
+        $reapproMeta = $reappro_meta ?? [];
+        $reapproBasis = 'demande : ' . (string) ($reapproMeta['demande'] ?? 'prévision du moteur')
+            . (isset($reapproMeta['fenetre']) ? ' (' . (string) $reapproMeta['fenetre'] . ')' : '')
+            . (!empty($reapproMeta['creuse']) ? ', période creuse ' . (string) $reapproMeta['creuse'] : '')
+            . ' · stock : ' . (string) ($reapproMeta['stock'] ?? 'théorique inventaire');
+        if (!empty($reapproMeta['date_stock'])) {
+            $reapproBasis .= ' (comptages jusqu\'au '
+                . (new DateTimeImmutable(substr((string) $reapproMeta['date_stock'], 0, 10)))->format('d/m/Y')
+                . ')';
+        }
         ?>
         <div class="card surface glass chart-card chart-span-2">
             <div class="chart-head">
                 <h2 class="chart-title">Réapprovisionnement</h2>
-                <span class="chart-sub">besoins estimés — horizon 7 jours ouverts</span>
+                <span class="chart-sub">besoins estimés — horizon 7 jours ouverts · <?= e($reapproBasis) ?></span>
             </div>
             <?php if ($reappro === []): ?>
                 <p class="muted fc-empty">Aucune suggestion de réapprovisionnement.</p>
@@ -697,14 +710,21 @@ $iconSvg = static function (string $name): string {
                         </thead>
                         <tbody>
                             <?php foreach ($reappro as $p): ?>
-                                <?php $sugg = array_key_exists('suggestion', $p) && $p['suggestion'] !== null ? (float) $p['suggestion'] : null; ?>
+                                <?php
+                                $sugg = array_key_exists('suggestion', $p) && $p['suggestion'] !== null ? (float) $p['suggestion'] : null;
+                                $negatif = !empty($p['stock_negatif']);
+                                ?>
                                 <tr>
                                     <td><?= e((string) ($p['label'] ?? '')) ?></td>
                                     <td><?= e((string) ($p['category'] ?? '—')) ?></td>
                                     <td class="num"><?= e(number_format((float) ($p['unites'] ?? 0), 0, ',', ' '))
                                         ?> (<?= e(number_format((float) ($p['lo'] ?? 0), 0, ',', ' ')) ?>–<?= e(number_format((float) ($p['hi'] ?? 0), 0, ',', ' ')) ?>)</td>
                                     <td class="num"><?= e(number_format((float) ($p['safety_demand'] ?? 0), 1, ',', ' ')) ?></td>
-                                    <td class="num"><?= !array_key_exists('stock', $p) || $p['stock'] === null ? '—' : e(number_format((float) $p['stock'], 0, ',', ' ')) ?></td>
+                                    <td class="num"><?= !array_key_exists('stock', $p) || $p['stock'] === null
+                                        ? '—'
+                                        : ($negatif
+                                            ? '<span class="reappro-neg" title="Stock théorique négatif (survente) — anomalie d\'inventaire à recompter ; la suggestion ne le compte pas">' . e(number_format((float) $p['stock'], 0, ',', ' ')) . ' ⚠</span>'
+                                            : e(number_format((float) $p['stock'], 0, ',', ' '))) ?></td>
                                     <td class="num<?= $sugg !== null && $sugg > 0 ? ' reappro-sugg' : '' ?>"><?= $sugg === null ? '—' : e(number_format($sugg, 0, ',', ' ')) ?></td>
                                 </tr>
                             <?php endforeach; ?>
@@ -784,6 +804,7 @@ $iconSvg = static function (string $name): string {
     $anomFusion = isset($forecast['anomalies']['cles_fusionnees']) && is_array($forecast['anomalies']['cles_fusionnees']) ? $forecast['anomalies']['cles_fusionnees'] : [];
     $anomSansStock = isset($forecast['anomalies']['produits_sans_stock']) && is_array($forecast['anomalies']['produits_sans_stock']) ? $forecast['anomalies']['produits_sans_stock'] : [];
     $anomNSansStock = (int) ($forecast['anomalies']['n_produits_sans_stock'] ?? 0);
+    $anomNegatifs = isset($forecast['anomalies']['stocks_negatifs']) && is_array($forecast['anomalies']['stocks_negatifs']) ? $forecast['anomalies']['stocks_negatifs'] : [];
     ?>
     <details class="card surface glass dataq">
         <summary>
@@ -793,6 +814,7 @@ $iconSvg = static function (string $name): string {
             · <?= (int) ($forecast['anomalies']['doublons_ignores'] ?? 0) ?> doublon(s) ignoré(s)
             · <?= count($anomCout) ?> produit(s) à coût suspect
             <?= $anomNSansStock > 0 ? '· ' . $anomNSansStock . ' produit(s) sans stock' : '' ?>
+            <?= $anomNegatifs !== [] ? '· ' . count($anomNegatifs) . ' stock(s) négatif(s)' : '' ?>
         </summary>
         <div class="dataq-body">
             <?php if ($fcNoteSel !== ''): ?>
@@ -808,7 +830,15 @@ $iconSvg = static function (string $name): string {
                 <p><strong>Clés produit fusionnées (quasi-doublons) :</strong> <?= e(implode(', ', array_map('strval', $anomFusion))) ?> — à consolider via les alias.</p>
             <?php endif; ?>
             <?php if ($anomNSansStock > 0): ?>
-                <p><strong><?= $anomNSansStock ?> produit<?= $anomNSansStock > 1 ? 's' : '' ?> non rattaché<?= $anomNSansStock > 1 ? 's' : '' ?> au stock<?= $anomSansStock !== [] ? ' (' . e(implode(', ', array_map('strval', $anomSansStock))) . ')' : '' ?> :</strong> rattache-les via les alias/product_stocks pour des suggestions.</p>
+                <p><strong><?= $anomNSansStock ?> produit<?= $anomNSansStock > 1 ? 's' : '' ?> non rattaché<?= $anomNSansStock > 1 ? 's' : '' ?> au stock<?= $anomSansStock !== [] ? ' (' . e(implode(', ', array_map('strval', $anomSansStock))) . ')' : '' ?> :</strong> rattache-les via les alias (comptage/achats/pertes) pour des suggestions.</p>
+            <?php endif; ?>
+            <?php if ($anomNegatifs !== []): ?>
+                <p><strong>Stocks théoriques négatifs (survente — à recompter) :</strong>
+                    <?= e(implode(', ', array_map(
+                        static fn (array $n): string => $n['label'] . ' (' . (int) $n['stock'] . ')',
+                        $anomNegatifs
+                    ))) ?>.
+                    Ces stocks ne majorent pas les suggestions : le besoin déduit max(0, stock).</p>
             <?php endif; ?>
             <?php if ($anomNotes !== []): ?>
                 <ul class="dataq-notes">
@@ -1851,6 +1881,7 @@ $iconSvg = static function (string $name): string {
 .benef-total { display: flex; align-items: baseline; gap: .5rem; margin: 0 0 .75rem; }
 .benef-suspects { margin: .75rem 0 0; padding-left: 1.1rem; font-size: .82rem; color: var(--muted, #9fb3c8); }
 .reappro-sugg { color: #22c55e; font-weight: 800; }
+.reappro-neg { color: #fb923c; font-weight: 800; white-space: nowrap; }
 
 /* ---- Qualité des données (bandeau discret, repliable) ---- */
 .dataq { padding: .8rem 1.1rem; }
