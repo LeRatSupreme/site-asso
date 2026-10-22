@@ -469,6 +469,7 @@ function aeic_register_routes(Router $router): void
     // =====================================================================
     $router->get('/admin/reco/historique', [AdminRecoController::class, 'historique']);
     $router->post('/admin/reco/decision', [AdminRecoController::class, 'decision']);
+    $router->post('/admin/reco/retablir', [AdminRecoController::class, 'retablir']);
     $router->post('/admin/reco/parametres', [AdminRecoController::class, 'saveParametres']);
     $router->get('/kiosque/admin/reco/{token}', [AdminRecoController::class, 'kiosk']);
     $router->post('/kiosque/admin/reco/decision/{token}', [AdminRecoController::class, 'kioskDecision']);
