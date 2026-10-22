@@ -63,8 +63,40 @@ jobs:
             FLUSH PRIVILEGES;"
           mysql -h127.0.0.1 -uroot -pci_root --default-character-set=utf8mb4 aeic_test < database/schema.sql
 
-      - name: Lancer PHPUnit
-        run: vendor/bin/phpunit --no-coverage
+      # PHPUnit écrit junit.xml ; un petit lecteur PHP émet des annotations
+      # GitHub (::error) lisibles via l'API publique (sans token) pour chaque
+      # test en échec (50 premiers), puis le step échoue avec le vrai statut.
+      - name: Lancer PHPUnit (avec annotations des échecs)
+        run: |
+          status=0
+          vendor/bin/phpunit --no-coverage --log-junit junit.xml || status=$?
+          if [ "$status" -ne 0 ] && [ -f junit.xml ]; then
+            php -r '
+$f = @simplexml_load_file("junit.xml");
+if ($f === false) { fwrite(STDERR, "junit.xml illisible\n"); exit(0); }
+$vus = 0; $echecs = 0;
+foreach ($f->xpath("//testcase") as $tc) {
+    foreach ($tc->xpath("failure|error") as $err) {
+        $echecs++;
+        if ($vus >= 50) { continue; }
+        $vus++;
+        $fichier = (string)$tc["file"];
+        $nom = (string)$tc["class"] . "::" . (string)$tc["name"];
+        $type = (string)($err["type"] ?? "Echec");
+        $msg = (string)($err["message"] ?? "");
+        if (trim($msg) === "") { $msg = substr(preg_replace("/\s+/", " ", (string)$err), 0, 400); }
+        $msg = str_replace(["\r\n", "\r", "\n", "%"], [" ", " ", " ", "%25"], $msg);
+        $msg = mb_substr($msg, 0, 500);
+        $ligne = "::error";
+        if ($fichier !== "") { $ligne .= " file=" . $fichier; }
+        echo $ligne . "::[" . $type . "] " . $nom . " : " . $msg . "\n";
+    }
+}
+echo "PHPUnit : " . $echecs . " echec(s) au total\n";
+exit($echecs > 0 ? 1 : 0);
+' || true
+          fi
+          exit $status
 
   # Lint : syntaxe PHP de tous les sources + tests JS (sans dépendance npm).
   lint:
