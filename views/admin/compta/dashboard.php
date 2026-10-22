@@ -8,6 +8,7 @@ declare(strict_types=1);
  * @var array<string,string> $periodOptions
  * @var array{ca:float,profit:float,qty:int,ca_products:float} $agg
  * @var array<string,float> $split
+ * @var int $txCount  Nombre de transactions distinctes sur la période.
  * @var float $cardFee  Frais SumUp estimés sur les ventes carte de la période.
  * @var float $cardNet  Net estimé des ventes carte après frais.
  * @var string $feeRate Taux de commission formaté (ex. « 1,75 »).
@@ -90,6 +91,7 @@ if ($reorderAlerts > 0) {
 <div class="admin-actions">
     <a class="btn btn-primary" href="<?= e(url('/admin/compta/import')) ?>">Importer un CSV</a>
 </div>
+<p class="muted">Les encaissements proviennent des rapports CSV SumUp importés manuellement — aucun appel API temps réel. Importe un nouveau rapport pour actualiser.</p>
 
 <div class="admin-actions">
     <?php require AEIC_VIEWS . '/admin/compta/_period_bar.php'; ?>
@@ -163,6 +165,7 @@ if ($reorderAlerts > 0) {
         <div class="split-bar" title="Carte vs Liquide">
             <div class="split-bar-card" style="width:<?= e((string) $cardPct) ?>%"></div>
         </div>
+        <p class="muted"><?= e((string) $txCount) ?> transaction<?= $txCount > 1 ? 's' : '' ?> sur la période</p>
         <?php if (($split['CARTE'] ?? 0) > 0): ?>
             <p class="muted">
                 Frais SumUp estimés ≈ <strong>−<?= e(formatPrice($cardFee)) ?></strong>

@@ -61,6 +61,7 @@ final class AdminComptaController extends AdminBaseController
         $period = ComptaCalc::resolvePeriod($_GET['period'] ?? null, $_GET['from'] ?? null, $_GET['to'] ?? null);
         $agg = Sale::aggregatesBetween($period['from'], $period['to']);
         $split = Sale::paymentSplitBetween($period['from'], $period['to']);
+        $txCount = Sale::transactionsBetween($period['from'], $period['to']);
         $top = Sale::topProductsBetween($period['from'], $period['to']);
         $byCategory = Sale::byCategoryBetween($period['from'], $period['to']);
         $cardFee = CardFees::estimatedTotal($period['from'], $period['to']);
@@ -101,6 +102,7 @@ final class AdminComptaController extends AdminBaseController
             'periodOptions'=> ComptaCalc::PERIOD_OPTIONS,
             'agg'          => $agg,
             'split'        => $split,
+            'txCount'      => $txCount,
             'cardFee'      => $cardFee,
             'cardNet'      => $cardNet,
             'feeRate'      => CardFees::formattedRate(),
