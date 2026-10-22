@@ -34,8 +34,7 @@ final class AdminAnalyticsController extends AdminBaseController
      */
     private const PERIODS = [
         '1d'   => '1 jour',
-        'week' => 'Semaine actuelle',
-        '7d'   => '7 derniers jours',
+        'week' => 'Semaine en cours',
         '30d'  => '30 derniers jours',
         'all'  => 'Tout',
         'custom' => 'Personnalisé',
@@ -76,7 +75,7 @@ final class AdminAnalyticsController extends AdminBaseController
             return;
         }
 
-        $this->renderKiosk('admin/analytics/kiosk', $this->buildPage('7d') + [
+        $this->renderKiosk('admin/analytics/kiosk', $this->buildPage('week') + [
             'title' => 'Analytique',
             'kiosk' => true,
             'token' => $token,
@@ -144,8 +143,7 @@ final class AdminAnalyticsController extends AdminBaseController
     {
         // ---- Lecture des filtres GET (valeurs sûres) ----
         // $defaultPeriod : sans « period » en GET, le dashboard ouvre sur
-        // la semaine actuelle ; le kiosque téléphone garde « 7 derniers
-        // jours » via son appel explicite.
+        // la semaine en cours (admin comme kiosque téléphone).
         $period      = $this->filter('period', $defaultPeriod);
         $granularity = $this->filter('granularity', '');
         $category    = $this->filter('category', 'all');
@@ -733,7 +731,6 @@ final class AdminAnalyticsController extends AdminBaseController
         return match ($period) {
             '1d'   => [$today, $today],
             'week' => array_values(ComptaCalc::currentWeekWindow()),
-            '7d'   => [date('Y-m-d', strtotime('-6 days')), $today],
             '30d'  => [date('Y-m-d', strtotime('-29 days')), $today],
             '90d'  => [date('Y-m-d', strtotime('-89 days')), $today],
             '180d' => [date('Y-m-d', strtotime('-179 days')), $today],
