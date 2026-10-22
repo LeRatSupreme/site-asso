@@ -295,8 +295,12 @@ final class ComptaConsistencyTest extends IntegrationTestCase
             $this->insertSale('s_lst_' . $i, 'TLST0' . $i, date('Y-m-d ') . sprintf('09:0%d:00', $i), '1.50', 'cola');
         }
         $this->insertCount('inv_lst_0', '2026-01-01 08:00:00', 'cola', 0);
+        // Pack enregistré sous une VARIANTE ORTHOGRAPHIQUE (« Côla » ≠
+        // « cola » en exact, converge en normalisé) : garantit que la
+        // liste résout le pack via PackResolver (règle AGENTS.md) et non
+        // par un lookup naïf — régression « 5 cannettes » du 22/10/2026.
         $this->pdo->prepare('INSERT INTO product_packs (product_key, pack_size, updated_by) VALUES (?,?,?)')
-            ->execute(['cola', 12, 'test']);
+            ->execute(['Côla', 12, 'test']);
 
         // misterfreeze : jamais compté (« à compter ») → PAS une tuile de
         // commande, mais listé à part (exigence du 21/10/2026 : les produits
