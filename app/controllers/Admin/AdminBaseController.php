@@ -130,6 +130,28 @@ abstract class AdminBaseController extends Controller
     }
 
     /**
+     * Garde de la liste de courses : module comptabilité OU rôle Bénévole.
+     *
+     * La liste de courses (produit, stock restant, quantité à acheter,
+     * cases cochées partagées) est ouverte au bénévole de caisse SANS
+     * aucun chiffre financier — le masquage des montants est décidé par
+     * le contrôleur via le flag $showMoney (AdminComptaController), la
+     * garde ne faisant qu'ouvrir l'accès. Tout autre rôle passe par la
+     * garde compta habituelle : la défense en profondeur est conservée
+     * (le bénévole reste refusé sur le reste de /admin/compta/*).
+     *
+     * @return array<string,mixed>
+     */
+    protected function guardComptaOuBenevol(): array
+    {
+        if (Auth::role() === Auth::ROLE_BENEVOL) {
+            return Auth::user();
+        }
+
+        return $this->guardCompta();
+    }
+
+    /**
      * Journalise une action sensible (audit log).
      */
     protected function audit(

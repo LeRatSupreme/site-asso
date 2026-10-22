@@ -9,14 +9,23 @@ declare(strict_types=1);
  *
  * DEMANDE UNIQUE (21/10/2026) : la prévision vient du moteur ForecastEngine
  * (même appel que la carte Réappro Analytics via ReapproDemande), le stock
- * du théorique d'inventaire — la base utilisée est énoncée sous le sélecteur.
+ * du théorique d'inventaire — l'encart « Base de calcul » (partiel partagé
+ * avec la page Réappro) énonce cette base.
+ *
+ * Lot 5 : accessible au bénévole de caisse — quand $showMoney est faux
+ * (rôle sans module compta, ou jeton kiosque « membres »), AUCUN chiffre
+ * financier n'est rendu (pas de coût estimé du panier) ; la page ne
+ * montre alors que produit, stock restant, quantité à acheter, case à
+ * cocher. Vocabulaire aligné sur le Réappro : « à commander »,
+ * « stock restant », « packs ».
  *
  * @var list<array<string,mixed>> $items
  * @var array<string,array{label:string,days:int}> $covers
  * @var string $coverKey
  * @var int    $totalUnits
  * @var float  $totalCost
- * @var array<string,mixed> $meta
+ * @var array{ventes:string,couverture:string,source:string} $basis
+ * @var bool   $showMoney
  * @var list<array{name:string,besoin:int}> $aCompter
  * @var list<array{name:string,stock:int}> $negatifs
  * @var bool   $kiosk
@@ -154,11 +163,6 @@ use App\Models\Setting;
     .shop-legend .dot-stock { background: #4ade80; }
     .shop-legend .dot-week { background: rgba(239, 68, 68, 0.75); }
 
-    .shop-basis {
-        margin: -0.4rem 0 1.2rem; font-size: 0.8rem; color: var(--muted, #8892a6);
-    }
-    .shop-basis strong { color: var(--foreground, inherit); font-weight: 700; }
-
     .shop-note {
         display: flex; gap: 0.6rem; align-items: flex-start;
         padding: 0.7rem 1rem; margin-bottom: 1.2rem;
@@ -204,16 +208,7 @@ use App\Models\Setting;
     <?php endforeach; ?>
 </div>
 
-<?php
-$dateStock = !empty($meta['date_stock'])
-    ? (new DateTimeImmutable(substr((string) $meta['date_stock'], 0, 10)))->format('d/m/Y')
-    : null;
-?>
-<p class="shop-basis">
-    Base : demande = <strong><?= e((string) ($meta['demande'] ?? 'prévision')) ?></strong>
-    (<?= e((string) ($meta['fenetre'] ?? '')) ?><?= !empty($meta['creuse']) ? ', période creuse ' . e((string) $meta['creuse']) : '' ?>)
-    · stock = <strong>théorique inventaire</strong><?= $dateStock !== null ? ' (comptages jusqu\'au ' . e($dateStock) . ')' : '' ?>.
-</p>
+<?php require AEIC_VIEWS . '/partials/_base_calcul.php'; ?>
 
 <?php if (($negatifs ?? []) !== []): ?>
 <aside class="shop-note shop-note-warn" role="alert">
@@ -245,7 +240,7 @@ $dateStock = !empty($meta['date_stock'])
 <?php if ($items !== []): ?>
 <div class="shop-total">
     <strong><?= (int) $totalUnits ?> unités</strong>
-    <span>≈ <?= e(formatPrice($totalCost)) ?></span>
+    <?php if ($showMoney): ?><span>≈ <?= e(formatPrice($totalCost)) ?></span><?php endif ?>
 </div>
 <?php endif; ?>
 
@@ -263,9 +258,9 @@ $dateStock = !empty($meta['date_stock'])
             role="button" tabindex="0" aria-pressed="false"
             title="Clique pour cocher (acheté) — re-clique pour décocher. Partagé avec tout le monde.">
             <?php if ((int) $r['stock'] < 0): ?>
-            <span class="shop-stock is-neg" title="Stock théorique NÉGATIF (survente) — à recompter ; besoin calculé sans le stock"><?= (int) $r['stock'] ?> ⚠</span>
+            <span class="shop-stock is-neg" title="Stock restant NÉGATIF (survente) — à recompter ; besoin calculé sans le stock"><?= (int) $r['stock'] ?> ⚠</span>
             <?php else: ?>
-            <span class="shop-stock" title="Stock théorique restant (dernier comptage + achats − ventes − pertes)"><?= (int) $r['stock'] ?></span>
+            <span class="shop-stock" title="Stock restant (dernier comptage + achats − ventes − pertes)"><?= (int) $r['stock'] ?></span>
             <?php endif; ?>
             <span class="shop-week" title="Prévision par semaine (moteur, jours ouverts)"><?= number_format((float) $r['prev_week'], (float) $r['prev_week'] >= 10 ? 0 : 1, ',', ' ') ?></span>
             <?php if ((int) $r['to_order'] > 0): ?>
@@ -284,7 +279,7 @@ $dateStock = !empty($meta['date_stock'])
 <?php endif; ?>
 
 <p class="shop-legend">
-    <span class="leg"><span class="dot dot-stock"></span> stock théorique restant</span>
+    <span class="leg"><span class="dot dot-stock"></span> stock restant</span>
     <span class="leg"><span class="dot dot-week"></span> prévu par semaine (moteur)</span>
 </p>
 
