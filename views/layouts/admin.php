@@ -73,7 +73,6 @@ $sections = [
         'Ventes' => [
             'Importer CSV'    => '/admin/compta/import',
             'Journal ventes'  => '/admin/compta/ventes',
-            'Dashboard SumUp' => '/admin/sumup',
         ],
         'Produits & coûts' => [
             'Produits'                => '/admin/compta/produits',

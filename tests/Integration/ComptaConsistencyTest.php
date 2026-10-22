@@ -520,9 +520,10 @@ final class ComptaConsistencyTest extends IntegrationTestCase
         self::assertSame(200, (int) ($analytics['code'] ?? 0), 'Analytics doit répondre sur une période personnalisée.');
         self::assertStringContainsString('25,00', (string) ($analytics['body'] ?? ''), 'Analytics n\'affiche pas le CA de la période.');
 
-        // Le dashboard SumUp (même source « sales ») répond aussi avec les données.
-        $sumup = $this->request('GET', '/admin/sumup', [], [], $this->rootId);
-        self::assertSame(200, (int) ($sumup['code'] ?? 0), 'Le dashboard SumUp doit répondre.');
+        // Le dashboard compta (même source « sales », qui a absorbé l'ancien
+        // dashboard SumUp) répond aussi avec les données.
+        $compta = $this->request('GET', '/admin/compta', [], [], $this->rootId);
+        self::assertSame(200, (int) ($compta['code'] ?? 0), 'Le dashboard compta doit répondre.');
     }
 
     public function test_depot_banque_genere_frais_repercutes_dans_le_bilan(): void
