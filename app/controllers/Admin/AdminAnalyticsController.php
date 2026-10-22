@@ -53,6 +53,14 @@ final class AdminAnalyticsController extends AdminBaseController
     /** Abréviations françaises des jours (0 = lundi) — libellés de charts. */
     private const DAY_ABBR = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
 
+    /**
+     * Quotient de l'intervalle à 80 % d'une loi normale (lot 4) : sert à
+     * tracer la bande de fourchette « jour de semaine attendu » autour du
+     * modèle (ca ± z × se), même convention 80 % que intervalle_80 du
+     * moteur. Calculé CÔTÉ CONTRÔLEUR : le JS ne fait que tracer.
+     */
+    private const INTERVALLE80_Z = 1.2816;
+
     public function index(): void
     {
         // ADMIN + TRESORERIE (lecture seule d'agrégats compta).
@@ -61,7 +69,13 @@ final class AdminAnalyticsController extends AdminBaseController
         // loadComptaCss : la carte « Idées du moment » (partiel reco) est
         // stylée par compta.css, que le layout admin ne charge que sur
         // /compta ou sur ce drapeau — /admin/analytics n'est ni l'un ni l'autre.
-        $this->renderAdmin('admin/analytics/index', $this->buildPage() + ['title' => 'Analytics', 'loadComptaCss' => true]);
+        // activeTab : onglet actif de l'espace Ventes (partiel partagé
+        // _tabs_ventes.php : Aujourd'hui / Analyses / Bilan annuel).
+        $this->renderAdmin('admin/analytics/index', $this->buildPage() + [
+            'title'          => 'Analytics',
+            'loadComptaCss'  => true,
+            'activeTab'      => 'analyses',
+        ]);
     }
 
     /**
@@ -79,9 +93,10 @@ final class AdminAnalyticsController extends AdminBaseController
         }
 
         $this->renderKiosk('admin/analytics/kiosk', $this->buildPage('week') + [
-            'title' => 'Analytique',
-            'kiosk' => true,
-            'token' => $token,
+            'title'     => 'Analytique',
+            'kiosk'     => true,
+            'token'     => $token,
+            'activeTab' => 'analyses',
         ]);
     }
 
@@ -290,6 +305,20 @@ final class AdminAnalyticsController extends AdminBaseController
             ? Analytics::productWeeklyTrend($productSelected, $from, $to, $category, $payment)
             : [];
 
+        // ---- Agrégats d'affichage (lot 4, mission §9) : tout calcul qui ----
+        // vivait dans les vues analytics (array_sum des totaux de tendance
+        // produit, parts catégorie/paiement, totaux du tableau produit,
+        // max/totaux de la heatmap, probabilité en %, écart hier) remonte
+        // ICI. Les vues et le JS extrait n'affichent que ces valeurs.
+        $productTotals = $this->productTotals($productWeekly);
+        $categoryShare = $this->categoryShare($byCat);
+        $paymentShare  = $this->paymentShare($payments);
+        $tableTotals   = $this->tableTotals($table);
+        $tableCategories = $this->tableCategories($table);
+        $heatmapMeta   = $this->heatmapMeta($heatmap);
+        $goalProbPct   = $this->goalProbPct($forecast);
+        $hierEcart     = $this->hierEcart($forecast);
+
         // ---- Méta du modèle (badges, notes, fiabilité) ----
         $meta = [
             'modele'            => $forecast['modele'],
@@ -344,12 +373,17 @@ final class AdminAnalyticsController extends AdminBaseController
             'byCategory' => [
                 'labels' => array_column($byCat, 'label'),
                 'ca'     => array_column($byCat, 'ca'),
+                'total'  => $categoryShare['total'],
+                'pcts'   => $categoryShare['pcts'],
             ],
-            'payments'   => $payments,
+            'payments'   => $paymentShare,
             'heatmap'    => $heatmap,
+            'heatmap_meta' => $heatmapMeta,
             'activity'   => $activity,
             'stock'      => $stock,
             'table'      => $table,
+            'table_totals' => $tableTotals,
+            'table_categories' => $tableCategories,
             'insights'   => $insights,
             'forecast'   => $forecast,
             'day_track'  => $dayTrack,
@@ -377,7 +411,12 @@ final class AdminAnalyticsController extends AdminBaseController
                 ),
                 'ca'     => array_column($productWeekly, 'ca'),
                 'qty'    => array_column($productWeekly, 'qty'),
+                'total_ca' => $productTotals['ca'],
+                'total_qty' => $productTotals['qty'],
             ],
+            'category_share' => $categoryShare,
+            'goal_prob_pct'  => $goalProbPct,
+            'hier_ecart'     => $hierEcart,
             'products'        => $products,
             'product_selected' => $productSelected,
             'filters'    => [
@@ -420,6 +459,15 @@ final class AdminAnalyticsController extends AdminBaseController
             'products'       => $products,
             'productSelected' => $productSelected,
             'productWeekly'  => $productWeekly,
+            'product_totals' => $productTotals,
+            'category_share' => $categoryShare,
+            'payment_share'  => $paymentShare,
+            'table_totals'   => $tableTotals,
+            'table_categories' => $tableCategories,
+            'heatmap_meta'   => $heatmapMeta,
+            'goal_prob_pct'  => $goalProbPct,
+            'hier_ecart'     => $hierEcart,
+            'croissance_note' => $croissanceNote,
             'json'           => (string) json_encode(
                 $payload,
                 JSON_NUMERIC_CHECK
@@ -614,6 +662,8 @@ final class AdminAnalyticsController extends AdminBaseController
         $qty = [];
         $tx = [];
         $daysCount = [];
+        $lo = [];
+        $hi = [];
         $js = is_array($forecast['jours_semaine'] ?? null) ? $forecast['jours_semaine'] : [];
 
         for ($dow = 0; $dow < 7; $dow++) {
@@ -636,6 +686,15 @@ final class AdminAnalyticsController extends AdminBaseController
             $daysCount[$dow] = (int) ($entry['occ'] ?? 0);
             $qty[$dow] = (int) ($observed[$dow]['qty'] ?? 0);
             $tx[$dow]  = (int) ($observed[$dow]['tx'] ?? 0);
+            // Bande de fourchette ~80 % autour du modèle (ca ± z × se,
+            // plancher à 0) : lot 4 « fourchettes de prévision en bande
+            // discrète ». Le JS ne fait que tracer ces deux séries.
+            $lo[$dow] = $ca[$dow] === null
+                ? null
+                : max(0.0, $ca[$dow] - self::INTERVALLE80_Z * (float) ($se[$dow] ?? 0.0));
+            $hi[$dow] = $ca[$dow] === null
+                ? null
+                : $ca[$dow] + self::INTERVALLE80_Z * (float) ($se[$dow] ?? 0.0);
         }
 
         $best = null;
@@ -653,6 +712,8 @@ final class AdminAnalyticsController extends AdminBaseController
         return [
             'labels'      => self::DAY_ABBR,
             'ca'          => $ca,          // modèle : attendu prochaine occurrence
+            'lo'          => $lo,          // bande fourchette ~80 % (ca − z·se)
+            'hi'          => $hi,          // bande fourchette ~80 % (ca + z·se)
             'obs'         => $obs,         // observé : moyenne brute (null sans occ)
             'obs_creuse'  => $obsCreuse,   // observé EN plage creuse (null si aucun)
             'obs_n_creuse' => $obsNCreuse, // nb de jours observés en plage creuse
@@ -684,8 +745,14 @@ final class AdminAnalyticsController extends AdminBaseController
         $s         = array_values(is_array($horaire['s'] ?? null) ? $horaire['s'] : []);
 
         $caAvg = [];
+        $peakHour = null;
+        $peakVal = 0.0;
         for ($h = 0; $h < 24; $h++) {
             $caAvg[] = $openDays > 0 ? (float) ($trackHourly[$h]['ca'] ?? 0.0) / $openDays : 0.0;
+            if ($caAvg[$h] > $peakVal) {
+                $peakVal = $caAvg[$h];
+                $peakHour = $h;
+            }
         }
 
         // Complète à 24 entrées par robustesse (le moteur en fournit 24).
@@ -700,6 +767,7 @@ final class AdminAnalyticsController extends AdminBaseController
         return [
             'labels'         => array_map(static fn (int $h): string => $h . 'h', range(0, 23)),
             'ca_avg'         => $caAvg,
+            'peak_hour'      => $peakHour, // heure de pointe OBSERVÉE (ex-argmax en vue)
             'today_ca'       => $pad($reelCa),
             'today_expected' => $pad($attenduCa),
             'today_projete'  => $pad($projeteCa),
@@ -825,5 +893,219 @@ final class AdminAnalyticsController extends AdminBaseController
         }
 
         return round((($current - $previous) / $previous) * 100, 1);
+    }
+
+    // -----------------------------------------------------------------
+    //  Agrégats d'affichage (lot 4) : anciens calculs de vue remontés ici
+    // -----------------------------------------------------------------
+
+    /**
+     * Totaux de la tendance produit (CA et quantités cumulés sur la
+     * période) — ex-array_sum en vue (analytics/index.php L739-740).
+     *
+     * @param list<array{week:string,ca:float,qty:int}> $productWeekly
+     * @return array{ca:float,qty:int}
+     */
+    private function productTotals(array $productWeekly): array
+    {
+        return [
+            'ca'  => round(array_sum(array_map(
+                static fn (array $r): float => (float) ($r['ca'] ?? 0),
+                $productWeekly
+            )), 2),
+            'qty' => (int) array_sum(array_map(
+                static fn (array $r): int => (int) ($r['qty'] ?? 0),
+                $productWeekly
+            )),
+        ];
+    }
+
+    /**
+     * Part de la première catégorie (poids du CA de la catégorie la plus
+     * vendue sur la période) : titre-conclusion du donut catégorie
+     * (« Boisson pèse 62 % du chiffre d'affaires »). Null sans vente.
+     * « pcts » = parts DÉTAILLÉES par catégorie (texte fr à 1 décimale,
+     * alignées sur byCat) pour la légende kiosque — plus aucun calcul
+     * de part côté vue/JS.
+     *
+     * @param list<array{label:string,ca:float}> $byCat
+     * @return array{label:?string,pct:?float,total:float,pcts:list<?string>}
+     */
+    private function categoryShare(array $byCat): array
+    {
+        $total = 0.0;
+        foreach ($byCat as $row) {
+            $total += (float) ($row['ca'] ?? 0);
+        }
+        if ($total <= 0.0 || $byCat === []) {
+            return ['label' => null, 'pct' => null, 'total' => 0.0, 'pcts' => []];
+        }
+
+        $top = $byCat[0];
+        foreach ($byCat as $row) {
+            if ((float) ($row['ca'] ?? 0) > (float) ($top['ca'] ?? 0)) {
+                $top = $row;
+            }
+        }
+
+        $pcts = [];
+        foreach ($byCat as $row) {
+            $pcts[] = number_format((float) ($row['ca'] ?? 0) / $total * 100, 1, ',', ' ');
+        }
+
+        return [
+            'label' => (string) ($top['label'] ?? ''),
+            'pct'   => round((float) ($top['ca'] ?? 0) / $total * 100, 1),
+            'total' => round($total, 2),
+            'pcts'  => $pcts,
+        ];
+    }
+
+    /**
+     * Part de paiement : total CA, % carte (entier, pour le centre du
+     * donut), % détaillés (texte fr à 1 décimale pour les tooltips) et
+     * libellés de légende pré-composés (« Carte 62 % »). Ex-calculs JS
+     * (reduce/Math.round) de la vue et des scripts extraits.
+     *
+     * @param array<string,mixed> $payments {by_ca, by_count}
+     * @return array<string,mixed>
+     */
+    private function paymentShare(array $payments): array
+    {
+        $byCa = is_array($payments['by_ca'] ?? null) ? $payments['by_ca'] : [];
+        $carte = (float) ($byCa['CARTE'] ?? 0);
+        $liquide = (float) ($byCa['LIQUIDE'] ?? 0);
+        $total = $carte + $liquide;
+
+        $pctTxt = static function (float $part) use ($total): ?string {
+            if ($total <= 0.0) {
+                return null;
+            }
+
+            return number_format($part / $total * 100, 1, ',', ' ');
+        };
+
+        $pctCarte = $total > 0.0 ? (int) round($carte / $total * 100) : null;
+
+        return [
+            'by_ca'     => $byCa,
+            'by_count'  => is_array($payments['by_count'] ?? null) ? $payments['by_count'] : [],
+            'total'     => round($total, 2),
+            'pct_carte' => $pctCarte,
+            'pct'       => [
+                'CARTE'   => $pctTxt($carte),
+                'LIQUIDE' => $pctTxt($liquide),
+            ],
+            'labels'    => [
+                'Carte' . ($pctCarte === null ? '' : ' ' . $pctCarte . ' %'),
+                'Liquide' . ($pctCarte === null ? '' : ' ' . (100 - $pctCarte) . ' %'),
+            ],
+        ];
+    }
+
+    /**
+     * Totaux du tableau « Détail par produit » (quantités, CA, bénéfice,
+     * marge observée globale) — ex-calculs JS de la ligne Total (desktop)
+     * et du bandeau de totaux (kiosque).
+     *
+     * @param list<array<string,mixed>> $table
+     * @return array{qty:int,ca:float,profit:float,margin_pct:?float}
+     */
+    private function tableTotals(array $table): array
+    {
+        $qty = 0;
+        $ca = 0.0;
+        $profit = 0.0;
+        foreach ($table as $row) {
+            $qty += (int) ($row['qty'] ?? 0);
+            $ca += (float) ($row['ca'] ?? 0);
+            $profit += (float) ($row['profit'] ?? 0);
+        }
+
+        return [
+            'qty'        => $qty,
+            'ca'         => round($ca, 2),
+            'profit'     => round($profit, 2),
+            'margin_pct' => $ca > 0.0 ? round($profit / $ca * 100, 1) : null,
+        ];
+    }
+
+    /**
+     * Total CA PAR CATÉGORIE (sommes du tableau « Détail par produit ») :
+     * sous-totaux des groupes de la vue kiosque (tri « Catégorie »),
+     * ex-calcul JS (reduce). Clé = nom de catégorie exact du tableau.
+     *
+     * @param list<array<string,mixed>> $table
+     * @return array<string,float>
+     */
+    private function tableCategories(array $table): array
+    {
+        $totaux = [];
+        foreach ($table as $row) {
+            $cat = (string) ($row['category'] ?? '—');
+            $totaux[$cat] = ($totaux[$cat] ?? 0.0) + (float) ($row['ca'] ?? 0);
+        }
+        foreach ($totaux as $cat => $ca) {
+            $totaux[$cat] = round($ca, 2);
+        }
+
+        return $totaux;
+    }
+
+    /**
+     * Méta de la heatmap : intensité maximale (échelle de couleur unique)
+     * et total CA par jour (tooltips) — ex-calculs JS des deux vues.
+     *
+     * @param array<int,array<int,mixed>> $heatmap
+     * @return array{max:float,day_totals:list<float>}
+     */
+    private function heatmapMeta(array $heatmap): array
+    {
+        $max = 0.0;
+        $dayTotals = [];
+        for ($d = 0; $d < 7; $d++) {
+            $dayTotal = 0.0;
+            for ($h = 0; $h < 24; $h++) {
+                $v = (float) (($heatmap[$d] ?? [])[$h] ?? 0);
+                $dayTotal += $v;
+                if ($v > $max) {
+                    $max = $v;
+                }
+            }
+            $dayTotals[] = round($dayTotal, 2);
+        }
+
+        return ['max' => $max, 'day_totals' => $dayTotals];
+    }
+
+    /**
+     * Probabilité d'atteinte de l'objectif AFFICHÉE (prob_atteinte × 100,
+     * bornée [0 ; 100]) — ex-calcul en vue (desktop + kiosque). Le moteur
+     * renvoie une FRACTION 0–1 ; le ×100 est fait UNE fois ici.
+     */
+    private function goalProbPct(array $forecast): ?float
+    {
+        $prob = $forecast['semaine']['prob_atteinte'] ?? null;
+        if ($prob === null || !is_numeric($prob)) {
+            return null;
+        }
+
+        return max(0.0, min(100.0, (float) $prob * 100.0));
+    }
+
+    /**
+     * Écart (€) réel vs attendu d'hier — ex-soustraction en vue
+     * (chip « Hier : X vs Y (écart) »). Null si une des valeurs manque.
+     */
+    private function hierEcart(array $forecast): ?float
+    {
+        $hier = is_array($forecast['hier'] ?? null) ? $forecast['hier'] : [];
+        $reel = $hier['reel'] ?? null;
+        $prevu = $hier['prevu'] ?? null;
+        if (!is_numeric($reel) || !is_numeric($prevu)) {
+            return null;
+        }
+
+        return round((float) $reel - (float) $prevu, 2);
     }
 }

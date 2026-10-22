@@ -27,7 +27,21 @@ use ReflectionMethod;
  *  - produits / produits_reappro cohérents (flux courant : Événement et
  *    ligne 0 € exclus) ;
  *  - n_jours ≥ 10 → confiance ≠ « insuffisant » ;
- *  - la probabilité AFFICHÉE dans la carte Objectif = prob × 100.
+ *  - la probabilité AFFICHÉE dans la carte Objectif = prob × 100 ;
+ *  - LOT 4 : agrégats d'affichage calculés côté contrôleur (totaux
+ *    tendance produit, parts catégorie/paiement, totaux tableau produit,
+ *    méta heatmap, prob en %, bande fourchette jour de semaine) et
+ *    cohérence de ces valeurs avec les séries du payload.
+ *
+ * AJUSTEMENTS LOT 4 (extraction JS/CSS imposée par la mission — la page
+ * ne contient plus le JS inline) :
+ *  - le payload JSON est extrait de l'îlot <script type="application/json"
+ *    id="analytics-data"> / id="analytics-kiosk-data"> (l'ancien inline
+ *    « var data = {…}; » a disparu de la page) ;
+ *  - les étiquettes de séries Chart.js (« Observé », « Modèle (prochaine
+ *    occurrence) ») vivent dans public/assets/js/analytics.js et
+ *    analytics-kiosk.js : les assertions correspondantes portent sur le
+ *    CONTENU DE CES FICHIERS et non sur le HTML rendu.
  *
  * Base `aeic_test` requise (les tests sont sautés sinon).
  */
@@ -104,6 +118,15 @@ final class AnalyticsBuildPageTest extends IntegrationTestCase
 
         // La vue est rendue : carte Objectif présente.
         self::assertStringContainsString("Probabilité d'atteindre l'objectif hebdo", $body, 'La carte Objectif est absente.');
+
+        // ---- LOT 4 : onglets de l'espace Ventes (partiel partagé) ----
+        self::assertStringContainsString('class="tabs-ventes"', $body, 'La nav « Espace ventes » est absente.');
+        self::assertStringContainsString('aria-label="Espace ventes"', $body, 'La nav « Espace ventes » doit être labellisée.');
+        self::assertMatchesRegularExpression(
+            '#/admin/analytics" class="is-active" aria-current="page">Analyses<#',
+            $body,
+            'L\'onglet « Analyses » doit être actif sur /admin/analytics.'
+        );
 
         $payload = $this->extractPayload($body);
         foreach (['forecast', 'day_track', 'weekday', 'hourly', 'semaine', 'mois30', 'goal', 'meta'] as $key) {
@@ -184,8 +207,114 @@ final class AnalyticsBuildPageTest extends IntegrationTestCase
         self::assertStringNotContainsString('/jour en moyenne', $body, 'Ancien libellé à deux chiffres encore présent.');
         self::assertStringNotContainsString('Moyenne/jour : ', $body, 'La moyenne/jour ne doit plus vivre dans le sous-titre.');
         self::assertStringNotContainsString('CA moyen (€)', $body, 'L\'étiquette trompeuse « CA moyen » doit avoir disparu.');
-        self::assertStringContainsString('Modèle (prochaine occurrence)', $body, 'La série modèle doit être étiquetée.');
-        self::assertStringContainsString("'Observé'", $body, 'La série observée doit être étiquetée.');
+
+        // ---- LOT 4 : étiquettes de séries déplacées dans le JS extrait ----
+        // (extraction imposée par la mission : le JS inline n'est plus dans
+        // la page — l'assertion porte sur les fichiers extraits).
+        $jsDesktop = $this->jsSource('analytics.js');
+        $jsKiosk = $this->jsSource('analytics-kiosk.js');
+        self::assertStringContainsString('Modèle (prochaine occurrence)', $jsDesktop, 'La série modèle doit être étiquetée (JS extrait desktop).');
+        self::assertStringContainsString("'Observé'", $jsDesktop, 'La série observée doit être étiquetée (JS extrait desktop).');
+        self::assertStringContainsString('Modèle (prochaine occurrence)', $jsKiosk, 'La série modèle doit être étiquetée (JS extrait kiosque).');
+        self::assertStringContainsString("'Observé'", $jsKiosk, 'La série observée doit être étiquetée (JS extrait kiosque).');
+
+        // ---- LOT 4 : agrégats calculés côté contrôleur (ex-calculs vue/JS) ----
+        // Tendance produit : totaux = sommes des colonnes du payload.
+        $pw = $payload['product_weekly'];
+        self::assertArrayHasKey('total_ca', $pw, 'product_weekly.total_ca manquant (ex-array_sum de vue).');
+        self::assertArrayHasKey('total_qty', $pw, 'product_weekly.total_qty manquant (ex-array_sum de vue).');
+        self::assertEqualsWithDelta(
+            array_sum(array_map('floatval', $pw['ca'])),
+            (float) $pw['total_ca'],
+            0.01,
+            'total_ca doit être la somme des CA hebdo (calcul remonté côté contrôleur).'
+        );
+        self::assertSame(
+            array_sum(array_map('intval', $pw['qty'])),
+            (int) $pw['total_qty'],
+            'total_qty doit être la somme des quantités hebdo.'
+        );
+
+        // Donut catégorie : total et part de la 1re catégorie cohérents.
+        $byCat = $payload['byCategory'];
+        self::assertEqualsWithDelta(
+            array_sum(array_map('floatval', $byCat['ca'])),
+            (float) $byCat['total'],
+            0.01,
+            'byCategory.total = somme des CA par catégorie (ex-reduce JS).'
+        );
+        self::assertArrayHasKey('category_share', $payload, 'category_share manquant (titre-conclusion du donut).');
+        if ((float) $byCat['total'] > 0.0) {
+            self::assertNotNull($payload['category_share']['label'], 'Part catégorie désignée dès qu\'il y a des ventes.');
+            $maxCa = max(array_map('floatval', $byCat['ca']));
+            self::assertEqualsWithDelta(
+                round($maxCa / (float) $byCat['total'] * 100, 1),
+                (float) $payload['category_share']['pct'],
+                0.01,
+                'category_share.pct = poids de la catégorie la plus vendue.'
+            );
+        }
+
+        // Donut paiements : total, part carte et libellés pré-composés.
+        $pay = $payload['payments'];
+        $sumPay = (float) ($pay['by_ca']['CARTE'] ?? 0) + (float) ($pay['by_ca']['LIQUIDE'] ?? 0);
+        self::assertEqualsWithDelta($sumPay, (float) $pay['total'], 0.01, 'payments.total = somme carte + liquide.');
+        $pctCarteAttendu = $sumPay > 0 ? (int) round((float) ($pay['by_ca']['CARTE'] ?? 0) / $sumPay * 100) : null;
+        self::assertSame($pctCarteAttendu, $pay['pct_carte'] !== null ? (int) $pay['pct_carte'] : null, 'pct_carte = % carte (ex-Math.round JS).');
+        if ($pctCarteAttendu !== null) {
+            self::assertCount(2, $pay['labels'], 'Deux libellés de légende pré-composés.');
+            self::assertStringContainsString((string) $pctCarteAttendu . ' %', (string) $pay['labels'][0], 'Le libellé Carte porte la part calculée côté contrôleur.');
+        }
+
+        // Tableau produit : totaux de la ligne Total (ex-calculs JS).
+        $tt = $payload['table_totals'];
+        $sumQty = array_sum(array_map(static fn ($r) => (int) $r['qty'], $payload['table']));
+        $sumCa = array_sum(array_map(static fn ($r) => (float) $r['ca'], $payload['table']));
+        $sumProfit = array_sum(array_map(static fn ($r) => (float) $r['profit'], $payload['table']));
+        self::assertSame($sumQty, (int) $tt['qty'], 'table_totals.qty = somme des quantités.');
+        self::assertEqualsWithDelta($sumCa, (float) $tt['ca'], 0.01, 'table_totals.ca = somme des CA.');
+        self::assertEqualsWithDelta($sumProfit, (float) $tt['profit'], 0.01, 'table_totals.profit = somme des bénéfices.');
+        if ($sumCa > 0.0) {
+            self::assertEqualsWithDelta(round($sumProfit / $sumCa * 100, 1), (float) $tt['margin_pct'], 0.01, 'table_totals.margin_pct = marge observée globale.');
+        }
+        self::assertArrayHasKey('table_categories', $payload, 'table_categories manquant (sous-totaux kiosque).');
+
+        // Heatmap : échelle (max) et totaux par jour (ex-calculs JS).
+        $hm = $payload['heatmap_meta'];
+        $maxAttendu = 0.0;
+        $jour0 = 0.0;
+        foreach ($payload['heatmap'] as $d => $row) {
+            foreach ($row as $h => $v) {
+                $v = (float) $v;
+                $maxAttendu = max($maxAttendu, $v);
+                if ((int) $d === 0) {
+                    $jour0 += $v;
+                }
+            }
+        }
+        self::assertEqualsWithDelta($maxAttendu, (float) $hm['max'], 0.001, 'heatmap_meta.max = max de la matrice (échelle de couleur).');
+        self::assertCount(7, $hm['day_totals'], 'Un total par jour de semaine.');
+        self::assertEqualsWithDelta($jour0, (float) $hm['day_totals'][0], 0.01, 'day_totals[0] = somme du lundi.');
+
+        // Jour de semaine : bande de fourchette ~80 % autour du modèle.
+        $wd4 = $payload['weekday'];
+        foreach (['lo', 'hi'] as $bandKey) {
+            self::assertArrayHasKey($bandKey, $wd4, "weekday.$bandKey manquant (bande de fourchette, lot 4).");
+            self::assertCount(7, $wd4[$bandKey], "weekday.$bandKey : 7 entrées.");
+        }
+        foreach ($wd4['ca'] as $i => $caVal) {
+            if ($caVal === null) {
+                continue;
+            }
+            self::assertGreaterThanOrEqual(0.0, (float) $wd4['lo'][$i], 'Borne basse jamais négative.');
+            self::assertGreaterThanOrEqual((float) $caVal - 0.001, (float) $wd4['hi'][$i], 'Borne haute ≥ attendu (bande autour du modèle).');
+        }
+
+        // Probabilité d'atteinte pré-échelonnée (×100 borné, contrôleur).
+        self::assertArrayHasKey('goal_prob_pct', $payload, 'goal_prob_pct manquant (ex-×100 en vue).');
+        self::assertNotNull($payload['goal_prob_pct'], 'Semaine chargée → probabilité affichable.');
+        self::assertGreaterThanOrEqual(0.0, (float) $payload['goal_prob_pct']);
+        self::assertLessThanOrEqual(100.0, (float) $payload['goal_prob_pct']);
 
         // ---- F6 : note bénéfice en régimes (≥ 5 % ici, produits nommés) ----
         self::assertStringContainsString(
@@ -218,6 +347,10 @@ final class AnalyticsBuildPageTest extends IntegrationTestCase
         self::assertSame(200, (int) ($r['code'] ?? 0), 'Le kiosque Analytics doit répondre 200.');
         $body = (string) ($r['body'] ?? '');
 
+        // ---- LOT 4 : onglets Ventes en version compacte kiosque ----
+        self::assertStringContainsString('tabs-ventes--compact', $body, 'Kiosque : version compacte des onglets Ventes absente.');
+        self::assertStringContainsString('aria-current="page"', $body, 'Kiosque : l\'onglet actif doit porter aria-current.');
+
         $payload = $this->extractPayload($body);
         $pct = max(0.0, min(100.0, (float) $payload['semaine']['prob_atteinte'] * 100.0));
         $fmt = number_format($pct, $pct < 10 ? 1 : 0, ',', ' ');
@@ -247,17 +380,38 @@ final class AnalyticsBuildPageTest extends IntegrationTestCase
     }
 
     /**
-     * Extraction du payload JSON injecté dans la vue (« var data = {…}; »).
+     * Extraction du payload JSON injecté dans la vue.
+     *
+     * AJUSTEMENT LOT 4 (extraction JS) : le payload vit désormais dans un
+     * îlot <script type="application/json" id="analytics-data"> (vue
+     * desktop) ou id="analytics-kiosk-data" (kiosque) — l'ancien inline
+     * « var data = {…}; » a été déplacé vers public/assets/js/.
      *
      * @return array<string,mixed>
      */
     private function extractPayload(string $body): array
     {
-        self::assertSame(1, preg_match('/var data = (\{.*?\});\r?\n/s', $body, $m), 'Payload JSON introuvable dans la page.');
+        self::assertSame(
+            1,
+            preg_match('/<script type="application\/json" id="analytics(?:-kiosk)?-data">(\{.*?\})<\/script>/s', $body, $m),
+            'Îlot payload JSON introuvable dans la page.'
+        );
         $data = json_decode((string) $m[1], true);
         self::assertIsArray($data, 'Le payload JSON de la page est invalide.');
 
         return $data;
+    }
+
+    /**
+     * Contenu d'un JS extrait (lot 4) — les étiquettes de séries Chart.js
+     * vivent dans ces fichiers depuis l'extraction du JS inline.
+     */
+    private function jsSource(string $file): string
+    {
+        $path = AEIC_PUBLIC . '/assets/js/' . $file;
+        self::assertFileExists($path, 'JS extrait manquant : ' . $file);
+
+        return (string) file_get_contents($path);
     }
 
     /**

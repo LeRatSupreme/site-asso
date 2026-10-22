@@ -349,9 +349,16 @@ final class ComptaConsistencyTest extends IntegrationTestCase
 
         // ---- COHÉRENCE exigée : besoin(liste, 1 semaine) ≡ suggestion du ----
         // Réappro Analytics — même moteur, même stock (ReapproDemande).
+        // Lot 4 : le payload JSON vit dans l'îlot <script
+        // type="application/json" id="analytics-data"> (extraction du JS
+        // inline vers public/assets/js/analytics.js).
         $ra = $this->request('GET', '/admin/analytics', [], [], $this->rootId);
         self::assertSame(200, (int) ($ra['code'] ?? 0), 'La page Analytics doit répondre.');
-        self::assertSame(1, preg_match('/var data = (\{.*?\});\r?\n/s', (string) ($ra['body'] ?? ''), $m), 'Payload Analytics introuvable.');
+        self::assertSame(
+            1,
+            preg_match('/<script type="application\/json" id="analytics(?:-kiosk)?-data">(\{.*?\})<\/script>/s', (string) ($ra['body'] ?? ''), $m),
+            'Îlot payload Analytics introuvable.'
+        );
         $payload = json_decode((string) $m[1], true);
         $suggestion = null;
         foreach ((array) ($payload['produits_reappro'] ?? []) as $p) {

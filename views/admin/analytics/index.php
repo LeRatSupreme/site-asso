@@ -17,13 +17,22 @@ declare(strict_types=1);
  * @var list<array<string,mixed>> $insights
  * @var array<string,mixed> $forecast      Moteur ForecastEngine::forecast() TEL QUEL (prevision_jour, intervalle_80, attendu_a_h, trop_tot, projection_fin_journee, ecart_vs_attendu, dans_intervalle, confiance, modele, n_jours, wape_backtest, hier, jours, horaire, jours_semaine, semaine, mois30, benefice, produits, anomalies, notes…)
  * @var array<string,mixed> $day_track     Estimation du jour (window, hour, trop_tot, estimate, cum_actual, cum_expected, actual_so_far, expected_so_far, delta_pct|null, projection_eod, ecart_eur, intervalle_h|null, dans_intervalle|null, confiance, notes)
- * @var array<string,mixed> $weekday       Par jour de semaine {labels, ca (modèle : attendu prochaine occurrence), obs (moyenne brute observée|null), se, next_date, qty, tx, days_count (occ), today_index, best?{index,label,ca,n}|null, creuse_note?string|null}
- * @var array<string,mixed> $hourly        Par heure {labels, ca_avg, today_ca, today_expected, today_projete, now_hour, trop_tot, s}
+ * @var array<string,mixed> $weekday       Par jour de semaine {labels, ca (modèle : attendu prochaine occurrence), lo/hi (bande ~80 %), obs (moyenne brute observée|null), se, next_date, qty, tx, days_count (occ), today_index, best?{index,label,ca,n}|null, creuse_note?string|null}
+ * @var array<string,mixed> $hourly        Par heure {labels, ca_avg, peak_hour, today_ca, today_expected, today_projete, now_hour, trop_tot, s}
  * @var float $goal                        Objectif hebdomadaire affiché (GET ?goal= ou sauvegarde POST /admin/analytics/objectif)
  * @var list<string> $products             Produits distincts (sélecteur tendance)
  * @var string $productSelected            Produit suivi par la tendance hebdo
  * @var list<array{week:string,ca:float,qty:int}> $productWeekly Tendance hebdo du produit
- * @var string $json  Payload JSON injecté dans un <script>.
+ * @var array{ca:float,qty:int} $product_totals            Totaux de la tendance produit (contrôleur, lot 4)
+ * @var array{label:?string,pct:?float,total:float} $category_share Part du CA de la 1re catégorie (contrôleur, lot 4)
+ * @var array<string,mixed> $payment_share Part carte/liquide + libellés pré-composés (contrôleur, lot 4)
+ * @var array{qty:int,ca:float,profit:float,margin_pct:?float} $table_totals Totaux du tableau produit (contrôleur, lot 4)
+ * @var array{max:float,day_totals:list<float>} $heatmap_meta Échelle et totaux de la heatmap (contrôleur, lot 4)
+ * @var ?float $goal_prob_pct              Probabilité d'atteinte AFFICHÉE (prob × 100 borné, contrôleur, lot 4)
+ * @var ?float $hier_ecart                 Écart € réel vs attendu d'hier (contrôleur, lot 4)
+ * @var string $croissance_note            Note d'affichage des deltas (contrôleur, lot 4)
+ * @var string $activeTab                  Onglet actif de l'espace Ventes ('today'|'analyses'|'annual')
+ * @var string $json  Payload JSON injecté dans un îlot <script type="application/json">.
  * @var bool $kiosk   Vrai si rendu dans le layout kiosque (défaut : false).
  * @var string $token Jeton kiosque ADMIN (utilisé si $kiosk).
  */
@@ -45,7 +54,12 @@ $iconSvg = static function (string $name): string {
     ];
     return $icons[$name] ?? $icons['star'];
 };
+
+// Onglets de l'espace Ventes (partiel partagé avec /admin/compta et le
+// bilan annuel — lot 4) : cette page est l'onglet « Analyses ».
+$activeTab = $activeTab ?? 'analyses';
 ?>
+<?php require AEIC_VIEWS . '/partials/_tabs_ventes.php'; ?>
 
 <div class="analytics-page">
 
@@ -142,12 +156,10 @@ $iconSvg = static function (string $name): string {
     <!-- ============================================================ -->
     <div class="grid grid-6 kpi-grid">
         <?php
-        // Note de croissance du moteur (payload $json > meta) : si la
-        // période précédente est incomplète, les deltas sont null côté
-        // payload — on affiche la note, SANS recomposer de delta.
-        $payloadDecoded = is_string($json ?? null) ? json_decode($json, true) : null;
-        $payloadMeta    = is_array($payloadDecoded) ? (array) ($payloadDecoded['meta'] ?? []) : [];
-        $croissanceNote = trim((string) ($payloadMeta['croissance_note'] ?? ''));
+        // Note de croissance du moteur (variable du contrôleur, lot 4) :
+        // si la période précédente est incomplète, les deltas sont null
+        // côté payload — on affiche la note, SANS recomposer de delta.
+        $croissanceNote = trim((string) ($croissance_note ?? ''));
 
         $kpiCards = [
             ['label' => "Chiffre d'affaires", 'value' => formatPrice($kpis['ca']),          'delta' => $kpis['ca_delta'] ?? null],
@@ -188,7 +200,7 @@ $iconSvg = static function (string $name): string {
     <div class="analytics-grid analytics-grid-2">
         <div class="card surface glass chart-card chart-span-2">
             <div class="chart-head">
-                <h2 class="chart-title">Évolution du CA et du bénéfice</h2>
+                <h2 class="chart-title">Le chiffre d'affaires et le bénéfice, période par période</h2>
                 <span class="chart-sub" id="trend-sub"></span>
             </div>
             <div class="chart-canvas"><canvas id="chart-trend" height="120"></canvas></div>
@@ -295,6 +307,11 @@ $iconSvg = static function (string $name): string {
                 ? ' · Tendance désactivée (historique < 6 semaines)'
                 : ($fcTendance !== null ? ' · Tendance ≈ ' . number_format($fcTendance, 1, ',', ' ') . ' %/jour' : ''))
             . ($fcNoteSel !== '' ? ' · ' . $fcNoteSel : '');
+        // Lot 4 (jargon) : les métriques du modèle (WAPE, dispersion,
+        // couverture) ne vivent PLUS en info-bulle mais DANS la section
+        // repliée « Détails techniques » en bas de page ; l'info-bulle
+        // des cartes renvoie simplement vers cette section.
+        $fcInfoTxt = 'Fiabilité du modèle, fourchettes et notes : voir la section « Détails techniques » en bas de page.';
 
         $fcHasChart = $fcPrev !== null || !empty($forecast['jours']);
 
@@ -327,8 +344,8 @@ $iconSvg = static function (string $name): string {
             $hIv = (isset($fcHier['lo'], $fcHier['hi']) && $fcHier['lo'] !== null && $fcHier['hi'] !== null)
                 ? ['lo' => $fcHier['lo'], 'hi' => $fcHier['hi']] : null;
             $txt = 'Hier : ' . formatPrice((float) ($fcHier['reel'] ?? 0)) . ' vs ' . formatPrice((float) $fcHier['prevu']);
-            if (isset($fcHier['reel']) && $fcHier['reel'] !== null) {
-                $txt .= ' (' . $fcSigned((float) $fcHier['reel'] - (float) $fcHier['prevu']) . ')';
+            if (($hier_ecart ?? null) !== null) {
+                $txt .= ' (' . $fcSigned($hier_ecart) . ')';
             }
             $txt .= $fcRange($hIv);
             $fcChips[] = ['cls' => 'is-muted', 'text' => $txt];
@@ -341,7 +358,7 @@ $iconSvg = static function (string $name): string {
         <div class="card surface glass chart-card chart-span-2">
             <div class="chart-head">
                 <div>
-                    <h2 class="chart-title">Prévisions<span class="fc-info" title="<?= e($fcTooltip) ?>" aria-label="<?= e($fcTooltip) ?>">ⓘ</span></h2>
+                    <h2 class="chart-title">À quoi ressemblent les prochains jours<span class="fc-info" title="<?= e($fcInfoTxt) ?>" aria-label="<?= e($fcInfoTxt) ?>">ⓘ</span></h2>
                     <span class="chart-sub">Fenêtre d'apprentissage : <?= $fcFw ?> derniers jours</span>
                 </div>
                 <div class="af-pills dt-pills">
@@ -355,7 +372,7 @@ $iconSvg = static function (string $name): string {
                     <span class="kpi-delta <?= e($chip['cls']) ?>"><?= e($chip['text']) ?></span>
                 <?php endforeach; ?>
                 <?php if ($fcModele === 'baseline_B2'): ?>
-                    <span class="kpi-delta is-off">Baseline naïve active (le modèle avancé ne bat pas la référence)</span>
+                    <span class="kpi-delta is-off">Prévision simplifiée active : l'historique récent ne permet pas d'utiliser le modèle avancé</span>
                 <?php endif; ?>
                 <?php if ($fcInsuf): ?>
                     <span class="kpi-delta is-off">Données insuffisantes (&lt; 7 jours ouverts)</span>
@@ -396,7 +413,7 @@ $iconSvg = static function (string $name): string {
         <div class="card surface glass chart-card chart-span-2">
             <div class="chart-head">
                 <div>
-                    <h2 class="chart-title">Estimation du jour<span class="fc-info" title="<?= e($fcTooltip) ?>" aria-label="<?= e($fcTooltip) ?>">ⓘ</span></h2>
+                    <h2 class="chart-title">La journée en cours comparée à un jour habituel<span class="fc-info" title="<?= e($fcInfoTxt) ?>" aria-label="<?= e($fcInfoTxt) ?>">ⓘ</span></h2>
                     <span class="chart-sub">Fenêtre d'apprentissage : <?= $dtFw ?> derniers jours</span>
                 </div>
                 <div class="af-pills dt-pills">
@@ -439,23 +456,38 @@ $iconSvg = static function (string $name): string {
 
         <div class="card surface glass chart-card">
             <div class="chart-head">
-                <h2 class="chart-title">Top 10 produits</h2>
-                <span class="chart-sub">CA · cliquer pour le détail</span>
+                <h2 class="chart-title">Les produits qui font le chiffre d'affaires</h2>
+                <span class="chart-sub">Top 10 · cliquer pour le détail</span>
             </div>
             <div class="chart-canvas"><canvas id="chart-top" height="160"></canvas></div>
         </div>
 
+        <?php
+        // Titre-conclusion du donut catégorie (part calculée côté
+        // contrôleur, lot 4) : « Boisson pèse 62 % du chiffre d'affaires ».
+        $catSharePct = $category_share['pct'] ?? null;
+        $catShareTxt = $catSharePct === null ? '' : rtrim(rtrim(number_format((float) $catSharePct, 1, ',', ' '), '0'), ',');
+        ?>
         <div class="card surface glass chart-card">
             <div class="chart-head">
-                <h2 class="chart-title">Répartition par catégorie</h2>
-                <span class="chart-sub">CA</span>
+                <h2 class="chart-title"><?= ($category_share['label'] ?? null) !== null && $catShareTxt !== ''
+                    ? e((string) $category_share['label']) . ' pèse ' . e($catShareTxt) . ' % du chiffre d&#039;affaires'
+                    : 'Répartition du chiffre d&#039;affaires par catégorie' ?></h2>
+                <span class="chart-sub">CA par catégorie</span>
             </div>
             <div class="chart-canvas chart-canvas-square"><canvas id="chart-category"></canvas></div>
         </div>
 
+        <?php
+        // Titre-conclusion du donut paiements (part carte calculée côté
+        // contrôleur, lot 4) ; « Répartition des paiements » sans vente.
+        $payPctCarte = $payment_share['pct_carte'] ?? null;
+        ?>
         <div class="card surface glass chart-card">
             <div class="chart-head">
-                <h2 class="chart-title">Répartition des paiements</h2>
+                <h2 class="chart-title"><?= $payPctCarte !== null
+                    ? 'La carte fait ' . e((string) $payPctCarte) . ' % des encaissements'
+                    : 'Répartition des paiements' ?></h2>
                 <span class="chart-sub">CA · transactions</span>
             </div>
             <div class="chart-canvas chart-canvas-square"><canvas id="chart-payment"></canvas></div>
@@ -463,7 +495,7 @@ $iconSvg = static function (string $name): string {
 
         <div class="card surface glass chart-card">
             <div class="chart-head">
-                <h2 class="chart-title">Par heure</h2>
+                <h2 class="chart-title">Le rythme des ventes au fil de la journée</h2>
                 <span class="chart-sub" id="hourly-sub"><?php
                 // Sous-titre 100 % serveur (une seule source : le payload du
                 // moteur). « Attendu aujourd'hui » = JOURNÉE (prevision_jour +
@@ -472,6 +504,8 @@ $iconSvg = static function (string $name): string {
                 // intervalle_h, ou « — (trop tôt) » quand le profil horaire
                 // couvre < 10 % de la journée (attendu horaire masqué).
                 // Jour fermé → « Fermé aujourd'hui », jamais « 0,00 € ».
+                // Heure de pointe : argmax calculé côté contrôleur
+                // (hourly.peak_hour, lot 4).
                 $phPrev  = isset($forecast['prevision_jour']) ? $forecast['prevision_jour'] : null;
                 $phIv    = isset($forecast['intervalle_80']) && is_array($forecast['intervalle_80']) ? $forecast['intervalle_80'] : null;
                 $phFerme = $phPrev === null
@@ -480,14 +514,7 @@ $iconSvg = static function (string $name): string {
                 $phTrop = !empty($day_track['trop_tot']);
                 $phExp  = isset($day_track['expected_so_far']) ? $day_track['expected_so_far'] : null;
                 $phIvH  = isset($day_track['intervalle_h']) && is_array($day_track['intervalle_h']) ? $day_track['intervalle_h'] : null;
-                $phPeak  = null;
-                $phPeakV = 0.0;
-                foreach ((isset($hourly['ca_avg']) && is_array($hourly['ca_avg']) ? $hourly['ca_avg'] : []) as $phHr => $phVal) {
-                    if ($phVal !== null && (float) $phVal > $phPeakV) {
-                        $phPeakV = (float) $phVal;
-                        $phPeak  = (int) $phHr;
-                    }
-                }
+                $phPeak = isset($hourly['peak_hour']) ? $hourly['peak_hour'] : null;
                 $phParts = ['Heure de pointe : ' . ($phPeak === null ? '—' : $phPeak . 'h') . ' (observé)'];
                 if ($phPrev !== null) {
                     $phParts[] = "Attendu aujourd'hui : " . formatPrice((float) $phPrev) . $fcRange($phIv);
@@ -516,7 +543,6 @@ $iconSvg = static function (string $name): string {
         $semIv   = (($sem['lo'] ?? null) !== null && ($sem['hi'] ?? null) !== null)
             ? ['lo' => $sem['lo'], 'hi' => $sem['hi']] : null;
         $semReel = $sem['reel'] ?? null;
-        $semProb = $sem['prob_atteinte'] ?? null;
         $semManq = $sem['manquant_par_jour'] ?? null;
         $semRest = (int) ($sem['jours_restants'] ?? 0);
         $m30     = isset($forecast['mois30']) && is_array($forecast['mois30']) ? $forecast['mois30'] : [];
@@ -543,8 +569,9 @@ $iconSvg = static function (string $name): string {
             }
         }
         // prob_atteinte est une FRACTION 0–1 (P(total ≥ objectif)) : le
-        // moteur ne renvoie jamais 0–100 — l'affichage fait le ×100.
-        $probPct = $semProb === null ? null : max(0.0, min(100.0, (float) $semProb * 100.0));
+        // moteur ne renvoie jamais 0–100 — le ×100 (borné) est fait UNE
+        // fois côté contrôleur (goal_prob_pct, lot 4) ; ici l'affichage.
+        $probPct = $goal_prob_pct ?? null;
         $probFmt = $probPct === null ? '' : number_format($probPct, $probPct < 10 ? 1 : 0, ',', ' ');
         ?>
         <div class="card surface glass chart-card">
@@ -735,13 +762,23 @@ $iconSvg = static function (string $name): string {
         </div>
 
         <?php
-        // Totaux de la tendance produit.
-        $pwCa  = array_sum(array_column($productWeekly, 'ca'));
-        $pwQty = array_sum(array_column($productWeekly, 'qty'));
+        // Totaux de la tendance produit : calculés côté contrôleur
+        // (product_totals, lot 4 — ex-array_sum en vue).
+        $pwCa  = (float) ($product_totals['ca'] ?? 0);
+        $pwQty = (int) ($product_totals['qty'] ?? 0);
+
+        // Titre-conclusion : le meilleur jour DU MOTEUR quand il est
+        // significatif (insight « Meilleur jour »), sinon mention honnête.
+        $wdBestCard = isset($weekday['best']) && is_array($weekday['best']) ? $weekday['best'] : null;
+        $wdJoursComplets = ['Lun' => 'lundi', 'Mar' => 'mardi', 'Mer' => 'mercredi', 'Jeu' => 'jeudi', 'Ven' => 'vendredi', 'Sam' => 'samedi', 'Dim' => 'dimanche'];
         ?>
         <div class="card surface glass chart-card">
             <div class="chart-head">
-                <h2 class="chart-title">Par jour de semaine</h2>
+                <h2 class="chart-title"><?=
+                    $wdBestCard !== null && ($wdBestCard['ca'] ?? null) !== null
+                        ? 'Le ' . e($wdJoursComplets[(string) ($wdBestCard['label'] ?? '')] ?? mb_strtolower((string) ($wdBestCard['label'] ?? ''))) . ' est le meilleur jour de la semaine'
+                        : 'Aucune journée ne domine nettement la semaine'
+                ?></h2>
                 <!-- F4 : UN seul chiffre — le meilleur jour, UNIQUEMENT si
                      significatif (meilleur_jour du moteur, sinon la carte
                      dit honnêtement que les jours sont indiscernables).
@@ -765,7 +802,7 @@ $iconSvg = static function (string $name): string {
         <div class="card surface glass chart-card chart-span-2">
             <div class="chart-head">
                 <div>
-                    <h2 class="chart-title">Tendance produit (semaines)</h2>
+                    <h2 class="chart-title">Semaine après semaine : <?= $productSelected !== '' ? e($productSelected) : 'le produit suivi' ?></h2>
                     <span class="chart-sub">
                         <?= $productSelected !== '' ? e($productSelected) . ' — ' : '' ?>
                         CA <?= e(formatPrice((float) $pwCa)) ?> · <?= number_format((float) $pwQty, 0, ',', ' ') ?> ventes sur la période
@@ -795,7 +832,9 @@ $iconSvg = static function (string $name): string {
     </div>
 
     <!-- ============================================================ -->
-    <!--  Qualité des données : anomalies du moteur + notes (repliable) -->
+    <!--  Détails techniques (replié) : métriques du modèle + qualité   -->
+    <!--  des données. Toutes les mentions de jargon (WAPE, dispersion, -->
+    <!--  couverture) vivent UNIQUEMENT ici, section repliée (lot 4).   -->
     <!-- ============================================================ -->
     <?php
     $anomAtyp  = isset($forecast['anomalies']['jours_atypiques']) && is_array($forecast['anomalies']['jours_atypiques']) ? $forecast['anomalies']['jours_atypiques'] : [];
@@ -808,7 +847,7 @@ $iconSvg = static function (string $name): string {
     ?>
     <details class="card surface glass dataq">
         <summary>
-            Qualité des données — <?= (int) ($forecast['anomalies']['n_jours_inclus'] ?? 0) ?> jours inclus
+            Détails techniques — <?= (int) ($forecast['anomalies']['n_jours_inclus'] ?? 0) ?> jours inclus
             · <?= count($anomAtyp) ?> jour<?= count($anomAtyp) > 1 ? 's' : '' ?> atypique<?= count($anomAtyp) > 1 ? 's' : '' ?> exclu(s)
             · <?= (int) ($forecast['anomalies']['ventes_zero'] ?? 0) ?> vente(s) à 0 €
             · <?= (int) ($forecast['anomalies']['doublons_ignores'] ?? 0) ?> doublon(s) ignoré(s)
@@ -817,6 +856,7 @@ $iconSvg = static function (string $name): string {
             <?= $anomNegatifs !== [] ? '· ' . count($anomNegatifs) . ' stock(s) négatif(s)' : '' ?>
         </summary>
         <div class="dataq-body">
+            <p><strong>Qualité du modèle de prévision :</strong> <?= e($fcTooltip) ?></p>
             <?php if ($fcNoteSel !== ''): ?>
                 <p><?= e($fcNoteSel) ?></p>
             <?php endif; ?>
@@ -856,8 +896,8 @@ $iconSvg = static function (string $name): string {
     <div class="card surface glass chart-card heatmap-card">
         <div class="chart-head">
             <div>
-                <h2 class="chart-title">Heatmap des ventes (jour × heure)</h2>
-                <span class="chart-sub" id="heatmap-sub">Intensité du CA — <?= e($filters['category'] === 'all' ? 'Toutes catégories' : $filters['category']) ?> · <?= e($filters['payment'] === 'all' ? 'Tous paiements' : $filters['payment']) ?></span>
+                <h2 class="chart-title">Les créneaux qui concentrent les ventes</h2>
+                <span class="chart-sub" id="heatmap-sub">Jour × heure — <?= e($filters['category'] === 'all' ? 'Toutes catégories' : $filters['category']) ?> · <?= e($filters['payment'] === 'all' ? 'Tous paiements' : $filters['payment']) ?></span>
             </div>
             <div class="hm-filters">
                 <select id="hm-cat" class="af-select" onchange="document.getElementById('analytics-filters').submit()">
@@ -941,1051 +981,21 @@ $iconSvg = static function (string $name): string {
 </div>
 <?php endif; ?>
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<!-- Chart.js 4.4.7, vendorisé (lot 4) -->
+<script src="<?= e(rootAssetVersioned('/assets/vendor/chart.umd.min.js')) ?>" defer></script>
+<script src="<?= e(rootAssetVersioned('/assets/js/analytics.js')) ?>" defer></script>
+<?php /*
+Lot 4 (extraction JS) : les valeurs injectées par PHP restent ici —
+l'îlot JSON (payload complet du contrôleur) + la constante BOOT
+(valeurs ponctuelles : mode kiosque, URL produits, catégorie courante).
+Le JS extrait (public/assets/js/analytics.js, defer) lit ces données
+et ne contient aucun calcul métier.
+*/ ?>
+<script type="application/json" id="analytics-data"><?= $json ?></script>
 <script>
-(function () {
-    var data = <?= $json ?>;
-
-    // Mode kiosque : les liens vers l'espace admin sont désactivés.
-    var kiosk = <?= $kiosk ? 'true' : 'false' ?>;
-
-    // ---------- Heatmap filter sync ----------
-    var hmCat = document.getElementById('hm-cat');
-    if (hmCat) {
-        // Sync valeur actuelle.
-        var curCat = '<?= e($filters['category']) ?>';
-        if (curCat !== 'all') { hmCat.value = curCat; }
-        hmCat.addEventListener('change', function () {
-            // Met à jour le select catégorie global et soumet le form.
-            var globalCat = document.querySelector('select[name="category"]');
-            if (globalCat) {
-                globalCat.value = hmCat.value || 'all';
-            }
-            document.getElementById('analytics-filters').submit();
-        });
-    }
-
-    // ---------- Affichage du sélecteur de dates custom + pills ----------
-    var customBox = document.getElementById('filter-custom');
-    var periodHidden = document.getElementById('period-hidden');
-    function syncCustom() {
-        var val = periodHidden.value;
-        customBox.hidden = val !== 'custom';
-    }
-    document.querySelectorAll('.af-pill').forEach(function (pill) {
-        pill.addEventListener('click', function () {
-            document.querySelectorAll('.af-pill').forEach(function (p) { p.classList.remove('is-active'); });
-            pill.classList.add('is-active');
-            periodHidden.value = pill.getAttribute('data-period');
-            syncCustom();
-            // Application immédiate : la pastille soumet le formulaire,
-            // sauf « Personnalisé » qui affiche d'abord les champs de dates.
-            if (periodHidden.value !== 'custom') {
-                document.getElementById('analytics-filters').submit();
-            }
-        });
-    });
-
-    // Saisie manuelle d'une date → bascule immédiate sur « Personnalisé »,
-    // avec application automatique dès que les deux bornes sont remplies.
-    var customInputs = [
-        customBox.querySelector('input[name="from"]'),
-        customBox.querySelector('input[name="to"]')
-    ];
-    Array.prototype.forEach.call(customInputs, function (input) {
-        if (!input) return;
-        input.addEventListener('change', function () {
-            var customPill = document.querySelector('.af-pill[data-period="custom"]');
-            document.querySelectorAll('.af-pill').forEach(function (p) { p.classList.remove('is-active'); });
-            if (customPill) customPill.classList.add('is-active');
-            periodHidden.value = 'custom';
-            syncCustom();
-            var from = customInputs[0], to = customInputs[1];
-            if (from && to && from.value && to.value) {
-                document.getElementById('analytics-filters').submit();
-            }
-        });
-    });
-    syncCustom();
-
-    // ---------- Chart.js defaults ----------
-    Chart.defaults.color = '#9fb3c8';
-    Chart.defaults.borderColor = 'rgba(255,255,255,.08)';
-    Chart.defaults.font.family = "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif";
-
-    var teal    = '#48bdd3';
-    var violet  = '#6150aa';
-    var amber   = '#f59e0b';
-    var green   = '#22c55e';
-    var red     = '#ef4444';
-    var palette = [teal, violet, amber, green, red, '#6db4ff', '#d9c24a', '#c46ad9', '#4ad9b0', '#d96a6a'];
-
-    function money(v) { return Number(v).toFixed(2).replace('.', ',') + ' €'; }
-    function pct(v)   { return Number(v).toFixed(1).replace('.', ',') + ' %'; }
-
-    // ---------- 1. Évolution CA + bénéfice (bar CA + line profit, double axe) ----------
-    var tr = data.trend || { labels: [], ca: [], profit: [] };
-    var sub = document.getElementById('trend-sub');
-    if (sub) {
-        var g = (data.filters || {}).granularity || 'auto';
-        sub.textContent = g.charAt(0).toUpperCase() + g.slice(1);
-    }
-    var ctxTrend = document.getElementById('chart-trend');
-    if (ctxTrend) {
-        new Chart(ctxTrend, {
-            type: 'bar',
-            data: {
-                labels: tr.labels,
-                datasets: [
-                    {
-                        type: 'bar',
-                        label: "Chiffre d'affaires (€)",
-                        data: tr.ca,
-                        backgroundColor: 'rgba(72,189,211,.55)',
-                        borderColor: teal,
-                        borderWidth: 1,
-                        borderRadius: 4,
-                        yAxisID: 'y',
-                        order: 2,
-                    },
-                    {
-                        type: 'line',
-                        label: 'Bénéfice (€)',
-                        data: tr.profit,
-                        borderColor: violet,
-                        backgroundColor: 'rgba(97,80,170,.15)',
-                        tension: 0.35,
-                        pointBackgroundColor: violet,
-                        pointRadius: 3,
-                        fill: false,
-                        yAxisID: 'y',
-                        order: 1,
-                    },
-                ],
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                interaction: { mode: 'index', intersect: false },
-                plugins: {
-                    legend: { position: 'bottom' },
-                    tooltip: { callbacks: { label: function (c) { return c.dataset.label + ' : ' + money(c.raw); } } },
-                },
-                scales: { y: { beginAtZero: true, ticks: { callback: money } } },
-            },
-        });
-    }
-
-    // ---------- 1bis. Prévisions : réalisé observé + courbe du modèle + bande 80 % ----------
-    // Barres = CA passé OBSERVÉ (payload historique ; barre du jour en
-    // ambre via today_index), ligne violette en tirets = prévision (point
-    // du jour + 7 jours J+1..J+7), bande violette = fourchette 80 %
-    // (lo–hi). Toutes les valeurs viennent du payload — aucun recalcul.
-    var fc = data.forecast || null;
-    var hist = data.historique || { labels: [], values: [], today_index: -1 };
-    var ctxFc = document.getElementById('chart-forecast');
-    if (ctxFc && fc) {
-        var fLabels = (hist.labels || []).map(String);
-        var fBars   = (hist.values || []).map(function (v) { return v == null ? null : Number(v); });
-        var fTi     = Number(hist.today_index);
-        var fPrev   = fc.prevision_jour;
-        var fIv     = fc.intervalle_80 || null;
-        var fLine = fBars.map(function () { return null; });
-        var fLo   = fBars.map(function () { return null; });
-        var fHi   = fBars.map(function () { return null; });
-        if (fPrev != null) {
-            fLabels.push('Auj.');
-            fBars.push(null);
-            fLine.push(Number(fPrev));
-            // Bande plancher 0 : un CA négatif n'existe pas (le lo PHP est
-            // déjà clampé ; ce clamp JS garantit l'axe côté client).
-            fLo.push(fIv && fIv.lo != null ? Math.max(0, Number(fIv.lo)) : null);
-            fHi.push(fIv && fIv.hi != null ? Number(fIv.hi) : null);
-        }
-        (fc.jours || []).forEach(function (d) {
-            fLabels.push(String(d.label));
-            fBars.push(null);
-            fLine.push(d.is_open && d.ca != null ? Number(d.ca) : null);
-            fLo.push(d.is_open && d.lo != null ? Math.max(0, Number(d.lo)) : null);
-            fHi.push(d.is_open && d.hi != null ? Number(d.hi) : null);
-        });
-        var fBg = fBars.map(function (v, i) {
-            return i === fTi ? 'rgba(245,158,11,.75)' : 'rgba(72,189,211,.55)';
-        });
-        new Chart(ctxFc, {
-            type: 'line',
-            data: {
-                labels: fLabels,
-                datasets: [
-                    {
-                        // Bande 80 % : remplissage entre hi (ce dataset,
-                        // fill vers le suivant) et lo. Masquée légende/tooltips.
-                        label: 'Fourchette 80 %',
-                        data: fHi,
-                        borderColor: 'transparent',
-                        backgroundColor: 'rgba(97,80,170,.14)',
-                        fill: '+1',
-                        pointRadius: 0,
-                        pointHitRadius: 0,
-                        order: 0,
-                    },
-                    {
-                        label: 'Borne basse',
-                        data: fLo,
-                        borderColor: 'transparent',
-                        pointRadius: 0,
-                        pointHitRadius: 0,
-                        fill: false,
-                        order: 0,
-                    },
-                    {
-                        type: 'bar',
-                        label: 'CA réalisé (€)',
-                        data: fBars,
-                        backgroundColor: fBg,
-                        borderColor: teal,
-                        borderWidth: 1,
-                        borderRadius: 4,
-                        order: 2,
-                    },
-                    {
-                        label: 'Prévision (€)',
-                        data: fLine,
-                        borderColor: violet,
-                        borderDash: [6, 6],
-                        pointRadius: 3,
-                        pointBackgroundColor: violet,
-                        fill: false,
-                        spanGaps: false,
-                        tension: 0.25,
-                        order: 1,
-                    },
-                ],
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                interaction: { mode: 'index', intersect: false },
-                plugins: {
-                    legend: {
-                        position: 'bottom',
-                        labels: { filter: function (item) { return item.text !== 'Fourchette 80 %' && item.text !== 'Borne basse'; } },
-                    },
-                    tooltip: {
-                        filter: function (t) { return t.dataset.label !== 'Fourchette 80 %' && t.dataset.label !== 'Borne basse'; },
-                        callbacks: {
-                            label: function (c) {
-                                if (c.dataset.label === 'Prévision (€)' && c.raw != null
-                                    && fLo[c.dataIndex] != null && fHi[c.dataIndex] != null) {
-                                    return 'Prévision : ' + money(c.raw)
-                                        + ' (fourchette ' + money(fLo[c.dataIndex]) + ' – ' + money(fHi[c.dataIndex]) + ')';
-                                }
-                                return c.dataset.label + ' : ' + (c.raw == null ? '—' : money(c.raw));
-                            },
-                        },
-                    },
-                },
-                scales: { y: { beginAtZero: true, ticks: { callback: money } } },
-            },
-        });
-    }
-
-    // ---------- 1ter. Estimation du jour : cumul réel vs attendu ----------
-    // Le cumul réel s'arrête à l'heure courante (null au-delà), la
-    // courbe attendue court sur 0h→23h (tirets violets). Valeurs du
-    // payload day_track (format plat : cum_actual / cum_expected).
-    var dt = data.day_track || null;
-    var ctxDt = document.getElementById('chart-daytrack');
-    if (ctxDt && dt && dt.estimate != null && Number(dt.estimate) > 0) {
-        var dtHour = Number(dt.hour == null ? 0 : dt.hour);
-        var dtLabels = [];
-        for (var di = 0; di < 24; di++) { dtLabels.push(di + 'h'); }
-        var dtToday = (dt.cum_actual || []).map(function (v, i) {
-            return i <= dtHour && v != null ? Number(v) : null;
-        });
-        var dtExpected = (dt.cum_expected || []).map(function (v) {
-            return v == null ? null : Number(v);
-        });
-        new Chart(ctxDt, {
-            type: 'line',
-            data: {
-                labels: dtLabels,
-                datasets: [
-                    {
-                        label: "Aujourd'hui (cumulé €)",
-                        data: dtToday,
-                        borderColor: teal,
-                        backgroundColor: 'rgba(72,189,211,.15)',
-                        fill: true,
-                        tension: 0.3,
-                        pointRadius: 3,
-                        pointBackgroundColor: teal,
-                        spanGaps: false,
-                    },
-                    {
-                        label: 'Attendu (cumulé €)',
-                        data: dtExpected,
-                        borderColor: violet,
-                        borderDash: [6, 6],
-                        fill: false,
-                        tension: 0.3,
-                        pointRadius: 0,
-                        pointHitRadius: 8,
-                    },
-                ],
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                interaction: { mode: 'index', intersect: false },
-                plugins: {
-                    legend: { position: 'bottom' },
-                    tooltip: { callbacks: { label: function (c) { return c.dataset.label + ' : ' + (c.raw == null ? '—' : money(c.raw)); } } },
-                },
-                scales: {
-                    x: { ticks: { maxRotation: 0, autoSkip: true, autoSkipPadding: 4 } },
-                    y: { beginAtZero: true, ticks: { callback: money } },
-                },
-            },
-        });
-    }
-
-    // ---------- 2. Top 10 produits (bar horizontal, cliquable) ----------
-    var tp = data.topProducts || { labels: [], ca: [] };
-    var ctxTop = document.getElementById('chart-top');
-    if (ctxTop) {
-        var grad = ctxTop.getContext('2d').createLinearGradient(0, 0, 600, 0);
-        grad.addColorStop(0, teal);
-        grad.addColorStop(1, violet);
-        new Chart(ctxTop, {
-            type: 'bar',
-            data: {
-                labels: tp.labels,
-                datasets: [{
-                    label: 'CA (€)',
-                    data: tp.ca,
-                    backgroundColor: grad,
-                    borderRadius: 6,
-                }],
-            },
-            options: {
-                indexAxis: 'y',
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: { display: false },
-                    tooltip: { callbacks: { label: function (c) { return money(c.raw); } } },
-                },
-                scales: { x: { beginAtZero: true, ticks: { callback: money } } },
-                onClick: function () { if (!kiosk) window.location.href = '<?= e(url('/admin/compta/produits')) ?>'; },
-            },
-        });
-    }
-
-    // ---------- 3. Répartition par catégorie (donut, centre = total) ----------
-    var bc = data.byCategory || { labels: [], ca: [] };
-    var catTotal = (bc.ca || []).reduce(function (a, b) { return a + Number(b); }, 0);
-    var ctxCat = document.getElementById('chart-category');
-    if (ctxCat) {
-        new Chart(ctxCat, {
-            type: 'doughnut',
-            data: {
-                labels: bc.labels,
-                datasets: [{ data: bc.ca, backgroundColor: palette, borderColor: 'transparent' }],
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                cutout: '64%',
-                plugins: {
-                    legend: { position: 'bottom', labels: { boxWidth: 12, padding: 12 } },
-                    tooltip: { callbacks: { label: function (c) { return c.label + ' : ' + money(c.raw); } } },
-                },
-            },
-            plugins: [{
-                id: 'centerText',
-                beforeDraw: function (chart) {
-                    var w = chart.width, h = chart.height, ctx = chart.ctx;
-                    ctx.save();
-                    ctx.font = '600 14px system-ui';
-                    ctx.fillStyle = '#9fb3c8';
-                    ctx.textAlign = 'center';
-                    ctx.fillText('Total', w / 2, h / 2 - 10);
-                    ctx.font = '700 18px system-ui';
-                    ctx.fillStyle = '#eaf2fb';
-                    ctx.fillText(money(catTotal), w / 2, h / 2 + 14);
-                    ctx.restore();
-                },
-            }],
-        });
-    }
-
-    // ---------- 4. Répartition des paiements (donut CA + % au centre) ----------
-    var pm = data.payments || { by_ca: {}, by_count: {} };
-    var pmLabels = ['Carte', 'Liquide'];
-    var pmKeys   = ['CARTE', 'LIQUIDE'];
-    var pmCa     = pmKeys.map(function (k) { return Number((pm.by_ca || {})[k] || 0); });
-    var pmTotal  = pmCa.reduce(function (a, b) { return a + b; }, 0);
-    var ctxPm = document.getElementById('chart-payment');
-    if (ctxPm) {
-        new Chart(ctxPm, {
-            type: 'doughnut',
-            data: {
-                labels: pmLabels.map(function (label, i) {
-                    var pct = pmTotal > 0 ? Math.round(pmCa[i] / pmTotal * 100) : 0;
-                    return label + ' ' + pct + '%';
-                }),
-                datasets: [{
-                    data: pmCa,
-                    backgroundColor: [teal, amber],
-                    borderColor: 'transparent',
-                }],
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                cutout: '58%',
-                plugins: {
-                    legend: { position: 'bottom', labels: { boxWidth: 12, padding: 12 } },
-                    tooltip: {
-                        callbacks: {
-                            label: function (c) {
-                                var key = pmKeys[c.dataIndex];
-                                var nb = Number((pm.by_count || {})[key] || 0);
-                                var pct = pmTotal > 0 ? (c.raw / pmTotal * 100).toFixed(1).replace('.', ',') : '0';
-                                return c.label + ' : ' + money(c.raw) + ' (' + pct + '% · ' + nb + ' transactions)';
-                            },
-                        },
-                    },
-                },
-            },
-            plugins: [{
-                id: 'pmCenter',
-                beforeDraw: function (chart) {
-                    var w = chart.width, h = chart.height, ctx = chart.ctx;
-                    var cartPct = pmTotal > 0 ? Math.round(pmCa[0] / pmTotal * 100) : 0;
-                    ctx.save();
-                    ctx.font = '600 12px system-ui';
-                    ctx.fillStyle = '#9fb3c8';
-                    ctx.textAlign = 'center';
-                    ctx.fillText('Carte', w / 2, h / 2 - 12);
-                    ctx.font = '800 22px system-ui';
-                    ctx.fillStyle = '#48bdd3';
-                    ctx.fillText(cartPct + '%', w / 2, h / 2 + 14);
-                    ctx.restore();
-                },
-            }],
-        });
-    }
-
-    // ---------- 6. Activité de l'association (multi-line) ----------
-    var ac = data.activity || { labels: [], registrations: [], members: [], votes: [] };
-    var ctxAc = document.getElementById('chart-activity');
-    if (ctxAc) {
-        new Chart(ctxAc, {
-            type: 'line',
-            data: {
-                labels: ac.labels,
-                datasets: [
-                    { label: 'Inscriptions événements', data: ac.registrations, borderColor: violet, backgroundColor: 'rgba(97,80,170,.12)', tension: 0.35, pointBackgroundColor: violet },
-                    { label: 'Nouveaux membres',        data: ac.members,        borderColor: teal,    backgroundColor: 'rgba(72,189,211,.12)', tension: 0.35, pointBackgroundColor: teal },
-                    { label: 'Votes sondages',          data: ac.votes,          borderColor: amber,   backgroundColor: 'rgba(245,158,11,.12)', tension: 0.35, pointBackgroundColor: amber },
-                ],
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                interaction: { mode: 'index', intersect: false },
-                plugins: { legend: { position: 'bottom' } },
-                scales: { y: { beginAtZero: true } },
-            },
-        });
-    }
-
-    // ---------- 5bis. CA par jour de semaine : OBSERVÉ (barres) + MODÈLE (points/ligne) ----------
-    // Barres PLEINES = moyenne OBSERVÉE par dow (obs : null = pas de
-    // barre), points/ligne tiretée = MODÈLE (attendu de la prochaine
-    // occurrence). « Meilleur jour » (seulement s'il est significatif) et
-    // la mention période creuse viennent du payload — AUCUN calcul local.
-    var wd = data.weekday || { labels: [], ca: [], obs: [] };
-    var ctxWd = document.getElementById('chart-weekday');
-    if (ctxWd) {
-        var wdObs = (wd.obs || []).map(function (v) { return v == null ? null : Number(v); });
-        var wdModel = (wd.ca || []).map(function (v) { return v == null ? null : Number(v); });
-        var wdDaysCount = (wd.days_count || []).map(function (v) { return v == null ? 0 : Number(v); });
-        // Observé « dont période creuse » (moyenne + nb des jours du dow en
-        // plage creuse, null si aucun) — ajouté au tooltip de la barre.
-        var wdObsCreuse = (wd.obs_creuse || []).map(function (v) { return v == null ? null : Number(v); });
-        var wdObsNCreuse = (wd.obs_n_creuse || []).map(function (v) { return v == null ? 0 : Number(v); });
-        var wdTi  = Number(wd.today_index);
-        var wdBest = wd.best || null;
-        var wdCreuse = wd.creuse_note || null;
-
-        var wdSub = document.getElementById('weekday-sub');
-        if (wdSub) {
-            // F4 : un SEUL chiffre dans le sous-titre (déjà pré-rendu côté
-            // serveur) — reconstruit depuis le payload, jamais un meilleur
-            // jour non significatif.
-            if (wdBest && wdBest.label && wdBest.ca != null) {
-                wdSub.textContent = 'Meilleur jour : ' + wdBest.label + ' — ' + money(wdBest.ca)
-                    + '/jour attendu (modèle, n=' + Number(wdBest.n || 0) + ')';
-            } else {
-                wdSub.textContent = 'Pas de différence significative entre les jours (historique court)';
-            }
-            if (wdCreuse) {
-                wdSub.textContent += ' · ' + wdCreuse;
-            }
-        }
-
-        var wdBg = wdObs.map(function (v, i) {
-            return i === wdTi ? 'rgba(245,158,11,.75)' : 'rgba(97,80,170,.55)';
-        });
-        new Chart(ctxWd, {
-            type: 'bar',
-            data: {
-                labels: wd.labels || [],
-                datasets: [
-                    {
-                        type: 'bar',
-                        label: 'Observé',
-                        data: wdObs,
-                        backgroundColor: wdBg,
-                        borderColor: violet,
-                        borderWidth: 1,
-                        borderRadius: 4,
-                        order: 2,
-                    },
-                    {
-                        type: 'line',
-                        label: 'Modèle (prochaine occurrence)',
-                        data: wdModel,
-                        borderColor: violet,
-                        borderDash: [4, 4],
-                        backgroundColor: violet,
-                        pointRadius: 3,
-                        pointHitRadius: 10,
-                        tension: 0,
-                        fill: false,
-                        order: 1,
-                    },
-                ],
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                interaction: { mode: 'index', intersect: false },
-                plugins: {
-                    legend: { position: 'bottom' },
-                    tooltip: {
-                        callbacks: {
-                            label: function (c) {
-                                if (c.dataset.type === 'bar') {
-                                    var t = 'Observé : ' + (c.raw == null ? '—' : money(c.raw))
-                                        + ' (n=' + (wdDaysCount[c.dataIndex] || 0) + ')';
-                                    if (wdObsNCreuse[c.dataIndex] > 0) {
-                                        t += ' · dont période creuse : '
-                                            + (wdObsCreuse[c.dataIndex] == null ? '—' : money(wdObsCreuse[c.dataIndex]))
-                                            + ' (n=' + wdObsNCreuse[c.dataIndex] + ')';
-                                    }
-                                    return t;
-                                }
-                                return 'Modèle : ' + (c.raw == null ? '—' : money(c.raw));
-                            },
-                        },
-                    },
-                },
-                scales: { y: { beginAtZero: true, ticks: { callback: money } } },
-            },
-        });
-    }
-
-    // ---------- 5ter. CA par heure (observé + attendu/projeté du jour) ----------
-    // Barres ambre = CA moyen OBSERVÉ par heure (payload hourly.ca_avg).
-    // Tirets violets = attendu du jour ; pointillés verts = projeté fin
-    // de journée ; ligne sarcelle = réel du jour tronqué à l'heure
-    // courante. Le SOUS-TITRE (heure de pointe, attendu JOURNÉE, attendu
-    // à Nh / trop tôt) est rendu côté serveur (#hourly-sub) — aucune
-    // reconstruction JS, une seule source de vérité.
-    var hr = data.hourly || { labels: [], ca_avg: [] };
-    var ctxHr = document.getElementById('chart-hourly');
-    if (ctxHr) {
-        var hrAvg  = (hr.ca_avg || []).map(function (v) { return v == null ? null : Number(v); });
-        var hrHour = Number(hr.now_hour == null ? 0 : hr.now_hour);
-        var hrToday = (hr.today_ca || []).map(function (v, i) {
-            return i <= hrHour && v != null ? Number(v) : null;
-        });
-        var hrExpected = (hr.today_expected || []).map(function (v) { return v == null ? null : Number(v); });
-        var hrProjete  = (hr.today_projete || []).map(function (v) { return v == null ? null : Number(v); });
-
-        new Chart(ctxHr, {
-            type: 'bar',
-            data: {
-                labels: hr.labels || [],
-                datasets: [
-                    {
-                        type: 'bar',
-                        label: 'CA moyen observé (€)',
-                        data: hrAvg,
-                        backgroundColor: 'rgba(245,158,11,.55)',
-                        borderColor: amber,
-                        borderWidth: 1,
-                        borderRadius: 3,
-                        order: 4,
-                    },
-                    {
-                        type: 'line',
-                        label: "Attendu aujourd'hui (€)",
-                        data: hrExpected,
-                        borderColor: violet,
-                        borderDash: [6, 6],
-                        fill: false,
-                        tension: 0.3,
-                        pointRadius: 0,
-                        pointHitRadius: 8,
-                        order: 3,
-                    },
-                    {
-                        type: 'line',
-                        label: 'Projeté fin de journée (€)',
-                        data: hrProjete,
-                        borderColor: green,
-                        borderDash: [2, 4],
-                        fill: false,
-                        tension: 0.3,
-                        pointRadius: 0,
-                        pointHitRadius: 8,
-                        order: 2,
-                    },
-                    {
-                        type: 'line',
-                        label: "Aujourd'hui (€)",
-                        data: hrToday,
-                        borderColor: teal,
-                        backgroundColor: 'rgba(72,189,211,.15)',
-                        fill: true,
-                        tension: 0.3,
-                        pointRadius: 3,
-                        pointBackgroundColor: teal,
-                        spanGaps: false,
-                        order: 1,
-                    },
-                ],
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                interaction: { mode: 'index', intersect: false },
-                plugins: {
-                    legend: { position: 'bottom' },
-                    tooltip: { callbacks: { label: function (c) { return c.dataset.label + ' : ' + (c.raw == null ? '—' : money(c.raw)); } } },
-                },
-                scales: {
-                    x: { ticks: { maxRotation: 0, autoSkip: true, autoSkipPadding: 4 } },
-                    y: { beginAtZero: true, ticks: { callback: money } },
-                },
-            },
-        });
-    }
-
-    // ---------- 5quater. Tendance produit (semaines) + sélecteur auto ----------
-    var pw = data.product_weekly || { labels: [], ca: [] };
-    var pwSelect = document.getElementById('product-select');
-    if (pwSelect) {
-        pwSelect.addEventListener('change', function () { pwSelect.form.submit(); });
-    }
-    var ctxPw = document.getElementById('chart-product-weekly');
-    if (ctxPw) {
-        new Chart(ctxPw, {
-            type: 'line',
-            data: {
-                labels: pw.labels,
-                datasets: [{
-                    label: 'CA (€)',
-                    data: pw.ca,
-                    borderColor: teal,
-                    backgroundColor: 'rgba(72,189,211,.12)',
-                    tension: 0.3,
-                    pointBackgroundColor: teal,
-                    pointRadius: 3,
-                    fill: true,
-                }],
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                interaction: { mode: 'index', intersect: false },
-                plugins: {
-                    legend: { display: false },
-                    tooltip: { callbacks: { label: function (c) { return money(c.raw); } } },
-                },
-                scales: { y: { beginAtZero: true, ticks: { callback: money } } },
-            },
-        });
-    }
-
-    // ---------- 5. Heatmap jour × heure ----------
-    var heat = data.heatmap || [];
-    var days = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
-    var heatEl = document.getElementById('heatmap');
-    if (heatEl) {
-        var max = 0;
-        for (var d = 0; d < 7; d++) {
-            for (var h = 0; h < 24; h++) {
-                var v = Number(((heat[d] || [])[h]) || 0);
-                if (v > max) { max = v; }
-            }
-        }
-
-        var html = '<div class="hm-row hm-head"><span class="hm-label"></span>';
-        for (var hh = 0; hh < 24; hh++) { html += '<span class="hm-hh">' + hh + 'h</span>'; }
-        html += '</div>';
-
-        for (var dd = 0; dd < 7; dd++) {
-            var dayTotal = 0;
-            for (var dh2 = 0; dh2 < 24; dh2++) { dayTotal += Number(((heat[dd] || [])[dh2]) || 0); }
-
-            html += '<div class="hm-row">';
-            html += '<span class="hm-label">' + days[dd] + '</span>';
-            for (var hhh = 0; hhh < 24; hhh++) {
-                var val = Number(((heat[dd] || [])[hhh]) || 0);
-                var alpha = max > 0 ? val / max : 0;
-                var tip = days[dd] + ' à ' + hhh + 'h\nCA : ' + money(val) + '\nTotal ' + days[dd] + ' : ' + money(dayTotal);
-                html += '<span class="hm-cell" style="background:rgba(72,189,211,' + alpha.toFixed(3) + ')" data-tip="' + tip.replace(/"/g, '&quot;').replace(/\n/g, '&#10;') + '"></span>';
-            }
-            html += '</div>';
-        }
-        heatEl.innerHTML = html;
-
-        // Tooltip flottant.
-        var hTip = document.createElement('div');
-        hTip.className = 'hm-tooltip';
-        hTip.style.cssText = 'position:fixed;pointer-events:none;z-index:9999;background:#0c1d36;border:1px solid rgba(72,189,211,0.4);border-radius:8px;padding:0.6rem 0.85rem;font-size:0.78rem;color:#eaf2fb;box-shadow:0 8px 24px rgba(0,0,0,0.5);display:none;white-space:pre-line;line-height:1.5;';
-        document.body.appendChild(hTip);
-
-        heatEl.querySelectorAll('.hm-cell').forEach(function (cell) {
-            cell.addEventListener('mouseenter', function () {
-                hTip.innerHTML = cell.getAttribute('data-tip').replace(/&#10;/g, '<br>');
-                hTip.style.display = 'block';
-            });
-            cell.addEventListener('mousemove', function (e) {
-                hTip.style.left = (e.clientX + 14) + 'px';
-                hTip.style.top = (e.clientY - 10) + 'px';
-            });
-            cell.addEventListener('mouseleave', function () {
-                hTip.style.display = 'none';
-            });
-        });
-    }
-
-    // ---------- Tableau récapitulatif (tri + totaux + CSV) ----------
-    var rows = data.table || [];
-    var tbody = document.getElementById('product-table-body');
-    var sortKey = 'ca', sortDir = -1, sortType = 'num';
-
-    function renderTable() {
-        if (!tbody) { return; }
-        var sorted = rows.slice().sort(function (a, b) {
-            var va = a[sortKey], vb = b[sortKey];
-            if (sortType === 'num') { return (Number(va) - Number(vb)) * sortDir; }
-            return String(va).localeCompare(String(vb)) * sortDir;
-        });
-
-        tbody.innerHTML = sorted.map(function (r) {
-            return '<tr>'
-                + '<td>' + esc(r.product) + '</td>'
-                + '<td>' + esc(r.category) + '</td>'
-                + '<td class="num">' + Number(r.qty) + '</td>'
-                + '<td class="num">' + money(r.ca) + '</td>'
-                + '<td class="num">' + money(r.cost) + '</td>'
-                + '<td class="num">' + money(r.profit) + '</td>'
-                + '<td class="num">' + pct(r.margin) + '</td>'
-                + '</tr>';
-        }).join('');
-
-        var totQty = 0, totCa = 0, totProfit = 0;
-        rows.forEach(function (r) { totQty += Number(r.qty); totCa += Number(r.ca); totProfit += Number(r.profit); });
-        setText('tot-qty', totQty);
-        setText('tot-ca', money(totCa));
-        setText('tot-profit', money(totProfit));
-        setText('tot-margin', totCa > 0 ? pct((totProfit / totCa) * 100) : '—');
-    }
-    function setText(id, v) { var el = document.getElementById(id); if (el) { el.textContent = v; } }
-    function esc(s) { var d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
-
-    document.querySelectorAll('#product-table thead th').forEach(function (th) {
-        th.style.cursor = 'pointer';
-        th.addEventListener('click', function () {
-            var key = th.getAttribute('data-key');
-            var type = th.getAttribute('data-type') || 'str';
-            if (sortKey === key) { sortDir *= -1; } else { sortKey = key; sortType = type; sortDir = type === 'num' ? -1 : 1; }
-            renderTable();
-        });
-    });
-    renderTable();
-
-    // ---------- Export CSV ----------
-    var btnCsv = document.getElementById('export-csv');
-    if (btnCsv) {
-        btnCsv.addEventListener('click', function () {
-            var header = ['Produit', 'Categorie', 'Qte', 'CA', 'Cout moyen', 'Benefice', 'Marge %'];
-            var lines = [header.join(';')];
-            rows.forEach(function (r) {
-                lines.push([
-                    csvEsc(r.product), csvEsc(r.category), r.qty,
-                    Number(r.ca).toFixed(2).replace('.', ','), Number(r.cost).toFixed(2).replace('.', ','),
-                    Number(r.profit).toFixed(2).replace('.', ','), Number(r.margin).toFixed(1).replace('.', ',')
-                ].join(';'));
-            });
-            var blob = new Blob(['\uFEFF' + lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
-            var a = document.createElement('a');
-            a.href = URL.createObjectURL(blob);
-            a.download = 'analytics_produits.csv';
-            a.click();
-        });
-    }
-    function csvEsc(s) {
-        s = s == null ? '' : String(s);
-        return /[;"\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
-    }
-})();
+const ANALYTICS_BOOT = {
+    kiosk: <?= $kiosk ? 'true' : 'false' ?>,
+    produitsUrl: '<?= e(url('/admin/compta/produits')) ?>',
+    categorie: '<?= e($filters['category']) ?>'
+};
 </script>
-
-<style>
-.analytics-page { display: flex; flex-direction: column; gap: 1.25rem; }
-
-.analytics-head { margin-bottom: .25rem; }
-.analytics-head .eyebrow { color: var(--primary, #48bdd3); font-size: .8rem; letter-spacing: .04em; text-transform: uppercase; margin: 0 0 .15rem; }
-.analytics-head .page-title { margin: 0 0 .25rem; }
-.analytics-head .muted { margin: 0; color: var(--muted, #9fb3c8); font-size: .9rem; }
-
-/* ---- Filtres ---- */
-.analytics-filters {
-    background: rgba(255,255,255,0.03);
-    border: 1px solid var(--border, rgba(255,255,255,.08));
-    border-radius: 14px;
-    padding: 1.25rem 1.4rem;
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-}
-.af-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0.75rem 1.25rem; }
-.af-row-filters { align-items: flex-end; }
-.af-group { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
-.af-label {
-    font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
-    letter-spacing: 0.04em; color: var(--muted, #9fb3c8); white-space: nowrap;
-}
-.af-pills { display: flex; flex-wrap: wrap; gap: 0.35rem; }
-.af-pill {
-    background: rgba(255,255,255,0.04);
-    border: 1px solid rgba(255,255,255,0.1);
-    color: var(--muted, #9fb3c8);
-    padding: 0.42rem 0.85rem;
-    border-radius: 999px;
-    font-size: 0.82rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.15s;
-    white-space: nowrap;
-}
-.af-pill:hover {
-    border-color: rgba(72,189,211,0.4);
-    color: var(--foreground);
-    background: rgba(72,189,211,0.06);
-}
-.af-pill.is-active {
-    background: var(--primary, #48bdd3);
-    border-color: var(--primary, #48bdd3);
-    color: #08172d;
-    font-weight: 700;
-}
-.af-select, .af-input {
-    background: rgba(255,255,255,0.05);
-    border: 1px solid rgba(255,255,255,0.12);
-    color: var(--foreground);
-    border-radius: 8px;
-    padding: 0.5rem 0.7rem;
-    font-size: 0.88rem;
-    transition: border-color 0.15s;
-}
-.af-select:focus, .af-input:focus {
-    outline: none;
-    border-color: var(--primary, #48bdd3);
-    background: rgba(72,189,211,0.05);
-}
-.af-actions { margin-left: auto; display: flex; gap: 0.5rem; }
-
-/* ---- KPI ---- */
-.kpi-grid { gap: 1rem; }
-.kpi-card { display: flex; flex-direction: column; gap: .25rem; padding: 1rem 1.1rem; min-height: 110px; }
-.kpi-label { font-size: .76rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted, #9fb3c8); }
-.kpi-value { font-size: 1.5rem; font-weight: 800; color: var(--primary, #48bdd3); line-height: 1.1; }
-.kpi-sub { font-size: .78rem; color: var(--muted, #9fb3c8); }
-.kpi-delta { font-size: .8rem; font-weight: 700; }
-.kpi-delta.is-up { color: #22c55e; }
-.kpi-delta.is-down { color: #ef4444; }
-.kpi-delta.is-muted { color: var(--muted, #9fb3c8); font-weight: 400; }
-
-.grid-6 { display: grid; grid-template-columns: repeat(6, minmax(0,1fr)); }
-@media (max-width: 1100px) { .grid-6 { grid-template-columns: repeat(3, minmax(0,1fr)); } }
-@media (max-width: 640px)  { .grid-6 { grid-template-columns: repeat(2, minmax(0,1fr)); } }
-
-/* ---- Charts ---- */
-.analytics-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 1.25rem; }
-.chart-span-2 { grid-column: 1 / -1; }
-.chart-card { padding: 1.25rem 1.4rem; }
-.chart-head { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; }
-.chart-title { font-size: 1rem; font-weight: 700; margin: 0; color: var(--primary, #48bdd3); }
-.chart-sub { font-size: .8rem; color: var(--muted, #9fb3c8); }
-.chart-canvas { position: relative; height: 300px; }
-.chart-canvas-square { height: 280px; max-width: 360px; margin: 0 auto; }
-@media (max-width: 860px) { .analytics-grid { grid-template-columns: 1fr; } .chart-span-2 { grid-column: auto; } }
-
-/* ---- Prévisions ---- */
-.fc-chips { display: flex; flex-wrap: wrap; gap: 0.35rem 0.75rem; justify-content: flex-end; }
-.fc-note { display: block; margin: -0.6rem 0 0.75rem; }
-.fc-empty { margin: 0; padding: 0.5rem 0 1rem; }
-.pt-form { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; justify-content: flex-end; }
-/* Info-bulle métriques du modèle (règle interface 8) : native « title ». */
-.fc-info {
-    display: inline-block; margin-left: .35rem; cursor: help;
-    font-size: .68rem; font-weight: 700; color: var(--muted, #9fb3c8);
-    border: 1px solid rgba(255,255,255,.2); border-radius: 50%;
-    width: 15px; height: 15px; line-height: 13px; text-align: center;
-    vertical-align: 2px;
-}
-/* Statut « Hors fourchette » (anomalie, ambre) — le statut « Dans la
-   fourchette ✓ » reste neutre (classe is-muted existante). */
-.kpi-delta.is-off { color: #f59e0b; }
-/* Bandeau d'avertissement (données insuffisantes / coût non fiable). */
-.fc-banner {
-    margin: 0 0 .75rem; padding: .5rem .75rem; border-radius: 10px;
-    background: rgba(245,158,11,.12); border: 1px solid rgba(245,158,11,.35);
-    color: #fbbf24; font-size: .84rem;
-}
-
-/* ---- Objectif ---- */
-.goal-body { display: flex; flex-direction: column; gap: .9rem; }
-.goal-prob { display: flex; flex-direction: column; gap: .25rem; }
-.goal-prob-value { font-size: 2rem; font-weight: 800; color: var(--primary, #48bdd3); line-height: 1; }
-.goal-prob-label { font-size: .78rem; color: var(--muted, #9fb3c8); }
-.goal-prob-bar { height: 10px; border-radius: 5px; background: rgba(255,255,255,.07); overflow: hidden; }
-.goal-prob-fill { height: 100%; border-radius: 5px; background: linear-gradient(90deg, #48bdd3, #22c55e); }
-.goal-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; font-size: .88rem; }
-.goal-list li { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; border-bottom: 1px solid rgba(255,255,255,.06); padding: .3rem 0; }
-.goal-list li:last-child { border-bottom: none; }
-.goal-list li span { color: var(--muted, #9fb3c8); }
-.goal-form { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
-
-/* ---- Bénéfice prévu / Réapprovisionnement ---- */
-.benef-total { display: flex; align-items: baseline; gap: .5rem; margin: 0 0 .75rem; }
-.benef-suspects { margin: .75rem 0 0; padding-left: 1.1rem; font-size: .82rem; color: var(--muted, #9fb3c8); }
-.reappro-sugg { color: #22c55e; font-weight: 800; }
-.reappro-neg { color: #fb923c; font-weight: 800; white-space: nowrap; }
-
-/* ---- Qualité des données (bandeau discret, repliable) ---- */
-.dataq { padding: .8rem 1.1rem; }
-.dataq summary { cursor: pointer; font-size: .82rem; color: var(--muted, #9fb3c8); }
-.dataq-body { margin-top: .6rem; font-size: .84rem; display: flex; flex-direction: column; gap: .35rem; }
-.dataq-body p { margin: 0; }
-.dataq-notes { margin: 0; padding-left: 1.1rem; color: var(--muted, #9fb3c8); }
-
-/* ---- Estimation du jour ---- */
-.dt-pills { gap: 0.3rem; }
-.dt-pills .af-pill { padding: 0.32rem 0.75rem; font-size: 0.78rem; text-decoration: none; }
-.dt-chips { justify-content: flex-start; margin-bottom: 0.75rem; }
-
-/* ---- Heatmap ---- */
-.heatmap-card { overflow-x: auto; }
-.hm-filters { display: flex; gap: 0.5rem; align-items: center; }
-.hm-filters .af-select { font-size: 0.82rem; padding: 0.35rem 0.6rem; }
-.heatmap-wrap { display: flex; flex-direction: column; gap: 0.8rem; }
-.heatmap {
-    display: inline-grid;
-    grid-auto-rows: 28px;
-    gap: 3px;
-    min-width: 820px;
-    padding: 4px;
-}
-.hm-row {
-    display: grid;
-    grid-template-columns: 40px repeat(24, 1fr);
-    gap: 3px;
-    align-items: center;
-}
-.hm-head .hm-label, .hm-head .hm-hh {
-    font-size: 0.62rem;
-    color: var(--muted, #9fb3c8);
-    text-align: center;
-    font-weight: 600;
-    padding-bottom: 2px;
-}
-.hm-label {
-    font-size: 0.72rem;
-    font-weight: 700;
-    color: var(--foreground);
-    text-align: right;
-    padding-right: 4px;
-}
-.hm-hh {
-    font-size: 0.6rem;
-    color: var(--muted, #9fb3c8);
-    text-align: center;
-}
-.hm-cell {
-    height: 28px;
-    border-radius: 5px;
-    background: rgba(72,189,211,0.03);
-    border: 1px solid rgba(255,255,255,0.03);
-    transition: transform 0.1s, box-shadow 0.1s;
-    cursor: default;
-}
-.hm-cell:hover {
-    transform: scale(1.25);
-    box-shadow: 0 0 8px rgba(72,189,211,0.4);
-    z-index: 5;
-    position: relative;
-}
-.hm-legend {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    justify-content: flex-end;
-}
-.hm-legend-label { font-size: 0.72rem; color: var(--muted, #9fb3c8); }
-.hm-legend-bar {
-    width: 120px;
-    height: 12px;
-    border-radius: 6px;
-    background: linear-gradient(90deg, rgba(72,189,211,0.05), rgba(72,189,211,1));
-}
-
-/* ---- Insights ---- */
-.insights-grid { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 1rem; }
-@media (max-width: 1100px) { .insights-grid { grid-template-columns: repeat(2, minmax(0,1fr)); } }
-@media (max-width: 640px)  { .insights-grid { grid-template-columns: 1fr; } }
-.insight-card { display: flex; gap: .8rem; align-items: flex-start; padding: 1rem 1.1rem; border-left: 4px solid var(--primary, #48bdd3); }
-.insight-teal   { border-left-color: #48bdd3; }
-.insight-green  { border-left-color: #22c55e; }
-.insight-red    { border-left-color: #ef4444; }
-.insight-amber  { border-left-color: #f59e0b; }
-.insight-icon svg { width: 24px; height: 24px; display: block; }
-.insight-title { font-size: .85rem; font-weight: 700; margin: 0 0 .25rem; color: var(--primary, #48bdd3); }
-.insight-text { font-size: .85rem; margin: 0; color: var(--muted, #9fb3c8); }
-
-/* ---- Nav bas de page (kiosque) ---- */
-.kday-actions {
-    max-width: 40rem; margin: 0 auto 1rem;
-    display: flex; gap: 0.5rem; flex-wrap: wrap; justify-content: center;
-}
-
-/* ---- Tableau ---- */
-.table-card { padding: 1.25rem 1.4rem; }
-.table-wrap { overflow-x: auto; }
-.data-table { width: 100%; border-collapse: collapse; font-size: .88rem; }
-.data-table th, .data-table td { padding: .5rem .6rem; border-bottom: 1px solid rgba(255,255,255,.07); text-align: left; white-space: nowrap; }
-.data-table th.num, .data-table td.num { text-align: right; }
-.data-table thead th { color: var(--muted, #9fb3c8); font-weight: 600; }
-.data-table tfoot td { font-weight: 700; }
-.data-table tbody tr:hover { background: rgba(255,255,255,.03); }
-</style>
