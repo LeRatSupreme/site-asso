@@ -65,12 +65,12 @@ declare(strict_types=1);
     .krow.is-counted { background: rgba(72, 189, 211, 0.06); border-color: rgba(72, 189, 211, 0.25); }
     .kname {
         font-size: 0.92rem; font-weight: 800; margin: 0;
-        padding-right: 28px;
+        padding-right: 48px;
         white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
     .kpause {
         position: absolute; top: 6px; right: 6px;
-        width: 28px; height: 28px; border-radius: 50%;
+        width: 44px; height: 44px; border-radius: 50%;
         border: 1px solid var(--border, rgba(255,255,255,0.15));
         background: rgba(255, 255, 255, 0.05);
         color: var(--muted, #8892a6); font-size: 0.8rem; line-height: 1;

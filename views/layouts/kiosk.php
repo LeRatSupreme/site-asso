@@ -33,7 +33,7 @@ $siteName = Setting::get('site_name', 'AEIC');
     <!-- Toujours chargée : les pages kiosque sont des pages compta. -->
     <link rel="stylesheet" href="<?= e(rootAssetVersioned('/css/compta.css')) ?>">
 </head>
-<body class="admin-body">
+<body class="admin-body kiosk-body">
     <?php
     // Bouton retour flottant : présent sur toutes les pages kiosque SAUF
     // les hubs eux-mêmes. Le hub de retour dépend du jeton de l'URL
@@ -57,7 +57,7 @@ $siteName = Setting::get('site_name', 'AEIC');
         .kr-back {
             position: fixed; top: 12px; left: 12px; z-index: 60;
             display: inline-flex; align-items: center; gap: 0.35rem;
-            padding: 0.55rem 0.95rem; border-radius: 999px;
+            padding: 0.7rem 1.05rem; border-radius: 999px;
             border: 2px solid var(--primary, #48bdd3);
             background: rgba(10, 22, 38, 0.92);
             color: var(--primary, #48bdd3); font-size: 0.85rem; font-weight: 800;
@@ -127,6 +127,7 @@ $siteName = Setting::get('site_name', 'AEIC');
         }
         .kwho-error { margin: 0 0 0.6rem; font-size: 0.8rem; color: #ff8f8f; }
         .kwho-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 0.4rem; }
+        .kwho-actions .btn { min-height: 44px; }
     </style>
 
     <script>

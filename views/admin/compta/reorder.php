@@ -98,7 +98,7 @@ $colspan = $showMoney ? 13 : 12;
 
 <?php if (!$kiosk && ($user['role'] ?? '') === 'SUPERADMIN'): ?>
 <details class="card surface glass" style="padding: 0.85rem 1.1rem; margin-bottom: 1.25rem;">
-    <summary style="cursor: pointer; font-weight: 800;">📱 Accès téléphone sans connexion</summary>
+    <summary style="cursor: pointer; font-weight: 800;">Accès téléphone sans connexion</summary>
     <p class="muted" style="margin: 0.6rem 0 0.4rem;">
         Copie ce lien secret sur ton téléphone (raccourci écran d'accueil) : il ouvre cette page directement,
         <strong>sans jamais demander de connexion</strong>. Lecture seule — régénère le lien pour révoquer l'ancien.
@@ -218,6 +218,13 @@ $colspan = $showMoney ? 13 : 12;
     transition: color 0.15s, border-color 0.15s;
 }
 .reinf-btn:hover { color: var(--primary); border-color: var(--primary); }
+
+/* Téléphone étroit (360 px) : pastilles de période et réinitialisation
+   en cibles tactiles, sans toucher à la logique de la page. */
+@media (max-width: 400px) {
+    .chip span { display: inline-flex; align-items: center; min-height: 44px; }
+    .reorder-reset { min-height: 44px; }
+}
 </style>
     <div class="costs-toolbar" style="margin-bottom:0;border:none;background:none;padding:1rem 1.1rem 0;">
         <div class="search-box">

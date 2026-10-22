@@ -101,7 +101,6 @@ $mapsUrl = 'https://www.google.com/maps/search/?api=1&query='
     </script>
 </head>
 <body>
-    <div class="starfield" id="starfield" aria-hidden="true"></div>
     <a class="skip-link" href="#contenu"><?= e(t('nav.skip')) ?></a>
 
     <header class="site-header">
@@ -589,6 +588,5 @@ $mapsUrl = 'https://www.google.com/maps/search/?api=1&query='
 
     <!-- PWA : enregistrement du service worker -->
     <script>if ('serviceWorker' in navigator) { window.addEventListener('load', function () { navigator.serviceWorker.register('/sw.js').catch(function () {}); }); }</script>
-    <script src="<?= e(assetVersioned('js/stars.js')) ?>" defer></script>
 </body>
 </html>

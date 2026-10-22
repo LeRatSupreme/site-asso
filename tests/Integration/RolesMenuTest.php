@@ -17,6 +17,10 @@ namespace Tests\Integration;
  *    AUCUN chiffre financier (ni « € », ni « Coût », ni « Total estimé »),
  *    avec l'entrée « Liste de courses » dans le menu Accueil ; un rôle
  *    compta voit les coûts sur la même page ;
+ *  - BENEVOL (lot 6E) : parcours complet page après page (accueil, comptage
+ *    de caisse, comptage inventaire, liste de courses) — chaque étape
+ *    répond 200 et n'affiche NI « € », NI « Bénéfice », NI « Marge »
+ *    (les libellés neutres de comptage restent bien sûr autorisés) ;
  *  - PRESIDENT : lecture générale (accueil, compta), jamais le groupe
  *    Système (settings), et toute écriture POST /admin/* reçue en 403 par
  *    le routeur — le contrôleur n'est jamais atteint (l'objectif hebdo ne
@@ -90,6 +94,48 @@ final class RolesMenuTest extends IntegrationTestCase
             self::assertSame(200, $code, sprintf('Le comptage fait partie des pages du bénévole : %s.', $path));
             self::assertNull($this->bodyError($body), sprintf('La page %s doit se rendre sans erreur PHP.', $path));
         }
+    }
+
+    /**
+     * Lot 6E : parcours complet du bénévole de caisse, dans l'ordre où il
+     * enchaîne les pages (mission : « test par rôle »). Chaque étape répond
+     * 200 et AUCUNE n'affiche de chiffre financier ni de vocabulaire de
+     * marge : ni « € », ni « Bénéfice », ni « Marge » — les libellés neutres
+     * (« Comptage », « Montant compté »…) restent bien sûr affichés.
+     */
+    public function test_benevol_parcours_complet_sans_aucun_chiffre_financier(): void
+    {
+        $this->seedProduitListe();
+
+        $parcours = [
+            '/admin'                            => 'accueil outils',
+            '/admin/compta/caisse'              => 'comptage de caisse',
+            '/admin/compta/inventaire/comptage' => 'comptage inventaire',
+            '/admin/compta/liste'               => 'liste de courses',
+        ];
+
+        foreach ($parcours as $path => $etape) {
+            $r    = $this->request('GET', $path, [], [], $this->benevolId);
+            $code = (int) ($r['code'] ?? 0);
+            $body = (string) ($r['body'] ?? '');
+
+            self::assertSame(200, $code, sprintf('Le bénévole enchaîne son parcours : étape « %s » (%s).', $etape, $path));
+            self::assertNull($this->bodyError($body), sprintf('L\'étape « %s » (%s) doit se rendre sans erreur PHP.', $etape, $path));
+
+            foreach (['€', 'Bénéfice', 'Marge'] as $interdit) {
+                self::assertStringNotContainsString(
+                    $interdit,
+                    $body,
+                    sprintf('« %s » ne doit apparaître sur aucune page du bénévole (étape « %s »).', $interdit, $etape)
+                );
+            }
+        }
+
+        // La dernière étape reste utile : la liste montre bien les produits
+        // à acheter (sans aucun montant).
+        $rl   = $this->request('GET', '/admin/compta/liste', [], [], $this->benevolId);
+        $body = (string) ($rl['body'] ?? '');
+        self::assertStringContainsString('data-key="colalistetest"', $body, 'La tuile du produit à acheter reste visible au bout du parcours.');
     }
 
     /**
