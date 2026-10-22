@@ -409,9 +409,10 @@ aucun token/secret à stocker) :
    Un bouton teal **« Payer en ligne (SumUp) »** ouvre le lien dans un nouvel onglet.
 3. **Cafétéria (espace élève)** : un bouton **« Payer ma commande (SumUp) »**
    apparaît sous le panier (optionnel — les commandes restent réglées au comptoir).
-4. **Dashboard SumUp** (`/admin/sumup`) : synthèse mensuelle (carte vs espèces,
-   nombre de transactions) **fondée sur les ventes déjà importées** dans la
-   comptabilité (rapports SumUp). Aucun appel réseau à SumUp.
+4. **Dashboard compta** (`/admin/compta`) : la synthèse mensuelle des
+    encaissements (répartition carte vs espèces, nombre de transactions) y est
+    intégrée, **fondée sur les ventes déjà importées** dans la comptabilité
+    (rapports SumUp). Aucun appel réseau à SumUp.
 
 > L'ancienne caisse POS admin (« Encaisser par SumUp ») a été retirée :
 > l'encaissement se fait sur les caisses SumUp physiques / kiosques.

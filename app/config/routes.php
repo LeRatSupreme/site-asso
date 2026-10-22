@@ -26,7 +26,6 @@ use App\Controllers\Admin\AdminRecoController;
 use App\Controllers\Admin\AdminReportingController;
 use App\Controllers\Admin\AdminSettingController;
 use App\Controllers\Admin\AdminStockController;
-use App\Controllers\Admin\AdminSumupController;
 use App\Controllers\Admin\AdminTeamController;
 use App\Controllers\Admin\AdminUserController;
 use App\Controllers\AuthController;
@@ -439,8 +438,9 @@ function aeic_register_routes(Router $router): void
     $router->post('/admin/compta/evenements/couts/save', [AdminComptaEventController::class, 'saveCostQuick']);
     $router->get('/admin/compta/annuel', [AdminReportingController::class, 'annual']);
 
-    // Mini dashboard SumUp (fondé sur les ventes importées ; ADMIN/TRESORERIE).
-    $router->get('/admin/sumup', [AdminSumupController::class, 'index']);
+    // Alias hérité de l'ancienne page « Dashboard SumUp », fusionnée dans le
+    // dashboard compta (conserve les anciens liens/bookmarks fonctionnels).
+    $router->get('/admin/sumup', [AdminComptaController::class, 'dashboard']);
 
     // Dashboard analytics (graphiques Chart.js).
     $router->get('/admin/analytics', [AdminAnalyticsController::class, 'index']);
