@@ -14,11 +14,13 @@ final class Auth
 {
     public const ROLE_SUPERADMIN = 'SUPERADMIN';
     public const ROLE_ADMIN = 'ADMIN';
+    public const ROLE_PRESIDENT = 'PRESIDENT';
     public const ROLE_TRESORERIE = 'TRESORERIE';
     public const ROLE_EVENEMENTS = 'EVENEMENTS';
     public const ROLE_COMMUNICATION = 'COMMUNICATION';
     public const ROLE_CAFETERIA = 'CAFETERIA';
     public const ROLE_JEUX = 'JEUX';
+    public const ROLE_BENEVOL = 'BENEVOL';
     public const ROLE_ELEVE = 'ELEVE';
 
     /** Cache de l'utilisateur chargé depuis la base (une fois par requête). */

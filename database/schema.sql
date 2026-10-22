@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS users (
     email       VARCHAR(255) NOT NULL,
     password    VARCHAR(255) NULL,
     image       VARCHAR(255) NULL,
-    role        ENUM('SUPERADMIN','ADMIN','TRESORERIE','EVENEMENTS','COMMUNICATION','CAFETERIA','JEUX','ELEVE') NOT NULL DEFAULT 'ELEVE',
+    role        ENUM('SUPERADMIN','ADMIN','PRESIDENT','TRESORERIE','EVENEMENTS','COMMUNICATION','CAFETERIA','JEUX','BENEVOL','ELEVE') NOT NULL DEFAULT 'ELEVE',
     -- Pages attribuées individuellement, CSV de clés — ex: inventory,costs
     extra_pages VARCHAR(255) NULL DEFAULT NULL,
     is_active   TINYINT(1) NOT NULL DEFAULT 1,
