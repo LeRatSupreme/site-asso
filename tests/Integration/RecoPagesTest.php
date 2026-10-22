@@ -267,8 +267,8 @@ final class RecoPagesTest extends IntegrationTestCase
             "INSERT INTO sales
                 (id, transaction_ref, sold_at, payment_method, quantity, description,
                  product_key, category, price_ttc, is_custom_amount)
-             VALUES (?, ?, DATE_SUB(NOW(), INTERVAL 1 DAY), 'CARTE', 2, ?, ?, ?, 'Boissons', 4.00, 0)"
-        )->execute([$ref, $ref, $label, $key, $label]);
+             VALUES (?, ?, DATE_SUB(NOW(), INTERVAL 1 DAY), 'CARTE', 2, ?, ?, 'Boissons', 4.00, 0)"
+        )->execute([$ref, $ref, $label, $key]);
     }
 
     /**

@@ -80,6 +80,12 @@ final class DashboardPageTest extends IntegrationTestCase
         $this->insertSale('s_dash_t1', 'TDASH1', date('Y-m-d H:i:s', strtotime('-10 days')), '60.00', 'CARTE');
         $this->insertSale('s_dash_t1b', 'TDASH2', date('Y-m-d H:i:s', strtotime('-9 days')), '40.00', 'LIQUIDE');
         $this->insertSale('s_dash_t2', 'TDASH3', date('Y-m-d H:i:s', strtotime('-17 days')), '50.00', 'CARTE');
+        // Vente antérieure au DÉBUT de la fenêtre précédente (prevFrom =
+        // t1From − 7 j = −20 j) : precedentComplet exige que la première
+        // vente importée (Analytics::firstSaleDate) précède prevFrom —
+        // « pas de comparaison sur du vide ». Hors de toutes les fenêtres :
+        // elle ne fausse ni T1 ni T2.
+        $this->insertSale('s_dash_t0', 'TDASH0', date('Y-m-d H:i:s', strtotime('-21 days')), '5.00', 'CARTE');
 
         $r = $this->request(
             'GET',
