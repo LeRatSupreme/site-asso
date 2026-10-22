@@ -58,7 +58,10 @@ final class AdminAnalyticsController extends AdminBaseController
         // ADMIN + TRESORERIE (lecture seule d'agrégats compta).
         $this->guardCompta();
 
-        $this->renderAdmin('admin/analytics/index', $this->buildPage() + ['title' => 'Analytics']);
+        // loadComptaCss : la carte « Idées du moment » (partiel reco) est
+        // stylée par compta.css, que le layout admin ne charge que sur
+        // /compta ou sur ce drapeau — /admin/analytics n'est ni l'un ni l'autre.
+        $this->renderAdmin('admin/analytics/index', $this->buildPage() + ['title' => 'Analytics', 'loadComptaCss' => true]);
     }
 
     /**

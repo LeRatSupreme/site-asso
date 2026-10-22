@@ -4,34 +4,50 @@ declare(strict_types=1);
 
 /**
  * Kiosque ADMIN — « Idées du moment » : version téléphone compacte de la
- * carte de recommandations (DEUX BLOCS : corrections puis idées) +
- * historique court des idées appliquées. Accès par lien secret (jeton
+ * carte de recommandations, MÊMES COMPOSANTS ET MÊMES RÈGLES que la vue
+ * admin : DEUX BLOCS (« À corriger » / « Idées pour vendre plus »),
+ * idées REGROUPÉES PAR NATURE (1 carte = 1 nature, produits en
+ * <details>), confiance EN MOTS, gain en fourchette, dépliant « Voir
+ * les autres idées », état vide sobre. Accès par lien secret (jeton
  * admin = l'authentification, sans connexion) ; les POST sont sans CSRF
  * (Router::dispatch), le jeton du chemin EST l'authentification.
+ * JAMAIS de code de règle (R1…) : libellés humains via RecoLibelles.
  *
  * @var list<array<string,mixed>> $idees        Idées du jour (bloc 'idee', toArray() du cœur).
  * @var list<array<string,mixed>> $corrections  Corrections du jour (bloc 'correction').
- * @var array<string,mixed>       $meta        Méta du moteur (indisponible, message, raison…).
+ * @var list<array<string,mixed>> $autres_idees Idées écartées par les caps (extension additive).
+ * @var array<string,mixed>       $meta        Méta du moteur (indisponible, raison…).
  * @var bool                      $insuffisant Historique insuffisant (< 14 jours ouverts).
  * @var bool                      $indisponible Vrai si le moteur Reco est en échec.
  * @var string                    $raison      Raison de l'indisponibilité.
  * @var bool                      $kiosk       Toujours vrai (rendu kiosque).
  * @var string                    $token       Jeton kiosque admin.
- * @var list<array{titre:string,regle:string,applied_at:string,conclusion:string,libelle:string,note:string}> $hist
+ * @var list<array{titre:string,regle_lib:string,applied_at:string,conclusion:string,libelle:string,note:string}> $hist
  */
 
 use App\Core\Compta\Reco\Hyper;
+use App\Core\Compta\Reco\RecoLibelles;
 
 $kiosk          = true;
 $idees          = is_array($idees ?? null) ? array_values(array_filter($idees, 'is_array')) : [];
 $corrections    = is_array($corrections ?? null) ? array_values(array_filter($corrections, 'is_array')) : [];
+$autres         = array_values(array_filter(is_array($autres_idees ?? null) ? $autres_idees : [], 'is_array'));
 $meta           = is_array($meta ?? null) ? $meta : [];
 $indispo        = (bool) ($indisponible ?? ($meta['indisponible'] ?? false));
 $raison         = trim((string) ($raison ?? ($meta['raison'] ?? '')));
 $insuff         = (bool) ($insuffisant ?? false);
-$message        = isset($meta['message']) && is_string($meta['message']) && $meta['message'] !== '' ? $meta['message'] : null;
 $actionDecision = url('/kiosque/admin/reco/decision/' . rawurlencode($token));
 $hist           = is_array($hist ?? null) ? $hist : [];
+
+// Regroupement PAR NATURE (même règle que la vue admin, ≤ 3 cartes).
+$groupes = [];
+foreach ($idees as $idee) {
+    if ((string) ($idee['id'] ?? '') === '') {
+        continue;
+    }
+    $groupes[(string) ($idee['regle'] ?? '')][] = $idee;
+}
+$groupes = array_slice($groupes, 0, Hyper::MAX_IDEES);
 
 $badgeConfiance = static function (string $niveau): string {
     return match ($niveau) {
@@ -41,31 +57,49 @@ $badgeConfiance = static function (string $niveau): string {
     };
 };
 
-$formBoutons = static function (array $idee) use ($actionDecision, $kiosk): string {
-    $id = (string) ($idee['id'] ?? '');
-    if ($id === '') {
+// Gain estimé en fourchette (format fr via formatPrice).
+$gainTxt = static function (array $gain): string {
+    $bas  = (float) ($gain['bas'] ?? 0.0);
+    $haut = (float) ($gain['haut'] ?? 0.0);
+    if ($bas <= 0.0 && $haut <= 0.0) {
         return '';
     }
-    $champs = !$kiosk ? csrf_field() : '';
-    $champs .= '<input type="hidden" name="id" value="' . e($id) . '">';
+    $bas  = max(0.0, $bas);
+    $haut = max($bas, $haut);
+    if ($haut - $bas < 0.005) {
+        return 'environ ' . formatPrice($haut, 0) . ' par semaine';
+    }
 
-    return $champs;
+    return 'entre ' . formatPrice($bas, 0) . ' et ' . formatPrice($haut, 0) . ' par semaine';
 };
 
-$lienFiche = static function (array $item): string {
-    $lien = $item['lien'] ?? null;
-    if (!is_string($lien) || $lien === '') {
-        return '';
+$champs = static function (array $idee): string {
+    $id = (string) ($idee['id'] ?? '');
+
+    return '<input type="hidden" name="id" value="' . e($id) . '">';
+};
+
+// Bouton principal d'une correction ({href, libelle} côté contrôleur ;
+// payloads d'avant l'itération 3 : chaîne → libellé par défaut).
+$lienPrincipal = static function (array $item): array {
+    $l = $item['lien'] ?? null;
+    if (is_array($l)) {
+        $href = (string) ($l['href'] ?? '');
+
+        return $href !== '' ? ['href' => $href, 'libelle' => (string) ($l['libelle'] ?? 'Ouvrir la fiche du produit')] : [];
+    }
+    if (is_string($l) && $l !== '') {
+        return ['href' => $l, 'libelle' => 'Ouvrir la fiche du produit'];
     }
 
-    return '<a class="btn btn-outline btn-sm" href="' . e($lien) . '" target="_blank" rel="noopener">Ouvrir la fiche ↗</a>';
+    return [];
 };
 ?>
 <div class="kr-page">
 
     <header class="ka-head">
-        <h1 class="ka-title">💡 Idées du moment</h1>
-        <p class="ka-period">Le site propose, tu décides — rien n'est appliqué automatiquement</p>
+        <h1 class="ka-title">Idées du moment</h1>
+        <p class="ka-period">Le site propose, vous décidez — rien n'est appliqué automatiquement</p>
     </header>
 
     <?php if ($indispo): ?>
@@ -79,7 +113,7 @@ $lienFiche = static function (array $item): string {
             </section>
         <?php endif; ?>
         <section class="card surface glass ka-card">
-            <span class="ka-kpi-delta is-muted"><?= e($message ?? 'Peu d\'idées fiables pour l\'instant.') ?></span>
+            <span class="ka-kpi-delta is-muted">Rien d'important cette semaine.</span>
         </section>
     <?php else: ?>
         <?php if ($insuff): ?>
@@ -89,10 +123,10 @@ $lienFiche = static function (array $item): string {
         <?php endif; ?>
 
         <!-- ======================================================== -->
-        <!--  Bloc « À corriger » : données / stock (pas d'Appliquer) -->
+        <!--  Bloc « À corriger » : données / stock (pas d'appliquer) -->
         <!-- ======================================================== -->
         <header class="ka-head">
-            <h2 class="ka-chart-title">🔧 À corriger</h2>
+            <h2 class="ka-chart-title">À corriger</h2>
         </header>
         <?php if ($corrections === []): ?>
             <section class="card surface glass ka-card">
@@ -100,23 +134,29 @@ $lienFiche = static function (array $item): string {
             </section>
         <?php else: ?>
             <?php foreach ($corrections as $c): ?>
-                <?php $idC = (string) ($c['id'] ?? ''); if ($idC === '') { continue; } ?>
+                <?php
+                $idC = (string) ($c['id'] ?? '');
+                if ($idC === '') { continue; }
+                $lienC = $lienPrincipal($c);
+                ?>
                 <section class="card surface glass ka-card kr-idee">
                     <div class="kr-head">
                         <strong><?= e((string) ($c['titre'] ?? '')) ?></strong>
-                        <span class="krb is-rule"><?= e((string) ($c['regle'] ?? '')) ?></span>
+                        <span class="krb is-rule"><?= e(RecoLibelles::regle((string) ($c['regle'] ?? ''))) ?></span>
                     </div>
                     <p class="kr-pourquoi"><?= e((string) ($c['pourquoi'] ?? '')) ?></p>
                     <div class="kr-actions">
-                        <?= $lienFiche($c) ?>
+                        <?php if ($lienC !== []): ?>
+                            <a class="btn btn-primary btn-sm" href="<?= e($lienC['href']) ?>" target="_blank" rel="noopener"><?= e($lienC['libelle']) ?></a>
+                        <?php endif; ?>
                         <form method="post" action="<?= e($actionDecision) ?>" class="kr-form">
-                            <?= $formBoutons($c) ?>
+                            <?= $champs($c) ?>
                             <button type="submit" name="decision" value="plus_tard" class="btn btn-ghost btn-sm">Plus tard</button>
                         </form>
                         <form method="post" action="<?= e($actionDecision) ?>" class="kr-form">
-                            <?= $formBoutons($c) ?>
+                            <?= $champs($c) ?>
                             <input type="hidden" name="motif" value="non_pertinent">
-                            <button type="submit" name="decision" value="ignorer" class="btn btn-ghost btn-sm">Ignorer</button>
+                            <button type="submit" name="decision" value="ignorer" class="btn btn-ghost btn-sm">Pas pour moi</button>
                         </form>
                     </div>
                 </section>
@@ -124,62 +164,110 @@ $lienFiche = static function (array $item): string {
         <?php endif; ?>
 
         <!-- ======================================================== -->
-        <!--  Bloc « Idées pour vendre plus » : consignes (≤ 3)       -->
+        <!--  Bloc « Idées pour vendre plus » : 1 carte = 1 nature    -->
         <!-- ======================================================== -->
         <header class="ka-head">
-            <h2 class="ka-chart-title">🚀 Idées pour vendre plus</h2>
+            <h2 class="ka-chart-title">Idées pour vendre plus</h2>
         </header>
-        <?php if ($message !== null): ?>
-            <section class="card surface glass ka-card">
-                <span class="ka-kpi-delta is-muted"><?= e($message) ?></span>
-            </section>
-        <?php endif; ?>
         <?php if ($idees === []): ?>
             <section class="card surface glass ka-card">
-                <span class="ka-kpi-delta is-muted">Peu d'idées fiables pour l'instant.</span>
+                <span class="ka-kpi-delta is-muted">Rien d'important cette semaine.</span>
             </section>
         <?php else: ?>
-            <?php foreach ($idees as $idee): ?>
+            <?php foreach ($groupes as $regle => $ideesDuGroupe): ?>
                 <?php
-                $idIdee = (string) ($idee['id'] ?? '');
-                if ($idIdee === '') { continue; }
-                $gain      = is_array($idee['gain_hebdo'] ?? null) ? $idee['gain_hebdo'] : [];
-                $gainBas   = (float) ($gain['bas'] ?? 0.0);
-                $gainHaut  = (float) ($gain['haut'] ?? 0.0);
-                $confiance = (string) ($idee['confiance'] ?? 'faible');
+                $produitsGroupe = [];
+                foreach ($ideesDuGroupe as $ideeG) {
+                    foreach ((array) ($ideeG['produits'] ?? []) as $pg) {
+                        if (is_array($pg) && (string) ($pg['label'] ?? $pg['key'] ?? '') !== '') {
+                            $produitsGroupe[(string) ($pg['key'] ?? $pg['label'])] = (string) ($pg['label'] ?? $pg['key']);
+                        }
+                    }
+                }
                 ?>
                 <section class="card surface glass ka-card kr-idee">
                     <div class="kr-head">
-                        <span class="krb is-rule"><?= e((string) ($idee['regle'] ?? '')) ?></span>
-                        <?= $badgeConfiance($confiance) ?>
-                        <?php if ($gainBas > 0.0 || $gainHaut > 0.0): ?>
-                            <span class="ka-kpi-delta is-up">+<?= e(formatPrice(max(0.0, $gainBas)) . ' – ' . formatPrice(max($gainBas, $gainHaut)) . ' €/sem') ?></span>
-                        <?php endif; ?>
+                        <span class="krb is-rule"><?= e(RecoLibelles::regle($regle)) ?></span>
                     </div>
-                    <?php
-                    $debut = is_string($idee['debut'] ?? null) ? $idee['debut'] : '';
-                    $fin   = is_string($idee['fin'] ?? null) ? $idee['fin'] : '';
-                    if ($debut !== '' && $fin !== ''): ?>
-                        <span class="ka-kpi-delta is-muted">Du <?= e(formatDate($debut, 'd/m/Y')) ?> au <?= e(formatDate($fin, 'd/m/Y')) ?></span>
+                    <?php foreach ($ideesDuGroupe as $idee): ?>
+                        <?php
+                        $idIdee = (string) ($idee['id'] ?? '');
+                        if ($idIdee === '') { continue; }
+                        $gain      = is_array($idee['gain_hebdo'] ?? null) ? $idee['gain_hebdo'] : [];
+                        $gainLib   = $gainTxt($gain);
+                        $confiance = (string) ($idee['confiance'] ?? 'faible');
+                        $debut     = is_string($idee['debut'] ?? null) ? $idee['debut'] : '';
+                        $fin       = is_string($idee['fin'] ?? null) ? $idee['fin'] : '';
+                        $hypoth    = array_values(array_filter(is_array($idee['hypotheses'] ?? null) ? $idee['hypotheses'] : [], 'is_string'));
+                        $mesure    = (string) ($idee['comment_mesurer'] ?? '');
+                        ?>
+                        <div class="kr-idee-item">
+                            <p class="kr-chiffres">
+                                <?= $badgeConfiance($confiance) ?>
+                                <?php if ($gainLib !== ''): ?>
+                                    <span class="krb is-gain">Gain estimé : <?= e($gainLib) ?></span>
+                                <?php endif; ?>
+                            </p>
+                            <?php if ($debut !== '' && $fin !== ''): ?>
+                                <span class="ka-kpi-delta is-muted">Du <?= e(formatDate($debut, 'd/m/Y')) ?> au <?= e(formatDate($fin, 'd/m/Y')) ?></span>
+                            <?php endif; ?>
+                            <p class="kr-pourquoi"><?= e((string) ($idee['pourquoi'] ?? '')) ?></p>
+                            <p class="kr-action"><?= e((string) ($idee['action'] ?? '')) ?></p>
+                            <?php if ($hypoth !== [] || $mesure !== ''): ?>
+                                <details class="kr-details">
+                                    <summary>Hypothèses et mesure</summary>
+                                    <ul class="kr-hypotheses">
+                                        <?php foreach ($hypoth as $h): ?>
+                                            <li><?= e($h) ?></li>
+                                        <?php endforeach; ?>
+                                    </ul>
+                                    <?php if ($mesure !== ''): ?>
+                                        <p class="kr-mesure"><?= e($mesure) ?></p>
+                                    <?php endif; ?>
+                                </details>
+                            <?php endif; ?>
+                            <div class="kr-actions">
+                                <form method="post" action="<?= e($actionDecision) ?>" class="kr-form">
+                                    <?= $champs($idee) ?>
+                                    <button type="submit" name="decision" value="appliquer" class="btn btn-primary btn-sm">Je le fais</button>
+                                </form>
+                                <form method="post" action="<?= e($actionDecision) ?>" class="kr-form">
+                                    <?= $champs($idee) ?>
+                                    <button type="submit" name="decision" value="plus_tard" class="btn btn-ghost btn-sm">Plus tard</button>
+                                </form>
+                                <form method="post" action="<?= e($actionDecision) ?>" class="kr-form">
+                                    <?= $champs($idee) ?>
+                                    <input type="hidden" name="motif" value="non_pertinent">
+                                    <button type="submit" name="decision" value="ignorer" class="btn btn-ghost btn-sm">Pas pour moi</button>
+                                </form>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                    <?php if ($produitsGroupe !== []): ?>
+                        <details class="kr-details">
+                            <summary>Produits concernés (<?= count($produitsGroupe) ?>)</summary>
+                            <ul class="kr-hypotheses">
+                                <?php foreach ($produitsGroupe as $labelProduit): ?>
+                                    <li><?= e($labelProduit) ?></li>
+                                <?php endforeach; ?>
+                            </ul>
+                        </details>
                     <?php endif; ?>
-                    <p class="kr-action"><?= e((string) ($idee['action'] ?? '')) ?></p>
-                    <div class="kr-actions">
-                        <form method="post" action="<?= e($actionDecision) ?>" class="kr-form">
-                            <?= $formBoutons($idee) ?>
-                            <button type="submit" name="decision" value="appliquer" class="btn btn-primary btn-sm">Appliquer</button>
-                        </form>
-                        <form method="post" action="<?= e($actionDecision) ?>" class="kr-form">
-                            <?= $formBoutons($idee) ?>
-                            <button type="submit" name="decision" value="plus_tard" class="btn btn-ghost btn-sm">Plus tard</button>
-                        </form>
-                        <form method="post" action="<?= e($actionDecision) ?>" class="kr-form">
-                            <?= $formBoutons($idee) ?>
-                            <input type="hidden" name="motif" value="non_pertinent">
-                            <button type="submit" name="decision" value="ignorer" class="btn btn-ghost btn-sm">Ignorer</button>
-                        </form>
-                    </div>
                 </section>
             <?php endforeach; ?>
+            <?php if ($autres !== []): ?>
+                <details class="kr-details ka-card">
+                    <summary>Voir les autres idées (<?= count($autres) ?>)</summary>
+                    <ul class="kr-hypotheses">
+                        <?php foreach ($autres as $a): ?>
+                            <li>
+                                <strong><?= e(RecoLibelles::regle((string) ($a['regle'] ?? ''))) ?></strong>
+                                — <?= e((string) ($a['titre'] ?? '')) ?>
+                            </li>
+                        <?php endforeach; ?>
+                    </ul>
+                </details>
+            <?php endif; ?>
         <?php endif; ?>
     <?php endif; ?>
 
@@ -198,7 +286,7 @@ $lienFiche = static function (array $item): string {
             <section class="card surface glass ka-card">
                 <div class="kr-head">
                     <strong><?= e($h['titre']) ?></strong>
-                    <span class="krb is-rule"><?= e($h['regle']) ?></span>
+                    <span class="krb is-rule"><?= e($h['regle_lib']) ?></span>
                     <?php if ($h['conclusion'] === 'concluant'): ?>
                         <span class="krb is-up">concluant</span>
                     <?php elseif ($h['conclusion'] === 'non_concluant'): ?>
@@ -218,22 +306,6 @@ $lienFiche = static function (array $item): string {
     <!-- Nav de bas de page kiosque. -->
     <div class="ka-actions">
         <a class="btn btn-ghost btn-sm" href="<?= e(url('/kiosque/admin/' . rawurlencode($token))) ?>">← Kiosque admin</a>
-        <a class="btn btn-ghost btn-sm" href="<?= e(url('/kiosque/admin/analytics/' . rawurlencode($token))) ?>">📈 Analytique</a>
+        <a class="btn btn-ghost btn-sm" href="<?= e(url('/kiosque/admin/analytics/' . rawurlencode($token))) ?>">Analytique</a>
     </div>
 </div>
-
-<style>
-    .kr-page { display: flex; flex-direction: column; gap: 0.7rem; }
-    .kr-idee { display: flex; flex-direction: column; gap: 0.4rem; }
-    .kr-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; }
-    .krb { font-size: 0.68rem; font-weight: 800; padding: 0.1rem 0.45rem; border-radius: 999px; border: 1px solid rgba(255,255,255,.14); white-space: nowrap; }
-    .krb.is-rule { color: var(--primary, #48bdd3); border-color: rgba(72,189,211,.4); }
-    .krb.is-up { color: #22c55e; border-color: rgba(34,197,94,.4); }
-    .krb.is-off { color: #f59e0b; border-color: rgba(245,158,11,.4); }
-    .krb.is-muted { color: var(--muted, #9fb3c8); }
-    .kr-pourquoi { margin: 0; font-size: 0.82rem; color: var(--muted, #9fb3c8); }
-    .kr-action { margin: 0; font-size: 0.9rem; font-weight: 800; }
-    .kr-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.2rem; }
-    .kr-form { display: flex; margin: 0; }
-    .kr-hist-head { margin-top: 0.6rem; }
-</style>

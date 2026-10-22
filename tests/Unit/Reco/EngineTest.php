@@ -462,6 +462,60 @@ final class EngineTest extends TestCase
         self::assertSame(['R4', 'R4', 'R4'], array_column($ideesSans, 'regle'), 'Sans diversité : R4×3 évince la R7.');
     }
 
+    /**
+     * Option ADDITIVE 'autres_idees' (lot 3, dépliant « Voir les autres
+     * idées ») : expose dans meta['autres_idees'] les idées écartées par
+     * le cap (ni bloquées par l'historique, ni rejetées par les garde-fous)
+     * SANS changer une seule retenue — même appel à Scoring::classe à cap
+     * infini, dont les retenues sont strictement identiques (la coupe
+     * finale n'est qu'un array_slice). Sans l'option : sortie inchangée,
+     * meta['autres_idees'] vide.
+     */
+    public function test_autres_idees_option_additive_sans_changer_les_retenues(): void
+    {
+        $now = self::paris('2026-10-21 12:00');
+        $produits = [
+            self::produitR4('P1'),
+            self::produitR4('P2'),
+            self::produitR4('P3'),
+        ];
+        for ($i = 4; $i <= 7; $i++) {
+            $produits[] = self::produitVolume('P' . $i);
+        }
+        $produits[] = self::produitVolume('P8', 0.2); // cible R7
+
+        $ds = RecoScenario::dataset($produits, [], [], 1.0, false, 30, self::forecastProb(0.9));
+
+        // Cap surchargé à 2 (surcharge de test, jamais en prod) : la R7 est
+        // écartée par le cap — l'option la expose, les retenues ne bougent pas.
+        $base = RecommendationEngine::recommend($ds, $now, ['parametres' => ['reco_max_idees' => 2]]);
+        $avec = RecommendationEngine::recommend($ds, $now, ['parametres' => ['reco_max_idees' => 2], 'autres_idees' => true]);
+
+        self::assertSame([], $base['meta']['autres_idees'], 'Sans l\'option : rien d\'exposé (sortie inchangée).');
+        self::assertSame(
+            array_map(static fn (Recommendation $r): string => $r->id, $base['idees']),
+            array_map(static fn (Recommendation $r): string => $r->id, $avec['idees']),
+            'L\'option ne change AUCUNE retenue.'
+        );
+        self::assertSame(['R4', 'R4'], array_column($avec['idees'], 'regle'));
+
+        $autres = $avec['meta']['autres_idees'];
+        self::assertNotEmpty($autres, 'L\'idée écartée par le cap doit être exposée.');
+        self::assertSame(['R7'], array_column($autres, 'regle'), 'La R7 évincée par le cap est l\'idée écartée.');
+        foreach ($autres as $a) {
+            self::assertSame(['regle', 'titre', 'pourquoi'], array_keys($a), 'Structure minimale d\'affichage.');
+            self::assertNotSame('', $a['titre']);
+        }
+
+        // À cap par défaut (3) : tout le classement tient dans le cap —
+        // retenues strictement identiques, rien d'écarté à exposer.
+        $defaut = RecommendationEngine::recommend($ds, $now);
+        $defautAvec = RecommendationEngine::recommend($ds, $now, ['autres_idees' => true]);
+        self::assertSame(self::regles($defaut), self::regles($defautAvec), 'À cap par défaut, l\'option est un no-op sur les retenues.');
+        self::assertSame(['R4', 'R4', 'R7'], self::regles($defautAvec));
+        self::assertSame([], $defautAvec['meta']['autres_idees'], 'Rien d\'écarté à cap 3 : dépliant absent.');
+    }
+
     public function test_r10_assemble_gain_somme_et_titres(): void
     {
         $now = self::paris('2026-10-21 12:00');
