@@ -361,8 +361,8 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
                      invisible (caméra vs galerie/PDF), aperçu vignette ou
                      chip PDF retirable — cf. JS en bas de page. -->
                 <div class="lg-shot-actions">
-                    <button type="button" id="lg-shot-btn" class="btn btn-primary btn-sm">📷 Prendre une photo</button>
-                    <button type="button" id="lg-file-btn" class="btn btn-ghost btn-sm">🖼️ Choisir un fichier</button>
+                    <button type="button" id="lg-shot-btn" class="btn btn-primary btn-sm">Prendre une photo</button>
+                    <button type="button" id="lg-file-btn" class="btn btn-ghost btn-sm">Choisir un fichier</button>
                 </div>
                 <input type="file" id="lg-receipt" name="receipt" accept="image/*,.pdf" style="display:none;">
                 <div id="lg-shot-preview" hidden>
@@ -419,7 +419,7 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
                  injectée par le contrôleur). data-save-bulk-url pointe
                  vers l'endpoint kiosque (auth par jeton). -->
             <div id="lg-purchase-box" class="lg-scan-purchase" data-save-bulk-url="<?= e(url('/kiosque/admin/ledger/purchases/' . rawurlencode($token))) ?>">
-                <p class="lg-scan-title">🛒 Achats à créer (stock + coût de revient)</p>
+                <p class="lg-scan-title">Achats à créer (stock + coût de revient)</p>
                 <label class="lg-purchase-toggle">
                     <input type="checkbox" id="lg-create-purchases">
                     <span>Créer aussi ces achats <span class="muted">(stock + coût de revient — confirmation demandée)</span></span>
@@ -492,8 +492,8 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
                      invisible (caméra vs galerie/PDF), aperçu vignette ou
                      chip PDF retirable — cf. JS en bas de page. -->
                 <div class="lg-shot-actions">
-                    <button type="button" id="lg-shot-btn" class="btn btn-primary btn-sm">📷 Prendre une photo</button>
-                    <button type="button" id="lg-file-btn" class="btn btn-ghost btn-sm">🖼️ Choisir un fichier</button>
+                    <button type="button" id="lg-shot-btn" class="btn btn-primary btn-sm">Prendre une photo</button>
+                    <button type="button" id="lg-file-btn" class="btn btn-ghost btn-sm">Choisir un fichier</button>
                 </div>
                 <input type="file" id="lg-receipt" name="receipt" accept="image/*,.pdf" style="display:none;">
                 <div id="lg-shot-preview" hidden>
@@ -548,7 +548,7 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
                  rempli par le JS depuis data-purchase-products (liste
                  injectée par le contrôleur). -->
             <div id="lg-purchase-box" class="lg-scan-purchase" data-save-bulk-url="<?= e(url('/admin/compta/achats/save-bulk')) ?>">
-                <p class="lg-scan-title">🛒 Achats à créer (stock + coût de revient)</p>
+                <p class="lg-scan-title">Achats à créer (stock + coût de revient)</p>
                 <label class="lg-purchase-toggle">
                     <input type="checkbox" id="lg-create-purchases">
                     <span>Créer aussi ces achats <span class="muted">(stock + coût de revient — confirmation demandée)</span></span>
@@ -937,7 +937,7 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
         } else if (file) {
             img.removeAttribute('src');
             img.hidden = true;
-            chip.textContent = '📄 ' + file.name;
+            chip.textContent = file.name;
             chip.hidden = false;
         }
         preview.hidden = false;

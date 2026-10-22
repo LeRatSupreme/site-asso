@@ -256,13 +256,9 @@ $userPseudo = ($user !== null && !empty($user['pseudo'])) ? (string) $user['pseu
     letter-spacing: -0.02em;
 }
 
-/* Statistiques joueur : chiffres en dégradé */
+/* Statistiques joueur : chiffres en couleur pleine (sobriété, lot 6F) */
 .gm-stats .gm-stat {
     font-size: 1.9rem;
-    background: linear-gradient(135deg, #8b7ae0, #3a9bb8 60%, #7fd0e4);
-    -webkit-background-clip: text;
-    background-clip: text;
-    -webkit-text-fill-color: transparent;
 }
 .gm-stats-grid {
     display: grid;
@@ -293,7 +289,7 @@ $userPseudo = ($user !== null && !empty($user['pseudo'])) ? (string) $user['pseu
 .gm-ticket:hover {
     transform: translateY(-4px);
     border-color: rgba(72, 189, 211, 0.35);
-    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35), 0 0 26px rgba(58, 155, 184, 0.15);
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
 }
 .gm-stub {
     flex: 0 0 76px;
@@ -301,13 +297,13 @@ $userPseudo = ($user !== null && !empty($user['pseudo'])) ? (string) $user['pseu
     place-items: center;
     font-size: 2rem;
     line-height: 1;
-    background: linear-gradient(160deg, rgba(58, 155, 184, 0.38), rgba(58, 155, 184, 0.1));
+    background: rgba(58, 155, 184, 0.18);
     border-right: 2px dashed rgba(255, 255, 255, 0.14);
     transition: font-size 0.25s ease;
 }
 [data-theme="light"] .gm-stub { border-right-color: rgba(15, 23, 42, 0.14); }
 .gm-ticket:hover .gm-stub { font-size: 2.4rem; }
-.gm-ticket-violet .gm-stub { background: linear-gradient(160deg, rgba(139, 122, 224, 0.38), rgba(139, 122, 224, 0.1)); }
+.gm-ticket-violet .gm-stub { background: rgba(139, 122, 224, 0.16); }
 .gm-ticket-muted { opacity: 0.65; }
 .gm-ticket-muted .gm-stub { background: rgba(255, 255, 255, 0.04); }
 .gm-ticket-muted:hover { transform: none; box-shadow: none; border-color: var(--border); }
@@ -356,7 +352,7 @@ $userPseudo = ($user !== null && !empty($user['pseudo'])) ? (string) $user['pseu
 .lb-avatar {
     width:34px; height:34px; border-radius:50%;
     display:inline-grid; place-items:center; flex:0 0 auto;
-    background:linear-gradient(135deg, var(--secondary), var(--primary));
+    background:var(--secondary);
     color:#fff; font-weight:900; font-size:0.85rem;
 }
 .lb-user-cell { display:flex; align-items:center; gap:0.6rem; }

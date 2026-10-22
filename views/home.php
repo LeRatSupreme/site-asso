@@ -235,8 +235,6 @@ $allPromoEmpty = empty($promotions);
     <div class="container">
         <div class="ae-cta-panel ae-reveal">
             <div class="ae-cta-dots" aria-hidden="true"></div>
-            <span class="ae-cta-halo ae-cta-halo-1" aria-hidden="true"></span>
-            <span class="ae-cta-halo ae-cta-halo-2" aria-hidden="true"></span>
             <div class="ae-cta-inner">
                 <h2 class="section-title"><?= e(t('about.cta.title')) ?></h2>
                 <div class="ae-cta-actions">
@@ -260,14 +258,10 @@ $allPromoEmpty = empty($promotions);
 }
 .hm-stats:hover {
     transform: rotate(0deg) translateY(-4px);
-    box-shadow: 0 30px 70px rgba(0, 0, 0, 0.45), 0 0 40px rgba(58, 155, 184, 0.14);
+    box-shadow: 0 30px 70px rgba(0, 0, 0, 0.45);
 }
 .hm-stats .stat-value {
     font-size: 2.1rem;
-    background: linear-gradient(135deg, #8b7ae0, #3a9bb8 60%, #7fd0e4);
-    -webkit-background-clip: text;
-    background-clip: text;
-    -webkit-text-fill-color: transparent;
 }
 .hm-stats .stat:nth-child(even) { border-left: 1px solid var(--border); padding-left: 1.25rem; }
 .hm-stats .stat:nth-child(n+3) { border-top: 1px solid var(--border); padding-top: 1.1rem; }
@@ -312,7 +306,7 @@ $allPromoEmpty = empty($promotions);
 }
 [data-theme="light"] .hm-feature-code { color: rgba(15, 23, 42, 0.4); }
 
-/* Onglets menu : état actif dégradé */
+/* Onglets menu : état actif uni */
 #menu .menu-tab {
     border-radius: 999px;
     padding: 0.55rem 1.1rem;
@@ -321,12 +315,12 @@ $allPromoEmpty = empty($promotions);
 }
 #menu .menu-tab:hover { border-color: rgba(72, 189, 211, 0.4); color: var(--foreground); }
 #menu .menu-tab.is-active {
-    background: linear-gradient(120deg, rgba(74, 61, 143, 0.5), rgba(58, 155, 184, 0.4));
+    background: rgba(74, 61, 143, 0.5);
     border-color: rgba(72, 189, 211, 0.5);
     color: #fff;
 }
 [data-theme="light"] #menu .menu-tab.is-active {
-    background: linear-gradient(120deg, rgba(74, 61, 143, 0.85), rgba(45, 122, 148, 0.8));
+    background: rgba(74, 61, 143, 0.85);
 }
 
 /* CTA : resserre l'espace au-dessus du panneau */
@@ -347,22 +341,8 @@ $allPromoEmpty = empty($promotions);
     gap: 1.75rem;
     padding: 2.25rem 2.5rem;
     border-radius: 24px;
-    background:
-        radial-gradient(80% 140% at 0% 0%, rgba(58, 155, 184, 0.1), transparent 55%),
-        rgba(255, 255, 255, 0.03);
-}
-.about-contact::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    border-radius: inherit;
-    padding: 1px;
-    background: linear-gradient(135deg, rgba(74, 61, 143, 0.6), rgba(58, 155, 184, 0.5) 50%, rgba(255, 255, 255, 0.06));
-    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-    -webkit-mask-composite: xor;
-    mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-    mask-composite: exclude;
-    pointer-events: none;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border);
 }
 .about-contact > * { position: relative; z-index: 1; }
 .about-contact-body { flex: 1; min-width: 0; }

@@ -12,7 +12,6 @@ use App\Core\Security\HtmlSanitizer;
 ?>
 <?php if ($page === null || empty($page['content'])): ?>
 <header class="page-hero">
-    <div class="halo halo-violet" aria-hidden="true"></div>
     <div class="container">
         <span class="eyebrow"><?= e(t('page.generic.eyebrow')) ?></span>
         <h1 class="page-title"><?= e($page['title'] ?? t('page.generic.eyebrow')) ?></h1>
@@ -27,7 +26,6 @@ use App\Core\Security\HtmlSanitizer;
 </section>
 <?php else: ?>
 <header class="page-hero">
-    <div class="halo halo-violet" aria-hidden="true"></div>
     <div class="container">
         <span class="eyebrow"><?= e(t('page.generic.eyebrow')) ?></span>
         <h1 class="page-title"><?= e($page['title'] ?? t('page.generic.eyebrow')) ?></h1>

@@ -77,19 +77,19 @@ declare(strict_types=1);
           data-confirm-button="Régénérer membres">
         <?= csrf_field() ?>
         <input type="hidden" name="scope" value="membres">
-        <button type="submit" class="btn btn-outline btn-sm">👥 Régénérer le lien membres</button>
+        <button type="submit" class="btn btn-outline btn-sm">Régénérer le lien membres</button>
     </form>
     <form method="post" action="<?= e(url('/admin/kiosques/regenerate')) ?>" style="margin-top: 0.5rem;"
           data-confirm="Régénérer le lien ADMIN ? Tous les liens financiers déjà copiés (hub admin, récaps) cesseront de fonctionner."
           data-confirm-button="Régénérer admins">
         <?= csrf_field() ?>
         <input type="hidden" name="scope" value="admins">
-        <button type="submit" class="btn btn-outline btn-sm">🔐 Régénérer le lien admins</button>
+        <button type="submit" class="btn btn-outline btn-sm">Régénérer le lien admins</button>
     </form>
 </div>
 
 <section class="kq-section">
-    <h2 class="kq-section-title">👥 Membres — à partager</h2>
+    <h2 class="kq-section-title">Membres — à partager</h2>
     <p class="kq-section-sub">Outils de saisie et suivi léger : aucun bénéfice ni donnée financière sensible.</p>
 
     <div class="kq-grid">
@@ -113,7 +113,7 @@ declare(strict_types=1);
 </section>
 
 <section class="kq-section">
-    <h2 class="kq-section-title">🔐 Admins — pour ton téléphone</h2>
+    <h2 class="kq-section-title">Admins — pour ton téléphone</h2>
     <p class="kq-section-sub">Données financières complètes. Les pages /admin demandent la connexion admin (mémorisée sur ton téléphone) ; les liens kiosque marchent sans connexion.</p>
 
     <div class="kq-grid">

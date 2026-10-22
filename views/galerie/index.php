@@ -99,7 +99,7 @@ $groups = $groups ?? [];
     bottom: -1px;
     width: 180px;
     height: 2px;
-    background: linear-gradient(90deg, #8b7ae0, rgba(58, 155, 184, 0));
+    background: var(--primary);
 }
 .gallery-group-title { font-size: 1.4rem; letter-spacing: -0.02em; }
 .gallery-group-date {
@@ -118,7 +118,7 @@ $groups = $groups ?? [];
 .gallery-item:hover {
     transform: translateY(-4px);
     border-color: rgba(72, 189, 211, 0.4);
-    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35), 0 0 26px rgba(58, 155, 184, 0.12);
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
 }
 </style>
 
