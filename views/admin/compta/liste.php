@@ -7,11 +7,18 @@ declare(strict_types=1);
  * aux packs d'achat. ULTRA SIMPLE — une grille de carrés : coche, chiffre,
  * nom. Utilisable en kiosque (layout kiosk, sans navigation) sur téléphone.
  *
+ * DEMANDE UNIQUE (21/10/2026) : la prévision vient du moteur ForecastEngine
+ * (même appel que la carte Réappro Analytics via ReapproDemande), le stock
+ * du théorique d'inventaire — la base utilisée est énoncée sous le sélecteur.
+ *
  * @var list<array<string,mixed>> $items
  * @var array<string,array{label:string,days:int}> $covers
  * @var string $coverKey
  * @var int    $totalUnits
  * @var float  $totalCost
+ * @var array<string,mixed> $meta
+ * @var list<array{name:string,besoin:int}> $aCompter
+ * @var list<array{name:string,stock:int}> $negatifs
  * @var bool   $kiosk
  * @var string $kioskUrl
  * @var string $kioskToken
@@ -107,6 +114,11 @@ use App\Models\Setting;
         border: 1px solid rgba(34, 197, 94, 0.5);
         color: #4ade80;
     }
+    .shop-stock.is-neg {
+        background: rgba(251, 146, 60, 0.14);
+        border-color: rgba(251, 146, 60, 0.55);
+        color: #fb923c;
+    }
     .shop-week {
         right: 0.45rem;
         background: rgba(239, 68, 68, 0.12);
@@ -142,6 +154,30 @@ use App\Models\Setting;
     .shop-legend .dot-stock { background: #4ade80; }
     .shop-legend .dot-week { background: rgba(239, 68, 68, 0.75); }
 
+    .shop-basis {
+        margin: -0.4rem 0 1.2rem; font-size: 0.8rem; color: var(--muted, #8892a6);
+    }
+    .shop-basis strong { color: var(--foreground, inherit); font-weight: 700; }
+
+    .shop-note {
+        display: flex; gap: 0.6rem; align-items: flex-start;
+        padding: 0.7rem 1rem; margin-bottom: 1.2rem;
+        border-radius: 12px; font-size: 0.85rem; line-height: 1.45;
+    }
+    .shop-note .emoji { font-size: 1.05rem; line-height: 1.2; }
+    .shop-note ul { margin: 0.3rem 0 0; padding-left: 1.1rem; }
+    .shop-note-warn {
+        background: rgba(251, 146, 60, 0.10);
+        border: 1px solid rgba(251, 146, 60, 0.45);
+    }
+    .shop-note-info {
+        background: rgba(96, 165, 250, 0.08);
+        border: 1px solid rgba(96, 165, 250, 0.35);
+    }
+    .shop-note code {
+        font-weight: 800; white-space: nowrap;
+    }
+
     @media print {
         .shop-seg, details, .compta-head .eyebrow { display: none !important; }
         body { background: #fff !important; color: #111 !important; }
@@ -168,6 +204,44 @@ use App\Models\Setting;
     <?php endforeach; ?>
 </div>
 
+<?php
+$dateStock = !empty($meta['date_stock'])
+    ? (new DateTimeImmutable(substr((string) $meta['date_stock'], 0, 10)))->format('d/m/Y')
+    : null;
+?>
+<p class="shop-basis">
+    Base : demande = <strong><?= e((string) ($meta['demande'] ?? 'prévision')) ?></strong>
+    (<?= e((string) ($meta['fenetre'] ?? '')) ?><?= !empty($meta['creuse']) ? ', période creuse ' . e((string) $meta['creuse']) : '' ?>)
+    · stock = <strong>théorique inventaire</strong><?= $dateStock !== null ? ' (comptages jusqu\'au ' . e($dateStock) . ')' : '' ?>.
+</p>
+
+<?php if (($negatifs ?? []) !== []): ?>
+<aside class="shop-note shop-note-warn" role="alert">
+    <span class="emoji">⚠️</span>
+    <div>
+        <strong>Anomalie d'inventaire — stock théorique négatif (survente), à recompter :</strong>
+        <ul>
+            <?php foreach ($negatifs as $n): ?>
+                <li><code><?= e((string) $n['name']) ?></code> : <?= (int) $n['stock'] ?></li>
+            <?php endforeach; ?>
+        </ul>
+        Ces produits restent dans la liste : leur besoin est calculé <em>sans</em> déduire le stock négatif.
+    </div>
+</aside>
+<?php endif; ?>
+
+<?php if (($aCompter ?? []) !== []): ?>
+<aside class="shop-note shop-note-info">
+    <span class="emoji">📦</span>
+    <div>
+        <strong>Sans donnée d'inventaire — à compter d'abord</strong> (besoin prévu sur la couverture, à titre indicatif) :
+        <?php foreach ($aCompter as $a): ?>
+            <code><?= e((string) $a['name']) ?> · <?= (int) $a['besoin'] ?></code>
+        <?php endforeach; ?>
+    </div>
+</aside>
+<?php endif; ?>
+
 <?php if ($items !== []): ?>
 <div class="shop-total">
     <strong><?= (int) $totalUnits ?> unités</strong>
@@ -188,10 +262,14 @@ use App\Models\Setting;
             data-key="<?= e((string) $r['name']) ?>"
             role="button" tabindex="0" aria-pressed="false"
             title="Clique pour cocher (acheté) — re-clique pour décocher. Partagé avec tout le monde.">
+            <?php if ((int) $r['stock'] < 0): ?>
+            <span class="shop-stock is-neg" title="Stock théorique NÉGATIF (survente) — à recompter ; besoin calculé sans le stock"><?= (int) $r['stock'] ?> ⚠</span>
+            <?php else: ?>
             <span class="shop-stock" title="Stock théorique restant (dernier comptage + achats − ventes − pertes)"><?= (int) $r['stock'] ?></span>
-            <span class="shop-week" title="Consommation par semaine (7 j/7)"><?= number_format((float) $r['avg_week'], (float) $r['avg_week'] >= 10 ? 0 : 1, ',', ' ') ?></span>
+            <?php endif; ?>
+            <span class="shop-week" title="Prévision par semaine (moteur, jours ouverts)"><?= number_format((float) $r['prev_week'], (float) $r['prev_week'] >= 10 ? 0 : 1, ',', ' ') ?></span>
             <?php if ((int) $r['to_order'] > 0): ?>
-            <span class="shop-qty"><?= (int) $r['to_order'] ?></span>
+            <span class="shop-qty" title="À commander : besoin (<?= (int) ($r['besoin'] ?? $r['to_order']) ?>) − stock, arrondi au pack"><?= (int) $r['to_order'] ?></span>
         <?php else: ?>
             <span class="shop-qty is-unknown" title="Stock épuisé — consommation inconnue sur la période">—</span>
         <?php endif; ?>
@@ -206,8 +284,8 @@ use App\Models\Setting;
 <?php endif; ?>
 
 <p class="shop-legend">
-    <span class="leg"><span class="dot dot-stock"></span> stock restant</span>
-    <span class="leg"><span class="dot dot-week"></span> consommé par semaine</span>
+    <span class="leg"><span class="dot dot-stock"></span> stock théorique restant</span>
+    <span class="leg"><span class="dot dot-week"></span> prévu par semaine (moteur)</span>
 </p>
 
 <?php if ($kiosk): ?>

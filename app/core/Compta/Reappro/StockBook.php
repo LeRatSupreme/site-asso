@@ -1,0 +1,181 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Core\Compta\Reappro;
+
+use App\Core\Compta\StockPublic;
+
+/**
+ * Livre de stock UNIQUE du réapprovisionnement (pur, sans accès DB).
+ *
+ * Une seule source de vérité pour le stock consommé par TOUTES les pages
+ * réappro (Liste de courses, carte Réapprovisionnement Analytics, page
+ * Réappro détaillée) : le stock THÉORIQUE de l'inventaire (dernier
+ * comptage + achats − ventes − pertes), avec sa date (dernier comptage).
+ * L'ancienne source « product_stocks » (photo mise à jour aux mouvements,
+ * bornée à 0, ventes non déduites) produisait des stocks différents de
+ * la liste de courses (ex. prod 21/10/2026 : Monster Rose 13 contre 3
+ * en théorique) — elle n'est plus lue ici.
+ *
+ * RAPPROCHEMENT DES NOMS (exigence : « redbull Peach » / « Redbull Peach »,
+ * « pepsi Zero » / « Pepsi sans sucre » ne formaient qu'une seule ligne
+ * d'un côté, deux de l'autre) — trois passes déterministes :
+ *  1. EXACTE insensible à la casse/espaces (trim + strtolower) ;
+ *  2. NORMALISÉE (minuscules, accents retirés, ponctuation et espaces
+ *     supprimés — StockPublic::normalizeKey : « Red Bull », « red-bull »
+ *     et « redbull » convergent) ;
+ *  3. ALIAS (table product_aliases : raw_description → product_key),
+ *     exact puis normalisé, la clé cible étant relue par les passes 1-2.
+ *
+ * Le stock théorique PEUT être négatif (survente) : il est retourné tel
+ * quel — le signaler comme anomalie d'inventaire et ne jamais l'ajouter
+ * au besoin relève du calcul de besoin (BesoinListe / ProductForecast).
+ */
+final class StockBook
+{
+    /** @var array<string,array{stock:int,at:?string}> entrées par clé EXACTE (product_key d'inventaire) */
+    private array $entries;
+
+    /** @var array<string,array{stock:int,at:?string}> entrées par clé normalisée (conflits : max) */
+    private array $byNorm;
+
+    /** @var array<string,string> alias par libellé brut normalisé → product_key */
+    private array $aliasByNorm;
+
+    /** @var array<string,string> alias par libellé brut EXACT (trim) → product_key */
+    private array $aliasExact;
+
+    /**
+     * @param array<string,int>                    $theoretical Stocks théoriques (clé = product_key d'inventaire).
+     * @param array<string,array{at:?string,qty:int,gap:int}> $lastCounts Derniers comptages par product_key (date).
+     * @param list<array{raw_description:string,product_key:string}> $aliases Lignes product_aliases.
+     */
+    public function __construct(array $theoretical, array $lastCounts = [], array $aliases = [])
+    {
+        $this->entries = [];
+        foreach ($theoretical as $key => $stock) {
+            $k = trim((string) $key);
+            if ($k === '') {
+                continue;
+            }
+            $this->entries[strtolower($k)] = [
+                'stock' => (int) $stock,
+                'at'    => isset($lastCounts[$k]['at']) ? (string) $lastCounts[$k]['at'] : null,
+            ];
+        }
+        // Comptages sans stock théorique (ne devrait pas arriver) : date seule.
+        foreach ($lastCounts as $key => $c) {
+            $k = trim((string) $key);
+            $lk = strtolower($k);
+            if ($k !== '' && !isset($this->entries[$lk])) {
+                $this->entries[$lk] = ['stock' => 0, 'at' => isset($c['at']) ? (string) $c['at'] : null];
+            }
+        }
+
+        $this->byNorm = [];
+        foreach ($this->entries as $lk => $e) {
+            $norm = StockPublic::normalizeKey($lk);
+            if ($norm === '') {
+                continue;
+            }
+            if (!isset($this->byNorm[$norm])) {
+                $this->byNorm[$norm] = $e;
+                continue;
+            }
+            // Conflit de normalisation : comportement conservateur (max),
+            // date la plus récente — cohérent avec StockPublic::normalizeMap.
+            $this->byNorm[$norm] = [
+                'stock' => max($e['stock'], $this->byNorm[$norm]['stock']),
+                'at'    => self::dateMax($e['at'], $this->byNorm[$norm]['at']),
+            ];
+        }
+
+        $this->aliasExact = [];
+        $this->aliasByNorm = [];
+        foreach ($aliases as $alias) {
+            $raw = trim((string) ($alias['raw_description'] ?? ''));
+            $to  = trim((string) ($alias['product_key'] ?? ''));
+            if ($raw === '' || $to === '') {
+                continue;
+            }
+            $this->aliasExact[$raw] = $to;
+            $norm = StockPublic::normalizeKey($raw);
+            if ($norm !== '') {
+                $this->aliasByNorm[$norm] = $to;
+            }
+        }
+    }
+
+    /**
+     * Résout le stock d'un produit (clé de vente / libellé moteur).
+     *
+     * @return null|array{key:string,stock:int,at:?string,via:'exact'|'normalise'|'alias'}
+     *              null = produit sans AUCUNE donnée d'inventaire (ni comptage,
+     *              ni achat, ni perte) : à lister à part (« à compter »).
+     */
+    public function resolve(string $productKey): ?array
+    {
+        $trim = trim($productKey);
+        if ($trim === '') {
+            return null;
+        }
+
+        // Passe 1 : exacte (casse/espaces de bords ignorés).
+        $lk = strtolower($trim);
+        if (isset($this->entries[$lk])) {
+            return ['key' => $trim, 'stock' => $this->entries[$lk]['stock'], 'at' => $this->entries[$lk]['at'], 'via' => 'exact'];
+        }
+
+        // Passe 2 : normalisée (« Redbull  Peach » == « redbull peach »).
+        $norm = StockPublic::normalizeKey($trim);
+        if ($norm !== '' && isset($this->byNorm[$norm])) {
+            $e = $this->byNorm[$norm];
+
+            return ['key' => $trim, 'stock' => $e['stock'], 'at' => $e['at'], 'via' => 'normalise'];
+        }
+
+        // Passe 3 : alias (« pepsi Zero » → « Pepsi sans sucre » si l'alias
+        // existe), puis re-résolution EXACTE puis NORMALISÉE de la cible.
+        $cible = $this->aliasExact[$trim] ?? ($norm !== '' ? ($this->aliasByNorm[$norm] ?? null) : null);
+        if (is_string($cible) && $cible !== '') {
+            $cTrim = trim($cible);
+            $cLk = strtolower($cTrim);
+            if (isset($this->entries[$cLk])) {
+                return ['key' => $cTrim, 'stock' => $this->entries[$cLk]['stock'], 'at' => $this->entries[$cLk]['at'], 'via' => 'alias'];
+            }
+            $cNorm = StockPublic::normalizeKey($cTrim);
+            if ($cNorm !== '' && isset($this->byNorm[$cNorm])) {
+                $e = $this->byNorm[$cNorm];
+
+                return ['key' => $cTrim, 'stock' => $e['stock'], 'at' => $e['at'], 'via' => 'alias'];
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Date du comptage le plus récent du livre (affichage global « stock
+     * au JJ/MM/AAAA ») ; null si aucun comptage.
+     */
+    public function derniereDate(): ?string
+    {
+        $max = null;
+        foreach ($this->entries as $e) {
+            $max = self::dateMax($max, $e['at']);
+        }
+
+        return $max;
+    }
+
+    /** La plus récente de deux dates 'Y-m-d HH:MM:SS' (null-aware). */
+    private static function dateMax(?string $a, ?string $b): ?string
+    {
+        if ($a === null) {
+            return $b;
+        }
+
+        return ($b !== null && $b > $a) ? $b : $a;
+    }
+}

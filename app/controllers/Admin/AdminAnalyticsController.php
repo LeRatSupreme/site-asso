@@ -5,10 +5,9 @@ declare(strict_types=1);
 namespace App\Controllers\Admin;
 
 use App\Core\Compta\ComptaCalc;
-use App\Core\Compta\Forecast\ForecastEngine;
 use App\Core\Compta\Forecast\SlowPeriods;
 use App\Models\Analytics;
-use App\Models\AnalyticsForecastData;
+use App\Models\ReapproDemande;
 use App\Models\Sale;
 use App\Models\Setting;
 
@@ -216,30 +215,19 @@ final class AdminAnalyticsController extends AdminBaseController
         // seul appel. Défaut 30 j (~20 jours ouverts) : au-delà du seuil
         // TREND_MIN_OPEN_DAYS de la porte de tendance, la fenêtre la plus
         // large donne un niveau plus stable (fw=7 reste possible).
-        $fw = self::fenetreApprentissage($this->filter('fw', ''));
+        //
+        // L'appel au moteur vit dans ReapproDemande (couche modèle) : la
+        // carte Réappro de CE page et la LISTE DE COURSES partagent la
+        // MÊME demande et le MÊME stock théorique (cohérence exigée le
+        // 21/10/2026) ; le contrôleur ne fait que mapper les sorties.
+        $demande  = ReapproDemande::calculer($this->filter('fw', ''), $now, $goal);
 
-        $trackFrom = $now->modify('-' . ($fw - 1) . ' days')->format('Y-m-d');
-
-        $dataset  = AnalyticsForecastData::dataset($trackFrom, $todayKey);
-
-        // ---- Période creuse saisie à la main (setting, ex. Toussaint) ----
-        // Config neutre si absente ; valeur stockée invalide → null (sans
-        // ajustement), cf. SlowPeriods::parse.
-        $creuseRaw = trim((string) Setting::get('analytics_periode_creuse', ''));
-        $creuse    = SlowPeriods::parse($creuseRaw);
-
-        // ---- Backtest sur l'HISTORIQUE COMPLET (première vente → hier) ----
-        // 2ᵉ dataset (jours du flux courant seulement) : BACKTEST_START=10
-        // n'est plus compté dans la fenêtre fw, le backtest à origine
-        // glissante couvre toute la vie de la cafétéria (borne 90 j).
-        $histDays = AnalyticsForecastData::currentFlowDays(AnalyticsForecastData::firstSaleDate(), $todayKey);
-
-        $forecast = ForecastEngine::forecast($dataset, $now, $now->format('H:i'), [
-            'horizon'       => 7,
-            'goal_weekly'   => $goal,
-            'backtest_days' => $histDays,
-            'slow_periods'  => $creuse,
-        ]);
+        $fw        = $demande['fw'];
+        $trackFrom = $demande['trackFrom'];
+        $dataset   = $demande['dataset'];
+        $creuse    = $demande['creuse'];
+        $creuseRaw = $demande['creuseRaw'];
+        $forecast  = $demande['forecast'];
 
         // ---- Estimation du jour : mappage SANS recalcul métier ----
         $dayTrack = $this->dayTrackFromForecast($forecast, $fw);
@@ -416,6 +404,7 @@ final class AdminAnalyticsController extends AdminBaseController
             'benefice'       => $forecast['benefice'],
             'produits_reappro' => $forecast['produits'],
             'anomalies'      => $forecast['anomalies'],
+            'reappro_meta'   => $demande['meta'],
             'goal'           => $goal,
             'meta'           => $meta,
             'reco'           => $recoPayload,
@@ -475,14 +464,12 @@ final class AdminAnalyticsController extends AdminBaseController
      * défaut 30 (≈ 20 jours ouverts — au-dessus du seuil d'activation de la
      * tendance Hyper::TREND_MIN_OPEN_DAYS, niveau plus stable ; fw=7 reste
      * possible). GET invalide ou absent → défaut. Public statique : testable
-     * en unitaire sans base (source unique de la règle, consommée par
-     * buildPage).
+     * en unitaire sans base ; LA RÈGLE vit dans ReapproDemande::fenetre
+     * (consommée aussi par la liste de courses — même fenêtre partout).
      */
     public static function fenetreApprentissage(?string $fwRaw): int
     {
-        $raw = trim((string) $fwRaw);
-
-        return in_array($raw, ['7', '14', '30'], true) ? (int) $raw : 30;
+        return ReapproDemande::fenetre($fwRaw);
     }
 
     /**

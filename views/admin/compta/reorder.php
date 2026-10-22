@@ -402,6 +402,7 @@ foreach ($rows as $r) {
 </div>
 
 <p class="card-meta">
+    Cette page analyse la consommation <strong>observée</strong> sur la période ; la <strong>liste de courses</strong> et la carte <strong>Réappro Analytics</strong> utilisent la prévision du moteur (7 jours ouverts, calibration CA) — même <strong>stock théorique</strong> partout, demande adaptée à chaque usage.
     Moyennes calculées sur les <strong>jours calendaires</strong> de la période analysée : le <strong>week-end est inclus</strong> (7 j/7), comme les ventes qu'il génère.
     Conso / jour = vendus ÷ jours analysés · Conso / semaine = conso / jour × 7 · Conso / mois = conso / jour × 30,44.
     L'<strong>autonomie</strong> est le nombre de jours avant rupture, week-end compris.
