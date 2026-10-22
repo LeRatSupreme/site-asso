@@ -661,6 +661,10 @@ final class Sale extends Model
     /**
      * Agrégats par produit canonique pour un mois donné.
      *
+     * La catégorie est agrégée (MAX) : la requête reste valide sous le
+     * sql_mode ONLY_FULL_GROUP_BY (défaut MySQL 8) — sinon 500 sur la
+     * page Coûts de revient qui n'attrape pas d'exception SQL.
+     *
      * @return list<array<string,mixed>>
      */
     public static function byProduct(int $year, ?int $month): array
@@ -674,7 +678,7 @@ final class Sale extends Model
 
         $sql = 'SELECT
                     COALESCE(product_key, description) AS product_key,
-                    COALESCE(NULLIF(category, ""), "Non classé") AS category,
+                    COALESCE(MAX(NULLIF(category, "")), "Non classé") AS category,
                     SUM(quantity) AS qty,
                     SUM(price_ttc) AS ca,
                     AVG(price_ttc / NULLIF(quantity, 0)) AS avg_price,
@@ -722,7 +726,7 @@ final class Sale extends Model
 
         $sql = 'SELECT
                     COALESCE(product_key, description) AS product_key,
-                    COALESCE(NULLIF(category, ""), "Non classé") AS category,
+                    COALESCE(MAX(NULLIF(category, "")), "Non classé") AS category,
                     SUM(quantity) AS qty,
                     SUM(price_ttc) AS ca,
                     AVG(price_ttc / NULLIF(quantity, 0)) AS avg_price,
