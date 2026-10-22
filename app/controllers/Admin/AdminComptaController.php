@@ -2180,9 +2180,14 @@ final class AdminComptaController extends AdminBaseController
             'all'    => 'Tout',
             'custom' => 'Personnalisé',
         ];
-        $ref = (string) ($_GET['ref'] ?? 'week');
+        // Défaut « 14 derniers jours » : c'est la fenêtre d'analyse du
+        // contrat réappro (besoin brut = ceil(ventes / 14 j × horizon),
+        // testé par ComptaConsistencyTest::test_reappro_arrondit_au_pack)
+        // — la demande moteur de la liste est calibrée pareil. L'option
+        // « Semaine en cours » reste choisissable dans refOptions.
+        $ref = (string) ($_GET['ref'] ?? '14d');
         if (!array_key_exists($ref, $refOptions)) {
-            $ref = 'week';
+            $ref = '14d';
         }
 
         $today = date('Y-m-d');
