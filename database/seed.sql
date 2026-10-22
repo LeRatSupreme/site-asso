@@ -79,7 +79,9 @@ INSERT INTO settings (id, `key`, value, type, label, `group`) VALUES
     ('set_reco_immobilise_seuil_eur',   'reco_immobilise_seuil_eur',    '30',   'text', 'Seuil stock immobilisé gamme (€)',                 'recommandations'),
     ('set_reco_max_actives',            'reco_max_actives',             '5',    'text', 'Nombre max d''idées actives',                      'recommandations'),
     ('set_reco_max_idees',              'reco_max_idees',               '3',    'text', 'Nombre max d''idées commerciales',                 'recommandations'),
-    ('set_reco_max_corrections',        'reco_max_corrections',         '5',    'text', 'Nombre max de corrections affichées',              'recommandations')
+    ('set_reco_max_corrections',        'reco_max_corrections',         '5',    'text', 'Nombre max de corrections affichées',              'recommandations'),
+    ('set_dashboard_baisse_attention_pct', 'dashboard_baisse_attention_pct', '-10', 'text', 'Baisse du résultat net → orange (%)', 'dashboard'),
+    ('set_dashboard_baisse_alerte_pct',    'dashboard_baisse_alerte_pct',    '-25', 'text', 'Baisse du résultat net → rouge (%)',  'dashboard')
 ON DUPLICATE KEY UPDATE value = VALUES(value);
 
 -- -------------------------------------------------------------------

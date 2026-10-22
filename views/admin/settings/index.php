@@ -18,6 +18,7 @@ $groupConfig = [
     'events'    => ['label' => 'Événements'],
     'social'    => ['label' => 'Réseaux sociaux & Discord'],
     'recommandations' => ['label' => 'Recommandations commerciales'],
+    'dashboard'       => ['label' => 'Dashboard compta'],
 ];
 
 // Libellés lisibles par clé technique.
@@ -63,6 +64,8 @@ $niceLabels = [
     'reco_immobilise_seuil_eur'   => 'Seuil stock immobilisé gamme (€)',
     'reco_max_idees'              => "Nombre max d'idées commerciales",
     'reco_max_corrections'        => 'Nombre max de corrections affichées',
+    'dashboard_baisse_attention_pct' => 'Baisse du résultat net → orange (%)',
+    'dashboard_baisse_alerte_pct'    => 'Baisse du résultat net → rouge (%)',
 ];
 
 $boolKeys = ['maintenance_mode', 'orders_enabled', 'registrations_enabled', 'sumup_enabled', 'discord_enabled', 'membership_enabled'];
@@ -95,6 +98,11 @@ $passwordKeys = ['smtp_pass', 'brevo_api_key', 'discord_webhook_url'];
                 <p class="settings-help">
                     Seuils du moteur de recommandations commerciales (page Opérations).
                     Les fractions s'expriment entre 0 et 1 (0.15 = 15 %).
+                </p>
+            <?php elseif ($group === 'dashboard'): ?>
+                <p class="settings-help">
+                    Seuils du verdict du dashboard Comptabilité : une baisse du résultat net
+                    au-delà du seuil orange affiche « Attention », au-delà du seuil rouge « Urgent ».
                 </p>
             <?php endif; ?>
 

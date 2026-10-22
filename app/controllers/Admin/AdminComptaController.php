@@ -9,15 +9,22 @@ use App\Core\Compta\AliasSuggester;
 use App\Core\Compta\CardFees;
 use App\Core\Compta\CashLedger;
 use App\Core\Compta\ComptaCalc;
+use App\Core\Compta\Dashboard\Afaire;
+use App\Core\Compta\Dashboard\Cartes;
+use App\Core\Compta\Dashboard\Hyper;
+use App\Core\Compta\Dashboard\Verdict;
 use App\Core\Compta\Kiosk;
 use App\Core\Compta\ProductAutoSync;
 use App\Core\Compta\ScanCatalogMatcher;
 use App\Core\Compta\StockPublic;
 use App\Core\Compta\SumUpCsvParser;
 use App\Core\Logger;
+use App\Models\Analytics;
+use App\Models\CashCount;
 use App\Models\Expense;
 use App\Models\ImportBatch;
 use App\Models\InventoryCount;
+use App\Models\InventoryTablet;
 use App\Models\Product;
 use App\Models\ProductAlias;
 use App\Models\ProductCategory;
@@ -71,12 +78,13 @@ final class AdminComptaController extends AdminBaseController
         // (L'horizon de couverture n'influence pas les alertes, seul
         // compte le rythme de consommation journalier.)
         $refFrom = date('Y-m-d', strtotime('-29 days'));
-        $reorderAlerts = $this->reorderData(
+        $reorder = $this->reorderData(
             5,
             $refFrom,
             date('Y-m-d'),
             ComptaCalc::calendarDaysBetween($refFrom, date('Y-m-d'))
-        )['alerts'];
+        );
+        $reorderAlerts = $reorder['alerts'];
 
         // Suivi avancé : dépenses, résultat net, fiabilité des coûts, alertes.
         $expenseAgg = Expense::aggregatesBetween($period['from'], $period['to']);
@@ -84,6 +92,7 @@ final class AdminComptaController extends AdminBaseController
         $vat = Sale::vatByRateBetween($period['from'], $period['to']);
         $lossLeaders = Sale::lossLeadersBetween($period['from'], $period['to']);
         $invGaps = InventoryCount::recentGaps(30);
+        $invPending = InventoryTablet::pendingSessions();
         $lastImport = Sale::lastImportAt();
 
         $vatTotal = 0.0;
@@ -94,6 +103,189 @@ final class AdminComptaController extends AdminBaseController
         $daysSinceImport = $lastImport !== null
             ? (new \DateTimeImmutable($lastImport))->diff(new \DateTimeImmutable('now'))->days
             : null;
+
+        // ── Complétude de la période (règle de mission, documentée) ─────
+        // $periodeComplete = la fenêtre sélectionnée est entièrement passée
+        // (to < aujourd'hui) ET les données sont plausiblement à jour dessus
+        // (un import SumUp existe ET couvre le début de la fenêtre). Sans
+        // import du tout → incomplète : aucun % ni verdict définitif.
+        // Les presets « 1d / 7d / 30d » (fin = aujourd'hui) et « all »
+        // (bornes ouvertes) sont donc toujours incomplets.
+        $today = date('Y-m-d');
+        $periodeComplete = $period['from'] !== null
+            && $period['to'] !== null
+            && $period['to'] < $today
+            && $lastImport !== null
+            && $lastImport >= $period['from'];
+
+        // ── Fenêtre PRÉCÉDENTE : même longueur, finissant J-1 avant $from
+        //      (même calcul qu'Analytics::kpisPrevious — pattern maison).
+        //      « all » (bornes null) n'a pas de précédent comparable.
+        $prevFrom = null;
+        $prevTo = null;
+        if ($period['from'] !== null && $period['to'] !== null) {
+            $days = ComptaCalc::calendarDaysBetween($period['from'], $period['to']);
+            $prevTo = (new \DateTimeImmutable($period['from']))->modify('-1 day')->format('Y-m-d');
+            $prevFrom = (new \DateTimeImmutable($period['from']))->modify('-' . $days . ' days')->format('Y-m-d');
+        }
+
+        // Fiable (pattern analytics : AdminAnalyticsController::prevComplete)
+        // si la fenêtre précédente est entièrement passée ET commence après
+        // la première vente importée (pas de comparaison sur du vide).
+        $precedentComplet = $prevFrom !== null
+            && $prevTo !== null
+            && $prevTo < $today
+            && $prevFrom >= Analytics::firstSaleDate();
+
+        $prevAgg = null;
+        if ($precedentComplet) {
+            $prevAgg = Sale::aggregatesBetween($prevFrom, $prevTo);
+            $prevExpenses = Expense::aggregatesBetween($prevFrom, $prevTo);
+        }
+
+        // ── Objectif de CA (période complète seulement) : pro-rata de
+        //      l'objectif HEBDOMADAIRE existant (source unique, setting
+        //      « analytics_weekly_goal ») sur les jours calendaires de la
+        //      fenêtre : objectif = hebdo × nbJours / 7.
+        $objectif = null;
+        if ($periodeComplete) {
+            $weeklyGoal = (float) Setting::get('analytics_weekly_goal', '500');
+            $days = ComptaCalc::calendarDaysBetween((string) $period['from'], (string) $period['to']);
+            $objectif = round($weeklyGoal * $days / 7.0, 2);
+        }
+
+        // ── Cœur « Niveau 1 » (classes pures) : verdict, cartes, à faire.
+        //      Les surcharges de seuils viennent des Paramètres (clés
+        //      « dashboard_* », préfixe attendu par Hyper::valeur) ; valeur
+        //      vide → constante Hyper (jamais 0, qui alerterait à tort).
+        $parametres = [
+            'dashboard_baisse_attention_pct' => self::seuilSetting('dashboard_baisse_attention_pct', Hyper::BAISSE_ATTENTION_PCT),
+            'dashboard_baisse_alerte_pct'    => self::seuilSetting('dashboard_baisse_alerte_pct', Hyper::BAISSE_ALERTE_PCT),
+        ];
+
+        $actuel = [
+            'ca'       => (float) $agg['ca'],
+            'profit'   => (float) $agg['profit'],
+            'qty'      => (float) $agg['qty'],
+            'expenses' => (float) $expenseAgg['ttc'],
+        ];
+        $precedent = $precedentComplet ? [
+            'ca'       => (float) $prevAgg['ca'],
+            'profit'   => (float) $prevAgg['profit'],
+            'qty'      => (float) $prevAgg['qty'],
+            'expenses' => (float) $prevExpenses['ttc'],
+        ] : null;
+
+        $verdict = Verdict::construire(
+            $actuel['profit'] - $actuel['expenses'],
+            $precedent !== null ? $precedent['profit'] - $precedent['expenses'] : null,
+            $precedentComplet,
+            $periodeComplete,
+            $actuel['ca'],
+            $objectif,
+            $parametres
+        );
+        $cartes = Cartes::construire($actuel, $precedent, $precedentComplet, $periodeComplete, $parametres);
+
+        // ── Bloc « À faire » : items construits ici, triés par Afaire. ──
+        $afaireItems = [];
+
+        // 1. Ruptures réappro (réutilise reorderData()) : produits en état
+        //    « reorder », dont ceux déjà à zéro (plus urgents).
+        $nbRupture = 0;
+        $nbRuptureZero = 0;
+        foreach ($reorder['rows'] as $row) {
+            if (($row['state'] ?? '') === 'reorder') {
+                $nbRupture++;
+                if ((int) ($row['stock'] ?? 0) <= 0) {
+                    $nbRuptureZero++;
+                }
+            }
+        }
+        if ($nbRupture > 0) {
+            $afaireItems[] = [
+                'cle'     => 'rupture',
+                'urgence' => $nbRuptureZero > 0 ? 3 : 2,
+                'texte'   => $nbRuptureZero > 0
+                    ? sprintf('%d produits en rupture (dont %d à zéro)', $nbRupture, $nbRuptureZero)
+                    : sprintf('%d produits en rupture', $nbRupture),
+                'lien'    => url('/admin/compta/liste'),
+            ];
+        }
+
+        // 2. Inventaire : écarts des 30 derniers jours + sessions tablette
+        //    en attente de correction.
+        $nbGaps = count($invGaps);
+        $nbPending = count($invPending);
+        if ($nbGaps + $nbPending > 0) {
+            $afaireItems[] = [
+                'cle'     => 'inventaire',
+                'urgence' => 2,
+                'texte'   => $nbPending > 0
+                    ? sprintf("%d écarts d'inventaire sur 30 jours (dont %d sessions tablette en attente)", $nbGaps, $nbPending)
+                    : sprintf("%d écarts d'inventaire sur 30 jours", $nbGaps),
+                'lien'    => url('/admin/compta/inventaire'),
+            ];
+        }
+
+        // 3. Coûts manquants : ventes sans lot de coût connu (% du CA
+        //    seulement si la période est complète).
+        $uncovered = (float) ($coverage['uncovered'] ?? 0);
+        if ($uncovered > 0.0) {
+            $caProducts = (float) $agg['ca_products'];
+            $pct = ($periodeComplete && $caProducts > 0.0)
+                ? sprintf(' (%s %% du CA)', number_format($uncovered / $caProducts * 100, 1, ',', ' '))
+                : '';
+            $afaireItems[] = [
+                'cle'     => 'couts',
+                'urgence' => 2,
+                'texte'   => formatPrice($uncovered) . ' de ventes sans coût connu' . $pct,
+                'lien'    => url('/admin/compta/couts'),
+            ];
+        }
+
+        // 4. Import SumUp : absent → urgent ; ≥ 14 j → urgent ; ≥ 7 j →
+        //    à traiter ; < 7 j → rien à signaler.
+        if ($daysSinceImport === null) {
+            $afaireItems[] = [
+                'cle'     => 'import',
+                'urgence' => 3,
+                'texte'   => 'Aucun import SumUp connu',
+                'lien'    => url('/admin/compta/import'),
+            ];
+        } elseif ($daysSinceImport >= 14) {
+            $afaireItems[] = [
+                'cle'     => 'import',
+                'urgence' => 3,
+                'texte'   => sprintf('Dernier import SumUp il y a %d jours', $daysSinceImport),
+                'lien'    => url('/admin/compta/import'),
+            ];
+        } elseif ($daysSinceImport >= 7) {
+            $afaireItems[] = [
+                'cle'     => 'import',
+                'urgence' => 2,
+                'texte'   => sprintf('Dernier import SumUp il y a %d jours', $daysSinceImport),
+                'lien'    => url('/admin/compta/import'),
+            ];
+        }
+
+        // 5. Caisse : liquide encaissé depuis le dernier comptage — au-delà
+        //    de 0,50 €, un comptage est attendu (urgence maximale).
+        $lastCountAt = CashCount::lastCountAt();
+        $liquide = Sale::sumLiquidSince($lastCountAt);
+        if ($liquide > 0.5) {
+            $depuis = $lastCountAt !== null
+                ? 'depuis le dernier comptage (' . formatDate($lastCountAt) . ')'
+                : 'depuis toujours';
+            $afaireItems[] = [
+                'cle'     => 'caisse',
+                'urgence' => 3,
+                'texte'   => 'Caisse non comptée : ' . formatPrice($liquide) . ' de liquide ' . $depuis,
+                'lien'    => url('/admin/compta/caisse'),
+            ];
+        }
+
+        $afaire = Afaire::trier($afaireItems, $parametres);
 
         $this->renderAdmin('admin/compta/dashboard', [
             'title'        => 'Comptabilité',
@@ -111,14 +303,36 @@ final class AdminComptaController extends AdminBaseController
             'reorderAlerts'=> $reorderAlerts,
             'margin'       => ComptaCalc::marginPercent($agg['profit'], $agg['ca_products']),
             'expenseTtc'   => $expenseAgg['ttc'],
+            'expenseCount' => (int) ($expenseAgg['count'] ?? 0),
             'netResult'    => $agg['profit'] - $expenseAgg['ttc'],
             'noCostCa'     => $coverage['uncovered'],
+            'vat'          => $vat,
             'vatTotal'     => $vatTotal,
             'lossLeaders'  => $lossLeaders,
             'invGaps'      => array_slice($invGaps, 0, 5),
             'lastImport'   => $lastImport,
             'daysSinceImport' => $daysSinceImport,
+            // Niveau 1 (refonte 3 niveaux).
+            'verdict'         => $verdict,
+            'cartes'          => $cartes,
+            'afaire'          => $afaire,
+            'periode_complete'=> $periodeComplete,
+            'precedent_complet'=> $precedentComplet,
+            'prev_from'       => $prevFrom,
+            'prev_to'         => $prevTo,
+            'objectif'        => $objectif,
         ]);
+    }
+
+    /**
+     * Seuil du dashboard lu en base (clé « dashboard_* ») : valeur vide ou
+     * absente → constante Hyper (jamais 0, qui alerterait à tort).
+     */
+    private static function seuilSetting(string $key, float $defaut): float
+    {
+        $raw = trim((string) Setting::get($key, (string) $defaut));
+
+        return $raw !== '' ? (float) $raw : $defaut;
     }
 
     // -----------------------------------------------------------------

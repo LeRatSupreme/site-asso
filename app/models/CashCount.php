@@ -57,6 +57,24 @@ final class CashCount extends Model
     }
 
     /**
+     * Date-heure du dernier comptage de caisse (« YYYY-MM-DD HH:MM:SS »),
+     * ou null si aucun comptage n'a jamais été enregistré.
+     *
+     * Utilisé par le dashboard : liquide encaissé depuis le dernier
+     * comptage (« depuis toujours » si null).
+     */
+    public static function lastCountAt(): ?string
+    {
+        try {
+            $at = self::pdo()->query('SELECT MAX(created_at) FROM cash_counts')->fetchColumn();
+        } catch (\Throwable) {
+            return null;
+        }
+
+        return $at ? (string) $at : null;
+    }
+
+    /**
      * Comptages avec écart non nul sur les N derniers jours
      * (section « ⚠️ Écarts détectés »).
      *
