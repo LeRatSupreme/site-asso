@@ -50,6 +50,13 @@ Tous les tokens sont portés par `html.ds` ; le thème sombre surcharge
 les mêmes variables via `html.ds[data-theme="dark"]` (avec
 `color-scheme: dark`). Le thème clair est le défaut.
 
+**Thème sombre automatique** : quand le système d'exploitation est en
+mode sombre, `@media (prefers-color-scheme: dark)` applique les mêmes
+surcharges via `html.ds:not([data-theme="light"])` — sauf si
+l'utilisateur a choisi explicitement « clair » (`data-theme="light"`).
+Le choix manuel (`data-theme="dark"`) reste prioritaire et fonctionnel ;
+les deux blocs de surcharge doivent rester synchronisés.
+
 ### Neutres
 
 | Token | Clair | Rôle |

@@ -138,14 +138,14 @@ function wordlePageWindow(int $current, int $total): array
             <?php if ($page > 1): ?>
                 <a class="btn btn-outline btn-sm" href="<?= e($buildUrl($page - 1)) ?>">← Préc.</a>
             <?php else: ?>
-                <span class="btn btn-outline btn-sm" style="opacity:0.4;pointer-events:none;">← Préc.</span>
+                <span class="btn btn-outline btn-sm" aria-disabled="true" style="opacity:0.4;pointer-events:none;">← Préc.</span>
             <?php endif; ?>
 
             <?php foreach ($window as $item):
                 if ($item === '…'): ?>
-                    <span class="pagination-ellipsis">…</span>
+                    <span class="pagination-ellipsis" aria-hidden="true">…</span>
                 <?php elseif ($item === $page): ?>
-                    <span class="btn btn-primary btn-sm pagination-current"><?= $item ?></span>
+                    <span class="btn btn-primary btn-sm pagination-current" aria-current="page" aria-label="Page <?= $item ?> (page courante)"><?= $item ?></span>
                 <?php else: ?>
                     <a class="btn btn-outline btn-sm" href="<?= e($buildUrl($item)) ?>"><?= $item ?></a>
                 <?php endif;
@@ -154,7 +154,7 @@ function wordlePageWindow(int $current, int $total): array
             <?php if ($page < $totalPages): ?>
                 <a class="btn btn-outline btn-sm" href="<?= e($buildUrl($page + 1)) ?>">Suiv. →</a>
             <?php else: ?>
-                <span class="btn btn-outline btn-sm" style="opacity:0.4;pointer-events:none;">Suiv. →</span>
+                <span class="btn btn-outline btn-sm" aria-disabled="true" style="opacity:0.4;pointer-events:none;">Suiv. →</span>
             <?php endif; ?>
         </div>
 

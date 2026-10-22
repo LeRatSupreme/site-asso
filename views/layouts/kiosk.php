@@ -84,7 +84,7 @@ $siteName = Setting::get('site_name', 'AEIC');
                 <input type="text" id="kWhoNom" autocomplete="family-name" maxlength="60"></label>
             <label class="kwho-field"><span>Rôle (obligatoire — ex. vice-trésorier)</span>
                 <input type="text" id="kWhoAlias" maxlength="60" placeholder="vice-trésorier, président…"></label>
-            <p class="kwho-error" id="kWhoError" hidden>Prénom, nom et rôle sont obligatoires pour enregistrer.</p>
+            <p class="kwho-error" id="kWhoError" aria-live="polite" hidden>Prénom, nom et rôle sont obligatoires pour enregistrer.</p>
             <div class="kwho-actions">
                 <button type="button" class="btn btn-primary btn-sm" id="kWhoSave">Enregistrer</button>
             </div>
@@ -189,8 +189,37 @@ $siteName = Setting::get('site_name', 'AEIC');
             alias.value = w.alias || '';
             err.hidden = true;
             modal.hidden = false;
-            try { (prenom.value ? nom : prenom).focus(); } catch (e) {}
+            /* Focus initial : premier champ vide (ou le prénom si tout est vide). */
+            try {
+                var first = [prenom, nom, alias].filter(function (f) { return f.value.trim() === ''; })[0];
+                (first || prenom).focus();
+            } catch (e) {}
         }
+        /* Piège de focus Tab : la boucle reste dans la fenêtre (champs puis
+           bouton Enregistrer) tant qu'elle est ouverte. Échap ferme quand
+           l'identité est complète (le bouton de fermeture n'existe pas :
+           la fenêtre n'est fermable qu'en s'identifiant). */
+        modal.addEventListener('keydown', function (e) {
+            if (e.key === 'Tab' && !modal.hidden) {
+                var focusables = [prenom, nom, alias, document.getElementById('kWhoSave')]
+                    .filter(function (el) { return el && !el.disabled; });
+                var first = focusables[0];
+                var last = focusables[focusables.length - 1];
+                if (e.shiftKey && document.activeElement === first) {
+                    e.preventDefault();
+                    last.focus();
+                } else if (!e.shiftKey && document.activeElement === last) {
+                    e.preventDefault();
+                    first.focus();
+                }
+            }
+        });
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' && !modal.hidden && complete(read())) {
+                modal.hidden = true;
+                btn.focus();
+            }
+        }, true);
         /* Fermable uniquement une fois l'identité complète. */
         function close() { if (complete(read())) modal.hidden = true; }
         function save() {

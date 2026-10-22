@@ -62,7 +62,7 @@ declare(strict_types=1);
                         <td><strong><?= e((string) $a['product_key']) ?></strong></td>
                         <td>
                             <input type="hidden" name="bulk_raw[]" value="<?= e((string) $a['raw_description']) ?>" form="alias-bulk-form">
-                            <input type="text" name="bulk_cat[]" value="<?= e((string) ($a['category'] ?? '')) ?>" placeholder="ex: <?= e($categories[0] ?? 'Catégorie') ?>" list="alias-categories" style="width:130px" form="alias-bulk-form">
+                            <input type="text" name="bulk_cat[]" value="<?= e((string) ($a['category'] ?? '')) ?>" placeholder="ex: <?= e($categories[0] ?? 'Catégorie') ?>" list="alias-categories" style="width:130px" form="alias-bulk-form" aria-label="Catégorie du libellé « <?= e((string) $a['raw_description']) ?> »">
                         </td>
                         <td>
                             <form method="post" action="<?= e(url('/admin/compta/aliases/' . rawurlencode((string) $a['id']) . '/delete')) ?>" data-confirm="Supprimer cet alias ?" data-preserve-scroll>

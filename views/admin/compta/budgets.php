@@ -120,7 +120,8 @@ $resultGap = $resultRealized - $resultPlanned;
                         <td>
                             <input type="text" name="planned[<?= e($r['key']) ?>]"
                                 value="<?= $r['planned'] > 0 ? e(number_format($r['planned'], 2, ',', ' ')) : '' ?>"
-                                inputmode="decimal" style="width:130px" placeholder="—">
+                                inputmode="decimal" style="width:130px" placeholder="—"
+                                aria-label="Budget prévu (en euros) pour <?= e($r['label']) ?>">
                         </td>
                         <td class="num"><?= e(formatPrice($r['realized'])) ?></td>
                         <td class="num"><?= $hasBudget ? e(($gap > 0 ? '+' : '') . formatPrice($gap)) : '<span class="muted">—</span>' ?></td>

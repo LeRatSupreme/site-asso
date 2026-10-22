@@ -10,7 +10,6 @@ declare(strict_types=1);
 /** @var string $csrfToken */
 ?>
 <header class="page-hero">
-    <div class="halo halo-teal" aria-hidden="true"></div>
     <div class="container">
         <span class="eyebrow">Jeu de lettres</span>
         <h1 class="page-title">Wordle</h1>
@@ -67,6 +66,7 @@ declare(strict_types=1);
         <input type="text" id="wordle-input" autocomplete="off" autocorrect="off"
                autocapitalize="characters" spellcheck="false" inputmode="text"
                aria-hidden="true" tabindex="-1"
+               aria-label="Saisie du mot (clavier natif mobile, champ technique masqué)"
                style="position:absolute;left:-9999px;top:50%;opacity:0;width:1px;height:1px;font-size:16px;" />
 
         <!-- Actions fin -->

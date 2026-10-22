@@ -125,7 +125,7 @@ declare(strict_types=1);
     <section class="costs-list">
         <div class="costs-toolbar">
             <div class="search-box">
-                <input type="text" id="c-search" placeholder="Rechercher un produit…" autocomplete="off">
+                <input type="text" id="c-search" placeholder="Rechercher un produit…" autocomplete="off" aria-label="Rechercher un produit">
             </div>
             <select id="c-cat" aria-label="Filtrer par catégorie">
                 <option value="">Toutes les catégories</option>
@@ -272,8 +272,8 @@ declare(strict_types=1);
             </thead>
             <tbody id="costs-bulk-lines">
                 <tr class="cost-bulk-line">
-                    <td><input type="text" name="product_key[]" list="bulk-products" placeholder="Rechercher un produit…" autocomplete="off" style="width:100%;"></td>
-                    <td><input type="text" name="cost_price[]" placeholder="ex: 0,60" inputmode="decimal" style="width:100%;"></td>
+                    <td><input type="text" name="product_key[]" list="bulk-products" placeholder="Rechercher un produit…" autocomplete="off" style="width:100%;" aria-label="Produit de la ligne (ajout en lot)"></td>
+                    <td><input type="text" name="cost_price[]" placeholder="ex: 0,60" inputmode="decimal" style="width:100%;" aria-label="Coût d'achat en euros par unité pour ce produit"></td>
                     <td><button type="button" class="btn btn-ghost btn-sm cost-bulk-remove" aria-label="Supprimer la ligne">Retirer</button></td>
                 </tr>
             </tbody>
@@ -307,8 +307,8 @@ declare(strict_types=1);
                 var tr = document.createElement('tr');
                 tr.className = 'cost-bulk-line';
                 tr.innerHTML =
-                    '<td><input type="text" name="product_key[]" list="bulk-products" placeholder="Rechercher un produit…" autocomplete="off" style="width:100%;"></td>' +
-                    '<td><input type="text" name="cost_price[]" placeholder="ex: 0,60" inputmode="decimal" style="width:100%;"></td>' +
+                    '<td><input type="text" name="product_key[]" list="bulk-products" placeholder="Rechercher un produit…" autocomplete="off" style="width:100%;" aria-label="Produit de la ligne (ajout en lot)"></td>' +
+                    '<td><input type="text" name="cost_price[]" placeholder="ex: 0,60" inputmode="decimal" style="width:100%;" aria-label="Coût d\'achat en euros par unité pour ce produit"></td>' +
                     '<td><button type="button" class="btn btn-ghost btn-sm cost-bulk-remove" aria-label="Supprimer la ligne">Retirer</button></td>';
                 tbody.appendChild(tr);
                 wireRow(tr);

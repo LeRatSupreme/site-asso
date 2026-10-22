@@ -154,6 +154,7 @@ $colspan = $showMoney ? 13 : 12;
             <?php foreach ($refOptions as $k => $label): ?>
                 <label class="chip" title="<?= e($label) ?>">
                     <input type="radio" name="ref" value="<?= e($k) ?>"
+                           aria-label="<?= e($label) ?>"
                            data-autosubmit="<?= $k === 'custom' ? '0' : '1' ?>"
                            <?= $k === $currentRef ? 'checked' : '' ?>>
                     <span><?= e($refShort[$k] ?? $label) ?></span>
@@ -303,6 +304,7 @@ $colspan = $showMoney ? 13 : 12;
                     <td class="num" data-label="Stock restant">
                         <?php if ($hasStock): ?>
                             <strong class="stock-value<?= $stockVal <= 0 ? ' is-out' : '' ?>"
+                                    aria-label="<?= $stockVal < 0 ? 'Stock négatif : survente (ventes sans stock reconstitué)' : 'Stock théorique de l\'inventaire' ?>"
                                     title="<?= $stockVal < 0 ? 'Stock négatif : survente (ventes sans stock reconstitué)' : 'Stock théorique de l\'inventaire' ?>">
                                 <?= $stockVal ?>
                             </strong>
@@ -310,7 +312,7 @@ $colspan = $showMoney ? 13 : 12;
                                 <span class="cell-sub" title="Date du dernier comptage physique">compté le <?= e(reorder_date_fr(substr((string) $r['counted_at'], 0, 10))) ?></span>
                             <?php endif; ?>
                         <?php else: ?>
-                            <span class="badge badge-muted" title="Jamais compté en inventaire : fais un comptage pour affiner">À compter</span>
+                            <span class="badge badge-muted" aria-label="Jamais compté en inventaire : fais un comptage pour affiner" title="Jamais compté en inventaire : fais un comptage pour affiner">À compter</span>
                         <?php endif; ?>
                     </td>
                     <td class="num muted" data-label="Conso / jour (7j/7)"><?= reorder_qty((float) $r['avg_day']) ?></td>
@@ -318,13 +320,14 @@ $colspan = $showMoney ? 13 : 12;
                     <td class="num muted" data-label="Conso / mois"><?= reorder_qty((float) $r['avg_month']) ?></td>
                     <td class="num" data-label="Autonomie">
                         <?php if (!empty($r['infinite'])): ?>
-                            <span class="auto-pill auto-none" title="Stock infini (marqué manuellement) : jamais proposé à la commande">∞</span>
+                            <span class="auto-pill auto-none" aria-label="Stock infini (marqué manuellement) : jamais proposé à la commande" title="Stock infini (marqué manuellement) : jamais proposé à la commande">∞</span>
                         <?php elseif (!$hasStock || $autonomy === null): ?>
-                            <span class="auto-pill auto-none" title="Stock inconnu : compte le produit en inventaire, ou marque-le « stock infini » s'il n'est jamais réapprovisionné">—</span>
+                            <span class="auto-pill auto-none" aria-label="Stock inconnu : compte le produit en inventaire, ou marque-le « stock infini » s'il n'est jamais réapprovisionné" title="Stock inconnu : compte le produit en inventaire, ou marque-le « stock infini » s'il n'est jamais réapprovisionné">—</span>
                         <?php elseif ($r['avg_day'] <= 0): ?>
-                            <span class="auto-pill auto-none" title="Aucune vente sur la période">∞</span>
+                            <span class="auto-pill auto-none" aria-label="Aucune vente sur la période" title="Aucune vente sur la période">∞</span>
                         <?php else: ?>
                             <span class="auto-pill <?= reorder_autonomy_class($autonomy, true) ?>"
+                                  aria-label="<?= $autonomy ?> jour(s) avant rupture (week-end inclus)"
                                   title="<?= $autonomy ?> jour(s) avant rupture (week-end inclus)">
                                 <?= $autonomy ?> j
                             </span>
@@ -335,6 +338,7 @@ $colspan = $showMoney ? 13 : 12;
                                 <input type="hidden" name="product_key" value="<?= e($key) ?>">
                                 <input type="hidden" name="back" value="<?= e($backQuery) ?>">
                                 <button type="submit" class="reinf-btn"
+                                        aria-label="<?= !empty($r['infinite']) ? 'Retirer le marquage « stock infini » : le produit redevient « à compter »' : 'Marquer « stock infini » : produit jamais réapprovisionné, autonomie ∞, jamais proposé à la commande' ?>"
                                         title="<?= !empty($r['infinite']) ? 'Retirer le marquage « stock infini » : le produit redevient « à compter »' : 'Marquer « stock infini » : produit jamais réapprovisionné, autonomie ∞, jamais proposé à la commande' ?>">
                                     <?= !empty($r['infinite']) ? 'retirer ∞' : 'stock ∞' ?>
                                 </button>
