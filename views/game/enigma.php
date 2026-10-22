@@ -8,7 +8,6 @@ declare(strict_types=1);
 /** @var string $csrfToken */
 ?>
 <header class="page-hero">
-    <div class="halo halo-teal" aria-hidden="true"></div>
     <div class="container">
         <span class="eyebrow">Défi du jour</span>
         <h1 class="page-title">Énigme quotidienne</h1>

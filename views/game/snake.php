@@ -15,7 +15,6 @@ declare(strict_types=1);
  */
 ?>
 <header class="page-hero">
-    <div class="halo halo-teal" aria-hidden="true"></div>
     <div class="container">
         <span class="eyebrow">Jeu d'arcade</span>
         <h1 class="page-title">Snake</h1>

@@ -324,9 +324,6 @@
 .poll-result-fill.is-winner {
     background: linear-gradient(90deg, #f59e0b, #fbbf24);
 }
-.poll-result-fill.is-mine {
-    box-shadow: 0 0 12px rgba(72,189,211,.4);
-}
 
 .poll-result-count {
     font-size: .78rem;

@@ -13,11 +13,11 @@ use PDO;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Tests de la synchro automatique des ventes SumUp (API â†’ table `sales`).
+ * Tests de la synchro automatique des ventes SumUp (API → table `sales`).
  *
  * Les tests HTTP utilisent un transport factice (aucun socket, cf. les
- * conventions du projet) dont les rÃ©ponses reproduisent fidÃ¨lement les
- * charges utiles rÃ©elles de l'API SumUp v2.1.
+ * conventions du projet) dont les réponses reproduisent fidèlement les
+ * charges utiles réelles de l'API SumUp v2.1.
  *
  * Les tests de persistance sautent si la base aeic_test est indisponible.
  */
@@ -25,7 +25,7 @@ final class SumUpSalesSyncTest extends TestCase
 {
     use TestDatabaseTrait;
 
-    /** Transaction rÃ©elle (vente cash d'un produit du catalogue). */
+    /** Transaction réelle (vente cash d'un produit du catalogue). */
     private const TX_MONSTER = [
         'amount'            => 1.8,
         'currency'          => 'EUR',
@@ -52,7 +52,7 @@ final class SumUpSalesSyncTest extends TestCase
         ],
     ];
 
-    /** Transaction rÃ©elle (paiement carte sans dÃ©tail panier). */
+    /** Transaction réelle (paiement carte sans détail panier). */
     private const TX_CARTE = [
         'amount'           => 1.0,
         'currency'         => 'EUR',
@@ -68,7 +68,7 @@ final class SumUpSalesSyncTest extends TestCase
         'local_time'       => '2026-09-21T10:07:00.798+02:00',
     ];
 
-    // â”€â”€ Mapping API â†’ lignes du parseur CSV â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Mapping API → lignes du parseur CSV ──────────────────────────────
 
     public function test_map_transaction_avec_produits(): void
     {
@@ -133,7 +133,7 @@ final class SumUpSalesSyncTest extends TestCase
 
         $rows = SumUpSalesSync::mapTransaction($tx);
 
-        self::assertSame('2026-09-21 12:16:14', $rows[0]['sold_at'], 'UTC 10:16 â†’ Europe/Paris 12:16 (Ã©tÃ©).');
+        self::assertSame('2026-09-21 12:16:14', $rows[0]['sold_at'], 'UTC 10:16 → Europe/Paris 12:16 (été).');
     }
 
     public function test_map_transaction_resoud_le_product_key(): void
@@ -143,7 +143,7 @@ final class SumUpSalesSyncTest extends TestCase
         self::assertSame('monster-blanche', $rows[0]['product_key']);
     }
 
-    // â”€â”€ Client HTTP (transport factice) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Client HTTP (transport factice) ──────────────────────────────────
 
     public function test_client_decouvre_le_code_marchand(): void
     {
@@ -188,10 +188,10 @@ final class SumUpSalesSyncTest extends TestCase
         self::assertCount(2, $items);
         self::assertCount(2, $urls);
         self::assertStringContainsString('transactions/history?', $urls[1]);
-        self::assertStringContainsString('newest_ref=abc', $urls[1], 'Le lien rel=next relatif est rÃ©solu sur le mÃªme endpoint.');
+        self::assertStringContainsString('newest_ref=abc', $urls[1], 'Le lien rel=next relatif est résolu sur le même endpoint.');
     }
 
-    // â”€â”€ Synchro complÃ¨te avec base (aeic_test) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Synchro complète avec base (aeic_test) ───────────────────────────
 
     private function makeSyncClient(array $historyItems): SumUpApiClient
     {
@@ -200,7 +200,7 @@ final class SumUpSalesSyncTest extends TestCase
                 return ['items' => $historyItems, 'links' => []];
             }
 
-            // DÃ©tail : retrouve la transaction par son id.
+            // Détail : retrouve la transaction par son id.
             parse_str((string) parse_url($url, PHP_URL_QUERY), $q);
             foreach ($historyItems as $item) {
                 if (($item['transaction_id'] ?? null) === ($q['id'] ?? null)) {
@@ -214,7 +214,7 @@ final class SumUpSalesSyncTest extends TestCase
 
     private function syncRow(string $ref, string $description): array
     {
-        // Ligne Ã©quivalente Ã  un import CSV de la mÃªme vente.
+        // Ligne équivalente à un import CSV de la même vente.
         return [
             'transaction_ref'  => $ref,
             'sold_at'          => '2026-09-21 12:16:14',
@@ -236,14 +236,14 @@ final class SumUpSalesSyncTest extends TestCase
     }
 
     /**
-     * PrÃ©pare la base de test (tables vides + PDO injectÃ© dans les modÃ¨les).
-     * Renvoie false (et marque le test Â« skipped Â») si elle est indisponible.
+     * Prépare la base de test (tables vides + PDO injecté dans les modèles).
+     * Renvoie false (et marque le test « skipped ») si elle est indisponible.
      */
     private function requireDatabase(): bool
     {
         $pdo = $this->connect();
         if ($pdo === null || !$this->tablesExist($pdo)) {
-            self::markTestSkipped('Base aeic_test indisponible : test de persistance ignorÃ©.');
+            self::markTestSkipped('Base aeic_test indisponible : test de persistance ignoré.');
 
             return false;
         }
@@ -288,7 +288,7 @@ final class SumUpSalesSyncTest extends TestCase
         self::assertNotNull($stats['batch_id']);
         self::assertSame(2, Sale::count());
 
-        // Le lot de synchro est tracÃ© avec sa pÃ©riode (anti-chevauchement CSV).
+        // Le lot de synchro est tracé avec sa période (anti-chevauchement CSV).
         $batch = ImportBatch::find((string) $stats['batch_id']);
         self::assertNotNull($batch);
         self::assertSame('synchro-api-sumup.json', $batch['filename']);
@@ -309,9 +309,9 @@ final class SumUpSalesSyncTest extends TestCase
         $second = $sync->sync(new \DateTimeImmutable('-24 hours'));
 
         self::assertSame(1, $first['inserted']);
-        self::assertSame(0, $second['sales'], 'La transaction dÃ©jÃ  en base ne doit plus Ãªtre candidate.');
+        self::assertSame(0, $second['sales'], 'La transaction déjà en base ne doit plus être candidate.');
         self::assertSame(0, $second['inserted']);
-        self::assertSame(1, Sale::count(), 'Aucune vente dupliquÃ©e.');
+        self::assertSame(1, Sale::count(), 'Aucune vente dupliquée.');
     }
 
     public function test_sync_ignore_les_ventes_deja_importees_par_csv(): void
@@ -326,7 +326,7 @@ final class SumUpSalesSyncTest extends TestCase
         $sync = new SumUpSalesSync($this->makeSyncClient([self::TX_MONSTER]));
         $stats = $sync->sync(new \DateTimeImmutable('-24 hours'));
 
-        self::assertSame(0, $stats['sales'], 'RÃ©f. dÃ©jÃ  comptabilisÃ©e par le CSV â†’ ignorÃ©e.');
+        self::assertSame(0, $stats['sales'], 'Réf. déjà comptabilisée par le CSV → ignorée.');
         self::assertSame(1, Sale::count(), 'Aucun doublon CSV/synchro.');
     }
 

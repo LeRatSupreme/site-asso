@@ -42,7 +42,6 @@ foreach ($results as $r) {
 }
 ?>
 <header class="page-hero">
-    <div class="halo halo-violet" aria-hidden="true"></div>
     <div class="container">
         <div class="poll-header-top">
             <a class="btn btn-outline poll-back" href="<?= e(url('/sondages')) ?>"><?= e(t('poll.back')) ?></a>

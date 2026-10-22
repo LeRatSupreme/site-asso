@@ -13,7 +13,7 @@ use PDO;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Tests du modÃ¨le 2FA sur la base `aeic_test`.
+ * Tests du modèle 2FA sur la base `aeic_test`.
  *
  * Saute automatiquement si la base n'est pas joignable.
  */
@@ -61,7 +61,7 @@ final class TwoFactorModelTest extends TestCase
         $setup = TwoFactor::beginSetup($this->userId);
         self::assertNotEmpty($setup['secret']);
         self::assertCount(RecoveryCodes::DEFAULT_COUNT, $setup['recovery']);
-        // Secret pas encore confirmÃ©.
+        // Secret pas encore confirmé.
         self::assertFalse(TwoFactor::isEnabled($this->userId));
 
         TwoFactor::enable($this->userId);
@@ -132,7 +132,7 @@ final class TwoFactorModelTest extends TestCase
 
         $code = $setup['recovery'][0];
         self::assertTrue(TwoFactor::verify($this->userId, $code));
-        // Un second usage du mÃªme code Ã©choue (usage unique).
+        // Un second usage du même code échoue (usage unique).
         self::assertFalse(TwoFactor::verify($this->userId, $code));
     }
 

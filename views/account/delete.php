@@ -9,7 +9,6 @@ declare(strict_types=1);
  */
 ?>
 <header class="page-hero">
-    <div class="halo halo-violet" aria-hidden="true"></div>
     <div class="container">
         <a class="btn btn-outline" href="<?= e(url('/account/privacy')) ?>" style="margin-bottom:1rem;text-decoration:none;"><?= e(t('common.back')) ?></a>
         <span class="eyebrow"><?= e(t('account.delete.zone')) ?></span>

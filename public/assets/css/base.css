@@ -88,8 +88,6 @@
 [data-theme="light"] .dot-grid {
     background-image: radial-gradient(circle, rgba(14, 116, 144, 0.12) 1px, transparent 1px);
 }
-[data-theme="light"] .hero .halo-teal { background: radial-gradient(circle, rgba(14, 116, 144, 0.1), transparent 65%); }
-[data-theme="light"] .hero .halo-violet { background: radial-gradient(circle, rgba(97, 80, 170, 0.08), transparent 65%); }
 [data-theme="light"] .section-title,
 [data-theme="light"] .hero-title,
 [data-theme="light"] .page-title,
@@ -110,7 +108,6 @@
 [data-theme="light"] .nav-link:hover { background: rgba(0, 0, 0, 0.04); }
 [data-theme="light"] .nav-link.is-active { background: rgba(14, 116, 144, 0.1); }
 [data-theme="light"] .nav-bell-btn:hover,
-[data-theme="light"] .nav-search-result:hover,
 [data-theme="light"] .nav-bell-item a:hover,
 [data-theme="light"] .dash-link:hover { background: rgba(0, 0, 0, 0.04); }
 [data-theme="light"] .btn-ghost { background: rgba(0, 0, 0, 0.03); }
@@ -124,7 +121,6 @@
 [data-theme="light"] .badge-gradient { background: linear-gradient(135deg, #6150aa, #0e7490); color: #fff; }
 [data-theme="light"] .empty-state { background: rgba(0, 0, 0, 0.015); }
 [data-theme="light"] .prose code { background: rgba(0, 0, 0, 0.05); }
-[data-theme="light"] .search-overlay { background: rgba(240, 242, 247, 0.97); }
 [data-theme="light"] .site-footer {
     background: linear-gradient(180deg, #f0f2f7 0%, #e2e6f0 60%, #dbe0eb 100%);
     border-top-color: rgba(0, 0, 0, 0.06);
@@ -318,23 +314,10 @@ ul, ol { list-style: none; }
     .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
 }
 
-/* ----------------------------- Dégradés & halos ----------------------------- */
+/* ----------------------------- Décorations sobres ----------------------------- */
 .aeic-gradient {
     background: linear-gradient(135deg, #4a3d8f 0%, #3a9bb8 100%);
 }
-.halo {
-    position: absolute;
-    border-radius: 50%;
-    pointer-events: none;
-    z-index: 0;
-}
-.halo-teal {
-    background: radial-gradient(circle, rgba(72, 189, 211, 0.16), transparent 65%);
-}
-.halo-violet {
-    background: radial-gradient(circle, rgba(97, 80, 170, 0.13), transparent 65%);
-}
-.page-hero .halo { width: 540px; height: 540px; top: -180px; right: -120px; }
 
 .dot-grid {
     background-image: radial-gradient(circle, rgba(72, 189, 211, 0.15) 1px, transparent 1px);
@@ -443,8 +426,6 @@ ul, ol { list-style: none; }
 
 /* ----------------------------- Hero (accueil) ----------------------------- */
 .hero { position: relative; overflow: hidden; padding: 5rem 0 4rem; border-bottom: 1px solid var(--border); }
-.hero .halo-teal { width: 600px; height: 600px; top: -220px; right: -200px; }
-.hero .halo-violet { width: 500px; height: 500px; bottom: -240px; left: -200px; }
 .hero-title {
     font-size: clamp(2.5rem, 6vw, 4.5rem);
     font-weight: 900;
@@ -791,71 +772,7 @@ ul, ol { list-style: none; }
     visibility: visible;
 }
 
-/* Recherche + notifications dans la navbar */
-.nav-search {
-    position: relative;
-    display: flex;
-    align-items: center;
-}
-.nav-search-icon {
-    position: absolute;
-    left: 0.7rem;
-    font-size: 0.85rem;
-    pointer-events: none;
-    opacity: 0.8;
-}
-.nav-search-input {
-    width: 220px;
-    padding: 0.5rem 0.9rem 0.5rem 2.1rem;
-    border-radius: 999px;
-    border: 1px solid var(--border-strong);
-    background: var(--input-bg);
-    color: var(--foreground);
-    font-size: 0.9rem;
-    transition: width 0.15s ease, border-color 0.15s ease;
-}
-.nav-search-input:focus {
-    outline: none;
-    border-color: var(--primary);
-    width: 260px;
-}
-.nav-search-results {
-    position: absolute;
-    top: calc(100% + 0.4rem);
-    left: 0;
-    right: 0;
-    min-width: 320px;
-    background: var(--card);
-    border: 1px solid var(--border-strong);
-    border-radius: var(--radius-sm);
-    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
-    overflow: hidden;
-    z-index: 60;
-    max-height: 70vh;
-    overflow-y: auto;
-}
-.search-result {
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
-    padding: 0.6rem 0.85rem;
-    color: var(--foreground);
-    border-bottom: 1px solid var(--border);
-}
-.search-result:last-child { border-bottom: none; }
-.search-result:hover { background: rgba(255, 255, 255, 0.05); }
-.search-result-main { display: flex; flex-direction: column; min-width: 0; flex: 1; }
-.search-result-title { font-weight: 600; font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.search-result-excerpt {
-    font-size: 0.78rem;
-    color: var(--muted);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-.search-result-type { flex-shrink: 0; font-size: 0.68rem; }
-
-/* Cloche notifications */
+/* Notifications dans la navbar */
 .nav-bell { position: relative; }
 .nav-bell-btn {
     position: relative;
@@ -926,58 +843,9 @@ ul, ol { list-style: none; }
 .nav-bell-item-body { font-size: 0.78rem; color: var(--muted); margin-top: 0.1rem; }
 .nav-bell-item-meta { font-size: 0.7rem; color: var(--muted); margin-top: 0.2rem; }
 
-/* Bouton recherche mobile */
-.nav-search-toggle {
-    display: none;
-    width: 42px;
-    height: 42px;
-    place-items: center;
-    border: 1px solid var(--border-strong);
-    border-radius: 0.625rem;
-    background: transparent;
-    color: var(--foreground);
-}
-
-/* Overlay plein écran (mobile) */
-.search-overlay {
-    position: fixed;
-    inset: 0;
-    z-index: 200;
-    background: rgba(8, 23, 45, 0.97);
-    display: flex;
-    align-items: flex-start;
-    justify-content: center;
-    padding: 1.25rem;
-}
-.search-overlay[hidden] { display: none; }
-.search-overlay-inner {
-    width: 100%;
-    max-width: 640px;
-    position: relative;
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
-    padding-top: 0.5rem;
-}
-.search-overlay-inner .nav-search-icon { position: static; font-size: 1.2rem; }
-.search-overlay-inner .nav-search-input { width: 100%; }
-.search-overlay-close {
-    background: none;
-    border: none;
-    color: var(--foreground);
-    font-size: 1.3rem;
-}
-.search-overlay-inner .nav-search-results {
-    position: absolute;
-    top: 100%;
-    left: 0;
-    right: 0;
-}
-
 @media (max-width: 860px) {
     .main-nav, .nav-actions { display: none; }
     .nav-toggle { display: flex; }
-    .nav-search-toggle { display: grid; }
 }
 
 /* ----------------------------- Footer ----------------------------- */

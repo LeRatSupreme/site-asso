@@ -58,7 +58,6 @@ function wordleInitials(string $prenom, string $nom): string
 </style>
 
 <header class="page-hero">
-    <div class="halo halo-teal" aria-hidden="true"></div>
     <div class="container">
         <span class="eyebrow">Zone jeux</span>
         <h1 class="page-title">Classement Wordle</h1>
