@@ -195,8 +195,11 @@ final class AnalyticsForecastData extends Model
      *   rencontrée) ; NULL/'' normalisé en « Non classé ».
      * - unitCost : coût as-of AUJOURD'HUI (voir docblock de classe) ; NULL si
      *   aucun lot couvrant ni antérieur.
-     * - stock : stock référencé (product_stocks), NULL si inconnu OU si le
-     *   produit est marqué « stock infini » (product_infinite).
+     * - stock : stock THÉORIQUE d'inventaire résolu par StockBook (exact →
+     *   normalisé → alias) ; repli « stock référencé » (product_stocks, clé
+     *   exacte) quand l'inventaire ne connaît pas du tout le produit ;
+     *   NULL si inconnu des deux sources OU si le produit est marqué
+     *   « stock infini » (product_infinite).
      * - costSuspect : coût inconnu (NULL), coût ≤ 0, ou prix unitaire < coût.
      *   ATTENTION : un prix unitaire inconnu (NULL) avec un coût > 0 n'est PAS
      *   suspect (prix inconnu ≠ incohérent) — mais il est signalé si le coût
@@ -218,18 +221,18 @@ final class AnalyticsForecastData extends Model
      * incluses) + rapprochement par alias. Toutes les pages réappro
      * (liste de courses, carte Analytics, page Réappro, RecoData)
      * consomment ce livre — l'ancienne lecture « product_stocks » (photo
-     * non décrémentée des ventes, bornée à 0) est abandonnée.
+     * non décrémentée des ventes, bornée à 0) n'y sert plus que de repli
+     * (cf. productStatsInternal).
+     *
+     * Volontairement SANS cache statique : le livre relit la base à chaque
+     * construction (deux requêtes petites). Un cache de process rendrait
+     * les stocks périmés dans tout processus longue durée (tests PHPUnit,
+     * workers CLI) dès que l'inventaire change — bug « cola absent de la
+     * liste de courses » du 22/10/2026.
      */
-    /** @var ?StockBook cache du livre de stock (une construction par requête) */
-    private static ?StockBook $stockBookCache = null;
-
     public static function stockBook(): StockBook
     {
-        if (self::$stockBookCache !== null) {
-            return self::$stockBookCache;
-        }
-
-        return self::$stockBookCache = new StockBook(
+        return new StockBook(
             InventoryCount::theoreticalStocksMap(),
             InventoryCount::lastCountsMap(),
             array_map(
@@ -314,6 +317,7 @@ final class AnalyticsForecastData extends Model
 
         $costs = self::currentCostMap(array_keys($caW));
         $book = self::stockBook();
+        $legacyStocks = ProductStock::allMap();
         $infinite = ProductInfinite::keys();
 
         // Regroupement par clé normalisée : l'ordre des clés d'un groupe
@@ -383,6 +387,14 @@ final class AnalyticsForecastData extends Model
                         if ($e['at'] !== null && ($stockAt === null || $e['at'] > $stockAt)) {
                             $stockAt = $e['at'];
                         }
+                    } elseif (array_key_exists($k, $legacyStocks)) {
+                        // Repli : l'inventaire ne connaît PAS le produit
+                        // (ni comptage, ni achat, ni perte) mais un stock
+                        // « référencé » product_stocks existe (clé exacte).
+                        // Mieux vaut cet indice (photo datée) que « null » :
+                        // la carte Analytics reste exploitable pour les
+                        // produits jamais inventoriés.
+                        $stock = ($stock ?? 0) + (int) $legacyStocks[$k];
                     }
                 }
 
