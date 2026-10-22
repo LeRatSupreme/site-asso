@@ -119,30 +119,7 @@ $repereBadges = [
     'alerte'    => 'badge-danger',
     'neutre'    => 'badge-muted',
 ];
-
-// Lignes de TVA non nulles (les lignes à 0 € sont masquées, niveau 2).
-$vatLines = array_values(array_filter(
-    $vat,
-    static fn(array $v): bool => abs((float) ($v['vat'] ?? 0)) > 0.005
-));
 ?>
-<style>
-/* Local au dashboard compta (house pattern : style de la vue). */
-.dashboard-verdict { padding: 1.15rem 1.35rem; }
-.dashboard-verdict-phrase { margin: 0; font-size: 1.18rem; font-weight: 600; display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
-.dashboard-verdict-alerte .dashboard-verdict-phrase { color: var(--accent-danger, #ef4444); }
-.dashboard-verdict-attention .dashboard-verdict-phrase { color: var(--accent-warning, #f59e0b); }
-.dashboard-verdict-ok .dashboard-verdict-phrase { color: var(--accent-success, #22c55e); }
-.dashboard-verdict-objectif { margin: 0.45rem 0 0; font-size: 0.95rem; }
-.aide-mark { display: inline-block; border: 1px solid currentColor; border-radius: 50%; width: 1em; height: 1em; line-height: 1; text-align: center; font-size: 0.75em; opacity: 0.65; vertical-align: super; margin-left: 0.15rem; }
-.kpi-repere { margin: 0.35rem 0 0; }
-.kpi-repere-none { color: var(--muted); }
-.afaire-list { list-style: none; margin: 0; padding: 0; }
-.afaire-item { display: flex; align-items: center; gap: 0.75rem; padding: 0.55rem 0; border-top: 1px solid rgba(128, 128, 128, 0.15); flex-wrap: wrap; }
-.afaire-item:first-child { border-top: 0; }
-.afaire-item .afaire-texte { flex: 1 1 auto; min-width: 200px; }
-</style>
-
 <div class="admin-actions">
     <a class="btn btn-primary" href="<?= e(url('/admin/compta/import')) ?>">Importer un CSV</a>
 </div>
@@ -213,106 +190,17 @@ $vatLines = array_values(array_filter(
 
 <!-- ══════════════════════════ NIVEAU 2 ══════════════════════════ -->
 
-<details class="card surface glass">
-    <summary>💳 Carte et liquide</summary>
-    <ul class="split-list">
-        <li>
-            <span>Carte</span>
-            <strong><?= e(formatPrice($split['CARTE'] ?? 0)) ?></strong>
-        </li>
-        <li>
-            <span>Liquide</span>
-            <strong><?= e(formatPrice($split['LIQUIDE'] ?? 0)) ?></strong>
-        </li>
-    </ul>
-    <?php
-    $total = ($split['CARTE'] ?? 0) + ($split['LIQUIDE'] ?? 0);
-    $cardPct = $total > 0 ? round(($split['CARTE'] ?? 0) / $total * 100) : 0;
-    ?>
-    <div class="split-bar" title="Carte vs Liquide">
-        <div class="split-bar-card" style="width:<?= e((string) $cardPct) ?>%"></div>
-    </div>
-    <p class="muted"><?= e((string) $txCount) ?> transaction<?= $txCount > 1 ? 's' : '' ?> sur la période</p>
-    <?php if (($split['CARTE'] ?? 0) > 0): ?>
-        <p class="muted">
-            <span title="Commission estimée de SumUp sur les paiements par carte : taux × ventes carte. Estimation, jamais prélevée ici.">
-                Frais SumUp estimés ≈ <strong>−<?= e(formatPrice($cardFee)) ?></strong>
-                (<?= e($feeRate) ?> %) · net carte ≈ <strong><?= e(formatPrice($cardNet)) ?></strong> <span class="aide-mark">?</span>
-            </span>
-        </p>
-    <?php endif; ?>
-    <p class="muted">
-        <span title="TVA collectée sur les ventes de la période, ventilée par taux (20 %, 10 %, 5,5 %…) — à reverser à l'État.">
-            TVA collectée sur la période : <strong><?= e(formatPrice($vatTotal)) ?></strong> <span class="aide-mark">?</span>
-        </span>
-    </p>
-    <?php if ($vatLines !== []): ?>
-        <table class="table">
-            <thead><tr><th>Taux</th><th>HT</th><th>TVA</th><th>TTC</th></tr></thead>
-            <tbody>
-                <?php foreach ($vatLines as $v): ?>
-                    <tr>
-                        <td><?= e((string) $v['rate']) ?> %</td>
-                        <td><?= e(formatPrice($v['ht'])) ?></td>
-                        <td><?= e(formatPrice($v['vat'])) ?></td>
-                        <td><?= e(formatPrice($v['ttc'])) ?></td>
-                    </tr>
-                <?php endforeach; ?>
-            </tbody>
-        </table>
-    <?php else: ?>
-        <p class="muted">Pas de TVA collectée sur la période.</p>
-    <?php endif; ?>
-</details>
+<!-- ══════════════════════════ NIVEAU 2 ══════════════════════════ -->
+<!-- Sections extraites en partiaux partagés (réutilisés par l'accueil
+     /admin, variante compta — même payload Dashboard\Data). -->
 
-<details class="card surface glass">
-    <summary>🏷️ Par catégorie</summary>
-    <table class="table">
-        <thead><tr><th>Catégorie</th><th>CA</th><th>Bénéfice</th></tr></thead>
-        <tbody>
-            <?php foreach ($byCategory as $c): ?>
-                <tr>
-                    <td><?= e($c['category']) ?></td>
-                    <td><?= e(formatPrice($c['ca'])) ?></td>
-                    <td><?= e(formatPrice($c['profit'])) ?></td>
-                </tr>
-            <?php endforeach; ?>
-            <?php if ($byCategory === []): ?>
-                <tr><td colspan="3" class="muted">Aucune vente sur cette période.</td></tr>
-            <?php endif; ?>
-        </tbody>
-    </table>
-</details>
+<?php require AEIC_VIEWS . '/admin/partials/compta_section_paiements.php'; ?>
 
-<details class="card surface glass">
-    <summary>🏆 Top produits</summary>
-    <table class="table">
-        <thead><tr><th>Produit</th><th>Qté</th><th>CA</th></tr></thead>
-        <tbody>
-            <?php foreach ($top as $t): ?>
-                <tr>
-                    <td><strong><?= e($t['label']) ?></strong></td>
-                    <td><?= e((string) $t['qty']) ?></td>
-                    <td><?= e(formatPrice($t['ca'])) ?></td>
-                </tr>
-            <?php endforeach; ?>
-            <?php if ($top === []): ?>
-                <tr><td colspan="3" class="muted">Aucune vente sur cette période.</td></tr>
-            <?php endif; ?>
-        </tbody>
-    </table>
-</details>
+<?php require AEIC_VIEWS . '/admin/partials/compta_section_categories.php'; ?>
 
-<details class="card surface glass">
-    <summary>🧾 Dépenses</summary>
-    <p>
-        <span title="Vos charges saisies (FRAIS, MATERIEL…). Les achats de stock ne sont PAS ici : ils sont déjà déduits de la marge.">
-            Total des dépenses sur la période : <strong><?= e(formatPrice($expenseTtc)) ?></strong>
-            (<?= e((string) $expenseCount) ?> dépense<?= $expenseCount > 1 ? 's' : '' ?>) <span class="aide-mark">?</span>
-        </span>
-    </p>
-    <p><a class="btn btn-outline btn-sm" href="<?= e(url('/admin/compta/depenses')) ?>">Gérer les dépenses →</a></p>
-</details>
+<?php require AEIC_VIEWS . '/admin/partials/compta_section_top.php'; ?>
+
+<?php require AEIC_VIEWS . '/admin/partials/compta_section_depenses.php'; ?>
 
 <details class="card surface glass">
     <summary>🛠️ Suivi et alertes techniques

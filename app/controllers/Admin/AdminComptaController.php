@@ -6,13 +6,9 @@ namespace App\Controllers\Admin;
 
 use App\Core\Auth;
 use App\Core\Compta\AliasSuggester;
-use App\Core\Compta\CardFees;
 use App\Core\Compta\CashLedger;
 use App\Core\Compta\ComptaCalc;
-use App\Core\Compta\Dashboard\Afaire;
-use App\Core\Compta\Dashboard\Cartes;
-use App\Core\Compta\Dashboard\Hyper;
-use App\Core\Compta\Dashboard\Verdict;
+use App\Core\Compta\Dashboard\Data;
 use App\Core\Compta\Kiosk;
 use App\Core\Compta\ProductAutoSync;
 use App\Core\Compta\Reappro\BesoinListe;
@@ -20,12 +16,7 @@ use App\Core\Compta\ScanCatalogMatcher;
 use App\Core\Compta\StockPublic;
 use App\Core\Compta\SumUpCsvParser;
 use App\Core\Logger;
-use App\Models\Analytics;
-use App\Models\CashCount;
-use App\Models\Expense;
 use App\Models\ImportBatch;
-use App\Models\InventoryCount;
-use App\Models\InventoryTablet;
 use App\Models\Product;
 use App\Models\ProductAlias;
 use App\Models\ProductCategory;
@@ -67,263 +58,21 @@ final class AdminComptaController extends AdminBaseController
     {
         $user = $this->guardCompta();
 
-        $period = ComptaCalc::resolvePeriod($_GET['period'] ?? null, $_GET['from'] ?? null, $_GET['to'] ?? null);
-        $agg = Sale::aggregatesBetween($period['from'], $period['to']);
-        $split = Sale::paymentSplitBetween($period['from'], $period['to']);
-        $txCount = Sale::transactionsBetween($period['from'], $period['to']);
-        $top = Sale::topProductsBetween($period['from'], $period['to']);
-        $byCategory = Sale::byCategoryBetween($period['from'], $period['to']);
-        $cardFee = CardFees::estimatedTotal($period['from'], $period['to']);
-        $cardNet = round((float) ($split['CARTE'] ?? 0) - $cardFee, 2);
-
-        // Alerte stock faible : analyse des 30 derniers jours.
-        // (L'horizon de couverture n'influence pas les alertes, seul
-        // compte le rythme de consommation journalier.)
-        $refFrom = date('Y-m-d', strtotime('-29 days'));
-        $reorder = $this->reorderData(
-            5,
-            $refFrom,
-            date('Y-m-d'),
-            ComptaCalc::calendarDaysBetween($refFrom, date('Y-m-d'))
+        // Assemblage du payload déporté dans Dashboard\Data (point
+        // d'assemblage unique partagé avec l'accueil /admin — règle
+        // AGENTS.md). Contrat de la vue inchangé : les mêmes clés sont
+        // injectées, avec les mêmes valeurs qu'avant l'extraction.
+        $payload = Data::construire(
+            isset($_GET['period']) ? (string) $_GET['period'] : null,
+            isset($_GET['from']) ? (string) $_GET['from'] : null,
+            isset($_GET['to']) ? (string) $_GET['to'] : null
         );
-        $reorderAlerts = $reorder['alerts'];
 
-        // Suivi avancé : dépenses, résultat net, fiabilité des coûts, alertes.
-        $expenseAgg = Expense::aggregatesBetween($period['from'], $period['to']);
-        $coverage = Sale::costCoverageBetween($period['from'], $period['to']);
-        $vat = Sale::vatByRateBetween($period['from'], $period['to']);
-        $lossLeaders = Sale::lossLeadersBetween($period['from'], $period['to']);
-        $invGaps = InventoryCount::recentGaps(30);
-        $invPending = InventoryTablet::pendingSessions();
-        $lastImport = Sale::lastImportAt();
-
-        $vatTotal = 0.0;
-        foreach ($vat as $v) {
-            $vatTotal += (float) ($v['vat'] ?? 0);
-        }
-
-        $daysSinceImport = $lastImport !== null
-            ? (new \DateTimeImmutable($lastImport))->diff(new \DateTimeImmutable('now'))->days
-            : null;
-
-        // ── Complétude de la période (règle de mission, documentée) ─────
-        // $periodeComplete = la fenêtre sélectionnée est entièrement passée
-        // (to < aujourd'hui) ET les données sont plausiblement à jour dessus
-        // (un import SumUp existe ET couvre le début de la fenêtre). Sans
-        // import du tout → incomplète : aucun % ni verdict définitif.
-        // Les presets « 1d / 7d / 30d » (fin = aujourd'hui) et « all »
-        // (bornes ouvertes) sont donc toujours incomplets.
-        $today = date('Y-m-d');
-        $periodeComplete = $period['from'] !== null
-            && $period['to'] !== null
-            && $period['to'] < $today
-            && $lastImport !== null
-            && $lastImport >= $period['from'];
-
-        // ── Fenêtre PRÉCÉDENTE : même longueur, finissant J-1 avant $from
-        //      (même calcul qu'Analytics::kpisPrevious — pattern maison).
-        //      « all » (bornes null) n'a pas de précédent comparable.
-        $prevFrom = null;
-        $prevTo = null;
-        if ($period['from'] !== null && $period['to'] !== null) {
-            $days = ComptaCalc::calendarDaysBetween($period['from'], $period['to']);
-            $prevTo = (new \DateTimeImmutable($period['from']))->modify('-1 day')->format('Y-m-d');
-            $prevFrom = (new \DateTimeImmutable($period['from']))->modify('-' . $days . ' days')->format('Y-m-d');
-        }
-
-        // Fiable (pattern analytics : AdminAnalyticsController::prevComplete)
-        // si la fenêtre précédente est entièrement passée ET commence après
-        // la première vente importée (pas de comparaison sur du vide).
-        $precedentComplet = $prevFrom !== null
-            && $prevTo !== null
-            && $prevTo < $today
-            && $prevFrom >= Analytics::firstSaleDate();
-
-        $prevAgg = null;
-        if ($precedentComplet) {
-            $prevAgg = Sale::aggregatesBetween($prevFrom, $prevTo);
-            $prevExpenses = Expense::aggregatesBetween($prevFrom, $prevTo);
-        }
-
-        // ── Objectif de CA (période complète seulement) : pro-rata de
-        //      l'objectif HEBDOMADAIRE existant (source unique, setting
-        //      « analytics_weekly_goal ») sur les jours calendaires de la
-        //      fenêtre : objectif = hebdo × nbJours / 7.
-        $objectif = null;
-        if ($periodeComplete) {
-            $weeklyGoal = (float) Setting::get('analytics_weekly_goal', '500');
-            $days = ComptaCalc::calendarDaysBetween((string) $period['from'], (string) $period['to']);
-            $objectif = round($weeklyGoal * $days / 7.0, 2);
-        }
-
-        // ── Cœur « Niveau 1 » (classes pures) : verdict, cartes, à faire.
-        //      Les surcharges de seuils viennent des Paramètres (clés
-        //      « dashboard_* », préfixe attendu par Hyper::valeur) ; valeur
-        //      vide → constante Hyper (jamais 0, qui alerterait à tort).
-        $parametres = [
-            'dashboard_baisse_attention_pct' => self::seuilSetting('dashboard_baisse_attention_pct', Hyper::BAISSE_ATTENTION_PCT),
-            'dashboard_baisse_alerte_pct'    => self::seuilSetting('dashboard_baisse_alerte_pct', Hyper::BAISSE_ALERTE_PCT),
-        ];
-
-        $actuel = [
-            'ca'       => (float) $agg['ca'],
-            'profit'   => (float) $agg['profit'],
-            'qty'      => (float) $agg['qty'],
-            'expenses' => (float) $expenseAgg['ttc'],
-        ];
-        $precedent = $precedentComplet ? [
-            'ca'       => (float) $prevAgg['ca'],
-            'profit'   => (float) $prevAgg['profit'],
-            'qty'      => (float) $prevAgg['qty'],
-            'expenses' => (float) $prevExpenses['ttc'],
-        ] : null;
-
-        $verdict = Verdict::construire(
-            $actuel['profit'] - $actuel['expenses'],
-            $precedent !== null ? $precedent['profit'] - $precedent['expenses'] : null,
-            $precedentComplet,
-            $periodeComplete,
-            $actuel['ca'],
-            $objectif,
-            $parametres
-        );
-        $cartes = Cartes::construire($actuel, $precedent, $precedentComplet, $periodeComplete, $parametres);
-
-        // ── Bloc « À faire » : items construits ici, triés par Afaire. ──
-        $afaireItems = [];
-
-        // 1. Ruptures réappro (réutilise reorderData()) : produits en état
-        //    « reorder », dont ceux déjà à zéro (plus urgents).
-        $nbRupture = 0;
-        $nbRuptureZero = 0;
-        foreach ($reorder['rows'] as $row) {
-            if (($row['state'] ?? '') === 'reorder') {
-                $nbRupture++;
-                if ((int) ($row['stock'] ?? 0) <= 0) {
-                    $nbRuptureZero++;
-                }
-            }
-        }
-        if ($nbRupture > 0) {
-            $afaireItems[] = [
-                'cle'     => 'rupture',
-                'urgence' => $nbRuptureZero > 0 ? 3 : 2,
-                'texte'   => $nbRuptureZero > 0
-                    ? sprintf('%d produits en rupture (dont %d à zéro)', $nbRupture, $nbRuptureZero)
-                    : sprintf('%d produits en rupture', $nbRupture),
-                'lien'    => url('/admin/compta/liste'),
-            ];
-        }
-
-        // 2. Inventaire : écarts des 30 derniers jours + sessions tablette
-        //    en attente de correction.
-        $nbGaps = count($invGaps);
-        $nbPending = count($invPending);
-        if ($nbGaps + $nbPending > 0) {
-            $afaireItems[] = [
-                'cle'     => 'inventaire',
-                'urgence' => 2,
-                'texte'   => $nbPending > 0
-                    ? sprintf("%d écarts d'inventaire sur 30 jours (dont %d sessions tablette en attente)", $nbGaps, $nbPending)
-                    : sprintf("%d écarts d'inventaire sur 30 jours", $nbGaps),
-                'lien'    => url('/admin/compta/inventaire'),
-            ];
-        }
-
-        // 3. Coûts manquants : ventes sans lot de coût connu (% du CA
-        //    seulement si la période est complète).
-        $uncovered = (float) ($coverage['uncovered'] ?? 0);
-        if ($uncovered > 0.0) {
-            $caProducts = (float) $agg['ca_products'];
-            $pct = ($periodeComplete && $caProducts > 0.0)
-                ? sprintf(' (%s %% du CA)', number_format($uncovered / $caProducts * 100, 1, ',', ' '))
-                : '';
-            $afaireItems[] = [
-                'cle'     => 'couts',
-                'urgence' => 2,
-                'texte'   => formatPrice($uncovered) . ' de ventes sans coût connu' . $pct,
-                'lien'    => url('/admin/compta/couts'),
-            ];
-        }
-
-        // 4. Import SumUp : absent → urgent ; ≥ 14 j → urgent ; ≥ 7 j →
-        //    à traiter ; < 7 j → rien à signaler.
-        if ($daysSinceImport === null) {
-            $afaireItems[] = [
-                'cle'     => 'import',
-                'urgence' => 3,
-                'texte'   => 'Aucun import SumUp connu',
-                'lien'    => url('/admin/compta/import'),
-            ];
-        } elseif ($daysSinceImport >= 14) {
-            $afaireItems[] = [
-                'cle'     => 'import',
-                'urgence' => 3,
-                'texte'   => sprintf('Dernier import SumUp il y a %d jours', $daysSinceImport),
-                'lien'    => url('/admin/compta/import'),
-            ];
-        } elseif ($daysSinceImport >= 7) {
-            $afaireItems[] = [
-                'cle'     => 'import',
-                'urgence' => 2,
-                'texte'   => sprintf('Dernier import SumUp il y a %d jours', $daysSinceImport),
-                'lien'    => url('/admin/compta/import'),
-            ];
-        }
-
-        // 5. Caisse : liquide encaissé depuis le dernier comptage — au-delà
-        //    de 0,50 €, un comptage est attendu (urgence maximale).
-        $lastCountAt = CashCount::lastCountAt();
-        $liquide = Sale::sumLiquidSince($lastCountAt);
-        if ($liquide > 0.5) {
-            $depuis = $lastCountAt !== null
-                ? 'depuis le dernier comptage (' . formatDate($lastCountAt) . ')'
-                : 'depuis toujours';
-            $afaireItems[] = [
-                'cle'     => 'caisse',
-                'urgence' => 3,
-                'texte'   => 'Caisse non comptée : ' . formatPrice($liquide) . ' de liquide ' . $depuis,
-                'lien'    => url('/admin/compta/caisse'),
-            ];
-        }
-
-        $afaire = Afaire::trier($afaireItems, $parametres);
-
-        $this->renderAdmin('admin/compta/dashboard', [
+        $this->renderAdmin('admin/compta/dashboard', array_merge([
             'title'        => 'Comptabilité',
             'user'         => $user,
-            'period'       => $period,
             'periodOptions'=> ComptaCalc::PERIOD_OPTIONS,
-            'agg'          => $agg,
-            'split'        => $split,
-            'txCount'      => $txCount,
-            'cardFee'      => $cardFee,
-            'cardNet'      => $cardNet,
-            'feeRate'      => CardFees::formattedRate(),
-            'top'          => $top,
-            'byCategory'   => $byCategory,
-            'reorderAlerts'=> $reorderAlerts,
-            'margin'       => ComptaCalc::marginPercent($agg['profit'], $agg['ca_products']),
-            'expenseTtc'   => $expenseAgg['ttc'],
-            'expenseCount' => (int) ($expenseAgg['count'] ?? 0),
-            'netResult'    => $agg['profit'] - $expenseAgg['ttc'],
-            'noCostCa'     => $coverage['uncovered'],
-            'vat'          => $vat,
-            'vatTotal'     => $vatTotal,
-            'lossLeaders'  => $lossLeaders,
-            'invGaps'      => array_slice($invGaps, 0, 5),
-            'lastImport'   => $lastImport,
-            'daysSinceImport' => $daysSinceImport,
-            // Niveau 1 (refonte 3 niveaux).
-            'verdict'         => $verdict,
-            'cartes'          => $cartes,
-            'afaire'          => $afaire,
-            'periode_complete'=> $periodeComplete,
-            'precedent_complet'=> $precedentComplet,
-            'prev_from'       => $prevFrom,
-            'prev_to'         => $prevTo,
-            'objectif'        => $objectif,
-        ]);
+        ], $payload));
     }
 
     /**
@@ -2356,171 +2105,13 @@ final class AdminComptaController extends AdminBaseController
     }
 
     /**
-     * Calcule l'analyse de réapprovisionnement sur une période donnée.
-     *
-     * Chaque produit vendu dans la période d'analyse est listé avec sa
-     * consommation moyenne (rapportée aux jours CALENDaires de la période,
-     * week-end inclus — rythme 7 j/7) par jour / semaine / mois, et la
-     * quantité à commander pour couvrir l'horizon cible (lui aussi en
-     * jours calendaires). L'autonomie est donc le nombre de jours avant
-     * rupture WEEK-END COMPRIS. Le stock est le THÉORIQUE de l'inventaire
-     * (dernier comptage + achats − ventes − pertes) : jamais une saisie
-     * manuelle qui se périme. Un achat ou une perte établit une base 0 :
-     * le théorique existe même sans comptage préalable ; seuls les
-     * produits sans aucune donnée (ni comptage, ni achat, ni perte)
-     * apparaissent « à compter », besoin calculé sans stock déduit. Les
-     * produits marqués « plus en vente » sont exclus (voir
-     * ProductDiscontinued).
-     *
-     * @param int         $targetDays Horizon de couverture, en jours calendaires.
-     * @param string|null $fromDay    Début de la période d'analyse (inclus).
-     * @param string|null $toDay      Fin de la période d'analyse (inclus).
-     * @param int         $calDays    Jours calendaires de la période (week-end inclus).
-     *
-     * @return array{rows:list<array<string,mixed>>, alerts:int}
+     * Analyse de réapprovisionnement de la page : délégation au point
+     * d'assemblage unique Dashboard\Data::analyseReappro() (même code,
+     * partagé avec le bloc « À faire » du dashboard et l'accueil /admin).
      */
     private function reorderData(int $targetDays, ?string $fromDay, ?string $toDay, int $calDays): array
     {
-        // 100 % basé sur les ventes SumUp : chaque produit du CSV est listé,
-        // sa catégorie vient du CSV, et son stock est le théorique issu de
-        // l'inventaire (même source que la page Inventaire).
-        $consumption = Sale::consumptionBetween($fromDay, $toDay);
-        $calDays = max(1, $calDays);
-
-        // Produits marqués « plus en vente » (saisonniers/discontinués) :
-        // exclus du réappro pour ne pas encombrer l'analyse des commandes.
-        // Clés normalisées : insensible à la casse/espaces, comme le lookup stock.
-        $discontinued = array_flip(array_map(
-            static fn(string $k): string => strtolower(trim($k)),
-            ProductDiscontinued::keys()
-        ));
-
-        // Produits marqués « stock infini » (jamais réapprovisionnés) :
-        // autonomie ∞, jamais proposés à la commande, même « à compter ».
-        $infinite = array_flip(array_map(
-            static fn(string $k): string => strtolower(trim($k)),
-            ProductInfinite::keys()
-        ));
-
-        // Packs d'achat (12, 24, 32…) : « À commander » est arrondi au
-        // multiple supérieur du pack — on achète par pack, pas à l'unité.
-        $packs = ProductPack::sizesMap();
-
-        // Stock théorique + dernier comptage, indexés en minuscules pour un
-        // rapprochement insensible à la casse (ex. « Red bull » == « Red Bull »).
-        $theoreticalLower = [];
-        foreach (InventoryCount::theoreticalStocksMap() as $k => $v) {
-            $theoreticalLower[strtolower(trim((string) $k))] = (int) $v;
-        }
-        $lastCountsLower = [];
-        foreach (InventoryCount::lastCountsMap() as $k => $c) {
-            $lastCountsLower[strtolower(trim((string) $k))] = $c;
-        }
-
-        $rows = [];
-        $alerts = 0;
-
-        foreach ($consumption as $key => $data) {
-            $key = (string) $key;
-            if ($key === '' || isset($discontinued[strtolower(trim($key))])) {
-                continue;
-            }
-
-            $qty      = (int) ($data['qty'] ?? 0);
-            // Rythme 7 j/7 : les ventes du week-end sont incluses dans la
-            // quantité ET dans le nombre de jours — week-end couvert.
-            $avgDay   = $qty / $calDays;
-            $avgWeek  = $avgDay * 7.0;
-            $avgMonth = $avgDay * 30.44;
-
-            $lookupKey = strtolower(trim($key));
-            $hasStock = array_key_exists($lookupKey, $theoreticalLower);
-            $stock    = $hasStock ? $theoreticalLower[$lookupKey] : null;
-            $countedAt = $lastCountsLower[$lookupKey]['at'] ?? null;
-
-            // Autonomie : jours CALENDaires avant rupture, week-end inclus
-            // (arrondie à la baisse ; un stock négatif signifie rupture
-            // déjà atteinte).
-            $autonomy = ($stock !== null && $avgDay > 0)
-                ? max(0, (int) floor($stock / $avgDay))
-                : null;
-
-            $need   = (int) ceil($avgDay * $targetDays);
-            // Un stock négatif (survente) majore la quantité à commander :
-            // reconstituer le niveau perdu en plus de couvrir le besoin.
-            $toOrderRaw = max(0, $need - ($stock ?? 0));
-
-            // Pack d'achat : arrondi au multiple supérieur (besoin brut 2,
-            // pack de 12 → commander 12). 0/absent = commande à l'unité.
-            $packSize = $packs[$lookupKey] ?? 0;
-            if ($packSize > 1 && $toOrderRaw > 0) {
-                $toOrder = (int) ceil($toOrderRaw / $packSize) * $packSize;
-            } else {
-                $toOrder = $toOrderRaw;
-            }
-
-            // Stock déclaré infini : autonomie ∞ et jamais à commander,
-            // même si le produit n'a jamais été compté (« à compter »).
-            $infiniteStock = isset($infinite[$lookupKey]);
-            if ($infiniteStock) {
-                $autonomy = null;
-                $toOrder  = 0;
-            }
-
-            // Coût unitaire actuel (lot en cours à aujourd'hui) et coût
-            // estimé de la ligne (qté à commander × coût unitaire).
-            $unitCostRaw = ProductCost::costAt($key, date('Y-m-d'));
-            $unitCost = $unitCostRaw !== null ? (float) $unitCostRaw : null;
-            $orderCost = $unitCost !== null ? round($toOrder * $unitCost, 2) : null;
-
-            if ($infiniteStock) {
-                $state = 'ok';
-            } elseif ($stock === null) {
-                $state = 'unknown';
-            } elseif ($stock <= 0 || ($autonomy !== null && $autonomy < 7)) {
-                $state = 'reorder';
-            } else {
-                $state = 'ok';
-            }
-            $isAlert = ($state === 'reorder');
-            if ($isAlert) {
-                $alerts++;
-            }
-
-            $rows[] = [
-                'name'       => $key,
-                'category'   => (string) ($data['category'] ?? '—'),
-                'qty'        => $qty,
-                'stock'      => $stock,
-                'counted_at' => $countedAt,
-                'avg_day'    => $avgDay,
-                'avg_week'   => $avgWeek,
-                'avg_month'  => $avgMonth,
-                'unit_cost'  => $unitCost,
-                'order_cost' => $orderCost,
-                'autonomy'   => $autonomy,
-                'need'       => $need,
-                'to_order'   => $toOrder,
-                'to_order_raw' => $toOrderRaw,
-                'pack'       => $packSize,
-                'state'      => $state,
-                'is_alert'   => $isAlert,
-                'infinite'   => $infiniteStock,
-            ];
-        }
-
-        // Tri : quantité à commander décroissante (les plus urgents d'abord).
-        usort($rows, static function (array $a, array $b): int {
-            if ($b['to_order'] !== $a['to_order']) {
-                return $b['to_order'] <=> $a['to_order'];
-            }
-            $aa = $a['autonomy'] ?? PHP_INT_MAX;
-            $bb = $b['autonomy'] ?? PHP_INT_MAX;
-
-            return $aa <=> $bb;
-        });
-
-        return ['rows' => $rows, 'alerts' => $alerts];
+        return Data::analyseReappro($targetDays, $fromDay, $toDay, $calDays);
     }
 
     // -----------------------------------------------------------------

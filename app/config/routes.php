@@ -158,6 +158,12 @@ function aeic_register_routes(Router $router): void
     // Administration (rôle ADMIN requis — vérifié par chaque contrôleur).
     $router->get('/admin', [AdminController::class, 'index']);
 
+    // Journal d'audit filtrable (même garde que l'ancienne carte du
+    // tableau de bord : Fondateur/ADMIN seulement) + recherche globale
+    // (tout le bureau, groupes de résultats filtrés par rôle).
+    $router->get('/admin/audit', [AdminController::class, 'auditPage']);
+    $router->get('/admin/search', [AdminController::class, 'search']);
+
     // Design system : page de démonstration des composants (garde de
     // l'espace admin, accès par URL directe — hors menu, la navigation
     // est refaite au lot 2).

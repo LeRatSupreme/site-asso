@@ -1476,9 +1476,19 @@ details.howto p {
     .costs-toolbar select { flex: 1 1 30%; width: auto; }
 }
 
-
-
-
-
-
-
+/* ---- Dashboard compta + accueil « À faire aujourd'hui » ---------------- */
+/* Classes délocalisées du bloc <style> local de la vue dashboard (source
+   unique partagée avec l'accueil /admin — même payload, mêmes composants). */
+.dashboard-verdict { padding: 1.15rem 1.35rem; }
+.dashboard-verdict-phrase { margin: 0; font-size: 1.18rem; font-weight: 600; display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
+.dashboard-verdict-alerte .dashboard-verdict-phrase { color: var(--accent-danger, #ef4444); }
+.dashboard-verdict-attention .dashboard-verdict-phrase { color: var(--accent-warning, #f59e0b); }
+.dashboard-verdict-ok .dashboard-verdict-phrase { color: var(--accent-success, #22c55e); }
+.dashboard-verdict-objectif { margin: 0.45rem 0 0; font-size: 0.95rem; }
+.aide-mark { display: inline-block; border: 1px solid currentColor; border-radius: 50%; width: 1em; height: 1em; line-height: 1; text-align: center; font-size: 0.75em; opacity: 0.65; vertical-align: super; margin-left: 0.15rem; cursor: help; }
+.kpi-repere { margin: 0.35rem 0 0; }
+.kpi-repere-none { color: var(--muted); }
+.afaire-list { list-style: none; margin: 0; padding: 0; }
+.afaire-item { display: flex; align-items: center; gap: 0.75rem; padding: 0.55rem 0; border-top: 1px solid rgba(128, 128, 128, 0.15); flex-wrap: wrap; }
+.afaire-item:first-child { border-top: 0; }
+.afaire-item .afaire-texte { flex: 1 1 auto; min-width: 200px; }
