@@ -130,6 +130,35 @@ final class Sale extends Model
     }
 
     /**
+     * Somme TTC des ventes LIQUIDE depuis une date (inclusive), ou sur tout
+     * l'historique si $since est null.
+     *
+     * Utilisé par le dashboard : liquide encaissé non encore contrôlé par
+     * un comptage de caisse (depuis le dernier comptage).
+     */
+    public static function sumLiquidSince(?string $since): float
+    {
+        $sql = 'SELECT COALESCE(SUM(price_ttc), 0) AS total FROM sales WHERE payment_method = \'LIQUIDE\'';
+        $args = [];
+        if ($since !== null && $since !== '') {
+            $sql .= ' AND sold_at >= ?';
+            $args[] = $since;
+        }
+
+        try {
+            $stmt = self::pdo()->prepare($sql);
+            $stmt->execute($args);
+
+            /** @var array<string,mixed> $r */
+            $r = $stmt->fetch();
+        } catch (\Throwable) {
+            return 0.0;
+        }
+
+        return (float) ($r['total'] ?? 0);
+    }
+
+    /**
      * Répartition des ventes par libellé de paiement brut SumUp
      * (payment_raw) et par classement (CARTE/LIQUIDE).
      *
