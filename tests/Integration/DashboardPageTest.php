@@ -97,7 +97,7 @@ final class DashboardPageTest extends IntegrationTestCase
 
     public function test_verdict_neutre_sur_periode_courante(): void
     {
-        // Fenêtre par défaut = 30 derniers jours, finissant aujourd'hui :
+        // Fenêtre par défaut = semaine en cours, finissant aujourd'hui :
         // période en cours → le cœur refuse de trancher (règle 1). Assertion
         // la plus robuste : la phrase exacte « Période en cours » (impossible
         // sur une période complète, quel que soit le reste des données).

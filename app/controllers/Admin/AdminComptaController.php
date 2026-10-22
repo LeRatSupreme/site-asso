@@ -2174,15 +2174,15 @@ final class AdminComptaController extends AdminBaseController
         // ── Période d'ANALYSE (sur quoi calculer les moyennes) ──────────
         $refOptions = [
             '1d'     => '1 jour',
-            '7d'     => '7 derniers jours',
+            'week'   => 'Semaine en cours',
             '14d'    => '14 derniers jours',
             '30d'    => '30 derniers jours',
             'all'    => 'Tout',
             'custom' => 'Personnalisé',
         ];
-        $ref = (string) ($_GET['ref'] ?? '14d');
+        $ref = (string) ($_GET['ref'] ?? 'week');
         if (!array_key_exists($ref, $refOptions)) {
-            $ref = '14d';
+            $ref = 'week';
         }
 
         $today = date('Y-m-d');
@@ -2196,7 +2196,7 @@ final class AdminComptaController extends AdminBaseController
 
         switch ($ref) {
             case '1d':  $fromDay = $today; break;
-            case '7d':  $fromDay = date('Y-m-d', strtotime('-6 days')); break;
+            case 'week': $fromDay = ComptaCalc::currentWeekWindow()['from']; break;
             case '14d': $fromDay = date('Y-m-d', strtotime('-13 days')); break;
             case '30d': $fromDay = date('Y-m-d', strtotime('-29 days')); break;
             case 'all': $fromDay = Sale::firstSoldDay(); $toDay = $today; break;

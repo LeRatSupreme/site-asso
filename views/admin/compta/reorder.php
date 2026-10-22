@@ -51,7 +51,7 @@ $canInventory = \App\Core\Permissions::isSystemAdmin()
 // Libellés courts pour les pastilles de période.
 $refShort = [
     '1d'     => '1 j',
-    '7d'     => '7 j',
+    'week'   => 'Semaine',
     '14d'    => '14 j',
     '30d'    => '30 j',
     'all'    => 'Tout',

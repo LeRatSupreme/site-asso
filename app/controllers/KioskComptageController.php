@@ -511,14 +511,14 @@ final class KioskComptageController extends Controller
     }
 
     /** Durées proposées par le menu « Période analysée ». */
-    private const PERIODE_OPTIONS = ['7j', '14j', '30j', 'mois'];
+    private const PERIODE_OPTIONS = ['semaine', '14j', '30j', 'mois'];
 
     /**
-     * Récap de période unifié (admin) : une seule page pour 7 / 14 / 30
-     * derniers jours et le mois en cours — menu « Période analysée » avec
-     * bornes affichées et nombre de jours analysés (week-end inclus).
-     * Détail jour par jour sur toute durée ; comparaison mois précédent
-     * quand la période est le mois en cours.
+     * Récap de période unifié (admin) : une seule page pour la semaine en
+     * cours, les 14 / 30 derniers jours et le mois en cours — menu
+     * « Période analysée » avec bornes affichées et nombre de jours
+     * analysés (week-end inclus). Détail jour par jour sur toute durée ;
+     * comparaison mois précédent quand la période est le mois en cours.
      */
     public function periode(string $token): void
     {
@@ -529,9 +529,9 @@ final class KioskComptageController extends Controller
         }
 
         $paris = new \DateTimeZone('Europe/Paris');
-        $p = (string) ($_GET['p'] ?? '7j');
+        $p = (string) ($_GET['p'] ?? 'semaine');
         if (!in_array($p, self::PERIODE_OPTIONS, true)) {
-            $p = '7j';
+            $p = 'semaine';
         }
 
         $today = new \DateTimeImmutable('today', $paris);
@@ -547,6 +547,11 @@ final class KioskComptageController extends Controller
             $prev = Sale::aggregatesBetween($prevFrom->format('Y-m-d'), $prevTo->format('Y-m-d'));
             $prevCa = round($prev['ca'], 2);
             $prevLabel = $prevFrom->format('m/Y');
+        } elseif ($p === 'semaine') {
+            // Semaine en cours : du lundi (inclus) à aujourd'hui, heure de Paris.
+            $w = \App\Core\Compta\ComptaCalc::currentWeekWindow();
+            $from = new \DateTimeImmutable($w['from'], $paris);
+            $to = new \DateTimeImmutable($w['to'], $paris);
         } else {
             $days = (int) substr($p, 0, -1);
             $from = $today->modify('-' . ($days - 1) . ' days');
@@ -582,7 +587,7 @@ final class KioskComptageController extends Controller
             return;
         }
 
-        redirect(url('/kiosque/admin/periode/' . rawurlencode($token) . '?p=7j'));
+        redirect(url('/kiosque/admin/periode/' . rawurlencode($token) . '?p=semaine'));
     }
 
     /**

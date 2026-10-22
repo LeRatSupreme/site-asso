@@ -78,7 +78,7 @@ final class ComptaCalc
      */
     public const PERIOD_OPTIONS = [
         '1d'     => '1 jour',
-        '7d'     => '7 derniers jours',
+        'week'   => 'Semaine en cours',
         '30d'    => '30 derniers jours',
         'all'    => 'Tout',
         'custom' => 'Personnalisé',
@@ -89,8 +89,9 @@ final class ComptaCalc
      * avec la même sémantique que la page Réappro.
      *
      * Règles :
-     *  - preset inconnu/null → « 30d » ;
+     *  - preset inconnu/null → « week » (semaine en cours, lundi → J) ;
      *  - « Nd » → from = aujourd'hui −(N−1) jours ;
+     *  - « week » → from = lundi de la semaine en cours ;
      *  - « all » → bornes null (toute la période disponible) ;
      *  - « custom » → from/to validés au format YYYY-MM-DD (from <= to,
      *    sinon échange) ; bornes invalides → repli sur « 30d ».
@@ -106,7 +107,7 @@ final class ComptaCalc
     {
         $preset = (string) $preset;
         if (!array_key_exists($preset, self::PERIOD_OPTIONS)) {
-            $preset = '30d';
+            $preset = 'week';
         }
 
         $fromDay = null;
@@ -117,8 +118,9 @@ final class ComptaCalc
                 $fromDay = date('Y-m-d');
                 $toDay = date('Y-m-d');
                 break;
-            case '7d':
-                $fromDay = date('Y-m-d', strtotime('-6 days'));
+            case 'week':
+                // Semaine en cours : du lundi (inclus) à aujourd'hui.
+                $fromDay = date('Y-m-d', strtotime('-' . ((int) date('N') - 1) . ' days'));
                 $toDay = date('Y-m-d');
                 break;
             case 'all':
@@ -137,9 +139,9 @@ final class ComptaCalc
                     $fromDay = $from;
                     $toDay = $to;
                 } else {
-                    // Bornes invalides : bascule sur les 30 derniers jours.
-                    $preset = '30d';
-                    $fromDay = date('Y-m-d', strtotime('-29 days'));
+                    // Bornes invalides : repli sur la semaine en cours.
+                    $preset = 'week';
+                    $fromDay = date('Y-m-d', strtotime('-' . ((int) date('N') - 1) . ' days'));
                     $toDay = date('Y-m-d');
                 }
                 break;

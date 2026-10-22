@@ -4,25 +4,25 @@ declare(strict_types=1);
 
 /**
  * Kiosque ADMIN — récap de période unifié : menu « Période analysée »
- * (7 / 14 / 30 derniers jours ou mois en cours) avec bornes affichées et
- * nombre de jours analysés (week-end inclus), comme sur le réappro.
- * CA, bénéfice, paiements, détail jour par jour, comparaison mois
+ * (semaine en cours, 14 / 30 derniers jours ou mois en cours) avec bornes
+ * affichées et nombre de jours analysés (week-end inclus), comme sur le
+ * réappro. CA, bénéfice, paiements, détail jour par jour, comparaison mois
  * précédent (mois), top produits.
  *
  * @var string $token
- * @var string $p '7j'|'14j'|'30j'|'mois'
+ * @var string $p 'semaine'|'14j'|'30j'|'mois'
  * @var int $calDays
  * @var string $rangeLabel
  * @var array<string,mixed> $stats
  */
 $isMois = $p === 'mois';
 $options = [
-    '7j'   => '7 derniers jours',
-    '14j'  => '14 derniers jours',
-    '30j'  => '30 derniers jours',
-    'mois' => 'Mois en cours',
+    'semaine' => 'Semaine en cours',
+    '14j'     => '14 derniers jours',
+    '30j'     => '30 derniers jours',
+    'mois'    => 'Mois en cours',
 ];
-$optionLabel = $options[$p] ?? $options['7j'];
+$optionLabel = $options[$p] ?? $options['semaine'];
 $fmtFull = static fn (string $d): string => (new DateTimeImmutable($d))->format('d/m/Y');
 $from = (string) $stats['from'];
 $to = (string) $stats['to'];

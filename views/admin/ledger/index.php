@@ -45,10 +45,10 @@ declare(strict_types=1);
  *      admin ET kiosque ; `?? []` par robustesse).
  */
 $presets = [
-    '1d'  => '1 jour',
-    '7d'  => '7 derniers jours',
-    '30d' => '30 derniers jours',
-    'all' => 'Tout',
+    '1d'   => '1 jour',
+    'week' => 'Semaine en cours',
+    '30d'  => '30 derniers jours',
+    'all'  => 'Tout',
 ];
 $balancePos = (float) $entries['balance'] >= 0;
 // Bénéfice net de la période (coût des produits vendus déduit) — distinct
