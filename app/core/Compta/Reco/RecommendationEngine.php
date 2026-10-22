@@ -61,12 +61,20 @@ final class RecommendationEngine
      *
      * @param RecoDataset                      $data Instantané pur des données de la fenêtre.
      * @param \DateTimeImmutable               $now  Instant de référence (fingerprint/refus, horodatage, dates des consignes).
-     * @param array{parametres?:array<string,mixed>,regles?:list<string>} $opts
+     * @param array{parametres?:array<string,mixed>,regles?:list<string>,autres_idees?:bool} $opts
      *         'parametres' : surcharges « reco_<nom> » fusionnées DANS le dataset ;
-     *         'regles' : restriction de la liste des règles évaluées (tests).
+     *         'regles' : restriction de la liste des règles évaluées (tests) ;
+     *         'autres_idees' : ADDITIF d'affichage — expose dans
+     *         meta['autres_idees'] les idées écartées par le cap / la
+     *         diversité / le dédoublonnage (JAMAIS celles bloquées par
+     *         l'historique ni rejetées par les garde-fous). Aucun calcul,
+     *         aucun cap ni score modifié : le classement complet est
+     *         obtenu par le même Scoring::classe à cap infini, dont les
+     *         retenues sont identiques (la coupe finale n'est qu'un slice).
      *
      * @return array{idees:list<Recommendation>,meta:array<string,mixed>} meta : audit complet
-     *         (creuse, historique, rejets, écartées R3, message, paramètres résolus, horodatage Europe/Paris).
+     *         (creuse, historique, rejets, écartées R3, autres idées si
+     *         demandées, message, paramètres résolus, horodatage Europe/Paris).
      */
     public static function recommend(RecoDataset $data, \DateTimeImmutable $now, array $opts = []): array
     {
@@ -181,8 +189,19 @@ final class RecommendationEngine
         // 4. Coupes SÉPARÉES : historique (actifs/refus), tri, dédoublonnage,
         //    DIVERSITÉ idées (≤ IDEES_MAX_PAR_REGLE par règle, AVANT le cap :
         //    le slot libéré va à la règle suivante), cap par bloc.
+        //    Option 'autres_idees' : le MÊME classement est demandé à cap
+        //    infini puis tronqué — retenues strictement identiques (le cap
+        //    final n'est qu'un array_slice), le reliquat est exposé en méta.
+        $avecAutres = ($opts['autres_idees'] ?? null) === true;
+        if ($avecAutres) {
+            $classementIdees = Scoring::classe($candidatsIdees, $ds->historique, $now, PHP_INT_MAX, false, $maxParRegle);
+            $retenuesIdees = array_slice($classementIdees, 0, max(0, $maxIdees));
+            $autresIdees = array_slice($classementIdees, max(0, $maxIdees));
+        } else {
+            $retenuesIdees = Scoring::classe($candidatsIdees, $ds->historique, $now, $maxIdees, false, $maxParRegle);
+            $autresIdees = [];
+        }
         $retenuesCorrections = Scoring::classe($candidatsCorrections, $ds->historique, $now, $maxCorrections, true);
-        $retenuesIdees = Scoring::classe($candidatsIdees, $ds->historique, $now, $maxIdees, false, $maxParRegle);
 
         // 5. Mapping en Recommendation (garde-fous déjà passés → garde_fous_ok = true).
         $idees = [];
@@ -209,6 +228,14 @@ final class RecommendationEngine
             'idees_fiables'          => $nbIdees,
             'message'                => $nbIdees === 0 ? self::MESSAGE_AUCUNE_IDEE : ($nbIdees === 1 ? self::MESSAGE_UNE_IDEE : null),
             'ecartees'               => ['R3' => $ecarteesR3],
+            'autres_idees'           => array_map(
+                static fn (array $c): array => [
+                    'regle'    => (string) ($c['regle'] ?? ''),
+                    'titre'    => (string) ($c['titre'] ?? ''),
+                    'pourquoi' => (string) ($c['pourquoi'] ?? ''),
+                ],
+                $autresIdees
+            ),
         ];
 
         return ['idees' => $idees, 'meta' => $meta];

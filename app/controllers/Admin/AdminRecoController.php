@@ -6,6 +6,7 @@ namespace App\Controllers\Admin;
 
 use App\Core\Compta\Kiosk;
 use App\Core\Compta\Reco\EffetMesure;
+use App\Core\Compta\Reco\RecoLibelles;
 use App\Core\Compta\Reco\RecommendationEngine;
 use App\Models\RecoData;
 use App\Models\Recommendation;
@@ -14,7 +15,8 @@ use App\Models\Recommendation;
  * Intégration du moteur de recommandations commerciales (cœur pur
  * App\Core\Compta\Reco) au site : carte « Idées du moment » du dashboard
  * Analytics + kiosque admin, page d'historique avec EFFET MESURÉ, décisions
- * humaines (Appliquer / Plus tard / Ignorer) et seuils modifiables.
+ * humaines (Je le fais / Plus tard / Pas pour moi — valeurs POST
+ * « appliquer / plus_tard / ignorer ») et seuils modifiables.
  *
  * RÈGLE DE MISSION : le site PROPOSE, un humain DÉCIDE — aucune écriture
  * automatique de prix ou de stock. Une décision « appliquer » écrit la
@@ -45,6 +47,12 @@ final class AdminRecoController extends AdminBaseController
     /** Redirects autorisés après décision (whitelist anti open-redirect). */
     private const RETOURS = ['/admin/analytics', '/admin/reco/historique'];
 
+    /** Libellé du bouton principal d'une correction (fiche produit/coût). */
+    private const LIEN_FICHE_PRODUIT = 'Ouvrir la fiche du produit';
+
+    /** Libellé du bouton principal d'une rupture (liste de courses). */
+    private const LIEN_LISTE_COURSES = 'Ajouter à la liste de courses';
+
     // -----------------------------------------------------------------
     //  Payload de la carte « Idées du moment »
     // -----------------------------------------------------------------
@@ -60,15 +68,21 @@ final class AdminRecoController extends AdminBaseController
      *   - 'idees'       : consignes commerciales (bloc 'idee', ≤ 3) ;
      *   - 'corrections' : données/stock (bloc 'correction', ≤ 5).
      * Chaque entrée est le toArray() du cœur (16 clés) + 'lien' résolu
-     * par lienPour() selon le contexte (admin ou kiosque).
+     * par lienPour() selon le contexte (admin ou kiosque) : tableau
+     * {href, libelle} (libellé humain du bouton principal — « Ouvrir la
+     * fiche du produit » pour une fiche, « Ajouter à la liste de courses »
+     * pour une rupture). S'ajoute 'autres_idees' : les idées écartées par
+     * les caps du moteur (extension additive, derrière le dépliant
+     * « Voir les autres idées » des vues).
      *
-     * @return array{idees:list<array<string,mixed>>,corrections:list<array<string,mixed>>,meta:array<string,mixed>,insuffisant:bool,indisponible:bool,raison:string,fenetre:array{from:string,to:string,jours_ouverts:int}}
+     * @return array{idees:list<array<string,mixed>>,corrections:list<array<string,mixed>>,autres_idees:list<array{regle:string,titre:string,pourquoi:string}>,meta:array<string,mixed>,insuffisant:bool,indisponible:bool,raison:string,fenetre:array{from:string,to:string,jours_ouverts:int}}
      */
     public static function payloadPourAnalytics(bool $kiosk = false): array
     {
         $vide = [
             'idees'        => [],
             'corrections'  => [],
+            'autres_idees' => [],
             'meta'         => ['indisponible' => true, 'raison' => ''],
             'insuffisant'  => false,
             'indisponible' => true,
@@ -79,7 +93,7 @@ final class AdminRecoController extends AdminBaseController
         try {
             $now = new \DateTimeImmutable('now', new \DateTimeZone(self::TZ));
             ['reco' => $reco, 'forecast' => $forecast, 'fenetre' => $fenetre] = RecoData::dataset($now->format('Y-m-d'), $now);
-            ['idees' => $idees, 'meta' => $meta] = RecommendationEngine::recommend($reco, $now);
+            ['idees' => $idees, 'meta' => $meta] = RecommendationEngine::recommend($reco, $now, ['autres_idees' => true]);
 
             $tabIdees = [];
             $tabCorrections = [];
@@ -92,10 +106,14 @@ final class AdminRecoController extends AdminBaseController
                     $tabIdees[] = $tab;
                 }
             }
+            $autres = is_array($meta['autres_idees'] ?? null)
+                ? array_values(array_filter($meta['autres_idees'], 'is_array'))
+                : [];
 
             return [
                 'idees'        => $tabIdees,
                 'corrections'  => $tabCorrections,
+                'autres_idees' => $autres,
                 'meta'         => $meta,
                 'insuffisant'  => (bool) ($meta['historique_insuffisant'] ?? false),
                 'indisponible' => false,
@@ -110,30 +128,40 @@ final class AdminRecoController extends AdminBaseController
     }
 
     /**
-     * Lien admin de la fiche concernée par une reco (bouton « Ouvrir la
-     * fiche ↗ »), résolu UNE FOIS côté contrôleur pour toutes les vues.
-     *
-     * Mapping (clé = premier produit, préfixe « sans_stock: » des clés
-     * hors catalogue R11 retiré ; doublons = groupe R11 sans fiche
-     * produit unique) :
-     *   - R11 « Renseigner le coût » → fiche coûts du produit (ancre formulaire) ;
-     *   - R11 « Fusionner »          → page des alias (doublons ≥ 2 produits) ;
-     *   - R11 « Vérifier le stock » / R8 / R9 → inventaire ;
-     *   - R2 → liste des ventes.
-     * En KIOSQUE : les pages compta n'ont pas d'équivalent — seulement
-     * R2 vers la liste publique du kiosque, null ailleurs.
+     * Lien + libellé du bouton PRINCIPAL d'une reco (résolus UNE FOIS
+     * côté contrôleur pour toutes les vues — les vues n'inventent rien) :
+     *  - R2 (rupture)  → liste de courses, « Ajouter à la liste de courses »
+     *    (kiosque : la liste publique du kiosque) ;
+     *  - R11 « Renseigner le coût » → fiche coûts du produit (ancre
+     *    formulaire), « Ouvrir la fiche du produit » ;
+     *  - R11 « Fusionner »          → page des libellés (doublons ≥ 2
+     *    produits, pas de fiche unique), « Ouvrir les libellés » ;
+     *  - R11 « Vérifier le stock » / R8 / R9 → inventaire, « Ouvrir la
+     *    fiche du produit ».
+     * En KIOSQUE : les pages compta n'ont pas d'équivalent — seulement R2
+     * vers la liste publique du kiosque, null ailleurs (la vue n'affiche
+     * alors que les options discrètes).
      *
      * @param array<string,mixed> $idee  toArray() du cœur (+ 'lien' ajouté par l'appelant).
+     *
+     * @return array{href:string,libelle:string}|null
      */
-    private static function lienPour(array $idee, bool $kiosk = false): ?string
+    private static function lienPour(array $idee, bool $kiosk = false): ?array
     {
         $regle = (string) ($idee['regle'] ?? '');
         if ($regle === '') {
             return null;
         }
 
+        if ($regle === 'R2') {
+            return [
+                'href'    => $kiosk ? Kiosk::url('/kiosque/liste/') : url('/admin/compta/liste'),
+                'libelle' => self::LIEN_LISTE_COURSES,
+            ];
+        }
+
         if ($kiosk) {
-            return $regle === 'R2' ? Kiosk::url('/kiosque/liste/') : null;
+            return null;
         }
 
         $produits = is_array($idee['produits'] ?? null) ? $idee['produits'] : [];
@@ -149,33 +177,35 @@ final class AdminRecoController extends AdminBaseController
 
         if ($regle === 'R11') {
             if (str_contains($titre, 'Renseigner le coût') && $cle !== '') {
-                return url('/admin/compta/couts') . '?product_key=' . rawurlencode($cle) . '#costs-form';
+                return [
+                    'href'    => url('/admin/compta/couts') . '?product_key=' . rawurlencode($cle) . '#costs-form',
+                    'libelle' => self::LIEN_FICHE_PRODUIT,
+                ];
             }
             if (str_contains($titre, 'Fusionner')) {
-                return url('/admin/compta/aliases');
+                return ['href' => url('/admin/compta/aliases'), 'libelle' => 'Ouvrir les libellés'];
             }
             if (str_contains($titre, 'Vérifier le stock')) {
-                return url('/admin/compta/inventaire');
+                return ['href' => url('/admin/compta/inventaire'), 'libelle' => self::LIEN_FICHE_PRODUIT];
             }
 
             return null;
         }
 
         return match ($regle) {
-            'R2'    => url('/admin/compta/liste'),
-            'R8', 'R9' => url('/admin/compta/inventaire'),
-            default => null,
+            'R8', 'R9' => ['href' => url('/admin/compta/inventaire'), 'libelle' => self::LIEN_FICHE_PRODUIT],
+            default    => null,
         };
     }
 
     /**
      * Persiste les recommandations AFFICHÉES — idées ET corrections (les
      * appelants fusionnent les deux listes du payload) — statut
-     * « proposee » par défaut du upsert, pour que les boutons Appliquer /
-     * Plus tard / Ignorer aient un id. Le payload stocké est le toArray()
-     * complet du cœur (16 clés, bloc inclus) ; le upsert ne touche JAMAIS
-     * aux décisions déjà prises. Un échec lève (l'appelant enveloppe dans
-     * un try/catch silencieux).
+     * « proposee » par défaut du upsert, pour que les boutons
+     * Je le fais / Plus tard / Pas pour moi aient un id. Le payload stocké
+     * est le toArray() complet du cœur (16 clés, bloc inclus) ; le upsert
+     * ne touche JAMAIS aux décisions déjà prises. Un échec lève (l'appelant
+     * enveloppe dans un try/catch silencieux).
      *
      * @param list<array<string,mixed>> $idees Recommandations des deux blocs (idées + corrections).
      * @param array<string,mixed>       $meta    (réservé : les idées d'un payload indisponible ne sont jamais persistées)
@@ -308,12 +338,13 @@ final class AdminRecoController extends AdminBaseController
         }
 
         // Historique compact (idées appliquées, la plus récente d'abord).
+        // Libellé humain de la règle (JAMAIS le code R# dans la vue).
         $hist = [];
         foreach (Recommendation::historique() as $l) {
             $effet = self::effetDepuisJson($l['effet_json'] ?? null);
             $hist[] = [
                 'titre'       => (string) ($l['titre'] ?? ''),
-                'regle'       => (string) ($l['regle'] ?? ''),
+                'regle_lib'   => RecoLibelles::regle((string) ($l['regle'] ?? '')),
                 'applied_at'  => (string) ($l['applied_at'] ?? ''),
                 'conclusion'  => (string) ($l['effet_conclusion'] ?? ''),
                 'libelle'     => is_array($effet) ? EffetMesure::libelle($effet) : '',

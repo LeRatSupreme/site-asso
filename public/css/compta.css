@@ -1492,3 +1492,70 @@ details.howto p {
 .afaire-item { display: flex; align-items: center; gap: 0.75rem; padding: 0.55rem 0; border-top: 1px solid rgba(128, 128, 128, 0.15); flex-wrap: wrap; }
 .afaire-item:first-child { border-top: 0; }
 .afaire-item .afaire-texte { flex: 1 1 auto; min-width: 200px; }
+
+/* ---- Idées du moment (recommandations) ---------------------------------- */
+/* Classes délocalisées des blocs <style> locaux des vues reco (carte
+   analytics, kiosque, historique) : source unique, variables existantes. */
+.reco-card { display: flex; flex-direction: column; gap: .75rem; }
+.reco-bloc { display: flex; flex-direction: column; gap: .5rem; }
+.reco-bloc-titre { margin: 0; font-size: .95rem; }
+.reco-idee { border: 1px solid var(--border); border-radius: 12px; padding: .85rem 1rem; display: flex; flex-direction: column; gap: .4rem; }
+.reco-correction { border-style: dashed; }
+.reco-idee-item { display: flex; flex-direction: column; gap: .4rem; padding: .35rem 0; }
+.reco-idee-item + .reco-idee-item { border-top: 1px dashed var(--border); }
+.reco-idee-head { display: flex; flex-wrap: wrap; align-items: center; gap: .45rem; }
+.reco-titre { font-size: .95rem; }
+.reco-badge { font-size: .7rem; font-weight: 800; padding: .12rem .5rem; border-radius: 999px; border: 1px solid var(--border); }
+.reco-badge.is-rule { color: var(--primary); border-color: var(--border-strong, var(--border)); }
+.reco-badge.is-up { color: var(--accent-success, #22c55e); border-color: var(--accent-success, #22c55e); }
+.reco-badge.is-off { color: var(--accent-warning, #f59e0b); border-color: var(--accent-warning, #f59e0b); }
+.reco-badge.is-muted { color: var(--muted); }
+.reco-badge.is-gain { color: var(--accent-success, #22c55e); border-color: var(--accent-success, #22c55e); }
+.reco-chiffres { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: .45rem; }
+.reco-periode { margin: 0; font-size: .8rem; color: var(--primary); font-weight: 700; }
+.reco-pourquoi { margin: 0; font-size: .86rem; color: var(--muted); }
+.reco-action { margin: 0; font-size: .95rem; font-weight: 800; }
+.reco-details summary { cursor: pointer; font-size: .8rem; color: var(--muted); }
+.reco-details { font-size: .8rem; }
+.reco-hypotheses { margin: .4rem 0 0; padding-left: 1.1rem; font-size: .8rem; color: var(--muted); }
+.reco-mesure { margin: .35rem 0 0; font-size: .8rem; color: var(--muted); }
+.reco-produits-liste { margin: .4rem 0 0; padding-left: 1.1rem; font-size: .8rem; color: var(--muted); }
+.reco-autres { margin-top: .25rem; }
+.reco-autres-liste { margin: .4rem 0 0; padding-left: 1.1rem; font-size: .8rem; color: var(--muted); display: flex; flex-direction: column; gap: .25rem; }
+.reco-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .45rem; margin-top: .25rem; }
+.reco-form { display: flex; align-items: center; gap: .35rem; margin: 0; }
+.reco-form-ignore { flex-wrap: wrap; }
+.reco-form-ignore .af-select, .reco-form-ignore .af-input { font-size: .78rem; padding: .3rem .5rem; }
+.reco-foot { margin: 0; font-size: .82rem; }
+.reco-foot a { color: var(--primary); }
+
+/* Historique des idées (page /admin/reco/historique). */
+.reco-hist { display: flex; flex-direction: column; gap: 1.25rem; }
+.reco-hist .reco-badge { display: inline-block; }
+.reco-sous-titre { margin: 1rem 0 .4rem; font-size: .9rem; }
+.reco-seuils { display: flex; flex-direction: column; gap: .6rem; max-width: 480px; }
+.reco-seuil { display: flex; flex-direction: column; gap: .2rem; }
+.reco-seuil span { font-size: .78rem; color: var(--muted); }
+.reco-seuil .af-input { width: 100%; }
+
+/* Version compacte téléphone (kiosque admin, mêmes composants). */
+.kr-idee { display: flex; flex-direction: column; gap: 0.4rem; }
+.kr-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; }
+.kr-idee-item { display: flex; flex-direction: column; gap: 0.4rem; padding: 0.3rem 0; }
+.kr-idee-item + .kr-idee-item { border-top: 1px dashed var(--border); }
+.kr-chiffres { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; }
+.krb { font-size: 0.68rem; font-weight: 800; padding: 0.1rem 0.45rem; border-radius: 999px; border: 1px solid var(--border); white-space: nowrap; }
+.krb.is-rule { color: var(--primary); border-color: var(--border-strong, var(--border)); }
+.krb.is-up { color: var(--accent-success, #22c55e); border-color: var(--accent-success, #22c55e); }
+.krb.is-off { color: var(--accent-warning, #f59e0b); border-color: var(--accent-warning, #f59e0b); }
+.krb.is-muted { color: var(--muted); }
+.krb.is-gain { color: var(--accent-success, #22c55e); border-color: var(--accent-success, #22c55e); }
+.kr-pourquoi { margin: 0; font-size: 0.82rem; color: var(--muted); }
+.kr-action { margin: 0; font-size: 0.9rem; font-weight: 800; }
+.kr-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.2rem; }
+.kr-form { display: flex; margin: 0; }
+.kr-details summary { cursor: pointer; font-size: 0.78rem; color: var(--muted); }
+.kr-details { font-size: 0.78rem; }
+.kr-hypotheses { margin: 0.35rem 0 0; padding-left: 1.1rem; font-size: 0.78rem; color: var(--muted); }
+.kr-mesure { margin: 0.3rem 0 0; font-size: 0.78rem; color: var(--muted); }
+.kr-hist-head { margin-top: 0.6rem; }
