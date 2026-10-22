@@ -77,7 +77,13 @@ final class RecoPagesTest extends IntegrationTestCase
 
     /**
      * La page d'historique (admin) répond 200 et affiche son titre, les
-     * deux sections d'historique et le formulaire des seuils.
+     * TROIS sections de mission (« En cours », « Mesurées », « Ignorées »)
+     * et le formulaire des seuils.
+     *
+     * AJUSTEMENT LOT 3 : la mission §6 impose la refonte en 3 sections —
+     * l'ancienne assertion « Corrections traitées » (4e carte) est remplacée
+     * par les titres des nouvelles sections (les corrections appliquées
+     * restent visibles dans « En cours », sous-liste « Corrections appliquées »).
      */
     public function test_historique_reco_repond_200(): void
     {
@@ -85,16 +91,22 @@ final class RecoPagesTest extends IntegrationTestCase
         self::assertSame(200, (int) ($r['code'] ?? 0), 'Historique reco doit répondre 200.');
         $body = (string) ($r['body'] ?? '');
         self::assertStringContainsString('Idées appliquées', $body, 'Titre de page absent.');
-        self::assertStringContainsString('Corrections traitées', $body, 'Section corrections absente.');
+        self::assertStringContainsString('En cours', $body, 'Section « En cours » absente.');
+        self::assertStringContainsString('Mesurées', $body, 'Section « Mesurées » absente.');
+        self::assertStringContainsString('Ignorées', $body, 'Section « Ignorées » absente.');
         self::assertStringContainsString('Seuils du moteur', $body, 'Formulaire des seuils absent.');
     }
 
     /**
-     * Les lignes appliquées sont groupées par bloc décodé du payload :
-     * bloc 'idee' → section « Idées appliquées », bloc 'correction' →
-     * section « Corrections traitées ».
+     * Les lignes appliquées sont réparties selon le bloc décodé du
+     * payload : idée → « En cours » (mesure en cours), correction →
+     * sous-liste « Corrections appliquées » de « En cours ».
+     *
+     * AJUSTEMENT LOT 3 : remplace l'ancien groupement « Idées appliquées » /
+     * « Corrections traitées » par les sections de mission ; AUCUN code de
+     * règle ne doit apparaître (libellés humains RecoLibelles).
      */
-    public function test_historique_groupe_idees_et_corrections_par_bloc(): void
+    public function test_historique_repartit_idees_et_corrections_appliquees(): void
     {
         $this->seedReco('fp_hist_idee', 'appliquee', 'R1', ['bloc' => 'idee']);
         $this->seedReco('fp_hist_corr', 'appliquee', 'R11', ['bloc' => 'correction']);
@@ -102,9 +114,68 @@ final class RecoPagesTest extends IntegrationTestCase
         $r = $this->request('GET', '/admin/reco/historique', [], [], $this->rootId);
         self::assertSame(200, (int) ($r['code'] ?? 0));
         $body = (string) ($r['body'] ?? '');
-        self::assertStringContainsString('Idée test fp_hist_idee', $body, 'L\'idée appliquée doit apparaître dans l\'historique.');
-        self::assertStringContainsString('Correction test fp_hist_corr', $body, 'La correction appliquée doit apparaître dans l\'historique.');
-        self::assertStringContainsString('Corrections traitées', $body);
+        self::assertStringContainsString('Idée test fp_hist_idee', $body, 'L\'idée appliquée doit apparaître dans « En cours ».');
+        self::assertStringContainsString('Correction test fp_hist_corr', $body, 'La correction appliquée doit apparaître dans « Corrections appliquées ».');
+        self::assertStringContainsString('Corrections appliquées', $body);
+        self::assertStringContainsString('mesure en cours', $body, 'L\'idée appliquée non mesurée est « mesure en cours ».');
+        self::assertDoesNotMatchRegularExpression('/\bR\d{1,2}\b/', $body, 'Aucun code de règle ne doit fuiter dans l\'historique.');
+    }
+
+    /**
+     * LOT 3 : les idées ignorées sont listées dans « Ignorées » avec leur
+     * motif et un bouton « Rétablir » postant vers /admin/reco/retablir.
+     */
+    public function test_historique_affiche_les_ignorcees_avec_motif_et_bouton_retalbir(): void
+    {
+        $this->seedReco('fp_hist_ignoree', 'ignoree', 'R7');
+
+        $r = $this->request('GET', '/admin/reco/historique', [], [], $this->rootId);
+        self::assertSame(200, (int) ($r['code'] ?? 0));
+        $body = (string) ($r['body'] ?? '');
+        self::assertStringContainsString('Idée test fp_hist_ignoree', $body, 'L\'idée ignorée doit apparaître dans « Ignorées ».');
+        self::assertStringContainsString('>Rétablir</button>', $body, 'Le bouton « Rétablir » est absent.');
+        self::assertStringContainsString('/admin/reco/retablir', $body, 'L\'endpoint de rétablissement est absent.');
+    }
+
+    /**
+     * LOT 3 : POST /admin/reco/retablir — une idée ignorée repasse à
+     * l'état « proposee » (re-proposable), motif et date de décision
+     * effacés ; elle réapparaît alors dans « Idées en attente ».
+     */
+    public function test_retablir_une_ignorcee_la_remet_proposee(): void
+    {
+        $this->seedReco('fp_hist_ret', 'ignoree', 'R5');
+
+        $r = $this->request('POST', '/admin/reco/retablir', ['id' => 'fp_hist_ret'], [], $this->rootId);
+        self::assertSame(302, (int) ($r['code'] ?? 0), 'Le rétablissement doit rediriger.');
+
+        $row = $this->fetchReco('fp_hist_ret');
+        self::assertSame('proposee', (string) $row['statut'], 'Le statut doit revenir à proposee.');
+        self::assertNull($row['motif'], 'Le motif doit être effacé.');
+        self::assertNull($row['decided_at'], 'La date de décision doit être effacée.');
+
+        $r2 = $this->request('GET', '/admin/reco/historique', [], [], $this->rootId);
+        self::assertSame(200, (int) ($r2['code'] ?? 0));
+        self::assertStringContainsString(
+            'Idée test fp_hist_ret',
+            (string) ($r2['body'] ?? ''),
+            'L\'idée rétablie doit réapparaître dans « Idées en attente ».'
+        );
+    }
+
+    /**
+     * POST /admin/reco/retablir sur une ligne NON ignorée : refusé (pas
+     * de changement de statut, redirection avec message d'erreur).
+     */
+    public function test_retablir_refuse_une_ligne_non_ignoree(): void
+    {
+        $this->seedReco('fp_hist_prop', 'proposee', 'R2');
+
+        $r = $this->request('POST', '/admin/reco/retablir', ['id' => 'fp_hist_prop'], [], $this->rootId);
+        self::assertSame(302, (int) ($r['code'] ?? 0));
+
+        $row = $this->fetchReco('fp_hist_prop');
+        self::assertSame('proposee', (string) $row['statut'], 'Une ligne non ignorée ne doit pas être modifiée.');
     }
 
     /**

@@ -279,11 +279,13 @@ final class AdminRecoController extends AdminBaseController
         }
 
         $this->renderAdmin('admin/reco/historique', [
-            'title'     => 'Idées appliquées',
-            'lignes'    => $lignes,
-            'reussies'  => $reussies,
-            'proposees' => Recommendation::proposees(),
-            'seuils'    => $seuils,
+            'title'         => 'Idées appliquées',
+            'lignes'        => $lignes,
+            'reussies'      => $reussies,
+            'proposees'     => Recommendation::proposees(),
+            'ignorees'      => Recommendation::ignorees(),
+            'seuils'        => $seuils,
+            'loadComptaCss' => true,
         ]);
     }
 
@@ -404,6 +406,29 @@ final class AdminRecoController extends AdminBaseController
             self::normaliserMotif(),
             url('/kiosque/admin/reco/' . rawurlencode($token))
         );
+    }
+
+    /**
+     * Rétablit une idée ignorée (section « Ignorées » de l'historique) :
+     * remise à l'état « proposee » — elle réapparaît dans « Idées en
+     * attente » (et dans la carte si le moteur la re-génère). POST
+     * guardé compta, CSRF vérifié centralement par le routeur.
+     */
+    public function retablir(): void
+    {
+        $this->guardCompta();
+
+        $id = trim((string) ($_POST['id'] ?? ''));
+        if ($id === '' || !Recommendation::retablir($id)) {
+            $this->setFlash('error', 'Rétablissement impossible : cette idée ignorée est introuvable.');
+            redirect(url('/admin/reco/historique'));
+
+            return;
+        }
+
+        $this->audit('reco.retablir', 'recommendation', $id);
+        $this->setFlash('success', 'Idée rétablie : elle est de nouveau proposée.');
+        redirect(url('/admin/reco/historique'));
     }
 
     /**

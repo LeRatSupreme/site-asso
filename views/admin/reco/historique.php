@@ -3,24 +3,29 @@
 declare(strict_types=1);
 
 /**
- * Historique des idées appliquées (recommandations commerciales) :
- * effet mesuré par le cœur (EffetMesure), « Ce qui a marché », idées en
- * attente de décision et seuils modifiables du moteur.
+ * Historique des idées (recommandations commerciales), refondu en
+ * TROIS sections + annexes conservées :
+ *  - « En cours » : idées appliquées en cours de mesure (~4 semaines)
+ *    et corrections appliquées (sans mesure d'effet, par nature) ;
+ *  - « Mesurées » : effet en euros AVEC fourchette (EffetMesure) ou
+ *    verdict « non concluant » ;
+ *  - « Ignorées » : motif d'ignorance et bouton « Rétablir » (remise à
+ *    l'état proposable — l'idée repart dans « Idées en attente »).
+ * Suivent « Idées en attente » (décidables) et « Seuils du moteur ».
  *
- * Les lignes appliquées sont groupées en DEUX sections selon le bloc
- * décodé du payload (json_decode payload_json['bloc'] ?? 'idee') :
- *  - « Idées appliquées » (bloc 'idee') : effet mesuré ~4 semaines ;
- *  - « Corrections traitées » (bloc 'correction') : données/stock,
- *    appliquées SANS baseline (rien à mesurer).
+ * JAMAIS de code de règle (R1…) : libellés humains via RecoLibelles.
+ * Aucun calcul métier en vue : les effets viennent du contrôleur/cœur.
  *
  * @var string $title
  * @var list<array<string,mixed>> $lignes    Idées appliquées (Recommendation::historique()).
  * @var list<array<string,mixed>> $reussies  Mesures concluantes à effet > 0.
  * @var list<array<string,mixed>> $proposees Idées en attente (Recommendation::proposees()).
+ * @var list<array<string,mixed>> $ignorees  Idées ignorées (Recommendation::ignorees()).
  * @var array<string,string>      $seuils    Valeurs courantes des seuils « reco_* ».
  */
 
 use App\Core\Compta\Reco\EffetMesure;
+use App\Core\Compta\Reco\RecoLibelles;
 
 $libellesSeuils = [
     'reco_marge_min'              => 'Marge minimale (fraction, ex. 0.15 = 15 %)',
@@ -33,17 +38,21 @@ $libellesSeuils = [
     'reco_max_corrections'        => 'Nombre max de corrections affichées',
 ];
 
-// Groupement par bloc décodé du payload stocké ('idee' par défaut :
-// lignes d'avant l'itération 2 sans bloc = idées).
-$lignesIdee = [];
+// Découpage des lignes APPLIQUÉES : en cours de mesure (pas encore
+// contrôlées) vs mesurées (verdict posé), et corrections (sans mesure).
+$lignesEnCours = [];
+$lignesMesurees = [];
 $lignesCorrection = [];
 foreach ($lignes as $l) {
     $dec = json_decode((string) ($l['payload_json'] ?? '{}'), true);
     $bloc = is_array($dec) ? (string) ($dec['bloc'] ?? 'idee') : 'idee';
+    $conclusion = (string) ($l['effet_conclusion'] ?? '');
     if ($bloc === 'correction') {
         $lignesCorrection[] = $l;
+    } elseif ($conclusion === 'concluant' || $conclusion === 'non_concluant') {
+        $lignesMesurees[] = $l;
     } else {
-        $lignesIdee[] = $l;
+        $lignesEnCours[] = $l;
     }
 }
 
@@ -68,37 +77,90 @@ $badgeConclusion = static function (array $l): string {
         <div>
             <p class="eyebrow">Analyse</p>
             <h1 class="page-title">Idées appliquées</h1>
-            <p class="muted">Le site propose, tu décides : historique des idées appliquées et de leur effet mesuré. Aucun prix ni stock n'est modifié automatiquement.</p>
+            <p class="muted">Le site propose, vous décidez : historique des idées appliquées et de leur effet mesuré. Aucun prix ni stock n'est modifié automatiquement.</p>
         </div>
     </div>
 
     <!-- ============================================================ -->
-    <!--  Idées appliquées (bloc 'idee') : effet mesuré                -->
+    <!--  1. EN COURS : idées appliquées en cours de mesure +          -->
+    <!--      corrections appliquées (sans mesure d'effet)             -->
     <!-- ============================================================ -->
     <div class="card surface glass chart-card">
         <div class="chart-head">
-            <h2 class="chart-title">Idées appliquées</h2>
-            <span class="chart-sub">effet mesuré ~4 semaines après l'application</span>
+            <h2 class="chart-title">En cours</h2>
+            <span class="chart-sub">mesure de l'effet en cours, résultat dans environ 4 semaines</span>
         </div>
-        <?php if ($lignesIdee === []): ?>
-            <p class="muted fc-empty">Aucune idée appliquée pour l'instant. Les idées du moment sont sur le dashboard <a href="<?= e(url('/admin/analytics')) ?>">Analytics</a>.</p>
+        <?php if ($lignesEnCours === [] && $lignesCorrection === []): ?>
+            <p class="muted fc-empty">Rien en cours pour l'instant. Les idées appliquées depuis la carte apparaîtront ici.</p>
+        <?php else: ?>
+            <?php if ($lignesEnCours !== []): ?>
+                <div class="table-wrap">
+                    <table class="data-table">
+                        <thead>
+                            <tr><th>Idée</th><th>Nature</th><th>Appliquée le</th><th>Statut</th></tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($lignesEnCours as $l): ?>
+                                <tr>
+                                    <td><?= e((string) ($l['titre'] ?? '')) ?></td>
+                                    <td><span class="reco-badge is-rule"><?= e(RecoLibelles::regle((string) ($l['regle'] ?? ''))) ?></span></td>
+                                    <td><?= e((string) ($l['applied_at'] ?? '') !== '' ? formatDate(substr((string) $l['applied_at'], 0, 10), 'd/m/Y') : '—') ?></td>
+                                    <td><?= $badgeConclusion($l) ?></td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            <?php endif; ?>
+            <?php if ($lignesCorrection !== []): ?>
+                <h3 class="reco-sous-titre">Corrections appliquées</h3>
+                <div class="table-wrap">
+                    <table class="data-table">
+                        <thead>
+                            <tr><th>Correction</th><th>Nature</th><th>Appliquée le</th></tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($lignesCorrection as $l): ?>
+                                <tr>
+                                    <td><?= e((string) ($l['titre'] ?? '')) ?></td>
+                                    <td><span class="reco-badge is-rule"><?= e(RecoLibelles::regle((string) ($l['regle'] ?? ''))) ?></span></td>
+                                    <td><?= e((string) ($l['applied_at'] ?? '') !== '' ? formatDate(substr((string) $l['applied_at'], 0, 10), 'd/m/Y') : '—') ?></td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            <?php endif; ?>
+        <?php endif; ?>
+    </div>
+
+    <!-- ============================================================ -->
+    <!--  2. MESURÉES : effet en € (fourchette) ou non concluant       -->
+    <!-- ============================================================ -->
+    <div class="card surface glass chart-card">
+        <div class="chart-head">
+            <h2 class="chart-title">Mesurées</h2>
+            <span class="chart-sub">effet observé avec sa fourchette, ou verdict non concluant</span>
+        </div>
+        <?php if ($lignesMesurees === []): ?>
+            <p class="muted fc-empty">Rien de mesuré pour l'instant — les mesures prennent environ 4 semaines.</p>
         <?php else: ?>
             <div class="table-wrap">
                 <table class="data-table">
                     <thead>
-                        <tr><th>Idée</th><th>Règle</th><th>Appliquée le</th><th>Effet mesuré</th><th>Statut</th></tr>
+                        <tr><th>Idée</th><th>Nature</th><th>Appliquée le</th><th>Effet mesuré</th><th>Verdict</th></tr>
                     </thead>
                     <tbody>
-                        <?php foreach ($lignesIdee as $l): ?>
+                        <?php foreach ($lignesMesurees as $l): ?>
                             <?php
                             // $l['effet'] : tableau déjà décodé/normalisé par
                             // le contrôleur (prêt pour EffetMesure::libelle).
                             $effet = is_array($l['effet'] ?? null) ? $l['effet'] : null;
-                            $libelle = $effet !== null ? EffetMesure::libelle($effet) : 'Mesure pas encore déclenchée (délai de 14 jours ouverts).';
+                            $libelle = $effet !== null ? EffetMesure::libelle($effet) : 'non concluant';
                             ?>
                             <tr>
                                 <td><?= e((string) ($l['titre'] ?? '')) ?></td>
-                                <td><span class="reco-badge is-rule"><?= e((string) ($l['regle'] ?? '')) ?></span></td>
+                                <td><span class="reco-badge is-rule"><?= e(RecoLibelles::regle((string) ($l['regle'] ?? ''))) ?></span></td>
                                 <td><?= e((string) ($l['applied_at'] ?? '') !== '' ? formatDate(substr((string) $l['applied_at'], 0, 10), 'd/m/Y') : '—') ?></td>
                                 <td><?= e($libelle) ?></td>
                                 <td><?= $badgeConclusion($l) ?></td>
@@ -111,55 +173,40 @@ $badgeConclusion = static function (array $l): string {
     </div>
 
     <!-- ============================================================ -->
-    <!--  Corrections traitées (bloc 'correction') : sans baseline     -->
+    <!--  3. IGNORÉES : motif + bouton « Rétablir »                    -->
     <!-- ============================================================ -->
     <div class="card surface glass chart-card">
         <div class="chart-head">
-            <h2 class="chart-title">Corrections traitées</h2>
-            <span class="chart-sub">données / stock — appliquées sans mesure d'effet</span>
+            <h2 class="chart-title">Ignorées</h2>
+            <span class="chart-sub">idées écartées — rétablissez celle que vous voulez revoir</span>
         </div>
-        <?php if ($lignesCorrection === []): ?>
-            <p class="muted fc-empty">Aucune correction traitée pour l'instant.</p>
+        <?php if ($ignorees === []): ?>
+            <p class="muted fc-empty">Aucune idée ignorée pour l'instant.</p>
         <?php else: ?>
             <div class="table-wrap">
                 <table class="data-table">
                     <thead>
-                        <tr><th>Correction</th><th>Règle</th><th>Traitée le</th></tr>
+                        <tr><th>Idée</th><th>Nature</th><th>Ignorée le</th><th>Motif</th><th></th></tr>
                     </thead>
                     <tbody>
-                        <?php foreach ($lignesCorrection as $l): ?>
+                        <?php foreach ($ignorees as $l): ?>
                             <tr>
                                 <td><?= e((string) ($l['titre'] ?? '')) ?></td>
-                                <td><span class="reco-badge is-rule"><?= e((string) ($l['regle'] ?? '')) ?></span></td>
-                                <td><?= e((string) ($l['applied_at'] ?? '') !== '' ? formatDate(substr((string) $l['applied_at'], 0, 10), 'd/m/Y') : '—') ?></td>
+                                <td><span class="reco-badge is-rule"><?= e(RecoLibelles::regle((string) ($l['regle'] ?? ''))) ?></span></td>
+                                <td><?= e((string) ($l['decided_at'] ?? '') !== '' ? formatDate(substr((string) $l['decided_at'], 0, 10), 'd/m/Y') : '—') ?></td>
+                                <td><?= e(trim((string) ($l['motif'] ?? '')) !== '' ? (string) $l['motif'] : '—') ?></td>
+                                <td>
+                                    <form method="post" action="<?= e(url('/admin/reco/retablir')) ?>" class="reco-form">
+                                        <?= csrf_field() ?>
+                                        <input type="hidden" name="id" value="<?= e((string) ($l['id'] ?? '')) ?>">
+                                        <button type="submit" class="btn btn-outline btn-sm">Rétablir</button>
+                                    </form>
+                                </td>
                             </tr>
                         <?php endforeach; ?>
                     </tbody>
                 </table>
             </div>
-        <?php endif; ?>
-    </div>
-
-    <!-- ============================================================ -->
-    <!--  Ce qui a marché (effet mesuré > 0, concluant)                 -->
-    <!-- ============================================================ -->
-    <div class="card surface glass chart-card">
-        <div class="chart-head">
-            <h2 class="chart-title">Ce qui a marché</h2>
-            <span class="chart-sub">effet mesuré strictement positif</span>
-        </div>
-        <?php if ($reussies === []): ?>
-            <p class="muted fc-empty">Rien de concluant pour l'instant — les mesures prennent environ 4 semaines.</p>
-        <?php else: ?>
-            <ul class="reco-reussites">
-                <?php foreach ($reussies as $r): ?>
-                    <li>
-                        <strong><?= e((string) ($r['titre'] ?? '')) ?></strong>
-                        <span class="reco-badge is-rule"><?= e((string) ($r['regle'] ?? '')) ?></span>
-                        — <?= e(EffetMesure::libelle(is_array($r['effet'] ?? null) ? $r['effet'] : [])) ?>
-                    </li>
-                <?php endforeach; ?>
-            </ul>
         <?php endif; ?>
     </div>
 
@@ -177,13 +224,13 @@ $badgeConclusion = static function (array $l): string {
             <div class="table-wrap">
                 <table class="data-table">
                     <thead>
-                        <tr><th>Idée</th><th>Règle</th><th>Proposée le</th><th>Décision</th></tr>
+                        <tr><th>Idée</th><th>Nature</th><th>Proposée le</th><th>Décision</th></tr>
                     </thead>
                     <tbody>
                         <?php foreach ($proposees as $p): ?>
                             <tr>
                                 <td><?= e((string) ($p['titre'] ?? '')) ?></td>
-                                <td><span class="reco-badge is-rule"><?= e((string) ($p['regle'] ?? '')) ?></span></td>
+                                <td><span class="reco-badge is-rule"><?= e(RecoLibelles::regle((string) ($p['regle'] ?? ''))) ?></span></td>
                                 <td><?= e((string) ($p['created_at'] ?? '') !== '' ? formatDate(substr((string) $p['created_at'], 0, 10), 'd/m/Y') : '—') ?></td>
                                 <td>
                                     <div class="reco-actions">
@@ -191,7 +238,7 @@ $badgeConclusion = static function (array $l): string {
                                             <?= csrf_field() ?>
                                             <input type="hidden" name="id" value="<?= e((string) ($p['id'] ?? '')) ?>">
                                             <input type="hidden" name="retour" value="/admin/reco/historique">
-                                            <button type="submit" name="decision" value="appliquer" class="btn btn-primary btn-sm">Appliquer</button>
+                                            <button type="submit" name="decision" value="appliquer" class="btn btn-primary btn-sm">Je le fais</button>
                                         </form>
                                         <form method="post" action="<?= e(url('/admin/reco/decision')) ?>" class="reco-form">
                                             <?= csrf_field() ?>
@@ -204,7 +251,7 @@ $badgeConclusion = static function (array $l): string {
                                             <input type="hidden" name="id" value="<?= e((string) ($p['id'] ?? '')) ?>">
                                             <input type="hidden" name="retour" value="/admin/reco/historique">
                                             <input type="hidden" name="motif" value="non_pertinent">
-                                            <button type="submit" name="decision" value="ignorer" class="btn btn-ghost btn-sm">Ignorer</button>
+                                            <button type="submit" name="decision" value="ignorer" class="btn btn-ghost btn-sm">Pas pour moi</button>
                                         </form>
                                     </div>
                                 </td>
@@ -217,7 +264,7 @@ $badgeConclusion = static function (array $l): string {
     </div>
 
     <!-- ============================================================ -->
-    <!--  Seuils du moteur (reco_*)                                     -->
+    <!--  Seuils du moteur (reco_*) — conservé, inchangé               -->
     <!-- ============================================================ -->
     <div class="card surface glass chart-card">
         <div class="chart-head">
@@ -239,19 +286,3 @@ $badgeConclusion = static function (array $l): string {
         </form>
     </div>
 </div>
-
-<style>
-    .reco-hist { display: flex; flex-direction: column; gap: 1.25rem; }
-    .reco-badge { display: inline-block; font-size: .7rem; font-weight: 800; padding: .12rem .5rem; border-radius: 999px; border: 1px solid rgba(255,255,255,.14); }
-    .reco-badge.is-rule { color: var(--primary, #48bdd3); border-color: rgba(72,189,211,.4); }
-    .reco-badge.is-up { color: #22c55e; border-color: rgba(34,197,94,.4); }
-    .reco-badge.is-off { color: #f59e0b; border-color: rgba(245,158,11,.4); }
-    .reco-badge.is-muted { color: var(--muted, #9fb3c8); }
-    .reco-reussites { margin: 0; padding-left: 1.1rem; display: flex; flex-direction: column; gap: .35rem; font-size: .88rem; }
-    .reco-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .45rem; }
-    .reco-form { display: flex; align-items: center; gap: .35rem; margin: 0; }
-    .reco-seuils { display: flex; flex-direction: column; gap: .6rem; max-width: 480px; }
-    .reco-seuil { display: flex; flex-direction: column; gap: .2rem; }
-    .reco-seuil span { font-size: .78rem; color: var(--muted, #9fb3c8); }
-    .reco-seuil .af-input { width: 100%; }
-</style>

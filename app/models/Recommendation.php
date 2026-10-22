@@ -281,6 +281,52 @@ final class Recommendation extends Model
     }
 
     /**
+     * Idées IGNORÉES (la plus récente d'abord) : section « Ignorées » de
+     * l'historique, avec motif et bouton « Rétablir ». Liste bornée aux
+     * 50 plus récentes (les refus datant de plus de FENETRE_BLOCAGE_JOURS
+     * n'influencent plus le moteur).
+     *
+     * @return list<array<string,mixed>>
+     */
+    public static function ignorees(): array
+    {
+        try {
+            $rows = self::pdo()
+                ->query(
+                    "SELECT id, regle, titre, produits_json, payload_json, motif, decided_at
+                     FROM recommendations
+                     WHERE statut = 'ignoree'
+                     ORDER BY decided_at DESC
+                     LIMIT 50"
+                )
+                ->fetchAll();
+        } catch (\Throwable) {
+            return [];
+        }
+
+        /** @var list<array<string,mixed>> $rows */
+        return $rows;
+    }
+
+    /**
+     * Rétablit une idée ignorée : remise à l'état « proposee » (re-
+     * proposable), motif et date de décision effacés. Rien d'autre n'est
+     * touché (baseline/effet d'une application antérieure conservés si
+     * présents). Retourne false si la ligne est absente ou non ignorée.
+     */
+    public static function retablir(string $id): bool
+    {
+        $stmt = self::pdo()->prepare(
+            "UPDATE recommendations
+             SET statut = 'proposee', motif = NULL, decided_at = NULL
+             WHERE id = ? AND statut = 'ignoree'"
+        );
+        $stmt->execute([$id]);
+
+        return $stmt->rowCount() > 0;
+    }
+
+    /**
      * Encode un tableau en JSON (unicode lisible pour l'affichage admin).
      */
     private static function json(array $data): string
