@@ -34,16 +34,24 @@ final class Permissions
         return [
             Auth::ROLE_SUPERADMIN    => 'Fondateur',
             Auth::ROLE_ADMIN         => 'Administrateur',
+            Auth::ROLE_PRESIDENT     => 'Président',
             Auth::ROLE_TRESORERIE    => 'Trésorerie',
+            Auth::ROLE_EVENEMENTS    => 'Événements',
             Auth::ROLE_COMMUNICATION => 'Communication',
             Auth::ROLE_CAFETERIA     => 'Cafétéria',
             Auth::ROLE_JEUX          => 'Jeux',
+            Auth::ROLE_BENEVOL       => 'Bénévole',
             Auth::ROLE_ELEVE         => 'Élève',
         ];
     }
 
     /**
-     * Rôles donnant accès à l'espace d'administration (au moins un module).
+     * Rôles du bureau donnant accès à l'espace d'administration.
+     *
+     * La règle de base est « au moins un module », avec une exception
+     * assumée : BENEVOL (bénévole de caisse) n'a aucun module mais reste
+     * un rôle du bureau — ses pages (accueil, comptage caisse, comptage
+     * inventaire) sont gardées par AdminBaseController::guardAdminArea().
      *
      * @return list<string>
      */
@@ -97,6 +105,22 @@ final class Permissions
             Auth::ROLE_COMMUNICATION => [self::MODULE_CONTENT, self::MODULE_EVENTS, self::MODULE_CAFETERIA],
             Auth::ROLE_CAFETERIA     => [self::MODULE_CAFETERIA],
             Auth::ROLE_JEUX          => [self::MODULE_GAMES, self::MODULE_CAFETERIA],
+            // Événements : rôle dédié à la vie associative (agenda + contenu).
+            Auth::ROLE_EVENEMENTS    => [self::MODULE_EVENTS, self::MODULE_CONTENT],
+            // Président : lecture générale de l'espace admin. L'écriture est
+            // bloquée au routeur (tout POST /admin/* reçoit un 403, voir
+            // Router::dispatch).
+            Auth::ROLE_PRESIDENT     => [
+                self::MODULE_COMPTA,
+                self::MODULE_EVENTS,
+                self::MODULE_CONTENT,
+                self::MODULE_CAFETERIA,
+                self::MODULE_GAMES,
+            ],
+            // Bénévole de caisse : AUCUN module (aucun chiffre financier).
+            // Ses pages (accueil, comptage caisse, comptage inventaire) sont
+            // gérées par AdminBaseController::guardAdminArea() via adminRoles().
+            Auth::ROLE_BENEVOL       => [],
             Auth::ROLE_ELEVE         => [],
         ];
     }
@@ -163,6 +187,13 @@ final class Permissions
      */
     public static function isSystemAdmin(?string $email = null): bool
     {
+        // Le président (lecture seule) et le bénévole de caisse n'accèdent
+        // JAMAIS au groupe Système — même si leur e-mail figure dans
+        // SYSTEM_ADMINS (la liste ne vise que les ADMIN de confiance).
+        if (in_array(Auth::role(), [Auth::ROLE_PRESIDENT, Auth::ROLE_BENEVOL], true)) {
+            return false;
+        }
+
         if (Auth::role() === Auth::ROLE_SUPERADMIN) {
             return true;
         }

@@ -113,6 +113,56 @@ final class AdminGuardTest extends TestCase
     }
 
     // -----------------------------------------------------------------
+    //  Président (lecture seule) & Bénévole de caisse
+    // -----------------------------------------------------------------
+
+    public function test_president_lit_les_modules_mas_pas_l_admin_general(): void
+    {
+        $_SESSION['user_id'] = 'pres1';
+        $_SESSION['user_role'] = Auth::ROLE_PRESIDENT;
+
+        // Lecture générale : chaque module ouvert au président passe.
+        foreach (Permissions::modulesFor(Auth::ROLE_PRESIDENT) as $module) {
+            self::assertSame(
+                Middleware::OK,
+                Middleware::resolve(Permissions::rolesForModule($module)),
+                $module
+            );
+        }
+
+        // Ni l'admin général (guard()), ni le Système (guardSystem).
+        self::assertSame(Middleware::FORBIDDEN, Middleware::resolve([Auth::ROLE_ADMIN]));
+        putenv('SYSTEM_ADMINS');
+        self::assertFalse(Permissions::isSystemAdmin());
+    }
+
+    public function test_benevol_refuse_sur_tous_les_modules_mas_passe_en_zone_admin(): void
+    {
+        $_SESSION['user_id'] = 'benev1';
+        $_SESSION['user_role'] = Auth::ROLE_BENEVOL;
+
+        // Aucun module : toutes les pages module (compta, analytics…)
+        // sont refusées.
+        foreach ([
+            Permissions::MODULE_COMPTA,
+            Permissions::MODULE_EVENTS,
+            Permissions::MODULE_CONTENT,
+            Permissions::MODULE_CAFETERIA,
+            Permissions::MODULE_GAMES,
+        ] as $module) {
+            self::assertSame(
+                Middleware::FORBIDDEN,
+                Middleware::resolve(Permissions::rolesForModule($module)),
+                $module
+            );
+        }
+
+        // Mais il reste un rôle du bureau : accueil et pages de comptage
+        // (guardAdminArea → adminRoles()).
+        self::assertSame(Middleware::OK, Middleware::resolve(Permissions::adminRoles()));
+    }
+
+    // -----------------------------------------------------------------
     //  Groupe « Système » : ADMIN + SYSTEM_ADMINS (guardSystem)
     // -----------------------------------------------------------------
 

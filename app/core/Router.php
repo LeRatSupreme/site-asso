@@ -170,6 +170,18 @@ final class Router
 
                 return;
             }
+            // Président : rôle de CONSULTATION. Toute écriture (POST) sous
+            // /admin est refusée d'emblée, avant tout contrôleur — les GET
+            // restent possibles selon les modules ouverts (Permissions).
+            // Le bloc s'applique aussi en APP_TESTING : seuls les tests qui
+            // simulent un autre rôle (ADMIN/SUPERADMIN…) passent, comme en
+            // production.
+            if ($method === 'POST' && Auth::role() === Auth::ROLE_PRESIDENT) {
+                http_response_code(403);
+                echo '<h1>Erreur 403 — Consultation seule : les modifications sont réservées aux autres rôles.</h1>';
+
+                return;
+            }
         } elseif (str_starts_with($routePath, '/eleve') || str_starts_with($routePath, '/account')) {
             if (!Auth::check()) {
                 $callback = $_SERVER['REQUEST_URI'] ?? '/';

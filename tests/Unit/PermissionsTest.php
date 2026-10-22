@@ -67,6 +67,92 @@ final class PermissionsTest extends TestCase
         self::assertSame([Permissions::MODULE_CAFETERIA], Permissions::modulesFor(Auth::ROLE_CAFETERIA));
     }
 
+    public function test_libelles_des_trois_roles_nouveaux_ou_recables(): void
+    {
+        $roles = Permissions::roles();
+
+        self::assertSame('Président', $roles[Auth::ROLE_PRESIDENT]);
+        self::assertSame('Bénévole', $roles[Auth::ROLE_BENEVOL]);
+        // EVENEMENTS était mort (absent de la liste) : désormais libellé et
+        // sélectionnable, sans renommer les rôles existants.
+        self::assertSame('Événements', $roles[Auth::ROLE_EVENEMENTS]);
+        self::assertCount(10, $roles);
+    }
+
+    public function test_president_lecture_generale_tous_les_modules(): void
+    {
+        // Le président lit tout ; l'écriture est bloquée au routeur
+        // (Router::dispatch refuse tout POST /admin/*).
+        self::assertSame(
+            [
+                Permissions::MODULE_COMPTA,
+                Permissions::MODULE_EVENTS,
+                Permissions::MODULE_CONTENT,
+                Permissions::MODULE_CAFETERIA,
+                Permissions::MODULE_GAMES,
+            ],
+            Permissions::modulesFor(Auth::ROLE_PRESIDENT)
+        );
+        foreach (Permissions::modulesFor(Auth::ROLE_PRESIDENT) as $module) {
+            self::assertTrue(Permissions::allows(Auth::ROLE_PRESIDENT, $module), $module);
+        }
+    }
+
+    public function test_benevol_aucun_module(): void
+    {
+        // Bénévole de caisse : aucun module, donc aucun chiffre financier.
+        // Ses pages (accueil, comptages) passent par guardAdminArea.
+        self::assertSame([], Permissions::modulesFor(Auth::ROLE_BENEVOL));
+        foreach ([Permissions::MODULE_COMPTA, Permissions::MODULE_EVENTS, Permissions::MODULE_CONTENT, Permissions::MODULE_CAFETERIA, Permissions::MODULE_GAMES] as $module) {
+            self::assertFalse(Permissions::allows(Auth::ROLE_BENEVOL, $module), $module);
+            self::assertNotContains(Auth::ROLE_BENEVOL, Permissions::rolesForModule($module));
+        }
+    }
+
+    public function test_evenements_cable_sur_events_et_content(): void
+    {
+        self::assertSame(
+            [Permissions::MODULE_EVENTS, Permissions::MODULE_CONTENT],
+            Permissions::modulesFor(Auth::ROLE_EVENEMENTS)
+        );
+        self::assertContains(Auth::ROLE_EVENEMENTS, Permissions::rolesForModule(Permissions::MODULE_EVENTS));
+        self::assertContains(Auth::ROLE_EVENEMENTS, Permissions::rolesForModule(Permissions::MODULE_CONTENT));
+        self::assertNotContains(Auth::ROLE_EVENEMENTS, Permissions::rolesForModule(Permissions::MODULE_COMPTA));
+    }
+
+    public function test_president_et_benevol_sont_des_roles_bureau(): void
+    {
+        foreach ([Auth::ROLE_PRESIDENT, Auth::ROLE_BENEVOL] as $role) {
+            self::assertContains($role, Permissions::adminRoles(), $role);
+            self::assertTrue(Permissions::isAdminRole($role), $role);
+        }
+
+        // L'élève reste exclu du bureau.
+        self::assertNotContains(Auth::ROLE_ELEVE, Permissions::adminRoles());
+        self::assertFalse(Permissions::isAdminRole(Auth::ROLE_ELEVE));
+    }
+
+    public function test_president_et_benevol_jamais_dans_le_groupe_systeme(): void
+    {
+        if (session_status() === PHP_SESSION_NONE) {
+            @session_start();
+        }
+
+        // Même e-mail listé dans SYSTEM_ADMINS : ces deux rôles n'accèdent
+        // jamais au groupe Système (Utilisateurs, Paramètres…).
+        putenv('SYSTEM_ADMINS=president@exemple.fr,benevol@exemple.fr');
+
+        foreach ([Auth::ROLE_PRESIDENT, Auth::ROLE_BENEVOL] as $role) {
+            $_SESSION['user_id'] = 'u_' . strtolower((string) $role);
+            $_SESSION['user_role'] = $role;
+
+            self::assertFalse(Permissions::isSystemAdmin(), $role);
+            self::assertFalse(Permissions::isSystemAdmin('president@exemple.fr'), $role);
+        }
+
+        $_SESSION = [];
+    }
+
     public function test_eleve_et_visiteur_n_ont_acces_a_rien(): void
     {
         self::assertSame([], Permissions::modulesFor(Auth::ROLE_ELEVE));
