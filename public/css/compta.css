@@ -2259,3 +2259,11 @@ tr.tt-row-hidden { display: none; }
 
 /* Cartes filtrables (grille catégories) : même classe de masquage. */
 .cat-grid .cat-card.tt-row-hidden { display: none; }
+
+/* Encart « Base de calcul » (lot 5) — partagé par les pages Réappro et
+   Liste de courses (partiel views/partials/_base_calcul.php) ; compta.css
+   est chargé sur les pages /admin/compta/* et dans le layout kiosque. */
+.shop-basis {
+    margin: -0.4rem 0 1.2rem; font-size: 0.8rem; color: var(--muted, #8892a6);
+}
+.shop-basis strong { color: var(--foreground, inherit); font-weight: 700; }

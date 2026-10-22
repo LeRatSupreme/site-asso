@@ -24,6 +24,8 @@ declare(strict_types=1);
  * @var int                                          $refCalDays
  * @var bool                                         $kiosk     Mode kiosque : accès par lien secret, sans connexion.
  * @var string                                       $kioskUrl  Lien kiosque à copier sur le téléphone (vide en kiosque).
+ * @var bool                                         $showMoney Faux = AUCUN chiffre financier rendu (jeton kiosque « membres ») ; vrai pour tout rôle compta et le jeton « admin ».
+ * @var array{ventes:string,couverture:string,source:string} $basis Encart « Base de calcul » (identique à la liste de courses).
  */
 
 function reorder_qty(float $v): string {
@@ -74,6 +76,10 @@ foreach ($rows as $r) {
         $uncounted++;
     }
 }
+
+// Nombre de colonnes du tableau : la colonne « Coût ligne » disparaît
+// quand les montants sont masqués (bénévole / jeton kiosque « membres »).
+$colspan = $showMoney ? 13 : 12;
 ?>
 <div class="compta-head">
     <div class="compta-head-row">
@@ -87,6 +93,8 @@ foreach ($rows as $r) {
         <?php endif; ?>
     </div>
 </div>
+
+<?php require AEIC_VIEWS . '/partials/_base_calcul.php'; ?>
 
 <?php if (!$kiosk && ($user['role'] ?? '') === 'SUPERADMIN'): ?>
 <details class="card surface glass" style="padding: 0.85rem 1.1rem; margin-bottom: 1.25rem;">
@@ -121,11 +129,13 @@ foreach ($rows as $r) {
         <p class="kpi-value <?= $totalToOrder > 0 ? '' : 'is-positive' ?>"><?= (int) $totalToOrder ?></p>
         <p class="kpi-sub">unités pour couvrir <?= e($periods[$currentPeriod]['label']) ?></p>
     </div>
+    <?php if ($showMoney): ?>
     <div class="card surface glass kpi">
         <p class="kpi-label">Coût estimé du panier</p>
         <p class="kpi-value"><?= e(formatPrice($totalCost)) ?></p>
         <p class="kpi-sub"><?php if ($missingCost > 0): ?>+<?= (int) $missingCost ?> produit<?= $missingCost > 1 ? 's' : '' ?> sans coût saisi<?php else: ?>tous les coûts sont connus<?php endif ?></p>
     </div>
+    <?php endif; ?>
     <div class="card surface glass kpi">
         <p class="kpi-label">Alertes stock</p>
         <p class="kpi-value <?= $alerts > 0 ? 'is-negative' : 'is-positive' ?>"><?= (int) $alerts ?></p>
@@ -249,15 +259,15 @@ foreach ($rows as $r) {
                 <th>Produit</th>
                 <th>Catégorie</th>
                 <th class="th-num" title="Quantité totale vendue sur la période analysée">Vendus<br>(période)</th>
-                <th class="th-num" title="Stock théorique de l'inventaire : dernier comptage + achats − ventes − pertes">Stock théorique</th>
+                <th class="th-num" title="Stock théorique de l'inventaire : dernier comptage + achats − ventes − pertes">Stock restant</th>
                 <th class="th-num" title="Conso moyenne par jour (7 j/7, week-end inclus)">Conso / jour<br><small>(7j/7)</small></th>
                 <th class="th-num" title="Conso / jour × 7 (semaine calendaire)">Conso /<br>semaine</th>
                 <th class="th-num" title="Conso / jour × 30,44 (mois calendaire moyen)">Conso /<br>mois</th>
                 <th class="th-num" title="Jours avant rupture, week-end inclus (stock ÷ conso / jour)">Autonomie</th>
                 <th class="th-num" title="Besoin estimé pour couvrir l'horizon choisi">Besoin<br>(<?= e($periods[$currentPeriod]['label']) ?>)</th>
-                <th class="th-num" title="Besoin − stock théorique (minimum 0)">À commander</th>
+                <th class="th-num" title="Besoin − stock restant (minimum 0)">À commander</th>
                 <th class="th-num" title="Quantité par pack d'achat (12, 24, 32…) : « À commander » est arrondi au multiple supérieur du pack. Vide = commande à l'unité.">Pack</th>
-                <th class="th-num" title="À commander × coût de revient du lot en cours">Coût ligne</th>
+                <?php if ($showMoney): ?><th class="th-num" title="À commander × coût de revient du lot en cours">Coût ligne</th><?php endif ?>
                 <th>État</th>
             </tr>
         </thead>
@@ -278,12 +288,12 @@ foreach ($rows as $r) {
                     data-month="<?= (float) $r['avg_month'] ?>"
                     data-need="<?= (int) $r['need'] ?>"
                     data-toorder="<?= (int) $r['to_order'] ?>"
-                    data-unitcost="<?= $r['unit_cost'] !== null ? e((string) $r['unit_cost']) : '' ?>"
+                    <?= $showMoney && $r['unit_cost'] !== null ? 'data-unitcost="' . e((string) $r['unit_cost']) . '"' : '' ?>
                     data-autonomy="<?= !empty($r['infinite']) ? 999999 : ($autonomy ?? 99999) ?>">
                     <td><strong><?= e($key) ?></strong></td>
                     <td data-label="Catégorie"><?= e((string) $r['category']) ?></td>
                     <td class="num muted" data-label="Vendus (période)"><?= (int) $r['qty'] ?></td>
-                    <td class="num" data-label="Stock théorique">
+                    <td class="num" data-label="Stock restant">
                         <?php if ($hasStock): ?>
                             <strong class="stock-value<?= $stockVal <= 0 ? ' is-out' : '' ?>"
                                     title="<?= $stockVal < 0 ? 'Stock négatif : survente (ventes sans stock reconstitué)' : 'Stock théorique de l\'inventaire' ?>">
@@ -327,7 +337,7 @@ foreach ($rows as $r) {
                     <td class="num" data-label="Besoin (<?= e($periods[$currentPeriod]['label']) ?>)"><?= (int) $r['need'] ?></td>
                     <td class="num to-order-cell" data-label="À commander">
                         <?php if ((int) $r['to_order'] > 0): ?>
-                            <strong style="color:var(--primary)" title="<?= !$hasStock ? 'Stock jamais compté : le besoin complet est proposé' : 'Besoin − stock théorique' ?><?= (int) $r['pack'] > 1 ? ', arrondi au pack de ' . (int) $r['pack'] : '' ?>"><?= (int) $r['to_order'] ?></strong>
+                            <strong style="color:var(--primary)" title="<?= !$hasStock ? 'Stock jamais compté : le besoin complet est proposé' : 'Besoin − stock restant' ?><?= (int) $r['pack'] > 1 ? ', arrondi au pack de ' . (int) $r['pack'] : '' ?>"><?= (int) $r['to_order'] ?></strong>
                             <?php if ((int) $r['pack'] > 1 && (int) $r['to_order_raw'] !== (int) $r['to_order']): ?>
                                 <span class="cost-sub" title="Besoin brut avant arrondi au pack">besoin <?= (int) $r['to_order_raw'] ?> · pack <?= (int) $r['pack'] ?></span>
                             <?php endif; ?>
@@ -347,6 +357,7 @@ foreach ($rows as $r) {
                             <input type="hidden" name="pack_keys[]" value="<?= e($key) ?>">
                         <?php endif; ?>
                     </td>
+                    <?php if ($showMoney): ?>
                     <td class="num cost-line-cell" data-label="Coût ligne">
                         <?php if ($r['order_cost'] !== null && (int) $r['to_order'] > 0): ?>
                             <strong><?= e(formatPrice((float) $r['order_cost'])) ?></strong>
@@ -357,6 +368,7 @@ foreach ($rows as $r) {
                             <span class="muted">0 €</span>
                         <?php endif; ?>
                     </td>
+                    <?php endif; ?>
                     <td>
                         <?php if (($r['state'] ?? '') === 'reorder'): ?>
                             <span class="badge badge-warning">À racheter</span>
@@ -369,7 +381,7 @@ foreach ($rows as $r) {
                 </tr>
             <?php endforeach; ?>
             <?php if ($rows === []): ?>
-                <tr><td colspan="13" class="muted">Aucun produit à analyser sur cette période. Importe d'abord un rapport SumUp.</td></tr>
+                <tr><td colspan="<?= $colspan ?>" class="muted">Aucun produit à analyser sur cette période. Importe d'abord un rapport SumUp.</td></tr>
             <?php endif; ?>
         </tbody>
         <?php if ($rows !== []): ?>
@@ -378,6 +390,7 @@ foreach ($rows as $r) {
                 <th colspan="9">Total à commander (<?= e($periods[$currentPeriod]['label']) ?>) :</th>
                 <th class="num" data-label="À commander"><strong id="reorder-total" style="color:var(--primary)"><?= (int) $totalToOrder ?></strong></th>
                 <th class="num" data-label="Pack"></th>
+                <?php if ($showMoney): ?>
                 <th class="num" data-label="Coût du panier">
                     <strong id="reorder-total-cost" style="color:var(--primary)">≈ <?= e(formatPrice($totalCost)) ?></strong>
                     <?php if ($missingCost > 0): ?>
@@ -386,6 +399,7 @@ foreach ($rows as $r) {
                         </span>
                     <?php endif; ?>
                 </th>
+                <?php endif; ?>
                 <th></th>
             </tr>
         </tfoot>
@@ -402,14 +416,14 @@ foreach ($rows as $r) {
 </div>
 
 <p class="card-meta">
-    Cette page analyse la consommation <strong>observée</strong> sur la période ; la <strong>liste de courses</strong> et la carte <strong>Réappro Analytics</strong> utilisent la prévision du moteur (7 jours ouverts, calibration CA) — même <strong>stock théorique</strong> partout, demande adaptée à chaque usage.
+    Cette page analyse la consommation <strong>observée</strong> sur la période ; la <strong>liste de courses</strong> et la carte <strong>Réappro Analytics</strong> utilisent la prévision du moteur (7 jours ouverts, calibration CA) — même <strong>stock restant</strong> partout, demande adaptée à chaque usage.
     Moyennes calculées sur les <strong>jours calendaires</strong> de la période analysée : le <strong>week-end est inclus</strong> (7 j/7), comme les ventes qu'il génère.
     Conso / jour = vendus ÷ jours analysés · Conso / semaine = conso / jour × 7 · Conso / mois = conso / jour × 30,44.
     L'<strong>autonomie</strong> est le nombre de jours avant rupture, week-end compris.
-    « À commander » = besoin sur l'horizon de couverture − <strong>stock théorique</strong> (minimum 0 ; un stock négatif majore la commande),
+    « À commander » = besoin sur l'horizon de couverture − <strong>stock restant</strong> (minimum 0 ; un stock négatif majore la commande),
     <strong>arrondi au multiple du pack</strong> quand une taille de pack est définie dans la colonne « Pack » (besoin 2 + pack 12 → commander 12 ; vide = à l'unité).
-    Stock théorique = dernier comptage + achats − ventes − pertes (mis à jour par <strong>Inventaire</strong>, <strong>Achats</strong> et <strong>Pertes</strong>).
-    « Coût ligne » = à commander × coût de revient du lot en cours · le total ≈ prix d'achat du panier (produits sans coût saisi exclus, comptés sous le total).
+    Stock restant = dernier comptage + achats − ventes − pertes (mis à jour par <strong>Inventaire</strong>, <strong>Achats</strong> et <strong>Pertes</strong>).
+    <?php if ($showMoney): ?>« Coût ligne » = à commander × coût de revient du lot en cours · le total ≈ prix d'achat du panier (produits sans coût saisi exclus, comptés sous le total).<?php endif ?>
     Un produit marqué <strong>« stock ∞ »</strong> (bouton sous l'autonomie) n'est jamais réapprovisionné : autonomie ∞, jamais proposé à la commande — réversible en un clic.
 </p>
 
@@ -487,12 +501,12 @@ foreach ($rows as $r) {
     var emptyRow = document.createElement('tr');
     emptyRow.className = 'reorder-empty';
     emptyRow.hidden = true;
-    emptyRow.innerHTML = '<td colspan="13" class="muted" style="text-align:center;padding:2.25rem 1rem">Aucun produit ne correspond à ces filtres.</td>';
+    emptyRow.innerHTML = '<td colspan="<?= $colspan ?>" class="muted" style="text-align:center;padding:2.25rem 1rem">Aucun produit ne correspond à ces filtres.</td>';
     if (tbody) tbody.appendChild(emptyRow);
 
     function norm(s) { return String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim(); }
     function num(tr, attr) { return parseFloat(tr.getAttribute(attr)) || 0; }
-    function fmtPrice(v) { return v.toFixed(2).replace('.', ',') + ' €'; }
+    function fmtPrice(v) { return v.toFixed(2).replace('.', ',') + '<?= $showMoney ? ' €' : '' ?>'; }
     function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
     function getParam(name) {
         var m = new RegExp('[?&]' + name + '=([^&#]*)').exec(window.location.search);
