@@ -5,7 +5,14 @@ declare(strict_types=1);
 /**
  * Layout espace administrateur AEIC.
  *
- * Sidebar + zone de contenu. Toutes les pages admin sont en noindex.
+ * Sidebar en 6 sections + fil d'Ariane automatique + recherche globale
+ * dans la barre du haut. Toutes les pages admin sont en noindex.
+ *
+ * Structure de la sidebar (refonte UI, cf. docs/ui-audit.md §3 et §8) :
+ * les entrées conservent EXACTEMENT les conditions de visibilité issues
+ * des guards serveur — module (Permissions::allows) pour les groupes,
+ * « Système OU page attribuée » (guardSystemOrPage, clé de page dans
+ * users.extra_pages) pour les pages protégées.
  *
  * @var string $content
  * @var string $title
@@ -19,149 +26,277 @@ use App\Models\Setting;
 $siteName    = Setting::get('site_name', 'AEIC');
 $currentPath = $_SERVER['REQUEST_URI'] ?? '/';
 // Chemin SANS query string, pour le matching actif de la sidebar :
-// « /admin/compta/ventes?period=... » doit allumer « Journal ventes ».
+// « /admin/compta/ventes?period=... » doit allumer « Journal des ventes ».
 $currentUrlPath = (string) (parse_url($currentPath, PHP_URL_PATH) ?: '/');
 $user        = Auth::user();
 $lang        = current_lang();
 
-$sections = [
-    'Tableau de bord' => [
-        'Tableau de bord' => '/admin',
-        'Wiki'        => '/admin/wiki',
-    ],
-    'Comptage' => [
-        'Comptage caisse'     => '/admin/compta/caisse',
-        'Comptage inventaire' => '/admin/compta/inventaire/comptage',
-    ],
-    'Contenu' => [
-        'Événements'   => '/admin/events',
-        'Pages'        => '/admin/pages',
-        'Équipe'       => '/admin/team',
-        'Sondages'     => '/admin/sondages',
-        'Promotions'   => '/admin/promotions',
-        'Médias'       => '/admin/media',
-    ],
-    'Cafétéria' => [
-        'Produits'    => '/admin/cafeteria',
-        'Catégories'  => '/admin/cafeteria/categories',
-        'Commandes'   => '/admin/cafeteria/commandes',
-    ],
-    'Jeux' => [
-        'Vue d\'ensemble' => '/admin/jeux',
-        'Joueurs & Pseudos' => '/admin/jeux/scores',
-        'Mots Wordle'   => '/admin/jeux/wordle',
-        'Énigmes'       => '/admin/jeux/enigmes',
-    ],
-    // Convention : la valeur d'un groupe est SOIT un tableau à plat
-    // « libellé => URL », SOIT un tableau imbriqué « sous-groupe =>
-    // (libellé => URL) » rendu avec des intertitres .admin-subgroup.
-    'Comptabilité' => [
-        'Général' => [
-            'Dashboard'    => '/admin/compta',
-            'Opérations'   => '/admin/compta/achats',
-            'Bilan annuel' => '/admin/compta/annuel',
-        ],
-        'Analyse' => [
-            'Analytics' => '/admin/analytics',
-            'Idées appliquées (reco)' => '/admin/reco/historique',
-            'Budgets'   => '/admin/compta/budgets',
-        ],
-        'Stock' => [
-            'Réappro'          => '/admin/compta/reappro',
-            'Liste de courses' => '/admin/compta/liste',
-        ],
-        'Ventes' => [
-            'Importer CSV'    => '/admin/compta/import',
-            'Journal ventes'  => '/admin/compta/ventes',
-        ],
-        'Produits & coûts' => [
-            'Produits'                => '/admin/compta/produits',
-            'Catégories'              => '/admin/compta/categories',
-            'Ajouter une appellation' => '/admin/compta/aliases/new',
-            'Mapping libellés'        => '/admin/compta/aliases',
-        ],
-    ],
-];
+/* -------------------------------------------------------------------------
+ * Conditions de visibilité réutilisées par entrée.
+ * ---------------------------------------------------------------------- */
 
-// Filtre les groupes de menu selon les modules autorisés au rôle :
-// un rôle ne doit jamais voir un lien vers une page qui lui est interdite.
-$sectionModules = [
-    'Cafétéria'    => Permissions::MODULE_CAFETERIA,
-    'Jeux'         => Permissions::MODULE_GAMES,
-    'Comptabilité' => Permissions::MODULE_COMPTA,
-];
 $viewerRole = (string) ($user['role'] ?? '');
-foreach ($sectionModules as $group => $module) {
-    if (!Permissions::allows($viewerRole, $module)) {
-        unset($sections[$group]);
+
+// Module autorisé au rôle (ou attribué individuellement via extra_pages).
+$moduleAllowed = static fn(string $module): bool => Permissions::allows($viewerRole, $module);
+
+// Pages protégées type « Système » : Fondateur/SYSTEM_ADMINS, ou page
+// attribuée individuellement (users.extra_pages, guardSystemOrPage()).
+$isSystemAdmin = Permissions::isSystemAdmin();
+$systemPageAllowed = static fn(string $key): bool => $isSystemAdmin || Permissions::userHasExtraPage($key);
+
+// Niveau « bureau » requis pour les entrées issues de l'ancien groupe
+// Système (même garde que guardSystemOrPage : rôles admin uniquement).
+$isAdminRole = in_array($user['role'] ?? null, Permissions::adminRoles(), true);
+
+// Journal d'audit : visible seulement Fondateur/ADMIN (garde actuelle).
+$isFondateurOuAdmin = in_array($user['role'] ?? null, [Auth::ROLE_SUPERADMIN, Auth::ROLE_ADMIN], true);
+
+// Bénévole (nouveau rôle) : aucun module, uniquement l'accueil et les
+// pages de comptage. La constante Auth::ROLE_BENEVOL est posée par le
+// lot rôles ; repli sur la clé littérale si le lot n'est pas encore
+// déployé (le fallback disparaît de lui-même une fois la constante là).
+$benevolRole = defined('App\Core\Auth::ROLE_BENEVOL') ? Auth::ROLE_BENEVOL : 'BENEVOL';
+$isBenevol = ($user['role'] ?? null) === $benevolRole;
+
+/* -------------------------------------------------------------------------
+ * Construction des 6 sections. Une section n'est ajoutée que si au moins
+ * une de ses entrées est visible : jamais de lien vers une page interdite.
+ * ---------------------------------------------------------------------- */
+
+$sections = [];
+
+// 1. Accueil (tout le bureau).
+$accueil = [
+    'À faire aujourd\'hui' => '/admin',
+    'Aide & wiki'          => '/admin/wiki',
+];
+if ($isFondateurOuAdmin) {
+    $accueil['Journal d\'audit'] = '/admin/audit';
+}
+if ($isBenevol) {
+    $accueil['Comptage caisse']     = '/admin/compta/caisse';
+    $accueil['Comptage inventaire'] = '/admin/compta/inventaire/comptage';
+}
+$sections['Accueil'] = $accueil;
+
+// 2. Ventes (module compta ; « Commandes élèves » requiert la cafétéria).
+$ventes = [];
+if ($moduleAllowed(Permissions::MODULE_COMPTA)) {
+    $ventes += [
+        'Aujourd\'hui'             => '/admin/compta',
+        'Analyses'                 => '/admin/analytics',
+        'Idées appliquées'         => '/admin/reco/historique',
+        'Bilan annuel'             => '/admin/compta/annuel',
+        'Journal des ventes'       => '/admin/compta/ventes',
+        'Bénéfice par produit'     => '/admin/compta/produits',
+        'Bénéfice par catégorie'   => '/admin/compta/categories',
+        'Importer un rapport SumUp' => '/admin/compta/import',
+    ];
+}
+if ($moduleAllowed(Permissions::MODULE_CAFETERIA)) {
+    $ventes['Commandes élèves'] = '/admin/cafeteria/commandes';
+}
+if ($ventes !== []) {
+    $sections['Ventes'] = $ventes;
+}
+
+// 3. Stock (compta + cafétéria), sous-groupes repliables.
+$stockProduits = [];
+if ($moduleAllowed(Permissions::MODULE_CAFETERIA)) {
+    $stockProduits += [
+        'Produits'   => '/admin/cafeteria',
+        'Catégories' => '/admin/cafeteria/categories',
+    ];
+}
+if ($isAdminRole && $systemPageAllowed('costs')) {
+    $stockProduits['Coûts de revient'] = '/admin/compta/couts';
+}
+if ($moduleAllowed(Permissions::MODULE_COMPTA)) {
+    $stockProduits += [
+        'Mapping libellés'        => '/admin/compta/aliases',
+        'Ajouter une appellation' => '/admin/compta/aliases/new',
+        'Détection de doublons'   => '/admin/compta/aliases/auto',
+    ];
+}
+
+$stockReappro = [];
+if ($moduleAllowed(Permissions::MODULE_COMPTA)) {
+    $stockReappro = [
+        'Réappro'          => '/admin/compta/reappro',
+        'Liste de courses' => '/admin/compta/liste',
+    ];
+}
+
+$stockInventaire = [];
+if ($isAdminRole && $systemPageAllowed('inventory')) {
+    $stockInventaire['Inventaire'] = '/admin/compta/inventaire';
+}
+if ($moduleAllowed(Permissions::MODULE_COMPTA)) {
+    $stockInventaire += [
+        'Comptage à l\'aveugle' => '/admin/compta/inventaire/comptage',
+        'Inventaire tablette'   => '/admin/compta/inventaire-tablette',
+    ];
+}
+
+$stockMouvements = [];
+if ($moduleAllowed(Permissions::MODULE_COMPTA)) {
+    $stockMouvements = [
+        'Achats' => '/admin/compta/achats',
+        'Pertes' => '/admin/compta/pertes',
+    ];
+}
+
+$stock = [];
+foreach ([
+    'Produits'             => $stockProduits,
+    'Réapprovisionnement'  => $stockReappro,
+    'Inventaire'           => $stockInventaire,
+    'Mouvements'           => $stockMouvements,
+] as $sousGroupe => $liens) {
+    if ($liens !== []) {
+        $stock[$sousGroupe] = $liens;
     }
 }
-
-// Groupe « Contenu » : filtrage PAR LIEN (les pages appartiennent à des
-// modules distincts : Événements = events, le reste = content).
-$contentLinkModules = [
-    'Événements' => Permissions::MODULE_EVENTS,
-    'Pages'      => Permissions::MODULE_CONTENT,
-    'Équipe'     => Permissions::MODULE_CONTENT,
-    'Sondages'   => Permissions::MODULE_CONTENT,
-    'Promotions' => Permissions::MODULE_CONTENT,
-    'Médias'     => Permissions::MODULE_CONTENT,
-];
-foreach ($contentLinkModules as $label => $module) {
-    if (isset($sections['Contenu'][$label]) && !Permissions::allows($viewerRole, $module)) {
-        unset($sections['Contenu'][$label]);
-    }
-}
-if (isset($sections['Contenu']) && $sections['Contenu'] === []) {
-    unset($sections['Contenu']);
+if ($stock !== []) {
+    $sections['Stock'] = $stock;
 }
 
-// Groupe « Système » : réservé au Fondateur et aux ADMIN listés dans
-// SYSTEM_ADMINS, plus les pages attribuées individuellement à un membre
-// du bureau (users.extra_pages, gérées depuis Utilisateurs, voir
-// AdminBaseController::guardSystemOrPage()). Chaque entrée est associée
-// à sa clé de page (null n'existe plus : tout est attribuable).
-$systemEntries = [
-    'Utilisateurs'     => ['/admin/users', 'users'],
-    'Adhésions'        => ['/admin/memberships', 'users'],
-    'Caisses'          => ['/admin/caisses', 'cash'],
-    'Kiosques'         => ['/admin/kiosques', 'kiosques'],
-    'Livre comptable'  => ['/admin/ledger', 'ledger'],
-    'Inventaire'       => ['/admin/compta/inventaire', 'inventory'],
-    'Coûts de revient' => ['/admin/compta/couts', 'costs'],
-    'Notifications'    => ['/admin/notifications', 'notifications'],
-    'Paramètres'       => ['/admin/settings', 'settings'],
-];
-if (in_array($user['role'] ?? null, Permissions::adminRoles(), true)) {
-    $system = [];
-    foreach ($systemEntries as $label => [$path, $key]) {
-        // Système OU attribution individuelle (users.extra_pages).
-        $allowed = Permissions::isSystemAdmin() || Permissions::userHasExtraPage($key);
+// 4. Comptabilité (module compta ; Livre comptable et Caisses : pages Système).
+$compta = [];
+if ($moduleAllowed(Permissions::MODULE_COMPTA)) {
+    $compta += [
+        'Opérations'           => '/admin/compta/depenses',
+        'Opérations événements' => '/admin/compta/evenements',
+    ];
+}
+if ($isAdminRole && $systemPageAllowed('ledger')) {
+    $compta['Livre comptable'] = '/admin/ledger';
+}
+if ($moduleAllowed(Permissions::MODULE_COMPTA)) {
+    $compta['Budgets'] = '/admin/compta/budgets';
+}
+if ($isAdminRole && $systemPageAllowed('cash')) {
+    $compta['Caisses'] = '/admin/caisses';
+}
+if ($compta !== []) {
+    $sections['Comptabilité'] = $compta;
+}
 
-        if ($allowed) {
-            $system[$label] = $path;
+// 5. Association : événements + contenu + pages Système Membres/Adhésions,
+//    avec sous-groupes « Site web » (content) et « Jeux » (games).
+$association = [];
+if ($moduleAllowed(Permissions::MODULE_EVENTS)) {
+    $association['Événements'] = '/admin/events';
+}
+if ($moduleAllowed(Permissions::MODULE_CONTENT)) {
+    $association['Sondages'] = '/admin/sondages';
+}
+if ($isAdminRole && $systemPageAllowed('users')) {
+    $association += [
+        'Membres'   => '/admin/users',
+        'Adhésions' => '/admin/memberships',
+    ];
+}
+
+$siteWeb = [];
+if ($moduleAllowed(Permissions::MODULE_CONTENT)) {
+    $siteWeb = [
+        'Pages'      => '/admin/pages',
+        'Équipe'     => '/admin/team',
+        'Médias'     => '/admin/media',
+        'Promotions' => '/admin/promotions',
+    ];
+}
+
+$jeux = [];
+if ($moduleAllowed(Permissions::MODULE_GAMES)) {
+    $jeux = [
+        'Vue d\'ensemble'   => '/admin/jeux',
+        'Joueurs & pseudos' => '/admin/jeux/scores',
+        'Mots Wordle'       => '/admin/jeux/wordle',
+        'Énigmes'           => '/admin/jeux/enigmes',
+    ];
+}
+
+if ($siteWeb !== []) {
+    $association['Site web'] = $siteWeb;
+}
+if ($jeux !== []) {
+    $association['Jeux'] = $jeux;
+}
+if ($association !== []) {
+    $sections['Association'] = $association;
+}
+
+// 6. Réglages (comme l'ancien groupe Système : pages attribuables).
+$reglages = [];
+if ($isAdminRole) {
+    foreach ([
+        'Paramètres'         => ['settings', '/admin/settings'],
+        'Kiosques & jetons'  => ['kiosques', '/admin/kiosques'],
+        'Notifications SMS'  => ['notifications', '/admin/notifications'],
+    ] as $label => [$key, $path]) {
+        if ($systemPageAllowed($key)) {
+            $reglages[$label] = $path;
         }
     }
-    if ($system !== []) {
-        $sections['Système'] = $system;
+}
+if ($reglages !== []) {
+    $sections['Réglages'] = $reglages;
+}
+
+/* -------------------------------------------------------------------------
+ * Fil d'Ariane : calculé automatiquement à partir de l'arbre de menu
+ * ci-dessus (section > [sous-groupe >] entrée correspondant au chemin
+ * courant, même règle « meilleur match » que l'état actif : chemin exact
+ * ou préfixe le plus long). Sous /admin racine : « Administration » seul.
+ * ---------------------------------------------------------------------- */
+
+$crumbMatches = static function (string $path) use ($currentUrlPath): bool {
+    if ($currentUrlPath === $path) {
+        return true;
+    }
+    // La racine /admin ne « absorbe » pas les autres pages admin.
+    if ($path === '/admin') {
+        return false;
+    }
+
+    return str_starts_with($currentUrlPath, $path . '/');
+};
+
+$crumbEntry = null;
+$crumbLen   = 0;
+foreach ($sections as $crumbSection => $crumbLinks) {
+    foreach ($crumbLinks as $crumbLabel => $crumbPath) {
+        if (is_array($crumbPath)) {
+            foreach ($crumbPath as $crumbSubLabel => $crumbSubPath) {
+                if ($crumbMatches($crumbSubPath) && strlen($crumbSubPath) > $crumbLen) {
+                    $crumbLen   = strlen($crumbSubPath);
+                    $crumbEntry = ['section' => $crumbSection, 'subgroup' => $crumbLabel, 'label' => $crumbSubLabel, 'path' => $crumbSubPath];
+                }
+            }
+        } elseif ($crumbMatches($crumbPath) && strlen($crumbPath) > $crumbLen) {
+            $crumbLen   = strlen($crumbPath);
+            $crumbEntry = ['section' => $crumbSection, 'subgroup' => null, 'label' => $crumbLabel, 'path' => $crumbPath];
+        }
     }
 }
-// Pages fusionnées « Opérations » : les quatre URL de sections (et leurs
-// sous-routes, ex. détail d'un événement) allument l'entrée unique de la
-// sidebar. Règle aussi les URL portant un paramètre (?period=...).
-$operationsPrefixes = [
-    '/admin/compta/achats',
-    '/admin/compta/depenses',
-    '/admin/compta/pertes',
-    '/admin/compta/evenements',
-    '/admin/compta/inventaire-tablette',
-];
-$activePath = $currentUrlPath;
-foreach ($operationsPrefixes as $opPrefix) {
-    if (str_starts_with($activePath, $opPrefix)) {
-        $activePath = '/admin/compta/achats';
-        break;
+
+if ($currentUrlPath === '/admin' || $crumbEntry === null) {
+    $crumbItems = [['label' => 'Administration', 'url' => null]];
+} else {
+    $crumbItems = [['label' => 'Administration', 'url' => url('/admin')]];
+    $crumbItems[] = ['label' => $crumbEntry['section'], 'url' => null];
+    if ($crumbEntry['subgroup'] !== null) {
+        $crumbItems[] = ['label' => $crumbEntry['subgroup'], 'url' => null];
     }
+    // L'entrée finale n'est un lien que si ce n'est pas la page courante
+    // (sous-routes : le lien ramène vers la page de liste).
+    $crumbItems[] = [
+        'label' => $crumbEntry['label'],
+        'url'   => $currentUrlPath === $crumbEntry['path'] ? null : url($crumbEntry['path']),
+    ];
 }
 ?>
 <!DOCTYPE html>
@@ -188,7 +323,6 @@ foreach ($operationsPrefixes as $opPrefix) {
             }
         } catch (e) {}
     </script>
-    <div class="starfield" id="starfield" aria-hidden="true"></div>
     <a class="skip-link" href="#contenu">Aller au contenu</a>
 
     <div class="admin-shell">
@@ -216,6 +350,13 @@ foreach ($operationsPrefixes as $opPrefix) {
                     }
                 }
             }
+
+            // Chemin courant utilisé pour l'état actif : chaque page
+            // d'opérations (/depenses, /achats, /pertes, /evenements,
+            // /inventaire-tablette) ayant désormais SA propre entrée de
+            // menu, plus besoin de fusionner ces préfixes sur une entrée
+            // unique comme avant la refonte.
+            $activePath = $currentUrlPath;
 
             // État actif d'un lien, partagé par les deux niveaux de rendu.
             $isActive = function (string $label, string $path) use ($flatLinks, $activePath): bool {
@@ -363,7 +504,17 @@ foreach ($operationsPrefixes as $opPrefix) {
             <?php require AEIC_VIEWS . '/partials/flash_messages.php'; ?>
             <header class="admin-topbar">
                 <button class="admin-toggle" type="button" aria-label="Menu" aria-expanded="false" aria-controls="admin-sidebar"></button>
-                <h1 class="admin-title"><?= e($title ?? 'Administration') ?></h1>
+                <div class="admin-topbar-text">
+                    <?php require AEIC_VIEWS . '/partials/_breadcrumb.php'; ?>
+                    <h1 class="admin-title"><?= e($title ?? 'Administration') ?></h1>
+                </div>
+                <form class="admin-search" method="get" action="<?= e(url('/admin/search')) ?>" role="search">
+                    <input type="search" name="q" value="<?= e($_GET['q'] ?? '') ?>"
+                           placeholder="Rechercher…"
+                           aria-label="Rechercher un produit, une vente, un membre"
+                           autocomplete="off">
+                    <button type="submit" class="btn btn-outline admin-search-btn">Rechercher</button>
+                </form>
             </header>
             <div class="admin-content">
                 <?= $content ?>
@@ -453,6 +604,5 @@ foreach ($operationsPrefixes as $opPrefix) {
         })();
     </script>
     <script src="<?= e(rootAssetVersioned('/assets/js/confirm.js')) ?>"></script>
-    <script src="<?= e(rootAssetVersioned('/assets/js/stars.js')) ?>" defer></script>
 </body>
 </html>
