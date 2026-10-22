@@ -485,6 +485,8 @@ final class KioskComptageController extends Controller
     /**
      * HUB ADMIN kiosque : menu de tuiles avec données financières
      * complètes — totalement détaché du hub membres (jeton dédié).
+     * La marge de chaque période est calculée ICI (clé « marge ») : la
+     * vue n'affiche que des valeurs prêtes, aucun calcul métier.
      */
     public function adminHub(string $token): void
     {
@@ -501,12 +503,19 @@ final class KioskComptageController extends Controller
         $aggWeek = Sale::aggregatesBetween($week['from'], $week['to']);
         $aggMonth = Sale::aggregatesBetween($month['from'], $month['to']);
 
+        $jour = ['ca' => round($aggToday['ca'], 2), 'profit' => round($aggToday['profit'], 2)];
+        $semaine = ['ca' => round($aggWeek['ca'], 2), 'profit' => round($aggWeek['profit'], 2)];
+        $mois = ['ca' => round($aggMonth['ca'], 2), 'profit' => round($aggMonth['profit'], 2)];
+        $jour['marge'] = self::margePct($jour['ca'], $jour['profit']);
+        $semaine['marge'] = self::margePct($semaine['ca'], $semaine['profit']);
+        $mois['marge'] = self::margePct($mois['ca'], $mois['profit']);
+
         $this->renderKiosk('admin/compta/kiosk-admin-hub', [
             'title'   => 'Kiosque admin',
             'token'   => $token,
-            'jour'    => ['ca' => round($aggToday['ca'], 2), 'profit' => round($aggToday['profit'], 2)],
-            'semaine' => ['ca' => round($aggWeek['ca'], 2), 'profit' => round($aggWeek['profit'], 2)],
-            'mois'    => ['ca' => round($aggMonth['ca'], 2), 'profit' => round($aggMonth['profit'], 2)],
+            'jour'    => $jour,
+            'semaine' => $semaine,
+            'mois'    => $mois,
         ]);
     }
 
@@ -606,7 +615,8 @@ final class KioskComptageController extends Controller
 
     /**
      * Agrégats d'une période (bornes incluses) avec option détail
-     * jour par jour.
+     * jour par jour. La marge (« margin », en %) est calculée ici : la
+     * vue l'affiche telle quelle.
      *
      * @return array<string,mixed>
      */
@@ -616,6 +626,8 @@ final class KioskComptageController extends Controller
         $split = Sale::paymentSplitBetween($from, $to);
         $top = Sale::topProductsBetween($from, $to, 10);
         $tx = Sale::transactionsBetween($from, $to);
+        $ca = round($agg['ca'], 2);
+        $profit = round($agg['profit'], 2);
 
         $days = [];
         if ($perDay) {
@@ -637,8 +649,9 @@ final class KioskComptageController extends Controller
         return [
             'from'         => $from,
             'to'           => $to,
-            'ca'           => round($agg['ca'], 2),
-            'profit'       => round($agg['profit'], 2),
+            'ca'           => $ca,
+            'profit'       => $profit,
+            'margin'       => self::margePct($ca, $profit),
             'qty'          => $agg['qty'],
             'transactions' => $tx,
             'liquide'      => round((float) ($split['LIQUIDE'] ?? 0), 2),
@@ -683,10 +696,24 @@ final class KioskComptageController extends Controller
     }
 
     /**
+     * Marge en pourcentage (bénéfice / CA), une décimale — 0.0 si le CA
+     * est nul. Point unique pour les vues kiosque (jour, hub, période) :
+     * aucune marge n'est recalculée en vue.
+     */
+    private static function margePct(float $ca, float $profit): float
+    {
+        return $ca > 0 ? round($profit / $ca * 100, 1) : 0.0;
+    }
+
+    /**
      * Agrégats du jour (Europe/Paris, bornes 00:00 → 23:59 locales) +
-     * enrichissements : panier moyen, comparaison avec hier, transactions
-     * par moyen de paiement, semaine en cours et CA par heure du jour.
-     * 7 requêtes légères (toutes indexées sur la date), pas plus.
+     * enrichissements — TOUS calculés ici, la vue et le JS du
+     * rafraîchissement ne font qu'afficher :
+     * panier moyen (« cartMean »), delta vs hier (« deltaCa », null si
+     * hier sans CA), marge (« margin »), ventes par heure avec le max du
+     * jour (« hoursMax ») et la largeur de barre précalculée de chaque
+     * heure (« pct »). 7 requêtes légères (toutes indexées sur la date),
+     * pas plus.
      *
      * @return array<string,mixed>
      */
@@ -705,10 +732,24 @@ final class KioskComptageController extends Controller
         $week = \App\Core\Compta\ComptaCalc::currentWeekWindow($todayDt);
         $aggWeek = Sale::aggregatesBetween($week['from'], $week['to']);
 
+        $ca = round($agg['ca'], 2);
+        $profit = round($agg['profit'], 2);
+        $yesterdayCa = round($aggYesterday['ca'], 2);
+
+        // Panier moyen (CA / transactions), delta vs hier (en %, arrondi
+        // entier, null si hier est vide) et marge (bénéfice / CA, en %) :
+        // l'ancien doublon PHP + JS des vues est supprimé au profit de
+        // ces trois clés.
+        $cartMean = $tx > 0 ? round($ca / $tx, 2) : 0.0;
+        $deltaCa = $yesterdayCa > 0 ? (int) round(($ca - $yesterdayCa) / $yesterdayCa * 100) : null;
+        $margin = self::margePct($ca, $profit);
+
         // CA par heure du jour : salesByDayHour() regroupe par jour de
         // SEMAINE (0 = lundi) — sur une requête today→today, seule la
         // ligne du jour courant est remplie. On garde uniquement les
-        // heures avec CA > 0, déjà triées par heure croissante (0→23).
+        // heures avec CA > 0, déjà triées par heure croissante (0→23),
+        // et on précalcule la largeur de barre de chaque heure (en %
+        // du max du jour) pour que la vue n'ait rien à calculer.
         $dayIndex = (int) $todayDt->format('N') - 1;
         $hoursMatrix = Analytics::salesByDayHour($today, $today);
         $todayHours = $hoursMatrix[$dayIndex] ?? array_fill(0, 24, 0.0);
@@ -718,11 +759,23 @@ final class KioskComptageController extends Controller
                 $hours[] = ['h' => (int) $h, 'ca' => round((float) $ca, 2)];
             }
         }
+        $hoursMax = 0.0;
+        foreach ($hours as $row) {
+            if ($row['ca'] > $hoursMax) {
+                $hoursMax = $row['ca'];
+            }
+        }
+        foreach ($hours as $i => $row) {
+            $hours[$i]['pct'] = $hoursMax > 0 ? round($row['ca'] / $hoursMax * 100, 2) : 0.0;
+        }
 
         return [
             'date'         => $today,
-            'ca'           => round($agg['ca'], 2),
-            'profit'       => round($agg['profit'], 2),
+            'ca'           => $ca,
+            'profit'       => $profit,
+            'margin'       => $margin,
+            'cartMean'     => $cartMean,
+            'deltaCa'      => $deltaCa,
             'qty'          => $agg['qty'],
             'ca_products'  => round($agg['ca_products'], 2),
             'transactions' => $tx,
@@ -730,7 +783,7 @@ final class KioskComptageController extends Controller
             'carte'        => round((float) ($detail['CARTE']['ca'] ?? 0), 2),
             'liquide_tx'   => (int) ($detail['LIQUIDE']['tx'] ?? 0),
             'carte_tx'     => (int) ($detail['CARTE']['tx'] ?? 0),
-            'yesterday_ca' => round($aggYesterday['ca'], 2),
+            'yesterday_ca' => $yesterdayCa,
             'week'         => [
                 'from'   => $week['from'],
                 'to'     => $week['to'],
@@ -738,6 +791,7 @@ final class KioskComptageController extends Controller
                 'profit' => round($aggWeek['profit'], 2),
             ],
             'hours'        => $hours,
+            'hoursMax'     => $hoursMax,
             'top'          => $top,
             'computed_at'  => (new \DateTimeImmutable('now', $paris))->format('H:i:s'),
         ];
