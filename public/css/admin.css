@@ -1107,3 +1107,91 @@ button:where(.admin-group, .admin-subgroup):focus-visible {
     }
     .period-pill { white-space: nowrap; }
 }
+
+/* ==========================================================================
+   Navigation admin (lot 2) — fil d'Ariane + recherche dans la topbar
+   Ajouts sobres : uniquement des variables existantes (aucune couleur neuve).
+   ========================================================================== */
+
+/* Le titre (fil d'Ariane au-dessus du H1) prend l'espace disponible ;
+   la recherche vient se placer à droite, et passe dessous en mobile. */
+.admin-topbar { flex-wrap: wrap; }
+
+.admin-topbar-text {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+/* ---- Fil d'Ariane ------------------------------------------------------- */
+
+.breadcrumb { margin: 0 0 0.4rem; }
+
+.breadcrumb ol {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.3rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.breadcrumb li {
+    display: flex;
+    align-items: baseline;
+    font-size: 0.78rem;
+    color: var(--muted);
+}
+
+/* Séparateur « / » entre les éléments (généré en CSS, absent du HTML). */
+.breadcrumb li + li::before {
+    content: '/';
+    margin-right: 0.3rem;
+    opacity: 0.6;
+}
+
+.breadcrumb a {
+    color: var(--muted);
+    text-decoration: none;
+}
+
+.breadcrumb a:hover,
+.breadcrumb a:focus-visible {
+    color: var(--primary);
+    text-decoration: underline;
+}
+
+.breadcrumb li[aria-current='page'] {
+    color: var(--foreground);
+    font-weight: 600;
+}
+
+/* ---- Recherche globale (topbar) ------------------------------------------ */
+
+.admin-search {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-left: auto;
+}
+
+/* La règle commune .admin-main input[type="search"] fournit couleurs,
+   bordures et focus : on ne fixe ici que la largeur. */
+.admin-search input[type='search'] {
+    width: clamp(150px, 22vw, 260px);
+}
+
+.admin-search-btn { white-space: nowrap; }
+
+@media (max-width: 700px) {
+    /* Recherche sous le titre sur petit écran (topbar collante). */
+    .admin-search {
+        order: 3;
+        flex: 1 1 100%;
+        margin-left: 0;
+    }
+    .admin-search input[type='search'] {
+        flex: 1 1 auto;
+        width: auto;
+    }
+}
