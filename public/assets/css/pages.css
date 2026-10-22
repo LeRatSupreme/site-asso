@@ -547,16 +547,9 @@
     padding: 1.5rem;
     overflow: hidden;
 }
-.promo-card::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: radial-gradient(120% 80% at 100% 0%, rgba(72, 189, 211, 0.12), transparent 60%);
-    pointer-events: none;
-}
 .promo-badge {
     align-self: flex-start;
-    background: linear-gradient(135deg, #ff5a5f, #ff8a3d);
+    background: #ff5a5f;
     color: #fff;
     font-size: 0.72rem;
     font-weight: 800;

@@ -766,7 +766,7 @@ button:where(.admin-group, .admin-subgroup):focus-visible {
     margin: 1rem 0 0.8rem;
 }
 .split-bar-card {
-    background: linear-gradient(135deg, rgba(72,189,211,0.35), rgba(72,189,211,0.20));
+    background: rgba(72,189,211,0.35);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -774,7 +774,7 @@ button:where(.admin-group, .admin-subgroup):focus-visible {
     transition: width 0.3s ease;
 }
 .split-bar-cash {
-    background: linear-gradient(135deg, rgba(255,255,255,0.12), rgba(255,255,255,0.06));
+    background: rgba(255,255,255,0.12);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -886,7 +886,7 @@ button:where(.admin-group, .admin-subgroup):focus-visible {
     left: 0;
     right: 0;
     padding: 1rem 0;
-    background: linear-gradient(to top, var(--admin-bg, #0a1b33) 60%, transparent);
+    background: var(--admin-bg, #0a1b33);
     text-align: right;
     z-index: 10;
 }
@@ -923,7 +923,7 @@ button:where(.admin-group, .admin-subgroup):focus-visible {
 .sms-day-chip input { position: absolute; opacity: 0; pointer-events: none; }
 .sms-day-chip:hover { border-color: rgba(72, 189, 211, 0.45); color: var(--foreground, #e8eef7); }
 .sms-day-chip.is-on {
-    background: linear-gradient(120deg, rgba(74, 61, 143, 0.55), rgba(58, 155, 184, 0.45));
+    background: rgba(74, 61, 143, 0.55);
     border-color: rgba(72, 189, 211, 0.55);
     color: #fff;
 }

@@ -150,8 +150,6 @@ declare(strict_types=1);
     <div class="container">
         <div class="about-cta-panel">
             <div class="about-cta-dots" aria-hidden="true"></div>
-            <span class="about-cta-halo about-cta-halo-1" aria-hidden="true"></span>
-            <span class="about-cta-halo about-cta-halo-2" aria-hidden="true"></span>
             <div class="about-cta-inner">
                 <h2 class="section-title"><?= e(t('about.cta.title')) ?></h2>
                 <div class="about-cta-actions">
@@ -176,19 +174,13 @@ declare(strict_types=1);
 
 /* ============ Hero ============ */
 .about-hero { padding: 5.5rem 0 5rem; }
+/* Ancien dégradé « aurora » : voile uni très léger, sans animation
+   (sobriété, lot 6F). */
 .about-aurora {
     position: absolute;
     inset: 0;
     pointer-events: none;
-    background:
-        radial-gradient(52% 62% at 82% 12%, rgba(58, 155, 184, 0.20), transparent 70%),
-        radial-gradient(46% 58% at 8% 88%, rgba(74, 61, 143, 0.22), transparent 70%),
-        radial-gradient(38% 46% at 50% 0%, rgba(139, 122, 224, 0.10), transparent 70%);
-    animation: about-aurora 12s ease-in-out infinite alternate;
-}
-@keyframes about-aurora {
-    from { opacity: 0.75; transform: scale(1); }
-    to   { opacity: 1; transform: scale(1.06); }
+    background: rgba(72, 189, 211, 0.04);
 }
 .about-hero-dots {
     position: absolute;
@@ -225,40 +217,11 @@ declare(strict_types=1);
     height: 8px;
     border-radius: 50%;
     background: var(--primary);
-    animation: about-pulse 2.2s ease-in-out infinite;
 }
-@keyframes about-pulse {
-    0%, 100% { box-shadow: 0 0 0 0 rgba(72, 189, 211, 0.5); }
-    50%      { box-shadow: 0 0 0 6px rgba(72, 189, 211, 0); }
-}
-.about-title-grad {
-    background: linear-gradient(105deg, #fff 30%, #7fd0e4 62%, #b3a1ea 100%);
-    -webkit-background-clip: text;
-    background-clip: text;
-    -webkit-text-fill-color: transparent;
-    color: transparent;
-}
-[data-theme="light"] .about-title-grad {
-    background: linear-gradient(105deg, #1e293b 30%, #2d7a94 62%, #4a3d8f 100%);
-    -webkit-background-clip: text;
-    background-clip: text;
-}
+/* Ancien titre en dégradé : couleur pleine (sobriété, lot 6F). */
+.about-title-grad { color: #fff; }
+[data-theme="light"] .about-title-grad { color: #1e293b; }
 .about-hero-actions { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 2rem; }
-
-/* ============ Médaillon dégradé (mission / contact) ============ */
-.about-medal {
-    width: 92px;
-    height: 92px;
-    display: grid;
-    place-items: center;
-    border-radius: 26px;
-    font-size: 2.6rem;
-    line-height: 1;
-    background: linear-gradient(135deg, #4a3d8f, #3a9bb8);
-    box-shadow: 0 16px 38px rgba(58, 155, 184, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.35);
-    flex-shrink: 0;
-}
-.about-medal-sm { width: 72px; height: 72px; border-radius: 22px; font-size: 2.1rem; }
 
 /* ============ Mission ============ */
 .about-mission {
@@ -269,23 +232,8 @@ declare(strict_types=1);
     align-items: center;
     padding: 2.75rem;
     border-radius: 24px;
-    background:
-        radial-gradient(90% 150% at 100% 0%, rgba(58, 155, 184, 0.12), transparent 55%),
-        radial-gradient(80% 150% at 0% 100%, rgba(74, 61, 143, 0.16), transparent 55%),
-        rgba(255, 255, 255, 0.03);
-}
-.about-mission::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    border-radius: inherit;
-    padding: 1px;
-    background: linear-gradient(135deg, rgba(74, 61, 143, 0.7), rgba(58, 155, 184, 0.6) 50%, rgba(255, 255, 255, 0.06));
-    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-    -webkit-mask-composite: xor;
-    mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-    mask-composite: exclude;
-    pointer-events: none;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border);
 }
 .about-mission > * { position: relative; z-index: 1; }
 .about-mission-code {
@@ -330,19 +278,18 @@ declare(strict_types=1);
     top: 0;
     bottom: 0;
     width: 5px;
-    background: linear-gradient(180deg, #8b7ae0, #3a9bb8);
+    background: var(--primary);
 }
+/* Ancien guillemet en dégradé : filigrane uni discret (sobriété, lot 6F). */
 .about-vision-mark {
     font-size: 7.5rem;
     font-weight: 900;
     line-height: 0.6;
-    background: linear-gradient(135deg, #8b7ae0, #3a9bb8);
-    -webkit-background-clip: text;
-    background-clip: text;
-    -webkit-text-fill-color: transparent;
+    color: rgba(255, 255, 255, 0.10);
     user-select: none;
     transform: translateY(14px);
 }
+[data-theme="light"] .about-vision-mark { color: rgba(15, 23, 42, 0.10); }
 .about-vision-text {
     font-size: clamp(1.1rem, 2.2vw, 1.4rem);
     line-height: 1.8;
@@ -373,20 +320,6 @@ declare(strict_types=1);
     border-color: rgba(72, 189, 211, 0.4);
     box-shadow: 0 22px 50px rgba(0, 0, 0, 0.4);
 }
-.about-space-tile {
-    display: grid;
-    place-items: center;
-    width: 78px;
-    height: 78px;
-    border-radius: 22px;
-    font-size: 2.3rem;
-    line-height: 1;
-    background: linear-gradient(135deg, rgba(74, 61, 143, 0.75), rgba(58, 155, 184, 0.6));
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 12px 26px rgba(0, 0, 0, 0.3);
-    flex-shrink: 0;
-    transition: transform 0.3s ease;
-}
-.about-space:hover .about-space-tile { transform: scale(1.08) rotate(-4deg); }
 .about-space-code {
     margin: 0;
     min-height: 3.6rem;
@@ -419,20 +352,8 @@ declare(strict_types=1);
 .about-event:hover {
     transform: translateY(-4px);
     border-color: rgba(72, 189, 211, 0.35);
-    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35), 0 0 26px var(--cg, rgba(58, 155, 184, 0.15));
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
 }
-.about-event-stub {
-    flex: 0 0 84px;
-    display: grid;
-    place-items: center;
-    font-size: 2.1rem;
-    line-height: 1;
-    background: var(--stub, linear-gradient(160deg, rgba(58, 155, 184, 0.35), rgba(58, 155, 184, 0.1)));
-    border-right: 2px dashed rgba(255, 255, 255, 0.14);
-    transition: font-size 0.25s ease;
-}
-[data-theme="light"] .about-event-stub { border-right-color: rgba(15, 23, 42, 0.14); }
-.about-event:hover .about-event-stub { font-size: 2.5rem; }
 .about-event-body { padding: 1.15rem 1.3rem; min-width: 0; }
 .about-event h3 {
     font-size: 1rem;
@@ -448,24 +369,16 @@ declare(strict_types=1);
     margin: 0;
     line-height: 1.6;
 }
-.about-event-1 { --c: #3a9bb8; --cg: rgba(58, 155, 184, 0.18); --stub: linear-gradient(160deg, rgba(58, 155, 184, 0.38), rgba(58, 155, 184, 0.1)); }
-.about-event-2 { --c: #8b7ae0; --cg: rgba(139, 122, 224, 0.16); --stub: linear-gradient(160deg, rgba(139, 122, 224, 0.38), rgba(139, 122, 224, 0.1)); }
-.about-event-3 { --c: #d4941a; --cg: rgba(212, 148, 26, 0.16); --stub: linear-gradient(160deg, rgba(212, 148, 26, 0.38), rgba(212, 148, 26, 0.1)); }
-.about-event-4 { --c: #d4568c; --cg: rgba(212, 86, 140, 0.16); --stub: linear-gradient(160deg, rgba(212, 86, 140, 0.38), rgba(212, 86, 140, 0.1)); }
 .about-event-more {
     grid-column: 1 / -1;
     border-style: dashed;
     border-color: rgba(72, 189, 211, 0.35);
     background: rgba(72, 189, 211, 0.04);
 }
-.about-event-more .about-event-stub {
-    background: transparent;
-    border-right-color: rgba(72, 189, 211, 0.25);
-    font-size: 1.8rem;
-}
 .about-event-more h3 { margin: 0; color: var(--foreground); font-size: 0.95rem; font-weight: 600; }
 
-/* ============ CTA — panneau dégradé ============ */
+/* ============ CTA — panneau ============ */
+/* Ancien panneau en dégradé : fond uni (sobriété, lot 6F). */
 .about-cta { padding-top: 1rem; }
 .about-cta-panel {
     position: relative;
@@ -473,7 +386,7 @@ declare(strict_types=1);
     border-radius: 28px;
     padding: 4rem 2rem;
     text-align: center;
-    background: linear-gradient(120deg, #43386f 0%, #2c6f88 100%);
+    background: var(--secondary);
     box-shadow: 0 30px 70px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.18);
 }
 .about-cta-dots {
@@ -485,15 +398,6 @@ declare(strict_types=1);
     mask-image: radial-gradient(70% 90% at 50% 0%, #000 0%, transparent 100%);
     pointer-events: none;
 }
-.about-cta-halo {
-    position: absolute;
-    width: 380px;
-    height: 380px;
-    border-radius: 50%;
-    pointer-events: none;
-}
-.about-cta-halo-1 { top: -180px; right: -120px; background: radial-gradient(circle, rgba(127, 208, 228, 0.35), transparent 65%); }
-.about-cta-halo-2 { bottom: -200px; left: -140px; background: radial-gradient(circle, rgba(179, 161, 234, 0.3), transparent 65%); }
 .about-cta-inner { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 1.75rem; }
 .about-cta .section-title { color: #fff; }
 .about-cta-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.75rem; }
@@ -527,20 +431,12 @@ declare(strict_types=1);
 @media (max-width: 640px) {
     .about-hero { padding: 4rem 0 3.5rem; }
     .about-mission { grid-template-columns: 1fr; text-align: center; padding: 2.25rem 1.5rem; gap: 1.5rem; }
-    .about-mission .about-medal { margin: 0 auto; }
     .about-mission-code { display: none; }
-    .about-medal { width: 76px; height: 76px; font-size: 2.2rem; border-radius: 22px; }
     .about-vision { padding: 2.25rem 1.5rem; }
     .about-space { flex-direction: column; padding: 1.75rem 1.5rem; gap: 1.1rem; }
-    .about-event-stub { flex-basis: 64px; font-size: 1.8rem; }
     .about-cta-panel { padding: 3rem 1.5rem; }
 }
 
-/* ============ Motion réduit ============ */
-@media (prefers-reduced-motion: reduce) {
-    .about-aurora,
-    .about-pill-dot { animation: none; }
-}
 </style>
 
 <script>

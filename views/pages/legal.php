@@ -10,7 +10,6 @@ use App\Core\Security\HtmlSanitizer;
 $isFr = current_lang() === 'fr';
 ?>
 <header class="page-hero">
-    <div class="halo halo-violet" aria-hidden="true"></div>
     <div class="container">
         <span class="eyebrow"><?= e(t('page.legal.eyebrow')) ?></span>
         <h1 class="page-title"><?= e(t('page.legal.title')) ?></h1>

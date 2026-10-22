@@ -83,7 +83,7 @@ ksort($groupedPast);
 <style>
 /* ============ Événements — spécifique ============ */
 
-/* En-têtes de catégorie : tuile dégradée + filet dégradé */
+/* En-têtes de catégorie : filet d'accent uni */
 .event-cat-header {
     display: flex;
     align-items: center;
@@ -99,7 +99,7 @@ ksort($groupedPast);
     bottom: -1px;
     width: 180px;
     height: 2px;
-    background: linear-gradient(90deg, #8b7ae0, rgba(58, 155, 184, 0));
+    background: var(--primary);
 }
 .event-cat-title {
     display: flex;

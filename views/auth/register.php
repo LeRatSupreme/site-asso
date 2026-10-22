@@ -7,7 +7,6 @@ declare(strict_types=1);
  */
 ?>
 <header class="page-hero">
-    <div class="halo halo-violet" aria-hidden="true"></div>
     <div class="container">
         <span class="eyebrow"><?= e(t('auth.register.eyebrow')) ?></span>
         <h1 class="page-title"><?= e(t('auth.register.title')) ?></h1>

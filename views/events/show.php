@@ -55,7 +55,6 @@ $priceLabel = ($price === null || (float) $price <= 0)
     : formatPrice($price);
 ?>
 <header class="page-hero">
-    <div class="halo halo-violet" aria-hidden="true"></div>
     <div class="container">
         <p class="back-link">
             <a href="<?= e(url('/events')) ?>"><?= e(t('event.back')) ?></a>

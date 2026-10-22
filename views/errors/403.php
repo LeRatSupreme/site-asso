@@ -7,7 +7,6 @@ declare(strict_types=1);
  */
 ?>
 <header class="page-hero">
-    <div class="halo halo-violet" aria-hidden="true"></div>
     <div class="container">
         <span class="eyebrow">Erreur 403</span>
         <h1 class="page-title">Accès interdit.</h1>
