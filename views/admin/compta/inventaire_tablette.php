@@ -28,7 +28,9 @@ declare(strict_types=1);
  *                                              missing_cost_count,
  *                                              loss_value_sum,
  *                                              corrected_count)
- * @var array{kpis:array{sessions:int,gaps:int,loss_value:float,missing_cost_count:int,products_affected:int}, per_session:list<array{date:string,label:string,gaps:int,loss_value:float}>, top_products:list<array{key:string,gaps_units_sum:int,loss_value:float}>} $analysis
+ * @var array{kpis:array{sessions:int,gaps:int,loss_value:float,missing_cost_count:int,products_affected:int}, deltas:array<string,?float>, per_session:list<array{date:string,label:string,gaps:int,loss_value:float}>, top_products:list<array{key:string,gaps_units_sum:int,loss_value:float}>} $analysis
+ *      « deltas » (lot 4B) : % d'évolution par KPI vs période précédente,
+ *      calculé par le contrôleur — null si la base est nulle.
  * @var array{kpis:array{sessions:int,gaps:int,loss_value:float,missing_cost_count:int,products_affected:int}, per_session:list<array{date:string,label:string,gaps:int,loss_value:float}>, top_products:list<array{key:string,gaps_units_sum:int,loss_value:float}>} $prev
  */
 
@@ -41,10 +43,9 @@ foreach ($sessions as $s) {
     $histLoss += (float) $s['loss_value_sum'];
 }
 
-// ---- Deltas « analyse vs période précédente » (null si base nulle) ----
-$pctDelta = static function (float $cur, float $base): ?float {
-    return $base == 0.0 ? null : round((($cur - $base) / $base) * 100, 1);
-};
+// Deltas « analyse vs période précédente » : calculés par le contrôleur
+// (lot 4B) — la vue ne les met en forme plus (voir $deltaHtml ci-dessous).
+$deltas = $analysis['deltas'];
 
 /**
  * Petit libellé de variation (↑/↓ %), coloré bon/mauvais selon le sens
@@ -289,27 +290,27 @@ $hasTopProducts = $analysis['top_products'] !== [];
         <div class="card surface glass kpi">
             <p class="kpi-label">Sessions</p>
             <p class="kpi-value"><?= (int) $ak['sessions'] ?></p>
-            <?= $deltaHtml($pctDelta((float) $ak['sessions'], (float) $pk['sessions'])) ?>
+            <?= $deltaHtml($deltas['sessions'] ?? null) ?>
         </div>
         <div class="card surface glass kpi">
             <p class="kpi-label">Écarts détectés</p>
             <p class="kpi-value"><?= (int) $ak['gaps'] ?></p>
-            <?= $deltaHtml($pctDelta((float) $ak['gaps'], (float) $pk['gaps']), true) ?>
+            <?= $deltaHtml($deltas['gaps'] ?? null, true) ?>
         </div>
         <div class="card surface glass kpi">
             <p class="kpi-label">Perte estimée</p>
             <p class="kpi-value <?= (float) $ak['loss_value'] > 0 ? 'is-negative' : '' ?>"><?= e(formatPrice((float) $ak['loss_value'])) ?></p>
-            <?= $deltaHtml($pctDelta((float) $ak['loss_value'], (float) $pk['loss_value']), true) ?>
+            <?= $deltaHtml($deltas['loss_value'] ?? null, true) ?>
         </div>
         <div class="card surface glass kpi">
             <p class="kpi-label">Produits touchés</p>
             <p class="kpi-value"><?= (int) $ak['products_affected'] ?></p>
-            <?= $deltaHtml($pctDelta((float) $ak['products_affected'], (float) $pk['products_affected']), true) ?>
+            <?= $deltaHtml($deltas['products_affected'] ?? null, true) ?>
         </div>
         <div class="card surface glass kpi">
             <p class="kpi-label">Coûts manquants</p>
             <p class="kpi-value"><?= (int) $ak['missing_cost_count'] ?></p>
-            <?= $deltaHtml($pctDelta((float) $ak['missing_cost_count'], (float) $pk['missing_cost_count']), true) ?>
+            <?= $deltaHtml($deltas['missing_cost_count'] ?? null, true) ?>
         </div>
     </div>
 
@@ -358,7 +359,8 @@ $hasTopProducts = $analysis['top_products'] !== [];
     </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<!-- Chart.js 4.4.7, vendorisé (lot 4) -->
+<script src="<?= e(rootAssetVersioned('/assets/vendor/chart.umd.min.js')) ?>" defer></script>
 <script src="<?= e(rootAssetVersioned('/assets/js/inventaire-tablette.js')) ?>"></script>
 <script>
 // ---------- Produits connus (index JS pour l'appariement du collage) ----------
@@ -862,12 +864,20 @@ function initAnalyseCharts() {
     });
 
     // Onglet initial : valeur du contrôleur (elle-même issue de ?tab=).
+    // Chart.js est chargé en defer (lot 4, vendor) : les scripts différés
+    // s'exécutent APRÈS ce script inline — on attend DOMContentLoaded
+    // (émis après les defer) pour la première activation, sinon les
+    // graphiques de l'onglet Analyse ne se dessineraient pas au chargement.
     var initial = <?= json_encode($tab) ?>;
     if (!initial) {
         initial = new URLSearchParams(window.location.search).get('tab');
     }
     if (initial) {
-        activate(initial, false);
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', function () { activate(initial, false); });
+        } else {
+            activate(initial, false);
+        }
     }
 })();
 

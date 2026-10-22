@@ -7,15 +7,16 @@ declare(strict_types=1);
  * @var int $year
  * @var list<int> $years
  * @var list<array{m:int,ca:float,profit:float,margin:?float,expenses:float,net:float,caPrev:float,delta:?float}> $rows
- * @var array{ca:float,profit:float,expenses:float,net:float,caPrev:float} $totals
+ * @var array{ca:float,profit:float,expenses:float,net:float,caPrev:float,margin:?float,delta:?float} $totals
+ *      Marge totale et évolution du CA vs N-1 calculées par le contrôleur
+ *      (lot 4B : aucun calcul métier dans la vue).
  * @var list<array<string,mixed>> $vat
  * @var array{baskets:int,avg_basket:float,avg_items:float} $baskets
  */
 ?>
-<?php
-$totalMargin = $totals['ca'] > 0 ? round($totals['profit'] / $totals['ca'] * 100, 1) : null;
-$totalDelta = $totals['caPrev'] > 0 ? round(($totals['ca'] - $totals['caPrev']) / $totals['caPrev'] * 100, 1) : null;
-?>
+<!-- Onglets de l'espace Ventes (partiel partagé — lot 4) : cette page
+     est l'onglet « Bilan annuel ». -->
+<?php $activeTab = 'annual'; require AEIC_VIEWS . '/partials/_tabs_ventes.php'; ?>
 
 <div class="compta-head">
     <div class="compta-head-row">
@@ -83,16 +84,16 @@ $totalDelta = $totals['caPrev'] > 0 ? round(($totals['ca'] - $totals['caPrev']) 
                 <th>TOTAL</th>
                 <th><?= e(formatPrice($totals['ca'])) ?></th>
                 <th><?= e(formatPrice($totals['profit'])) ?></th>
-                <th><?= $totalMargin === null ? '—' : e(number_format($totalMargin, 1, ',', ' ')) . ' %' ?></th>
+                <th><?= $totals['margin'] === null ? '—' : e(number_format((float) $totals['margin'], 1, ',', ' ')) . ' %' ?></th>
                 <th><?= e(formatPrice($totals['expenses'])) ?></th>
                 <th class="<?= $totals['net'] >= 0 ? 'is-positive' : 'is-negative' ?>"><?= e(formatPrice($totals['net'])) ?></th>
                 <th><?= e(formatPrice($totals['caPrev'])) ?></th>
                 <th>
-                    <?php if ($totalDelta === null): ?>
+                    <?php if ($totals['delta'] === null): ?>
                         —
                     <?php else: ?>
-                        <strong class="<?= $totalDelta >= 0 ? 'is-positive' : 'is-negative' ?>"><?= $totalDelta >= 0 ? '▲' : '▼' ?></strong>
-                        <?= e(number_format($totalDelta, 1, ',', ' ')) ?> %
+                        <strong class="<?= (float) $totals['delta'] >= 0 ? 'is-positive' : 'is-negative' ?>"><?= (float) $totals['delta'] >= 0 ? '▲' : '▼' ?></strong>
+                        <?= e(number_format((float) $totals['delta'], 1, ',', ' ')) ?> %
                     <?php endif; ?>
                 </th>
             </tr>

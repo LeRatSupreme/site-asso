@@ -796,7 +796,15 @@ foreach ($byCategory as $c) {
 <div class="compta-tabpane" data-pane="journal" hidden>
     <div class="card surface glass table-wrap">
         <h2 class="card-title">Écritures</h2>
-        <table class="table">
+        <!-- Filtre rapide (lot 4B) : masque les écritures ne correspondant
+             pas ; les blocs d'édition inline suivent leur ligne. Aucun
+             formulaire n'est touché. -->
+        <div class="table-tools">
+            <input type="search" class="tt-filter" data-table-filter="#expenses-journal"
+                   aria-label="Filtrer les écritures" placeholder="Filtrer le journal…">
+            <span class="tt-count muted" data-table-count="#expenses-journal" aria-live="polite"></span>
+        </div>
+        <table class="table" id="expenses-journal" data-table data-table-nosort>
             <thead>
                 <tr>
                     <th>Date</th>
@@ -843,7 +851,7 @@ foreach ($byCategory as $c) {
                         </td>
                     </tr>
                     <?php if ((string) ($x['id'] ?? '') !== ''): ?>
-                    <tr class="exp-edit-row">
+                    <tr class="exp-edit-row tt-sub-row">
                         <td colspan="9">
                             <details class="exp-edit">
                                 <summary>Modifier</summary>

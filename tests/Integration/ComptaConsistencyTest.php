@@ -25,6 +25,10 @@ namespace Tests\Integration;
  *      à stock 0 depuis ≥ 7 jours → pause ; pauses manuelles intouchées.
  *   6. Le drapeau « stock infini » (Réappro) exclut un produit « à
  *      compter » de la commande.
+ *   7. (Lot 4B) Calculs remontés dans les contrôleurs : marge totale et
+ *      évolution N-1 du bilan annuel HTML (clés totals.margin/delta),
+ *      totaux/marges/parts des pages Catégories et Produits, total et
+ *      part carte du split paiements (testé dans DashboardPageTest).
  *
  * Base `aeic_test` requise (les tests sont sautés sinon).
  */
@@ -554,11 +558,33 @@ final class ComptaConsistencyTest extends IntegrationTestCase
 
     public function test_analytics_et_bilan_html_affichent_les_memes_chiffres(): void
     {
-        // Bilan HTML : la ligne juin existe et affiche bien le CA de juin.
+        // Un coût sur la vente de septembre (100,00 − 10,00) rend la marge
+        // TOTALE du bilan discriminante : 115,00 / 125,00 = 92,0 % (contre
+        // 100,0 % en juin et 90,0 % en septembre — aucun doublon).
+        $this->pdo->prepare(
+            'INSERT INTO product_costs (id, product_key, cost_price, valid_from) VALUES (?,?,?,?)'
+        )->execute(['pc_cons_ann', 'TCONS003', '10.000', '2026-01-01']);
+        // Vente N-1 (septembre 2025, 50,00 €) : évolution totale du CA
+        // = (125,00 − 50,00) / 50,00 = +150,0 % (unique sur la page).
+        $this->insertSale('s_cons_prev', 'TCONS251', '2025-09-15 12:30:00', '50.00');
+
+        // Bilan HTML : la ligne juin existe et affiche bien le CA de juin,
+        // la marge totale et l'évolution vs N-1 viennent des clés
+        // totals.margin / totals.delta calculées par le contrôleur (lot 4B).
         $html = $this->request('GET', '/admin/compta/annuel?year=2026', [], [], $this->rootId);
         self::assertSame(200, (int) ($html['code'] ?? 0), 'Le bilan annuel (HTML) doit répondre.');
         self::assertStringContainsString('06/2026', (string) ($html['body'] ?? ''));
         self::assertStringContainsString('25,00', (string) ($html['body'] ?? ''));
+        self::assertStringContainsString(
+            '92,0 %',
+            (string) ($html['body'] ?? ''),
+            'La marge totale du bilan (clé totals.margin) est absente ou erronée.'
+        );
+        self::assertStringContainsString(
+            '150,0 %',
+            (string) ($html['body'] ?? ''),
+            'L\'évolution du CA vs N-1 (clé totals.delta) est absente ou erronée.'
+        );
 
         // Analytics filtré sur la même fenêtre (juin 2026) : même CA affiché.
         $analytics = $this->request(
@@ -575,6 +601,46 @@ final class ComptaConsistencyTest extends IntegrationTestCase
         // dashboard SumUp) répond aussi avec les données.
         $compta = $this->request('GET', '/admin/compta', [], [], $this->rootId);
         self::assertSame(200, (int) ($compta['code'] ?? 0), 'Le dashboard compta doit répondre.');
+    }
+
+    /**
+     * Lot 4B : les pages Catégories et Produits ne calculent plus rien en
+     * vue — totaux, marges et parts sont des clés du payload contrôleur.
+     */
+    public function test_categories_et_produits_affichent_les_calculs_du_controleur(): void
+    {
+        // Boissons : 100,00 € de CA pour 50,00 € de coût → marge 50,0 %.
+        // Snacks : 100,00 € sans coût → marge 100,0 %. Totaux : CA 200,00,
+        // profit 150,00, marge globale 75,0 %, chaque catégorie 50,0 % du CA.
+        $this->insertSale('s_cons_catb', 'TCATPB1', '2026-07-05 10:00:00', '100.00', 'café', 'Boissons');
+        $this->insertSale('s_cons_cats', 'TCATPS1', '2026-07-06 10:00:00', '100.00', 'thé', 'Snacks');
+        $this->pdo->prepare(
+            'INSERT INTO product_costs (id, product_key, cost_price, valid_from) VALUES (?,?,?,?)'
+        )->execute(['pc_cons_cat', 'café', '50.000', '2026-01-01']);
+
+        $rc = $this->request(
+            'GET',
+            '/admin/compta/categories?period=custom&from=2026-07-01&to=2026-07-31',
+            [],
+            [],
+            $this->rootId
+        );
+        self::assertSame(200, (int) ($rc['code'] ?? 0), 'La page Catégories doit répondre.');
+        $bodyC = (string) ($rc['body'] ?? '');
+        self::assertStringContainsString('200,00 €', $bodyC, 'Le CA total (somme contrôleur) est erroné.');
+        self::assertStringContainsString('75,0 %', $bodyC, 'La marge globale (clé totaux du payload) est absente ou erronée.');
+        self::assertStringContainsString('50,0 % du CA total', $bodyC, 'La part de chaque catégorie (clé share du payload) est absente ou erronée.');
+
+        $rp = $this->request(
+            'GET',
+            '/admin/compta/produits?period=custom&from=2026-07-01&to=2026-07-31',
+            [],
+            [],
+            $this->rootId
+        );
+        self::assertSame(200, (int) ($rp['code'] ?? 0), 'La page Produits doit répondre.');
+        $bodyP = (string) ($rp['body'] ?? '');
+        self::assertStringContainsString('50,0 %', $bodyP, 'La marge produit (clé margin du payload) est absente ou erronée.');
     }
 
     public function test_depot_banque_genere_frais_repercutes_dans_le_bilan(): void

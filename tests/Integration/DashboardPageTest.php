@@ -190,6 +190,33 @@ final class DashboardPageTest extends IntegrationTestCase
         self::assertStringContainsString('Période en cours', $body, 'La période courante doit produire un verdict neutre « Période en cours ».');
     }
 
+    /**
+     * Lot 4B : total CARTE+LIQUIDE et part de la carte sont calculés dans
+     * Dashboard\Data::construire() (clés splitTotal / cardPct) et lus par
+     * le partiel compta_section_paiements — plus aucun calcul dans la vue.
+     */
+    public function test_total_et_part_carte_paiements(): void
+    {
+        // Carte 60,00 € + liquide 40,00 € → total 100,00 €, carte 60 %.
+        $this->insertSale('s_dash_pay1', 'TPAY1', date('Y-m-d H:i:s', strtotime('-2 days')), '60.00', 'CARTE');
+        $this->insertSale('s_dash_pay2', 'TPAY2', date('Y-m-d H:i:s', strtotime('-1 day')), '40.00', 'LIQUIDE');
+
+        $r = $this->request('GET', '/admin/compta', [], [], $this->rootId);
+        self::assertSame(200, (int) ($r['code'] ?? 0));
+        $body = (string) ($r['body'] ?? '');
+
+        self::assertStringContainsString(
+            'Total : <strong>100,00 €</strong>',
+            $body,
+            'Le total CARTE+LIQUIDE (clé splitTotal du payload) est absent ou erroné.'
+        );
+        self::assertStringContainsString(
+            '<strong>60 %</strong> des encaissements',
+            $body,
+            'La part de la carte (clé cardPct du payload) est absente ou erronée.'
+        );
+    }
+
     // -----------------------------------------------------------------
     //  Helpers
     // -----------------------------------------------------------------

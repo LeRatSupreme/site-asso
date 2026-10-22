@@ -28,6 +28,14 @@ final class AdminComptaEventController extends AdminBaseController
         $period = ComptaCalc::resolvePeriod($_GET['period'] ?? null, $_GET['from'] ?? null, $_GET['to'] ?? null);
         $events = ComptaEvent::listBetween($period['from'], $period['to']);
 
+        // Marge par événement (lot 4B : calcul sorti de la vue), en % —
+        // null si l'événement n'a aucun CA (pas de base comparable).
+        foreach ($events as &$ev) {
+            $ca = (float) $ev['ca'];
+            $ev['margin'] = $ca > 0.0 ? round((float) $ev['profit'] / $ca * 100.0, 1) : null;
+        }
+        unset($ev);
+
         // KPIs agrégés de la période, calculés en PHP.
         $caT = 0.0;
         $costsT = 0.0;

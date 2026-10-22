@@ -9,7 +9,9 @@ declare(strict_types=1);
  * pages : aucune donnée ni calcul métier propre à cette vue.
  *
  * Attend en scope : $split, $txCount, $cardFee, $cardNet, $feeRate,
- * $vat, $vatTotal.
+ * $vat, $vatTotal — et, depuis le lot 4B (calculs remontés dans
+ * Dashboard\Data::construire()) : $splitTotal (CARTE + LIQUIDE) et
+ * $cardPct (part de la carte en %, arrondie).
  *
  * @var array<string,float> $split
  * @var int $txCount
@@ -18,6 +20,8 @@ declare(strict_types=1);
  * @var string $feeRate
  * @var list<array<string,mixed>> $vat
  * @var float $vatTotal
+ * @var float $splitTotal
+ * @var int $cardPct
  */
 
 // Lignes de TVA non nulles (les lignes à 0 € sont masquées, niveau 2).
@@ -38,13 +42,12 @@ $vatLines = array_values(array_filter(
             <strong><?= e(formatPrice($split['LIQUIDE'] ?? 0)) ?></strong>
         </li>
     </ul>
-    <?php
-    $total = ($split['CARTE'] ?? 0) + ($split['LIQUIDE'] ?? 0);
-    $cardPct = $total > 0 ? round(($split['CARTE'] ?? 0) / $total * 100) : 0;
-    ?>
     <div class="split-bar" title="Carte vs Liquide">
         <div class="split-bar-card" style="width:<?= e((string) $cardPct) ?>%"></div>
     </div>
+    <p class="muted">
+        Total : <strong><?= e(formatPrice($splitTotal)) ?></strong> · carte : <strong><?= e((string) $cardPct) ?> %</strong> des encaissements
+    </p>
     <p class="muted"><?= e((string) $txCount) ?> transaction<?= $txCount > 1 ? 's' : '' ?> sur la période</p>
     <?php if (($split['CARTE'] ?? 0) > 0): ?>
         <p class="muted">
