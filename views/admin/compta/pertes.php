@@ -159,7 +159,14 @@ foreach ($allKeys as $k) {
 
 <div class="card surface glass table-wrap">
     <h2 class="card-title">Journal des pertes</h2>
-    <table class="table">
+    <!-- Filtre rapide (lot 4B). Les formulaires de suppression ne sont
+         pas touchés : le filtre ne fait qu'afficher/masquer les lignes. -->
+    <div class="table-tools">
+        <input type="search" class="tt-filter" data-table-filter="#pertes-journal"
+               aria-label="Filtrer les pertes" placeholder="Filtrer le journal…">
+        <span class="tt-count muted" data-table-count="#pertes-journal" aria-live="polite"></span>
+    </div>
+    <table class="table" id="pertes-journal" data-table data-table-nosort>
         <thead>
             <tr>
                 <th>Date</th>

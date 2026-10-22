@@ -435,6 +435,14 @@ final class AdminComptaController extends AdminBaseController
         $period = ComptaCalc::resolvePeriod($_GET['period'] ?? null, $_GET['from'] ?? null, $_GET['to'] ?? null);
         $rows = Sale::byProductBetween($period['from'], $period['to']);
 
+        // Marge par produit (lot 4B : calcul sorti de la vue), en % —
+        // 0.0 si le CA du produit est nul (même règle qu'auparavant).
+        foreach ($rows as &$r) {
+            $ca = (float) $r['ca'];
+            $r['margin'] = $ca > 0 ? round((float) $r['profit'] / $ca * 100, 1) : 0.0;
+        }
+        unset($r);
+
         $this->renderAdmin('admin/compta/products', [
             'title'         => 'Bénéfice par produit',
             'user'          => $user,
@@ -455,10 +463,29 @@ final class AdminComptaController extends AdminBaseController
         $period = ComptaCalc::resolvePeriod($_GET['period'] ?? null, $_GET['from'] ?? null, $_GET['to'] ?? null);
         $rows = Sale::byCategoryBetween($period['from'], $period['to']);
 
+        // Totaux, marge par catégorie et part du CA (lot 4B : calculs
+        // sortis de la vue — la vue ne lit que des clés prêtes).
+        $totaux = ['qty' => 0, 'ca' => 0.0, 'profit' => 0.0, 'margin' => 0.0];
+        foreach ($rows as &$r) {
+            $ca = (float) $r['ca'];
+            $profit = (float) $r['profit'];
+            $r['margin'] = $ca > 0 ? round($profit / $ca * 100, 1) : 0.0;
+            $totaux['qty'] += (int) $r['qty'];
+            $totaux['ca'] += $ca;
+            $totaux['profit'] += $profit;
+        }
+        unset($r);
+        $totaux['margin'] = $totaux['ca'] > 0 ? round($totaux['profit'] / $totaux['ca'] * 100, 1) : 0.0;
+        foreach ($rows as &$r) {
+            $r['share'] = $totaux['ca'] > 0 ? round((float) $r['ca'] / $totaux['ca'] * 100, 1) : 0.0;
+        }
+        unset($r);
+
         $this->renderAdmin('admin/compta/categories', [
             'title'         => 'Bénéfice par catégorie',
             'user'          => $user,
             'rows'          => $rows,
+            'totaux'        => $totaux,
             'period'        => $period,
             'periodOptions' => ComptaCalc::PERIOD_OPTIONS,
         ]);

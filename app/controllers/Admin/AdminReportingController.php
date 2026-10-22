@@ -80,6 +80,11 @@ final class AdminReportingController extends AdminBaseController
             $totals['caPrev'] += $caPrev;
         }
 
+        // Totaux dérivés (lot 4B : calculs sortis de la vue) — marge
+        // totale et évolution du CA vs N-1, null si base nulle.
+        $totals['margin'] = $totals['ca'] > 0 ? round($totals['profit'] / $totals['ca'] * 100, 1) : null;
+        $totals['delta'] = $totals['caPrev'] > 0 ? round(($totals['ca'] - $totals['caPrev']) / $totals['caPrev'] * 100, 1) : null;
+
         $vat = Sale::vatByRate($year, null);
         $baskets = Sale::basketStats($year, null);
 
@@ -106,7 +111,7 @@ final class AdminReportingController extends AdminBaseController
      * Stream le rapport annuel en CSV (termine par exit, ne retourne jamais).
      *
      * @param list<array<string,mixed>> $rows
-     * @param array{ca:float,profit:float,expenses:float,net:float,caPrev:float} $totals
+     * @param array{ca:float,profit:float,expenses:float,net:float,caPrev:float,margin:?float,delta:?float} $totals
      */
     private function exportAnnualCsv(array $rows, array $totals, int $year): void
     {

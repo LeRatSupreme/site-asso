@@ -20,6 +20,9 @@ declare(strict_types=1);
  *            Ventilation des métriques ci-dessus par catégorie (rayon), triée par valeur décroissante.
  * @var array{resumed:list<string>, paused:list<string>} $sweep Changements automatiques appliqués au chargement.
  * @var list<array<string,mixed>> $pending_sessions Sessions de relevé tablette ayant encore des écarts à corriger.
+ * @var int $invPage   Page courante de la grille de comptage (lot 4B, 50/page).
+ * @var int $invPages  Nombre total de pages.
+ * @var int $invTotal  Nombre total de produits à compter (toutes pages).
  */
 ?>
 <div class="compta-head">
@@ -127,7 +130,7 @@ declare(strict_types=1);
 </section>
 <?php endif; ?>
 
-<section class="card surface glass table-wrap">
+<section class="card surface glass">
     <h2 class="card-title">Comptage</h2>
 
     <?php if ($rows !== [] || $discontinuedRows !== []): ?>
@@ -229,17 +232,31 @@ declare(strict_types=1);
     </div>
     <?php endif; ?>
 
+    <!-- Boîte à outils tableaux (lot 4B) : filtre rapide, choix des
+         colonnes et compteur de la grille de comptage. Hors du
+         formulaire et hors du conteneur scrollable : aucun champ de
+         saisie n'est touché, le menu n'est pas rogné. -->
+    <div class="table-tools">
+        <input type="search" class="tt-filter" data-table-filter="#inventory-table"
+               aria-label="Filtrer les produits à compter" placeholder="Filtrer la grille…">
+        <details class="tt-cols" data-table-cols="#inventory-table">
+            <summary>Colonnes</summary>
+        </details>
+        <span class="tt-count muted" data-table-count="#inventory-table" aria-live="polite"></span>
+    </div>
     <form method="post" action="<?= e(url('/admin/compta/inventaire/save')) ?>" data-preserve-scroll>
         <?= csrf_field() ?>
-        <table class="table">
+        <div class="table-wrap">
+        <table class="table" id="inventory-table" data-table
+               data-cols-visible="produit,dernier_comptage,stock_theorique,saisie,dernier_ecart,actions">
             <thead>
                 <tr>
-                    <th>Produit</th>
-                    <th>Dernier comptage</th>
-                    <th class="th-num">Stock théorique</th>
-                    <th>Saisie physique</th>
-                    <th>Dernier écart</th>
-                    <th></th>
+                    <th data-col="produit" data-col-fixed>Produit</th>
+                    <th data-col="dernier_comptage">Dernier comptage</th>
+                    <th class="th-num" data-col="stock_theorique">Stock théorique</th>
+                    <th data-col="saisie" data-col-fixed>Saisie physique</th>
+                    <th data-col="dernier_ecart">Dernier écart</th>
+                    <th data-col="actions"><span class="muted">Pause</span></th>
                 </tr>
             </thead>
             <tbody>
@@ -292,6 +309,7 @@ declare(strict_types=1);
                 <?php endif; ?>
             </tbody>
         </table>
+        </div>
         <p class="muted">Seules les lignes renseignées sont comptées. Chaque comptage devient le nouveau point de départ du stock théorique.
         Les produits « En pause » (plus en vente pour l'instant) n'apparaissent pas dans cette grille : ils sont listés en bas de page, rétablissement en un clic.</p>
         <div class="form-actions">
@@ -299,6 +317,23 @@ declare(strict_types=1);
             <button type="button" class="btn btn-ghost" onclick="if (confirm('Effacer les quantités saisies ?')) this.form.reset();">Annuler</button>
         </div>
     </form>
+
+    <?php if ($invPages > 1): ?>
+    <!-- Pagination de la grille (lot 4B, modèle page audit) : seules les
+         lignes renseignées sont comptées, les pages se saisissent à la
+         suite sans perte. -->
+    <p class="muted">
+        <?= e((string) $invTotal) ?> produit<?= $invTotal > 1 ? 's' : '' ?> à compter — page <?= e((string) $invPage) ?> sur <?= e((string) $invPages) ?>
+    </p>
+    <div class="admin-actions">
+        <?php if ($invPage > 1): ?>
+            <a class="btn btn-outline btn-sm" href="<?= e(url('/admin/compta/inventaire?page=' . ($invPage - 1))) ?>">← Page précédente</a>
+        <?php endif; ?>
+        <?php if ($invPage < $invPages): ?>
+            <a class="btn btn-outline btn-sm" href="<?= e(url('/admin/compta/inventaire?page=' . ($invPage + 1))) ?>">Page suivante →</a>
+        <?php endif; ?>
+    </div>
+    <?php endif; ?>
 
     <?php foreach ($rows as $r): ?>
         <?php if (!empty($r['paused'])) { continue; } // déjà en pause : rien à marquer ?>
@@ -707,3 +742,7 @@ declare(strict_types=1);
     refresh();
 })();
 </script>
+
+<!-- Boîte à outils tableaux (lot 4B) : tri, filtre et colonnes de la
+     grille de comptage. -->
+<script src="<?= e(rootAssetVersioned('/assets/js/table-tools.js')) ?>" defer></script>

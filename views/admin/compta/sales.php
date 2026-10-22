@@ -82,18 +82,32 @@ foreach ($rows as $r) {
 </form>
 
 <!-- Tableau -->
-<div class="card surface glass table-wrap">
-    <table class="table sales-table">
+<div class="card surface glass">
+    <!-- Boîte à outils tableaux (lot 4B) : filtre rapide, choix des
+         colonnes (par défaut toutes sauf « Coût », ligne par ligne peu
+         utile) et compteur. Le tri se fait par clic sur les en-têtes.
+         La barre vit hors du conteneur scrollable (sinon menu rogné). -->
+    <div class="table-tools">
+        <input type="search" class="tt-filter" data-table-filter="#sales-table"
+               aria-label="Filtrer les lignes du journal" placeholder="Filtrer le journal…">
+        <details class="tt-cols" data-table-cols="#sales-table">
+            <summary>Colonnes</summary>
+        </details>
+        <span class="tt-count muted" data-table-count="#sales-table" aria-live="polite"></span>
+    </div>
+    <div class="table-wrap">
+    <table class="table sales-table" id="sales-table"
+           data-table data-cols-visible="date,produit,categorie,qte,ttc,benefice,paiement">
         <thead>
             <tr>
-                <th>Date</th>
-                <th>Produit</th>
-                <th>Cat.</th>
-                <th class="th-num">Qté</th>
-                <th class="th-num">TTC</th>
-                <th class="th-num">Coût</th>
-                <th class="th-num">Bénéfice</th>
-                <th>Paiement</th>
+                <th data-col="date" data-col-fixed>Date</th>
+                <th data-col="produit" data-col-fixed>Produit</th>
+                <th data-col="categorie">Cat.</th>
+                <th class="th-num" data-col="qte">Qté</th>
+                <th class="th-num" data-col="ttc">TTC</th>
+                <th class="th-num" data-col="cout">Coût</th>
+                <th class="th-num" data-col="benefice">Bénéfice</th>
+                <th data-col="paiement">Paiement</th>
             </tr>
         </thead>
         <tbody>
@@ -155,9 +169,13 @@ foreach ($rows as $r) {
             </tfoot>
         <?php endif; ?>
     </table>
+    </div>
 </div>
 
 <p class="card-meta">
     Le journal liste chaque ligne du rapport SumUp importé. Les « Montants personnalisés » (perso) sont inclus dans le CA mais exclus du bénéfice.
 </p>
+
+<!-- Boîte à outils tableaux (lot 4B) : tri, filtre et colonnes. -->
+<script src="<?= e(rootAssetVersioned('/assets/js/table-tools.js')) ?>" defer></script>
 

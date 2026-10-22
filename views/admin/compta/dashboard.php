@@ -120,6 +120,10 @@ $repereBadges = [
     'neutre'    => 'badge-muted',
 ];
 ?>
+<!-- Onglets de l'espace Ventes (partiel partagé — lot 4) : cette page
+     est l'onglet « Aujourd'hui ». -->
+<?php $activeTab = 'today'; require AEIC_VIEWS . '/partials/_tabs_ventes.php'; ?>
+
 <div class="admin-actions">
     <a class="btn btn-primary" href="<?= e(url('/admin/compta/import')) ?>">Importer un CSV</a>
 </div>

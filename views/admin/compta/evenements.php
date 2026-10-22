@@ -143,7 +143,14 @@ foreach ($events as $ev) {
 
 <div class="card surface glass table-wrap">
     <h2 class="card-title">Événements de la période</h2>
-    <table class="table">
+    <!-- Filtre rapide (lot 4B). Les formulaires d'action ne sont pas
+         touchés : le filtre ne fait qu'afficher/masquer les lignes. -->
+    <div class="table-tools">
+        <input type="search" class="tt-filter" data-table-filter="#evenements-table"
+               aria-label="Filtrer les événements" placeholder="Filtrer les événements…">
+        <span class="tt-count muted" data-table-count="#evenements-table" aria-live="polite"></span>
+    </div>
+    <table class="table" id="evenements-table" data-table data-table-nosort>
         <thead>
             <tr>
                 <th>Date</th>
@@ -159,11 +166,13 @@ foreach ($events as $ev) {
         <tbody>
             <?php foreach ($events as $ev): ?>
                 <?php
+                    // Marge calculée par le contrôleur (lot 4B) : null si
+                    // l'événement n'a aucun CA.
                     $ca = (float) $ev['ca'];
                     $qty = (int) $ev['qty'];
                     $costs = (float) $ev['costs'];
                     $profit = (float) $ev['profit'];
-                    $margin = $ca > 0.0 ? round($profit / $ca * 100.0, 1) : null;
+                    $margin = $ev['margin'];
                 ?>
                 <tr>
                     <td>

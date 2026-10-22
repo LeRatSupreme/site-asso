@@ -1090,7 +1090,15 @@ usort($pickerList, 'strnatcasecmp');
     <div class="card surface glass table-wrap">
         <h2 class="card-title">Derniers achats</h2>
         <p class="muted">Achats de la période sélectionnée (200 lignes max), regroupés par facture (jour + fournisseur + n° de facture).</p>
-        <table class="table">
+        <!-- Filtre rapide (lot 4B) : masque les lignes ne correspondant
+             pas ; les en-têtes de facture se cachent quand plus aucune
+             ligne du groupe n'est visible. Aucun formulaire n'est touché. -->
+        <div class="table-tools">
+            <input type="search" class="tt-filter" data-table-filter="#purchases-journal"
+                   aria-label="Filtrer les lignes d'achat" placeholder="Filtrer le journal…">
+            <span class="tt-count muted" data-table-count="#purchases-journal" aria-live="polite"></span>
+        </div>
+        <table class="table" id="purchases-journal" data-table data-table-nosort>
             <thead>
                 <tr>
                     <th>Date</th>
@@ -1135,7 +1143,7 @@ usort($pickerList, 'strnatcasecmp');
                     // d'en-tête GROUPÉES (routes /achats/group/*).
                     $pjIds = implode(',', array_map(static fn (array $r): string => (string) $r['id'], $g['lines']));
                     ?>
-                    <tr class="pj-group-head">
+                    <tr class="pj-group-head tt-static">
                         <td colspan="10">
                             <div class="pj-group-line">
                                 <strong><?= e(formatDate((string) $pjFirst['purchased_at'])) ?></strong>

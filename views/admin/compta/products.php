@@ -35,6 +35,11 @@ declare(strict_types=1);
         <option value="profit-desc">Bénéfice ↓</option>
         <option value="margin-desc">Marge % ↓</option>
     </select>
+    <!-- Choix des colonnes (lot 4B) : partagé par toutes les tables du
+         regroupement (même schéma), mémorisé d'une visite à l'autre. -->
+    <details class="tt-cols" data-table-cols=".prod-table">
+        <summary>Colonnes</summary>
+    </details>
     <span class="costs-count muted" id="pk-count"></span>
 </div>
 
@@ -52,38 +57,35 @@ declare(strict_types=1);
     <section class="cost-group" data-cat="<?= e(strtolower((string) $catName)) ?>">
         <h2 class="cost-group-title"><?= e($catName) ?> <span class="muted">(<?= count($catRows) ?>)</span></h2>
         <div class="card surface glass table-wrap">
-            <table class="table prod-table">
+            <table class="table prod-table" data-table
+                   data-cols-visible="produit,qte,prix_moyen,ca,benefice,marge">
                 <thead>
                     <tr>
-                        <th>Produit</th>
-                        <th class="th-num">Qté</th>
-                        <th class="th-num">Prix moy.</th>
-                        <th class="th-num">CA</th>
-                        <th class="th-num">Coût unit.</th>
-                        <th class="th-num">Bénéfice</th>
-                        <th class="th-num">Marge</th>
+                        <th data-col="produit" data-col-fixed>Produit</th>
+                        <th class="th-num" data-col="qte">Qté</th>
+                        <th class="th-num" data-col="prix_moyen">Prix moy.</th>
+                        <th class="th-num" data-col="ca">CA</th>
+                        <th class="th-num" data-col="cout_unit">Coût unit.</th>
+                        <th class="th-num" data-col="benefice">Bénéfice</th>
+                        <th class="th-num" data-col="marge">Marge</th>
                     </tr>
                 </thead>
                 <tbody>
-                    <?php foreach ($catRows as $r):
-                        $ca     = (float) $r['ca'];
-                        $profit = (float) $r['profit'];
-                        $marg   = $ca > 0 ? round($profit / $ca * 100, 1) : 0.0;
-                    ?>
+                    <?php foreach ($catRows as $r): ?>
                         <tr
                             data-product="<?= e(strtolower((string) $r['product_key'])) ?>"
                             data-cat="<?= e(strtolower((string) $catName)) ?>"
                             data-qty="<?= (float) $r['qty'] ?>"
-                            data-ca="<?= $ca ?>"
-                            data-profit="<?= $profit ?>"
-                            data-margin="<?= $marg ?>">
+                            data-ca="<?= (float) $r['ca'] ?>"
+                            data-profit="<?= (float) $r['profit'] ?>"
+                            data-margin="<?= (float) $r['margin'] ?>">
                             <td><strong><?= e((string) $r['product_key']) ?></strong></td>
                             <td class="num"><?= e((string) $r['qty']) ?></td>
                             <td class="num"><?= e(formatPrice($r['avg_price'] ?? 0)) ?></td>
-                            <td class="num"><?= e(formatPrice($ca)) ?></td>
+                            <td class="num"><?= e(formatPrice((float) $r['ca'])) ?></td>
                             <td class="num"><?= e(formatPrice($r['cost_price'] ?? 0, 3)) ?></td>
-                            <td class="num <?= $profit >= 0 ? 'is-positive' : 'is-negative' ?>"><?= e(formatPrice($profit)) ?></td>
-                            <td class="num"><?= e(number_format($marg, 1, ',', ' ')) ?> %</td>
+                            <td class="num <?= (float) $r['profit'] >= 0 ? 'is-positive' : 'is-negative' ?>"><?= e(formatPrice((float) $r['profit'])) ?></td>
+                            <td class="num"><?= e(number_format((float) $r['margin'], 1, ',', ' ')) ?> %</td>
                         </tr>
                     <?php endforeach; ?>
                 </tbody>
@@ -177,4 +179,9 @@ declare(strict_types=1);
     apply();
 })();
 </script>
+
+<!-- Boîte à outils tableaux (lot 4B) : tri par en-têtes + choix des
+     colonnes (le filtre et le compteur de la barre ci-dessus restent
+     les outils de référence de la page). -->
+<script src="<?= e(rootAssetVersioned('/assets/js/table-tools.js')) ?>" defer></script>
 

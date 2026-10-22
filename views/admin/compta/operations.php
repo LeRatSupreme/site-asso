@@ -92,3 +92,7 @@ $opInclude = [
 <?php endif; ?>
 
 <?php require AEIC_VIEWS . '/admin/compta/' . $opInclude . '.php'; ?>
+
+<!-- Boîte à outils tableaux (lot 4B) : filtre rapide des journaux
+     (une seule inclusion pour toutes les sections Opérations). -->
+<script src="<?= e(rootAssetVersioned('/assets/js/table-tools.js')) ?>" defer></script>

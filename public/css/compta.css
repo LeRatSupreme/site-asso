@@ -1559,3 +1559,703 @@ details.howto p {
 .kr-hypotheses { margin: 0.35rem 0 0; padding-left: 1.1rem; font-size: 0.78rem; color: var(--muted); }
 .kr-mesure { margin: 0.3rem 0 0; font-size: 0.78rem; color: var(--muted); }
 .kr-hist-head { margin-top: 0.6rem; }
+/* =========================================================
+   AEIC — Onglets de l'espace Ventes (lot 4)
+   Partiel partagé views/partials/_tabs_ventes.php, inclus par
+   /admin/compta (« Aujourd'hui »), /admin/analytics (« Analyses »)
+   et /admin/compta/annuel (« Bilan annuel »). Version compacte
+   kiosque : .tabs-ventes--compact.
+   ========================================================= */
+.tabs-ventes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    margin: 0 0 1rem;
+    padding: 0.25rem;
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    width: fit-content;
+    max-width: 100%;
+}
+.tabs-ventes a {
+    padding: 0.42rem 0.95rem;
+    border-radius: 999px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--muted);
+    text-decoration: none;
+    white-space: nowrap;
+}
+.tabs-ventes a:hover { color: var(--foreground); }
+.tabs-ventes a.is-active {
+    background: var(--primary);
+    color: var(--primary-foreground);
+    font-weight: 700;
+}
+.tabs-ventes--compact { margin: 0 0 0.6rem; }
+.tabs-ventes--compact a { padding: 0.3rem 0.7rem; font-size: 0.78rem; }
+
+/* =========================================================
+   AEIC — Dashboard Analytics (lot 4) : styles déplacés DEPUIS les
+   vues views/admin/analytics/{index,kiosk}.php (blocs <style> inline
+   supprimés). TOUT est scopé sous .analytics-page (desktop) ou
+   .ka-page (kiosque) pour ne pas retoucher aux autres pages compta
+   qui chargent ce fichier. Variables existantes uniquement ; les
+   dégradés/ombres décoratifs ont été retirés (seule exception : la
+   légende de l'échelle de la heatmap, fonctionnelle).
+   ========================================================= */
+
+/* ---- Racine desktop ---- */
+.analytics-page { display: flex; flex-direction: column; gap: 1.25rem; }
+
+.analytics-head { margin-bottom: .25rem; }
+.analytics-head .eyebrow { color: var(--primary); font-size: .8rem; letter-spacing: .04em; text-transform: uppercase; margin: 0 0 .15rem; }
+.analytics-head .page-title { margin: 0 0 .25rem; }
+.analytics-head .muted { margin: 0; color: var(--muted); font-size: .9rem; }
+
+/* ---- Filtres ---- */
+.analytics-page .analytics-filters {
+    background: var(--input-bg);
+    border: 1px solid var(--border-strong);
+    border-radius: 14px;
+    padding: 1.25rem 1.4rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+.analytics-page .af-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0.75rem 1.25rem; }
+.analytics-page .af-row-filters { align-items: flex-end; }
+.analytics-page .af-group { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.analytics-page .af-label {
+    font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.04em; color: var(--muted); white-space: nowrap;
+}
+.analytics-page .af-pills { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+.analytics-page .af-pill {
+    background: var(--input-bg);
+    border: 1px solid var(--border-strong);
+    color: var(--muted);
+    padding: 0.42rem 0.85rem;
+    border-radius: 999px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+}
+.analytics-page .af-pill:hover {
+    border-color: rgba(72,189,211,0.4);
+    color: var(--foreground);
+    background: rgba(72,189,211,0.06);
+}
+.analytics-page .af-pill.is-active {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: var(--primary-foreground);
+    font-weight: 700;
+}
+.analytics-page .af-select, .analytics-page .af-input {
+    background: var(--input-bg);
+    border: 1px solid var(--border-strong);
+    color: var(--foreground);
+    border-radius: 8px;
+    padding: 0.5rem 0.7rem;
+    font-size: 0.88rem;
+    transition: border-color 0.15s;
+}
+.analytics-page .af-select:focus, .analytics-page .af-input:focus {
+    outline: none;
+    border-color: var(--primary);
+    background: rgba(72,189,211,0.05);
+}
+.analytics-page .af-actions { margin-left: auto; display: flex; gap: 0.5rem; }
+
+/* ---- KPI (scopés : les .kpi-* globaux de compta.css gardent le ---- */
+/* ---- dashboard intact)                                          ---- */
+.analytics-page .kpi-grid { gap: 1rem; }
+.analytics-page .kpi-card { display: flex; flex-direction: column; gap: .25rem; padding: 1rem 1.1rem; min-height: 110px; }
+.analytics-page .kpi-label { font-size: .76rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.analytics-page .kpi-value { font-size: 1.5rem; font-weight: 800; color: var(--primary); line-height: 1.1; margin: 0; }
+.analytics-page .kpi-sub { font-size: .78rem; color: var(--muted); margin: 0; }
+.analytics-page .kpi-delta { font-size: .8rem; font-weight: 700; }
+.analytics-page .kpi-delta.is-up { color: var(--accent-success); }
+.analytics-page .kpi-delta.is-down { color: var(--accent-danger); }
+.analytics-page .kpi-delta.is-muted { color: var(--muted); font-weight: 400; }
+
+.analytics-page .grid-6 { display: grid; grid-template-columns: repeat(6, minmax(0,1fr)); }
+@media (max-width: 1100px) { .analytics-page .grid-6 { grid-template-columns: repeat(3, minmax(0,1fr)); } }
+@media (max-width: 640px)  { .analytics-page .grid-6 { grid-template-columns: repeat(2, minmax(0,1fr)); } }
+
+/* ---- Charts ---- */
+.analytics-page .analytics-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 1.25rem; }
+.analytics-page .chart-span-2 { grid-column: 1 / -1; }
+.analytics-page .chart-card { padding: 1.25rem 1.4rem; }
+.analytics-page .chart-head { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; }
+.analytics-page .chart-title { font-size: 1rem; font-weight: 700; margin: 0; color: var(--primary); }
+.analytics-page .chart-sub { font-size: .8rem; color: var(--muted); }
+.analytics-page .chart-canvas { position: relative; height: 300px; }
+.analytics-page .chart-canvas-square { height: 280px; max-width: 360px; margin: 0 auto; }
+@media (max-width: 860px) { .analytics-page .analytics-grid { grid-template-columns: 1fr; } .analytics-page .chart-span-2 { grid-column: auto; } }
+
+/* ---- Prévisions ---- */
+.analytics-page .fc-chips { display: flex; flex-wrap: wrap; gap: 0.35rem 0.75rem; justify-content: flex-end; }
+.analytics-page .fc-note { display: block; margin: -0.6rem 0 0.75rem; }
+.analytics-page .fc-empty { margin: 0; padding: 0.5rem 0 1rem; }
+.analytics-page .pt-form { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; justify-content: flex-end; }
+/* Info-bulle du modèle (renvoie vers la section repliée). */
+.analytics-page .fc-info {
+    display: inline-block; margin-left: .35rem; cursor: help;
+    font-size: .68rem; font-weight: 700; color: var(--muted);
+    border: 1px solid var(--border-strong); border-radius: 50%;
+    width: 15px; height: 15px; line-height: 13px; text-align: center;
+    vertical-align: 2px;
+}
+/* Statut « Hors fourchette » (anomalie, ambre) — le statut « Dans la
+   fourchette ✓ » reste neutre (classe is-muted existante). */
+.analytics-page .kpi-delta.is-off { color: var(--accent-warning); }
+/* Bandeau d'avertissement (données insuffisantes / coût non fiable). */
+.analytics-page .fc-banner {
+    margin: 0 0 .75rem; padding: .5rem .75rem; border-radius: 10px;
+    background: rgba(245,158,11,.12); border: 1px solid rgba(245,158,11,.35);
+    color: var(--accent-warning); font-size: .84rem;
+}
+
+/* ---- Objectif ---- */
+.analytics-page .goal-body { display: flex; flex-direction: column; gap: .9rem; }
+.analytics-page .goal-prob { display: flex; flex-direction: column; gap: .25rem; }
+.analytics-page .goal-prob-value { font-size: 2rem; font-weight: 800; color: var(--primary); line-height: 1; }
+.analytics-page .goal-prob-label { font-size: .78rem; color: var(--muted); }
+.analytics-page .goal-prob-bar { height: 10px; border-radius: 5px; background: var(--input-bg); overflow: hidden; }
+.analytics-page .goal-prob-fill { height: 100%; border-radius: 5px; background: var(--primary); }
+.analytics-page .goal-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; font-size: .88rem; }
+.analytics-page .goal-list li { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; border-bottom: 1px solid var(--border); padding: .3rem 0; }
+.analytics-page .goal-list li:last-child { border-bottom: none; }
+.analytics-page .goal-list li span { color: var(--muted); }
+.analytics-page .goal-form { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+
+/* ---- Bénéfice prévu / Réapprovisionnement ---- */
+.analytics-page .benef-total { display: flex; align-items: baseline; gap: .5rem; margin: 0 0 .75rem; }
+.analytics-page .benef-suspects { margin: .75rem 0 0; padding-left: 1.1rem; font-size: .82rem; color: var(--muted); }
+.analytics-page .reappro-sugg { color: var(--accent-success); font-weight: 800; }
+.analytics-page .reappro-neg { color: var(--accent-warning); font-weight: 800; white-space: nowrap; }
+
+/* ---- Détails techniques (bandeau discret, replié) ---- */
+.analytics-page .dataq { padding: .8rem 1.1rem; }
+.analytics-page .dataq summary { cursor: pointer; font-size: .82rem; color: var(--muted); }
+.analytics-page .dataq-body { margin-top: .6rem; font-size: .84rem; display: flex; flex-direction: column; gap: .35rem; }
+.analytics-page .dataq-body p { margin: 0; }
+.analytics-page .dataq-notes { margin: 0; padding-left: 1.1rem; color: var(--muted); }
+
+/* ---- Estimation du jour ---- */
+.analytics-page .dt-pills { gap: 0.3rem; }
+.analytics-page .dt-pills .af-pill { padding: 0.32rem 0.75rem; font-size: 0.78rem; text-decoration: none; }
+.analytics-page .dt-chips { justify-content: flex-start; margin-bottom: 0.75rem; }
+
+/* ---- Heatmap (légende = échelle fonctionnelle, omise de décoration) ---- */
+.analytics-page .heatmap-card { overflow-x: auto; }
+.analytics-page .hm-filters { display: flex; gap: 0.5rem; align-items: center; }
+.analytics-page .hm-filters .af-select { font-size: 0.82rem; padding: 0.35rem 0.6rem; }
+.analytics-page .heatmap-wrap { display: flex; flex-direction: column; gap: 0.8rem; }
+.analytics-page .heatmap {
+    display: inline-grid;
+    grid-auto-rows: 28px;
+    gap: 3px;
+    min-width: 820px;
+    padding: 4px;
+}
+.analytics-page .hm-row {
+    display: grid;
+    grid-template-columns: 40px repeat(24, 1fr);
+    gap: 3px;
+    align-items: center;
+}
+.analytics-page .hm-head .hm-label, .analytics-page .hm-head .hm-hh {
+    font-size: 0.62rem;
+    color: var(--muted);
+    text-align: center;
+    font-weight: 600;
+    padding-bottom: 2px;
+}
+.analytics-page .hm-label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--foreground);
+    text-align: right;
+    padding-right: 4px;
+}
+.analytics-page .hm-hh {
+    font-size: 0.6rem;
+    color: var(--muted);
+    text-align: center;
+}
+.analytics-page .hm-cell {
+    height: 28px;
+    border-radius: 5px;
+    background: rgba(72,189,211,0.03);
+    border: 1px solid var(--border);
+    transition: transform 0.1s;
+    cursor: default;
+}
+.analytics-page .hm-cell:hover {
+    transform: scale(1.25);
+    z-index: 5;
+    position: relative;
+}
+.analytics-page .hm-legend {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    justify-content: flex-end;
+}
+.analytics-page .hm-legend-label { font-size: 0.72rem; color: var(--muted); }
+.analytics-page .hm-legend-bar {
+    width: 120px;
+    height: 12px;
+    border-radius: 6px;
+    /* Échelle fonctionnelle de la heatmap (faible → fort). */
+    background: linear-gradient(90deg, rgba(72,189,211,0.05), rgba(72,189,211,1));
+}
+
+/* ---- Insights ---- */
+.analytics-page .insights-grid { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 1rem; }
+@media (max-width: 1100px) { .analytics-page .insights-grid { grid-template-columns: repeat(2, minmax(0,1fr)); } }
+@media (max-width: 640px)  { .analytics-page .insights-grid { grid-template-columns: 1fr; } }
+.analytics-page .insight-card { display: flex; gap: .8rem; align-items: flex-start; padding: 1rem 1.1rem; border-left: 4px solid var(--primary); }
+.analytics-page .insight-teal   { border-left-color: var(--primary); }
+.analytics-page .insight-green  { border-left-color: var(--accent-success); }
+.analytics-page .insight-red    { border-left-color: var(--accent-danger); }
+.analytics-page .insight-amber  { border-left-color: var(--accent-warning); }
+.analytics-page .insight-icon svg { width: 24px; height: 24px; display: block; }
+.analytics-page .insight-title { font-size: .85rem; font-weight: 700; margin: 0 0 .25rem; color: var(--primary); }
+.analytics-page .insight-text { font-size: .85rem; margin: 0; color: var(--muted); }
+
+/* ---- Nav bas de page (kiosque, hors .analytics-page) ---- */
+.kday-actions {
+    max-width: 40rem; margin: 0 auto 1rem;
+    display: flex; gap: 0.5rem; flex-wrap: wrap; justify-content: center;
+}
+
+/* ---- Tableau récapitulatif ---- */
+.analytics-page .table-card { padding: 1.25rem 1.4rem; }
+.analytics-page .table-wrap { overflow-x: auto; }
+.analytics-page .data-table { width: 100%; border-collapse: collapse; font-size: .88rem; }
+.analytics-page .data-table th, .analytics-page .data-table td { padding: .5rem .6rem; border-bottom: 1px solid var(--border); text-align: left; white-space: nowrap; }
+.analytics-page .data-table th.num, .analytics-page .data-table td.num { text-align: right; }
+.analytics-page .data-table thead th { color: var(--muted); font-weight: 600; }
+.analytics-page .data-table tfoot td { font-weight: 700; }
+.analytics-page .data-table tbody tr:hover { background: var(--input-bg); }
+
+/* =========================================================
+   AEIC — Analytique KIOSQUE (lot 4) : styles déplacés depuis
+   views/admin/analytics/kiosk.php, scopés sous .ka-page.
+   ========================================================= */
+
+/* Racine de la vue : verrou final anti-débordement — même si un élément
+   échappait aux règles ci-dessus, AUCUN scroll horizontal n'est possible
+   (le navigateur mobile ne dézoome donc jamais la page). */
+.ka-page { display: flex; flex-direction: column; gap: 0.6rem; max-width: 100%; overflow-x: clip; }
+.ka-page canvas, .ka-page img { max-width: 100%; }
+
+/* ---- En-tête minimal ---- */
+.ka-page .ka-title { margin: 0; font-size: 1.2rem; font-weight: 900; color: var(--foreground); }
+.ka-page .ka-period { margin: 0.1rem 0 0; font-size: 0.78rem; color: var(--muted); }
+
+/* ---- Filtres compacts ---- */
+.ka-page .ka-filters {
+    display: flex; flex-direction: column; gap: 0.45rem;
+    padding: 0.6rem 0.7rem;
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+}
+.ka-page .ka-pills { display: flex; flex-wrap: wrap; gap: 0.25rem; }
+.ka-page .ka-pill {
+    appearance: none; cursor: pointer; white-space: nowrap;
+    font-family: inherit;
+    background: var(--input-bg);
+    border: 1px solid var(--border-strong);
+    color: var(--muted);
+    padding: 0.3rem 0.6rem;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    transition: all 0.15s;
+}
+.ka-page .ka-pill:hover { border-color: rgba(72,189,211,0.4); color: var(--foreground); }
+.ka-page .ka-pill.is-active {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: var(--primary-foreground);
+}
+/* Pastilles de fenêtre des prévisions : mêmes styles que .ka-pill mais
+   classe distincte (liens <a>) pour ne pas capter le handler JS du
+   sélecteur de période. */
+.ka-page .ka-fwpill {
+    appearance: none; cursor: pointer; white-space: nowrap;
+    font-family: inherit; text-decoration: none;
+    background: var(--input-bg);
+    border: 1px solid var(--border-strong);
+    color: var(--muted);
+    padding: 0.3rem 0.6rem;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    transition: all 0.15s;
+}
+.ka-page .ka-fwpill:hover { border-color: rgba(72,189,211,0.4); color: var(--foreground); }
+.ka-page .ka-fwpill.is-active {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: var(--primary-foreground);
+}
+.ka-page .ka-custom { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; }
+/* Le display:flex ci-dessus écraserait l'attribut hidden sinon. */
+.ka-page .ka-custom[hidden] { display: none; }
+.ka-page .ka-custom input[type="date"] {
+    flex: 1 1 7.5rem; min-width: 0;
+    background: var(--input-bg);
+    border: 1px solid var(--border-strong);
+    color: var(--foreground);
+    border-radius: 8px;
+    padding: 0.32rem 0.45rem;
+    font-size: 0.8rem;
+}
+.ka-page .ka-custom-sep { color: var(--muted); font-size: 0.75rem; }
+.ka-page .ka-selects { display: flex; gap: 0.4rem; }
+.ka-page .ka-field { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.1rem; }
+.ka-page .ka-field label {
+    font-size: 0.6rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.04em; color: var(--muted);
+}
+.ka-page .ka-field select {
+    width: 100%;
+    background: var(--input-bg);
+    border: 1px solid var(--border-strong);
+    color: var(--foreground);
+    border-radius: 8px;
+    padding: 0.35rem 0.5rem;
+    font-size: 0.82rem;
+}
+
+/* ---- Bandeau KPI 3×2 (2 colonnes sous 360px) ---- */
+.ka-page .ka-kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.35rem; }
+@media (max-width: 360px) { .ka-page .ka-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.ka-page .ka-kpi { display: flex; flex-direction: column; gap: 0.08rem; padding: 0.5rem 0.6rem; }
+.ka-page .ka-kpi-label { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+.ka-page .ka-kpi-value { font-size: 1.2rem; font-weight: 800; color: var(--primary); line-height: 1.15; }
+.ka-page .ka-kpi-sub { font-size: 0.62rem; color: var(--muted); }
+.ka-page .ka-kpi-delta { font-size: 0.66rem; font-weight: 700; }
+.ka-page .ka-kpi-delta.is-up { color: var(--accent-success); }
+.ka-page .ka-kpi-delta.is-down { color: var(--accent-danger); }
+.ka-page .ka-kpi-delta.is-muted { color: var(--muted); font-weight: 400; }
+
+/* ---- Onglets : classes .compta-tabs de compta.css, juste resserrées ---- */
+.ka-page .ka-tabs { margin-bottom: 0.2rem; }
+
+/* ---- Cartes + graphiques (tailles 1:1 lisibles sans zoomer) ---- */
+.ka-page .ka-card { padding: 0.7rem 0.8rem; }
+.ka-page .ka-chart-head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.5rem; }
+.ka-page .ka-chart-title { margin: 0; font-size: 1rem; font-weight: 700; color: var(--primary); }
+.ka-page .ka-sub { font-size: 0.68rem; color: var(--muted); text-align: right; min-width: 0; }
+.ka-page .ka-chart { position: relative; }
+.ka-page .ka-chart-trend { height: 260px; }
+.ka-page .ka-chart-top { height: 300px; }
+.ka-page .ka-chart-donut { height: 250px; max-width: 280px; margin: 0 auto; }
+.ka-page .ka-chart-bar { height: 210px; }
+
+/* ---- Prévisions : fenêtre d'apprentissage + chips moteur (jour/hier) ---- */
+.ka-page .ka-fc { display: flex; flex-direction: column; gap: 0.2rem; padding: 0.6rem 0.7rem; }
+.ka-page .ka-fc .ka-kpi-delta { font-size: 0.78rem; line-height: 1.4; }
+.ka-page .ka-fc-note { font-size: 0.66rem; color: var(--muted); }
+.ka-page .ka-fc-win { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; margin-bottom: 0.2rem; }
+.ka-page .ka-fc-win-label { font-size: 0.68rem; font-weight: 700; color: var(--muted); }
+/* Donuts empilés sur téléphone (assez larges pour être lus en 1:1),
+   côte à côte uniquement sur écran large. */
+.ka-page .ka-duo { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.6rem; }
+@media (min-width: 640px) { .ka-page .ka-duo { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); } }
+
+/* Garde locale : un pane masqué ne doit JAMAIS prendre de largeur
+   (compta.css a déjà .compta-tabpane[hidden], on redouble ici). */
+.ka-page .ka-pane[hidden] { display: none; }
+
+/* ---- Légendes HTML des donuts (remplacent la légende Chart.js),
+        tailles 1:1 lisibles sans zoomer ---- */
+.ka-page .ka-leg { margin-top: 0.55rem; }
+.ka-page .ka-leg-row {
+    display: flex; align-items: center; gap: 0.5rem;
+    min-width: 0;
+    padding: 0.55rem 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 1rem;
+    line-height: 1.35;
+}
+.ka-page .ka-leg-row:last-child { border-bottom: none; }
+.ka-page .ka-leg-dot { flex: 0 0 auto; width: 12px; height: 12px; border-radius: 50%; }
+.ka-page .ka-leg-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ka-page .ka-leg-val { flex: 0 0 auto; font-size: 1rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.ka-page .ka-leg-pct { flex: 0 0 auto; font-size: 0.85rem; color: var(--muted); white-space: nowrap; }
+.ka-page .ka-leg-empty { margin: 0; padding: 0.55rem 0; font-size: 1rem; color: var(--muted); text-align: center; }
+
+/* ---- Heures : heatmap INVERSÉE (heures en lignes, jours en colonnes).
+        Colonnes minmax(0,1fr) : zéro débordement, tient à 320px comme au
+        verrou overflow-x:clip de .ka-page ; lecture verticale naturelle. ---- */
+.ka-page .ka-ht { display: grid; grid-template-columns: 38px repeat(7, minmax(0, 1fr)); gap: 2px; }
+.ka-page .ka-ht-row { display: contents; }
+.ka-page .ka-ht-day {
+    font-size: 0.6rem; font-weight: 700;
+    color: var(--muted);
+    text-align: center; padding-bottom: 2px;
+}
+.ka-page .ka-ht-hour {
+    font-size: 0.68rem; font-weight: 600;
+    color: var(--muted);
+    text-align: left;
+}
+.ka-page .ka-ht-cell {
+    height: 21px; padding: 0; border: none; border-radius: 4px;
+    background: rgba(72,189,211,0.03);
+    cursor: pointer;
+}
+/* Retour visuel de la case touchée (info affichée sous la grille). */
+.ka-page .ka-ht-cell.is-sel { outline: 2px solid var(--primary); outline-offset: -2px; }
+.ka-page .ka-ht-info {
+    min-height: 1.4em; /* réserve la place : pas de saut de layout au tap */
+    margin: 0.5rem 0 0;
+    font-size: 0.85rem;
+    color: var(--foreground);
+}
+.ka-page .ka-ht-info[hidden] { display: none; }
+.ka-page .ka-ht-legend[hidden] { display: none; }
+.ka-page .ka-ht-empty { margin: 0; font-size: 0.9rem; color: var(--muted); }
+.ka-page .ka-ht-legend { display: flex; align-items: center; gap: 0.4rem; justify-content: flex-end; margin-top: 0.5rem; }
+.ka-page .ka-ht-legend-label { font-size: 0.65rem; color: var(--muted); }
+.ka-page .ka-ht-legend-bar {
+    width: 90px; height: 10px; border-radius: 5px;
+    /* Échelle fonctionnelle de la heatmap (faible → fort). */
+    background: linear-gradient(90deg, rgba(72,189,211,0.05), rgba(72,189,211,1));
+}
+
+/* ---- Insights compacts (empilés) ---- */
+.ka-page .ka-insights { display: flex; flex-direction: column; gap: 0.4rem; }
+.ka-page .ka-insight { display: flex; gap: 0.55rem; align-items: flex-start; padding: 0.6rem 0.7rem; border-left: 3px solid var(--primary); }
+.ka-page .ka-insight--green { border-left-color: var(--accent-success); }
+.ka-page .ka-insight--red   { border-left-color: var(--accent-danger); }
+.ka-page .ka-insight--amber { border-left-color: var(--accent-warning); }
+.ka-page .ka-insight-icon { color: var(--primary); }
+.ka-page .ka-insight--green .ka-insight-icon { color: var(--accent-success); }
+.ka-page .ka-insight--red .ka-insight-icon   { color: var(--accent-danger); }
+.ka-page .ka-insight--amber .ka-insight-icon { color: var(--accent-warning); }
+.ka-page .ka-insight-icon svg { width: 18px; height: 18px; display: block; }
+.ka-page .ka-insight-title { margin: 0 0 0.1rem; font-size: 0.78rem; font-weight: 700; }
+.ka-page .ka-insight-text { margin: 0; font-size: 0.72rem; color: var(--muted); }
+
+/* ---- Produits : rangées-cartes pleine largeur (fin du tableau
+        scrollable — tout est visible sans défilement horizontal) ---- */
+.ka-page .ka-ptools { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.5rem; }
+.ka-page .ka-psort { display: flex; align-items: center; gap: 0.4rem; min-width: 0; }
+.ka-page .ka-psort span {
+    font-size: 0.62rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.04em; color: var(--muted);
+}
+.ka-page .ka-psort select {
+    background: var(--input-bg);
+    border: 1px solid var(--border-strong);
+    color: var(--foreground);
+    border-radius: 8px;
+    padding: 0.35rem 0.5rem;
+    font-size: 0.85rem;
+}
+.ka-page .ka-ptotals {
+    display: flex; flex-wrap: wrap; gap: 0.3rem 0.9rem;
+    margin: 0 0 0.6rem; padding: 0.5rem 0.6rem;
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    font-size: 0.78rem; color: var(--muted);
+}
+.ka-page .ka-ptot-profit.is-pos { color: var(--accent-success); }
+.ka-page .ka-ptot-profit.is-neg { color: var(--accent-danger); }
+/* Sections du tri « Catégorie » : entête lisible + aération généreuse
+   entre sections (1rem), entête → première carte (0.5rem). */
+.ka-page .ka-psec { margin-bottom: 1rem; }
+.ka-page .ka-psec:last-child { margin-bottom: 0; }
+.ka-page .ka-psec-head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem; min-width: 0; margin-bottom: 0.5rem; }
+.ka-page .ka-psec-name { flex: 1 1 auto; min-width: 0; font-weight: 700; font-size: 0.95rem; line-height: 1.3; }
+.ka-page .ka-psec-meta { flex: 0 0 auto; font-size: 0.72rem; color: var(--muted); white-space: nowrap; }
+.ka-page .ka-pcard {
+    padding: 0.7rem 0.8rem;
+    border-radius: 12px;
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    margin-bottom: 0.7rem;
+    /* Aération interne : les 3 lignes de la carte respirent. */
+    display: flex; flex-direction: column; gap: 0.3rem;
+    line-height: 1.45;
+}
+.ka-page .ka-pcard:last-child { margin-bottom: 0; }
+.ka-page .ka-pcard-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.5rem; }
+.ka-page .ka-pcard-name {
+    flex: 1 1 auto; min-width: 0;
+    font-weight: 700; font-size: 0.92rem; line-height: 1.25;
+    /* Wrap sur 2 lignes max, ellipsis au-delà ; overflow-wrap pour les
+       mots très longs (URL, références) qui ne doivent jamais pousser. */
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    overflow-wrap: anywhere;
+}
+.ka-page .ka-pcard-cat {
+    flex: 0 0 auto;
+    font-size: 0.62rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em;
+    color: var(--primary);
+    background: rgba(72,189,211,0.12);
+    border-radius: 999px;
+    padding: 0.18rem 0.55rem;
+}
+.ka-page .ka-pcard-meta { display: flex; align-items: baseline; font-size: 0.78rem; color: var(--muted); }
+/* Séparateur « · » entre les méta-informations. */
+.ka-page .ka-pcard-meta > * + *::before { content: '·'; margin-right: 0.45rem; color: var(--muted); }
+/* Les enfants flex portant du texte ne peuvent jamais forcer la largeur. */
+.ka-page .ka-pcard-stats > span, .ka-page .ka-ptotals > span, .ka-page .ka-pcard-meta > span { min-width: 0; }
+.ka-page .ka-pcard-stats { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.6rem; }
+.ka-page .ka-pcard-ca { font-size: 1rem; font-weight: 800; color: var(--primary); font-variant-numeric: tabular-nums; }
+.ka-page .ka-pcard-profit { font-size: 0.85rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.ka-page .ka-pcard-profit.is-pos { color: var(--accent-success); }
+.ka-page .ka-pcard-profit.is-neg { color: var(--accent-danger); }
+.ka-page .ka-pcard-margin { font-size: 0.78rem; color: var(--muted); }
+.ka-page .ka-pempty { margin: 0; font-size: 0.9rem; color: var(--muted); }
+
+/* ---- Divers ---- */
+.ka-page .ka-nosales { margin: 0; font-size: 0.78rem; color: var(--muted); }
+.ka-page .ka-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: center; margin: 0.6rem 0 1rem; }
+
+/* ---- Statut « Hors fourchette » (anomalie, ambre) + bandeau
+        « Détails techniques » replié ---- */
+.ka-page .ka-kpi-delta.is-off { color: var(--accent-warning); }
+.ka-page .ka-dataq { padding: 0.55rem 0.7rem; }
+.ka-page .ka-dataq summary {
+    cursor: pointer;
+    font-size: 0.7rem; font-weight: 700;
+    color: var(--muted);
+    line-height: 1.4;
+}
+.ka-page .ka-dataq .ka-fc-note { margin-top: 0.25rem; }
+
+/* ════════════════════════════════════════════════════════════════════
+   Boîte à outils tableaux (lot 4B) — tri, filtre rapide, choix des
+   colonnes, compteur. Portée par public/assets/js/table-tools.js
+   (tableaux data-table). Variables existantes uniquement.
+   ════════════════════════════════════════════════════════════════════ */
+
+/* Barre d'outils au-dessus du tableau. */
+.table-tools {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 0 0 0.7rem;
+}
+.table-tools .tt-filter {
+    flex: 1 1 12rem;
+    max-width: 20rem;
+    padding: 0.35rem 0.6rem;
+    border: 1px solid var(--border, rgba(255, 255, 255, 0.15));
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--foreground, inherit);
+    font-size: 0.86rem;
+}
+.table-tools .tt-filter:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 1px;
+}
+.table-tools .tt-count {
+    margin-left: auto;
+    font-size: 0.78rem;
+}
+
+/* Choix des colonnes (details/summary accessible). */
+.tt-cols {
+    position: relative;
+}
+.tt-cols summary {
+    cursor: pointer;
+    list-style: none;
+    padding: 0.3rem 0.7rem;
+    border: 1px solid var(--border, rgba(255, 255, 255, 0.15));
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.04);
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--foreground, inherit);
+    user-select: none;
+}
+.tt-cols summary::-webkit-details-marker { display: none; }
+.tt-cols summary::after { content: ' ▾'; color: var(--muted, #8892a6); }
+.tt-cols[open] summary::after { content: ' ▴'; }
+.tt-cols summary:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 1px;
+}
+.tt-cols .tt-cols-menu {
+    position: absolute;
+    z-index: 30;
+    right: 0;
+    margin-top: 0.3rem;
+    padding: 0.5rem 0.7rem;
+    min-width: 11rem;
+    border: 1px solid var(--border, rgba(255, 255, 255, 0.15));
+    border-radius: 10px;
+    /* Fond du menu déroulant : bleu admin existant, presque opaque. */
+    background: rgba(10, 27, 51, 0.98);
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.25);
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+.tt-cols .tt-cols-menu label {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    font-size: 0.82rem;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.tt-cols .tt-cols-menu input { accent-color: var(--primary); }
+.tt-cols .tt-cols-menu input:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 1px;
+}
+
+/* En-têtes triables : bouton neutre héritant du style du th,
+   indicateur ▲/▼ posé en ::after sur le bouton pressé. */
+.table th.tt-th-sort { cursor: pointer; }
+.table th.tt-th-sort:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: -2px;
+}
+.tt-sort {
+    all: unset;
+    cursor: pointer;
+    font: inherit;
+    color: inherit;
+    border-radius: 4px;
+}
+.tt-sort:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 1px;
+}
+.tt-sort::after {
+    content: ' ↕';
+    color: var(--muted, #8892a6);
+    font-size: 0.78em;
+}
+.tt-sort[aria-pressed='true']::after { content: ' ▲'; color: var(--primary); }
+.tt-sort[aria-pressed='true'].tt-desc::after { content: ' ▼'; color: var(--primary); }
+
+/* Colonnes et lignes masquées par les outils (jamais !important sur
+   des styles métier : ces classes ne sont posées que par table-tools). */
+.tt-col-hidden { display: none; }
+tr.tt-row-hidden { display: none; }
+
+/* Cartes filtrables (grille catégories) : même classe de masquage. */
+.cat-grid .cat-card.tt-row-hidden { display: none; }

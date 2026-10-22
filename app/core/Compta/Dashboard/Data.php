@@ -59,7 +59,9 @@ use App\Models\Setting;
  *     precedent_complet:bool,
  *     prev_from:?string,
  *     prev_to:?string,
- *     objectif:?float
+ *     objectif:?float,
+ *     splitTotal:float,
+ *     cardPct:int
  * }
  */
 final class Data
@@ -298,6 +300,14 @@ final class Data
 
         $afaire = Afaire::trier($afaireItems, $parametres);
 
+        // ── Split paiements (lot 4B : calculs sortis du partiel) ────────
+        // Total CARTE+LIQUIDE et part de la carte en % (arrondie, 0 si
+        // aucun encaissement) : lus par compta_section_paiements (dashboard
+        // et accueil admin — même payload, clés simplement ignorées là où
+        // elles ne servent pas).
+        $splitTotal = round((float) ($split['CARTE'] ?? 0) + (float) ($split['LIQUIDE'] ?? 0), 2);
+        $cardPct = $splitTotal > 0.0 ? (int) round((float) ($split['CARTE'] ?? 0) / $splitTotal * 100) : 0;
+
         return [
             'period'       => $period,
             'agg'          => $agg,
@@ -329,6 +339,9 @@ final class Data
             'prev_from'       => $prevFrom,
             'prev_to'         => $prevTo,
             'objectif'        => $objectif,
+            // Split paiements (lot 4B).
+            'splitTotal'      => $splitTotal,
+            'cardPct'         => $cardPct,
         ];
     }
 

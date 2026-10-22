@@ -39,6 +39,9 @@ use App\Models\Sale;
  */
 final class AdminStockController extends AdminBaseController
 {
+    /** Lignes de la grille de comptage par page (pagination lot 4B). */
+    private const INVENTORY_PER_PAGE = 50;
+
     // -----------------------------------------------------------------
     //  Achats
     // -----------------------------------------------------------------
@@ -680,6 +683,17 @@ final class AdminStockController extends AdminBaseController
 
         usort($discontinuedRows, static fn(array $a, array $b): int => strcasecmp($a['key'], $b['key']));
 
+        // Pagination de la grille de comptage (lot 4B, modèle page audit) :
+        // la liste des produits vendus peut dépasser 200 lignes. Les
+        // statistiques ci-dessous (valeur du stock, ventilation) restent
+        // calculées sur l'ENSEMBLE des produits ; seule la grille est
+        // paginée — le comptage ne poste que les lignes renseignées, les
+        // pages se saisissent donc à la suite sans perte.
+        $invTotal = count($rows);
+        $invPages = max(1, (int) ceil($invTotal / self::INVENTORY_PER_PAGE));
+        $invPage = min(max(1, (int) ($_GET['page'] ?? 1)), $invPages);
+        $rows = array_slice($rows, ($invPage - 1) * self::INVENTORY_PER_PAGE, self::INVENTORY_PER_PAGE);
+
         // Statistiques par clé + doublons probables (même clé normalisée) :
         // alimentent la carte « Fusionner des clés produits » (recherche,
         // aperçu des données déplacées, suggestions pré-remplies).
@@ -800,6 +814,10 @@ final class AdminStockController extends AdminBaseController
             'pausedUnits'      => $pausedUnits,
             'stockByCategory'  => $byCategory,
             'sweep'            => $sweep,
+            // Pagination de la grille (lot 4B).
+            'invPage'          => $invPage,
+            'invPages'         => $invPages,
+            'invTotal'         => $invTotal,
         ]);
     }
 
@@ -1259,6 +1277,12 @@ final class AdminStockController extends AdminBaseController
         }
         usort($products, static fn (array $a, array $b): int => strnatcasecmp($a['key'], $b['key']));
 
+        // Deltas « analyse vs période précédente » (lot 4B : calcul sorti
+        // de la vue) — % d'évolution par KPI, null si la base est nulle.
+        $analysis = InventoryTablet::analysis($from, $to);
+        $prev = InventoryTablet::analysis($prevFrom, $prevTo);
+        $analysis['deltas'] = self::pctDeltas($analysis['kpis'], $prev['kpis']);
+
         $this->renderAdmin('admin/compta/operations', [
             'title'    => 'Opérations · Inventaire tablette',
             'section'  => 'inventaire',
@@ -1270,9 +1294,32 @@ final class AdminStockController extends AdminBaseController
             'prevTo'   => $prevTo,
             'products' => $products,
             'sessions' => InventoryTablet::sessions(),
-            'analysis' => InventoryTablet::analysis($from, $to),
-            'prev'     => InventoryTablet::analysis($prevFrom, $prevTo),
+            'analysis' => $analysis,
+            'prev'     => $prev,
         ]);
+    }
+
+    /**
+     * Deltas en pourcentage « période courante vs précédente » (lot 4B,
+     * sortis de la vue inventaire_tablette) : round(delta, 1) pour chaque
+     * clé des KPIs, null quand la base vaut 0 (pas de base comparable).
+     *
+     * @param array<string,int|float> $courant KPIs de la fenêtre courante.
+     * @param array<string,int|float> $base    KPIs de la fenêtre précédente.
+     * @param list<string>            $cles    KPIs à comparer.
+     *
+     * @return array<string,?float>
+     */
+    private static function pctDeltas(array $courant, array $base, array $cles = ['sessions', 'gaps', 'loss_value', 'products_affected', 'missing_cost_count']): array
+    {
+        $deltas = [];
+        foreach ($cles as $k) {
+            $cur = (float) ($courant[$k] ?? 0);
+            $ref = (float) ($base[$k] ?? 0);
+            $deltas[$k] = $ref == 0.0 ? null : round(($cur - $ref) / $ref * 100, 1);
+        }
+
+        return $deltas;
     }
 
     /**
