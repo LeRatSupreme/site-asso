@@ -316,7 +316,7 @@ if ($currentUrlPath === '/admin' || $crumbEntry === null) {
         <link rel="stylesheet" href="<?= e(rootAssetVersioned('/css/compta.css')) ?>">
     <?php endif; ?>
 </head>
-<body class="admin-body">
+<body class="admin-body<?= Permissions::isReadOnly() ? ' is-readonly' : '' ?>">
     <script>
         /* Restaure l'état « menu réduit » AVANT le premier rendu (pas de flash). */
         try {
@@ -519,6 +519,12 @@ if ($currentUrlPath === '/admin' || $crumbEntry === null) {
                 </form>
             </header>
             <div class="admin-content">
+                <?php if (Permissions::isReadOnly()): ?>
+                <p class="alert alert--info" role="note">
+                    Mode lecture seule : la saisie est réservée aux autres rôles du bureau,
+                    les boutons d'écriture sont masqués.
+                </p>
+                <?php endif; ?>
                 <?= $content ?>
             </div>
         </main>

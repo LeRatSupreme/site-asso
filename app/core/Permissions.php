@@ -63,11 +63,22 @@ final class Permissions
     }
 
     /**
-     * Indique si le rôle ouvre l'accès à l'espace d'administration.
+     * Indique si un rôle ouvre l'accès à l'espace d'administration.
      */
     public static function isAdminRole(?string $role): bool
     {
         return $role !== null && $role !== Auth::ROLE_ELEVE && isset(self::roleModules()[$role]);
+    }
+
+    /**
+     * Rôle en lecture seule pour l'espace admin : le routeur refuse tout
+     * POST /admin/* (Router::dispatch). Le layout admin pose la classe
+     * body « is-readonly » et masque les boutons d'écriture pour éviter
+     * les clics qui aboutiraient à un 403 (docs/refonte-limites.md §4).
+     */
+    public static function isReadOnly(): bool
+    {
+        return Auth::role() === Auth::ROLE_PRESIDENT;
     }
 
     /**

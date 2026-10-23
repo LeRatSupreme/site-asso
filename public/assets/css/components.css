@@ -781,3 +781,17 @@ button.ds-expand:hover {
 .ds-dialog::backdrop {
     background: rgba(15, 20, 26, .5);
 }
+
+/* ------------------------------------------------------------------ */
+/*  Mode lecture seule (rôle Président)                                */
+/* ------------------------------------------------------------------ */
+
+/* Le routeur refuse déjà tout POST /admin/* pour ce rôle : on masque
+   les boutons d'écriture pour éviter les clics en 403. !important car
+   de nombreuses vues portent des styles en ligne. Seul le contenu de
+   page est visé — la barre du haut (recherche GET, déconnexion) garde
+   ses boutons. */
+.is-readonly .admin-content form[method="post"] button[type="submit"],
+.is-readonly .admin-content form[method="post"] input[type="submit"] {
+    display: none !important;
+}
