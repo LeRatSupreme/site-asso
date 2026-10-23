@@ -253,6 +253,31 @@ final class RolesMenuTest extends IntegrationTestCase
         self::assertSame($avant, $this->goalSetting(), 'Le POST bloqué ne doit rien écrire en base.');
     }
 
+    /**
+     * Lot suivi (docs/refonte-limites.md §4) : le layout pose le drapeau
+     * « lecture seule » pour le président — classe body is-readonly (les
+     * boutons des formulaires POST sont masqués en CSS) et bandeau
+     * explicite. Aucun autre rôle ne porte le drapeau.
+     */
+    public function test_president_drapeau_lecture_seule_dans_le_layout(): void
+    {
+        $r    = $this->request('GET', '/admin/compta/ventes', [], [], $this->presidentId);
+        $body = (string) ($r['body'] ?? '');
+
+        self::assertSame(200, (int) ($r['code'] ?? 0), 'Le président lit le journal des ventes.');
+        self::assertStringContainsString('admin-body is-readonly', $body, 'La classe body is-readonly est posée pour le président.');
+        self::assertStringContainsString('Mode lecture seule', $body, 'Le bandeau explicatif est affiché.');
+
+        $tresorierId = 'u_roles_tresorerie';
+        $this->seedUser($tresorierId, 'roles-tresorerie@exemple.fr', 'Password123456', 'TRESORERIE');
+        $r2    = $this->request('GET', '/admin/compta/ventes', [], [], $tresorierId);
+        $body2 = (string) ($r2['body'] ?? '');
+
+        self::assertSame(200, (int) ($r2['code'] ?? 0), 'Miroir : un rôle compta accède à la même page.');
+        self::assertStringNotContainsString('is-readonly', $body2, 'Aucun autre rôle ne porte le drapeau lecture seule.');
+        self::assertStringNotContainsString('Mode lecture seule', $body2, 'Pas de bandeau lecture seule pour un rôle qui écrit.');
+    }
+
     // -----------------------------------------------------------------
     //  EVENEMENTS : rôle câblé (events + content)
     // -----------------------------------------------------------------
