@@ -29,7 +29,6 @@ declare(strict_types=1);
  * @var list<array{name:string,besoin:int}> $aCompter
  * @var list<array{name:string,stock:int}> $negatifs
  * @var bool   $kiosk
- * @var string $kioskUrl
  * @var string $kioskToken
  * @var string $adminWho
  */
@@ -311,10 +310,7 @@ use App\Models\Setting;
         <strong>sans jamais demander de connexion</strong> (même jeton que la page Réappro — le régénérer révoque les deux).
     </p>
     <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
-        <input type="text" readonly value="<?= e($kioskUrl) ?>" id="liste-kiosk-url" onclick="this.select()"
-               style="flex: 1 1 260px; padding: 0.5rem 0.7rem; border: 1px solid var(--border); border-radius: 8px; background: rgba(255,255,255,0.04); color: var(--foreground); font-size: 0.85rem;">
-        <button type="button" class="btn btn-outline btn-sm"
-                onclick="(function (b) { var i = document.getElementById('liste-kiosk-url'); i.select(); try { document.execCommand('copy'); } catch (e) {} if (navigator.clipboard) { navigator.clipboard.writeText(i.value); } b.textContent = 'Copié ✓'; setTimeout(function () { b.textContent = 'Copier le lien'; }, 1500); })(this)">Copier le lien</button>
+        <?php $kioskPath = '/kiosque/liste/'; $kioskLabel = 'liste de courses'; require AEIC_VIEWS . '/partials/_kiosk_link.php'; ?>
     </div>
 </details>
 <?php endif; ?>

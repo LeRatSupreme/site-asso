@@ -152,18 +152,29 @@ final class KiosqueAffichageTest extends IntegrationTestCase
         self::assertStringContainsString('Coût estimé du panier', $bodyR, 'Réappro kiosque admin : le KPI panier est visible.');
     }
 
+    /**
+     * Lot suivi (docs/refonte-limites.md §16) : les encarts « accès
+     * téléphone » des pages Réappro et Liste sont désormais MASQUÉS —
+     * le jeton ne figure plus dans le HTML initial, la révélation passe
+     * par le POST CSRF audité (partial _kiosk_link.php). La copie et la
+     * régénération restent proposées.
+     */
     public function test_bouton_copier_lien_kiosque_conserve(): void
     {
         $rr    = $this->request('GET', '/admin/compta/reappro', [], [], $this->rootId);
         $bodyR = (string) ($rr['body'] ?? '');
         self::assertSame(200, (int) ($rr['code'] ?? 0));
-        self::assertStringContainsString('Copier le lien', $bodyR, 'Le bouton « copier le lien kiosque » du Réappro doit rester.');
-        self::assertStringContainsString('/kiosque/reappro/', $bodyR, 'Le lien kiosque réappro reste affiché.');
+        self::assertStringContainsString('Copier', $bodyR, 'Le bouton « Copier » du Réappro doit rester.');
+        self::assertStringContainsString('Afficher le lien', $bodyR, 'La révélation à la demande remplace le lien en clair.');
+        self::assertStringContainsString('data-kl-path="/kiosque/reappro/"', $bodyR, 'L\'encart porte le chemin kiosque (pas le jeton).');
+        self::assertStringNotContainsString($this->tokenMembres, $bodyR, 'Le jeton membres ne doit plus apparaître dans le HTML du Réappro.');
         self::assertStringContainsString('/admin/compta/reappro/kiosk/regenerate', $bodyR, 'La régénération du jeton reste proposée.');
 
         $rl    = $this->request('GET', '/admin/compta/liste', [], [], $this->rootId);
         $bodyL = (string) ($rl['body'] ?? '');
         self::assertSame(200, (int) ($rl['code'] ?? 0));
-        self::assertStringContainsString('Copier le lien', $bodyL, 'Le bouton « copier le lien kiosque » de la liste doit rester.');
+        self::assertStringContainsString('Copier', $bodyL, 'Le bouton « Copier » de la liste doit rester.');
+        self::assertStringContainsString('data-kl-path="/kiosque/liste/"', $bodyL, 'L\'encart liste porte le chemin kiosque (pas le jeton).');
+        self::assertStringNotContainsString($this->tokenMembres, $bodyL, 'Le jeton membres ne doit plus apparaître dans le HTML de la liste.');
     }
 }
