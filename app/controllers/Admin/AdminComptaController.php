@@ -1774,6 +1774,10 @@ final class AdminComptaController extends AdminBaseController
      */
     private function renderListePage(bool $kiosk, ?array $user = null, ?string $kioskToken = null, bool $showMoney = true): void
     {
+        // Page affichant un lien à jeton (encart kiosque / jeton d'URL) :
+        // jamais mémorisable.
+        Kiosk::sendNoStore();
+
         // ---- Demande UNIQUE : le moteur ForecastEngine, via ReapproDemande ----
         // (exigence du 21/10/2026). La liste ne recalculait PLUS la même
         // chose que la carte Réappro Analytics : consommation observée 14 j
@@ -1963,6 +1967,9 @@ final class AdminComptaController extends AdminBaseController
      */
     private function renderReorderPage(bool $kiosk, ?array $user = null, ?string $kioskToken = null, bool $showMoney = true): void
     {
+        // Page affichant le lien kiosque à copier : jamais mémorisable.
+        Kiosk::sendNoStore();
+
         // Lien kiosque : généré à la première visite (connecté uniquement).
         $kioskUrl = '';
         if (!$kiosk) {
@@ -2206,6 +2213,9 @@ final class AdminComptaController extends AdminBaseController
     public function caisse(): void
     {
         $user = $this->guardAdminArea();
+
+        // La page affiche les liens kiosque à copier : jamais mémorisable.
+        Kiosk::sendNoStore();
 
         $this->renderAdmin('admin/compta/caisse', [
             'title'       => 'Comptage de caisse',

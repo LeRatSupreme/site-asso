@@ -30,11 +30,49 @@ final class Kiosk
 
     /**
      * URL absolue d'une page kiosque (le jeton est ajouté en fin de chemin).
-     * Ex. : Kiosk::url('/kiosque/liste/') â†’ https://â€¦/kiosque/liste/<jeton>
+     * Ex. : Kiosk::url('/kiosque/liste/') → https://…/kiosque/liste/<jeton>
      */
     public static function url(string $path): string
     {
         return url(rtrim($path, '/') . '/' . self::token());
+    }
+
+    /**
+     * En-têtes « ne pas mémoriser » pour TOUTES les pages à jeton : le
+     * lien secret EST l'authentification, aucune réponse (HTML, JSON ou
+     * refus 403) ne doit pouvoir être conservée par un cache/le navigateur.
+     *
+     * Point central unique : appelé par le routeur pour chaque requête
+     * /kiosque/*, par Controller::renderKiosk() (défense en profondeur)
+     * et par les pages admin qui affichent un lien kiosque (/admin/kiosques,
+     * réappro, liste, caisse, comptage à l'aveugle).
+     *
+     * En APP_TESTING, les en-têtes sont aussi exposés via
+     * $GLOBALS['AEIC_TEST_HEADERS'] : le SAPI CLI n'enregistre pas header()
+     * (headers_list() renvoie [] sous Linux), le runner d'intégration doit
+     * donc les recapturer — même mécanique que AEIC_TEST_LOCATION.
+     */
+    public static function sendNoStore(): void
+    {
+        $headers = [
+            'Cache-Control: no-store, max-age=0',
+            'Pragma: no-cache',
+        ];
+
+        if (!headers_sent()) {
+            foreach ($headers as $h) {
+                header($h);
+            }
+        }
+
+        if (defined('APP_TESTING') && APP_TESTING) {
+            $GLOBALS['AEIC_TEST_HEADERS'] ??= [];
+            foreach ($headers as $h) {
+                if (!in_array($h, $GLOBALS['AEIC_TEST_HEADERS'], true)) {
+                    $GLOBALS['AEIC_TEST_HEADERS'][] = $h;
+                }
+            }
+        }
     }
 
     /**

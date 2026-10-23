@@ -139,6 +139,13 @@ final class Router
             return;
         }
 
+        // Pages à jeton (/kiosque/*) : aucune réponse mémorisable — HTML,
+        // JSON et refus 403 compris (le jeton EST l'authentification, il ne
+        // doit finir ni dans un cache ni dans l'historique disque).
+        if (str_starts_with($path, '/kiosque/')) {
+            \App\Core\Compta\Kiosk::sendNoStore();
+        }
+
         $match = $this->match($method, $path);
 
         $handler = $match['handler'];

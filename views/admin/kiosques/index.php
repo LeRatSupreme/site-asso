@@ -6,9 +6,14 @@ declare(strict_types=1);
  * Page « Kiosques » (Système) : tous les liens kiosque centralisés, en
  * deux catégories — Membres (à partager) et Admins (données financières).
  *
+ * Les jetons ne figurent JAMAIS dans le HTML initial (mission §10 : aucune
+ * capture d'écran ne doit suffire à obtenir un accès) : chaque lien est
+ * masqué (« •••••••• ») et révélé à la demande par un POST CSRF vers
+ * /admin/kiosques/reveal, tracé dans le journal d'audit.
+ *
  * @var array<string,mixed> $user
- * @var list<array{emoji:string,label:string,desc:string,url:string,main?:bool}> $memberPages
- * @var list<array{emoji:string,label:string,desc:string,url:string,kiosk?:bool}> $adminPages
+ * @var list<array{emoji:string,label:string,desc:string,path:string,main?:bool,scope:string}> $memberPages
+ * @var list<array{emoji:string,label:string,desc:string,path?:string,scope?:string,url?:string,kiosk?:bool,main?:bool}> $adminPages
  */
 ?>
 <style>
@@ -71,6 +76,8 @@ declare(strict_types=1);
         l'identité du membre (prénom, nom, rôle) et est tracée en son nom. Les liens « Admins »
         donnent accès aux <strong>données financières</strong> — récap complet, analytics, bilan.
         La régénération du lien <strong>révoque tous les liens d'un coup</strong>.
+        Les liens sont <strong>masqués à l'écran</strong> : affiche seulement celui que tu utilises —
+        chaque affichage est tracé dans le journal d'audit.
     </p>
     <form method="post" action="<?= e(url('/admin/kiosques/regenerate')) ?>"
           data-confirm="Régénérer le lien MEMBRES ? Tous les liens membres déjà partagés (hub, comptages, liste, ventes du jour) cesseront de fonctionner."
@@ -101,11 +108,12 @@ declare(strict_types=1);
             <?php if (!empty($p['main'])): ?><span class="kq-badge">à partager</span><?php endif; ?>
         </div>
         <p class="kq-desc"><?= e($p['desc']) ?></p>
-        <div class="kq-row">
-            <input type="text" readonly value="<?= e($p['url']) ?>" onclick="this.select()"
-                   aria-label="Lien <?= e($p['label']) ?>">
-            <button type="button" class="btn btn-outline btn-sm kq-copy" data-url="<?= e($p['url']) ?>">Copier</button>
-            <a class="btn btn-ghost btn-sm" href="<?= e($p['url']) ?>" target="_blank">Ouvrir ↗</a>
+        <div class="kq-row" data-kq-scope="<?= e($p['scope']) ?>" data-kq-path="<?= e($p['path']) ?>">
+            <input type="text" readonly value="••••••••" onclick="this.select()"
+                   aria-label="Lien <?= e($p['label']) ?> — masqué, utilise le bouton « Afficher le lien »">
+            <button type="button" class="btn btn-outline btn-sm kq-reveal" aria-expanded="false">Afficher le lien</button>
+            <button type="button" class="btn btn-outline btn-sm kq-copy">Copier</button>
+            <a class="btn btn-ghost btn-sm kq-open" hidden>Ouvrir ↗</a>
         </div>
     </div>
     <?php endforeach; ?>
@@ -126,12 +134,22 @@ declare(strict_types=1);
             <?php if (empty($p['kiosk'])): ?><span class="kq-badge" style="color:#a78bfa;background:rgba(97,80,170,0.16)">connexion requise</span><?php endif; ?>
         </div>
         <p class="kq-desc"><?= e($p['desc']) ?></p>
-        <div class="kq-row">
-            <input type="text" readonly value="<?= e($p['url']) ?>" onclick="this.select()"
-                   aria-label="Lien <?= e($p['label']) ?>">
-            <button type="button" class="btn btn-outline btn-sm kq-copy" data-url="<?= e($p['url']) ?>">Copier</button>
-            <a class="btn btn-ghost btn-sm" href="<?= e($p['url']) ?>" target="_blank">Ouvrir ↗</a>
+        <?php if (!empty($p['kiosk'])): ?>
+        <div class="kq-row" data-kq-scope="<?= e((string) $p['scope']) ?>" data-kq-path="<?= e((string) $p['path']) ?>">
+            <input type="text" readonly value="••••••••" onclick="this.select()"
+                   aria-label="Lien <?= e($p['label']) ?> — masqué, utilise le bouton « Afficher le lien »">
+            <button type="button" class="btn btn-outline btn-sm kq-reveal" aria-expanded="false">Afficher le lien</button>
+            <button type="button" class="btn btn-outline btn-sm kq-copy">Copier</button>
+            <a class="btn btn-ghost btn-sm kq-open" hidden>Ouvrir ↗</a>
         </div>
+        <?php else: ?>
+        <div class="kq-row">
+            <input type="text" readonly value="<?= e(url((string) $p['url'])) ?>" onclick="this.select()"
+                   aria-label="Lien <?= e($p['label']) ?>">
+            <button type="button" class="btn btn-outline btn-sm kq-copy" data-url="<?= e(url((string) $p['url'])) ?>">Copier</button>
+            <a class="btn btn-ghost btn-sm" href="<?= e(url((string) $p['url'])) ?>" target="_blank">Ouvrir ↗</a>
+        </div>
+        <?php endif; ?>
     </div>
     <?php endforeach; ?>
     </div>
@@ -139,23 +157,112 @@ declare(strict_types=1);
 
 <script>
 (function () {
+    'use strict';
+    var REVEAL_URL = <?= json_encode(url('/admin/kiosques/reveal'), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
+    var MASK = '••••••••';
+    var csrfInput = document.querySelector('input[name="_csrf"]');
+
+    function rowsOf(card) { return card.querySelectorAll('.kq-row[data-kq-path]'); }
+
+    function applyUrl(row, url) {
+        row.querySelector('input').value = url;
+        row.querySelector('.kq-copy').setAttribute('data-url', url);
+        var open = row.querySelector('.kq-open');
+        open.setAttribute('href', url);
+        open.removeAttribute('hidden');
+    }
+
+    function clearUrl(row, btn) {
+        row.querySelector('input').value = MASK;
+        row.querySelector('.kq-copy').removeAttribute('data-url');
+        var open = row.querySelector('.kq-open');
+        open.removeAttribute('href');
+        open.setAttribute('hidden', '');
+        btn.setAttribute('aria-expanded', 'false');
+        btn.textContent = 'Afficher le lien';
+    }
+
+    function fetchUrl(row) {
+        var fd = new FormData();
+        fd.append('_csrf', csrfInput ? csrfInput.value : '');
+        fd.append('scope', row.getAttribute('data-kq-scope') || '');
+        fd.append('path', row.getAttribute('data-kq-path') || '');
+        return fetch(REVEAL_URL, { method: 'POST', body: fd })
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                return (d && d.ok && d.url) ? String(d.url) : null;
+            })
+            .catch(function () { return null; });
+    }
+
+    function flash(btn, label) {
+        var old = btn.textContent;
+        btn.textContent = label;
+        setTimeout(function () { btn.textContent = old; }, 1500);
+    }
+
+    /* Révélation : POST CSRF, l'URL complète n'arrive qu'en réponse. */
+    document.addEventListener('click', function (e) {
+        var btn = e.target.closest('.kq-reveal');
+        if (!btn) return;
+        var row = btn.closest('.kq-row');
+        if (!row) return;
+
+        if (btn.getAttribute('aria-expanded') === 'true') {
+            clearUrl(row, btn);
+            return;
+        }
+
+        fetchUrl(row).then(function (url) {
+            if (!url) {
+                flash(btn, 'Indisponible');
+                return;
+            }
+            applyUrl(row, url);
+            btn.setAttribute('aria-expanded', 'true');
+            btn.textContent = 'Masquer le lien';
+        });
+    });
+
+    /* Copie : après révélation ; sinon révèle d'abord, copie ensuite. */
     document.addEventListener('click', function (e) {
         var b = e.target.closest('.kq-copy');
         if (!b) return;
         var url = b.getAttribute('data-url');
-        var done = function () {
-            var old = b.textContent;
-            b.textContent = 'Copié ✓';
-            setTimeout(function () { b.textContent = old; }, 1500);
+
+        var copy = function (u) {
+            var done = function () { flash(b, 'Copié ✓'); };
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(u).then(done, done);
+            } else {
+                var input = b.closest('.kq-row').querySelector('input');
+                input.select();
+                try { document.execCommand('copy'); } catch (err) {}
+                done();
+            }
         };
-        if (navigator.clipboard) {
-            navigator.clipboard.writeText(url).then(done, done);
-        } else {
-            var i = b.parentElement.querySelector('input');
-            i.select();
-            try { document.execCommand('copy'); } catch (err) {}
-            done();
+
+        if (url) {
+            copy(url);
+            return;
         }
+
+        var row = b.closest('.kq-row');
+        if (!row || !row.hasAttribute('data-kq-path')) return;
+        flash(b, 'Révélation…');
+        fetchUrl(row).then(function (u) {
+            if (!u) {
+                flash(b, 'Indisponible');
+                return;
+            }
+            var reveal = row.querySelector('.kq-reveal');
+            if (reveal) {
+                applyUrl(row, u);
+                reveal.setAttribute('aria-expanded', 'true');
+                reveal.textContent = 'Masquer le lien';
+            }
+            copy(u);
+        });
     });
 })();
 </script>

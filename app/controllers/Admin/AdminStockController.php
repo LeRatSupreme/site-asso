@@ -906,6 +906,9 @@ final class AdminStockController extends AdminBaseController
     {
         $user = $this->guardAdminArea();
 
+        // La page affiche les liens kiosque à copier : jamais mémorisable.
+        Kiosk::sendNoStore();
+
         // Uniquement les clés produits : ni stock, ni écart, ni date de
         // dernier comptage (aucune fuite du théorique). Les produits en
         // pause sont gardés (flag paused) mais sans champ de saisie — la

@@ -265,6 +265,7 @@ function aeic_register_routes(Router $router): void
 
     // Kiosques — centralisation des liens téléphone (groupe Système).
     $router->get('/admin/kiosques', [AdminKiosquesController::class, 'index']);
+    $router->post('/admin/kiosques/reveal', [AdminKiosquesController::class, 'reveal']);
     $router->post('/admin/kiosques/regenerate', [AdminKiosquesController::class, 'regenerate']);
 
     // Livre comptable (groupe Système) + version kiosque admin.

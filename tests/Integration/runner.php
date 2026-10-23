@@ -172,6 +172,13 @@ register_shutdown_function(static function (): void {
     if ($location !== '' && !in_array('Location: ' . $location, $headers, true)) {
         $headers[] = 'Location: ' . $location;
     }
+    // En-têtes exposés côté application pour les tests (pages à jeton :
+    // Cache-Control/Pragma via App\Core\Compta\Kiosk::sendNoStore()).
+    foreach (($GLOBALS['AEIC_TEST_HEADERS'] ?? []) as $h) {
+        if (is_string($h) && !in_array($h, $headers, true)) {
+            $headers[] = $h;
+        }
+    }
     $payload = [
         'code'      => http_response_code(),
         'headers'   => $headers,
