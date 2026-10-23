@@ -761,10 +761,14 @@ final class AdminComptaController extends AdminBaseController
      * Fusionne un groupe de produits dupliqués vers un survivant choisi.
      *
      * Revalide côté serveur que le survivant fait bien partie d'un groupe de
-     * doublons (même clé normalisée), puis regroupe en une transaction :
-     * ventes, lots de coûts et alias — la ligne d'un libellé encore vendu
-     * reste un pointeur vers le survivant (les prochains imports résolvent
-     * au bon endroit), celle d'un libellé plus vendu est absorbée.
+     * doublons (même clé normalisée), puis délègue chaque paire à
+     * ProductKeyMerge::merge() — un seul point d'assemblage qui déplace TOUT
+     * de façon transactionnelle : ventes, lots de coûts, achats, pertes,
+     * comptages, stocks, packs, lignes tablette, drapeaux et alias (mêmes
+     * opérations absorbInto/consolidateFor/ensurePointer qu'avant), et
+     * invalide le cache de la carte publique. La fusion partielle d'hier
+     * (ventes + coûts + alias seulement) laissait achats, comptages et
+     * stocks sous les anciennes clés.
      */
     public function mergeProducts(): void
     {
@@ -801,72 +805,55 @@ final class AdminComptaController extends AdminBaseController
             redirect(url('/admin/compta/couts'));
         }
 
-        $pdo = db();
-        $salesMoved = 0;
-        $lotsMoved = 0;
-        $aliasesMoved = 0;
-        $aliasesAbsorbed = 0;
+        // Délégation complète à ProductKeyMerge::merge : la méthode gère sa
+        // propre transaction (pas de rollback manuel ici) et invalide le
+        // cache de la carte publique après chaque fusion.
+        $totals = [
+            'sales'            => 0,
+            'costs'            => 0,
+            'purchases'        => 0,
+            'losses'           => 0,
+            'counts'           => 0,
+            'stocks'           => 0,
+            'aliases'          => 0,
+            'aliases_absorbed' => 0,
+            'aliases_deduped'  => 0,
+        ];
 
         try {
-            $pdo->beginTransaction();
-
             foreach ($others as $old) {
-            $salesMoved += Sale::mergeInto($keep, [$old]);
-            $lotsMoved += ProductCost::reassign($old, $keep);
-            // Alias : la ligne « identité » d'un libellé plus vendu est
-            // absorbée (fusion totale, pas de doublon) ; un libellé encore
-            // actif au POS garde son pointeur vers le survivant.
-            $abs = ProductAlias::absorbInto($old, $keep);
-            $aliasesMoved += $abs['repointed'];
-            $aliasesAbsorbed += $abs['absorbed'];
-        }
-
-        // Alias consolidés : les libellés ramenés sur le survivant peuvent
-        // doubler une forme normalisée déjà rattachée.
-        $deduped = ProductAlias::consolidateFor($keep);
-
-        // Pointeurs des libellés encore actifs au POS (si resolve() ne
-        // les couvre pas déjà).
-        foreach ($others as $old) {
-            if (ProductAlias::ensurePointer($old, $keep)) {
-                $aliasesMoved++;
+                $moved = ProductKeyMerge::merge($old, $keep, Auth::id());
+                foreach ($totals as $key => $n) {
+                    $totals[$key] = $n + (int) ($moved[$key] ?? 0);
+                }
             }
-        }
-
-            $pdo->commit();
         } catch (\Throwable $e) {
-            if ($pdo->inTransaction()) {
-                $pdo->rollBack();
-            }
+            Logger::error('compta: fusion de produits échouée', [
+                'keep' => $keep,
+                'old'  => $old ?? null,
+                'msg'  => $e->getMessage(),
+            ]);
             $this->audit('compta.product.merge_failed', 'product', $keep, ['error' => $e->getMessage()]);
             // Message générique affiché : le détail de l'erreur reste dans
             // l'audit et le log applicatif.
-            Logger::error('compta: fusion de produits échouée', [
-                'keep' => $keep,
-                'msg'  => $e->getMessage(),
-            ]);
             $this->setFlash('error', 'Fusion annulée : une erreur inattendue est survenue. L\'incident a été journalisé.');
             redirect(url('/admin/compta/couts'));
         }
 
-        $this->audit('compta.product.merge', 'product', $keep, [
-            'merged'   => $others,
-            'sales'    => $salesMoved,
-            'lots'     => $lotsMoved,
-            'aliases'  => $aliasesMoved,
-            'absorbed' => $aliasesAbsorbed,
-            'deduped'  => $deduped,
-        ]);
+        $this->audit('compta.product.merge', 'product', $keep, array_merge([
+            'merged' => $others,
+        ], $totals));
         $this->setFlash(
             'success',
             sprintf(
-                'Fusion effectuée vers « %s » : %d vente(s), %d lot(s), %d alias re-groupés, %d alias obsolète(s) absorbé(s), %d doublon(s) d\'alias consolidé(s).',
+                'Fusion effectuée vers « %s » : %d vente(s), %d lot(s) de coût, %d achat(s), %d comptage(s), %d ligne(s) de stock, %d alias re-groupé(s).',
                 $keep,
-                $salesMoved,
-                $lotsMoved,
-                $aliasesMoved,
-                $aliasesAbsorbed,
-                $deduped
+                $totals['sales'],
+                $totals['costs'],
+                $totals['purchases'],
+                $totals['counts'],
+                $totals['stocks'],
+                $totals['aliases']
             )
         );
         redirect(url('/admin/compta/couts'));
@@ -1482,7 +1469,9 @@ final class AdminComptaController extends AdminBaseController
 
     /**
      * Applique le mapping validé (POST) : crée/met à jour chaque alias puis
-     * ré-applique le mapping à toutes les ventes existantes.
+     * ré-applique le mapping à toutes les ventes existantes. Les clés
+     * produits déplacées par le changement de cible d'un alias sont
+     * fusionnées (ProductKeyMerge) : coûts, stocks et historiques suivent.
      */
     public function aliasesApply(): void
     {
@@ -1514,21 +1503,29 @@ final class AdminComptaController extends AdminBaseController
             }
         }
 
-        $updated = Sale::reapplyAliases();
+        $result = Sale::reapplyAliases();
+        $updated = (int) ($result['updated'] ?? 0);
+        $repointed = is_array($result['repointed'] ?? null) ? $result['repointed'] : [];
 
         $this->audit('compta.alias.apply', 'product_alias', null, [
             'applied'      => $applied,
             'sales_updated' => $updated,
+            'keys_repointed' => $repointed,
         ]);
 
-        $this->setFlash(
-            'success',
-            sprintf(
-                '%d alias enregistré(s) — %d vente(s) mise(s) à jour.',
-                $applied,
-                $updated
-            )
-        );
+        $flash = sprintf('%d alias enregistré(s) — %d vente(s) mise(s) à jour.', $applied, $updated);
+        if ($repointed !== []) {
+            $pairs = [];
+            foreach ($repointed as $old => $new) {
+                $pairs[] = $old . ' → ' . $new;
+            }
+            $flash .= sprintf(
+                ' %d clé(s) renommée(s) — coûts, stocks et historiques suivis (%s).',
+                count($repointed),
+                implode(', ', $pairs)
+            );
+        }
+        $this->setFlash('success', $flash);
         redirect(url('/admin/compta/aliases'));
     }
 

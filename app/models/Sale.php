@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Core\Logger;
+
 /**
  * Ventes importées depuis les rapports SumUp (table `sales`).
  *
@@ -1362,6 +1364,91 @@ final class Sale extends Model
     }
 
     /**
+     * Plan de repointage des clés « déplacées » par le ré-applique du
+     * mapping (méthode PURE, testée sans base).
+     *
+     * Quand la clé canonique d'un libellé change (« Lipton » →
+     * « Lipton Ice Tea »), reapplyAliases() réécrit sales.product_key,
+     * mais les autres tables à product_key (coûts, stocks, achats,
+     * pertes, comptages…) restent sous l'ancienne clé et deviennent
+     * orphelines. Cette méthode calcule les paires ancienne → nouvelle
+     * clé à fusionner ensuite via ProductKeyMerge::merge() pour que
+     * tout l'historique suive.
+     *
+     * Une clé est « déplacée » si :
+     *  - elle n'apparaît plus nulle part parmi les clés APRÈS
+     *    (comparaison exacte, chaînes trimmées non vides) ;
+     *  - sa cible est unique et DIFFÉRENTE (comparaison exacte : une
+     *    simple variante de casse est un renommage légitime) ;
+     *  - elle a exactement UNE cible : si plusieurs libellés la
+     *    portaient et résolvent vers des clés distinctes, la clé est
+     *    ignorée (conservateur — on ne devine jamais).
+     *
+     * @param array<string, list<string>> $oldKeysByDesc Libellé de vente
+     *        → clés product_key portées AVANT le ré-applique.
+     * @param array<string, list<string>> $keysAfter Libellé de vente
+     *        → clés product_key présentes APRÈS (l'ensemble de leurs
+     *        valeurs forme les clés encore en vie dans sales).
+     *
+     * @return array<string,string> Paires ancienne clé → nouvelle clé,
+     *         triées par ancienne clé (déterministe).
+     */
+    public static function displacedKeyPlan(array $oldKeysByDesc, array $keysAfter): array
+    {
+        // Clés encore en vie quelque part après le ré-applique.
+        $alive = [];
+        foreach ($keysAfter as $keys) {
+            foreach ((array) $keys as $k) {
+                $k = trim((string) $k);
+                if ($k !== '') {
+                    $alive[$k] = true;
+                }
+            }
+        }
+
+        // Cibles candidates par ancienne clé : les clés après réécriture
+        // de chaque libellé qui la portait avant.
+        $targets = [];
+        foreach ($oldKeysByDesc as $desc => $oldKeys) {
+            $after = [];
+            foreach ((array) ($keysAfter[$desc] ?? []) as $k) {
+                $k = trim((string) $k);
+                if ($k !== '') {
+                    $after[$k] = true;
+                }
+            }
+            foreach ((array) $oldKeys as $old) {
+                $old = trim((string) $old);
+                if ($old === '') {
+                    continue;
+                }
+                foreach (array_keys($after) as $new) {
+                    $targets[$old][$new] = true;
+                }
+            }
+        }
+
+        $plan = [];
+        foreach ($targets as $old => $newSet) {
+            if (isset($alive[$old])) {
+                continue; // (a) encore présente quelque part : rien à déplacer.
+            }
+            if (count($newSet) !== 1) {
+                continue; // (c) zéro ou plusieurs cibles : conservateur.
+            }
+            $new = (string) array_key_first($newSet);
+            if ($new === $old) {
+                continue; // (b) identique à la cible (une casse ≠ est légitime).
+            }
+            $plan[$old] = $new;
+        }
+
+        ksort($plan, SORT_STRING);
+
+        return $plan;
+    }
+
+    /**
      * Ré-applique tous les aliases aux ventes existantes (par libellé
      * de vente, via resolvedKeyForApply).
      *
@@ -1375,9 +1462,17 @@ final class Sale extends Model
      *    quelles — un « appliquer » ne ressuscite pas une clé fusionnée
      *    (la clé existante fait foi).
      *
-     * @return int Nombre total de lignes affectées.
+     * Après réécriture, les clés qui ont DISPARU de sales (la clé
+     * canonique d'un libellé a changé) sont repointées via
+     * ProductKeyMerge::merge() : coûts, stocks, achats, pertes et
+     * comptages suivent la nouvelle clé au lieu de rester orphelins.
+     * Un repointage en échec est journalisé sans bloquer les suivants.
+     *
+     * @return array{updated: int, repointed: array<string,string>}
+     *         updated = lignes de ventes affectées ; repointed =
+     *         repointages réussis (ancienne clé → nouvelle).
      */
-    public static function reapplyAliases(): int
+    public static function reapplyAliases(): array
     {
         $pdo = self::pdo();
 
@@ -1390,7 +1485,30 @@ final class Sale extends Model
                  WHERE description IS NOT NULL AND description <> ''"
             )->fetchAll(\PDO::FETCH_COLUMN);
         } catch (\Throwable) {
-            return 0;
+            return ['updated' => 0, 'repointed' => []];
+        }
+
+        // Clés anciennes par libellé (AVANT réécriture) : servent à
+        // repointer les clés déplacées (coûts, stocks et historiques
+        // suivent la nouvelle clé via ProductKeyMerge::merge).
+        $oldKeysByDesc = [];
+        try {
+            /** @var list<array<string,mixed>> $rows */
+            $rows = $pdo->query(
+                "SELECT description, product_key FROM sales
+                 WHERE product_key IS NOT NULL AND product_key <> ''
+                 GROUP BY description, product_key"
+            )->fetchAll();
+            foreach ($rows as $row) {
+                $d = trim((string) $row['description']);
+                $k = trim((string) $row['product_key']);
+                if ($d === '' || $k === '') {
+                    continue;
+                }
+                $oldKeysByDesc[$d][] = $k;
+            }
+        } catch (\Throwable) {
+            $oldKeysByDesc = []; // Pas de plan fiable : jamais de repointage à l'aveugle.
         }
 
         // Catégorie par libellé brut (comblement, jamais d'écrasement).
@@ -1432,7 +1550,43 @@ final class Sale extends Model
             }
         }
 
-        return $count;
+        // Clés encore présentes APRÈS réécriture, par libellé : elles
+        // délimitent les clés « mortes » et leurs nouvelles cibles.
+        $keysAfter = [];
+        try {
+            /** @var list<array<string,mixed>> $rows */
+            $rows = $pdo->query(
+                "SELECT description, product_key FROM sales
+                 WHERE product_key IS NOT NULL AND product_key <> ''
+                 GROUP BY description, product_key"
+            )->fetchAll();
+            foreach ($rows as $row) {
+                $d = trim((string) $row['description']);
+                $k = trim((string) $row['product_key']);
+                if ($d === '' || $k === '') {
+                    continue;
+                }
+                $keysAfter[$d][] = $k;
+            }
+        } catch (\Throwable) {
+            $keysAfter = []; // Pas de plan fiable : jamais de repointage à l'aveugle.
+        }
+
+        $repointed = [];
+        foreach (self::displacedKeyPlan($oldKeysByDesc, $keysAfter) as $old => $new) {
+            try {
+                ProductKeyMerge::merge($old, $new, null);
+                $repointed[$old] = $new;
+            } catch (\Throwable $e) {
+                Logger::warning('reapplyAliases : repointage de clé impossible', [
+                    'old' => $old,
+                    'new' => $new,
+                    'msg' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        return ['updated' => $count, 'repointed' => $repointed];
     }
 
     /**

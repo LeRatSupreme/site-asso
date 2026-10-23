@@ -72,10 +72,11 @@ final class ProductKeyMerge extends Model
 
     /**
      * Tables à PK `product_key` (une seule ligne par produit) fusionnées
-     * mécaniquement : si la cible possède déjà sa ligne, elle fait foi et
-     * la ligne source est supprimée (jamais d'écrasement de la cible) ;
-     * sinon la ligne source est repointée vers la cible. Un UPDATE direct
-     * violerait l'unicité de la PK quand la cible existe déjà.
+     * mécaniquement : si la cible possède déjà SA ligne (test BINAIRE,
+     * voir mergeUniqueKeyRow), elle fait foi et la ligne source est
+     * supprimée (jamais d'écrasement de la cible) ; sinon la ligne
+     * source est repointée vers la cible. Un UPDATE direct violerait
+     * l'unicité de la PK quand la cible existe déjà.
      *
      * @var list<string>
      */
@@ -212,38 +213,103 @@ final class ProductKeyMerge extends Model
             }
 
             // 8. product_stocks (PK product_key) : fusion ADDITIVE du stock
-            //    de référence (source 5 + cible 7 → cible 12), puis
-            //    suppression de la ligne source.
+            //    de référence (source 5 + cible 7 → cible 12).
             //    Lecture en deux temps : un INSERT ... SELECT depuis la
             //    table product_stocks elle-même rend « stock » ambigu
             //    dans ON DUPLICATE KEY UPDATE (erreur 1052 MySQL) — on
-            //    lit donc le stock source, puis un INSERT ... VALUES sans
-            //    SELECT l'ajoute à la cible.
-            $stmt = $pdo->prepare('SELECT stock FROM product_stocks WHERE product_key = ?');
-            $stmt->execute([$source]);
-            $sourceStock = $stmt->fetchColumn();
-            $stocks = 0;
-            if ($sourceStock !== false) {
+            //    lit donc le stock source, puis on pose la somme sans
+            //    SELECT sur la même table.
+            //    Comparaisons BINAIREMENT sûres (COLLATE utf8mb4_bin) :
+            //    les colonnes product_key sont en utf8mb4_unicode_ci
+            //    (insensible casse ET accents), donc « Cafe » = « cafe »
+            //    — l'ancien INSERT ... ON DUPLICATE KEY UPDATE sur la
+            //    cible voyait la ligne SOURCE encore en place comme
+            //    « doublon de la cible » lors d'un renommage casse-seule
+            //    (« Fuze Tea » → « fuze tea ») : stock compté DEUX FOIS
+            //    (22 → 44) puis ligne supprimée. On somme donc les
+            //    lignes qui matchent la source en ci mais ne sont PAS
+            //    déjà, BINAIREMENT, la clé cible, on les supprime, puis
+            //    la somme rejoint la cible repérée BINAIREMENT (UPDATE
+            //    si elle existe, INSERT sinon — la PK garantit ensuite
+            //    une seule ligne par clé binaire).
+            $stmt = $pdo->prepare(
+                'SELECT COALESCE(SUM(stock), 0) FROM product_stocks
+                 WHERE product_key = ? AND product_key <> ? COLLATE utf8mb4_bin'
+            );
+            $stmt->execute([$source, $target]);
+            $absorbedStock = (int) $stmt->fetchColumn();
+
+            $stmt = $pdo->prepare(
+                'DELETE FROM product_stocks
+                 WHERE product_key = ? AND product_key <> ? COLLATE utf8mb4_bin'
+            );
+            $stmt->execute([$source, $target]);
+            $stocks = (int) $stmt->rowCount();
+
+            if ($absorbedStock !== 0 || $stocks !== 0) {
                 $stmt = $pdo->prepare(
-                    'INSERT INTO product_stocks (product_key, stock) VALUES (?, ?)
-                     ON DUPLICATE KEY UPDATE stock = stock + VALUES(stock), updated_at = NOW()'
+                    'SELECT 1 FROM product_stocks WHERE product_key = ? COLLATE utf8mb4_bin LIMIT 1'
                 );
-                $stmt->execute([$target, (int) $sourceStock]);
-                $stocks = 1;
+                $stmt->execute([$target]);
+                if ($stmt->fetchColumn() !== false) {
+                    $pdo->prepare(
+                        'UPDATE product_stocks SET stock = stock + ?, updated_at = NOW()
+                         WHERE product_key = ? COLLATE utf8mb4_bin'
+                    )->execute([$absorbedStock, $target]);
+                } else {
+                    $pdo->prepare('INSERT INTO product_stocks (product_key, stock) VALUES (?, ?)')
+                        ->execute([$target, $absorbedStock]);
+                }
             }
-            $pdo->prepare('DELETE FROM product_stocks WHERE product_key = ?')->execute([$source]);
 
             // 9. product_discontinued (PK product_key) : le drapeau « plus
-            //    en vente » suit la cible (premier auteur conservé), puis
-            //    suppression de la ligne source.
+            //    en vente » suit la cible, PREMIER AUTEUR CONSERVÉ (la
+            //    cible garde son updated_by ; elle n'hérite de celui de
+            //    la source que si le sien est NULL), puis suppression de
+            //    la ligne source.
+            //    Comparaisons BINAIREMENT sûres (COLLATE utf8mb4_bin),
+            //    même logique que mergeUniqueKeyRow : la collation ci
+            //    (utf8mb4_unicode_ci) fait que « Cafe » = « cafe » —
+            //    l'ancien INSERT ... SELECT ... ON DUPLICATE KEY UPDATE
+            //    updated_by = VALUES(updated_by) voyait la ligne SOURCE
+            //    elle-même comme « doublon de la cible » lors d'un
+            //    renommage casse-seule (« Fuze Tea » → « fuze tea ») :
+            //    no-op sur la source, puis DELETE — le drapeau était
+            //    PERDU au lieu d'être renommé. Désormais : si la cible
+            //    existe BINAIREMENT, l'auteur de la source complète
+            //    celui de la cible (UPDATE jointif — pas d'INSERT ...
+            //    SELECT depuis la même table) et la source est
+            //    supprimée ; sinon la ligne source est simplement
+            //    RENOMMÉE (variante de casse incluse, WHERE ci).
             $stmt = $pdo->prepare(
-                'INSERT INTO product_discontinued (product_key, updated_by)
-                 SELECT ?, COALESCE(updated_by, ?) FROM product_discontinued WHERE product_key = ?
-                 ON DUPLICATE KEY UPDATE updated_by = VALUES(updated_by)'
+                'SELECT 1 FROM product_discontinued WHERE product_key = ? COLLATE utf8mb4_bin LIMIT 1'
             );
-            $stmt->execute([$target, $userId, $source]);
-            $discontinued = (int) $stmt->rowCount();
-            $pdo->prepare('DELETE FROM product_discontinued WHERE product_key = ?')->execute([$source]);
+            $stmt->execute([$target]);
+            $discontinued = 0;
+            if ($stmt->fetchColumn() !== false) {
+                // La cible a déjà SA ligne : premier auteur conservé,
+                // l'auteur de la source ne comble qu'un NULL.
+                $pdo->prepare(
+                    'UPDATE product_discontinued d
+                     JOIN product_discontinued s
+                       ON s.product_key = ? AND s.product_key <> ? COLLATE utf8mb4_bin
+                     SET d.updated_by = COALESCE(d.updated_by, s.updated_by)
+                     WHERE d.product_key = ? COLLATE utf8mb4_bin'
+                )->execute([$source, $target, $target]);
+                // Suppression BINAIREMENT bornée : en casse-seule la
+                // ligne unique EST la cible — un DELETE ci la raterait
+                // et détruirait le drapeau de la cible elle-même.
+                $stmt = $pdo->prepare(
+                    'DELETE FROM product_discontinued
+                     WHERE product_key = ? AND product_key <> ? COLLATE utf8mb4_bin'
+                );
+                $stmt->execute([$source, $target]);
+                $discontinued = (int) $stmt->rowCount();
+            } else {
+                $stmt = $pdo->prepare('UPDATE product_discontinued SET product_key = ? WHERE product_key = ?');
+                $stmt->execute([$target, $source]);
+                $discontinued = (int) $stmt->rowCount();
+            }
 
             // 10. Drapeaux / réglages à PK product_key (stock infini, suivi
             //     « à zéro depuis », taille de pack, case de liste de
@@ -312,18 +378,40 @@ final class ProductKeyMerge extends Model
 
     /**
      * Fusion d'une table à PK `product_key` (une ligne par produit) :
-     * la ligne de la cible fait foi si elle existe déjà (la ligne source
-     * est supprimée, rien n'est écrasé — un UPDATE direct violerait
-     * l'unicité), sinon la ligne source est repointée vers la cible.
+     * la ligne de la cible fait foi si elle existe déjà — testé
+     * BINAIREMENT (COLLATE utf8mb4_bin) : les colonnes sont en ci
+     * (utf8mb4_unicode_ci), donc un WHERE product_key = ? simple
+     * ferait passer la ligne SOURCE elle-même pour « la cible
+     * existante » dès que source et cible ne diffèrent que par la
+     * casse (« Cafe » → « cafe ») — la ligne était alors SUPPRIMÉE au
+     * lieu d'être renommée (taille de pack ou case de liste de
+     * courses détruite). La distinction binaire est exactement ce qui
+     * sépare « la cible a déjà SA ligne » (la/les lignes source sont
+     * supprimées via un WHERE ci BORNÉ BINAIREMENT — en casse-seule la
+     * ligne unique peut être la cible elle-même, ex. clé stockée
+     * « fuze tea » : le DELETE ne doit pas la toucher — et rien
+     * n'est écrasé) de « la ligne source EST la cible à une casse
+     * près » (elle est renommée par UPDATE, WHERE ci). Un UPDATE
+     * direct violerait l'unicité de la PK quand la cible existe déjà.
      *
      * @return int 1 si une ligne a été déplacée, 0 sinon.
      */
     private static function mergeUniqueKeyRow(\PDO $pdo, string $table, string $source, string $target): int
     {
-        $stmt = $pdo->prepare('SELECT 1 FROM `' . $table . '` WHERE product_key = ? LIMIT 1');
+        $stmt = $pdo->prepare(
+            'SELECT 1 FROM `' . $table . '` WHERE product_key = ? COLLATE utf8mb4_bin LIMIT 1'
+        );
         $stmt->execute([$target]);
         if ($stmt->fetchColumn() !== false) {
-            $pdo->prepare('DELETE FROM `' . $table . '` WHERE product_key = ?')->execute([$source]);
+            // Suppression BINAIREMENT bornée : en casse-seule la ligne
+            // unique peut être la cible elle-même (ex. clé stockée
+            // « fuze tea ») — un DELETE ci la supprimerait au lieu de
+            // la conserver.
+            $stmt = $pdo->prepare(
+                'DELETE FROM `' . $table . '`
+                 WHERE product_key = ? AND product_key <> ? COLLATE utf8mb4_bin'
+            );
+            $stmt->execute([$source, $target]);
 
             return 0;
         }
