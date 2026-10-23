@@ -817,53 +817,67 @@ usort($pickerList, 'strnatcasecmp');
                     }, invoice);
                     var rowsData = st.rows;
 
-                    if (rowsData.length > 0 && gridHasContent() &&
-                        !window.confirm('La grille contient déjà des lignes : les remplacer par l\u2019analyse de la facture ?')) {
-                        scanSetStatus('Préremplissage annulé — la grille n\u2019a pas été modifiée.');
+                    var proceed = function () {
+                        if (supplierEl) supplierEl.value = st.supplier;
+                        if (invoiceNumberEl) invoiceNumberEl.value = st.invoice_number;
+                        if (purchasedAtEl && st.purchased_at !== '') purchasedAtEl.value = st.purchased_at;
+                        if (st.vat_rate !== null) {
+                            Array.prototype.forEach.call(rateEl.options, function (opt) {
+                                if (parseFloat(opt.value) === parseFloat(st.vat_rate)) rateEl.value = opt.value;
+                            });
+                        }
+                        if (st.amount_basis !== basis()) {
+                            Array.prototype.forEach.call(basisInputs, function (input) {
+                                input.checked = input.value === st.amount_basis;
+                            });
+                        }
+
+                        if (rowsData.length === 0) {
+                            recalcAll();
+                            scanSetStatus('Aucune ligne reconnue — vérifiez/corrigez le texte puis ré-analysez.');
+                            return;
+                        }
+
+                        resetGridRows();
+                        Array.prototype.forEach.call(rowsData, function (r) {
+                            var tr = firstEmptyRow() || (rows().length < MAX_LINES ? addLine(false) : null);
+                            if (!tr) return;
+                            // Libellé facture d'origine TOUJOURS conservé
+                            // (reconnu comme non reconnu) : info-bulle de
+                            // contrôle, liseré orange sur les lignes non
+                            // reconnues (refreshScanMark) et exclusion de la
+                            // création de fiche côté serveur pour ces clés.
+                            fillRow(tr, r.key, r.qty, r.total, r.raw_label || r.key, r.vat_rate);
+                            // Champ notes par ligne : absent de la grille
+                            // actuelle, câblé seulement s'il existe un jour.
+                            var notesInput = tr.querySelector('[name="notes[]"]');
+                            if (notesInput && r.notes) notesInput.value = r.notes;
+                        });
+                        // Mêmes mises à jour d'UI que l'import du collage :
+                        // numérotation, doublons, totaux, indices /unité
+                        // (recalcAll reflète aussi le taux et la base posés
+                        // ci-dessus, posés sans événement « change »).
+                        refreshIdx(); refreshDups(); recalcAll();
+                        scanSetStatus(rowsData.length + ' ligne' + (rowsData.length > 1 ? 's' : '') + ' préremplie' + (rowsData.length > 1 ? 's' : '') + ' — vérifiez puis enregistrez.');
+                    };
+
+                    // Grille déjà remplie : confirmation avant remplacement —
+                    // modale unifiée (window.aeicConfirm), repli window.confirm
+                    // si confirm.js n'est pas chargé.
+                    if (rowsData.length > 0 && gridHasContent()) {
+                        var msg = 'La grille contient déjà des lignes : les remplacer par l\u2019analyse de la facture ?';
+                        var go = window.aeicConfirm ? window.aeicConfirm(msg) : Promise.resolve(window.confirm(msg));
+                        go.then(function (ok) {
+                            if (!ok) {
+                                scanSetStatus('Préremplissage annulé — la grille n\u2019a pas été modifiée.');
+                                return;
+                            }
+                            proceed();
+                        });
                         return;
                     }
 
-                    if (supplierEl) supplierEl.value = st.supplier;
-                    if (invoiceNumberEl) invoiceNumberEl.value = st.invoice_number;
-                    if (purchasedAtEl && st.purchased_at !== '') purchasedAtEl.value = st.purchased_at;
-                    if (st.vat_rate !== null) {
-                        Array.prototype.forEach.call(rateEl.options, function (opt) {
-                            if (parseFloat(opt.value) === parseFloat(st.vat_rate)) rateEl.value = opt.value;
-                        });
-                    }
-                    if (st.amount_basis !== basis()) {
-                        Array.prototype.forEach.call(basisInputs, function (input) {
-                            input.checked = input.value === st.amount_basis;
-                        });
-                    }
-
-                    if (rowsData.length === 0) {
-                        recalcAll();
-                        scanSetStatus('Aucune ligne reconnue — vérifiez/corrigez le texte puis ré-analysez.');
-                        return;
-                    }
-
-                    resetGridRows();
-                    Array.prototype.forEach.call(rowsData, function (r) {
-                        var tr = firstEmptyRow() || (rows().length < MAX_LINES ? addLine(false) : null);
-                        if (!tr) return;
-                        // Libellé facture d'origine TOUJOURS conservé
-                        // (reconnu comme non reconnu) : info-bulle de
-                        // contrôle, liseré orange sur les lignes non
-                        // reconnues (refreshScanMark) et exclusion de la
-                        // création de fiche côté serveur pour ces clés.
-                        fillRow(tr, r.key, r.qty, r.total, r.raw_label || r.key, r.vat_rate);
-                        // Champ notes par ligne : absent de la grille
-                        // actuelle, câblé seulement s'il existe un jour.
-                        var notesInput = tr.querySelector('[name="notes[]"]');
-                        if (notesInput && r.notes) notesInput.value = r.notes;
-                    });
-                    // Mêmes mises à jour d'UI que l'import du collage :
-                    // numérotation, doublons, totaux, indices /unité
-                    // (recalcAll reflète aussi le taux et la base posés
-                    // ci-dessus, posés sans événement « change »).
-                    refreshIdx(); refreshDups(); recalcAll();
-                    scanSetStatus(rowsData.length + ' ligne' + (rowsData.length > 1 ? 's' : '') + ' préremplie' + (rowsData.length > 1 ? 's' : '') + ' — vérifiez puis enregistrez.');
+                    proceed();
                 }
 
                 scanToggle.addEventListener('click', function () {

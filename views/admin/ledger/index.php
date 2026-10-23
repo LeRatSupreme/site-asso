@@ -1592,6 +1592,8 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
         }
 
         // (b) Confirmation OBLIGATOIRE : récapitulatif avec les lignes.
+        // Modale unifiée (window.aeicConfirm, même modale que data-confirm)
+        // avec repli window.confirm si confirm.js n'est pas chargé (kiosque).
         var sum = 0;
         Array.prototype.forEach.call(bulk.total_amount, function (a) { sum += parseFloat(a); });
         var MAX_CONFIRM = 12;
@@ -1604,11 +1606,20 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
         if (bulk.product_key.length > MAX_CONFIRM) {
             lines.push('- … (' + (bulk.product_key.length - MAX_CONFIRM) + ' autre(s) ligne(s))');
         }
-        if (!window.confirm('Créer ' + bulk.product_key.length + ' achat(s) pour ' + fr2(sum)
-            + ' € + enregistrer la dépense ? Vérifiez les lignes :\n' + lines.join('\n'))) {
-            return; // refusée : RIEN n'est envoyé (ni achats, ni dépense)
-        }
+        var confirmMsg = 'Créer ' + bulk.product_key.length + ' achat(s) pour ' + fr2(sum)
+            + ' € + enregistrer la dépense ? Vérifiez les lignes :\n' + lines.join('\n');
+        var confirmed = window.aeicConfirm
+            ? window.aeicConfirm(confirmMsg, 'Créer les achats')
+            : Promise.resolve(window.confirm(confirmMsg));
+        confirmed.then(function (ok) {
+            if (!ok) return; // refusée : RIEN n'est envoyé (ni achats, ni dépense)
+            sendBulkPurchases(bulk);
+        });
+    });
 
+    // Suite de la soumission « achats + dépense » : tout ce qui suit la
+    // confirmation (anti double-clic, POST save-bulk, dépense ensuite).
+    function sendBulkPurchases(bulk) {
         // (d) Anti double-clic pendant le POST.
         purchaseBusy = true;
         var oldBtnText = purchaseSubmitBtn ? purchaseSubmitBtn.textContent : '';
@@ -1688,7 +1699,7 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
                 + (err && err.message ? err.message : 'erreur réseau.')
                 + ' Vérifie la page Achats avant de renvoyer pour ne pas créer deux fois.');
         });
-    });
+    }
 
     // État initial de la section (case désactivée + avertissement tant
     // qu'aucun scan n'a produit de lignes exploitables).

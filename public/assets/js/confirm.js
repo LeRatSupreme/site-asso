@@ -29,8 +29,9 @@
     var yesBtn = document.getElementById('confirm-yes');
     var pendingForm = null;
     var pendingHref = null;
+    var pendingResolver = null;
 
-    function open(message, form, href, confirmLabel) {
+    function open(message, form, href, confirmLabel, dangerOverride) {
         textEl.textContent = message;
         pendingForm = form || null;
         pendingHref = href || null;
@@ -47,15 +48,28 @@
                 danger = false;
             }
         }
+        if (dangerOverride !== undefined) danger = dangerOverride;
         yesBtn.textContent = label;
         yesBtn.classList.toggle('btn-danger', danger);
         yesBtn.classList.toggle('btn-primary', !danger);
         overlay.hidden = false;
     }
+
+    // Résout la demande programmatique en cours (une seule à la fois) ;
+    // sans effet pour les confirmations par attribut data-confirm.
+    function settle(result) {
+        if (pendingResolver) {
+            var resolve = pendingResolver;
+            pendingResolver = null;
+            resolve(result);
+        }
+    }
+
     function close() {
         overlay.hidden = true;
         pendingForm = null;
         pendingHref = null;
+        settle(false);
     }
 
     cancelBtn.addEventListener('click', close);
@@ -67,6 +81,11 @@
     });
 
     yesBtn.addEventListener('click', function () {
+        if (pendingResolver) {
+            settle(true);
+            close();
+            return;
+        }
         if (pendingForm) {
             pendingForm.submit();
         } else if (pendingHref) {
@@ -74,6 +93,17 @@
         }
         close();
     });
+
+    // API programmatique : même modale que data-confirm, en Promise —
+    // pour les confirmations au milieu d'un flux JS (récapitulatifs
+    // dynamiques, préremplissage de grille…). Remplace window.confirm().
+    window.aeicConfirm = function (message, confirmLabel) {
+        settle(false); // une demande à la fois : la précédente est annulée
+        return new Promise(function (resolve) {
+            pendingResolver = resolve;
+            open(message, null, null, confirmLabel, /supprim/i.test(message));
+        });
+    };
 
     // Intercepte tous les formulaires et liens avec data-confirm.
     document.addEventListener('submit', function (e) {
