@@ -135,6 +135,62 @@ final class ComptaCalcTest extends TestCase
         self::assertNull(ComptaCalc::selectCostLot('2026-05-01', []));
     }
 
+    public function test_deux_lots_meme_valid_from_la_saisie_la_plus_recente_gagne(): void
+    {
+        // Scénario réel : une même course saisie deux fois sous deux
+        // orthographes puis fusionnée — deux lots ouverts au même jour
+        // (1,300 saisi le 19-10, 1,233 saisi le 23-10). Le départage doit
+        // être DÉTERMINISTE : created_at le plus récent gagne, quel que
+        // soit l'ordre des lignes (jamais le plan SQL ni l'ordre d'entrée).
+        $lotAncien = [
+            'id' => 'cost_aaa', 'valid_from' => '2026-10-16', 'valid_to' => null,
+            'cost_price' => 1.300, 'created_at' => '2026-10-19 08:51:57',
+        ];
+        $lotRecent = [
+            'id' => 'cost_bbb', 'valid_from' => '2026-10-16', 'valid_to' => null,
+            'cost_price' => 1.233, 'created_at' => '2026-10-23 09:07:22',
+        ];
+
+        foreach ([[$lotAncien, $lotRecent], [$lotRecent, $lotAncien]] as $lots) {
+            $lot = ComptaCalc::selectCostLot('2026-10-23', $lots);
+            self::assertNotNull($lot);
+            self::assertSame(1.233, (float) $lot['cost_price'], 'La saisie la plus récente doit gagner.');
+            self::assertSame('cost_bbb', (string) $lot['id']);
+        }
+    }
+
+    public function test_deux_lots_meme_valid_from_sans_created_at_id_tranche(): void
+    {
+        // Lots hors base (sans created_at) : l'id le plus grand tranche,
+        // toujours indépendamment de l'ordre des lignes.
+        $lotA = ['id' => 'cost_111', 'valid_from' => '2026-10-16', 'valid_to' => null, 'cost_price' => 1.300];
+        $lotB = ['id' => 'cost_222', 'valid_from' => '2026-10-16', 'valid_to' => null, 'cost_price' => 1.233];
+
+        foreach ([[$lotA, $lotB], [$lotB, $lotA]] as $lots) {
+            $lot = ComptaCalc::selectCostLot('2026-10-16', $lots);
+            self::assertNotNull($lot);
+            self::assertSame('cost_222', (string) $lot['id']);
+        }
+    }
+
+    public function test_valid_from_plus_recent_domine_toujours_le_tie_break(): void
+    {
+        // Le départage ne s'applique QU'À valid_from égal : un lot plus
+        // récent reste prioritaire même s'il a été saisi avant.
+        $lotPlusRecentSaisiAvant = [
+            'id' => 'cost_zzz', 'valid_from' => '2026-10-20', 'valid_to' => null,
+            'cost_price' => 1.400, 'created_at' => '2026-10-20 08:00:00',
+        ];
+        $lotPlusAncienSaisiRecent = [
+            'id' => 'cost_aaa', 'valid_from' => '2026-10-16', 'valid_to' => null,
+            'cost_price' => 1.233, 'created_at' => '2026-10-23 09:07:22',
+        ];
+
+        $lot = ComptaCalc::selectCostLot('2026-10-23', [$lotPlusAncienSaisiRecent, $lotPlusRecentSaisiAvant]);
+        self::assertNotNull($lot);
+        self::assertSame(1.400, (float) $lot['cost_price']);
+    }
+
     public function test_cost_at_raccourci_renvoie_le_prix(): void
     {
         $lots = [
