@@ -172,7 +172,7 @@ final class ProductKeyMergeCaseRenameTest extends TestCase
 
         self::assertSame(
             1,
-            (int) $this->pdo->query("SELECT COUNT(*) FROM sales WHERE product_key = 'fuze tea'")->fetchColumn(),
+            (int) $this->pdo->query("SELECT COUNT(*) FROM sales WHERE product_key = 'fuze tea' COLLATE utf8mb4_bin")->fetchColumn(),
             'La vente porte la nouvelle clé.'
         );
         self::assertSame(
@@ -197,16 +197,16 @@ final class ProductKeyMergeCaseRenameTest extends TestCase
 
         self::assertSame(
             1,
-            (int) $this->pdo->query("SELECT COUNT(*) FROM product_discontinued WHERE product_key = 'fuze tea'")->fetchColumn(),
+            (int) $this->pdo->query("SELECT COUNT(*) FROM product_discontinued WHERE product_key = 'fuze tea' COLLATE utf8mb4_bin")->fetchColumn(),
             'Le drapeau existe toujours sous la nouvelle casse.'
         );
         self::assertSame(
             0,
-            (int) $this->pdo->query("SELECT COUNT(*) FROM product_discontinued WHERE product_key = 'Fuze Tea'")->fetchColumn(),
+            (int) $this->pdo->query("SELECT COUNT(*) FROM product_discontinued WHERE product_key = 'Fuze Tea' COLLATE utf8mb4_bin")->fetchColumn(),
             'L\'ancienne casse ne laisse aucune ligne.'
         );
 
-        $author = $this->pdo->query("SELECT updated_by FROM product_discontinued WHERE product_key = 'fuze tea'")->fetchColumn();
+        $author = $this->pdo->query("SELECT updated_by FROM product_discontinued WHERE product_key = 'fuze tea' COLLATE utf8mb4_bin")->fetchColumn();
         self::assertSame('u1', (string) $author, 'L\'auteur suit la ligne renommée.');
     }
 
