@@ -7,7 +7,7 @@ declare(strict_types=1);
  * de la journée en cours (heure de Paris). Mêmes calculs que le dashboard
  * analytics (perso inclus dans le CA, exclus du bénéfice). Lecture seule,
  * auto-actualisée toutes les 60 s. AUCUN calcul ici : panier moyen
- * (cartMean), delta vs hier (deltaCa), marge (margin), max horaire
+ * (cart_mean), delta vs hier (delta_ca), marge (margin), max horaire
  * (hoursMax) et largeurs de barres (pct) arrivent prêts du contrôleur
  * (jourStats) — le JS du rafraîchissement lit les mêmes clés.
  *
@@ -135,14 +135,14 @@ $dateLabel = $jours[(int) $dt->format('N') - 1] . ' ' . $dt->format('j') . ' ' .
     $fJour = (float) $stats['ca'];
     $fTransactions = (int) $stats['transactions'];
     $fYesterday = (float) ($stats['yesterday_ca'] ?? 0);
-    $fDelta = ($stats['deltaCa'] ?? null) === null ? null : (int) $stats['deltaCa'];
+    $fDelta = ($stats['delta_ca'] ?? null) === null ? null : (int) $stats['delta_ca'];
     $fWeek = $stats['week'] ?? [];
     $fHours = $stats['hours'] ?? [];
     ?>
     <div class="kx-hero">
         <p class="kx-hero-label">Chiffre d'affaires du jour (TTC)</p>
         <div class="kx-hero-value" id="kdayCa"><?= e(formatPrice($fJour)) ?></div>
-        <p class="kx-hero-sub"><strong><?= e(formatPrice((float) $stats['ca_products'])) ?></strong> produits · <strong><?= $fTransactions ?></strong> transactions · panier moyen <strong id="kdayBasket"><?= e(formatPrice((float) ($stats['cartMean'] ?? 0))) ?></strong></p>
+        <p class="kx-hero-sub"><strong><?= e(formatPrice((float) $stats['ca_products'])) ?></strong> produits · <strong><?= $fTransactions ?></strong> transactions · panier moyen <strong id="kdayBasket"><?= e(formatPrice((float) ($stats['cart_mean'] ?? 0))) ?></strong></p>
     </div>
 
     <div class="kx-pair">
@@ -247,9 +247,9 @@ $dateLabel = $jours[(int) $dt->format('N') - 1] . ' ' . $dt->format('j') . ' ' .
         set('kdayAt', j.computed_at);
 
         // Hero : produits + transactions + panier moyen — valeur fournie
-        // par le contrôleur (« cartMean »), jamais recalculée ici.
+        // par le contrôleur (« cart_mean »), jamais recalculée ici.
         var tx = Number(j.transactions) || 0;
-        var panier = Number(j.cartMean) || 0;
+        var panier = Number(j.cart_mean) || 0;
         var sub = document.querySelector('.kx-hero-sub');
         if (sub) {
             sub.innerHTML = '<strong>' + price(j.ca_products) + '</strong> produits · <strong>' + tx + '</strong> transactions'
@@ -269,11 +269,11 @@ $dateLabel = $jours[(int) $dt->format('N') - 1] . ' ' . $dt->format('j') . ' ' .
         }
 
         // Comparaison avec hier : delta % coloré, valeur fournie par le
-        // contrôleur (« deltaCa », null si hier est sans CA).
+        // contrôleur (« delta_ca », null si hier est sans CA).
         var yd = document.getElementById('kdayYesterday');
         if (yd) {
             var hier = Number(j.yesterday_ca) || 0;
-            var d = (j.deltaCa === null || j.deltaCa === undefined) ? null : Number(j.deltaCa);
+            var d = (j.delta_ca === null || j.delta_ca === undefined) ? null : Number(j.delta_ca);
             if (d !== null) {
                 yd.innerHTML = 'Hier : ' + price(hier)
                     + ' <span class="kday-delta ' + (d >= 0 ? 'is-up' : 'is-down') + '">'
