@@ -125,4 +125,64 @@ final class AliasSuggesterTest extends TestCase
         self::assertSame([], AliasSuggester::groupDuplicates(['Coca', 'Pepsi', '']));
         self::assertSame([], AliasSuggester::groupDuplicates([]));
     }
+
+    public function test_group_duplicates_faute_de_frappe_transposition(): void
+    {
+        // « bleu » / « blue » : transposition de deux lettres adjacentes —
+        // le même produit saisi deux fois (Redbull Bleu vs redbull blue).
+        $groups = AliasSuggester::groupDuplicates(['Redbull Bleu', 'redbull blue']);
+
+        self::assertCount(1, $groups);
+        self::assertSame(['Redbull Bleu', 'redbull blue'], $groups[0]);
+    }
+
+    public function test_group_duplicates_faute_de_frappe_lettre_en_plus(): void
+    {
+        $groups = AliasSuggester::groupDuplicates(['Cristaline', 'Cristalline']);
+
+        self::assertCount(1, $groups);
+        self::assertSame(['Cristaline', 'Cristalline'], $groups[0]);
+    }
+
+    public function test_group_duplicates_espace_en_plus_ou_en_moins(): void
+    {
+        // « red bull » et « redbull » sont déjà UNE seule clé pour la carte
+        // publique (StockPublic::normalizeKey retire les espaces) : le
+        // doublon doit être proposé aussi côté compta.
+        $groups = AliasSuggester::groupDuplicates(['Redbull', 'red bull']);
+
+        self::assertCount(1, $groups);
+        self::assertSame(['red bull', 'Redbull'], $groups[0]);
+    }
+
+    public function test_group_duplicates_chiffres_jamais_groupes(): void
+    {
+        // « Sucette 1 » et « Sucette 3 » sont deux variantes numérotées :
+        // une différence de chiffre n'est pas une faute de frappe.
+        self::assertSame([], AliasSuggester::groupDuplicates(['Sucette 1', 'Sucette 3']));
+    }
+
+    public function test_group_duplicates_cles_trop_courtes_jamais_groupes(): void
+    {
+        // En dessous de 5 caractères, une édition porte trop peu de sens.
+        self::assertSame([], AliasSuggester::groupDuplicates(['Eau', 'Eaux']));
+    }
+
+    public function test_group_duplicates_chaine_de_proches_forme_un_seul_groupe(): void
+    {
+        // A~B et B~C (une édition chacun) : un seul groupe de trois.
+        $groups = AliasSuggester::groupDuplicates(['monster vleu', 'Monster Bleu', 'monster blem']);
+
+        self::assertCount(1, $groups);
+        self::assertSame(['monster blem', 'Monster Bleu', 'monster vleu'], $groups[0]);
+    }
+
+    public function test_group_duplicates_ordre_d_entree_sans_effet(): void
+    {
+        $a = AliasSuggester::groupDuplicates(['Redbull Bleu', 'Monster', 'redbull blue']);
+        $b = AliasSuggester::groupDuplicates(['redbull blue', 'Monster', 'Redbull Bleu']);
+
+        self::assertSame($a, $b);
+        self::assertSame([['Redbull Bleu', 'redbull blue']], $a);
+    }
 }
