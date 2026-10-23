@@ -124,6 +124,35 @@ final class KiosqueSecuriteTest extends IntegrationTestCase
         self::assertStringContainsString('data-confirm', $body, 'La confirmation de régénération doit rester.');
     }
 
+    /**
+     * Lot suivi (docs/refonte-limites.md §16) : les encarts « accès
+     * téléphone » des pages Réappro, Liste, Caisse et Comptage
+     * inventaire utilisent le même masquage que /admin/kiosques — le
+     * HTML initial ne contient plus AUCUN jeton, la révélation passe
+     * par le POST CSRF audité (partial _kiosk_link.php).
+     */
+    public function test_encarts_kiosque_des_pages_admin_masques(): void
+    {
+        $pages = [
+            'admin réappro'            => ['/admin/compta/reappro', '/kiosque/reappro/'],
+            'admin liste'              => ['/admin/compta/liste', '/kiosque/liste/'],
+            'admin caisse'             => ['/admin/compta/caisse', '/kiosque/comptage/caisse/'],
+            'admin comptage inventaire' => ['/admin/compta/inventaire/comptage', '/kiosque/comptage/inventaire/'],
+        ];
+
+        foreach ($pages as $nom => [$path, $kioskPath]) {
+            $r    = $this->request('GET', $path, [], [], $this->rootId);
+            $body = (string) ($r['body'] ?? '');
+
+            self::assertSame(200, (int) ($r['code'] ?? 0), sprintf('%s : code HTTP inattendu.', $nom));
+            self::assertStringNotContainsString($this->tokenMembres, $body, sprintf('%s : le jeton membres ne doit pas apparaître dans le HTML.', $nom));
+            self::assertStringNotContainsString($this->tokenAdmin, $body, sprintf('%s : le jeton admin ne doit pas apparaître dans le HTML.', $nom));
+            self::assertStringContainsString('••••••••', $body, sprintf('%s : le lien kiosque doit être masqué.', $nom));
+            self::assertStringContainsString('Afficher le lien', $body, sprintf('%s : le bouton de révélation doit être présent.', $nom));
+            self::assertStringContainsString('data-kl-path="' . $kioskPath . '"', $body, sprintf('%s : l\'encart porte le chemin kiosque attendu (pas le jeton).', $nom));
+        }
+    }
+
     public function test_reveal_renvoie_l_url_complete_avec_csrf_valide(): void
     {
         // 1. Récupère le CSRF de la page (même session).

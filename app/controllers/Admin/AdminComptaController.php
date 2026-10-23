@@ -1906,16 +1906,14 @@ final class AdminComptaController extends AdminBaseController
             }
         }
 
-        // Lien kiosque — même jeton que le Réappro (généré paresseusement).
-        // En mode kiosque avec un jeton fourni : conserver CE jeton (espace
-        // membres OU admin) pour que les liens de retour y restent.
+        // Jeton kiosque (kiosque uniquement) : conservé pour les liens de
+        // retour vers le hub d'origine (espace membres OU admin). En mode
+        // connecté, le lien « accès téléphone » est masqué et révélé à la
+        // demande (partial _kiosk_link.php) : plus aucune URL à jeton
+        // n'est assemblée ici.
         $kioskToken = ($kiosk && $kioskToken !== null && trim($kioskToken) !== '')
             ? trim($kioskToken)
             : Kiosk::token();
-        $kioskUrl   = '';
-        if (!$kiosk) {
-            $kioskUrl = Kiosk::url('/kiosque/liste/');
-        }
 
         $viewData = [
             'title'       => 'Liste de courses',
@@ -1941,7 +1939,6 @@ final class AdminComptaController extends AdminBaseController
             // Stocks théoriques négatifs (survente) : anomalies à recompter.
             'negatifs'    => $negatifs,
             'kiosk'       => $kiosk,
-            'kioskUrl'    => $kioskUrl,
             'kioskToken'  => (string) $kioskToken,
             // Retour vers le hub correspondant au jeton (admin ou membres).
             'hubUrl'      => $kiosk ? $this->listeHubUrl((string) $kioskToken) : '',
@@ -1970,11 +1967,15 @@ final class AdminComptaController extends AdminBaseController
         // Page affichant le lien kiosque à copier : jamais mémorisable.
         Kiosk::sendNoStore();
 
-        // Lien kiosque : généré à la première visite (connecté uniquement).
-        $kioskUrl = '';
+        // Lien kiosque : plus jamais assemblé ici en mode connecté — la
+        // vue l'affiche masqué et le révèle à la demande (partial
+        // _kiosk_link.php + POST /admin/kiosques/reveal audité). Le jeton
+        // reste généré paresseusement à la première visite connectée
+        // (contrat testé par ComptaConsistencyTest), sans fuiter dans la vue.
         if (!$kiosk) {
-            $kioskUrl = Kiosk::url('/kiosque/reappro/');
+            Kiosk::token();
         }
+
         // Hub de retour selon le jeton entrant (admin ou membres).
         $kioskHubUrl = ($kiosk && $kioskToken !== null && trim($kioskToken) !== '')
             ? $this->listeHubUrl(trim($kioskToken))
@@ -2086,7 +2087,6 @@ final class AdminComptaController extends AdminBaseController
                 'du'            => $duOk ? $du : '',
                 'au'            => $auOk ? $au : '',
                 'kiosk'         => true,
-                'kioskUrl'      => '',
                 // Bouton retour flottant : hub du bon espace (admin/membres).
                 'kioskHubUrl'   => $kioskHubUrl,
                 // Faux = masque TOUT chiffre financier (jeton membres).
@@ -2113,7 +2113,6 @@ final class AdminComptaController extends AdminBaseController
             'du'            => $duOk ? $du : '',
             'au'            => $auOk ? $au : '',
             'kiosk'         => false,
-            'kioskUrl'      => $kioskUrl,
             'showMoney'     => $showMoney,
             'basis'         => $basis,
         ]);
@@ -2218,10 +2217,8 @@ final class AdminComptaController extends AdminBaseController
         Kiosk::sendNoStore();
 
         $this->renderAdmin('admin/compta/caisse', [
-            'title'       => 'Comptage de caisse',
-            'user'        => $user,
-            'kioskHub'    => Kiosk::url('/kiosque/comptage/'),
-            'kioskCaisse' => Kiosk::url('/kiosque/comptage/caisse/'),
+            'title' => 'Comptage de caisse',
+            'user'  => $user,
         ]);
     }
 

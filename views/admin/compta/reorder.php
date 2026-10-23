@@ -23,7 +23,6 @@ declare(strict_types=1);
  * @var string                                       $au
  * @var int                                          $refCalDays
  * @var bool                                         $kiosk     Mode kiosque : accès par lien secret, sans connexion.
- * @var string                                       $kioskUrl  Lien kiosque à copier sur le téléphone (vide en kiosque).
  * @var bool                                         $showMoney Faux = AUCUN chiffre financier rendu (jeton kiosque « membres ») ; vrai pour tout rôle compta et le jeton « admin ».
  * @var array{ventes:string,couverture:string,source:string} $basis Encart « Base de calcul » (identique à la liste de courses).
  */
@@ -104,10 +103,7 @@ $colspan = $showMoney ? 13 : 12;
         <strong>sans jamais demander de connexion</strong>. Lecture seule — régénère le lien pour révoquer l'ancien.
     </p>
     <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
-        <input type="text" readonly value="<?= e($kioskUrl) ?>" id="kiosk-url" onclick="this.select()"
-               style="flex: 1 1 260px; padding: 0.5rem 0.7rem; border: 1px solid var(--border); border-radius: 8px; background: rgba(255,255,255,0.04); color: var(--foreground); font-size: 0.85rem;">
-        <button type="button" class="btn btn-outline btn-sm"
-                onclick="(function (b) { var i = document.getElementById('kiosk-url'); i.select(); try { document.execCommand('copy'); } catch (e) {} if (navigator.clipboard) { navigator.clipboard.writeText(i.value); } b.textContent = 'Copié ✓'; setTimeout(function () { b.textContent = 'Copier le lien'; }, 1500); })(this)">Copier le lien</button>
+        <?php $kioskPath = '/kiosque/reappro/'; $kioskLabel = 'réapprovisionnement'; require AEIC_VIEWS . '/partials/_kiosk_link.php'; ?>
         <form method="post" action="<?= e(url('/admin/compta/reappro/kiosk/regenerate')) ?>"
               data-confirm="Régénérer le lien ? Le raccourci téléphone actuel cessera de fonctionner — il faudra recopier le nouveau lien."
               data-confirm-button="Régénérer">

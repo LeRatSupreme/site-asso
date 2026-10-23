@@ -612,5 +612,6 @@ if ($currentUrlPath === '/admin' || $crumbEntry === null) {
         })();
     </script>
     <script src="<?= e(rootAssetVersioned('/assets/js/confirm.js')) ?>"></script>
+    <script src="<?= e(rootAssetVersioned('/assets/js/kiosk-reveal.js')) ?>"></script>
 </body>
 </html>

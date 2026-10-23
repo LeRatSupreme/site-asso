@@ -933,11 +933,9 @@ final class AdminStockController extends AdminBaseController
         $rows = array_merge($active, $paused);
 
         $this->renderAdmin('admin/compta/blind_count', [
-            'title'         => 'Comptage inventaire',
-            'user'          => $user,
-            'rows'          => $rows,
-            'kioskHub'      => Kiosk::url('/kiosque/comptage/'),
-            'kioskInventaire' => Kiosk::url('/kiosque/comptage/inventaire/'),
+            'title' => 'Comptage inventaire',
+            'user'  => $user,
+            'rows'  => $rows,
         ]);
     }
 
