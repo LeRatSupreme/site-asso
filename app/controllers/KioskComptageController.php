@@ -709,7 +709,7 @@ final class KioskComptageController extends Controller
      * Agrégats du jour (Europe/Paris, bornes 00:00 → 23:59 locales) +
      * enrichissements — TOUS calculés ici, la vue et le JS du
      * rafraîchissement ne font qu'afficher :
-     * panier moyen (« cartMean »), delta vs hier (« deltaCa », null si
+     * panier moyen (« cart_mean »), delta vs hier (« delta_ca », null si
      * hier sans CA), marge (« margin »), ventes par heure avec le max du
      * jour (« hoursMax ») et la largeur de barre précalculée de chaque
      * heure (« pct »). 7 requêtes légères (toutes indexées sur la date),
@@ -740,8 +740,8 @@ final class KioskComptageController extends Controller
         // entier, null si hier est vide) et marge (bénéfice / CA, en %) :
         // l'ancien doublon PHP + JS des vues est supprimé au profit de
         // ces trois clés.
-        $cartMean = $tx > 0 ? round($ca / $tx, 2) : 0.0;
-        $deltaCa = $yesterdayCa > 0 ? (int) round(($ca - $yesterdayCa) / $yesterdayCa * 100) : null;
+        $cart_mean = $tx > 0 ? round($ca / $tx, 2) : 0.0;
+        $delta_ca = $yesterdayCa > 0 ? (int) round(($ca - $yesterdayCa) / $yesterdayCa * 100) : null;
         $margin = self::margePct($ca, $profit);
 
         // CA par heure du jour : salesByDayHour() regroupe par jour de
@@ -774,8 +774,8 @@ final class KioskComptageController extends Controller
             'ca'           => $ca,
             'profit'       => $profit,
             'margin'       => $margin,
-            'cartMean'     => $cartMean,
-            'deltaCa'      => $deltaCa,
+            'cart_mean'    => $cart_mean,
+            'delta_ca'     => $delta_ca,
             'qty'          => $agg['qty'],
             'ca_products'  => round($agg['ca_products'], 2),
             'transactions' => $tx,
