@@ -1,9 +1,11 @@
-# Limites connues après la refonte (fin lot 7)
+# Limites connues après la refonte (fin lot 7 + passe qualité)
 
 Liste factuelle de ce qui reste imparfait après les lots 1 à 7. Chaque
 ligne : constat, impact, préconisation (lot d'origine ou proposition).
 Ce document ne liste pas les défauts corrigés — voir `docs/ui-audit.md`
-(diagnostic d'entrée) et les commits des lots 1 à 7.
+(diagnostic d'entrée) et les commits des lots 1 à 7. Les entrées marquées
+« Traité » ont été résolues par la passe qualité du 23/10/2026 et sont
+gardées pour mémoire (le numéro sert de référence).
 
 ## Interface
 
@@ -25,24 +27,22 @@ Ce document ne liste pas les défauts corrigés — voir `docs/ui-audit.md`
    pages soeurs. Préconisation : poursuivre la migration (styles
    locaux → `compta.css`/`components.css`) espace par espace.
 
-3. **Favicon et logo aux anciennes couleurs — et 404.**
-   Constat : tous les layouts référencent `img/favicon.svg` et
-   `img/icon.svg` mais le dossier `public/img/` n'existe pas dans le dépôt
-   → chaque page déclenche une requête favicon en 404. L'ancienne couleur
-   `#48bdd3` reste par ailleurs la couleur de marque des favicon/logos
-   quand ils sont fournis côté serveur (audit §1 : 106 occurrences).
-   Impact : bruit dans les logs, identité visuelle datée, pas d'onglet
-   iconifié. Préconisation : fournir `public/img/favicon.svg` + icon.png
-   (PWA) aux couleurs du design system et mettre à jour `manifest.json`.
+3. **Traité (favicon/icônes) — reste le thème public.**
+   Constat d'origine : favicon et icônes aux anciennes couleurs, le 404
+   signalé était obsolète (fichiers fournis dès la phase 1). Traitement :
+   `favicon.svg`, `icon.svg`, `icon-192.png` et `icon-512.png` repassés
+   à l'accent du design system (`#1f7a99`, à plat). `manifest.json`
+   reste en `#08172d` : cohérent avec le thème sombre actuel des pages
+   publiques, à revoir avec la migration de l'entrée 1.
 
-4. **Boutons visibles mais refusés pour le rôle président.**
-   Constat : le rôle PRESIDENT (lot 2) voit dans sa navigation des actions
-   (boutons d'enregistrement, formulaires) qui répondent 403 au clic :
-   le menu filtre les liens mais les pages restent en lecture seule sans
-   masquage fin des boutons. Impact : parcours frustrant, appels réseau
-   inutiles. Préconisation : passer un drapeau « lecture seule » du
-   contrôleur à la vue (masquer ou désactiver les `submit`), côté espaces
-   Ventes/Stock/Comptabilité.
+4. **Traité (président lecture seule).**
+   Constat d'origine : le rôle PRESIDENT voyait des boutons qui
+   répondaient 403 au clic. Traitement : drapeau `body.is-readonly` posé
+   par le layout admin (`Permissions::isReadOnly()`), bandeau
+   « Mode lecture seule » et masquage des `submit` des formulaires POST
+   dans `.admin-content` (le routeur reste le garde réel — 403 —, la vue
+   ne montre plus que des actions autorisées). Test :
+   `RolesMenuTest::test_president_drapeau_lecture_seule_dans_le_layout`.
 
 5. **Emails avec styles dupliqués.**
    Constat : chaque template d'email embarque ses styles (≈ 148 `style="`
@@ -51,19 +51,19 @@ Ce document ne liste pas les défauts corrigés — voir `docs/ui-audit.md`
    Préconisation : un gabarit de base (header/footer/bouton) mutualisé,
    variables de couleurs centralisées côté PHP.
 
-6. **Confirmations non unifiées.**
-   Constat : la modale globale `data-confirm` coexiste avec ≈ 11 appels
-   `window.confirm()` natifs dans les vues (audit §2 : à unifier).
-   Impact : deux ergonomies de confirmation selon la page.
-   Préconisation : convertir les `window.confirm()` restants en
-   `data-confirm` (mission §2, reste du lot en cours de migration).
+6. **Traité (confirmations unifiées).**
+   Constat d'origine : la modale globale `data-confirm` coexistait avec
+   des `window.confirm()` natifs. Traitement : API programmatique
+   `window.aeicConfirm(message, libellé)` (Promise) ajoutée à
+   `confirm.js` et appliquée aux derniers cas (grand livre — envoi groupé,
+   achats — application facture). Repli `window.confirm` conservé dans
+   les vues kiosque, dont le layout ne charge pas `confirm.js`.
 
-7. **Marqueur `is-mine` devenu sans style (sondages).**
-   Constat : le glow de la barre « mon vote » a été retiré (sobriété,
-   lot 7) ; la classe `is-mine` reste posée dans `views/polls/show.php`
-   sans règle CSS associée. Impact : aucun visuel (marqueur mort).
-   Préconisation : soit supprimer la classe, soit la styler en gras
-   discret — au choix lors d'une prochaine passe sondages.
+7. **Traité (marqueur `is-mine`, sondages).**
+   Constat d'origine : la classe `is-mine` restait posée sans règle CSS
+   associée. Traitement : la barre « mon vote » est remplie avec l'accent
+   (`var(--primary)`) — la variante gagnante garde la priorité (déclarée
+   après dans `polls.css`).
 
 8. **Dégradés restants assumés (donnée, pas décoration).**
    Constat : `polls.css` garde le dégradé de remplissage des barres de
@@ -93,12 +93,11 @@ Ce document ne liste pas les défauts corrigés — voir `docs/ui-audit.md`
 
 ## Données et API
 
-11. **Clés camelCase dans le payload kiosque.**
-    Constat : `cartMean`, `deltaCa`, `margin` (lot 4D) côtoient le
-    snake_case du reste du payload (`total_debit`, `sales_profit`…).
-    Impact : hétérogénéité de convention pour les consommateurs JS.
-    Préconisation : arbitrage unique (snake_case recommandé) lors d'une
-    prochaine retouche de ces écrans, avec tests ajustés.
+11. **Traité (clés camelCase, payload kiosque).**
+    Constat d'origine : `cartMean`/`deltaCa` côtoyaient le snake_case du
+    reste du payload. Traitement : renommés `cart_mean`/`delta_ca` dans
+    `KioskComptageController` et `kiosk-jour.php` (`margin` était déjà
+    conforme).
 
 12. **Rôle `EVENEMENTS` mort en base.**
     Constat : présent dans l'ENUM `users.role` mais sans libellé, menu ni
@@ -109,19 +108,17 @@ Ce document ne liste pas les défauts corrigés — voir `docs/ui-audit.md`
 
 ## Tests
 
-13. **Couverture kiosque incomplète.**
-    Constat : aucune couverture d'intégration dédiée pour 4 pages kiosque :
-    `/kiosque/admin` (hub), `/kiosque/comptage/jour`, `/kiosque/admin/periode`
-    et `/kiosque/comptage/jour-membre` (signalé dès le lot 4D ; une fumée
-    manuelle de 37 contrôles avait été jouée). Impact : régressions
-    possibles sur ces pages sans filet. Préconisation : un test de rendu
-    par page sur le modèle `KiosqueAffichageTest`.
+13. **Traité (couverture kiosque).**
+    Constat d'origine : aucune couverture d'intégration dédiée pour
+    4 pages kiosque. Traitement : `tests/Integration/KiosquePagesRenduTest.php`
+    couvre le rendu des 4 pages (hub, comptage du jour, période admin,
+    récap membre), le refus des jetons invalides (403) et l'absence de
+    données financières dans le récap membre.
 
-14. **Mojibake résiduel hors tests.**
-    Constat : un commentaire docblock double-encodé subsiste dans
-    `app/core/Compta/Kiosk.php:33` (hors périmètre « tests » du lot 7).
-    Impact : nul fonctionnel (commentaire). Préconisation : correction
-    opportuniste au prochain passage sur ce fichier.
+14. **Obsolète (mojibake).**
+    Le docblock double-encodé signalé dans `app/core/Compta/Kiosk.php`
+    avait déjà été corrigé avant la passe qualité (aucune trace restante) :
+    entrée conservée pour mémoire, aucune action.
 
 15. **Thème sombre défini en deux blocs.**
     Constat : `tokens.css` duplique les surcharges sombres (choix manuel
@@ -132,16 +129,16 @@ Ce document ne liste pas les défauts corrigés — voir `docs/ui-audit.md`
 
 ## Sécurité UI (audit §6 — traité par le lot jetons, restes assumés)
 
-16. **Cartes « accès téléphone » encore visibles hors `/admin/kiosques`.**
-    Constat : `/admin/kiosques` masque désormais ses liens par défaut
-    (« •••••••• », révélation à la demande par POST CSRF audité
-    `kiosques.reveal`) ; les pages Réappro/Liste (encart SUPERADMIN),
-    Caisse et Comptage à l'aveugle gardent le lien en clair avec bouton
-    Copier — usage légitime de copie pour le bureau, pages désormais
-    servies en `Cache-Control: no-store`. Impact : ces liens restent à
-    l'écran sur session admin active seulement. Préconisation : même
-    masquage que `/admin/kiosques` lors d'une prochaine retouche de ces
-    écrans.
+16. **Traité (masquage des liens téléphone).**
+    Constat d'origine : les encarts « accès téléphone » des pages
+    Réappro, Liste, Caisse et Comptage à l'aveugle affichaient le lien
+    en clair (contrairement à `/admin/kiosques`). Traitement : partial
+    réutilisable `_kiosk_link.php` (valeur masquée
+    « •••••••• », boutons Afficher/Copier/Ouvrir) + `kiosk-reveal.js`
+    (POST CSRF vers `/admin/kiosques/reveal`, audité) ; plus aucun jeton
+    n'est envoyé dans le HTML de ces pages. Tests :
+    `KiosqueSecuriteTest::test_encarts_kiosque_des_pages_admin_masques`
+    et `KiosqueAffichageTest` mis à jour.
 
 17. **Pas de rotation/expiration des jetons.**
     Constat : `Referrer-Policy: no-referrer` (globale) et
