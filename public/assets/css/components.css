@@ -503,6 +503,9 @@ button.ds-expand:hover {
 .confirm-text {
     margin: 0 0 var(--sp-4);
     font-size: var(--fs-2);
+    /* Récapitulatifs multi-lignes (API window.aeicConfirm) : les \n
+       du message deviennent des sauts de ligne visibles. */
+    white-space: pre-line;
 }
 
 .confirm-buttons {
