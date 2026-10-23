@@ -321,6 +321,9 @@
     background: linear-gradient(90deg, var(--secondary, #6150aa), var(--primary, #48bdd3));
     transition: width .5s ease;
 }
+.poll-result-fill.is-mine {
+    background: var(--primary, #48bdd3);
+}
 .poll-result-fill.is-winner {
     background: linear-gradient(90deg, #f59e0b, #fbbf24);
 }
