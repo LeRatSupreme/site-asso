@@ -130,20 +130,25 @@ Ce document ne liste pas les défauts corrigés — voir `docs/ui-audit.md`
     rester synchronisés (mentionné en commentaire). Préconisation : build
     CSS (PostCSS) si la duplication devient pénible.
 
-## Sécurité UI (audit §6, non traité — lot dédié)
+## Sécurité UI (audit §6 — traité par le lot jetons, restes assumés)
 
-16. **Jetons kiosque visibles et copiables en clair.**
-    Constat : `/admin/kiosques` et la carte « Accès téléphone » du
-    réapprovisionnement affichent l'URL à jeton dans un champ readonly
-    avec bouton Copier (masquage par défaut non implémenté).
-    Impact : quiconque voit l'écran (ou une capture) obtient un accès.
-    Préconisation : masquage par défaut + révélation à la demande +
-    régénération rappelée (mission §10).
+16. **Cartes « accès téléphone » encore visibles hors `/admin/kiosques`.**
+    Constat : `/admin/kiosques` masque désormais ses liens par défaut
+    (« •••••••• », révélation à la demande par POST CSRF audité
+    `kiosques.reveal`) ; les pages Réappro/Liste (encart SUPERADMIN),
+    Caisse et Comptage à l'aveugle gardent le lien en clair avec bouton
+    Copier — usage légitime de copie pour le bureau, pages désormais
+    servies en `Cache-Control: no-store`. Impact : ces liens restent à
+    l'écran sur session admin active seulement. Préconisation : même
+    masquage que `/admin/kiosques` lors d'une prochaine retouche de ces
+    écrans.
 
-17. **En-têtes de cache sur les pages à jeton.**
-    Constat : `Cache-Control: no-store` n'est posé que sur
-    `/sms-chart/{token}` ; les pages kiosque s'en remettent à la session ;
-    `Referrer-Policy` reste `strict-origin-when-cross-origin` au lieu de
-    `no-referrer` sur ces pages. Impact : risque théorique de
-    mémorisation/referment du jeton. Préconisation : poser `no-store` et
-    `no-referrer` dans `KioskComptageController` (et le layout kiosque).
+17. **Pas de rotation/expiration des jetons.**
+    Constat : `Referrer-Policy: no-referrer` (globale) et
+    `Cache-Control: no-store` (toutes les pages à jeton, point central
+    `Kiosk::sendNoStore()`) sont posés ; les jetons restent permanents
+    jusqu'à régénération manuelle et vivent dans l'URL (le Referer ne les
+    fuite plus, mais ils restent exposés aux favoris/historique déjà
+    créés). Impact : un jeton compromis reste valable jusqu'à révocation.
+    Préconisation : expiration + rotation douce lors d'une prochaine
+    passe sécurité (audit §6, dernier point ouvert).

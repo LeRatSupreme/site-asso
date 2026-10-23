@@ -69,10 +69,15 @@ abstract class Controller
      * ex. Réappro/Liste/Comptage sur téléphone) : coquille minimale SANS
      * navigation — rien d'autre que la vue n'est visible.
      *
+     * La réponse n'est jamais mémorisable (le jeton est dans l'URL) :
+     * en-têtes posés au même point central que le reste des pages à jeton.
+     *
      * @param array<string,mixed> $data
      */
     protected function renderKiosk(string $view, array $data = []): void
     {
+        \App\Core\Compta\Kiosk::sendNoStore();
+
         $this->render($view, $data, 'kiosk');
     }
 

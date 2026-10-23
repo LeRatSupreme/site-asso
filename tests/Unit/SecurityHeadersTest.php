@@ -18,7 +18,9 @@ final class SecurityHeadersTest extends TestCase
 
         self::assertSame('nosniff', $headers['X-Content-Type-Options']);
         self::assertSame('SAMEORIGIN', $headers['X-Frame-Options']);
-        self::assertSame('strict-origin-when-cross-origin', $headers['Referrer-Policy']);
+        // no-referrer : les pages à jeton (/kiosque/*) ne doivent jamais
+        // fuiter leur URL par le Referer (mission §10).
+        self::assertSame('no-referrer', $headers['Referrer-Policy']);
         self::assertArrayHasKey('Content-Security-Policy', $headers);
     }
 
