@@ -260,6 +260,63 @@ final class ProductKeyMergeTest extends TestCase
         self::assertSame('1.500', (string) $lot['cost_price']);
     }
 
+    public function test_fusion_conserve_tous_les_lots_de_cout_sans_aucune_perte(): void
+    {
+        // Garde-fou anti-perte : la fusion DÉPLACE les lots (UPDATE de la
+        // seule clé), elle ne fusionne ni n'en supprime aucun — prix,
+        // périodes, fournisseur, notes, lien achat et date de création
+        // restent STRICTEMENT identiques (le doublon « même produit saisi
+        // sous deux orthographes, même jour de course » est le cas réel).
+        $source = 'Pulco Citronnade';
+        $target = 'pulco';
+
+        $lots = [
+            // Lot clôturé (période bornée) + fournisseur + notes.
+            ['price' => '1.050', 'from' => '2026-09-08', 'to' => '2026-10-15', 'supplier' => 'metro', 'notes' => 'course septembre'],
+            // Lot ouvert récent sur la cible.
+            ['price' => '1.300', 'from' => '2026-10-16', 'to' => null, 'supplier' => 'METRO', 'notes' => null],
+            // Même valid_from que le précédent, sur la source (doublon de course).
+            ['price' => '1.233', 'from' => '2026-10-16', 'to' => null, 'supplier' => 'METRO', 'notes' => 'METRO 16/10'],
+        ];
+        $ids = [];
+        foreach ($lots as $i => $l) {
+            $id = 'cost_test_' . $i;
+            $ids[] = $id;
+            $key = $i === 1 ? $target : $source;
+            $this->pdo->prepare(
+                'INSERT INTO product_costs
+                   (id, product_key, cost_price, valid_from, valid_to, supplier, notes, created_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+            )->execute([$id, $key, $l['price'], $l['from'], $l['to'], $l['supplier'], $l['notes'], '2026-10-' . sprintf('%02d', 10 + $i) . ' 09:00:00']);
+        }
+
+        $moved = ProductKeyMerge::merge($source, $target, null);
+        self::assertSame(2, $moved['costs'], 'Les deux lots de la source doivent être déplacés.');
+
+        // AUCUNE ligne perdue : toujours 3 lots, tous sous la cible.
+        $stmt = $this->pdo->query('SELECT COUNT(*) FROM product_costs');
+        self::assertSame(3, (int) $stmt->fetchColumn());
+        self::assertSame([$target], $this->tableKeys('product_costs'));
+
+        // Chaque lot conserve TOUTES ses données, à la clé près.
+        foreach ($lots as $i => $l) {
+            $stmt = $this->pdo->prepare(
+                'SELECT product_key, cost_price, valid_from, valid_to, supplier, notes, created_at
+                   FROM product_costs WHERE id = ?'
+            );
+            $stmt->execute([$ids[$i]]);
+            $lot = $stmt->fetch();
+            self::assertNotFalse($lot, 'Le lot ' . $ids[$i] . ' doit survivre à la fusion.');
+            self::assertSame($target, (string) $lot['product_key']);
+            self::assertSame($l['price'], (string) $lot['cost_price']);
+            self::assertSame($l['from'], (string) $lot['valid_from']);
+            self::assertSame($l['to'], $lot['valid_to'] === null ? null : (string) $lot['valid_to']);
+            self::assertSame($l['supplier'], (string) $lot['supplier']);
+            self::assertSame($l['notes'], $lot['notes'] === null ? null : (string) $lot['notes']);
+            self::assertSame('2026-10-' . sprintf('%02d', 10 + $i) . ' 09:00:00', (string) $lot['created_at']);
+        }
+    }
+
     public function test_stocks_additionnes_et_ligne_source_supprimee(): void
     {
         $this->addStock('Pulco Citronnade', 5);

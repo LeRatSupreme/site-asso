@@ -271,8 +271,10 @@ final class ComptaCalc
 
         $covered = null;    // lot couvrant la date, valid_from max
         $coveredFrom = '';
+        $coveredTie = '';
         $prior = null;      // lot le plus récent avec valid_from <= date
         $priorFrom = '';
+        $priorTie = '';
 
         foreach ($lots as $lot) {
             $from = self::datePart((string) ($lot['valid_from'] ?? ''));
@@ -285,22 +287,42 @@ final class ComptaCalc
                 continue;
             }
 
-            if ($prior === null || $from > $priorFrom) {
+            // À valid_from ÉGAL (deux lots ouverts le même jour, ex. une
+            // même course saisie deux fois sous deux orthographes puis
+            // fusionnées) : la saisie la plus récente gagne, puis l'id le
+            // plus grand — jamais un choix dépendant de l'ordre des lignes.
+            $tie = self::lotTieKey($lot);
+
+            if ($prior === null || $from > $priorFrom
+                || ($from === $priorFrom && $tie > $priorTie)) {
                 $prior = $lot;
                 $priorFrom = $from;
+                $priorTie = $tie;
             }
 
             $toRaw = $lot['valid_to'] ?? null;
             $to = $toRaw === null ? null : self::datePart((string) $toRaw);
             if ($to === null || $day <= $to) {
-                if ($covered === null || $from > $coveredFrom) {
+                if ($covered === null || $from > $coveredFrom
+                    || ($from === $coveredFrom && $tie > $coveredTie)) {
                     $covered = $lot;
                     $coveredFrom = $from;
+                    $coveredTie = $tie;
                 }
             }
         }
 
         return $covered ?? $prior;
+    }
+
+    /**
+     * Clé de départage entre deux lots de même valid_from : created_at
+     * puis id (mêmes règles que ProductCost::reopenPreviousLot). Colonnes
+     * absentes (lots hors base) → chaîne vide : l'ordre d'entrée décide.
+     */
+    private static function lotTieKey(array $lot): string
+    {
+        return (string) ($lot['created_at'] ?? '') . '|' . (string) ($lot['id'] ?? '');
     }
 
     /**

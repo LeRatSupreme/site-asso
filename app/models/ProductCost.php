@@ -45,6 +45,12 @@ final class ProductCost extends Model
      * date : créer un lot ne modifie pas rétroactivement les calculs des
      * ventes déjà couvertes.
      *
+     * Départage DÉTERMINISTE à valid_from égal (deux lots ouverts le même
+     * jour, ex. une même course saisie deux fois sous deux orthographes
+     * puis fusionnées) : created_at puis id — la saisie la plus récente
+     * gagne (mêmes règles que ComptaCalc::selectCostLot et
+     * reopenPreviousLot), jamais un choix dépendant du plan SQL.
+     *
      * @return array<string,mixed>|null
      */
     public static function lotAt(string $productKey, string $date): ?array
@@ -57,7 +63,7 @@ final class ProductCost extends Model
             'SELECT * FROM product_costs
              WHERE product_key = ? AND valid_from <= ?
                AND (valid_to IS NULL OR ? <= valid_to)
-             ORDER BY valid_from DESC LIMIT 1'
+             ORDER BY valid_from DESC, created_at DESC, id DESC LIMIT 1'
         );
         $stmt->execute([$productKey, $day, $day]);
         $row = $stmt->fetch();
@@ -70,7 +76,7 @@ final class ProductCost extends Model
         $stmt = $pdo->prepare(
             'SELECT * FROM product_costs
              WHERE product_key = ? AND valid_from <= ?
-             ORDER BY valid_from DESC LIMIT 1'
+             ORDER BY valid_from DESC, created_at DESC, id DESC LIMIT 1'
         );
         $stmt->execute([$productKey, $day]);
         $row = $stmt->fetch();
