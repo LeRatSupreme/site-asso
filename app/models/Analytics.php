@@ -36,7 +36,7 @@ final class Analytics extends Model
                 WHERE pc.product_key = COALESCE(sales.product_key, sales.description)
                   AND pc.valid_from <= DATE(sales.sold_at)
                   AND (pc.valid_to IS NULL OR DATE(sales.sold_at) <= pc.valid_to)
-                ORDER BY pc.valid_from DESC
+                ORDER BY pc.valid_from DESC, pc.created_at DESC, pc.id DESC
                 LIMIT 1
             ),
             (
@@ -44,7 +44,7 @@ final class Analytics extends Model
                 FROM product_costs pc
                 WHERE pc.product_key = COALESCE(sales.product_key, sales.description)
                   AND pc.valid_from <= DATE(sales.sold_at)
-                ORDER BY pc.valid_from DESC
+                ORDER BY pc.valid_from DESC, pc.created_at DESC, pc.id DESC
                 LIMIT 1
             )
         )';
@@ -746,7 +746,7 @@ final class Analytics extends Model
                         WHERE pc.product_key = ps.product_key
                           AND pc.valid_from <= CURDATE()
                           AND (pc.valid_to IS NULL OR CURDATE() <= pc.valid_to)
-                        ORDER BY pc.valid_from DESC
+                        ORDER BY pc.valid_from DESC, pc.created_at DESC, pc.id DESC
                         LIMIT 1
                     ),
                     (
@@ -754,7 +754,7 @@ final class Analytics extends Model
                         FROM product_costs pc
                         WHERE pc.product_key = ps.product_key
                           AND pc.valid_from <= CURDATE()
-                        ORDER BY pc.valid_from DESC
+                        ORDER BY pc.valid_from DESC, pc.created_at DESC, pc.id DESC
                         LIMIT 1
                     ),
                     0

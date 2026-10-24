@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 /**
  * @var list<array<string,mixed>>                $items
+ * @var array<string,array<string,mixed>>        $costStock Map product_key → suivi lots + écarts (CostLotStock::ecarts) ; absent = aucun lot suivi.
  * @var list<string>                             $categories
  * @var list<string>                             $productKeys
  * @var array<string,mixed>                      $form
@@ -18,6 +19,43 @@ declare(strict_types=1);
         <p class="muted">Dis <strong>combien chaque produit t'a coûté à l'achat</strong>. Sans ça, on a le chiffre d'affaires mais pas le vrai bénéfice.</p>
     </div>
 </div>
+
+<?php
+// Encart d'alerte « Écarts stock / coûts » : produits ayant au moins un
+// lot suivi dont l'écart (stock théorique − net des achats suivis) est
+// non nul — unités manquantes (vol, casse, vente non déclarée) ou stock
+// excédentaire (achat non saisi, quantité erronée).
+$costEcarts = [];
+foreach ($costStock as $k => $sd) {
+    $ec = $sd['ecart'] ?? null;
+    if ($ec !== null && (int) $ec !== 0) {
+        $costEcarts[(string) $k] = (int) $ec;
+    }
+}
+?>
+<?php if ($costEcarts !== []): ?>
+<section class="card surface glass" id="cost-ecarts" style="margin:0 0 24px;border-left:4px solid var(--danger,#ef4444);">
+    <h2 class="card-title">Écarts stock / coûts — vol ou casse possible ?</h2>
+    <p class="muted" style="font-size:0.85rem;margin:0 0 10px;">
+        Écart = stock théorique − (achats suivis − ventes − pertes depuis le 1er lot suivi).
+        Négatif → il manque des unités par rapport au prévu (vol, casse, vente non déclarée) ;
+        positif → stock excédentaire (achat non saisi ou quantité erronée).
+        Indicatif : les lots sans quantité saisie ne sont pas comptés.
+    </p>
+    <ul style="margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px;">
+        <?php foreach ($costEcarts as $k => $ec): ?>
+            <li>
+                <a href="#cost-<?= e($k) ?>"><strong><?= e($k) ?></strong></a>
+                <span class="muted">:</span>
+                <span class="badge <?= $ec < 0 ? 'badge-danger' : 'badge-warning' ?>">
+                    <?php if ($ec < 0): ?>Écart stock : −<?= abs($ec) ?> unités manquantes (vol, casse, vente non déclarée ?)
+                    <?php else: ?>Stock excédentaire : +<?= (int) $ec ?> (achat non saisi ou quantité erronée ?)<?php endif; ?>
+                </span>
+            </li>
+        <?php endforeach; ?>
+    </ul>
+</section>
+<?php endif; ?>
 
 <?php if (!empty($dupes)): ?>
 <section class="card surface glass dupes-card" id="dupes">
@@ -114,6 +152,13 @@ declare(strict_types=1);
                 <input type="text" id="supplier" name="supplier" value="<?= e((string) $form['supplier']) ?>" placeholder="ex: Metro…">
             </div>
 
+            <div class="field">
+                <label for="qty_purchased">Quantité achetée <span class="muted">(facultatif)</span></label>
+                <input type="number" id="qty_purchased" name="qty_purchased" min="0" step="1" inputmode="numeric"
+                    value="<?= e((string) ($form['qty_purchased'] ?? '')) ?>" placeholder="ex: 24">
+                <p class="field-help">Suivi : les ventes décrémentent cette quantité jusqu'à 0 ; le surplus passe sur le lot suivant. Laisser vide = pas de suivi.</p>
+            </div>
+
             <button type="submit" class="btn btn-primary btn-block"><?= $editLot !== null ? 'Mettre à jour' : 'Enregistrer' ?></button>
             <?php if ($editLot !== null): ?>
                 <a class="btn btn-ghost btn-block" href="<?= e(url('/admin/compta/couts')) ?>">Annuler la modification</a>
@@ -155,9 +200,11 @@ declare(strict_types=1);
                         <?php foreach ($catItems as $it):
                             $name = (string) $it['name'];
                             $hasCost = $it['currentCost'] !== null;
+                            $sd = $it['stockData'] ?? null;
                         ?>
                             <article
                                 class="cost-card <?= $hasCost ? 'has-cost' : 'no-cost' ?>"
+                                id="cost-<?= e($name) ?>"
                                 data-name="<?= e(strtolower($name)) ?>"
                                 data-cat="<?= e(strtolower((string) $it['category'])) ?>"
                                 data-nocost="<?= $hasCost ? '0' : '1' ?>">
@@ -171,6 +218,17 @@ declare(strict_types=1);
                                             <?php endif; ?>
                                             <?php if ($it['lotsCount'] > 0): ?>
                                                 <span class="muted"><?= (int) $it['lotsCount'] ?> lot<?= $it['lotsCount'] > 1 ? 's' : '' ?></span>
+                                            <?php endif; ?>
+                                            <?php if (is_array($sd) && (int) ($sd['non_couvert'] ?? 0) > 0): ?>
+                                                <span class="badge badge-warning"><?= (int) $sd['non_couvert'] ?> unité<?= (int) $sd['non_couvert'] > 1 ? 's' : '' ?> vendue<?= (int) $sd['non_couvert'] > 1 ? 's' : '' ?> sans lot</span>
+                                            <?php endif; ?>
+                                            <?php $ec = is_array($sd) ? ($sd['ecart'] ?? null) : null; ?>
+                                            <?php if ($ec !== null && (int) $ec !== 0): ?>
+                                                <?php if ((int) $ec < 0): ?>
+                                                    <span class="badge badge-danger">Écart stock : −<?= abs((int) $ec) ?> unités manquantes (vol, casse, vente non déclarée ?)</span>
+                                                <?php else: ?>
+                                                    <span class="badge badge-warning">Stock excédentaire : +<?= (int) $ec ?> (achat non saisi ou quantité erronée ?)</span>
+                                                <?php endif; ?>
                                             <?php endif; ?>
                                         </div>
                                     </div>
@@ -190,9 +248,10 @@ declare(strict_types=1);
                                         <summary>Voir les <?= (int) $it['lotsCount'] ?> lot<?= $it['lotsCount'] > 1 ? 's' : '' ?></summary>
                                         <div class="table-wrap">
                                             <table class="table">
-                                            <thead><tr><th>Coût unit.</th><th>Du</th><th>Au</th><th>Fournisseur</th><th>Actions</th></tr></thead>
+                                            <thead><tr><th>Coût unit.</th><th>Du</th><th>Au</th><th>Fournisseur</th><th>Quantité</th><th>Actions</th></tr></thead>
                                             <tbody>
                                                 <?php foreach ($it['lots'] as $c): ?>
+                                                    <?php $lotStock = $costStock[$name]['lots'][(string) $c['id']] ?? null; ?>
                                                     <tr class="<?= empty($c['valid_to']) ? 'row-current' : '' ?>">
                                                         <td><strong><?= e(formatPrice($c['cost_price'], 3)) ?></strong></td>
                                                         <td><?= e(formatDate($c['valid_from'])) ?></td>
@@ -204,6 +263,19 @@ declare(strict_types=1);
                                                             <?php endif; ?>
                                                         </td>
                                                         <td><?= e((string) ($c['supplier'] ?? '—')) ?></td>
+                                                        <td>
+                                                            <?php if (is_array($lotStock) && $lotStock['qty_purchased'] !== null): ?>
+                                                                <?php if (!empty($lotStock['epuise'])): ?>
+                                                                    <span class="muted"><?= (int) $lotStock['qty_purchased'] ?> achetés · <?= (int) $lotStock['alloue'] ?> consommés</span>
+                                                                    <span class="badge badge-danger">Épuisé</span>
+                                                                <?php else: ?>
+                                                                    <?= (int) $lotStock['qty_purchased'] ?> achetés · <?= (int) $lotStock['alloue'] ?> consommés · reste <?= (int) $lotStock['restant'] ?>
+                                                                <?php endif; ?>
+                                                            <?php else: ?>
+                                                                <span class="muted">—</span>
+                                                                <span class="badge badge-muted">non suivi</span>
+                                                            <?php endif; ?>
+                                                        </td>
                                                         <td class="row-actions">
                                                             <a class="btn btn-outline btn-sm" href="<?= e(url('/admin/compta/couts?edit=' . rawurlencode((string) $c['id']) . '#costs-form')) ?>">Modifier</a>
                                                             <?php if (empty($c['valid_to'])): ?>
@@ -267,6 +339,7 @@ declare(strict_types=1);
                 <tr>
                     <th>Produit</th>
                     <th style="width:180px;">Coût d'achat (€ / unité)</th>
+                    <th style="width:110px;">Quantité <span class="muted">(facultatif)</span></th>
                     <th style="width:50px;"></th>
                 </tr>
             </thead>
@@ -274,6 +347,7 @@ declare(strict_types=1);
                 <tr class="cost-bulk-line">
                     <td><input type="text" name="product_key[]" list="bulk-products" placeholder="Rechercher un produit…" autocomplete="off" style="width:100%;" aria-label="Produit de la ligne (ajout en lot)"></td>
                     <td><input type="text" name="cost_price[]" placeholder="ex: 0,60" inputmode="decimal" style="width:100%;" aria-label="Coût d'achat en euros par unité pour ce produit"></td>
+                    <td><input type="number" name="qty_purchased[]" min="0" step="1" placeholder="ex: 24" style="width:100%;" aria-label="Quantité achetée pour ce produit (facultatif)"></td>
                     <td><button type="button" class="btn btn-ghost btn-sm cost-bulk-remove" aria-label="Supprimer la ligne">Retirer</button></td>
                 </tr>
             </tbody>
@@ -309,6 +383,7 @@ declare(strict_types=1);
                 tr.innerHTML =
                     '<td><input type="text" name="product_key[]" list="bulk-products" placeholder="Rechercher un produit…" autocomplete="off" style="width:100%;" aria-label="Produit de la ligne (ajout en lot)"></td>' +
                     '<td><input type="text" name="cost_price[]" placeholder="ex: 0,60" inputmode="decimal" style="width:100%;" aria-label="Coût d\'achat en euros par unité pour ce produit"></td>' +
+                    '<td><input type="number" name="qty_purchased[]" min="0" step="1" placeholder="ex: 24" style="width:100%;" aria-label="Quantité achetée pour ce produit (facultatif)"></td>' +
                     '<td><button type="button" class="btn btn-ghost btn-sm cost-bulk-remove" aria-label="Supprimer la ligne">Retirer</button></td>';
                 tbody.appendChild(tr);
                 wireRow(tr);

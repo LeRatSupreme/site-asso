@@ -333,7 +333,12 @@ final class Sale extends Model
      * antérieures. Les usages wrappent le fragment dans IFNULL(…, 0).
      *
      * La table product_costs est petite : deux sous-requêtes scalaires
-     * bornées dans un COALESCE privilégient la clarté.
+     * bornées dans un COALESCE privilégient la clarté. Le départage
+     * pc.created_at DESC, pc.id DESC (même règle que
+     * ProductCost::lotAt) rend « toujours prendre le plus récent »
+     * DÉTERMINISTE même si deux lots ouverts partagent le même
+     * valid_from (ex. fusion de doublons de saisie) : jamais un choix
+     * dépendant du plan SQL.
      */
     private const COST_SUBQUERY = '
         COALESCE(
@@ -343,7 +348,7 @@ final class Sale extends Model
                 WHERE pc.product_key = COALESCE(sales.product_key, sales.description)
                   AND pc.valid_from <= DATE(sales.sold_at)
                   AND (pc.valid_to IS NULL OR DATE(sales.sold_at) <= pc.valid_to)
-                ORDER BY pc.valid_from DESC
+                ORDER BY pc.valid_from DESC, pc.created_at DESC, pc.id DESC
                 LIMIT 1
             ),
             (
@@ -351,7 +356,7 @@ final class Sale extends Model
                 FROM product_costs pc
                 WHERE pc.product_key = COALESCE(sales.product_key, sales.description)
                   AND pc.valid_from <= DATE(sales.sold_at)
-                ORDER BY pc.valid_from DESC
+                ORDER BY pc.valid_from DESC, pc.created_at DESC, pc.id DESC
                 LIMIT 1
             )
         )';

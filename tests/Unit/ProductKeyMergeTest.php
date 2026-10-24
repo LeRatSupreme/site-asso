@@ -298,7 +298,14 @@ final class ProductKeyMergeTest extends TestCase
         self::assertSame(3, (int) $stmt->fetchColumn());
         self::assertSame([$target], $this->tableKeys('product_costs'));
 
-        // Chaque lot conserve TOUTES ses données, à la clé près.
+        // Chaque lot conserve TOUTES ses données, à la clé près — SAUF le
+        // valid_to du lot ouvert doublon (cost_test_1, même valid_from
+        // que le lot suivant resté sur la cible) : depuis l'invariant
+        // « au plus un lot en cours », la fusion normalise les périodes
+        // et referme ce lot à la veille du valid_from suivant (2026-10-16
+        // → 2026-10-15). Normalisation = comportement voulu ; prix,
+        // fournisseur, notes, created_at et l'existence du lot restent
+        // STRICTEMENT intacts (aucune perte, le doublon est conservé).
         foreach ($lots as $i => $l) {
             $stmt = $this->pdo->prepare(
                 'SELECT product_key, cost_price, valid_from, valid_to, supplier, notes, created_at
@@ -310,11 +317,18 @@ final class ProductKeyMergeTest extends TestCase
             self::assertSame($target, (string) $lot['product_key']);
             self::assertSame($l['price'], (string) $lot['cost_price']);
             self::assertSame($l['from'], (string) $lot['valid_from']);
-            self::assertSame($l['to'], $lot['valid_to'] === null ? null : (string) $lot['valid_to']);
+            $expectedTo = $i === 1 ? '2026-10-15' : $l['to'];
+            self::assertSame($expectedTo, $lot['valid_to'] === null ? null : (string) $lot['valid_to']);
             self::assertSame($l['supplier'], (string) $lot['supplier']);
             self::assertSame($l['notes'], $lot['notes'] === null ? null : (string) $lot['notes']);
             self::assertSame('2026-10-' . sprintf('%02d', 10 + $i) . ' 09:00:00', (string) $lot['created_at']);
         }
+
+        // Le départage déterministe de ProductCost::lotAt : à valid_from
+        // égal, le lot saisi en dernier (cost_test_2) est le lot en cours.
+        $current = ProductCost::current($target);
+        self::assertNotFalse($current);
+        self::assertSame($ids[2], (string) $current['id']);
     }
 
     public function test_stocks_additionnes_et_ligne_source_supprimee(): void

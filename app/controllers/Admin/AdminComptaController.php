@@ -8,6 +8,7 @@ use App\Core\Auth;
 use App\Core\Compta\AliasSuggester;
 use App\Core\Compta\CashLedger;
 use App\Core\Compta\ComptaCalc;
+use App\Core\Compta\CostLotStock;
 use App\Core\Compta\Dashboard\Data;
 use App\Core\Compta\Kiosk;
 use App\Core\Compta\KioskPages;
@@ -559,6 +560,18 @@ final class AdminComptaController extends AdminBaseController
         }
         usort($items, static function ($a, $b) { return strnatcasecmp($a['name'], $b['name']); });
 
+        // Suivi quantité par lot : allocation + écarts stock (vol/casse)
+        // calculés UNE seule fois pour tous les produits ayant au moins un
+        // lot suivi (CostLotStock::ecarts). Chaque item reçoit sa ligne de
+        // suivi (« stockData ») ; les produits absents de la map n'ont
+        // aucun lot suivi — la vue affiche « — ». La map complète part à
+        // la vue pour l'encart d'alerte « Écarts stock / coûts ».
+        $costStock = CostLotStock::ecarts();
+        foreach ($items as &$it) {
+            $it['stockData'] = $costStock[$it['name']] ?? null;
+        }
+        unset($it);
+
         // Doublons : produits distincts en apparence mais identiques une fois
         // normalisés (« redbull Peach » vs « Redbull Peach »).
         $infoByName = [];
@@ -601,16 +614,21 @@ final class AdminComptaController extends AdminBaseController
             'user'        => $user,
             'costs'       => $costs,
             'items'       => $items,
+            'costStock'   => $costStock,
             'categories'  => array_values(array_unique(array_filter($catByProduct))),
             'productKeys' => $keys,
             'dupes'       => $dupes,
             'editLot'     => $editLot,
             'form'        => [
-                'product_key' => (string) ($editLot['product_key'] ?? ($_GET['product_key'] ?? '')),
-                'cost_price'  => $editLot !== null ? number_format((float) $editLot['cost_price'], 3, ',', '') : '',
-                'valid_from'  => $editLot !== null ? substr((string) $editLot['valid_from'], 0, 10) : date('Y-m-d'),
-                'supplier'    => $editLot !== null ? (string) ($editLot['supplier'] ?? '') : '',
-                'notes'       => '',
+                'product_key'   => (string) ($editLot['product_key'] ?? ($_GET['product_key'] ?? '')),
+                'cost_price'    => $editLot !== null ? number_format((float) $editLot['cost_price'], 3, ',', '') : '',
+                'valid_from'    => $editLot !== null ? substr((string) $editLot['valid_from'], 0, 10) : date('Y-m-d'),
+                'supplier'      => $editLot !== null ? (string) ($editLot['supplier'] ?? '') : '',
+                // Quantité achetée : '' si absente/null (pas de suivi).
+                'qty_purchased' => ($editLot !== null && $editLot['qty_purchased'] !== null)
+                    ? (string) (int) $editLot['qty_purchased']
+                    : '',
+                'notes'         => '',
             ],
         ]);
     }
@@ -621,6 +639,7 @@ final class AdminComptaController extends AdminBaseController
 
         $data = $_POST;
         $data['cost_price'] = parseFrenchFloat((string) ($data['cost_price'] ?? '0'));
+        $data['qty_purchased'] = self::qtyPurchasedFromPost($data['qty_purchased'] ?? null);
 
         $id = ProductCost::create($data);
         if ($id === '') {
@@ -634,6 +653,30 @@ final class AdminComptaController extends AdminBaseController
         }
 
         redirect(url('/admin/compta/couts'));
+    }
+
+    /**
+     * Quantité achetée saisie dans un POST (champ facultatif) : absent,
+     * vide ou invalide → null (lot non suivi, capacité infinie) ; sinon
+     * entier ≥ 0. Une valeur invalide (texte, négatif, décimal) retombe
+     * sur « pas de suivi » plutôt que de bloquer l'enregistrement du lot.
+     *
+     * @param mixed $raw Valeur brute du POST (string|int|null|array).
+     */
+    private static function qtyPurchasedFromPost(mixed $raw): ?int
+    {
+        if ($raw === null || is_array($raw)) {
+            return null;
+        }
+
+        $v = trim((string) $raw);
+        if ($v === '') {
+            return null;
+        }
+
+        $qty = filter_var($v, FILTER_VALIDATE_INT);
+
+        return ($qty === false || $qty < 0) ? null : $qty;
     }
 
     /**
@@ -655,6 +698,8 @@ final class AdminComptaController extends AdminBaseController
 
         $keys = is_array($_POST['product_key'] ?? null) ? $_POST['product_key'] : [];
         $prices = is_array($_POST['cost_price'] ?? null) ? $_POST['cost_price'] : [];
+        // Quantités facultatives alignées sur product_key[] (même index).
+        $qtys = is_array($_POST['qty_purchased'] ?? null) ? $_POST['qty_purchased'] : [];
 
         $created = 0;
         $ignored = 0;
@@ -678,10 +723,11 @@ final class AdminComptaController extends AdminBaseController
             $seen[$key] = true;
 
             if (ProductCost::create([
-                'product_key' => $key,
-                'cost_price'  => $price,
-                'valid_from'  => $validFrom,
-                'supplier'    => $supplier,
+                'product_key'   => $key,
+                'cost_price'    => $price,
+                'valid_from'    => $validFrom,
+                'supplier'      => $supplier,
+                'qty_purchased' => self::qtyPurchasedFromPost($qtys[$i] ?? null),
             ]) !== '') {
                 $created++;
             } else {
@@ -747,9 +793,17 @@ final class AdminComptaController extends AdminBaseController
         $data = $_POST;
         $data['cost_price'] = parseFrenchFloat((string) ($data['cost_price'] ?? '0'));
 
+        // Quantité achetée : mise à jour seulement si le champ est présent
+        // dans le POST (absent = quantité du lot intacte, compat anciens
+        // appels) ; '' = arrêter le suivi (NULL accepté par ProductCost).
+        if (array_key_exists('qty_purchased', $_POST)) {
+            $data['qty_purchased'] = self::qtyPurchasedFromPost($_POST['qty_purchased'] ?? null);
+        }
+
         if (ProductCost::update($id, $data)) {
             $this->audit('compta.cost.update', 'product_cost', $id, [
-                'cost_price' => $data['cost_price'],
+                'cost_price'    => $data['cost_price'],
+                'qty_purchased' => $data['qty_purchased'] ?? null,
             ]);
             $this->setFlash('success', 'Lot mis à jour.');
         } else {

@@ -476,6 +476,10 @@ final class PurchaseSaver
                 'cost_price'  => $costTtc,
                 'valid_from'  => $purchasedAt,
                 'supplier'    => trim((string) ($data['supplier'] ?? '')),
+                // Quantité achetée de la ligne (unités produits, validée
+                // >= 1) : le lot naît avec son stock coût, décrémenté
+                // ensuite par ventes/pertes côté affichage.
+                'qty_purchased' => $quantity,
                 // Lie le lot à l'achat : sa suppression en cascade
                 // (deletePurchase) saura exactement quel lot retirer.
                 'purchase_id' => $id,
