@@ -267,6 +267,12 @@ function aeic_register_routes(Router $router): void
     $router->get('/admin/kiosques', [AdminKiosquesController::class, 'index']);
     $router->post('/admin/kiosques/reveal', [AdminKiosquesController::class, 'reveal']);
     $router->post('/admin/kiosques/regenerate', [AdminKiosquesController::class, 'regenerate']);
+    // Kiosques personnalisés : création, édition des tuiles, suppression
+    // (l'identifiant du kiosque est dans l'URL ; le jeton, lui, n'apparaît
+    // jamais dans le HTML de la page Kiosques).
+    $router->post('/admin/kiosques/create', [AdminKiosquesController::class, 'create']);
+    $router->post('/admin/kiosques/{id}/save', [AdminKiosquesController::class, 'save']);
+    $router->post('/admin/kiosques/{id}/delete', [AdminKiosquesController::class, 'delete']);
 
     // Livre comptable (groupe Système) + version kiosque admin.
     $router->get('/admin/ledger', [AdminLedgerController::class, 'index']);
@@ -357,6 +363,9 @@ function aeic_register_routes(Router $router): void
     // hub de tuiles + récap de période unifié (7/14/30 jours, mois).
     // /semaine et /mois restent servis (redirections) pour les vieux liens.
     $router->get('/kiosque/admin/{token}', [KioskComptageController::class, 'adminHub']);
+    // Hub d'un kiosque personnalisé : tuiles choisies par l'admin, accès
+    // par son propre jeton secret (le jeton EST l'authentification).
+    $router->get('/kiosque/hub/{token}', [KioskComptageController::class, 'customHub']);
     $router->get('/kiosque/admin/periode/{token}', [KioskComptageController::class, 'periode']);
     $router->get('/kiosque/admin/semaine/{token}', [KioskComptageController::class, 'semaine']);
     $router->get('/kiosque/admin/mois/{token}', [KioskComptageController::class, 'mois']);

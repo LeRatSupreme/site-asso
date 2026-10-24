@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Controllers\Admin;
 
 use App\Core\Compta\Kiosk;
+use App\Core\Compta\KioskPages;
 use App\Core\Compta\Reco\EffetMesure;
 use App\Core\Compta\Reco\RecoLibelles;
 use App\Core\Compta\Reco\RecommendationEngine;
@@ -319,7 +320,7 @@ final class AdminRecoController extends AdminBaseController
      */
     public function kiosk(string $token): void
     {
-        if (!$this->adminTokenOk($token)) {
+        if (!KioskPages::tokenAllows($token, 'reco')) {
             $this->deny();
 
             return;
@@ -394,7 +395,7 @@ final class AdminRecoController extends AdminBaseController
      */
     public function kioskDecision(string $token): void
     {
-        if (!$this->adminTokenOk($token)) {
+        if (!KioskPages::tokenAllows($token, 'reco')) {
             $this->deny();
 
             return;
@@ -648,19 +649,6 @@ final class AdminRecoController extends AdminBaseController
         } catch (\Throwable) {
             // Mesure best-effort : jamais bloquante pour l'affichage.
         }
-    }
-
-    // -----------------------------------------------------------------
-    //  Jeton kiosque (copie conforme d'AdminAnalyticsController)
-    // -----------------------------------------------------------------
-
-    /** Jeton kiosque ADMIN : totalement indépendant du jeton membres. */
-    private function adminTokenOk(string $token): bool
-    {
-        $expected = trim((string) \App\Models\Setting::get('admin_kiosk_token', ''));
-        $given    = trim($token);
-
-        return $expected !== '' && $given !== '' && hash_equals($expected, $given);
     }
 
     /** Réponse 403 pour un lien kiosque invalide ou révoqué. */

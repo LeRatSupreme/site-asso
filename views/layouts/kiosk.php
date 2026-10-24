@@ -49,6 +49,16 @@ $siteName = Setting::get('site_name', 'AEIC');
             $krBackUrl = url('/kiosque/admin/' . $krTok);
         } elseif ($krMember !== '' && hash_equals($krMember, $krTok)) {
             $krBackUrl = url('/kiosque/comptage/' . $krTok);
+        } else {
+            // Kiosque personnalisé : retour vers son propre hub.
+            try {
+                $krCustom = \App\Models\Kiosque::findByToken($krTok);
+            } catch (\Throwable) {
+                $krCustom = null; // table absente (migration non passée) : pas de bouton custom
+            }
+            if ($krCustom !== null) {
+                $krBackUrl = url('/kiosque/hub/' . $krTok);
+            }
         }
     }
     ?>

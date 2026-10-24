@@ -6,6 +6,7 @@ namespace App\Controllers\Admin;
 
 use App\Core\Compta\ComptaCalc;
 use App\Core\Compta\Forecast\SlowPeriods;
+use App\Core\Compta\KioskPages;
 use App\Models\Analytics;
 use App\Models\ReapproDemande;
 use App\Models\Sale;
@@ -86,7 +87,7 @@ final class AdminAnalyticsController extends AdminBaseController
      */
     public function kiosk(string $token): void
     {
-        if (!$this->adminTokenOk($token)) {
+        if (!KioskPages::tokenAllows($token, 'analytics')) {
             $this->deny();
 
             return;
@@ -475,18 +476,6 @@ final class AdminAnalyticsController extends AdminBaseController
                 | JSON_UNESCAPED_UNICODE
             ),
         ];
-    }
-
-    /**
-     * Jeton kiosque ADMIN (données financières complètes) : totalement
-     * indépendant du jeton membres — même logique que KioskComptageController.
-     */
-    private function adminTokenOk(string $token): bool
-    {
-        $expected = trim((string) Setting::get('admin_kiosk_token', ''));
-        $given    = trim($token);
-
-        return $expected !== '' && $given !== '' && hash_equals($expected, $given);
     }
 
     /**
