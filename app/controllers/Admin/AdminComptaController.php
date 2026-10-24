@@ -10,6 +10,7 @@ use App\Core\Compta\CashLedger;
 use App\Core\Compta\ComptaCalc;
 use App\Core\Compta\Dashboard\Data;
 use App\Core\Compta\Kiosk;
+use App\Core\Compta\KioskPages;
 use App\Core\Compta\ProductAutoSync;
 use App\Core\Compta\Reappro\BesoinListe;
 use App\Core\Compta\ScanCatalogMatcher;
@@ -18,6 +19,7 @@ use App\Core\Compta\SumUpCsvParser;
 use App\Core\Logger;
 use App\Core\Permissions;
 use App\Models\ImportBatch;
+use App\Models\Kiosque;
 use App\Models\Product;
 use App\Models\ProductAlias;
 use App\Models\ProductCategory;
@@ -1547,7 +1549,7 @@ final class AdminComptaController extends AdminBaseController
      */
     public function kioskReorder(string $token): void
     {
-        if (!$this->kioskAnyTokenOk($token)) {
+        if (!KioskPages::tokenAllows($token, 'reappro')) {
             http_response_code(403);
             echo '<h1>Erreur 403 — Lien invalide ou révoqué.</h1>';
 
@@ -1600,7 +1602,7 @@ final class AdminComptaController extends AdminBaseController
      */
     public function kioskListe(string $token): void
     {
-        if (!$this->kioskAnyTokenOk($token)) {
+        if (!KioskPages::tokenAllows($token, 'liste')) {
             http_response_code(403);
             echo '<h1>Erreur 403 — Lien invalide ou révoqué.</h1>';
 
@@ -1633,42 +1635,33 @@ final class AdminComptaController extends AdminBaseController
         return mb_substr($p . ' ' . $n . ' (' . $a . ')', 0, 200);
     }
 
-    private function kioskTokenOk(string $token): bool
-    {
-        $expected = trim((string) Setting::get('reappro_kiosk_token', ''));
-        $given    = trim($token);
-
-        return $expected !== '' && $given !== '' && hash_equals($expected, $given);
-    }
-
     /**
-     * Le jeton fourni est-il le jeton « admin » (espace bureau du kiosque) ?
-     * Opposé du jeton « membres » (bénévole) : détermine le masquage des
-     * chiffres financiers sur les pages outils (liste, réappro).
+     * Variante « données complètes » des pages outils (Réappro/Liste) —
+     * pilote le drapeau showMoney : le jeton ADMIN legacy ou le jeton
+     * d'un kiosque personnalisé voit la variante complète avec coûts ;
+     * le jeton MEMBRES legacy (bénévole) voit la variante allégée, sans
+     * aucun chiffre financier.
      */
     private function kioskTokenIsAdmin(string $token): bool
     {
-        $expected = trim((string) Setting::get('admin_kiosk_token', ''));
-
-        return $expected !== '' && hash_equals($expected, trim($token));
+        return KioskPages::tokenIsFullData($token);
     }
 
     /**
-     * Jeton MEMBRES ou ADMIN accepté : les pages outils (liste, réappro)
-     * sont accessibles depuis les deux espaces kiosque, l'URL conservant
-     * le contexte d'origine (les liens de retour y restent).
-     */
-    private function kioskAnyTokenOk(string $token): bool
-    {
-        return $this->kioskTokenOk($token) || $this->kioskTokenIsAdmin($token);
-    }
-
-    /**
-     * Hub de retour selon le jeton de la liste : admin → hub admin,
-     * membres → hub membres.
+     * Hub de retour selon le jeton de la liste : kiosque personnalisé →
+     * son propre hub, admin → hub admin, membres → hub membres.
      */
     private function listeHubUrl(string $token): string
     {
+        try {
+            $custom = Kiosque::findByToken(trim($token));
+            if ($custom !== null) {
+                return url('/kiosque/hub/' . trim($token));
+            }
+        } catch (\Throwable) {
+            // Table kiosques absente (migration non appliquée) : on saute à la logique legacy.
+        }
+
         return $this->kioskTokenIsAdmin(trim($token))
             ? url('/kiosque/admin/' . trim($token))
             : url('/kiosque/comptage/' . trim($token));
@@ -1699,7 +1692,7 @@ final class AdminComptaController extends AdminBaseController
     public function kioskListeState(string $token): void
     {
         header('Content-Type: application/json; charset=utf-8');
-        if (!$this->kioskAnyTokenOk($token)) {
+        if (!KioskPages::tokenAllows($token, 'liste')) {
             http_response_code(403);
             echo '{"ok":false,"error":"lien invalide"}';
 
@@ -1719,7 +1712,7 @@ final class AdminComptaController extends AdminBaseController
     public function kioskListeCheck(string $token): void
     {
         header('Content-Type: application/json; charset=utf-8');
-        if (!$this->kioskAnyTokenOk($token)) {
+        if (!KioskPages::tokenAllows($token, 'liste')) {
             http_response_code(403);
             echo '{"ok":false,"error":"lien invalide"}';
 

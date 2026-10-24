@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 /**
  * Page « Kiosques » (Système) : tous les liens kiosque centralisés, en
- * deux catégories — Membres (à partager) et Admins (données financières).
+ * deux catégories — Membres (à partager) et Admins (données financières) —
+ * plus les kiosques personnalisés (un par type de personne, tuiles au
+ * choix dans le catalogue).
  *
  * Les jetons ne figurent JAMAIS dans le HTML initial (mission §10 : aucune
  * capture d'écran ne doit suffire à obtenir un accès) : chaque lien est
@@ -14,6 +16,8 @@ declare(strict_types=1);
  * @var array<string,mixed> $user
  * @var list<array{emoji:string,label:string,desc:string,path:string,main?:bool,scope:string}> $memberPages
  * @var list<array{emoji:string,label:string,desc:string,path?:string,scope?:string,url?:string,kiosk?:bool,main?:bool}> $adminPages
+ * @var list<array{id:string,name:string,token:string,pages:list<string>,created_by:string,created_at:string,updated_at:?string}> $customKiosques
+ * @var list<array{id:string,emoji:string,label:string,desc:string,path:string}> $tileCatalog
  */
 ?>
 <style>
@@ -59,6 +63,41 @@ declare(strict_types=1);
     }
     .kq-note { font-size: 0.85rem; color: var(--muted, #8892a6); margin: 0 0 1rem; max-width: 720px; }
     .kq-note strong { color: var(--foreground); }
+    /* Kiosques personnalisés : chips de pages, cases à cocher, édition. */
+    .kq-chips { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+    .kq-chip {
+        font-size: 0.72rem; font-weight: 700; white-space: nowrap;
+        padding: 0.12rem 0.55rem; border-radius: 999px;
+        background: rgba(255, 255, 255, 0.07);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    .kq-field { display: flex; flex-direction: column; gap: 0.25rem; margin: 0.55rem 0; }
+    .kq-field > label { font-size: 0.78rem; font-weight: 800; }
+    .kq-field input[type="text"] {
+        padding: 0.5rem 0.7rem; border: 1px solid var(--border); border-radius: 8px;
+        background: rgba(255, 255, 255, 0.04); color: var(--foreground);
+    }
+    .kq-checks {
+        display: grid; grid-template-columns: repeat(auto-fill, minmax(215px, 1fr));
+        gap: 0.35rem; margin: 0.55rem 0;
+    }
+    .kq-check {
+        display: flex; align-items: center; gap: 0.45rem; cursor: pointer;
+        font-size: 0.8rem; padding: 0.28rem 0.5rem; border-radius: 8px;
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    .kq-check:hover { background: rgba(255, 255, 255, 0.06); }
+    .kq-details {
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 10px; padding: 0.45rem 0.7rem;
+    }
+    .kq-details summary {
+        cursor: pointer; font-weight: 800; font-size: 0.85rem;
+        user-select: none;
+    }
+    .kq-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.55rem; align-items: center; }
+    .kq-actions form { margin: 0; }
 </style>
 
 <div class="compta-head">
@@ -155,6 +194,108 @@ declare(strict_types=1);
     </div>
 </section>
 
+<section class="kq-section">
+    <h2 class="kq-section-title">Kiosques personnalisés</h2>
+    <p class="kq-section-sub">Un kiosque par type de personne : tu choises les tuiles, le lien d'authentification est dédié (la régénération d'un kiosque n'affecte ni les autres ni les liens membres/admins).</p>
+
+    <?php
+    // Map id → tuile du catalogue : libellés des chips, jamais l'inverse.
+    // AUCUN jeton ne transite ici — les lignes $customKiosques ne servent
+    // que pour name/pages/id (le token reste en base).
+    $tileById = [];
+    foreach ($tileCatalog as $t) {
+        $tileById[$t['id']] = $t;
+    }
+    ?>
+    <div class="kq-grid">
+        <div class="kq-card is-main">
+            <div class="kq-head">
+                <span class="kq-emoji">➕</span>
+                <span class="kq-label">Créer un kiosque</span>
+            </div>
+            <p class="kq-desc">Crée autant de kiosques que besoin — un par type de personne (trésorier, bar, membres…). Coche les pages à mettre dessus, puis partage le lien révélé.</p>
+            <form method="post" action="<?= e(url('/admin/kiosques/create')) ?>">
+                <?= csrf_field() ?>
+                <div class="kq-field">
+                    <label for="kq-new-name">Nom du kiosque</label>
+                    <input type="text" id="kq-new-name" name="name" required maxlength="120" placeholder="ex. Trésorier">
+                </div>
+                <div class="kq-checks">
+                    <?php foreach ($tileCatalog as $tile): ?>
+                    <label class="kq-check" title="<?= e($tile['desc']) ?>">
+                        <input type="checkbox" name="pages[]" value="<?= e($tile['id']) ?>">
+                        <span><?= $tile['emoji'] ?> <?= e($tile['label']) ?></span>
+                    </label>
+                    <?php endforeach; ?>
+                </div>
+                <button type="submit" class="btn btn-primary btn-sm">Créer le kiosque</button>
+            </form>
+        </div>
+
+    <?php foreach ($customKiosques as $kq): ?>
+    <?php
+        $chipLabels = [];
+        foreach ($kq['pages'] as $pid) {
+            $tile = $tileById[$pid] ?? null;
+            if ($tile !== null) {
+                $chipLabels[] = $tile['emoji'] . ' ' . $tile['label'];
+            }
+        }
+    ?>
+    <div class="kq-card is-admin">
+        <div class="kq-head">
+            <span class="kq-label"><?= e($kq['name']) ?></span>
+            <span class="kq-badge">kiosque</span>
+        </div>
+        <?php if ($chipLabels !== []): ?>
+        <div class="kq-chips">
+            <?php foreach ($chipLabels as $chip): ?><span class="kq-chip"><?= e($chip) ?></span><?php endforeach; ?>
+        </div>
+        <?php endif; ?>
+        <div class="kq-row" data-kq-scope="custom" data-kq-id="<?= e($kq['id']) ?>">
+            <input type="text" readonly value="••••••••" onclick="this.select()"
+                   aria-label="Lien <?= e($kq['name']) ?> — masqué, utilise le bouton « Afficher le lien »">
+            <button type="button" class="btn btn-outline btn-sm kq-reveal" aria-expanded="false">Afficher le lien</button>
+            <button type="button" class="btn btn-outline btn-sm kq-copy">Copier</button>
+            <a class="btn btn-ghost btn-sm kq-open" hidden>Ouvrir ↗</a>
+        </div>
+        <details class="kq-details">
+            <summary>Modifier</summary>
+            <form method="post" action="<?= e(url('/admin/kiosques/' . rawurlencode($kq['id']) . '/save')) ?>">
+                <?= csrf_field() ?>
+                <div class="kq-field">
+                    <label for="kq-name-<?= e($kq['id']) ?>">Nom du kiosque</label>
+                    <input type="text" id="kq-name-<?= e($kq['id']) ?>" name="name" required maxlength="120" value="<?= e($kq['name']) ?>">
+                </div>
+                <div class="kq-checks">
+                    <?php foreach ($tileCatalog as $tile): ?>
+                    <label class="kq-check" title="<?= e($tile['desc']) ?>">
+                        <input type="checkbox" name="pages[]" value="<?= e($tile['id']) ?>"<?= in_array($tile['id'], $kq['pages'], true) ? ' checked' : '' ?>>
+                        <span><?= $tile['emoji'] ?> <?= e($tile['label']) ?></span>
+                    </label>
+                    <?php endforeach; ?>
+                </div>
+                <button type="submit" class="btn btn-outline btn-sm">Enregistrer</button>
+            </form>
+        </details>
+        <div class="kq-actions">
+            <form method="post" action="<?= e(url('/admin/kiosques/regenerate')) ?>"
+                  data-confirm="Régénérer le lien du kiosque « <?= e($kq['name']) ?> » ? L'ancien lien ne fonctionnera plus.">
+                <?= csrf_field() ?>
+                <input type="hidden" name="id" value="<?= e($kq['id']) ?>">
+                <button type="submit" class="btn btn-outline btn-sm">Régénérer le lien</button>
+            </form>
+            <form method="post" action="<?= e(url('/admin/kiosques/' . rawurlencode($kq['id']) . '/delete')) ?>"
+                  data-confirm="Supprimer définitivement le kiosque « <?= e($kq['name']) ?> » ? Son lien cessera de fonctionner.">
+                <?= csrf_field() ?>
+                <button type="submit" class="btn btn-outline btn-sm">Supprimer</button>
+            </form>
+        </div>
+    </div>
+    <?php endforeach; ?>
+    </div>
+</section>
+
 <script>
 (function () {
     'use strict';
@@ -162,7 +303,7 @@ declare(strict_types=1);
     var MASK = '••••••••';
     var csrfInput = document.querySelector('input[name="_csrf"]');
 
-    function rowsOf(card) { return card.querySelectorAll('.kq-row[data-kq-path]'); }
+    function rowsOf(card) { return card.querySelectorAll('.kq-row[data-kq-path], .kq-row[data-kq-id]'); }
 
     function applyUrl(row, url) {
         row.querySelector('input').value = url;
@@ -185,8 +326,16 @@ declare(strict_types=1);
     function fetchUrl(row) {
         var fd = new FormData();
         fd.append('_csrf', csrfInput ? csrfInput.value : '');
-        fd.append('scope', row.getAttribute('data-kq-scope') || '');
-        fd.append('path', row.getAttribute('data-kq-path') || '');
+        var scope = row.getAttribute('data-kq-scope') || '';
+        fd.append('scope', scope);
+        if (scope === 'custom') {
+            /* Kiosque personnalisé : on vise par id — jamais de path,
+               jamais de jeton côté client. */
+            fd.append('id', row.getAttribute('data-kq-id') || '');
+        } else {
+            /* Legacy membres/admins : couple scope + path en liste blanche. */
+            fd.append('path', row.getAttribute('data-kq-path') || '');
+        }
         return fetch(REVEAL_URL, { method: 'POST', body: fd })
             .then(function (r) { return r.json(); })
             .then(function (d) {
@@ -248,7 +397,9 @@ declare(strict_types=1);
         }
 
         var row = b.closest('.kq-row');
-        if (!row || !row.hasAttribute('data-kq-path')) return;
+        if (!row) return;
+        var isCustom = row.getAttribute('data-kq-scope') === 'custom';
+        if (!isCustom && !row.hasAttribute('data-kq-path')) return;
         flash(b, 'Révélation…');
         fetchUrl(row).then(function (u) {
             if (!u) {

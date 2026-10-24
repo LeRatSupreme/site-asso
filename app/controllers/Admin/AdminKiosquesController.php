@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace App\Controllers\Admin;
 
 use App\Core\Compta\Kiosk;
+use App\Core\Compta\KioskPages;
 use App\Core\Auth;
 use App\Core\Csrf;
+use App\Models\Kiosque;
 use App\Models\Setting;
 
 /**
@@ -14,6 +16,12 @@ use App\Models\Setting;
  * endroit — hub tout-en-un, comptages, liste de courses, récap du jour,
  * réappro — avec copie en un clic et régénération du jeton (qui révoque
  * TOUS les liens d'un coup).
+ *
+ * S'y ajoutent les KIOSQUES PERSONNALISÉS (table `kiosques`) : l'admin
+ * crée autant de kiosques que de types de personnes (trésorier, bar,
+ * membres…), coche les tuiles autorisées (catalogue KioskPages) et
+ * partage le lien révélé. Création, édition, suppression, régénération
+ * individuelle du jeton — avec audit systématique.
  *
  * Les jetons ne sont JAMAIS envoyés dans le HTML initial (mission §10 :
  * aucune capture ne doit suffire) : les liens sont masqués par défaut et
@@ -167,11 +175,141 @@ final class AdminKiosquesController extends AdminBaseController
         Kiosk::sendNoStore();
 
         $this->renderAdmin('admin/kiosques/index', [
-            'title'       => 'Kiosques',
-            'user'        => Auth::user(),
-            'memberPages' => $this->memberPages(),
-            'adminPages'  => $this->adminPages(),
+            'title'          => 'Kiosques',
+            'user'           => Auth::user(),
+            'memberPages'    => $this->memberPages(),
+            'adminPages'     => $this->adminPages(),
+            'customKiosques' => Kiosque::all(),
+            'tileCatalog'    => KioskPages::all(),
         ]);
+    }
+
+    /**
+     * Normalise les tuiles cochées d'un formulaire de kiosque : seuls les
+     * ids présents dans le catalogue KioskPages sont conservés, dédou-
+     * blonnés, puis RÉORDONNÉS selon l'ordre du catalogue (l'ordre du hub
+     * ne dépend jamais de l'ordre de coche).
+     *
+     * @return list<string>
+     */
+    private function normalizePages(): array
+    {
+        $posted = $_POST['pages'] ?? [];
+        if (!is_array($posted)) {
+            return [];
+        }
+
+        $valid = array_fill_keys(KioskPages::validIds(), true);
+        $picked = [];
+        foreach ($posted as $id) {
+            $id = (string) $id;
+            if (isset($valid[$id])) {
+                $picked[$id] = true;
+            }
+        }
+
+        $pages = [];
+        foreach (KioskPages::validIds() as $id) {
+            if (isset($picked[$id])) {
+                $pages[] = $id;
+            }
+        }
+
+        return $pages;
+    }
+
+    /**
+     * Nom saisi pour un kiosque (create/save) : trimé ; vide ou > 120
+     * caractères = invalide.
+     */
+    private function postedName(): string
+    {
+        return trim((string) ($_POST['name'] ?? ''));
+    }
+
+    /**
+     * Crée un kiosque personnalisé : nom + tuiles cochées. Le jeton est
+     * généré par le modèle et n'est JAMAIS renvoyé au HTML — l'admin le
+     * découvre via « Afficher le lien » (reveal audité).
+     */
+    public function create(): void
+    {
+        $this->guardSystemOrPage('kiosques');
+
+        $name = $this->postedName();
+        if ($name === '' || mb_strlen($name) > 120) {
+            $this->setFlash('error', 'Nom du kiosque requis (120 caractères max).');
+            redirect(url('/admin/kiosques'));
+        }
+
+        $pages = $this->normalizePages();
+        if ($pages === []) {
+            $this->setFlash('error', 'Choisis au moins une page pour ce kiosque.');
+            redirect(url('/admin/kiosques'));
+        }
+
+        $id = Kiosque::create($name, $pages, (string) Auth::user()['email']);
+
+        $this->audit('kiosques.create', 'kiosque', $id, ['name' => $name, 'pages' => $pages]);
+        $this->setFlash('success', 'Kiosque « ' . $name . ' » créé — révèle son lien pour l\'envoyer aux personnes concernées.');
+
+        redirect(url('/admin/kiosques'));
+    }
+
+    /**
+     * Met à jour un kiosque existant (nom + tuiles) : mêmes validations
+     * que la création. Le jeton et le lien restent inchangés.
+     */
+    public function save(string $id): void
+    {
+        $this->guardSystemOrPage('kiosques');
+
+        $k = Kiosque::find($id);
+        if ($k === null) {
+            $this->setFlash('error', 'Kiosque introuvable.');
+            redirect(url('/admin/kiosques'));
+        }
+
+        $name = $this->postedName();
+        if ($name === '' || mb_strlen($name) > 120) {
+            $this->setFlash('error', 'Nom du kiosque requis (120 caractères max).');
+            redirect(url('/admin/kiosques'));
+        }
+
+        $pages = $this->normalizePages();
+        if ($pages === []) {
+            $this->setFlash('error', 'Choisis au moins une page pour ce kiosque.');
+            redirect(url('/admin/kiosques'));
+        }
+
+        Kiosque::update($id, $name, $pages);
+
+        $this->audit('kiosques.save', 'kiosque', $id, ['name' => $name, 'pages' => $pages]);
+        $this->setFlash('success', 'Kiosque « ' . $name . ' » mis à jour.');
+
+        redirect(url('/admin/kiosques'));
+    }
+
+    /**
+     * Supprime définitivement un kiosque : son lien (jeton) cesse de
+     * fonctionner immédiatement.
+     */
+    public function delete(string $id): void
+    {
+        $this->guardSystemOrPage('kiosques');
+
+        $k = Kiosque::find($id);
+        if ($k === null) {
+            $this->setFlash('error', 'Kiosque introuvable.');
+            redirect(url('/admin/kiosques'));
+        }
+
+        Kiosque::delete($id);
+
+        $this->audit('kiosques.delete', 'kiosque', $id, ['name' => $k['name']]);
+        $this->setFlash('success', 'Kiosque « ' . $k['name'] . ' » supprimé — son lien ne fonctionne plus.');
+
+        redirect(url('/admin/kiosques'));
     }
 
     /**
@@ -189,6 +327,20 @@ final class AdminKiosquesController extends AdminBaseController
         // contrôleur (et la rend testable de bout en bout).
         if (!Csrf::verify(isset($_POST['_csrf']) ? (string) $_POST['_csrf'] : null)) {
             $this->json(['ok' => false, 'error' => 'Session expirée — recharge la page.'], 403);
+        }
+
+        // Kiosque personnalisé : la portée « custom » désigne un kiosque
+        // de la table `kiosques` (par son id), pas un couple scope/path
+        // legacy. L'URL hub n'est construite qu'ici — jamais dans le HTML.
+        if (($_POST['scope'] ?? '') === 'custom') {
+            $k = Kiosque::find(trim((string) ($_POST['id'] ?? '')));
+            if ($k === null) {
+                $this->json(['ok' => false, 'error' => 'Lien kiosque inconnu.'], 404);
+            }
+
+            $url = url('/kiosque/hub/' . $k['token']);
+            $this->audit('kiosques.reveal', 'kiosque', $k['id'], ['scope' => 'custom', 'page' => 'hub']);
+            $this->json(['ok' => true, 'scope' => 'custom', 'id' => $k['id'], 'url' => $url]);
         }
 
         $scope = ($_POST['scope'] ?? '') === 'admins' ? 'admins' : 'membres';
@@ -223,10 +375,31 @@ final class AdminKiosquesController extends AdminBaseController
      * Régénère un jeton kiosque : scope = « membres » (reappro_kiosk_token)
      * ou « admins » (admin_kiosk_token). Les deux sont indépendants :
      * régénérer l'un n'affecte pas l'autre.
+     *
+     * Un champ `id` non vide désigne un KIOSQUE PERSONNALISÉ : seul SON
+     * jeton est régénéré (l'ancien lien du kiosque meurt, les autres
+     * kiosques et les liens legacy restent valides). La valeur du jeton
+     * n'est JAMAIS audité ni affichée.
      */
     public function regenerate(): void
     {
         $this->guardSystemOrPage('kiosques');
+
+        // Branche kiosque personnalisé : régénération individuelle.
+        $customId = trim((string) ($_POST['id'] ?? ''));
+        if ($customId !== '') {
+            $k = Kiosque::find($customId);
+            if ($k === null) {
+                $this->setFlash('error', 'Kiosque introuvable.');
+                redirect(url('/admin/kiosques'));
+            }
+
+            Kiosque::regenerateToken($customId);
+            $this->audit('kiosque.token.regenerate', 'kiosque', $customId, ['scope' => 'custom', 'name' => $k['name']]);
+            $this->setFlash('success', 'Lien du kiosque « ' . $k['name'] . ' » régénéré — l\'ancien lien ne fonctionne plus.');
+
+            redirect(url('/admin/kiosques'));
+        }
 
         $scope = ($_POST['scope'] ?? '') === 'admins' ? 'admins' : 'membres';
         $key   = $scope === 'admins' ? 'admin_kiosk_token' : 'reappro_kiosk_token';

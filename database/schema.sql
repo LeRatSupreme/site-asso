@@ -853,4 +853,21 @@ CREATE TABLE IF NOT EXISTS recommendations (
     INDEX idx_reco_statut (statut), INDEX idx_reco_created (created_at), INDEX idx_reco_applied (applied_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- -------------------------------------------------------------------
+--  Kiosques personnalisables : accès téléphone par jeton secret, chaque
+--  kiosque avec son nom et ses tuiles autorisées (JSON). Le jeton est
+--  indexé UNIQUE, confirmé côté PHP en hash_equals.
+--  (migration 2026_kiosques_personnalises.sql)
+-- -------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS kiosques (
+    id VARCHAR(255) NOT NULL PRIMARY KEY,
+    name VARCHAR(120) NOT NULL,
+    token VARCHAR(64) NOT NULL,
+    pages TEXT NOT NULL,
+    created_by VARCHAR(255) NOT NULL DEFAULT '',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NULL DEFAULT NULL,
+    UNIQUE KEY uniq_kiosques_token (token)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 SET FOREIGN_KEY_CHECKS = 1;

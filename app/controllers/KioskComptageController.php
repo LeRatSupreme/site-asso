@@ -6,6 +6,7 @@ namespace App\Controllers;
 
 use App\Core\Compta\CashLedger;
 use App\Core\Compta\InvoiceScan;
+use App\Core\Compta\KioskPages;
 use App\Core\Compta\ProductAutoSync;
 use App\Core\Compta\PurchaseSaver;
 use App\Core\Compta\ReceiptStorage;
@@ -19,6 +20,7 @@ use App\Models\AuditLog;
 use App\Models\CashCount;
 use App\Models\Expense;
 use App\Models\InventoryCount;
+use App\Models\Kiosque;
 use App\Models\ProductDiscontinued;
 use App\Models\ScanLabel;
 use App\Models\Setting;
@@ -57,22 +59,22 @@ final class KioskComptageController extends Controller
     }
 
     /**
-     * Pages outils (caisse, inventaire, liste) : accessibles avec l'un OU
-     * l'autre jeton — l'URL porte le contexte et les liens de retour
-     * conservent l'espace (membres ou admin) d'origine.
-     */
-    private function anyTokenOk(string $token): bool
-    {
-        return $this->tokenOk($token) || $this->adminTokenOk($token);
-    }
-
-    /**
-     * URL du hub correspondant au jeton fourni : jeton admin → hub admin,
-     * jeton membres → hub membres. Les liens « retour » des pages outils
-     * restent ainsi dans l'espace d'origine.
+     * URL du hub correspondant au jeton fourni : kiosque personnalisé →
+     * son propre hub, jeton admin → hub admin, jeton membres → hub
+     * membres. Les liens « retour » des pages outils restent ainsi dans
+     * l'espace d'origine.
      */
     private function hubUrlFor(string $token): string
     {
+        try {
+            $custom = Kiosque::findByToken(trim($token));
+            if ($custom !== null) {
+                return url('/kiosque/hub/' . trim($token));
+            }
+        } catch (\Throwable) {
+            // Table kiosques absente (migration non appliquée) : on saute à la logique legacy.
+        }
+
         $admin = trim((string) Setting::get('admin_kiosk_token', ''));
 
         return $admin !== '' && hash_equals($admin, trim($token))
@@ -131,7 +133,7 @@ final class KioskComptageController extends Controller
      */
     public function jour(string $token): void
     {
-        if (!$this->adminTokenOk($token)) {
+        if (!KioskPages::tokenAllows($token, 'jour')) {
             $this->deny();
 
             return;
@@ -149,7 +151,7 @@ final class KioskComptageController extends Controller
     public function jourData(string $token): void
     {
         header('Content-Type: application/json; charset=utf-8');
-        if (!$this->adminTokenOk($token)) {
+        if (!KioskPages::tokenAllows($token, 'jour')) {
             http_response_code(403);
             echo '{"ok":false}';
 
@@ -167,7 +169,7 @@ final class KioskComptageController extends Controller
      */
     public function ledger(string $token): void
     {
-        if (!$this->adminTokenOk($token)) {
+        if (!KioskPages::tokenAllows($token, 'ledger')) {
             $this->deny();
 
             return;
@@ -208,7 +210,7 @@ final class KioskComptageController extends Controller
      */
     public function ledgerDepenseSave(string $token): void
     {
-        if (!$this->adminTokenOk($token)) {
+        if (!KioskPages::tokenAllows($token, 'ledger')) {
             $this->deny();
 
             return;
@@ -329,7 +331,7 @@ final class KioskComptageController extends Controller
      */
     public function ledgerScan(string $token): void
     {
-        if (!$this->adminTokenOk($token)) {
+        if (!KioskPages::tokenAllows($token, 'ledger')) {
             $this->deny();
 
             return;
@@ -401,7 +403,7 @@ final class KioskComptageController extends Controller
      */
     public function ledgerPurchasesSave(string $token): void
     {
-        if (!$this->adminTokenOk($token)) {
+        if (!KioskPages::tokenAllows($token, 'ledger')) {
             $this->deny();
 
             return;
@@ -520,6 +522,37 @@ final class KioskComptageController extends Controller
         ]);
     }
 
+    /**
+     * Hub d'un KIOSQUE PERSONNALISÉ : uniquement les tuiles cochées par
+     * l'admin, accessibles par le jeton secret du kiosque — le jeton EST
+     * l'authentification (aucune session, aucune page hors de sa liste).
+     * Jeton inconnu ou révoqué → accès refusé (403).
+     */
+    public function customHub(string $token): void
+    {
+        $kiosque = Kiosque::findByToken($token);
+        if ($kiosque === null) {
+            $this->deny();
+
+            return;
+        }
+
+        $tiles = [];
+        foreach ($kiosque['pages'] as $pageId) {
+            $def = KioskPages::get((string) $pageId);
+            if ($def !== null) {
+                $tiles[] = $def;
+            }
+        }
+
+        $this->renderKiosk('admin/compta/kiosk-hub-custom', [
+            'title'   => $kiosque['name'],
+            'token'   => $token,
+            'kiosque' => $kiosque,
+            'tiles'   => $tiles,
+        ]);
+    }
+
     /** Durées proposées par le menu « Période analysée ». */
     private const PERIODE_OPTIONS = ['semaine', '14j', '30j', 'mois'];
 
@@ -532,7 +565,7 @@ final class KioskComptageController extends Controller
      */
     public function periode(string $token): void
     {
-        if (!$this->adminTokenOk($token)) {
+        if (!KioskPages::tokenAllows($token, 'periode')) {
             $this->deny();
 
             return;
@@ -591,7 +624,7 @@ final class KioskComptageController extends Controller
      */
     public function semaine(string $token): void
     {
-        if (!$this->adminTokenOk($token)) {
+        if (!KioskPages::tokenAllows($token, 'periode')) {
             $this->deny();
 
             return;
@@ -605,7 +638,7 @@ final class KioskComptageController extends Controller
      */
     public function mois(string $token): void
     {
-        if (!$this->adminTokenOk($token)) {
+        if (!KioskPages::tokenAllows($token, 'periode')) {
             $this->deny();
 
             return;
@@ -669,7 +702,7 @@ final class KioskComptageController extends Controller
      */
     public function jourMembre(string $token): void
     {
-        if (!$this->tokenOk($token)) {
+        if (!KioskPages::tokenAllows($token, 'jour-membre')) {
             $this->deny();
 
             return;
@@ -686,7 +719,7 @@ final class KioskComptageController extends Controller
     public function jourMembreData(string $token): void
     {
         header('Content-Type: application/json; charset=utf-8');
-        if (!$this->tokenOk($token)) {
+        if (!KioskPages::tokenAllows($token, 'jour-membre')) {
             http_response_code(403);
             echo '{"ok":false}';
 
@@ -832,7 +865,7 @@ final class KioskComptageController extends Controller
      */
     public function caisse(string $token): void
     {
-        if (!$this->anyTokenOk($token)) {
+        if (!KioskPages::tokenAllows($token, 'caisse')) {
             $this->deny();
 
             return;
@@ -850,7 +883,7 @@ final class KioskComptageController extends Controller
      */
     public function caisseSave(string $token): void
     {
-        if (!$this->anyTokenOk($token)) {
+        if (!KioskPages::tokenAllows($token, 'caisse')) {
             $this->deny();
 
             return;
@@ -897,7 +930,7 @@ final class KioskComptageController extends Controller
      */
     public function caisseDepot(string $token): void
     {
-        if (!$this->adminTokenOk($token)) {
+        if (!KioskPages::tokenAllows($token, 'depot')) {
             $this->deny();
 
             return;
@@ -920,7 +953,7 @@ final class KioskComptageController extends Controller
      */
     public function caisseDepotSave(string $token): void
     {
-        if (!$this->adminTokenOk($token)) {
+        if (!KioskPages::tokenAllows($token, 'depot')) {
             $this->deny();
 
             return;
@@ -997,7 +1030,7 @@ final class KioskComptageController extends Controller
      */
     public function inventaire(string $token): void
     {
-        if (!$this->anyTokenOk($token)) {
+        if (!KioskPages::tokenAllows($token, 'inventaire')) {
             $this->deny();
 
             return;
@@ -1051,7 +1084,7 @@ final class KioskComptageController extends Controller
      */
     public function inventaireSave(string $token): void
     {
-        if (!$this->anyTokenOk($token)) {
+        if (!KioskPages::tokenAllows($token, 'inventaire')) {
             $this->deny();
 
             return;
@@ -1121,7 +1154,7 @@ final class KioskComptageController extends Controller
     {
         header('Content-Type: application/json; charset=utf-8');
 
-        if (!$this->anyTokenOk($token)) {
+        if (!KioskPages::tokenAllows($token, 'inventaire')) {
             http_response_code(403);
             echo '{"ok":false,"error":"lien invalide"}';
 
