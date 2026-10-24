@@ -683,6 +683,67 @@ final class ComptaConsistencyTest extends IntegrationTestCase
         );
     }
 
+    public function test_depot_banque_kiosque_admin_memes_ecritures_traces_kiosque(): void
+    {
+        // Jeton admin kiosque posé directement en settings (idempotent).
+        $token = 'jetonadmin-depot-kiosque';
+        $this->pdo->prepare(
+            'INSERT INTO settings (id, `key`, value) VALUES (?,?,?)
+             ON DUPLICATE KEY UPDATE value = VALUES(value)'
+        )->execute(['set_cons_kdepot', 'admin_kiosk_token', $token]);
+
+        // Sans identité (pastille profil) : refus, aucune écriture créée.
+        $r0     = $this->request('POST', '/kiosque/admin/caisse/depot/' . $token, ['amount' => '40,25']);
+        $flash0 = $r0['session']['_flash'] ?? [];
+        $last0  = is_array($flash0) && $flash0 !== [] ? end($flash0) : null;
+        self::assertNotNull($last0, 'Un refus doit produire un flash.');
+        self::assertSame('error', $last0['type'] ?? '');
+        self::assertSame(
+            0,
+            (int) $this->pdo->query("SELECT COUNT(*) FROM cash_movements WHERE type = 'DEPOT'")->fetchColumn(),
+            'Aucun dépôt ne doit être créé sans identité.'
+        );
+
+        // Mauvais jeton : 403, le POST n'enregistre rien.
+        $rBad = $this->request('POST', '/kiosque/admin/caisse/depot/mauvais-jeton-kiosque', [
+            'amount' => '40,25', 'who_prenom' => 'Jean', 'who_nom' => 'Dupont', 'who_alias' => 'trésorier',
+        ]);
+        self::assertSame(403, (int) ($rBad['code'] ?? 0), 'Un POST avec un jeton invalide doit être refusé.');
+
+        // Dépôt de 40,25 € en kiosque, identité complète (pastille profil).
+        $r = $this->request('POST', '/kiosque/admin/caisse/depot/' . $token, [
+            'amount' => '40,25',
+            'label'  => 'bordereau 4512 — La Banque Postale',
+            'who_prenom' => 'Jean',
+            'who_nom'    => 'Dupont',
+            'who_alias'  => 'trésorier',
+        ]);
+
+        $flash = $r['session']['_flash'] ?? [];
+        $last  = is_array($flash) && $flash !== [] ? end($flash) : null;
+        self::assertNotNull($last, 'Aucun flash après le dépôt kiosque.');
+        self::assertSame('success', $last['type'] ?? '');
+        self::assertStringContainsString('frais bancaires', (string) ($last['message'] ?? ''));
+
+        // Caisse : mouvement DEPOT du montant exact, signé de l'identité kiosque.
+        self::assertSame(
+            1,
+            (int) $this->pdo->query(
+                "SELECT COUNT(*) FROM cash_movements WHERE type = 'DEPOT' AND amount = -40.25 AND created_by = 'Jean Dupont (trésorier)'"
+            )->fetchColumn(),
+            'Le mouvement de caisse du dépôt kiosque est absent, erroné ou non signé.'
+        );
+
+        // Dépenses : frais bancaires 3,50 € créés et marqués « kiosque ».
+        self::assertSame(
+            1,
+            (int) $this->pdo->query(
+                "SELECT COUNT(*) FROM expenses WHERE category = 'FRAIS' AND amount_ttc = 3.50 AND label LIKE 'Frais de dépôt banque — bordereau 4512%' AND created_by = 'kiosque — Jean Dupont (trésorier)'"
+            )->fetchColumn(),
+            'La dépense de frais bancaires du kiosque est absente, erronée ou non marquée « kiosque ».'
+        );
+    }
+
     // -----------------------------------------------------------------
     //  Helpers
     // -----------------------------------------------------------------

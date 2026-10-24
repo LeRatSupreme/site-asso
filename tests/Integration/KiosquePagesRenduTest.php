@@ -5,9 +5,10 @@ declare(strict_types=1);
 namespace Tests\Integration;
 
 /**
- * Couverture de rendu des 4 pages kiosque restées sans test dédié
+ * Couverture de rendu des pages kiosque restées sans test dédié
  * (docs/refonte-limites.md §13) : hub admin, récap du jour (admin),
- * période analysée (admin) et ventes du jour (membres).
+ * période analysée (admin), ventes du jour (membres) et dépôt à la
+ * banque (admin).
  *
  * Modèle : KiosqueAffichageTest — jetons forgés directement en settings,
  * ventes du jour posées pour que les récaps aient du contenu.
@@ -16,7 +17,7 @@ namespace Tests\Integration;
  *  - chaque page répond 200 avec son titre, sans marqueur d'erreur PHP ;
  *  - le récap membres n'affiche NI bénéfice, NI moyen de paiement (la
  *    version membres ne montre que le CA et les produits vendus) ;
- *  - un jeton invalide reçoit 403 sur les quatre pages (le jeton EST
+ *  - un jeton invalide reçoit 403 sur toutes les pages (le jeton EST
  *    l'authentification).
  *
  * Base `aeic_test` requise (les tests sont sautés sinon).
@@ -64,15 +65,16 @@ final class KiosquePagesRenduTest extends IntegrationTestCase
     }
 
     /**
-     * Les quatre pages se rendent avec leur titre, sans erreur PHP.
+     * Les pages se rendent avec leur titre, sans erreur PHP.
      */
-    public function test_les_quatre_pages_se_rendent(): void
+    public function test_les_pages_se_rendent(): void
     {
         $pages = [
             'hub admin'       => ['/kiosque/admin/' . $this->tokenAdmin, 'Kiosque admin'],
             'récap du jour'   => ['/kiosque/comptage/jour/' . $this->tokenAdmin, 'Récap du jour'],
             'période'         => ['/kiosque/admin/periode/' . $this->tokenAdmin, 'Période analysée'],
             'ventes du jour'  => ['/kiosque/comptage/jour-membre/' . $this->tokenMembres, 'Ventes du jour'],
+            'dépôt banque'    => ['/kiosque/admin/caisse/depot/' . $this->tokenAdmin, 'Dépôt à la banque'],
         ];
 
         foreach ($pages as $nom => [$path, $titre]) {
@@ -126,6 +128,7 @@ final class KiosquePagesRenduTest extends IntegrationTestCase
             '/kiosque/comptage/jour/jetonnementinvalide',
             '/kiosque/admin/periode/jetonnementinvalide',
             '/kiosque/comptage/jour-membre/jetonnementinvalide',
+            '/kiosque/admin/caisse/depot/jetonnementinvalide',
         ];
 
         foreach ($paths as $path) {
