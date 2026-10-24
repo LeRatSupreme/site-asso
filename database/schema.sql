@@ -337,16 +337,19 @@ CREATE TABLE IF NOT EXISTS scan_labels (
 -- prix de vente TTC, pour des bénéfices cohérents).
 -- purchase_id : achat (purchases.id) à l'origine du lot — NULL pour les
 -- lots manuels ; sert à la suppression en cascade d'un achat.
+-- qty_purchased : quantité achetée portée par le lot (unités produits),
+-- décrémentée par ventes/pertes côté affichage — NULL = pas de suivi.
 CREATE TABLE IF NOT EXISTS product_costs (
-    id           VARCHAR(255) NOT NULL PRIMARY KEY,
-    product_key  VARCHAR(255) NOT NULL,
-    cost_price   DECIMAL(10,3) NOT NULL,
-    valid_from   DATE NOT NULL,
-    valid_to     DATE NULL,
-    supplier     VARCHAR(255) NULL,
-    notes        TEXT NULL,
-    purchase_id  VARCHAR(255) NULL,
-    created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    id            VARCHAR(255) NOT NULL PRIMARY KEY,
+    product_key   VARCHAR(255) NOT NULL,
+    cost_price    DECIMAL(10,3) NOT NULL,
+    qty_purchased INT NULL,
+    valid_from    DATE NOT NULL,
+    valid_to      DATE NULL,
+    supplier      VARCHAR(255) NULL,
+    notes         TEXT NULL,
+    purchase_id   VARCHAR(255) NULL,
+    created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     KEY idx_costs_product (product_key),
     KEY idx_costs_period (valid_from, valid_to),
     KEY idx_pc_purchase (purchase_id)

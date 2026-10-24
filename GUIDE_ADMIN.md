@@ -264,6 +264,12 @@ Pour calculer le **bénéfice réel**, tu dois saisir le **prix d'achat** de cha
 
 > 💡 Le bénéfice = Prix de vente − Coût d'achat. Sans coût saisi → bénéfice = 100% (faux).
 
+#### Quantité achetée (suivi par lot) et écarts stock
+Le champ facultatif **« Quantité achetée »** active le **suivi lot par lot** : chaque vente (ou perte) décrémente la quantité du lot jusqu'à 0, et le **surplus passe automatiquement sur le lot suivant** — même saisi rétroactivement. La quantité reste **modifiable** (« Modifier » le lot ; vider le champ = arrêter le suivi).
+- La colonne **Quantité** du tableau des lots affiche `10 achetés · 7 consommés · reste 3`, le badge rouge **Épuisé** quand tout est consommé, ou *non suivi* pour les lots sans quantité saisie
+- Le badge orange **« N unité(s) vendue(s) sans lot »** signale les ventes en attente d'un lot quantifié futur
+- L'encart rouge en tête de page **« Écarts stock / coûts — vol ou casse possible ? »** liste les produits à surveiller. **Écart = stock théorique − (achats suivis − ventes − pertes depuis le 1er lot suivi)** : **négatif** → il manque des unités par rapport au prévu (vol, casse ou vente non déclarée — alerte forte) ; **positif** → stock excédentaire (achat non saisi dans les coûts ou quantité erronée). Indicatif : les lots sans quantité saisie ne sont pas comptés
+
 ### D. Journal des ventes
 **Admin → Ventes → Journal ventes** :
 - Toutes les ventes importées, **filtrables** (catégorie, produit, paiement)
@@ -351,6 +357,8 @@ Tu comptes physiquement le rayon, tu saisis le nombre réel, et le site calcule 
 - Écart nul → nickel 🔥
 
 Le bloc **Valeur du stock — par catégorie** ventile la valeur (Σ stock × coût de revient) par rayon : une ligne par catégorie (Boissons, Snacks…, même classement que les ventes), avec les produits **sans coût saisi** et le stock **hors vente (en pause)** signalés par catégorie, et la ligne **Total** en synthèse. Les produits jamais vendus (achetés mais sans aucune vente classée) sont catégorisés via leur alias canonique dans le mapping des libellés, au lieu de finir en « Non classé ».
+
+Le **suivi quantité par lot** de la page Coûts de revient croise ces achats avec le stock théorique : un produit dont l'écart stock est non nul remonte dans l'encart « Écarts stock / coûts — vol ou casse possible ? » de cette page (détail §C).
 
 > 💡 Fais un inventaire **régulièrement** : en fin de semaine ou en fin de mois, avant de commander. Chaque comptage devient la nouvelle référence de stock.
 ### J. Bilan annuel

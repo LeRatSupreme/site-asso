@@ -13,7 +13,10 @@ use App\Core\Logger;
  * clé source vers une clé cible conservée, sans perte :
  *
  *  - UPDATE simple (PK `id`, pas de conflit possible) : purchases,
- *    losses, sales, inventory_counts, product_costs,
+ *    losses, sales, inventory_counts,
+ *    product_costs (périodes ensuite rééquilibrées :
+ *    ProductCost::normalizePeriods — jamais deux lots « en cours »
+ *    sur la cible après fusion),
  *    promotions (product_key nullable : seules les lignes rattachées
  *    à la source sont déplacées), inventory_tablet_lines (relevés
  *    tablette en attente : leurs corrections futures écriront sur la
@@ -194,6 +197,15 @@ final class ProductKeyMerge extends Model
                 );
                 $stmt->execute([$target, $source]);
                 $moved[$table] = (int) $stmt->rowCount();
+            }
+
+            // 1-ter. Lots de coût déplacés : la fusion brute peut faire
+            //    cohabiter DEUX lots « en cours » sur la cible (le sien et
+            //    celui de la source, ex. une même course saisie deux fois
+            //    sous deux orthographes). Les périodes sont rééquilibrées
+            //    (l'ancienne clé n'a plus aucun lot : rien à normaliser).
+            if ($moved['product_costs'] > 0) {
+                ProductCost::normalizePeriods($target);
             }
 
             // 1-bis. Alias ramenés sur la cible : les libellés de la source

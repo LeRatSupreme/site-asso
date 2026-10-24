@@ -317,7 +317,7 @@ final class ComptaCalc
 
     /**
      * Clé de départage entre deux lots de même valid_from : created_at
-     * puis id (mêmes règles que ProductCost::reopenPreviousLot). Colonnes
+     * puis id (mêmes règles que ProductCost::normalizePeriods). Colonnes
      * absentes (lots hors base) → chaîne vide : l'ordre d'entrée décide.
      */
     private static function lotTieKey(array $lot): string
