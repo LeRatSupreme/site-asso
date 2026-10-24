@@ -375,6 +375,12 @@ function aeic_register_routes(Router $router): void
     // contrat as_json=1 — mêmes champs que /admin/compta/achats/save-bulk),
     // sans CSRF : le jeton admin EST l'authentification.
     $router->post('/kiosque/admin/ledger/purchases/{token}', [KioskComptageController::class, 'ledgerPurchasesSave']);
+    // Dépôt à la banque depuis le kiosque admin : formulaire téléphone
+    // (GET) + enregistrement (POST, identité obligatoire, sans CSRF : le
+    // jeton admin EST l'authentification) — mêmes écritures que la page
+    // Caisses (mouvement DEPOT + dépense automatique de frais bancaires).
+    $router->get('/kiosque/admin/caisse/depot/{token}', [KioskComptageController::class, 'caisseDepot']);
+    $router->post('/kiosque/admin/caisse/depot/{token}', [KioskComptageController::class, 'caisseDepotSave']);
 
     // Suivi avancé : dépenses, budgets, achats, inventaire, pertes, événements, rapport annuel.
     $router->get('/admin/compta/depenses', [AdminExpenseController::class, 'index']);

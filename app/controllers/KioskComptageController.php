@@ -16,6 +16,7 @@ use App\Core\Controller;
 use App\Core\Logger;
 use App\Models\Analytics;
 use App\Models\AuditLog;
+use App\Models\CashCount;
 use App\Models\Expense;
 use App\Models\InventoryCount;
 use App\Models\ProductDiscontinued;
@@ -887,6 +888,106 @@ final class KioskComptageController extends Controller
             $this->setFlash('success', 'Comptage exact : aucun écart.');
         }
 
+        redirect($back);
+    }
+
+    /**
+     * Dépôt à la banque (kiosque ADMIN) : version téléphone de la carte
+     * « Dépôt à la banque » de la page Caisses.
+     */
+    public function caisseDepot(string $token): void
+    {
+        if (!$this->adminTokenOk($token)) {
+            $this->deny();
+
+            return;
+        }
+
+        $this->renderKiosk('admin/compta/kiosk-caisse-depot', [
+            'title' => 'Dépôt à la banque',
+            'token' => $token,
+        ]);
+    }
+
+    /**
+     * Enregistre un dépôt à la banque saisi en kiosque admin : MÊMES
+     * écritures que la page Caisses (AdminCashController::deposit) —
+     * mouvement DEPOT (sortie de liquide) + dépense automatique de
+     * frais bancaires (CashLedger::DEPOSIT_FEE, catégorie « FRAIS »),
+     * créées atomiquement. Identité obligatoire (pastille profil du
+     * layout kiosk) ; pas de CSRF : le jeton admin EST
+     * l'authentification, comme les autres POST kiosque.
+     */
+    public function caisseDepotSave(string $token): void
+    {
+        if (!$this->adminTokenOk($token)) {
+            $this->deny();
+
+            return;
+        }
+
+        $back = url('/kiosque/admin/caisse/depot/' . $token);
+
+        $who = $this->whoFromPost();
+        if ($who === '') {
+            $this->setFlash('error', 'Indique qui tu es (prénom, nom et rôle) via la pastille en haut à droite avant d\'enregistrer.');
+            redirect($back);
+        }
+
+        $amount = parseFrenchFloat((string) ($_POST['amount'] ?? ''));
+        if ($amount <= 0) {
+            $this->setFlash('error', 'Montant du dépôt (> 0) requis.');
+            redirect($back);
+        }
+
+        $date = datetime_selects_value();
+        if (!$date['ok']) {
+            $this->setFlash('error', 'Date invalide.');
+            redirect($back);
+        }
+
+        $label = trim((string) ($_POST['label'] ?? ''));
+        $fee = CashLedger::DEPOSIT_FEE;
+
+        // Dépôt + frais bancaires : les deux écritures sont créées
+        // atomiquement, comme côté admin (AdminCashController::deposit).
+        // Sans date saisie (valeur null = « maintenant »), la dépense de
+        // frais est datée du jour.
+        $pdo = CashCount::connection();
+        $pdo->beginTransaction();
+        try {
+            $id = CashLedger::recordDeposit($amount, $label, $who, $date['value']);
+            $feeExpenseId = Expense::create([
+                'spent_at'   => $date['value'] !== null ? substr((string) $date['value'], 0, 10) : date('Y-m-d'),
+                'category'   => 'FRAIS',
+                'label'      => 'Frais de dépôt banque' . ($label !== '' ? ' — ' . $label : ''),
+                'amount_ttc' => $fee,
+                'created_by' => 'kiosque — ' . $who,
+            ]);
+            $pdo->commit();
+        } catch (\Throwable $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+
+            throw $e;
+        }
+
+        AuditLog::log('cash.depot', null, 'cash', $id, [
+            'amount'         => $amount,
+            'label'          => $label,
+            'fee'            => $fee,
+            'fee_expense_id' => $feeExpenseId !== '' ? $feeExpenseId : null,
+            'via'            => 'kiosque',
+            'who'            => $who,
+        ]);
+
+        $this->setFlash('success', sprintf(
+            'Dépôt de %s enregistré — frais bancaires de %s ajoutés aux dépenses (net crédité en banque ≈ %s).',
+            formatPrice($amount),
+            formatPrice($fee),
+            formatPrice(max(0.0, round($amount - $fee, 2)))
+        ));
         redirect($back);
     }
 

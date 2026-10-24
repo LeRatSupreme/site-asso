@@ -128,6 +128,9 @@ declare(strict_types=1);
     <a href="<?= e(url('/kiosque/comptage/caisse/' . rawurlencode($token))) ?>">
         <span class="kiosk-tile-title">Comptage caisse</span>
     </a>
+    <a href="<?= e(url('/kiosque/admin/caisse/depot/' . rawurlencode($token))) ?>">
+        <span class="kiosk-tile-title">Dépôt banque</span>
+    </a>
     <a href="<?= e(url('/kiosque/comptage/inventaire/' . rawurlencode($token))) ?>">
         <span class="kiosk-tile-title">Comptage inventaire</span>
     </a>
