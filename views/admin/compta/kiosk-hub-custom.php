@@ -17,28 +17,35 @@ declare(strict_types=1);
     .khub-wrap { max-width: 44rem; margin: 0 auto; }
     .khub-grid {
         display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 0.7rem; margin-bottom: 0.7rem;
+        gap: 0.65rem; margin-bottom: 0.7rem;
     }
-    .khub-grid a {
-        display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.45rem;
-        aspect-ratio: 1 / 1; padding: 0.9rem 0.6rem; text-align: center; text-decoration: none;
+    @media (max-width: 560px) {
+        .khub-grid { grid-template-columns: 1fr; }
+    }
+    .khub-card {
+        display: flex; align-items: center; gap: 0.8rem;
+        padding: 0.85rem 0.95rem; border-radius: 16px;
         background: rgba(255, 255, 255, 0.035);
-        border: 1px solid rgba(255, 255, 255, 0.07);
-        border-radius: 20px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        text-decoration: none;
         transition: border-color 0.15s ease, background 0.15s ease;
     }
-    .khub-grid a:hover { border-color: var(--primary, #48bdd3); background: rgba(72, 189, 211, 0.07); }
-    .khub-tile-emoji { font-size: 2.1rem; line-height: 1; }
-    .khub-grid .kiosk-tile-title { font-size: 0.98rem; font-weight: 900; padding: 0 0.4rem; }
-    .khub-tile-desc {
-        font-size: 0.72rem; color: var(--muted, #8892a6); padding: 0 0.4rem;
-        overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+    .khub-card:hover { border-color: var(--primary, #48bdd3); background: rgba(72, 189, 211, 0.07); }
+    .khub-emoji {
+        flex-shrink: 0; width: 2.5rem; height: 2.5rem;
+        display: flex; align-items: center; justify-content: center;
+        border-radius: 12px; background: rgba(72, 189, 211, 0.12);
+        font-size: 1.25rem; line-height: 1;
     }
-    /* Tuile seule sur la 2e rangée : même taille, centrée. */
-    .khub-grid a:last-child:nth-child(odd) {
-        grid-column: 1 / -1;
-        justify-self: center;
-        width: calc(50% - 0.35rem);
+    .khub-text { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
+    .khub-label { font-size: 0.98rem; font-weight: 900; line-height: 1.2; }
+    .khub-desc {
+        font-size: 0.78rem; color: var(--muted, #8892a6); line-height: 1.35;
+        overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    }
+    .khub-chevron {
+        margin-left: auto; flex-shrink: 0; line-height: 1;
+        font-size: 1.3rem; color: var(--muted, #8892a6);
     }
     .khub-empty {
         margin: 1.2rem 0 0; text-align: center;
@@ -60,10 +67,13 @@ declare(strict_types=1);
     <?php else: ?>
         <div class="khub-grid">
             <?php foreach ($tiles as $tile): ?>
-                <a href="<?= e(url($tile['path'] . rawurlencode($token))) ?>">
-                    <span class="khub-tile-emoji" aria-hidden="true"><?= e($tile['emoji']) ?></span>
-                    <span class="kiosk-tile-title"><?= e($tile['label']) ?></span>
-                    <span class="khub-tile-desc"><?= e($tile['desc']) ?></span>
+                <a class="khub-card" href="<?= e(url($tile['path'] . rawurlencode($token))) ?>">
+                    <span class="khub-emoji" aria-hidden="true"><?= e($tile['emoji']) ?></span>
+                    <span class="khub-text">
+                        <span class="khub-label"><?= e($tile['label']) ?></span>
+                        <span class="khub-desc"><?= e($tile['desc']) ?></span>
+                    </span>
+                    <span class="khub-chevron" aria-hidden="true">›</span>
                 </a>
             <?php endforeach; ?>
         </div>

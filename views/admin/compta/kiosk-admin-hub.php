@@ -53,26 +53,35 @@ declare(strict_types=1);
     .kx-card-sub { font-size: 0.75rem; font-weight: 800; color: #4ade80; }
     .kx-card-sub.is-loss { color: #f87171; }
 
-    .kah-grid {
+    .kx-cards {
         display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 0.7rem; margin-bottom: 0.7rem;
+        gap: 0.65rem; margin-bottom: 0.7rem;
     }
-    .kah-grid a {
-        display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.45rem;
-        aspect-ratio: 1 / 1; padding: 0.9rem 0.6rem; text-align: center; text-decoration: none;
+    @media (max-width: 560px) {
+        .kx-cards { grid-template-columns: 1fr; }
+    }
+    .kx-card2 {
+        display: flex; align-items: center; gap: 0.8rem;
+        padding: 0.85rem 0.95rem; border-radius: 16px;
         background: rgba(255, 255, 255, 0.035);
-        border: 1px solid rgba(255, 255, 255, 0.07);
-        border-radius: 20px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        text-decoration: none;
         transition: border-color 0.15s ease, background 0.15s ease;
     }
-    .kah-grid a:hover { border-color: var(--primary, #48bdd3); background: rgba(72, 189, 211, 0.07); }
-    .kah-grid .kiosk-tile-title { font-size: 0.98rem; font-weight: 900; padding: 0 0.4rem; }
-    /* Tuile seule sur la 2e rangée : même taille, centrée. */
-    .kah-grid a:last-child:nth-child(odd) {
-        grid-column: 1 / -1;
-        justify-self: center;
-        width: calc(50% - 0.35rem);
+    .kx-card2:hover { border-color: var(--primary, #48bdd3); background: rgba(72, 189, 211, 0.07); }
+    .kx-emoji {
+        flex-shrink: 0; width: 2.5rem; height: 2.5rem;
+        display: flex; align-items: center; justify-content: center;
+        border-radius: 12px; background: rgba(72, 189, 211, 0.12);
+        font-size: 1.25rem; line-height: 1;
     }
+    .kx-tile-label { font-size: 0.98rem; font-weight: 900; line-height: 1.2; }
+    .kx-chevron {
+        margin-left: auto; flex-shrink: 0; line-height: 1;
+        font-size: 1.3rem; color: var(--muted, #8892a6);
+    }
+    /* Dernière carte seule sur sa rangée : pleine largeur. */
+    .kx-cards .kx-card2:last-child:nth-child(odd) { grid-column: 1 / -1; width: 100%; }
 
     .kah-foot {
         max-width: 44rem; margin: 1.1rem auto 0; text-align: center;
@@ -109,33 +118,51 @@ declare(strict_types=1);
         </div>
     </div>
 
-<div class="kah-grid">
-    <a href="<?= e(url('/kiosque/comptage/jour/' . rawurlencode($token))) ?>">
-        <span class="kiosk-tile-title">Récap du jour</span>
+<div class="kx-cards">
+    <a class="kx-card2" href="<?= e(url('/kiosque/comptage/jour/' . rawurlencode($token))) ?>">
+        <span class="kx-emoji" aria-hidden="true">📊</span>
+        <span class="kx-tile-label">Récap du jour</span>
+        <span class="kx-chevron" aria-hidden="true">›</span>
     </a>
-    <a href="<?= e(url('/kiosque/admin/ledger/' . rawurlencode($token))) ?>">
-        <span class="kiosk-tile-title">Livre comptable</span>
+    <a class="kx-card2" href="<?= e(url('/kiosque/admin/ledger/' . rawurlencode($token))) ?>">
+        <span class="kx-emoji" aria-hidden="true">🧾</span>
+        <span class="kx-tile-label">Livre comptable</span>
+        <span class="kx-chevron" aria-hidden="true">›</span>
     </a>
-    <a href="<?= e(url('/kiosque/admin/analytics/' . rawurlencode($token))) ?>">
-        <span class="kiosk-tile-title">Analytique</span>
+    <a class="kx-card2" href="<?= e(url('/kiosque/admin/analytics/' . rawurlencode($token))) ?>">
+        <span class="kx-emoji" aria-hidden="true">📈</span>
+        <span class="kx-tile-label">Analytique</span>
+        <span class="kx-chevron" aria-hidden="true">›</span>
     </a>
-    <a href="<?= e(url('/kiosque/admin/reco/' . rawurlencode($token))) ?>">
-        <span class="kiosk-tile-title">Idées du moment</span>
+    <a class="kx-card2" href="<?= e(url('/kiosque/admin/reco/' . rawurlencode($token))) ?>">
+        <span class="kx-emoji" aria-hidden="true">💡</span>
+        <span class="kx-tile-label">Idées du moment</span>
+        <span class="kx-chevron" aria-hidden="true">›</span>
     </a>
-    <a href="<?= e(url('/kiosque/liste/' . rawurlencode($token))) ?>">
-        <span class="kiosk-tile-title">Liste de courses</span>
+    <a class="kx-card2" href="<?= e(url('/kiosque/liste/' . rawurlencode($token))) ?>">
+        <span class="kx-emoji" aria-hidden="true">🛒</span>
+        <span class="kx-tile-label">Liste de courses</span>
+        <span class="kx-chevron" aria-hidden="true">›</span>
     </a>
-    <a href="<?= e(url('/kiosque/comptage/caisse/' . rawurlencode($token))) ?>">
-        <span class="kiosk-tile-title">Comptage caisse</span>
+    <a class="kx-card2" href="<?= e(url('/kiosque/comptage/caisse/' . rawurlencode($token))) ?>">
+        <span class="kx-emoji" aria-hidden="true">💵</span>
+        <span class="kx-tile-label">Comptage caisse</span>
+        <span class="kx-chevron" aria-hidden="true">›</span>
     </a>
-    <a href="<?= e(url('/kiosque/admin/caisse/depot/' . rawurlencode($token))) ?>">
-        <span class="kiosk-tile-title">Dépôt banque</span>
+    <a class="kx-card2" href="<?= e(url('/kiosque/admin/caisse/depot/' . rawurlencode($token))) ?>">
+        <span class="kx-emoji" aria-hidden="true">🏦</span>
+        <span class="kx-tile-label">Dépôt banque</span>
+        <span class="kx-chevron" aria-hidden="true">›</span>
     </a>
-    <a href="<?= e(url('/kiosque/comptage/inventaire/' . rawurlencode($token))) ?>">
-        <span class="kiosk-tile-title">Comptage inventaire</span>
+    <a class="kx-card2" href="<?= e(url('/kiosque/comptage/inventaire/' . rawurlencode($token))) ?>">
+        <span class="kx-emoji" aria-hidden="true">📦</span>
+        <span class="kx-tile-label">Comptage inventaire</span>
+        <span class="kx-chevron" aria-hidden="true">›</span>
     </a>
-    <a href="<?= e(url('/kiosque/reappro/' . rawurlencode($token))) ?>">
-        <span class="kiosk-tile-title">Réappro</span>
+    <a class="kx-card2" href="<?= e(url('/kiosque/reappro/' . rawurlencode($token))) ?>">
+        <span class="kx-emoji" aria-hidden="true">📈</span>
+        <span class="kx-tile-label">Réappro</span>
+        <span class="kx-chevron" aria-hidden="true">›</span>
     </a>
 </div>
 

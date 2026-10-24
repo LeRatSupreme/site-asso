@@ -10,9 +10,10 @@ use App\Models\Setting;
 /**
  * Catalogue unique des tuiles kiosque et garde centralisée des jetons.
  *
- * D'un côté, les 11 pages accessibles par lien à jeton (Récap du jour,
- * Livre comptable, Réappro…) : le catalogue fait foi pour l'admin qui
- * coche les tuiles d'un kiosque personnalisé.
+ * D'un côté, les 13 tuiles accessibles par lien à jeton (Récap du jour,
+ * Livre comptable, Réappro/Liste en variantes avec ou sans coûts…) : le
+ * catalogue fait foi pour l'admin qui coche les tuiles d'un kiosque
+ * personnalisé.
  * De l'autre, LA porte d'entrée unique pour décider si un jeton donné
  * autorise une page : jeton membres legacy, jeton admin legacy, puis
  * kiosques personnalisés. Les contrôleurs seront refactorés pour
@@ -38,12 +39,16 @@ final class KioskPages
     public const LEGACY_ADMIN_PAGES = ['jour', 'ledger', 'analytics', 'reco', 'periode', 'depot', 'caisse', 'inventaire', 'liste', 'reappro'];
 
     /**
-     * Catalogue des 11 tuiles kiosque, dans l'ordre d'affichage.
+     * Catalogue des 13 tuiles kiosque, dans l'ordre d'affichage. Les
+     * variantes « lite » (« liste-lite », « reappro-lite ») partagent
+     * l'URL de leur page mère : seule la variante de rendu (coûts
+     * visibles ou masqués) change.
      *
      * @var list<array{id:string,emoji:string,label:string,desc:string,path:string}>
      */
     private const TILES = [
-        ['id' => 'jour', 'emoji' => '📊', 'label' => 'Récap du jour', 'desc' => 'CA, bénéfice, liquide/carte, top produits du jour.', 'path' => '/kiosque/comptage/jour/'],
+        ['id' => 'jour', 'emoji' => '📊', 'label' => 'Récap du jour — complet', 'desc' => 'CA, bénéfice, liquide/carte, top produits du jour.', 'path' => '/kiosque/comptage/jour/'],
+        ['id' => 'jour-membre', 'emoji' => '📊', 'label' => 'Récap du jour — membres', 'desc' => 'CA du jour et produits vendus, sans bénéfice ni paiements.', 'path' => '/kiosque/comptage/jour-membre/'],
         ['id' => 'ledger', 'emoji' => '🧾', 'label' => 'Livre comptable', 'desc' => 'Date | Objet | Débit | Crédit + saisie express des dépenses.', 'path' => '/kiosque/admin/ledger/'],
         ['id' => 'analytics', 'emoji' => '📈', 'label' => 'Analytique', 'desc' => 'Tableaux de bord : CA, bénéfice, heures, produits.', 'path' => '/kiosque/admin/analytics/'],
         ['id' => 'reco', 'emoji' => '💡', 'label' => 'Idées du moment', 'desc' => 'Recommandations commerciales du moteur.', 'path' => '/kiosque/admin/reco/'],
@@ -51,9 +56,10 @@ final class KioskPages
         ['id' => 'depot', 'emoji' => '🏦', 'label' => 'Dépôt banque', 'desc' => 'Sortie de liquide vers la banque (+ frais bancaires automatiques).', 'path' => '/kiosque/admin/caisse/depot/'],
         ['id' => 'caisse', 'emoji' => '💵', 'label' => 'Comptage caisse', 'desc' => 'Liquide présent dans la caisse, comptage à l\'aveugle.', 'path' => '/kiosque/comptage/caisse/'],
         ['id' => 'inventaire', 'emoji' => '📦', 'label' => 'Comptage inventaire', 'desc' => 'Produits en stock, comptage à l\'aveugle.', 'path' => '/kiosque/comptage/inventaire/'],
-        ['id' => 'liste', 'emoji' => '🛒', 'label' => 'Liste de courses', 'desc' => 'Ce qu\'il faut racheter, cases cochées partagées.', 'path' => '/kiosque/liste/'],
-        ['id' => 'reappro', 'emoji' => '📈', 'label' => 'Réappro', 'desc' => 'Analyse de réapprovisionnement (stock, packs, coûts).', 'path' => '/kiosque/reappro/'],
-        ['id' => 'jour-membre', 'emoji' => '📊', 'label' => 'Ventes du jour (membres)', 'desc' => 'CA du jour et produits vendus, sans chiffre financier.', 'path' => '/kiosque/comptage/jour-membre/'],
+        ['id' => 'liste', 'emoji' => '🛒', 'label' => 'Liste de courses — avec coûts', 'desc' => 'Ce qu\'il faut racheter, coûts visibles : pour trésorier/président.', 'path' => '/kiosque/liste/'],
+        ['id' => 'liste-lite', 'emoji' => '🛒', 'label' => 'Liste de courses — sans coûts', 'desc' => 'Ce qu\'il faut racheter, sans chiffre financier : pour les membres.', 'path' => '/kiosque/liste/'],
+        ['id' => 'reappro', 'emoji' => '📈', 'label' => 'Réappro — avec coûts', 'desc' => 'Stock, packs et coûts : pour trésorier/président.', 'path' => '/kiosque/reappro/'],
+        ['id' => 'reappro-lite', 'emoji' => '📈', 'label' => 'Réappro — sans coûts', 'desc' => 'Stock et packs, sans chiffre financier : pour les membres.', 'path' => '/kiosque/reappro/'],
     ];
 
     /**
@@ -93,6 +99,21 @@ final class KioskPages
     }
 
     /**
+     * Identifiant d'ACCÈS d'une tuile : les variantes « lite » partagent
+     * l'accès de leur page mère (« liste-lite » → « liste », « reappro-lite »
+     * → « reappro » — mêmes URL, même garde tokenAllows) ; tout autre
+     * identifiant est renvoyé inchangé.
+     */
+    public static function accessId(string $pageId): string
+    {
+        return match ($pageId) {
+            'liste-lite' => 'liste',
+            'reappro-lite' => 'reappro',
+            default => $pageId,
+        };
+    }
+
+    /**
      * LA garde centrale : ce jeton autorise-t-il cette page ?
      *
      * Ordre OBLIGATOIRE membres → admin → kiosques personnalisés : un
@@ -100,6 +121,9 @@ final class KioskPages
      * (les réponses membres/admin ne dépendent que des settings, jamais
      * d'une table modifiable en admin). Vide = refus ; chaque jeton legacy
      * présent est comparé en hash_equals et limite aux pages de sa liste.
+     * En branche custom, la page est testée par identifiant d'ACCÈS
+     * (accessId) : les variantes lite partagées avec la page mère passent
+     * la même garde (« reappro-lite » → garde « reappro »).
      */
     public static function tokenAllows(string $token, string $pageId): bool
     {
@@ -125,15 +149,32 @@ final class KioskPages
             $k = null;
         }
 
-        return $k !== null && in_array($pageId, $k['pages'], true);
+        if ($k === null) {
+            return false;
+        }
+
+        // Comparaison par identifiant d'ACCÈS des deux côtés : la variante
+        // lite cochée seule ouvre la page mère (et elle seule).
+        $acc = self::accessId($pageId);
+        foreach ($k['pages'] as $page) {
+            if (self::accessId((string) $page) === $acc) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
      * Variante « données complètes » (coûts visibles sur les pages
-     * Réappro/Liste) : vrai pour le jeton ADMIN legacy ou le jeton d'un
-     * kiosque personnalisé ; faux pour le jeton MEMBRES legacy.
+     * Réappro/Liste) : vrai pour le jeton ADMIN legacy ; faux pour le
+     * jeton MEMBRES legacy (bénévole) ; pour un kiosque personnalisé,
+     * vrai SEULEMENT si l'admin a coché la variante complète ($pageId =
+     * l'identifiant PLEIN, ex. « reappro » ou « liste ») — un kiosque
+     * limité à la variante lite (« reappro-lite » / « liste-lite »)
+     * reste en variante allégée, sans chiffre financier.
      */
-    public static function tokenIsFullData(string $token): bool
+    public static function tokenIsFullData(string $token, string $pageId = 'reappro'): bool
     {
         $given = trim($token);
         if ($given === '') {
@@ -150,6 +191,13 @@ final class KioskPages
             return false;
         }
 
-        return Kiosque::findByToken($given) !== null;
+        try {
+            $k = Kiosque::findByToken($given);
+        } catch (\Throwable) {
+            // Table kiosques absente (migration non appliquée) : les kiosques personnalisés sont simplement inactifs.
+            return false;
+        }
+
+        return $k !== null && in_array($pageId, $k['pages'], true);
     }
 }

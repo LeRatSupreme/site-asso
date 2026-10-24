@@ -40,6 +40,12 @@ final class KiosquesPersonnalisesTest extends IntegrationTestCase
             'kiosques',
             'users',
             'audit_logs',
+            'sales',
+            'inventory_counts',
+            'product_costs',
+            'product_discontinued',
+            'product_infinite',
+            'product_packs',
         ]);
         $this->seedUser($this->rootId, 'kqpers-root@exemple.fr', 'Password123456', 'SUPERADMIN');
 
@@ -177,6 +183,112 @@ final class KiosquesPersonnalisesTest extends IntegrationTestCase
 
         $r403 = $this->request('GET', '/kiosque/hub/jeton-inconnu');
         self::assertSame(403, (int) ($r403['code'] ?? 0), 'Un jeton inconnu doit recevoir 403 sur le hub personnalisé.');
+    }
+
+    /**
+     * Variantes « lite » vs « complètes » des tuiles Réappro/Liste :
+     * un kiosque limité aux ids « reappro-lite » / « liste-lite » ouvre
+     * la MÊME URL que sa page mère (même garde tokenAllows, via
+     * accessId) mais en variante allégée — AUCUN chiffre financier —
+     * tandis que les ids pleins (« reappro » / « liste ») affichent les
+     * coûts. La garde reste par page : un kiosque « reappro(-lite) »
+     * n'ouvre PAS /kiosque/liste/, et inversement.
+     *
+     * Marqueurs repris tels quels de KiosqueAffichageTest : côté allégé,
+     * ni « € » ni « Coût » ; côté complet, « € », « Coût ligne » et
+     * « Coût estimé du panier » (réappro) / « € » (liste).
+     */
+    public function test_variantes_reappro_et_liste_selon_la_tuile_choisie(): void
+    {
+        // Un produit commandable avec un coût connu (même mécanique que
+        // KiosqueAffichageTest) : les variantes complètes ont un montant
+        // à afficher, les variantes lite doivent le masquer.
+        for ($i = 1; $i <= 3; $i++) {
+            $this->pdo->prepare(
+                'INSERT INTO sales (id, transaction_ref, sold_at, payment_method, payment_raw, quantity, description, price_ttc, is_custom_amount, category)
+                 VALUES (?,?,?,?,?,1,?,?,0,?)'
+            )->execute([
+                's_kqpers_var_' . $i,
+                'TKQPVAR0' . $i,
+                date('Y-m-d ') . sprintf('09:0%d:00', $i),
+                'CARTE',
+                'Visa - Débit',
+                'colakqpersvar',
+                '1.50',
+                'Boissons',
+            ]);
+        }
+        $this->pdo->prepare(
+            'INSERT INTO inventory_counts (id, counted_at, product_key, counted_qty, theoretical_qty, gap, created_by)
+             VALUES (?,?,?,?,?,?,?)'
+        )->execute(['inv_kqpers_var', '2026-01-01 08:00:00', 'colakqpersvar', 0, 0, 0, 'test']);
+        $this->pdo->prepare(
+            'INSERT INTO product_costs (id, product_key, cost_price, valid_from) VALUES (?,?,?,?)'
+        )->execute(['pc_kqpers_var', 'colakqpersvar', '1.500', '2026-01-01']);
+        $this->pdo->prepare(
+            'INSERT INTO product_packs (product_key, pack_size, updated_by) VALUES (?,?,?)'
+        )->execute(['colakqpersvar', 12, 'test']);
+
+        // Quatre kiosques : variantes lite et complètes de Réappro/Liste.
+        // Les jetons sont relus en base via find() (comme dans les autres
+        // tests de cette classe).
+        $kA = Kiosque::find(Kiosque::create('Réappro lite', ['reappro-lite'], 'test'));
+        $kB = Kiosque::find(Kiosque::create('Réappro full', ['reappro'], 'test'));
+        $kC = Kiosque::find(Kiosque::create('Liste lite', ['liste-lite'], 'test'));
+        $kD = Kiosque::find(Kiosque::create('Liste full', ['liste'], 'test'));
+        self::assertIsArray($kA, 'Le kiosque « Réappro lite » doit être relu en base.');
+        self::assertIsArray($kB, 'Le kiosque « Réappro full » doit être relu en base.');
+        self::assertIsArray($kC, 'Le kiosque « Liste lite » doit être relu en base.');
+        self::assertIsArray($kD, 'Le kiosque « Liste full » doit être relu en base.');
+        $tokenA = $kA['token'];
+        $tokenB = $kB['token'];
+        $tokenC = $kC['token'];
+        $tokenD = $kD['token'];
+
+        // A — « reappro-lite » : 200 sur /kiosque/reappro/, lignes produits
+        // visibles, mais AUCUN marqueur de coût.
+        $rA    = $this->request('GET', '/kiosque/reappro/' . $tokenA);
+        $bodyA = (string) ($rA['body'] ?? '');
+        self::assertSame(200, (int) ($rA['code'] ?? 0), 'La variante « reappro-lite » doit répondre 200 sur /kiosque/reappro/.');
+        self::assertStringContainsString('data-name="colakqpersvar"', $bodyA, 'La variante lite affiche quand même les lignes produits.');
+        foreach (['€', 'Coût'] as $interdit) {
+            self::assertStringNotContainsString($interdit, $bodyA, sprintf('Réappro lite : « %s » ne doit pas apparaître.', $interdit));
+        }
+        self::assertNull($this->bodyError($bodyA), 'La variante « reappro-lite » doit se rendre sans erreur PHP.');
+
+        // B — « reappro » : 200 sur /kiosque/reappro/ AVEC les coûts.
+        $rB    = $this->request('GET', '/kiosque/reappro/' . $tokenB);
+        $bodyB = (string) ($rB['body'] ?? '');
+        self::assertSame(200, (int) ($rB['code'] ?? 0), 'La variante « reappro » complète doit répondre 200.');
+        self::assertStringContainsString('€', $bodyB, 'Réappro complet : les coûts sont visibles.');
+        self::assertStringContainsString('Coût ligne', $bodyB, 'Réappro complet : la colonne « Coût ligne » est visible.');
+        self::assertStringContainsString('Coût estimé du panier', $bodyB, 'Réappro complet : le KPI panier est visible.');
+        self::assertNull($this->bodyError($bodyB), 'La variante « reappro » complète doit se rendre sans erreur PHP.');
+
+        // C — « liste-lite » : 200 sur /kiosque/liste/, tuile produit
+        // visible, AUCUN marqueur de coût.
+        $rC    = $this->request('GET', '/kiosque/liste/' . $tokenC);
+        $bodyC = (string) ($rC['body'] ?? '');
+        self::assertSame(200, (int) ($rC['code'] ?? 0), 'La variante « liste-lite » doit répondre 200 sur /kiosque/liste/.');
+        self::assertStringContainsString('data-key="colakqpersvar"', $bodyC, 'La variante lite affiche quand même la tuile produit.');
+        foreach (['€', 'Coût'] as $interdit) {
+            self::assertStringNotContainsString($interdit, $bodyC, sprintf('Liste lite : « %s » ne doit pas apparaître.', $interdit));
+        }
+        self::assertNull($this->bodyError($bodyC), 'La variante « liste-lite » doit se rendre sans erreur PHP.');
+
+        // D — « liste » : 200 sur /kiosque/liste/ AVEC les coûts.
+        $rD    = $this->request('GET', '/kiosque/liste/' . $tokenD);
+        $bodyD = (string) ($rD['body'] ?? '');
+        self::assertSame(200, (int) ($rD['code'] ?? 0), 'La variante « liste » complète doit répondre 200.');
+        self::assertStringContainsString('€', $bodyD, 'Liste complète : le coût estimé du panier est visible.');
+        self::assertNull($this->bodyError($bodyD), 'La variante « liste » complète doit se rendre sans erreur PHP.');
+
+        // Garde par page : la variante lite n'ouvre que SON URL, jamais
+        // celle de la page sœur.
+        $rGardeListe = $this->request('GET', '/kiosque/liste/' . $tokenA);
+        self::assertSame(403, (int) ($rGardeListe['code'] ?? 0), 'Un kiosque limité à « reappro-lite » n\'ouvre PAS /kiosque/liste/.');
+        $rGardeReappro = $this->request('GET', '/kiosque/reappro/' . $tokenC);
+        self::assertSame(403, (int) ($rGardeReappro['code'] ?? 0), 'Un kiosque limité à « liste-lite » n\'ouvre PAS /kiosque/reappro/.');
     }
 
     /**
