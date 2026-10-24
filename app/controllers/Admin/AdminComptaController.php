@@ -1557,8 +1557,10 @@ final class AdminComptaController extends AdminBaseController
         }
 
         // Jeton « membres » = bénévole : aucun chiffre financier. Jeton
-        // « admin » (bureau sur téléphone) : tout est visible.
-        $this->renderReorderPage(true, null, $token, $this->kioskTokenIsAdmin($token));
+        // « admin » (bureau sur téléphone) : tout est visible. Kiosque
+        // personnalisé : la variante (complète ou allégée) est celle
+        // cochée par l'admin pour la tuile « reappro » / « reappro-lite ».
+        $this->renderReorderPage(true, null, $token, $this->kioskTokenIsAdmin($token, 'reappro'));
     }
 
     /**
@@ -1610,8 +1612,10 @@ final class AdminComptaController extends AdminBaseController
         }
 
         // Jeton « membres » = bénévole : aucun chiffre financier. Jeton
-        // « admin » (bureau sur téléphone) : tout est visible.
-        $this->renderListePage(true, null, $token, $this->kioskTokenIsAdmin($token));
+        // « admin » (bureau sur téléphone) : tout est visible. Kiosque
+        // personnalisé : la variante (complète ou allégée) est celle
+        // cochée par l'admin pour la tuile « liste » / « liste-lite ».
+        $this->renderListePage(true, null, $token, $this->kioskTokenIsAdmin($token, 'liste'));
     }
 
     // -----------------------------------------------------------------
@@ -1636,20 +1640,25 @@ final class AdminComptaController extends AdminBaseController
     }
 
     /**
-     * Variante « données complètes » des pages outils (Réappro/Liste) —
-     * pilote le drapeau showMoney : le jeton ADMIN legacy ou le jeton
-     * d'un kiosque personnalisé voit la variante complète avec coûts ;
-     * le jeton MEMBRES legacy (bénévole) voit la variante allégée, sans
-     * aucun chiffre financier.
+     * Variante des pages outils (Réappro/Liste) : pilote le drapeau
+     * showMoney. Jetons legacy inchangés — ADMIN : variante complète avec
+     * coûts, MEMBRES (bénévole) : variante allégée. Kiosque personnalisé :
+     * la variante complète n'est servie que si l'admin a coché la tuile
+     * pleine ($pageId, « reappro » ou « liste ») ; la variante lite
+     * (« reappro-lite » / « liste-lite ») cochée seule reste sans aucun
+     * chiffre financier.
      */
-    private function kioskTokenIsAdmin(string $token): bool
+    private function kioskTokenIsAdmin(string $token, string $pageId = 'reappro'): bool
     {
-        return KioskPages::tokenIsFullData($token);
+        return KioskPages::tokenIsFullData($token, $pageId);
     }
 
     /**
      * Hub de retour selon le jeton de la liste : kiosque personnalisé →
-     * son propre hub, admin → hub admin, membres → hub membres.
+     * son propre hub (valable pour les variantes lite comme complètes),
+     * admin → hub admin, membres → hub membres. La branche legacy
+     * n'atteint kioskTokenIsAdmin qu'avec un jeton legacy, pour lequel
+     * l'id de page est sans effet.
      */
     private function listeHubUrl(string $token): string
     {
@@ -1662,7 +1671,7 @@ final class AdminComptaController extends AdminBaseController
             // Table kiosques absente (migration non appliquée) : on saute à la logique legacy.
         }
 
-        return $this->kioskTokenIsAdmin(trim($token))
+        return $this->kioskTokenIsAdmin(trim($token), 'liste')
             ? url('/kiosque/admin/' . trim($token))
             : url('/kiosque/comptage/' . trim($token));
     }
