@@ -23,6 +23,7 @@
 15. [Check-in QR codes aux événements](#15--check-in-qr-codes-aux-événements)
 16. [Conseils & bonnes pratiques](#16--conseils--bonnes-pratiques)
 17. [Modules récents (livre comptable, caisses, kiosques, SMS, scan)](#17--modules-récents)
+18. [Tests](#18--tests)
 19. [Monitoring](#19--monitoring)
 
 ---
@@ -748,6 +749,36 @@ Dans le formulaire **Achats** (Admin → Comptabilité → Opérations).
 - Grille **multi-lignes** : toute une commande fournisseur en un seul enregistrement (jusqu'à 60 lignes).
 - Colle « Nom ; Qté ; Montant » copié depuis une facture : la grille se remplit toute seule.
 - Au clavier : **Entrée** enchaîne les lignes, **Ctrl+Entrée** enregistre ; case **hors stock** et **TVA par ligne** disponibles.
+
+---
+
+## 18. 🧪 Tests
+
+Le projet dispose d'une suite PHPUnit d'environ **1181 tests** (unitaires + intégration). Les tests qui nécessitent la base de données ne s'exécutent que si une base de test est disponible — sinon ils sont **ignorés (« skipped »)**, ce qui est le comportement normal, pas une erreur.
+
+### Prérequis
+- **Docker Desktop** lancé (il fournit la base de données de test) ;
+- **PHP Herd** installé (PHP 8.4 : `C:\Users\<utilisateur>\.config\herd\bin\php84\php.exe`).
+
+### Lancer les tests
+1. Démarrer la base de test — MariaDB 10.11 sur le port **3307** (même moteur que la production VPS et la CI GitHub), le schéma `database/schema.sql` est installé automatiquement au premier démarrage :
+   ```bash
+   bash scripts/test-db-up.sh
+   ```
+2. Lancer la suite complète (copier-coller tel quel) :
+   ```bash
+   DB_HOST=127.0.0.1:3307 DB_NAME=aeic_test DB_USER=aeic DB_PASS=aeic "/c/Users/adrie/.config/herd/bin/php84/php.exe" vendor/bin/phpunit --no-coverage
+   ```
+
+Quand la base est lancée, les tests « skipped » s'exécutent : le run complet compte ~1181 tests.
+
+> ⚠️ Sous Windows, certains tests d'intégration échouent pour des **artefacts locaux** (session / HTTP 0) — sans lien avec la base de test.
+
+### Réinitialiser la base de test
+Le schéma n'est réinstallé que sur un volume vide. Pour repartir d'une base neuve :
+```bash
+docker compose -f docker-compose.test.yml down -v
+```
 
 ---
 
