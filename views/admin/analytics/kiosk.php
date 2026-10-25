@@ -142,18 +142,22 @@ $iconSvg = static function (string $name): string {
         // côté payload — on affiche la note, SANS recomposer de delta.
         $croissanceNote = trim((string) ($croissance_note ?? ''));
 
+        // Option du kiosque : sans « benefice », la carte Bénéfice
+        // disparaît (les valeurs ont déjà été retirées du payload).
         $kpiCards = [
             ['label' => 'CA',            'value' => formatPrice($kpis['ca']),          'delta' => $kpis['ca_delta'] ?? null],
-            ['label' => 'Bénéfice',      'value' => formatPrice($kpis['profit']),
-             'sub'   => 'Marge ' . number_format((float) $kpis['margin'], 1, ',', ' ') . '%',           'delta' => $kpis['profit_delta'] ?? null],
-            ['label' => 'Volume',        'value' => number_format((float) $kpis['qty'], 0, ',', ' ') . ' u.',
-                                                                                        'delta' => $kpis['qty_delta'] ?? null],
-            ['label' => 'Panier moyen',  'value' => formatPrice($kpis['avg_basket']),  'delta' => $kpis['avg_basket_delta'] ?? null],
-            ['label' => 'Transactions',  'value' => number_format((int) $kpis['transactions'], 0, ',', ' '),
-                                                                                        'delta' => $kpis['transactions_delta'] ?? null],
-            ['label' => 'Nouveaux membres', 'value' => number_format((int) $kpis['members'], 0, ',', ' '),
-                                                                                        'delta' => $kpis['members_delta'] ?? null],
         ];
+        if ($showBenefice ?? true) {
+            $kpiCards[] = ['label' => 'Bénéfice',      'value' => formatPrice($kpis['profit']),
+             'sub'   => 'Marge ' . number_format((float) $kpis['margin'], 1, ',', ' ') . '%',           'delta' => $kpis['profit_delta'] ?? null];
+        }
+        $kpiCards[] = ['label' => 'Volume',        'value' => number_format((float) $kpis['qty'], 0, ',', ' ') . ' u.',
+                                                                                        'delta' => $kpis['qty_delta'] ?? null];
+        $kpiCards[] = ['label' => 'Panier moyen',  'value' => formatPrice($kpis['avg_basket']),  'delta' => $kpis['avg_basket_delta'] ?? null];
+        $kpiCards[] = ['label' => 'Transactions',  'value' => number_format((int) $kpis['transactions'], 0, ',', ' '),
+                                                                                        'delta' => $kpis['transactions_delta'] ?? null];
+        $kpiCards[] = ['label' => 'Nouveaux membres', 'value' => number_format((int) $kpis['members'], 0, ',', ' '),
+                                                                                        'delta' => $kpis['members_delta'] ?? null];
         foreach ($kpiCards as $kpi):
             $delta = $kpi['delta'];
             $up    = $delta === null ? null : ($delta >= 0);
@@ -189,7 +193,7 @@ $iconSvg = static function (string $name): string {
     <div class="compta-tabpane ka-pane is-active" data-pane="vue">
         <section class="card surface glass ka-card">
             <div class="ka-chart-head">
-                <h2 class="ka-chart-title">Le CA et le bénéfice, période par période</h2>
+                <h2 class="ka-chart-title"><?= ($showBenefice ?? true) ? 'Le CA et le bénéfice, période par période' : 'Le CA, période par période' ?></h2>
                 <span class="ka-sub" id="ka-trend-sub"></span>
             </div>
             <div class="ka-chart ka-chart-trend"><canvas id="ka-chart-trend"></canvas></div>
@@ -666,8 +670,10 @@ $iconSvg = static function (string $name): string {
                     <select id="ka-psort">
                         <option value="category" selected>Catégorie</option>
                         <option value="ca">CA</option>
+                        <?php if ($showBenefice ?? true): ?>
                         <option value="profit">Bénéfice</option>
                         <option value="margin">Marge %</option>
+                        <?php endif; ?>
                         <option value="qty">Quantité</option>
                     </select>
                 </label>

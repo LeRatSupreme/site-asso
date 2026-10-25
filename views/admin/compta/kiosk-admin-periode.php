@@ -174,19 +174,22 @@ $to = (string) $stats['to'];
     </div>
 
     <div class="kx-pair">
+        <?php if ($showBenefice ?? true): ?>
         <div class="kx-card">
             <p class="kx-card-label">Bénéfice</p>
-            <div class="kx-card-value <?= (float) $stats['profit'] >= 0 ? 'is-profit' : 'is-loss' ?>">
-                <?= e(formatPrice((float) $stats['profit'])) ?>
+            <div class="kx-card-value <?= (float) ($stats['profit'] ?? 0) >= 0 ? 'is-profit' : 'is-loss' ?>">
+                <?= e(formatPrice((float) ($stats['profit'] ?? 0))) ?>
             </div>
             <p class="kx-card-sub">Marge : <?= e(number_format((float) ($stats['margin'] ?? 0), 1, ',', ' ')) ?> % · perso exclus</p>
         </div>
+        <?php endif; ?>
         <div class="kx-card">
             <p class="kx-card-label">Produits vendus</p>
             <div class="kx-card-value"><?= (int) $stats['qty'] ?></div>
         </div>
     </div>
 
+    <?php if ($showPaiements ?? true): ?>
     <div class="kx-pair">
         <div class="kx-card">
             <p class="kx-card-label">Liquide</p>
@@ -197,6 +200,7 @@ $to = (string) $stats['to'];
             <div class="kx-card-value"><?= e(formatPrice((float) $stats['carte'])) ?></div>
         </div>
     </div>
+    <?php endif; ?>
 
     <div class="kx-list-card">
         <p class="kx-card-label">Détail jour par jour</p>
@@ -206,7 +210,9 @@ $to = (string) $stats['to'];
                 <span class="kx-day-label"><?= e($d['label']) ?></span>
                 <span class="kx-day-qty">×<?= (int) $d['qty'] ?></span>
                 <span class="kx-day-ca"><?= e(formatPrice((float) $d['ca'])) ?></span>
-                <span class="kx-day-profit <?= (float) $d['profit'] < 0 ? 'is-loss' : '' ?>"><?= e(formatPrice((float) $d['profit'])) ?></span>
+                <?php if ($showBenefice ?? true): ?>
+                <span class="kx-day-profit <?= (float) ($d['profit'] ?? 0) < 0 ? 'is-loss' : '' ?>"><?= e(formatPrice((float) ($d['profit'] ?? 0))) ?></span>
+                <?php endif; ?>
             </li>
             <?php endforeach; ?>
         </ul>

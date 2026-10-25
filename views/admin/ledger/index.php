@@ -812,12 +812,16 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
                             <?= ($balancePos ? '+ ' : '− ') . e(formatPrice(abs((float) $entries['balance']))) ?>
                         </td>
                     </tr>
+                    <?php if ($kiosk && !($showBenefice ?? true)): ?>
+                    <!-- Bénéfice net masqué : option du kiosque personnalisé. -->
+                    <?php else: ?>
                     <tr class="ledger-balance lg-profit">
                         <td colspan="2">BÉNÉFICE NET — coût des produits vendus déduit</td>
                         <td colspan="<?= $kiosk ? 2 : 3 ?>" class="num <?= $salesProfitPos ? 'is-pos' : 'is-neg' ?>">
                             <?= ($salesProfitPos ? '+ ' : '− ') . e(formatPrice(abs($salesProfit))) ?>
                         </td>
                     </tr>
+                    <?php endif; ?>
                 </tfoot>
             </table>
         <p class="muted" style="font-size: 0.78rem; margin-top: 0.7rem;">

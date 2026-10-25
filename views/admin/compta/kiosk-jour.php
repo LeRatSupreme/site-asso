@@ -146,10 +146,11 @@ $dateLabel = $jours[(int) $dt->format('N') - 1] . ' ' . $dt->format('j') . ' ' .
     </div>
 
     <div class="kx-pair">
+        <?php if ($showBenefice ?? true): ?>
         <div class="kx-card">
             <p class="kx-card-label">Bénéfice</p>
-            <div class="kx-card-value <?= (float) $stats['profit'] >= 0 ? 'is-profit' : 'is-loss' ?>" id="kdayProfit">
-                <?= e(formatPrice((float) $stats['profit'])) ?>
+            <div class="kx-card-value <?= (float) ($stats['profit'] ?? 0) >= 0 ? 'is-profit' : 'is-loss' ?>" id="kdayProfit">
+                <?= e(formatPrice((float) ($stats['profit'] ?? 0))) ?>
             </div>
             <p class="kx-card-sub"><span id="kdayMargin"><?= e(number_format((float) ($stats['margin'] ?? 0), 1, ',', ' ')) ?> %</span> de marge · perso exclus</p>
             <?php if ($fDelta === null): ?>
@@ -160,12 +161,14 @@ $dateLabel = $jours[(int) $dt->format('N') - 1] . ' ' . $dt->format('j') . ' ' .
             </p>
             <?php endif; ?>
         </div>
+        <?php endif; ?>
         <div class="kx-card">
             <p class="kx-card-label">Produits vendus</p>
             <div class="kx-card-value" id="kdayQty"><?= (int) $stats['qty'] ?></div>
         </div>
     </div>
 
+    <?php if ($showPaiements ?? true): ?>
     <div class="kx-pair">
         <div class="kx-card">
             <p class="kx-card-label">Liquide</p>
@@ -178,6 +181,7 @@ $dateLabel = $jours[(int) $dt->format('N') - 1] . ' ' . $dt->format('j') . ' ' .
             <p class="kx-card-sub" id="kdayCarteTx"><?= (int) ($stats['carte_tx'] ?? 0) ?> transaction<?= (int) ($stats['carte_tx'] ?? 0) > 1 ? 's' : '' ?></p>
         </div>
     </div>
+    <?php endif; ?>
 
     <?php $fWeekFrom = isset($fWeek['from']) ? \DateTimeImmutable::createFromFormat('Y-m-d', (string) $fWeek['from']) : false; ?>
     <?php $fWeekTo = isset($fWeek['to']) ? \DateTimeImmutable::createFromFormat('Y-m-d', (string) $fWeek['to']) : false; ?>
@@ -185,8 +189,8 @@ $dateLabel = $jours[(int) $dt->format('N') - 1] . ' ' . $dt->format('j') . ' ' .
         <p class="kx-card-label">Semaine en cours</p>
         <div class="kx-card-value" id="kdayWeekCa"><?= e(formatPrice((float) ($fWeek['ca'] ?? 0))) ?></div>
         <p class="kx-card-sub">
-            <?php if ($fWeekFrom !== false && $fWeekTo !== false): ?>du <?= $fWeekFrom->format('d/m') ?> au <?= $fWeekTo->format('d/m') ?> · <?php endif; ?>bénéfice
-            <span class="kday-week-profit <?= (float) ($fWeek['profit'] ?? 0) >= 0 ? 'is-pos' : 'is-neg' ?>" id="kdayWeekProfit"><?= e(formatPrice((float) ($fWeek['profit'] ?? 0))) ?></span>
+            <?php if ($fWeekFrom !== false && $fWeekTo !== false): ?>du <?= $fWeekFrom->format('d/m') ?> au <?= $fWeekTo->format('d/m') ?><?php if ($showBenefice ?? true): ?> · <?php endif; ?><?php endif; ?><?php if ($showBenefice ?? true): ?>bénéfice
+            <span class="kday-week-profit <?= (float) ($fWeek['profit'] ?? 0) >= 0 ? 'is-pos' : 'is-neg' ?>" id="kdayWeekProfit"><?= e(formatPrice((float) ($fWeek['profit'] ?? 0))) ?></span><?php endif; ?>
         </p>
     </div>
 
@@ -242,8 +246,8 @@ $dateLabel = $jours[(int) $dt->format('N') - 1] . ' ' . $dt->format('j') . ' ' .
         if (!j || !j.ok) return;
         set('kdayCa', price(j.ca));
         set('kdayQty', String(j.qty));
-        set('kdayLiquide', price(j.liquide));
-        set('kdayCarte', price(j.carte));
+        if (j.liquide !== undefined) set('kdayLiquide', price(j.liquide));
+        if (j.carte !== undefined) set('kdayCarte', price(j.carte));
         set('kdayAt', j.computed_at);
 
         // Hero : produits + transactions + panier moyen — valeur fournie
@@ -256,15 +260,17 @@ $dateLabel = $jours[(int) $dt->format('N') - 1] . ' ' . $dt->format('j') . ' ' .
                 + ' · panier moyen <strong id="kdayBasket">' + price(panier) + '</strong>';
         }
 
+        // Bénéfice/marge : absents du JSON quand l'option « bénéfice »
+        // du kiosque est décochée — les éléments n'existent pas non plus.
         var p = document.getElementById('kdayProfit');
-        if (p) {
+        if (p && j.profit !== undefined) {
             p.textContent = price(j.profit);
             p.classList.toggle('is-profit', Number(j.profit) >= 0);
             p.classList.toggle('is-loss', Number(j.profit) < 0);
         }
 
         var marge = document.getElementById('kdayMargin');
-        if (marge) {
+        if (marge && j.margin !== undefined) {
             marge.textContent = (Number(j.margin) || 0).toFixed(1).replace('.', ',') + ' %';
         }
 
@@ -283,16 +289,16 @@ $dateLabel = $jours[(int) $dt->format('N') - 1] . ' ' . $dt->format('j') . ' ' .
             }
         }
 
-        // Transactions par moyen de paiement.
+        // Transactions par moyen de paiement (option « paiements »).
         function txText(n) { return n + ' transaction' + (n > 1 ? 's' : ''); }
-        set('kdayLiquideTx', txText(Number(j.liquide_tx) || 0));
-        set('kdayCarteTx', txText(Number(j.carte_tx) || 0));
+        if (j.liquide_tx !== undefined) set('kdayLiquideTx', txText(Number(j.liquide_tx) || 0));
+        if (j.carte_tx !== undefined) set('kdayCarteTx', txText(Number(j.carte_tx) || 0));
 
-        // Semaine en cours : CA + bénéfice coloré.
+        // Semaine en cours : CA + bénéfice coloré (si visible).
         var w = j.week || {};
         set('kdayWeekCa', price(w.ca));
         var wp = document.getElementById('kdayWeekProfit');
-        if (wp) {
+        if (wp && w.profit !== undefined) {
             var wpVal = Number(w.profit) || 0;
             wp.textContent = price(wpVal);
             wp.classList.toggle('is-pos', wpVal >= 0);

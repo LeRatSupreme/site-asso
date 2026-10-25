@@ -93,12 +93,58 @@ final class AdminAnalyticsController extends AdminBaseController
             return;
         }
 
-        $this->renderKiosk('admin/analytics/kiosk', $this->buildPage('week') + [
+        // Options du kiosque : sans « benefice », les montants sensibles
+        // sont RETIRÉS du payload (KPI, courbe, produits, prévision) — ils
+        // ne transitent ni dans le HTML ni dans l'îlot JSON — et sans
+        // « couts », le coût moyen par produit disparaît. Les drapeaux
+        // transmis à la vue/JS retirent cartes, séries et colonnes.
+        $opts = KioskPages::tokenOptions($token);
+        $hideBenefice = !$opts['benefice'];
+        $hideCosts = !$opts['couts'];
+
+        $page = $this->buildPage('week', null, $hideBenefice, $hideCosts);
+        if ($hideBenefice || $hideCosts) {
+            $page = self::scrubSensitive($page, $hideCosts ? ['cost'] : []);
+        }
+        $page['showBenefice'] = $opts['benefice'];
+        $page['showCosts'] = $opts['couts'];
+
+        $this->renderKiosk('admin/analytics/kiosk', $page + [
             'title'     => 'Analytique',
             'kiosk'     => true,
             'token'     => $token,
             'activeTab' => 'analyses',
         ]);
+    }
+
+    /**
+     * Retire récursivement les clés sensibles d'un tableau (kiosque
+     * sans les options « benefice » / « couts ») : KPI, tendance,
+     * produits, prévisions — les valeurs ne quittent jamais le serveur,
+     * ni en HTML ni dans l'îlot JSON.
+     *
+     * @param array<string,mixed> $payload
+     * @param list<string> $extraKeys clés additionnelles (ex. « cost »)
+     * @return array<string,mixed>
+     */
+    private static function scrubSensitive(array $payload, array $extraKeys = []): array
+    {
+        $sensitive = array_merge(
+            ['profit', 'profit_delta', 'margin', 'margin_pct', 'benefice', 'benefice_delta', 'prev_profit'],
+            $extraKeys
+        );
+
+        array_walk($payload, static function (&$value) use ($sensitive): void {
+            if (is_array($value)) {
+                $value = self::scrubSensitive($value, $sensitive);
+            }
+        });
+
+        foreach ($sensitive as $key) {
+            unset($payload[$key]);
+        }
+
+        return $payload;
     }
 
     /**
@@ -158,7 +204,7 @@ final class AdminAnalyticsController extends AdminBaseController
      *
      * @return array<string,mixed>
      */
-    private function buildPage(string $defaultPeriod = 'week', ?\DateTimeImmutable $now = null): array
+    private function buildPage(string $defaultPeriod = 'week', ?\DateTimeImmutable $now = null, bool $hideBenefice = false, bool $hideCosts = false): array
     {
         // ---- Lecture des filtres GET (valeurs sûres) ----
         // $defaultPeriod : sans « period » en GET, le dashboard ouvre sur
@@ -429,6 +475,23 @@ final class AdminAnalyticsController extends AdminBaseController
             ],
         ];
 
+        // Kiosque sans « benefice »/« couts » : le payload est épuré
+        // AVANT l'encodage JSON (l'îlot embarqué dans la vue le sert au
+        // JS) — les montants sensibles ne quittent jamais le serveur.
+        if ($hideBenefice || $hideCosts) {
+            $payload = self::scrubSensitive($payload, $hideCosts ? ['cost'] : []);
+        }
+        // Drapeaux d'options pour le JS kiosque (l'admin desktop n'utilise
+        // pas ce payload : true par défaut, jetons legacy inclus).
+        $payload['show_benefice'] = !$hideBenefice;
+        $payload['show_costs'] = !$hideCosts;
+        $json = (string) json_encode(
+            $payload,
+            JSON_NUMERIC_CHECK
+            | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
+            | JSON_UNESCAPED_UNICODE
+        );
+
         return [
             'filters'        => $filters,
             'periods'        => self::PERIODS,
@@ -469,12 +532,7 @@ final class AdminAnalyticsController extends AdminBaseController
             'goal_prob_pct'  => $goalProbPct,
             'hier_ecart'     => $hierEcart,
             'croissance_note' => $croissanceNote,
-            'json'           => (string) json_encode(
-                $payload,
-                JSON_NUMERIC_CHECK
-                | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
-                | JSON_UNESCAPED_UNICODE
-            ),
+            'json'           => $json,
         ];
     }
 

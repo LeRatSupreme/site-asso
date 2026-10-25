@@ -140,10 +140,22 @@ final class KioskComptageController extends Controller
         }
 
         $stats = $this->jourStats();
+        // Options du kiosque : bénéfice/marge et détail liquide/carte
+        // ne transitent NI dans le HTML NI dans le JSON d'auto-refresh
+        // quand l'option est décochée (KioskPages::tokenOptions).
+        $opts = KioskPages::tokenOptions($token);
+        if (!$opts['benefice']) {
+            unset($stats['profit'], $stats['margin'], $stats['week']['profit']);
+        }
+        if (!$opts['paiements']) {
+            unset($stats['liquide'], $stats['carte'], $stats['liquide_tx'], $stats['carte_tx']);
+        }
         $this->renderKiosk('admin/compta/kiosk-jour', [
             'title' => 'Récap du jour',
             'token' => $token,
             'stats' => $stats,
+            'showBenefice' => $opts['benefice'],
+            'showPaiements' => $opts['paiements'],
         ]);
     }
 
@@ -158,7 +170,18 @@ final class KioskComptageController extends Controller
             return;
         }
 
-        echo json_encode(['ok' => true] + $this->jourStats());
+        $stats = $this->jourStats();
+        // Mêmes règles que la page : les données masquées ne sont pas
+        // envoyées du tout (le lien seul ne doit pas les révéler).
+        $opts = KioskPages::tokenOptions($token);
+        if (!$opts['benefice']) {
+            unset($stats['profit'], $stats['margin'], $stats['week']['profit']);
+        }
+        if (!$opts['paiements']) {
+            unset($stats['liquide'], $stats['carte'], $stats['liquide_tx'], $stats['carte_tx']);
+        }
+
+        echo json_encode(['ok' => true] + $stats);
     }
 
     /**
@@ -179,10 +202,15 @@ final class KioskComptageController extends Controller
         [$from, $to, $preset] = $ledger->periodFromRequest();
         $entries = $ledger->buildEntries($from, $to);
 
+        // Option du kiosque : la ligne « bénéfice net » est masquée aux
+        // kiosques sans l'option bénéfice (rendu serveur uniquement).
+        $showBenefice = KioskPages::tokenOptions($token)['benefice'];
+
         $this->renderKiosk('admin/ledger/index', [
             'title'          => 'Livre comptable',
             'token'          => $token,
             'kiosk'          => true,
+            'showBenefice'   => $showBenefice,
             'entries'        => $entries,
             'from'           => $from,
             'to'             => $to,
@@ -608,6 +636,10 @@ final class KioskComptageController extends Controller
         // Jours CALENDaires couverts (week-end inclus), comme sur le réappro.
         $calDays = (int) $from->diff($to)->format('%a') + 1;
 
+        // Options du kiosque : bénéfice/marge et liquide/carte masqués
+        // quand décochés (rendu serveur uniquement — rien n'est envoyé).
+        $opts = KioskPages::tokenOptions($token);
+
         $this->renderKiosk('admin/compta/kiosk-admin-periode', [
             'title'      => 'Période analysée',
             'token'      => $token,
@@ -615,6 +647,8 @@ final class KioskComptageController extends Controller
             'stats'      => $stats,
             'calDays'    => $calDays,
             'rangeLabel' => 'du ' . $from->format('d/m') . ' au ' . $to->format('d/m'),
+            'showBenefice' => $opts['benefice'],
+            'showPaiements' => $opts['paiements'],
         ]);
     }
 
