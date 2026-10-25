@@ -144,6 +144,7 @@ $colspan = $showMoney ? 13 : 12;
     <input type="hidden" name="cat" id="f-cat">
     <input type="hidden" name="etat" id="f-etat">
     <input type="hidden" name="tri" id="f-tri">
+    <input type="hidden" name="voir" id="f-voir">
     <div class="reappro-field">
         <span class="field-label">Période analysée</span>
         <div class="chip-row" role="radiogroup" aria-label="Période analysée">
@@ -215,6 +216,16 @@ $colspan = $showMoney ? 13 : 12;
     transition: color 0.15s, border-color 0.15s;
 }
 .reinf-btn:hover { color: var(--primary); border-color: var(--primary); }
+
+/* Repli du tableau quand il y a beaucoup de lignes : bouton « Voir tout / Réduire »
+   sous le tableau (les lignes masquées gardent leurs champs pack soumis). */
+.reorder-toggle { display: flex; justify-content: center; padding: 0.55rem 1.1rem 0.2rem; }
+.reorder-toggle button {
+    border: 1px solid var(--border-strong); background: var(--card); color: var(--muted);
+    border-radius: 8px; padding: 0.45rem 1rem; cursor: pointer; font-size: 0.85rem; line-height: 1;
+    transition: color 0.15s, border-color 0.15s;
+}
+.reorder-toggle button:hover { color: var(--primary); border-color: var(--primary); }
 
 /* Téléphone étroit (360 px) : pastilles de période et réinitialisation
    en cibles tactiles, sans toucher à la logique de la page. */
@@ -413,6 +424,10 @@ $colspan = $showMoney ? 13 : 12;
         <?php endif; ?>
     </table>
 
+    <div class="reorder-toggle" id="reorder-toggle-wrap" hidden>
+        <button type="button" id="reorder-toggle" aria-expanded="false">Voir tout</button>
+    </div>
+
         <?php if (!$kiosk): ?>
         <div class="form-actions" style="padding: 0.9rem 1.1rem 1rem;">
             <button type="submit" class="btn btn-primary btn-sm">Enregistrer les packs</button>
@@ -498,6 +513,14 @@ $colspan = $showMoney ? 13 : 12;
     var total = rows.length;
     if (!total || !search) return;
 
+    // Repli du tableau quand il y a beaucoup de lignes : seules les
+    // COLLAPSE_LIMIT premières restent affichées jusqu'à « Voir tout ».
+    // Les lignes masquées gardent leurs champs (packs) soumis au formulaire.
+    var COLLAPSE_LIMIT = 15;
+    var expanded = getParam('voir') === '1';
+    var toggleWrap = document.getElementById('reorder-toggle-wrap');
+    var toggleBtn  = document.getElementById('reorder-toggle');
+
     // Libellés d'origine (casse réelle) pour la surbrillance.
     rows.forEach(function (tr) {
         var strong = tr.querySelector('td strong');
@@ -541,7 +564,7 @@ $colspan = $showMoney ? 13 : 12;
     function recomputeTotal() {
         var sum = 0, cost = 0;
         rows.forEach(function (tr) {
-            if (tr.style.display === 'none') return;
+            if (!tr._filterVisible) return;
             var toOrder = parseInt(tr.getAttribute('data-toorder'), 10) || 0;
             sum += toOrder;
             var unit = parseFloat(tr.getAttribute('data-unitcost'));
@@ -619,12 +642,32 @@ $colspan = $showMoney ? 13 : 12;
             var okCat = cat === '' || tr.getAttribute('data-cat') === cat;
             var okState = state === '' || tr.getAttribute('data-state') === state;
             var visible = okSearch && okCat && okState;
-            tr.style.display = visible ? '' : 'none';
-            if (visible) { shown++; highlight(tr, tokens); }
-            else { var strong = tr.querySelector('td strong'); if (strong) strong.textContent = tr._nameRaw; }
+            tr._filterVisible = visible;
+            if (visible) {
+                shown++;
+                highlight(tr, tokens);
+            } else {
+                var strong = tr.querySelector('td strong');
+                if (strong) strong.textContent = tr._nameRaw;
+            }
+            // Repli : au-delà de COLLAPSE_LIMIT lignes filtrées, le reste
+            // est masqué tant que l'utilisateur n'a pas étendu.
+            tr.style.display = (visible && (expanded || shown <= COLLAPSE_LIMIT)) ? '' : 'none';
         });
+        var displayed = expanded ? shown : Math.min(shown, COLLAPSE_LIMIT);
         if (emptyRow) emptyRow.hidden = shown > 0;
-        if (countEl) countEl.textContent = shown + ' / ' + total + ' produit' + (total > 1 ? 's' : '');
+        if (countEl) countEl.textContent = displayed + ' / ' + total + ' produit' + (total > 1 ? 's' : '');
+        if (toggleBtn && toggleWrap) {
+            if (shown > COLLAPSE_LIMIT) {
+                toggleWrap.hidden = false;
+                toggleBtn.textContent = expanded
+                    ? 'Réduire (les ' + COLLAPSE_LIMIT + ' premières lignes)'
+                    : 'Voir tout (' + shown + ' produits)';
+                toggleBtn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+            } else {
+                toggleWrap.hidden = true;
+            }
+        }
         if (resetBtn) resetBtn.hidden = (search.value.trim() === '' && cat === '' && state === '');
         sortRows();
         recomputeTotal();
@@ -632,7 +675,7 @@ $colspan = $showMoney ? 13 : 12;
         // Synchronise l'URL (filtres partageables / rechargements).
         if (window.URLSearchParams && window.history && window.history.replaceState) {
             var sp = new URLSearchParams(window.location.search);
-            [['q', search.value.trim()], ['cat', cat], ['etat', state], ['tri', (sortSel && sortSel.value !== DEFAULT_SORT) ? sortSel.value : '']]
+            [['q', search.value.trim()], ['cat', cat], ['etat', state], ['tri', (sortSel && sortSel.value !== DEFAULT_SORT) ? sortSel.value : ''], ['voir', expanded ? '1' : '']]
                 .forEach(function (p) { if (p[1]) { sp.set(p[0], p[1]); } else { sp.delete(p[0]); } });
             var qs = sp.toString();
             window.history.replaceState(null, '', window.location.pathname + (qs ? '?' + qs : ''));
@@ -640,7 +683,7 @@ $colspan = $showMoney ? 13 : 12;
 
         // Miroirs cachés dans le formulaire de période (GET) : les filtres
         // survivent au changement de période.
-        [['f-q', search.value.trim()], ['f-cat', cat], ['f-etat', state], ['f-tri', sortSel ? sortSel.value : '']]
+        [['f-q', search.value.trim()], ['f-cat', cat], ['f-etat', state], ['f-tri', sortSel ? sortSel.value : ''], ['f-voir', expanded ? '1' : '']]
             .forEach(function (p) { var el = document.getElementById(p[0]); if (el) el.value = p[1]; });
     }
 
@@ -657,8 +700,18 @@ $colspan = $showMoney ? 13 : 12;
         if (catSel) catSel.value = '';
         if (stateSel) stateSel.value = '';
         if (sortSel) sortSel.value = DEFAULT_SORT;
+        expanded = false;
         apply();
         search.focus();
+    });
+    if (toggleBtn) toggleBtn.addEventListener('click', function () {
+        expanded = !expanded;
+        apply();
+        // Réduire → on remonte au tableau pour ne pas se retrouver sous la liste.
+        if (!expanded) {
+            var head = document.querySelector('.reorder-table');
+            if (head && head.scrollIntoView) head.scrollIntoView({ block: 'start' });
+        }
     });
     apply();
 })();
