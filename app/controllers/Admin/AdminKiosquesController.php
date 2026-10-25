@@ -181,6 +181,7 @@ final class AdminKiosquesController extends AdminBaseController
             'adminPages'     => $this->adminPages(),
             'customKiosques' => Kiosque::all(),
             'tileCatalog'    => KioskPages::all(),
+            'optionCatalog'  => KioskPages::optionCatalog(),
         ]);
     }
 
@@ -228,9 +229,22 @@ final class AdminKiosquesController extends AdminBaseController
     }
 
     /**
-     * Crée un kiosque personnalisé : nom + tuiles cochées. Le jeton est
-     * généré par le modèle et n'est JAMAIS renvoyé au HTML — l'admin le
-     * découvre via « Afficher le lien » (reveal audité).
+     * Normalise les OPTIONS cochées d'un formulaire de kiosque : seuls
+     * les ids du catalogue KioskPages sont conservés (méthode pure du
+     * catalogue, réordonnée, dédoublonnée).
+     *
+     * @return list<string>
+     */
+    private function normalizeOptions(): array
+    {
+        return KioskPages::normalizeOptions($_POST['options'] ?? null);
+    }
+
+    /**
+     * Crée un kiosque personnalisé : nom + tuiles cochées + options de
+     * visibilité. Le jeton est généré par le modèle et n'est JAMAIS
+     * renvoyé au HTML — l'admin le découvre via « Afficher le lien »
+     * (reveal audité).
      */
     public function create(): void
     {
@@ -248,9 +262,11 @@ final class AdminKiosquesController extends AdminBaseController
             redirect(url('/admin/kiosques'));
         }
 
-        $id = Kiosque::create($name, $pages, (string) Auth::user()['email']);
+        $options = $this->normalizeOptions();
 
-        $this->audit('kiosques.create', 'kiosque', $id, ['name' => $name, 'pages' => $pages]);
+        $id = Kiosque::create($name, $pages, (string) Auth::user()['email'], $options);
+
+        $this->audit('kiosques.create', 'kiosque', $id, ['name' => $name, 'pages' => $pages, 'options' => $options]);
         $this->setFlash('success', 'Kiosque « ' . $name . ' » créé — révèle son lien pour l\'envoyer aux personnes concernées.');
 
         redirect(url('/admin/kiosques'));
@@ -282,9 +298,11 @@ final class AdminKiosquesController extends AdminBaseController
             redirect(url('/admin/kiosques'));
         }
 
-        Kiosque::update($id, $name, $pages);
+        $options = $this->normalizeOptions();
 
-        $this->audit('kiosques.save', 'kiosque', $id, ['name' => $name, 'pages' => $pages]);
+        Kiosque::update($id, $name, $pages, $options);
+
+        $this->audit('kiosques.save', 'kiosque', $id, ['name' => $name, 'pages' => $pages, 'options' => $options]);
         $this->setFlash('success', 'Kiosque « ' . $name . ' » mis à jour.');
 
         redirect(url('/admin/kiosques'));

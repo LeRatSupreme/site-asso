@@ -16,8 +16,9 @@ declare(strict_types=1);
  * @var array<string,mixed> $user
  * @var list<array{emoji:string,label:string,desc:string,path:string,main?:bool,scope:string}> $memberPages
  * @var list<array{emoji:string,label:string,desc:string,path?:string,scope?:string,url?:string,kiosk?:bool,main?:bool}> $adminPages
- * @var list<array{id:string,name:string,token:string,pages:list<string>,created_by:string,created_at:string,updated_at:?string}> $customKiosques
+ * @var list<array{id:string,name:string,token:string,pages:list<string>,options:?list<string>,created_by:string,created_at:string,updated_at:?string}> $customKiosques
  * @var list<array{id:string,emoji:string,label:string,desc:string,path:string}> $tileCatalog
+ * @var list<array{id:string,emoji:string,label:string,desc:string}> $optionCatalog
  */
 ?>
 <style>
@@ -88,6 +89,12 @@ declare(strict_types=1);
         border: 1px solid rgba(255, 255, 255, 0.06);
     }
     .kq-check:hover { background: rgba(255, 255, 255, 0.06); }
+    .kq-opts-title {
+        margin: 0.75rem 0 0.1rem; font-size: 0.78rem; font-weight: 900;
+        text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted, #8892a6);
+    }
+    .kq-opts-note { margin: 0.15rem 0 0; font-size: 0.72rem; color: var(--muted, #8892a6); }
+    .kq-chip.kq-chip-on { color: var(--primary, #48bdd3); background: rgba(72, 189, 211, 0.12); border-color: rgba(72, 189, 211, 0.35); }
     .kq-details {
         border: 1px solid rgba(255, 255, 255, 0.08);
         border-radius: 10px; padding: 0.45rem 0.7rem;
@@ -228,6 +235,16 @@ declare(strict_types=1);
                     </label>
                     <?php endforeach; ?>
                 </div>
+                <p class="kq-opts-title">Données sensibles visibles</p>
+                <p class="kq-opts-note">Personnalise ce que cette personne voit sur ses pages — décoché = masqué.</p>
+                <div class="kq-checks">
+                    <?php foreach ($optionCatalog as $opt): ?>
+                    <label class="kq-check" title="<?= e($opt['desc']) ?>">
+                        <input type="checkbox" name="options[]" value="<?= e($opt['id']) ?>">
+                        <span><?= $opt['emoji'] ?> <?= e($opt['label']) ?></span>
+                    </label>
+                    <?php endforeach; ?>
+                </div>
                 <button type="submit" class="btn btn-primary btn-sm">Créer le kiosque</button>
             </form>
         </div>
@@ -241,6 +258,25 @@ declare(strict_types=1);
                 $chipLabels[] = $tile['emoji'] . ' ' . $tile['label'];
             }
         }
+        // Options effectives du kiosque : NULL (kiosque antérieur) =
+        // comportement historique — bénéfice/paiements visibles, coûts
+        // si une tuile pleine « avec coûts » est cochée.
+        $optById = [];
+        foreach ($optionCatalog as $opt) {
+            $optById[$opt['id']] = $opt;
+        }
+        if ($kq['options'] !== null) {
+            $effectiveOpts = $kq['options'];
+        } else {
+            $effectiveOpts = ['benefice', 'paiements'];
+            if (in_array('reappro', $kq['pages'], true) || in_array('liste', $kq['pages'], true)) {
+                $effectiveOpts[] = 'couts';
+            }
+        }
+        $optChips = [];
+        foreach ($optionCatalog as $opt) {
+            $optChips[$opt['id']] = in_array($opt['id'], $effectiveOpts, true);
+        }
     ?>
     <div class="kq-card is-admin">
         <div class="kq-head">
@@ -252,6 +288,11 @@ declare(strict_types=1);
             <?php foreach ($chipLabels as $chip): ?><span class="kq-chip"><?= e($chip) ?></span><?php endforeach; ?>
         </div>
         <?php endif; ?>
+        <div class="kq-chips" title="Données sensibles visibles sur ce kiosque">
+            <?php foreach ($optChips as $optId => $on): ?>
+            <span class="kq-chip<?= $on ? ' kq-chip-on' : '' ?>"><?= $on ? '👁' : '🚫' ?> <?= e($optById[$optId]['label']) ?></span>
+            <?php endforeach; ?>
+        </div>
         <div class="kq-row" data-kq-scope="custom" data-kq-id="<?= e($kq['id']) ?>">
             <input type="text" readonly value="••••••••" onclick="this.select()"
                    aria-label="Lien <?= e($kq['name']) ?> — masqué, utilise le bouton « Afficher le lien »">
@@ -272,6 +313,15 @@ declare(strict_types=1);
                     <label class="kq-check" title="<?= e($tile['desc']) ?>">
                         <input type="checkbox" name="pages[]" value="<?= e($tile['id']) ?>"<?= in_array($tile['id'], $kq['pages'], true) ? ' checked' : '' ?>>
                         <span><?= $tile['emoji'] ?> <?= e($tile['label']) ?></span>
+                    </label>
+                    <?php endforeach; ?>
+                </div>
+                <p class="kq-opts-title">Données sensibles visibles</p>
+                <div class="kq-checks">
+                    <?php foreach ($optionCatalog as $opt): ?>
+                    <label class="kq-check" title="<?= e($opt['desc']) ?>">
+                        <input type="checkbox" name="options[]" value="<?= e($opt['id']) ?>"<?= in_array($opt['id'], $effectiveOpts, true) ? ' checked' : '' ?>>
+                        <span><?= $opt['emoji'] ?> <?= e($opt['label']) ?></span>
                     </label>
                     <?php endforeach; ?>
                 </div>

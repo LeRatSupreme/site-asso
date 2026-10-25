@@ -867,6 +867,10 @@ CREATE TABLE IF NOT EXISTS kiosques (
     name VARCHAR(120) NOT NULL,
     token VARCHAR(64) NOT NULL,
     pages TEXT NOT NULL,
+    -- Options de visibilité par kiosque (JSON, ids du catalogue
+    -- KioskPages::OPTION_IDS : benefice, paiements, couts).
+    -- NULL = kiosque pré-options : comportement historique conservé.
+    options TEXT NULL DEFAULT NULL,
     created_by VARCHAR(255) NOT NULL DEFAULT '',
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NULL DEFAULT NULL,

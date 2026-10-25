@@ -22,6 +22,21 @@ use App\Models\Setting;
 final class KioskPages
 {
     /**
+     * Catalogue des OPTIONS de visibilité par kiosque : ce que chaque
+     * personne a le droit de VOIR, indépendamment des pages cochées.
+     * Un kiosque dont les options sont définies (colonne non NULL)
+     * n'affiche QUE ce qui est coché ; NULL (kiosque antérieur) garde
+     * le comportement historique.
+     *
+     * @var list<array{id:string,emoji:string,label:string,desc:string}>
+     */
+    private const OPTIONS = [
+        ['id' => 'benefice', 'emoji' => '💰', 'label' => 'Bénéfices & marges', 'desc' => 'Bénéfice, marge et bénéfice net : récap du jour, période, analytique, livre comptable.'],
+        ['id' => 'paiements', 'emoji' => '💳', 'label' => 'Détail des paiements', 'desc' => 'Répartition liquide / carte (récap du jour, période).'],
+        ['id' => 'couts', 'emoji' => '🧮', 'label' => 'Coûts d’achat', 'desc' => 'Prix d’achat et coûts de revient : réapprovisionnement et liste de courses.'],
+    ];
+
+    /**
      * Tuiles autorisées par le jeton MEMBRES legacy
      * (settings.reappro_kiosk_token, généré par Kiosk::token()).
      *
@@ -70,6 +85,119 @@ final class KioskPages
     public static function all(): array
     {
         return self::TILES;
+    }
+
+    /**
+     * Catalogue des options de visibilité, dans l'ordre du catalogue.
+     *
+     * @return list<array{id:string,emoji:string,label:string,desc:string}>
+     */
+    public static function optionCatalog(): array
+    {
+        return self::OPTIONS;
+    }
+
+    /**
+     * Liste des ids d'options, dans l'ordre du catalogue.
+     *
+     * @return list<string>
+     */
+    public static function optionIds(): array
+    {
+        return array_column(self::OPTIONS, 'id');
+    }
+
+    /**
+     * Normalise les options cochées d'un formulaire de kiosque
+     * (méthode PURE, testée sans base) : seuls les ids du catalogue
+     * sont conservés, dédoublonnés puis réordonnés selon le catalogue
+     * — exactement le contrat de normalizePages côté contrôleur.
+     *
+     * @return list<string>
+     */
+    public static function normalizeOptions(mixed $posted): array
+    {
+        if (!is_array($posted)) {
+            return [];
+        }
+
+        $valid = array_fill_keys(self::optionIds(), true);
+        $picked = [];
+        foreach ($posted as $opt) {
+            $opt = (string) $opt;
+            if (isset($valid[$opt])) {
+                $picked[$opt] = true;
+            }
+        }
+
+        $options = [];
+        foreach (self::optionIds() as $id) {
+            if (isset($picked[$id])) {
+                $options[] = $id;
+            }
+        }
+
+        return $options;
+    }
+
+    /**
+     * Options EFFECTIVES d'un jeton (LA porte unique pour savoir ce
+     * qu'un kiosque a le droit d'afficher) :
+     *
+     *  - jeton ADMIN legacy : tout visible (données financières
+     *    complètes, comportement historique) ;
+     *  - jeton MEMBRES legacy (bénévole) : rien de sensible ;
+     *  - kiosque personnalisé avec options définies (colonne non
+     *    NULL) : EXACTEMENT les options cochées ;
+     *  - kiosque personnalisé antérieur (options NULL) : bénéfice et
+     *    paiements visibles (comme avant), coûts selon la tuile pleine
+     *    « avec coûts » (reprise du comportement tokenIsFullData).
+     *
+     * Jeton vide/inconnu : tout à false (refus par défaut).
+     *
+     * @return array{benefice:bool,paiements:bool,couts:bool}
+     */
+    public static function tokenOptions(string $token): array
+    {
+        $given = trim($token);
+        if ($given === '') {
+            return ['benefice' => false, 'paiements' => false, 'couts' => false];
+        }
+
+        $admin = trim((string) Setting::get('admin_kiosk_token', ''));
+        if ($admin !== '' && hash_equals($admin, $given)) {
+            return ['benefice' => true, 'paiements' => true, 'couts' => true];
+        }
+
+        $member = trim((string) Setting::get('reappro_kiosk_token', ''));
+        if ($member !== '' && hash_equals($member, $given)) {
+            return ['benefice' => false, 'paiements' => false, 'couts' => false];
+        }
+
+        try {
+            $k = Kiosque::findByToken($given);
+        } catch (\Throwable) {
+            $k = null;
+        }
+
+        if ($k === null) {
+            return ['benefice' => false, 'paiements' => false, 'couts' => false];
+        }
+
+        if ($k['options'] !== null) {
+            return [
+                'benefice' => in_array('benefice', $k['options'], true),
+                'paiements' => in_array('paiements', $k['options'], true),
+                'couts'    => in_array('couts', $k['options'], true),
+            ];
+        }
+
+        // Kiosque antérieur : comportement historique.
+        return [
+            'benefice' => true,
+            'paiements' => true,
+            'couts'    => in_array('reappro', $k['pages'], true) || in_array('liste', $k['pages'], true),
+        ];
     }
 
     /**
@@ -168,11 +296,12 @@ final class KioskPages
     /**
      * Variante « données complètes » (coûts visibles sur les pages
      * Réappro/Liste) : vrai pour le jeton ADMIN legacy ; faux pour le
-     * jeton MEMBRES legacy (bénévole) ; pour un kiosque personnalisé,
-     * vrai SEULEMENT si l'admin a coché la variante complète ($pageId =
-     * l'identifiant PLEIN, ex. « reappro » ou « liste ») — un kiosque
-     * limité à la variante lite (« reappro-lite » / « liste-lite »)
-     * reste en variante allégée, sans chiffre financier.
+     * jeton MEMBRES legacy (bénévole) ; pour un kiosque personnalisé
+     * PILOTÉ PAR SES OPTIONS (colonne non NULL), vrai SSI l'option
+     * « couts » est cochée — la tuile pleine/lite ne décide plus rien ;
+     * pour un kiosque antérieur (options NULL), vrai seulement si
+     * l'admin avait coché la tuile pleine ($pageId) — comportement
+     * historique conservé.
      */
     public static function tokenIsFullData(string $token, string $pageId = 'reappro'): bool
     {
@@ -198,6 +327,15 @@ final class KioskPages
             return false;
         }
 
-        return $k !== null && in_array($pageId, $k['pages'], true);
+        if ($k === null) {
+            return false;
+        }
+
+        // Kiosque piloté par ses options : SEULE l'option « couts » décide.
+        if ($k['options'] !== null) {
+            return in_array('couts', $k['options'], true);
+        }
+
+        return in_array($pageId, $k['pages'], true);
     }
 }

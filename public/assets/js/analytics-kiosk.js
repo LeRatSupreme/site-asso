@@ -121,6 +121,35 @@
     // ---------- Onglet « Vue » : trend CA/bénéfice + top produits ----------
     function initVueCharts() {
         var tr = data.trend || { labels: [], ca: [], profit: [] };
+        // Option du kiosque : sans bénéfice, la courbe « Bénéfice » et sa
+        // légende disparaissent (les valeurs sont absentes du payload).
+        var showBenefice = data.show_benefice !== false;
+        var datasets = [
+            {
+                type: 'bar',
+                label: "Chiffre d'affaires (€)",
+                data: tr.ca,
+                backgroundColor: 'rgba(72,189,211,.55)',
+                borderColor: teal,
+                borderWidth: 1,
+                borderRadius: 4,
+                order: 2,
+            },
+        ];
+        if (showBenefice && tr.profit) {
+            datasets.push({
+                type: 'line',
+                label: 'Bénéfice (€)',
+                data: tr.profit,
+                borderColor: violet,
+                backgroundColor: 'rgba(97,80,170,.15)',
+                tension: 0.35,
+                pointBackgroundColor: violet,
+                pointRadius: 3,
+                fill: false,
+                order: 1,
+            });
+        }
         var sub = document.getElementById('ka-trend-sub');
         if (sub) {
             var g = (data.filters || {}).granularity || 'auto';
@@ -132,30 +161,7 @@
                 type: 'bar',
                 data: {
                     labels: tr.labels,
-                    datasets: [
-                        {
-                            type: 'bar',
-                            label: "Chiffre d'affaires (€)",
-                            data: tr.ca,
-                            backgroundColor: 'rgba(72,189,211,.55)',
-                            borderColor: teal,
-                            borderWidth: 1,
-                            borderRadius: 4,
-                            order: 2,
-                        },
-                        {
-                            type: 'line',
-                            label: 'Bénéfice (€)',
-                            data: tr.profit,
-                            borderColor: violet,
-                            backgroundColor: 'rgba(97,80,170,.15)',
-                            tension: 0.35,
-                            pointBackgroundColor: violet,
-                            pointRadius: 3,
-                            fill: false,
-                            order: 1,
-                        },
-                    ],
+                    datasets: datasets,
                 },
                 options: {
                     responsive: true,
@@ -640,21 +646,30 @@
     // Une carte produit. withCat = chip catégorie (masquée en tri
     // « Catégorie », redondante avec l'entête de section). La marge est
     // OBSERVÉE (coût à la date de vente), distincte de la marge
-    // prévisionnelle de la carte « Bénéfice prévu ».
+    // prévisionnelle de la carte « Bénéfice prévu ». Options du kiosque :
+    // bénéfice/marge et coût moyen masqués si décochés (clés absentes
+    // du payload).
+    var showBenefice = data.show_benefice !== false;
+    var showCosts = data.show_costs !== false;
+
     function cardHtml(r, withCat) {
-        var pp = profitParts(r.profit);
+        var stats = '<span class="ka-pcard-ca">CA : ' + money(r.ca) + '</span>';
+        if (showBenefice && r.profit !== undefined) {
+            var pp = profitParts(r.profit);
+            stats += '<span class="ka-pcard-profit ' + pp.cls + '">Bénéfice : ' + pp.text + '</span>'
+                + '<span class="ka-pcard-margin">Marge observée (coût à la date de vente) ' + Math.round(Number(r.margin)) + ' %</span>';
+        }
+        var meta = '<span>×' + Number(r.qty) + '</span>';
+        if (showCosts && r.cost !== undefined) {
+            meta += '<span>Coût moy. ' + money(r.cost) + '</span>';
+        }
         return '<div class="ka-pcard">'
             + '<div class="ka-pcard-top">'
             + '<span class="ka-pcard-name">' + esc(r.product) + '</span>'
             + (withCat ? '<span class="ka-pcard-cat">' + esc(r.category) + '</span>' : '')
             + '</div>'
-            + '<div class="ka-pcard-meta"><span>×' + Number(r.qty) + '</span>'
-            + '<span>Coût moy. ' + money(r.cost) + '</span></div>'
-            + '<div class="ka-pcard-stats">'
-            + '<span class="ka-pcard-ca">CA : ' + money(r.ca) + '</span>'
-            + '<span class="ka-pcard-profit ' + pp.cls + '">Bénéfice : ' + pp.text + '</span>'
-            + '<span class="ka-pcard-margin">Marge observée (coût à la date de vente) ' + Math.round(Number(r.margin)) + ' %</span>'
-            + '</div>'
+            + '<div class="ka-pcard-meta">' + meta + '</div>'
+            + '<div class="ka-pcard-stats">' + stats + '</div>'
             + '</div>';
     }
 
@@ -675,11 +690,14 @@
         });
 
         if (totalsEl) {
-            var tp = profitParts(Number(totals.profit || 0));
-            totalsEl.innerHTML = '<span>Total ' + Number(totals.qty || 0) + ' u.</span>'
-                + '<span>CA <strong>' + money(totals.ca || 0) + '</strong></span>'
-                + '<span class="ka-ptot-profit ' + tp.cls + '">Bénéfice ' + tp.text + '</span>'
-                + '<span>Marge ' + (totals.margin_pct != null ? pct(totals.margin_pct) : '—') + '</span>';
+            var html = '<span>Total ' + Number(totals.qty || 0) + ' u.</span>'
+                + '<span>CA <strong>' + money(totals.ca || 0) + '</strong></span>';
+            if (showBenefice && totals.profit !== undefined) {
+                var tp = profitParts(Number(totals.profit || 0));
+                html += '<span class="ka-ptot-profit ' + tp.cls + '">Bénéfice ' + tp.text + '</span>'
+                    + '<span>Marge ' + (totals.margin_pct != null ? pct(totals.margin_pct) : '—') + '</span>';
+            }
+            totalsEl.innerHTML = html;
         }
 
         // Tri « Catégorie » = GROUPAGE : sections par catégorie (CA total
@@ -731,13 +749,19 @@
         if (btnCsv) {
             btnCsv.addEventListener('click', function () {
                 var header = ['Produit', 'Categorie', 'Qte', 'CA', 'Cout moyen', 'Benefice', 'Marge %'];
+                if (!showCosts) { header.splice(4, 1); }
+                if (!showBenefice) { header.splice(-2, 2); }
                 var lines = [header.join(';')];
                 rows.forEach(function (r) {
-                    lines.push([
+                    var cols = [
                         csvEsc(r.product), csvEsc(r.category), r.qty,
-                        Number(r.ca).toFixed(2).replace('.', ','), Number(r.cost).toFixed(2).replace('.', ','),
+                        Number(r.ca).toFixed(2).replace('.', ','),
+                        Number(r.cost).toFixed(2).replace('.', ','),
                         Number(r.profit).toFixed(2).replace('.', ','), Number(r.margin).toFixed(1).replace('.', ',')
-                    ].join(';'));
+                    ];
+                    if (!showCosts) { cols.splice(4, 1); }
+                    if (!showBenefice) { cols.splice(-2, 2); }
+                    lines.push(cols.join(';'));
                 });
                 var blob = new Blob(['\uFEFF' + lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
                 var a = document.createElement('a');
