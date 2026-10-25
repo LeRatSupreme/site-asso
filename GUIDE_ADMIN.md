@@ -23,6 +23,7 @@
 15. [Check-in QR codes aux événements](#15--check-in-qr-codes-aux-événements)
 16. [Conseils & bonnes pratiques](#16--conseils--bonnes-pratiques)
 17. [Modules récents (livre comptable, caisses, kiosques, SMS, scan)](#17--modules-récents)
+19. [Monitoring](#19--monitoring)
 
 ---
 
@@ -747,6 +748,28 @@ Dans le formulaire **Achats** (Admin → Comptabilité → Opérations).
 - Grille **multi-lignes** : toute une commande fournisseur en un seul enregistrement (jusqu'à 60 lignes).
 - Colle « Nom ; Qté ; Montant » copié depuis une facture : la grille se remplit toute seule.
 - Au clavier : **Entrée** enchaîne les lignes, **Ctrl+Entrée** enregistre ; case **hors stock** et **TVA par ligne** disponibles.
+
+---
+
+## 19. 📡 Monitoring
+
+Surveiller la disponibilité du site **https://asso.aremond.ovh/** et être alerté **par email en cas de panne**, via le service gratuit **UptimeRobot**.
+
+### Mise en place (une seule fois)
+1. **Créer un compte** gratuit sur **uptimerobot.com** — ⚠️ **ACTION HUMAINE** : à faire par un administrateur, une seule fois.
+2. Clique **« Add New Monitor »** et configure :
+
+| Réglage | Valeur |
+|---------|--------|
+| Type | **HTTPS** |
+| URL | `https://asso.aremond.ovh/` |
+| Intervalle | **5 minutes** |
+| Alertes | **Email** |
+
+3. **Vérifier les alertes email** : elles doivent être actives et pointer vers une adresse **réellement consultée** (boîte AEIC / admin).
+4. **Contrôler** : après quelques minutes, le monitor doit passer **« Up »** ; si UptimeRobot propose un test d'alerte, utilise-le.
+
+> 💡 En cas d'alerte : vérifie que le serveur (VPS `51.254.129.80`) répond, puis reprends ce guide. Pour le reste, contacte l'administrateur technique (Remond Adrien).
 
 ---
 
