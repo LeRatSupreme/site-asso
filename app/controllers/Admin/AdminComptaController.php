@@ -1520,6 +1520,10 @@ final class AdminComptaController extends AdminBaseController
             'title' => 'Auto-détection des doublons',
             'user'  => $user,
             'rows'  => $rows,
+            // Toutes les clés produits existantes : datalist du champ
+            // « Produit canonique » — choisir une cible EXISTANTE évite
+            // les fautes de frappe, première cause de doublons.
+            'productKeys' => ProductKeyMerge::allKeys(),
         ]);
     }
 
