@@ -1,5 +1,7 @@
 # AEIC — Site (PHP pur)
 
+![CI](https://github.com/LeRatSupreme/site-asso/actions/workflows/ci.yml/badge.svg?branch=experiments)
+
 Site de l'**AEIC — Association Étudiante Informatique de Calais**, développé en
 **PHP 8.2+ pur + HTML/CSS vanilla**, sans framework ni Docker.
 
