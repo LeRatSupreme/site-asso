@@ -20,16 +20,17 @@ final class Kiosque extends Model
     /**
      * Crée un kiosque (id et jeton générés aléatoirement).
      *
-     * Les options de visibilité sont TOUJOURS écrites (au minimum une
-     * liste vide) : un kiosque créé ici est immédiatement piloté par
-     * ses options, sans repli sur le comportement historique réservé
-     * aux kiosques antérieurs (colonne NULL, cf. castRow).
+     * Options de visibilité : null (défaut) = non configuré → colonne
+     * SQL NULL, le kiosque garde le comportement historique réservé
+     * aux kiosques antérieurs (cf. castRow) ; une liste explicite
+     * (même vide) = choix du formulaire → tout masqué sauf les options
+     * cochées.
      *
-     * @param list<string> $pages   ids de tuiles autorisées
-     * @param list<string> $options ids d'options de visibilité activées
+     * @param list<string>      $pages   ids de tuiles autorisées
+     * @param list<string>|null $options ids d'options de visibilité activées, ou null
      * @return string l'id du kiosque créé
      */
-    public static function create(string $name, array $pages, string $createdBy = '', array $options = []): string
+    public static function create(string $name, array $pages, string $createdBy = '', ?array $options = null): string
     {
         $id = 'kq_' . bin2hex(random_bytes(8));
 
@@ -41,7 +42,7 @@ final class Kiosque extends Model
             $name,
             bin2hex(random_bytes(20)),
             json_encode(array_values($pages), JSON_UNESCAPED_UNICODE),
-            json_encode(array_values($options), JSON_UNESCAPED_UNICODE),
+            $options === null ? null : json_encode(array_values($options), JSON_UNESCAPED_UNICODE),
             $createdBy,
         ]);
 
@@ -103,13 +104,15 @@ final class Kiosque extends Model
     }
 
     /**
-     * Renomme un kiosque, remplace sa liste de tuiles et ses options
-     * de visibilité (toujours écrites : le formulaire décide de TOUT).
+     * Renomme un kiosque et remplace sa liste de tuiles et ses options
+     * de visibilité : null = retour au comportement historique (colonne
+     * NULL) ; une liste explicite (même vide) = le formulaire décide
+     * de TOUT (tout masqué sauf les options cochées).
      *
-     * @param list<string>  $pages   ids de tuiles autorisées
-     * @param list<string>  $options ids d'options activées
+     * @param list<string>      $pages   ids de tuiles autorisées
+     * @param list<string>|null $options ids d'options activées, ou null
      */
-    public static function update(string $id, string $name, array $pages, array $options = []): bool
+    public static function update(string $id, string $name, array $pages, ?array $options = null): bool
     {
         $stmt = self::pdo()->prepare(
             'UPDATE kiosques SET name = ?, pages = ?, options = ?, updated_at = NOW() WHERE id = ?'
@@ -117,7 +120,7 @@ final class Kiosque extends Model
         $stmt->execute([
             $name,
             json_encode(array_values($pages), JSON_UNESCAPED_UNICODE),
-            json_encode(array_values($options), JSON_UNESCAPED_UNICODE),
+            $options === null ? null : json_encode(array_values($options), JSON_UNESCAPED_UNICODE),
             $id,
         ]);
 

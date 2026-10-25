@@ -6,6 +6,7 @@ namespace Tests\Unit;
 
 use App\Core\Compta\KioskPages;
 use App\Models\Kiosque;
+use App\Models\Model;
 use App\Models\Setting;
 use PHPUnit\Framework\TestCase;
 
@@ -27,7 +28,7 @@ final class KioskPagesOptionsTest extends TestCase
     /** @var list<string> ids de kiosques créés par le test (nettoyage). */
     private array $createdIds = [];
 
-    private function newKiosque(string $name, array $pages, array $options): array
+    private function newKiosque(string $name, array $pages, ?array $options = null): array
     {
         $id = Kiosque::create($name, $pages, 'test', $options);
         $this->createdIds[] = $id;
@@ -54,6 +55,12 @@ final class KioskPagesOptionsTest extends TestCase
             return false;
         }
 
+        // Branche le modèle sur la base de test (même mécanisme que
+        // AliasKeyRepointTest) : sans cela, Model::pdo() retombe sur db(),
+        // désactivée par le pont CostLotStockDbTest quand il tourne avant
+        // dans le même process (executionOrder=random).
+        Model::setTestPdo($pdo);
+
         return true;
     }
 
@@ -76,6 +83,11 @@ final class KioskPagesOptionsTest extends TestCase
                     // silencieux.
                 }
             }
+
+            // Dernier geste, APRÈS le nettoyage (DELETE et Setting::set
+            // ont besoin du PDO modèle) : détacher pour que les tests
+            // suivants retombent sur db().
+            Model::setTestPdo(null);
         }
     }
 
@@ -221,5 +233,53 @@ final class KioskPagesOptionsTest extends TestCase
         $k3 = Kiosque::find($id);
         self::assertTrue(KioskPages::tokenIsFullData($k3['token'], 'liste'));
         self::assertFalse(KioskPages::tokenIsFullData($k3['token'], 'reappro'));
+    }
+
+    public function testCreateSansOptionsComporteCommeUnKiosqueAnterieur(): void
+    {
+        if (!$this->requireDatabase()) {
+            return;
+        }
+
+        // Sans 4e argument : colonne NULL (non configuré) et
+        // comportement historique — pas de pilotage par les options.
+        $k = $this->newKiosque('kq_test create sans options', ['reappro']);
+        self::assertNotNull($k);
+        self::assertNull($k['options'], 'create() sans options doit écrire NULL (non configuré).');
+
+        // Tuile pleine « reappro » cochée → coûts visibles (historique).
+        self::assertTrue(KioskPages::tokenIsFullData($k['token'], 'reappro'));
+        $opts = KioskPages::tokenOptions($k['token']);
+        self::assertTrue($opts['benefice']);
+        self::assertTrue($opts['paiements']);
+        self::assertTrue($opts['couts'], 'Tuile pleine + options NULL : coûts visibles.');
+
+        // Tuile lite SEULE : pas de coûts (historique).
+        $kLite = $this->newKiosque('kq_test create lite seule', ['reappro-lite']);
+        self::assertNull($kLite['options']);
+        self::assertFalse(KioskPages::tokenIsFullData($kLite['token'], 'reappro'));
+    }
+
+    public function testUpdateSansOptionsRetourAuNullPuisListeExplicite(): void
+    {
+        if (!$this->requireDatabase()) {
+            return;
+        }
+
+        // Départ : kiosque piloté par ses options (colonne non NULL).
+        $k = $this->newKiosque('kq_test update options', ['jour'], ['benefice', 'couts']);
+        self::assertSame(['benefice', 'couts'], $k['options']);
+
+        // update() SANS options : retour au non-configuré (colonne NULL).
+        self::assertTrue(Kiosque::update($k['id'], 'kq_test update options', ['jour']));
+        $apres = Kiosque::find($k['id']);
+        self::assertNotNull($apres);
+        self::assertNull($apres['options'], 'update() sans options doit (re)venir à NULL.');
+
+        // update() avec une liste explicite : la liste fait foi.
+        self::assertTrue(Kiosque::update($k['id'], 'kq_test update options', ['jour'], ['benefice']));
+        $explicite = Kiosque::find($k['id']);
+        self::assertNotNull($explicite);
+        self::assertSame(['benefice'], $explicite['options']);
     }
 }
