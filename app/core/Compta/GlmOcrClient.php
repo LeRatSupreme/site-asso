@@ -72,6 +72,9 @@ final class GlmOcrClient
      * texte brut, un article par ligne — le texte produit part dans
      * InvoiceParser, qui attend exactement la mise en page d'un ticket
      * ou d'une facture (mêmes attentes que le texte collé à la main).
+     * Les MONTANTS sont LE point critique du préremplissage : la consigne
+     * insiste lourdement dessus (chiffres exacts, ligne de total TOUJOURS
+     * transcrite, TVA seulement si imprimée — jamais calculée).
      */
     private const PROMPT = <<<'TXT'
 Transcris fidèlement et intégralement ce document (ticket de caisse ou facture), sans rien inventer, résumer ni corriger.
@@ -79,9 +82,10 @@ Respecte impérativement, dans l'ordre du document :
 - l'enseigne / le nom du fournisseur ;
 - la date et le numéro de ticket ou de facture ;
 - CHAQUE ligne article, une seule par ligne : quantité, libellé, prix unitaire, total de la ligne ;
-- les totaux : total HT, total TTC, montant payé, mode de paiement ;
-- la TVA : chaque taux et son montant.
-Réponds uniquement par la transcription en texte brut (aucun Markdown, aucun commentaire, aucun titre ajouté) : une seule information par ligne. Un élément illisible est transcrit tel que tu le lis ; une valeur absente du document ne s'invente jamais.
+- les MONTANTS chiffre pour chiffre, décimales comprises : recopie chaque nombre EXACTEMENT tel qu'imprimé (virgule, espaces des milliers, symbole € ou EUR), sans arrondir, corriger ni convertir ;
+- la ligne de TOTAL À PAYER, même partielle, pâle, pliée ou tout en bas du ticket : TOTAL, TOTAL TTC, TOTAL GÉNÉRAL, TOTAL EUROS, À PAYER, NET À PAYER, MONTANT DÛ… transcris-la TOUJOURS ;
+- les lignes de paiement (carte, espèces, rendu de monnaie) et les lignes de TVA quand elles existent : « TVA », « dont TVA », chaque taux (5,5 %, 10 %, 20 %) et son montant.
+Réponds uniquement par la transcription en texte brut (aucun Markdown, aucun commentaire, aucun titre ajouté) : une seule information par ligne. Un élément illisible est transcrit tel que tu le lis ; une valeur absente du document ne s'invente jamais — surtout pas un total ou une TVA calculée.
 TXT;
 
     /** @var callable|null Hook remplaçant l'appel cURL réel (tests). */

@@ -178,6 +178,29 @@ final class GlmOcrClientTest extends TestCase
         self::assertSame('glm-4.7v-test', $this->corpsDecode()['model']);
     }
 
+    /**
+     * La consigne (prompt) insiste sur les points critiques du
+     * préremplissage : montants recopiés chiffre pour chiffre, ligne de
+     * TOTAL À PAYER toujours transcrite, TVA seulement si imprimée —
+     * jamais un total ou une TVA calculée.
+     */
+    public function test_consigne_insiste_sur_montants_total_et_tva(): void
+    {
+        $this->setKey();
+        $this->setTransportCapturant(200, $this->corpsReussite('ok'));
+
+        GlmOcrClient::extractText($this->petitPngPath(), 'image/png');
+
+        $partTexte = $this->partDuMessage('text');
+        self::assertNotNull($partTexte, 'La consigne accompagne la photo.');
+        $consigne = (string) ($partTexte['text'] ?? '');
+        self::assertStringContainsString('Transcris', $consigne, 'Toujours une transcription fidèle, jamais un résumé.');
+        self::assertStringContainsString('chiffre pour chiffre', $consigne, 'Les montants sont recopiés exactement, jamais arrondis ni corrigés.');
+        self::assertStringContainsString('TOTAL À PAYER', $consigne, 'La ligne de total du bas doit toujours être transcrite.');
+        self::assertStringContainsString('TVA', $consigne, 'Les lignes de TVA imprimées sont demandées quand elles existent.');
+        self::assertStringContainsString("s'invente jamais", $consigne, 'Une valeur absente ne s\'invente jamais — surtout pas un total ou une TVA calculée.');
+    }
+
     public function test_timeout_invalide_ou_nul_retombe_sur_le_defaut(): void
     {
         $this->setKey();
