@@ -128,6 +128,27 @@ final class KioskPagesOptionsTest extends TestCase
         self::assertSame([], KioskPages::normalizeOptions([]));
     }
 
+    /**
+     * Tuile « president » (Vue Président) : présente UNE fois au catalogue
+     * avec son chemin dédié, ouverte au jeton ADMIN legacy (données
+     * financières complètes) mais jamais au jeton MEMBRES.
+     */
+    public function testCatalogueContientLaTuilePresident(): void
+    {
+        $tile = KioskPages::get('president');
+        self::assertNotNull($tile, 'La tuile « president » doit exister au catalogue.');
+        self::assertSame('/kiosque/admin/president/', $tile['path']);
+        self::assertNotSame('', trim($tile['label']));
+        self::assertNotSame('', trim($tile['desc']));
+
+        $ids = KioskPages::validIds();
+        self::assertCount(1, array_keys($ids, 'president'), 'L\'id « president » doit être unique au catalogue.');
+        self::assertCount(1, array_keys(array_column(KioskPages::all(), 'path'), '/kiosque/admin/president/'), 'Le chemin de la tuile président doit être unique.');
+
+        self::assertContains('president', KioskPages::LEGACY_ADMIN_PAGES);
+        self::assertNotContains('president', KioskPages::LEGACY_MEMBER_PAGES);
+    }
+
     // ---------------------------------------------------------------
     // Intégration (aeic_test)
     // ---------------------------------------------------------------
@@ -281,5 +302,36 @@ final class KioskPagesOptionsTest extends TestCase
         $explicite = Kiosque::find($k['id']);
         self::assertNotNull($explicite);
         self::assertSame(['benefice'], $explicite['options']);
+    }
+
+    /**
+     * Tuile « president » + option « benefice » : le bénéfice du mois est
+     * un pilier de la page — sans l'option, la page ENTIÈRE doit être
+     * refusée par le contrôleur (contrat vérifié en HTTP dans
+     * KiosquePagesRenduTest) ; avec l'option, tuile et page passent.
+     */
+    public function testTuilePresidentExigeLOptionBenefice(): void
+    {
+        if (!$this->requireDatabase()) {
+            return;
+        }
+
+        // Tuile cochée SANS l'option « benefice » : la garde de page passe
+        // mais l'option manque → 403 sur la page entière (rien de partiel).
+        $k = $this->newKiosque('kq_test president sans benefice', ['president'], ['paiements']);
+        self::assertTrue(KioskPages::tokenAllows($k['token'], 'president'), 'Tuile cochée : la garde de page passe.');
+        self::assertFalse(
+            KioskPages::tokenOptions($k['token'])['benefice'],
+            'Option « benefice » absente : le contrôleur doit refuser toute la page (403).'
+        );
+
+        // Tuile cochée AVEC l'option : page autorisée.
+        $ok = $this->newKiosque('kq_test president avec benefice', ['president'], ['benefice']);
+        self::assertTrue(KioskPages::tokenAllows($ok['token'], 'president'));
+        self::assertTrue(KioskPages::tokenOptions($ok['token'])['benefice']);
+
+        // Option absente SANS la tuile : double refus (tuile ET option).
+        $sans = $this->newKiosque('kq_test president sans tuile', ['jour'], ['benefice']);
+        self::assertFalse(KioskPages::tokenAllows($sans['token'], 'president'), 'Tuile non cochée : la page est refusée.');
     }
 }

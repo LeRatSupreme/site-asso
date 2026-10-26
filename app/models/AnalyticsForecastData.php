@@ -246,6 +246,22 @@ final class AnalyticsForecastData extends Model
     }
 
     /**
+     * Valeur EUROS du stock restant au dernier coût connu (même règle
+     * « as-of » que currentCostMap : lot couvrant aujourd'hui, sinon
+     * dernier lot antérieur) — point d'assemblage UNIQUE du « stock
+     * valorisé » partagé par les vues simples (tuile Président, page
+     * trésorerie…) : personne ne recalcule cette somme ailleurs.
+     *
+     * Le stock vient du livre UNIQUE (stockBook()) ; les unités sans
+     * coût connu sont ignorées (aucune valeur inventée), les surventes
+     * (stock négatif) bornées à 0 par le livre lui-même.
+     */
+    public static function stockValueAtLastCost(StockBook $book): float
+    {
+        return $book->totalValue(self::currentCostMap(array_column($book->lines(), 'key')));
+    }
+
+    /**
      * Travaux de productStats() + diagnostics de fusion pour l'audit :
      * regroupe les produits par clé normalisée, fusionne les quasi-doublons
      * (« Cafe » et « café » → une ligne : qty/ca sommés, unitPrice et
