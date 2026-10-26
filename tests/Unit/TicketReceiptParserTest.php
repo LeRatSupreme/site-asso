@@ -119,6 +119,214 @@ TXT;
         self::assertSame('ttc', $r['amount_basis']);
     }
 
+    /**
+     * « TOTAL GÉNÉRAL 12,50 € » : libellé élargi reconnu (accent
+     * neutralisé, symbole € ignoré), même avec la ligne de paiement
+     * derrière.
+     */
+    public function test_libelle_total_general_avec_symbole_euro(): void
+    {
+        $text = <<<'TXT'
+PICARD
+Ticket : 31415
+le 21/09/2026
+LASAGNES 7,20
+ECLAIRS 5,30
+TOTAL GÉNÉRAL 12,50 €
+CARTE 12,50
+TXT;
+
+        $r = TicketReceiptParser::parse($text);
+
+        self::assertSame(12.50, $r['total_ttc'], '« TOTAL GÉNÉRAL » avec « € » : libellé fort reconnu.');
+        self::assertNotContains('Total non étiqueté — valeur la plus probable retenue, vérifie le montant.', $r['warnings']);
+    }
+
+    /**
+     * « A PAYER 9.99EUR » : point décimal + suffixe EUR collé.
+     */
+    public function test_libelle_a_payer_avec_point_decimal_et_suffixe_eur(): void
+    {
+        $text = <<<'TXT'
+MONOPRIX
+Ticket : 27182
+le 08/10/2026
+CAFE LONG 9,99
+A PAYER 9.99EUR
+CB 9,99
+TXT;
+
+        $r = TicketReceiptParser::parse($text);
+
+        self::assertSame(9.99, $r['total_ttc'], '« A PAYER » avec « 9.99EUR » (point décimal, EUR collé).');
+    }
+
+    /**
+     * « MONTANT DÛ 4,50 » : libellé fort sans « = » (seule la forme
+     * « MONTANT = X » de la zone paiement reste prioritaire absolue).
+     */
+    public function test_libelle_montant_du_sans_egal(): void
+    {
+        $text = <<<'TXT'
+FRANPRIX
+Ticket : 3355
+le 09/10/2026
+CAFE 250G 4,50
+MONTANT DÛ 4,50
+CB 4,50
+TXT;
+
+        $r = TicketReceiptParser::parse($text);
+
+        self::assertSame(4.50, $r['total_ttc'], '« MONTANT DÛ » (sans « = ») est une ligne de total forte.');
+    }
+
+    /**
+     * Milliers à espace fin : « 1 250,00 » lu 1250,00 — pas « 250,00 ».
+     */
+    public function test_montants_milliers_avec_espace_lus_entierement(): void
+    {
+        $text = <<<'TXT'
+BRICOMARCHE
+Ticket : 90807
+le 17/10/2026
+PERCEUSE 1 250,00 A
+TOTAL A PAYER 1 250,00
+CB 1 250,00
+TXT;
+
+        $r = TicketReceiptParser::parse($text);
+
+        self::assertSame(1250.00, $r['total_ttc'], '« 1 250,00 » (espace des milliers) ≠ « 250,00 ».');
+        self::assertSame(20.0, $r['vat_rate'], 'Lettre A de la ligne produit → 20 %.');
+        self::assertSame(1041.67, $r['total_ht'], 'HT = 1250,00 ÷ 1,20.');
+    }
+
+    /**
+     * OCR : « 12,5O » — la lettre O collée aux chiffres est un zéro.
+     */
+    public function test_o_majuscule_lu_pour_zero_dans_les_montants(): void
+    {
+        $text = <<<'TXT'
+DECATHLON
+Ticket : 11041
+le 05/10/2026
+GOURDE 12,5O
+TOTAL TTC 12,5O
+CB 12,5O
+TXT;
+
+        $r = TicketReceiptParser::parse($text);
+
+        self::assertSame(12.50, $r['total_ttc'], '« 12,5O » → 12,50 (O majuscule mal lu pour 0).');
+    }
+
+    /**
+     * « TOTAL » puis zone de paiement (CB avec billet, monnaie rendue) :
+     * le TOTAL avant les paiements fait foi — ni le montant payé, ni le
+     * rendu ; SOUS-TOTAL et REMISE ne sont pas des totaux à payer.
+     */
+    public function test_total_avant_paiement_sous_total_et_rendu_ecartes(): void
+    {
+        $text = <<<'TXT'
+NETTO
+Ticket : 58433
+le 14/10/2026
+EAU 1,5L 0,89
+CHIPS 2,10
+SOUS-TOTAL 2,99
+REMISE 1,00
+TOTAL 1,99
+CB 5,00
+RENDU 3,01
+TXT;
+
+        $r = TicketReceiptParser::parse($text);
+
+        self::assertSame(1.99, $r['total_ttc'], 'TOTAL avant CB : ni le SOUS-TOTAL (2,99), ni la REMISE, ni « CB 5,00 », ni le RENDU (3,01).');
+    }
+
+    /**
+     * Ticket sans AUCUNE ligne de total étiquetée (cas de la plainte :
+     * transcription « CB 15,64 » seule) : heuristique du dernier
+     * recours — le montant le plus plausible est retenu, TOUJOURS avec
+     * l'avertissement exact demandé.
+     */
+    public function test_sans_ligne_total_dernier_recours_avec_warning(): void
+    {
+        $text = <<<'TXT'
+KIABI
+Ticket : 60606
+le 10/10/2026 a 18:22
+TSHIRT ADULTE 15,64
+CB 15,64
+TICKET DU 10.10.2026 18:22
+TXT;
+
+        $r = TicketReceiptParser::parse($text);
+
+        self::assertSame(15.64, $r['total_ttc'], 'Dernier recours : « CB 15,64 » retenu plutôt que null.');
+        self::assertContains(
+            'Total non étiqueté — valeur la plus probable retenue, vérifie le montant.',
+            $r['warnings'],
+            'Le dernier recours est toujours signalé, mot pour mot.'
+        );
+    }
+
+    /**
+     * Ticket TTC sans AUCUN détail de TVA (ni lettres A-E, ni ligne
+     * « TVA x % ») : état NORMAL — aucun taux ni HT inventé, simple
+     * avertissement informatif.
+     */
+    public function test_ttc_sans_tva_detaillee_aucune_tva_inventee(): void
+    {
+        $text = <<<'TXT'
+ACTION
+Ticket : 77001
+le 03/10/2026
+EAU 0,89
+SACS 0,30
+TOTAL A PAYER 1,19
+CB 1,19
+TXT;
+
+        $r = TicketReceiptParser::parse($text);
+
+        self::assertSame(1.19, $r['total_ttc']);
+        self::assertNull($r['vat_rate'], 'TVA jamais estimée quand rien n\'est imprimé.');
+        self::assertNull($r['total_ht'], 'Pas de HT calculé sans taux.');
+        self::assertContains(
+            'TVA non détaillée sur ce ticket — montant TTC seul, taux à saisir manuellement si besoin.',
+            $r['warnings'],
+            'Avertissement informatif exact.'
+        );
+    }
+
+    /**
+     * « dont TVA 20% 1,67 » : taux explicitement imprimé (sans lettres
+     * de classe) → taux global + HT déduit ; la ligne n'est ni un total
+     * ni un produit.
+     */
+    public function test_dont_tva_imprimee_extraite_meme_sans_lettres_de_classe(): void
+    {
+        $text = <<<'TXT'
+PAUL
+Ticket : 4455
+le 06/10/2026
+SANDWICH 10,00
+BOISSON 2,00
+TOTAL A PAYER 12,00
+dont TVA 20% 1,67
+CB 12,00
+TXT;
+
+        $r = TicketReceiptParser::parse($text);
+
+        self::assertSame(12.00, $r['total_ttc']);
+        self::assertSame(20.0, $r['vat_rate'], '« dont TVA 20% » imprimé → taux retenu (jamais deviné).');
+        self::assertSame(10.00, $r['total_ht'], 'HT = 12,00 ÷ 1,20.');
+    }
+
     public function test_texte_sans_ticket_renvoie_structure_vide_et_warnings(): void
     {
         $r = TicketReceiptParser::parse('');
