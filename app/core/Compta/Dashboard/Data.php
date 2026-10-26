@@ -7,6 +7,7 @@ namespace App\Core\Compta\Dashboard;
 use App\Core\Compta\CardFees;
 use App\Core\Compta\ComptaCalc;
 use App\Models\Analytics;
+use App\Models\Budget;
 use App\Models\CashCount;
 use App\Models\Expense;
 use App\Models\InventoryCount;
@@ -15,6 +16,7 @@ use App\Models\ProductCost;
 use App\Models\ProductDiscontinued;
 use App\Models\ProductInfinite;
 use App\Models\ProductPack;
+use App\Models\Purchase;
 use App\Models\Sale;
 use App\Models\Setting;
 
@@ -296,6 +298,27 @@ final class Data
                 'texte'   => 'Caisse non comptée : ' . formatPrice($liquide) . ' de liquide ' . $depuis,
                 'lien'    => url('/admin/compta/caisse'),
             ];
+        }
+
+        // 6. Budget du mois courant : aucune ligne saisie (rappel mensuel —
+        //    sans lui, le budget reste invisible et inutilisé) ou enveloppe
+        //    de dépenses déjà consommée à ≥ 85 %. Décision pure dans
+        //    Afaire::itemBudget ; réalisé = MÊMES sources que la page
+        //    Budgets (dépenses du mois + achats de stock comptés dans
+        //    MATIERE), du 1ᵉʳ du mois à aujourd'hui.
+        $curY = (int) date('Y');
+        $curM = (int) date('n');
+        $curMonthStart = sprintf('%04d-%02d-01', $curY, $curM);
+        $realiseBudget = [];
+        foreach (Expense::byCategoryBetween($curMonthStart, $today) as $c) {
+            $realiseBudget[(string) $c['category']] = (float) $c['ttc'];
+        }
+        $realiseBudget['MATIERE'] = ($realiseBudget['MATIERE'] ?? 0.0)
+            + (float) Purchase::statsBetween($curMonthStart, $today)['ttc'];
+        $itemBudget = Afaire::itemBudget(Budget::forMonth($curY, $curM), $realiseBudget);
+        if ($itemBudget !== null) {
+            $itemBudget['lien'] = url('/admin/compta/budgets?month=' . sprintf('%04d-%02d', $curY, $curM));
+            $afaireItems[] = $itemBudget;
         }
 
         $afaire = Afaire::trier($afaireItems, $parametres);

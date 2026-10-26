@@ -27,7 +27,7 @@ final class Hyper
     public const A_FAIRE_MAX = 5;
 
     /** Urgences par défaut des sources du bloc « À faire » (le contrôleur peut surcharger par item) : 1 = quand vous pouvez, 2 = à traiter, 3 = urgent. */
-    public const A_FAIRE_URGENCES = ['rupture' => 3, 'caisse' => 3, 'import' => 2, 'inventaire' => 2, 'couts' => 2];
+    public const A_FAIRE_URGENCES = ['rupture' => 3, 'caisse' => 3, 'import' => 2, 'inventaire' => 2, 'couts' => 2, 'budget' => 2];
 
     /**
      * Lit un hyperparamètre surchargeable : retourne
