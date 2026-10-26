@@ -6,7 +6,10 @@ declare(strict_types=1);
  * @var array<string,mixed> $user
  * @var array{preset:string,from:?string,to:?string} $period
  * @var array<string,string> $periodOptions
- * @var array{year:int,month:int,value:string} $editMonth
+ * @var array{year:int,month:int,value:string,choisi:bool} $editMonth
+ * @var array<string,float>|null $editPlanned Budget RÉEL du mois édité (null = sans ?month : champs au prorata de la période, comportement historique).
+ * @var string $currentMonthValue Mois calendaire courant « YYYY-MM ».
+ * @var list<array{value:string,label:string,ca_planned:float,ca_realized:float,exp_planned:float,exp_realized:float}> $annual Grille annuelle (lecture seule).
  * @var string $rangeLabel
  * @var list<array{key:string,label:string,planned:float,realized:float}> $rows
  * @var array{planned:float,realized:float} $totals
@@ -48,6 +51,32 @@ $resultGap = $resultRealized - $resultPlanned;
     <?php require AEIC_VIEWS . '/admin/compta/_period_bar.php'; ?>
 </div>
 
+<?php
+// Sélecteur du mois ÉDITÉ (≠ période comparée) : ‹ précédent · mois actif ·
+// suivant › · retour au mois courant. Les liens conservent les autres
+// paramètres GET (période notamment), comme le fait la barre « Période ».
+$keep = $_GET;
+unset($keep['month']);
+$monthLink = static fn(string $value): string => '?' . http_build_query(array_merge($keep, ['month' => $value]));
+$editFirst = new DateTimeImmutable($editMonth['value'] . '-01');
+$prevMonth = $editFirst->modify('-1 month');
+$nextMonth = $editFirst->modify('+1 month');
+?>
+<div class="period-bar">
+    <span class="period-bar-label">Mois édité</span>
+    <nav class="period-pills" aria-label="Choix du mois de budget édité">
+        <?php if ((int) $prevMonth->format('Y') >= 2020): ?>
+            <a class="period-pill" href="<?= e($monthLink($prevMonth->format('Y-m'))) ?>" title="Éditer le mois précédent">‹ <?= e($prevMonth->format('m/Y')) ?></a>
+        <?php endif; ?>
+        <span class="period-pill is-active" title="Mois en cours d'édition"><?= e($editFirst->format('m/Y')) ?></span>
+        <a class="period-pill" href="<?= e($monthLink($nextMonth->format('Y-m'))) ?>" title="Éditer le mois suivant"><?= e($nextMonth->format('m/Y')) ?> ›</a>
+        <?php if ($editMonth['value'] !== $currentMonthValue): ?>
+            <a class="period-pill" href="<?= e($monthLink($currentMonthValue)) ?>">Mois courant</a>
+        <?php endif; ?>
+    </nav>
+    <span class="muted" style="font-size:0.85rem">Ce sélecteur choisit le mois <strong>enregistré par le formulaire</strong> ; la comparaison reste celle de la période ci-dessus.</span>
+</div>
+
 <div class="compta-kpis">
     <div class="card surface glass kpi">
         <p class="kpi-label">Résultat prévu</p>
@@ -64,8 +93,8 @@ $resultGap = $resultRealized - $resultPlanned;
 <div class="card surface glass table-wrap">
     <h2 class="card-title">Prévu vs Réalisé</h2>
     <p class="muted">
-        Réalisé : <strong><?= e($rangeLabel) ?></strong> — tu édites le budget du mois <strong><?= e(sprintf('%02d/%04d', $editMonth['month'], $editMonth['year'])) ?></strong> (dernier mois de la période).
-        Le « prévu » est ajusté au prorata des jours de la période (ex : 1 jour en septembre compare à 1/30 du budget de septembre) pour que la comparaison reste équitable sur n'importe quelle durée.
+        Réalisé : <strong><?= e($rangeLabel) ?></strong> — tu édites le budget du mois <strong><?= e(sprintf('%02d/%04d', $editMonth['month'], $editMonth['year'])) ?></strong><?= $editMonth['choisi'] ? ' (choisi dans « Mois édité »)' : ' (dernier mois de la période)' ?>.
+        Le « prévu » est ajusté au prorata des jours de la période (ex : 1 jour en septembre compare à 1/30 du budget de septembre) pour que la comparaison reste équitable sur n'importe quelle durée<?= $editMonth['choisi'] ? ' — les champs ci-dessous, eux, montrent le budget complet du mois édité' : '' ?>.
     </p>
     <form method="post" action="<?= e(url('/admin/compta/budgets/save')) ?>">
         <?= csrf_field() ?>
@@ -85,6 +114,13 @@ $resultGap = $resultRealized - $resultPlanned;
                     <?php
                         $isCa = $r['key'] === 'CA';
                         $hasBudget = $r['planned'] > 0;
+
+                        // Valeur du champ : avec ?month= (mois choisi), le
+                        // budget RÉEL du mois édité ; sinon (comportement
+                        // historique) le « prévu » au prorata de la période.
+                        $editValue = $editPlanned !== null
+                            ? (float) ($editPlanned[$r['key']] ?? 0)
+                            : (float) $r['planned'];
 
                         // CA : positif = objectif dépassé. Dépenses : positif = reste disponible.
                         // Sans budget saisi, l'écart n'a pas de sens : on affiche « — ».
@@ -119,7 +155,7 @@ $resultGap = $resultRealized - $resultPlanned;
                         <td><?= $isCa ? '<strong>' . e($r['label']) . '</strong>' : e($r['label']) ?></td>
                         <td>
                             <input type="text" name="planned[<?= e($r['key']) ?>]"
-                                value="<?= $r['planned'] > 0 ? e(number_format($r['planned'], 2, ',', ' ')) : '' ?>"
+                                value="<?= $editValue > 0 ? e(number_format($editValue, 2, ',', ' ')) : '' ?>"
                                 inputmode="decimal" style="width:130px" placeholder="—"
                                 aria-label="Budget prévu (en euros) pour <?= e($r['label']) ?>">
                         </td>
@@ -142,5 +178,56 @@ $resultGap = $resultRealized - $resultPlanned;
         <button type="submit" class="btn btn-primary">Enregistrer le budget</button>
         <p class="muted" style="font-size:0.85rem">Les montants se saisissent à la française (ex : 250,50 ou 10 000). Laisse vide ou mets 0 pour supprimer une ligne. La ligne « Bilan » compare le résultat (CA − dépenses) prévu au réalisé. <strong>Matière (cafétéria)</strong> se remplit automatiquement avec tes achats enregistrés (page Achats &amp; stock) — inutile de les ressaisir en dépenses.</p>
     </form>
+</div>
+
+<?php
+// Mini-grille annuelle — LECTURE SEULE (aucun formulaire ici, aucun champ
+// modifiable) : 12 mois × prévu vs réalisé, mêmes sources que la page.
+$annualTotals = ['ca_planned' => 0.0, 'ca_realized' => 0.0, 'exp_planned' => 0.0, 'exp_realized' => 0.0];
+foreach ($annual as $a) {
+    foreach (array_keys($annualTotals) as $k) {
+        $annualTotals[$k] += (float) $a[$k];
+    }
+}
+$cell = static fn(float $v): string => $v > 0.0 ? e(formatPrice($v)) : '<span class="muted">—</span>';
+?>
+<div class="card surface glass table-wrap">
+    <h2 class="card-title">Année <?= e($editMonth['year']) ?> d'un coup d'œil</h2>
+    <p class="muted">Lecture seule : budgets vs réalisé par mois calendaire (les achats de stock comptent dans les dépenses, comme dans le tableau ci-dessus). Clique un mois pour l'éditer.</p>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Mois</th>
+                <th class="th-num">CA prévu</th>
+                <th class="th-num">CA réalisé</th>
+                <th class="th-num">Dépenses prévues</th>
+                <th class="th-num">Dépenses réalisées</th>
+            </tr>
+        </thead>
+        <tbody>
+            <?php foreach ($annual as $a): ?>
+                <?php $enCours = $a['value'] === $currentMonthValue; ?>
+                <tr>
+                    <td>
+                        <a href="<?= e($monthLink($a['value'])) ?>" title="Éditer le budget de ce mois"><?= e($a['label']) ?></a>
+                        <?= $enCours ? '<span class="badge badge-muted">en cours</span>' : '' ?>
+                    </td>
+                    <td class="num"><?= $cell((float) $a['ca_planned']) ?></td>
+                    <td class="num"><?= $cell((float) $a['ca_realized']) ?></td>
+                    <td class="num"><?= $cell((float) $a['exp_planned']) ?></td>
+                    <td class="num"><?= $cell((float) $a['exp_realized']) ?></td>
+                </tr>
+            <?php endforeach; ?>
+        </tbody>
+        <tfoot>
+            <tr>
+                <th>Total</th>
+                <th class="num"><?= e(formatPrice($annualTotals['ca_planned'])) ?></th>
+                <th class="num"><?= e(formatPrice($annualTotals['ca_realized'])) ?></th>
+                <th class="num"><?= e(formatPrice($annualTotals['exp_planned'])) ?></th>
+                <th class="num"><?= e(formatPrice($annualTotals['exp_realized'])) ?></th>
+            </tr>
+        </tfoot>
+    </table>
 </div>
 

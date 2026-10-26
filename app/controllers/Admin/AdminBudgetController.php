@@ -18,7 +18,13 @@ use App\Models\Sale;
  * journalières incluses) ; le « prévu » somme les budgets des mois
  * couverts, ajustés au prorata des jours de la période dans chaque mois
  * (une période d'1 jour sur septembre compare donc à 1/30 du budget de
- * septembre). L'édition (formulaire de save) cible le DERNIER mois couvert.
+ * septembre).
+ *
+ * Mois ÉDITÉ : sans paramètre, le formulaire cible le DERNIER mois couvert
+ * (comportement historique, inchangé) ; avec ?month=YYYY-MM il cible ce
+ * mois-là (validation stricte du format) et les champs affichent le budget
+ * RÉEL du mois (pas le prorata de la période). Le paramètre ne touche ni
+ * la période comparée ni le prorata : il ne choisit que le mois enregistré.
  */
 final class AdminBudgetController extends AdminBaseController
 {
@@ -31,6 +37,21 @@ final class AdminBudgetController extends AdminBaseController
         $user = $this->guardCompta();
 
         $period = ComptaCalc::resolvePeriod($_GET['period'] ?? null, $_GET['from'] ?? null, $_GET['to'] ?? null);
+
+        // Mois édité explicite (?month=YYYY-MM) : validation stricte —
+        // format réel (mois 01-12) et année qu'un budget peut accepter
+        // (Budget::upsert ignore les années < 2020 : les refuser ici évite
+        // d'éditer un mois silencièrement non enregistrable).
+        $monthParam = trim((string) ($_GET['month'] ?? ''));
+        $editFromParam = null;
+        if ($monthParam !== '') {
+            if (preg_match('/^(\d{4})-(0[1-9]|1[0-2])$/', $monthParam, $mm) === 1 && (int) $mm[1] >= 2020) {
+                $editFromParam = [(int) $mm[1], (int) $mm[2]];
+            } else {
+                $this->setFlash('error', 'Mois invalide (format attendu : AAAA-MM).');
+                redirect(url('/admin/compta/budgets'));
+            }
+        }
 
         // Bornes journalières réelles du « réalisé ». Sans bornes (« Tout »),
         // on borne à la fenêtre des mois couverts pour que prévu et réalisé
@@ -72,13 +93,52 @@ final class AdminBudgetController extends AdminBaseController
         $realizedExpenses['MATIERE'] = ($realizedExpenses['MATIERE'] ?? 0.0)
             + (float) Purchase::statsBetween($fromDay, $toDay)['ttc'];
 
-        // Le formulaire édite le dernier mois couvert par la période.
-        [$lastY, $lastM] = $months[count($months) - 1];
+        // Le formulaire édite le mois choisi (?month=) ou, sans paramètre,
+        // le dernier mois couvert par la période (comportement historique).
+        [$editY, $editM] = $editFromParam ?? $months[count($months) - 1];
         $editMonth = [
-            'year'  => $lastY,
-            'month' => $lastM,
-            'value' => sprintf('%04d-%02d', $lastY, $lastM),
+            'year'   => $editY,
+            'month'  => $editM,
+            'value'  => sprintf('%04d-%02d', $editY, $editM),
+            'choisi' => $editFromParam !== null,
         ];
+
+        // Valeurs pré-remplies du formulaire : avec ?month= on édite le mois
+        // CHOISI → les champs montrent son budget réel (mois entier) ; sans
+        // paramètre, comportement inchangé (le « prévu » au prorata de la
+        // période, comme la colonne de comparaison).
+        $editPlanned = $editFromParam !== null ? Budget::forMonth($editY, $editM) : null;
+
+        // Mini-grille annuelle (LECTURE SEULE) : 12 mois × prévu vs réalisé
+        // pour l'année du mois édité. Zéro recalcul parallèle — mêmes sources
+        // que la comparaison ci-dessus (Budget::forMonth, Sale::caBetween,
+        // dépenses + achats comptés dans MATIERE), mois calendaire par mois
+        // calendaire (prévu = budget du mois entier, sans prorata).
+        $moisFr = [
+            1 => 'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
+            'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre',
+        ];
+        $annual = [];
+        for ($m = 1; $m <= 12; $m++) {
+            $first = sprintf('%04d-%02d-01', $editY, $m);
+            $last = (new \DateTimeImmutable($first))->format('Y-m-t');
+            $monthBudgets = Budget::forMonth($editY, $m);
+            $expPlanned = 0.0;
+            foreach ($monthBudgets as $cat => $planned) {
+                if ($cat !== 'CA') {
+                    $expPlanned += (float) $planned;
+                }
+            }
+            $annual[] = [
+                'value'        => sprintf('%04d-%02d', $editY, $m),
+                'label'        => $moisFr[$m],
+                'ca_planned'   => (float) ($monthBudgets['CA'] ?? 0),
+                'ca_realized'  => Sale::caBetween($first, $last),
+                'exp_planned'  => $expPlanned,
+                'exp_realized' => (float) Expense::aggregatesBetween($first, $last)['ttc']
+                    + (float) Purchase::statsBetween($first, $last)['ttc'],
+            ];
+        }
 
         $rangeLabel = $fromDay === $toDay
             ? 'le ' . formatDate($fromDay, 'd/m/Y')
@@ -117,14 +177,17 @@ final class AdminBudgetController extends AdminBaseController
         }
 
         $this->renderAdmin('admin/compta/budgets', [
-            'title'         => 'Budgets',
-            'user'          => $user,
-            'period'        => $period,
-            'periodOptions' => ComptaCalc::PERIOD_OPTIONS,
-            'editMonth'     => $editMonth,
-            'rangeLabel'    => $rangeLabel,
-            'rows'          => $rows,
-            'totals'        => $totals,
+            'title'             => 'Budgets',
+            'user'              => $user,
+            'period'            => $period,
+            'periodOptions'     => ComptaCalc::PERIOD_OPTIONS,
+            'editMonth'         => $editMonth,
+            'editPlanned'       => $editPlanned,
+            'currentMonthValue' => date('Y-m'),
+            'annual'            => $annual,
+            'rangeLabel'        => $rangeLabel,
+            'rows'              => $rows,
+            'totals'            => $totals,
         ]);
     }
 
