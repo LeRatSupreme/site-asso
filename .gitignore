@@ -16,6 +16,7 @@
 
 # Cache PHPUnit
 /.phpunit.cache/
+phpunit.phar
 
 # Sauvegardes (scripts/backup.sh)
 /backups/
