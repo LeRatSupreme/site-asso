@@ -7,6 +7,9 @@ namespace Tests\Integration;
 use PDO;
 use PDOException;
 use PHPUnit\Framework\TestCase;
+use RuntimeException;
+
+require_once __DIR__ . '/../support/db_guard.php';
 
 /**
  * Base des tests d'intégration : exécute de VRAIES requêtes HTTP simulées
@@ -34,18 +37,32 @@ abstract class IntegrationTestCase extends TestCase
 
     /**
      * Connexion à la base de test (null si indisponible).
+     *
+     * GARDE ANTI-PRODUCTION (incident TRUNCATE du 26/10/2026) : refuse,
+     * AVANT toute connexion, un DB_NAME autre que `aeic_test` — p. ex.
+     * hérité d'un shell qui aurait sourcé config.env (DB_NAME=aeic).
+     *
+     * @throws RuntimeException si DB_NAME résolu n'est pas `aeic_test`
      */
     protected function connect(): ?PDO
     {
+        $host = getenv('DB_HOST') ?: '127.0.0.1';
+        $name = getenv('DB_NAME') ?: 'aeic_test';
+        $user = getenv('DB_USER') ?: 'aeic';
+        $pass = getenv('DB_PASS') ?: '';
+
+        // Garde anti-production : refus AVANT toute tentative de connexion.
+        aeic_tests_assert_test_database($name);
+
         try {
             $pdo = new PDO(
                 sprintf(
                     'mysql:host=%s;dbname=%s;charset=utf8mb4',
-                    getenv('DB_HOST') ?: '127.0.0.1',
-                    getenv('DB_NAME') ?: 'aeic_test'
+                    $host,
+                    $name
                 ),
-                getenv('DB_USER') ?: 'aeic',
-                getenv('DB_PASS') ?: '',
+                $user,
+                $pass,
                 [
                     PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
                     PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
@@ -62,6 +79,10 @@ abstract class IntegrationTestCase extends TestCase
 
     /**
      * Vérifie la disponibilité de la base de test et marque le test skipped sinon.
+     *
+     * La garde de connect() lève AVANT le skip si DB_NAME ne désigne pas
+     * `aeic_test` : un environnement détourné vers la prod doit faire
+     * ÉCHOUER le run, pas le sauter silencieusement.
      */
     protected function requireDatabase(): PDO
     {
@@ -77,10 +98,16 @@ abstract class IntegrationTestCase extends TestCase
     /**
      * Vide les tables données (contraintes FK temporairement désactivées).
      *
+     * Ceinture et bretelles : re-vérifie la base RÉELLEMENT connectée avant
+     * le moindre TRUNCATE (jamais autre chose que `aeic_test`).
+     *
      * @param list<string> $tables
      */
     protected function reset(array $tables): void
     {
+        $current = $this->pdo->query('SELECT DATABASE()')->fetchColumn();
+        aeic_tests_assert_test_database((string) $current);
+
         $this->pdo->exec('SET FOREIGN_KEY_CHECKS = 0');
         foreach ($tables as $table) {
             $this->pdo->exec('TRUNCATE TABLE `' . $table . '`');

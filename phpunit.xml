@@ -9,12 +9,20 @@
          failOnWarning="true">
 
     <php>
-        <!-- Base de données de test (jamais la prod) -->
-        <env name="DB_HOST" value="127.0.0.1"/>
-        <env name="DB_NAME" value="aeic_test"/>
-        <env name="DB_USER" value="aeic"/>
-        <!-- DB_PASS : fournis-le via la variable d'environnement shell
-             (ex: DB_PASS='...' vendor/bin/phpunit) pour ne pas committer le mot de passe. -->
+        <!-- Base de données de test (jamais la prod). force="true" écrase une
+             variable shell déjà définie : sans lui, un « set -a; source
+             config.env » (DB_NAME=aeic, la PROD) détourne les tests vers la
+             base de production — incident TRUNCATE du 26/10/2026. La garde
+             TestDatabaseTrait/IntegrationTestCase refuse de toute façon tout
+             nom autre que aeic_test (voir tests/support/db_guard.php). -->
+        <env name="DB_HOST" value="127.0.0.1" force="true"/>
+        <env name="DB_NAME" value="aeic_test" force="true"/>
+        <env name="DB_USER" value="aeic" force="true"/>
+        <!-- DB_PASS : passer uniquement cette variable dans l'environnement
+             (ex: DB_PASS='...' vendor/bin/phpunit) pour ne pas committer le
+             mot de passe. NE JAMAIS exporter config.env (sourcer tout le
+             fichier exporterait DB_NAME=aeic de prod et détournerait les
+             tests — la garde les ferait échouer). -->
         <env name="APP_ENV" value="dev"/>
         <env name="APP_DEBUG" value="true"/>
         <env name="APP_URL" value="https://example.test"/>
