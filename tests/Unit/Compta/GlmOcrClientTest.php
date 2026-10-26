@@ -142,7 +142,7 @@ final class GlmOcrClientTest extends TestCase
         self::assertSame(75, $this->requete['timeout'], 'Délai par défaut : 75 s.');
 
         $corps = $this->corpsDecode();
-        self::assertSame('glm-ocr', $corps['model'], 'Modèle vision par défaut.');
+        self::assertSame('glm-4.6v', $corps['model'], 'Modèle vision par défaut.');
 
         // La photo voyage en data URI base64, octets d'origine intacts
         // (petite image : aucun rééchantillonnage attendu).
