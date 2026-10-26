@@ -34,10 +34,10 @@ use App\Core\Compta\StockPublic;
  */
 final class StockBook
 {
-    /** @var array<string,array{stock:int,at:?string}> entrées par clé EXACTE (product_key d'inventaire) */
+    /** @var array<string,array{stock:int,at:?string,orig:string}> entrées par clé EXACTE (product_key d'inventaire) */
     private array $entries;
 
-    /** @var array<string,array{stock:int,at:?string}> entrées par clé normalisée (conflits : max) */
+    /** @var array<string,array{stock:int,at:?string,orig:string}> entrées par clé normalisée (conflits : max) */
     private array $byNorm;
 
     /** @var array<string,string> alias par libellé brut normalisé → product_key */
@@ -62,6 +62,7 @@ final class StockBook
             $this->entries[strtolower($k)] = [
                 'stock' => (int) $stock,
                 'at'    => isset($lastCounts[$k]['at']) ? (string) $lastCounts[$k]['at'] : null,
+                'orig'  => $k,
             ];
         }
         // Comptages sans stock théorique (ne devrait pas arriver) : date seule.
@@ -69,7 +70,7 @@ final class StockBook
             $k = trim((string) $key);
             $lk = strtolower($k);
             if ($k !== '' && !isset($this->entries[$lk])) {
-                $this->entries[$lk] = ['stock' => 0, 'at' => isset($c['at']) ? (string) $c['at'] : null];
+                $this->entries[$lk] = ['stock' => 0, 'at' => isset($c['at']) ? (string) $c['at'] : null, 'orig' => $k];
             }
         }
 
@@ -85,10 +86,13 @@ final class StockBook
             }
             // Conflit de normalisation : comportement conservateur (max),
             // date la plus récente — cohérent avec StockPublic::normalizeMap.
-            $this->byNorm[$norm] = [
-                'stock' => max($e['stock'], $this->byNorm[$norm]['stock']),
-                'at'    => self::dateMax($e['at'], $this->byNorm[$norm]['at']),
-            ];
+            // La clé exacte retenue (« orig ») suit l'entrée au stock max.
+            if ($e['stock'] > $this->byNorm[$norm]['stock']) {
+                $e['at'] = self::dateMax($e['at'], $this->byNorm[$norm]['at']);
+                $this->byNorm[$norm] = $e;
+            } else {
+                $this->byNorm[$norm]['at'] = self::dateMax($e['at'], $this->byNorm[$norm]['at']);
+            }
         }
 
         $this->aliasExact = [];
@@ -167,6 +171,65 @@ final class StockBook
         }
 
         return $max;
+    }
+
+    /**
+     * Total des unités restantes du livre (vue d'ensemble « stock
+     * restant », ex. tuile Président) : somme des stocks théoriques, UN
+     * comptage par produit (dédupliqué par clé normalisée, conflit →
+     * max, comme resolve()) ; une survente (stock négatif = anomalie
+     * d'inventaire) compte 0, jamais moins — le même bornage que
+     * BesoinListe (l'anomalie ne retranche pas du total).
+     */
+    public function totalUnits(): int
+    {
+        $total = 0;
+        foreach ($this->byNorm as $e) {
+            $total += max(0, $e['stock']);
+        }
+
+        return $total;
+    }
+
+    /**
+     * Lignes du livre pour la valorisation : UN comptage par produit
+     * (clé normalisée, conflit → max) avec sa clé EXACTE d'inventaire
+     * (telle que saisie — les tables de coûts partagent ces clés telles
+     * quelles, cf. CostLotStock) et son stock théorique (négatif possible).
+     *
+     * @return list<array{key:string,stock:int}>
+     */
+    public function lines(): array
+    {
+        $lines = [];
+        foreach ($this->byNorm as $e) {
+            $lines[] = ['key' => $e['orig'], 'stock' => $e['stock']];
+        }
+
+        return $lines;
+    }
+
+    /**
+     * Valeur EUROS du stock restant (méthode PURE) : Σ max(0, stock) ×
+     * coût unitaire par clé EXACTE d'inventaire. Un produit sans coût
+     * connu (absent de la carte ou NULL) est IGNORÉ — aucune valeur
+     * inventée. La carte de coûts vient de l'appelant : le résolveur ne
+     * lit aucune base.
+     *
+     * @param array<string,?float> $unitCosts Coût unitaire par clé exacte (NULL/absent = ignoré).
+     */
+    public function totalValue(array $unitCosts): float
+    {
+        $total = 0.0;
+        foreach ($this->byNorm as $e) {
+            $cost = $unitCosts[$e['orig']] ?? null;
+            if ($cost === null) {
+                continue;
+            }
+            $total += max(0, $e['stock']) * (float) $cost;
+        }
+
+        return round($total, 2);
     }
 
     /** La plus récente de deux dates 'Y-m-d HH:MM:SS' (null-aware). */

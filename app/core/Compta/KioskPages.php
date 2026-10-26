@@ -10,10 +10,10 @@ use App\Models\Setting;
 /**
  * Catalogue unique des tuiles kiosque et garde centralisée des jetons.
  *
- * D'un côté, les 13 tuiles accessibles par lien à jeton (Récap du jour,
- * Livre comptable, Réappro/Liste en variantes avec ou sans coûts…) : le
- * catalogue fait foi pour l'admin qui coche les tuiles d'un kiosque
- * personnalisé.
+ * D'un côté, les 14 tuiles accessibles par lien à jeton (Vue Président,
+ * Récap du jour, Livre comptable, Réappro/Liste en variantes avec ou sans
+ * coûts…) : le catalogue fait foi pour l'admin qui coche les tuiles d'un
+ * kiosque personnalisé.
  * De l'autre, LA porte d'entrée unique pour décider si un jeton donné
  * autorise une page : jeton membres legacy, jeton admin legacy, puis
  * kiosques personnalisés. Les contrôleurs seront refactorés pour
@@ -51,13 +51,16 @@ final class KioskPages
      *
      * @var list<string>
      */
-    public const LEGACY_ADMIN_PAGES = ['jour', 'ledger', 'analytics', 'reco', 'periode', 'depot', 'caisse', 'inventaire', 'liste', 'reappro'];
+    public const LEGACY_ADMIN_PAGES = ['jour', 'ledger', 'analytics', 'reco', 'periode', 'depot', 'caisse', 'inventaire', 'liste', 'reappro', 'president'];
 
     /**
-     * Catalogue des 13 tuiles kiosque, dans l'ordre d'affichage. Les
+     * Catalogue des 14 tuiles kiosque, dans l'ordre d'affichage. Les
      * variantes « lite » (« liste-lite », « reappro-lite ») partagent
      * l'URL de leur page mère : seule la variante de rendu (coûts
-     * visibles ou masqués) change.
+     * visibles ou masqués) change. La tuile « president » (ajoutée en
+     * dernier, purement additive) affiche UNE page de 3 chiffres —
+     * ventes et bénéfice du mois, stock restant — sans aucun autre
+     * chiffre : elle exige en plus l'option « benefice » du kiosque.
      *
      * @var list<array{id:string,emoji:string,label:string,desc:string,path:string}>
      */
@@ -75,6 +78,7 @@ final class KioskPages
         ['id' => 'liste-lite', 'emoji' => '🛒', 'label' => 'Liste de courses — sans coûts', 'desc' => 'Ce qu\'il faut racheter, sans chiffre financier : pour les membres.', 'path' => '/kiosque/liste/'],
         ['id' => 'reappro', 'emoji' => '📈', 'label' => 'Réappro — avec coûts', 'desc' => 'Stock, packs et coûts : pour trésorier/président.', 'path' => '/kiosque/reappro/'],
         ['id' => 'reappro-lite', 'emoji' => '📈', 'label' => 'Réappro — sans coûts', 'desc' => 'Stock et packs, sans chiffre financier : pour les membres.', 'path' => '/kiosque/reappro/'],
+        ['id' => 'president', 'emoji' => '🏛️', 'label' => 'Vue Président', 'desc' => 'Trois chiffres simples : ventes et bénéfice du mois, stock restant.', 'path' => '/kiosque/admin/president/'],
     ];
 
     /**

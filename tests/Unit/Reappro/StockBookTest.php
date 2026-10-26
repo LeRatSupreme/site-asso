@@ -103,4 +103,55 @@ final class StockBookTest extends TestCase
         self::assertSame(7, $e['stock'], 'Conflit normalisé : max (conservateur pour ne pas sous-commander).');
         self::assertSame('2026-10-21 12:00:00', $e['at'], 'Date la plus récente des deux formes.');
     }
+
+    /**
+     * Total « stock restant » (tuile Président) : UN comptage par produit
+     * (dédoublonné par clé normalisée, conflit → max), survente bornée à 0.
+     */
+    public function test_total_units_dedupe_par_produit_et_borne_les_surventes(): void
+    {
+        $book = new StockBook(
+            ['Eau-50cl' => 4, 'Eau 50cl' => 12, 'Bueno white' => -5],
+            [],
+            []
+        );
+
+        // « Eau-50cl » / « Eau 50cl » = UN produit (max 12, pas 16) ;
+        // survente −5 = anomalie, elle compte 0 (jamais moins).
+        self::assertSame(12, $book->totalUnits());
+    }
+
+    /**
+     * Lignes de valorisation : un produit = une ligne avec sa clé EXACTE
+     * d'inventaire (celle du stock max en cas de conflit de normalisation).
+     */
+    public function test_lines_une_ligne_par_produit_avec_la_cle_exacte_du_max(): void
+    {
+        $book = new StockBook(['Eau-50cl' => 4, 'Eau 50cl' => 12], [], []);
+
+        self::assertSame([['key' => 'Eau 50cl', 'stock' => 12]], $book->lines());
+    }
+
+    /**
+     * Valeur € du stock : Σ max(0, stock) × coût PAR CLÉ EXACTE ; sans
+     * coût connu (absent ou NULL), le produit est ignoré — aucune valeur
+     * inventée.
+     */
+    public function test_valeur_au_dernier_cout_ignore_les_produits_sans_cout(): void
+    {
+        $book = new StockBook(
+            ['Coca 33cl' => 10, 'Eau 50cl' => 12, 'Bueno white' => -5, 'Gratis' => 4],
+            [],
+            []
+        );
+
+        $valeur = $book->totalValue([
+            'Coca 33cl'  => 0.5,  // 10 × 0,50 = 5,00
+            'Eau 50cl'   => null, // coût inconnu → ignorée
+            'Bueno white' => 2.0, // survente −5 bornée à 0 → 0,00
+            'Inconnu'    => 9.0, // pas dans le livre → sans effet
+        ]);
+
+        self::assertSame(5.0, $valeur);
+    }
 }

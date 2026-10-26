@@ -16,6 +16,7 @@ use App\Core\Compta\SumUpCsvParser;
 use App\Core\Controller;
 use App\Core\Logger;
 use App\Models\Analytics;
+use App\Models\AnalyticsForecastData;
 use App\Models\AuditLog;
 use App\Models\CashCount;
 use App\Models\Expense;
@@ -679,6 +680,64 @@ final class KioskComptageController extends Controller
         }
 
         redirect(url('/kiosque/admin/periode/' . rawurlencode($token) . '?p=mois'));
+    }
+
+    /**
+     * Vue Président : UNE page, TROIS gros chiffres, zéro jargon, zéro
+     * clic — ventes du mois, bénéfice du mois, stock restant. Réutilise
+     * EXCLUSIVEMENT les points d'assemblage existants : mois par la même
+     * fenêtre ComptaCalc + les mêmes agrégats Sale que la tuile
+     * « période », stock par le livre unique AnalyticsForecastData::
+     * stockBook() (règle AGENTS : aucun lookup produit direct).
+     *
+     * Garde double : la tuile « president » doit être cochée ET l'option
+     * « benefice » présente — le bénéfice du mois étant un pilier de la
+     * page, l'option absente refuse la page ENTIÈRE (403, rien n'est
+     * servi partiellement). La valeur € du stock n'est calculée (et
+     * affichée) QUE si l'option « couts » est cochée : sinon les unités
+     * seules partent au rendu (aucune fuite par le HTML).
+     */
+    public function president(string $token): void
+    {
+        if (!KioskPages::tokenAllows($token, 'president')) {
+            $this->deny();
+
+            return;
+        }
+
+        $opts = KioskPages::tokenOptions($token);
+        if (!$opts['benefice']) {
+            $this->deny();
+
+            return;
+        }
+
+        // Mois en cours : mêmes sources que la tuile « période » (fenêtre
+        // ComptaCalc::monthToDateWindow + Sale::aggregatesBetween).
+        $window = \App\Core\Compta\ComptaCalc::monthToDateWindow();
+        $agg = Sale::aggregatesBetween($window['from'], $window['to']);
+
+        // Stock restant : livre UNIQUE (StockBook), valeur € seulement
+        // si l'option « couts » est cochée (au dernier coût connu).
+        $book = AnalyticsForecastData::stockBook();
+        $stockValue = $opts['couts'] ? AnalyticsForecastData::stockValueAtLastCost($book) : null;
+
+        $moisFr = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin',
+                   'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+
+        $this->renderKiosk('admin/compta/kiosk-president', [
+            'title' => 'Vue Président',
+            'token' => $token,
+            'mois'  => [
+                'ca'     => round((float) $agg['ca'], 2),
+                'profit' => round((float) $agg['profit'], 2),
+                'label'  => $moisFr[(int) (new \DateTimeImmutable($window['from'], new \DateTimeZone('Europe/Paris')))->format('n') - 1],
+            ],
+            'stock' => [
+                'units' => $book->totalUnits(),
+                'value' => $stockValue,
+            ],
+        ]);
     }
 
     /**
