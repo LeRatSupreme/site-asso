@@ -11,9 +11,10 @@ namespace Tests\Integration;
  *   1. Les 4 cartes « Niveau 1 » et le bloc « À faire » sont rendus.
  *   2. Verdict « progresse » (vert) sur une semaine passée complète dont le
  *      résultat net dépasse celui de la semaine encore avant.
- *   3. Verdict neutre « Période en cours » sur la fenêtre par défaut (30 j
- *      finissant aujourd'hui) — choix d'assertion : la phrase « Période en
- *      cours » est le marqueur du refus de verdict (règle 1 du cœur).
+ *   3. Verdict neutre « Période en cours » sur la fenêtre par défaut
+ *      (semaine en cours, lundi → aujourd'hui) — choix d'assertion : la
+ *      phrase « Période en cours » est le marqueur du refus de verdict
+ *      (règle 1 du cœur).
  *   4. Aucune vente + des dépenses sur une semaine passée : phrase « Aucune
  *      vente » et badge rouge (classe badge-danger).
  *   5. Cohérence avec le livre : les montants affichés (CA, profit, net)
@@ -171,8 +172,9 @@ final class DashboardPageTest extends IntegrationTestCase
 
     public function test_aucun_pourcent_sur_periode_incomplete(): void
     {
-        // Période par défaut (30 j, finissant aujourd'hui) : incomplète →
-        // règle de mission « aucun % sur période incomplète ». Assertion la
+        // Période par défaut (semaine en cours, lundi → aujourd'hui) :
+        // incomplète → règle de mission « aucun % sur période incomplète ».
+        // Assertion la
         // plus robuste : aucun repère « vs période précédente » ne peut
         // apparaître (le cœur Cartes renvoie des repères null), quel que
         // soit le contenu de la base.
@@ -198,10 +200,26 @@ final class DashboardPageTest extends IntegrationTestCase
     public function test_total_et_part_carte_paiements(): void
     {
         // Carte 60,00 € + liquide 40,00 € → total 100,00 €, carte 60 %.
+        //
+        // DÉTERMINISME (fix flaky du 26/10/2026) : sans paramètre, la
+        // fenêtre est « semaine en cours » (lundi → J ; défaut 'week' de
+        // ComptaCalc::resolvePeriod depuis bffbfad) — un lundi/mardi, les
+        // seeds J-1/J-2 tombent HORS fenêtre et le total vaut 0,00 €. On
+        // requête une période explicite couvrant les seeds (même pattern
+        // que test_coherence_avec_le_livre) : l'intention du test est le
+        // rendu de splitTotal/cardPct pour une fenêtre CONTENANT les deux
+        // ventes, pas la fenêtre par défaut (couvrée par les scénarios 3
+        // et 6 ci-dessus). Comportement applicatif inchangé.
         $this->insertSale('s_dash_pay1', 'TPAY1', date('Y-m-d H:i:s', strtotime('-2 days')), '60.00', 'CARTE');
         $this->insertSale('s_dash_pay2', 'TPAY2', date('Y-m-d H:i:s', strtotime('-1 day')), '40.00', 'LIQUIDE');
 
-        $r = $this->request('GET', '/admin/compta', [], [], $this->rootId);
+        $r = $this->request(
+            'GET',
+            '/admin/compta?period=custom&from=' . date('Y-m-d', strtotime('-3 days')) . '&to=' . date('Y-m-d'),
+            [],
+            [],
+            $this->rootId
+        );
         self::assertSame(200, (int) ($r['code'] ?? 0));
         $body = (string) ($r['body'] ?? '');
 
