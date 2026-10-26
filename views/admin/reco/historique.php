@@ -5,6 +5,9 @@ declare(strict_types=1);
 /**
  * Historique des idées (recommandations commerciales), refondu en
  * TROIS sections + annexes conservées :
+ *  - « ✅ Ce qui a marché » (EN TÊTE) : idées concluantes à effet
+ *    mesuré strictement positif — ce que le conseil a réellement
+ *    rapporté, libellé humain via EffetMesure::libelle ;
  *  - « En cours » : idées appliquées en cours de mesure (~4 semaines)
  *    et corrections appliquées (sans mesure d'effet, par nature) ;
  *  - « Mesurées » : effet en euros AVEC fourchette (EffetMesure) ou
@@ -26,6 +29,10 @@ declare(strict_types=1);
 
 use App\Core\Compta\Reco\EffetMesure;
 use App\Core\Compta\Reco\RecoLibelles;
+
+// « Ce qui a marché » : mesures concluantes à effet positif fournies
+// par le contrôleur (jamais recalculées ici) ; normalisation défensive.
+$reussies = is_array($reussies ?? null) ? $reussies : [];
 
 $libellesSeuils = [
     'reco_marge_min'              => 'Marge minimale (fraction, ex. 0.15 = 15 %)',
@@ -79,6 +86,44 @@ $badgeConclusion = static function (array $l): string {
             <h1 class="page-title">Idées appliquées</h1>
             <p class="muted">Le site propose, vous décidez : historique des idées appliquées et de leur effet mesuré. Aucun prix ni stock n'est modifié automatiquement.</p>
         </div>
+    </div>
+
+    <!-- ============================================================ -->
+    <!--  0. CE QUI A MARCHÉ : idées concluantes à effet positif       -->
+    <!--      (la valorisation du conseil : ce qu'il a rapporté)       -->
+    <!-- ============================================================ -->
+    <div class="card surface glass chart-card">
+        <div class="chart-head">
+            <h2 class="chart-title">✅ Ce qui a marché</h2>
+            <span class="chart-sub">idées appliquées dont l'effet mesuré est concluant et positif</span>
+        </div>
+        <?php if ($reussies === []): ?>
+            <p class="muted fc-empty">Aucune idée concluante pour l'instant.</p>
+        <?php else: ?>
+            <div class="table-wrap">
+                <table class="data-table">
+                    <thead>
+                        <tr><th>Idée appliquée</th><th>Nature</th><th>Appliquée le</th><th>Effet mesuré</th></tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($reussies as $l): ?>
+                            <?php
+                            // Effet déjà décodé/normalisé par le contrôleur
+                            // (prêt pour EffetMesure::libelle — libellé
+                            // humain, jamais de code R#).
+                            $effetReussi = is_array($l['effet'] ?? null) ? $l['effet'] : null;
+                            ?>
+                            <tr>
+                                <td><?= e((string) ($l['titre'] ?? '')) ?></td>
+                                <td><span class="reco-badge is-rule"><?= e(RecoLibelles::regle((string) ($l['regle'] ?? ''))) ?></span></td>
+                                <td><?= e((string) ($l['applied_at'] ?? '') !== '' ? formatDate(substr((string) $l['applied_at'], 0, 10), 'd/m/Y') : '—') ?></td>
+                                <td><span class="reco-badge is-up"><?= e($effetReussi !== null ? EffetMesure::libelle($effetReussi) : '') ?></span></td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        <?php endif; ?>
     </div>
 
     <!-- ============================================================ -->

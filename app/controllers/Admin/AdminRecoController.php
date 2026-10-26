@@ -341,7 +341,10 @@ final class AdminRecoController extends AdminBaseController
         }
 
         // Historique compact (idées appliquées, la plus récente d'abord).
-        // Libellé humain de la règle (JAMAIS le code R# dans la vue).
+        // Libellé humain de la règle (JAMAIS le code R# dans la vue) ;
+        // « effet » = valeur brute déjà décodée, pur affichage : permet au
+        // kiosque de filtrer « concluantes à effet > 0 » (même critère que
+        // $reussies de historique()) sans recalcul en vue.
         $hist = [];
         foreach (Recommendation::historique() as $l) {
             $effet = self::effetDepuisJson($l['effet_json'] ?? null);
@@ -352,6 +355,7 @@ final class AdminRecoController extends AdminBaseController
                 'conclusion'  => (string) ($l['effet_conclusion'] ?? ''),
                 'libelle'     => is_array($effet) ? EffetMesure::libelle($effet) : '',
                 'note'        => is_array($effet) ? (string) ($effet['note'] ?? '') : '',
+                'effet'       => is_array($effet) ? (float) ($effet['effet'] ?? 0.0) : 0.0,
             ];
         }
 

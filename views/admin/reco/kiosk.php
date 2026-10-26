@@ -22,7 +22,7 @@ declare(strict_types=1);
  * @var string                    $raison      Raison de l'indisponibilité.
  * @var bool                      $kiosk       Toujours vrai (rendu kiosque).
  * @var string                    $token       Jeton kiosque admin.
- * @var list<array{titre:string,regle_lib:string,applied_at:string,conclusion:string,libelle:string,note:string}> $hist
+ * @var list<array{titre:string,regle_lib:string,applied_at:string,conclusion:string,libelle:string,note:string,effet:float}> $hist
  */
 
 use App\Core\Compta\Reco\Hyper;
@@ -38,6 +38,17 @@ $raison         = trim((string) ($raison ?? ($meta['raison'] ?? '')));
 $insuff         = (bool) ($insuffisant ?? false);
 $actionDecision = url('/kiosque/admin/reco/decision/' . rawurlencode($token));
 $hist           = is_array($hist ?? null) ? $hist : [];
+
+// « Ce qui a marché » : top 3 des idées concluantes à effet mesuré
+// strictement positif (MÊME critère que la section « ✅ Ce qui a
+// marché » de la page historique admin — jamais de concluant négatif).
+$reussiesKiosk = [];
+foreach ($hist as $h) {
+    if ((string) ($h['conclusion'] ?? '') === 'concluant' && (float) ($h['effet'] ?? 0.0) > 0.0) {
+        $reussiesKiosk[] = $h;
+    }
+}
+$reussiesKiosk = array_slice($reussiesKiosk, 0, 3);
 
 // Regroupement PAR NATURE (même règle que la vue admin, ≤ 3 cartes).
 $groupes = [];
@@ -269,6 +280,32 @@ $lienPrincipal = static function (array $item): array {
                 </details>
             <?php endif; ?>
         <?php endif; ?>
+    <?php endif; ?>
+
+    <!-- ============================================================ -->
+    <!--  Ce qui a marché : top 3 des idées concluantes               -->
+    <!-- ============================================================ -->
+    <header class="ka-head kr-hist-head">
+        <h2 class="ka-chart-title">Ce qui a marché</h2>
+    </header>
+    <?php if ($reussiesKiosk === []): ?>
+        <section class="card surface glass ka-card">
+            <span class="ka-kpi-delta is-muted">Aucune idée concluante pour l'instant.</span>
+        </section>
+    <?php else: ?>
+        <?php foreach ($reussiesKiosk as $h): ?>
+            <section class="card surface glass ka-card">
+                <div class="kr-head">
+                    <strong><?= e((string) ($h['titre'] ?? '')) ?></strong>
+                    <span class="krb is-rule"><?= e((string) ($h['regle_lib'] ?? '')) ?></span>
+                    <span class="krb is-up">ça a marché</span>
+                </div>
+                <span class="ka-kpi-delta is-up">
+                    appliquée le <?= e((string) ($h['applied_at'] ?? '') !== '' ? formatDate(substr((string) $h['applied_at'], 0, 10), 'd/m/Y') : '—') ?>
+                    <?php if ((string) ($h['libelle'] ?? '') !== ''): ?> · <?= e((string) $h['libelle']) ?><?php endif; ?>
+                </span>
+            </section>
+        <?php endforeach; ?>
     <?php endif; ?>
 
     <!-- ============================================================ -->
