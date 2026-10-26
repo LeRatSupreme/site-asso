@@ -8,6 +8,7 @@ declare(strict_types=1);
  * @var array<string,string> $periodOptions
  * @var array{year:int,month:int,value:string,choisi:bool} $editMonth
  * @var array<string,float>|null $editPlanned Budget RÉEL du mois édité (null = sans ?month : champs au prorata de la période, comportement historique).
+ * @var array{values:array<string,int>, label:string} $suggest Suggestions « réalisé récent » : moyenne du réalisé des 3 mois précédant le mois édité, arrondie à l'euro (lecture seule, aucun enregistrement automatique).
  * @var string $currentMonthValue Mois calendaire courant « YYYY-MM ».
  * @var list<array{value:string,label:string,ca_planned:float,ca_realized:float,exp_planned:float,exp_realized:float}> $annual Grille annuelle (lecture seule).
  * @var string $rangeLabel
@@ -122,6 +123,13 @@ $nextMonth = $editFirst->modify('+1 month');
                             ? (float) ($editPlanned[$r['key']] ?? 0)
                             : (float) $r['planned'];
 
+                        // Suggestion « réalisé récent » (calculée côté
+                        // contrôleur) : transportée dans data-suggest déjà
+                        // formatée à la française — le bouton « Pré-remplir »
+                        // n'a plus qu'à recopier, zéro calcul en JS. Vide si
+                        // aucun réalisé sur la fenêtre.
+                        $suggestValue = (int) ($suggest['values'][$r['key']] ?? 0);
+
                         // CA : positif = objectif dépassé. Dépenses : positif = reste disponible.
                         // Sans budget saisi, l'écart n'a pas de sens : on affiche « — ».
                         $gap = $isCa ? $r['realized'] - $r['planned'] : $r['planned'] - $r['realized'];
@@ -156,6 +164,7 @@ $nextMonth = $editFirst->modify('+1 month');
                         <td>
                             <input type="text" name="planned[<?= e($r['key']) ?>]"
                                 value="<?= $editValue > 0 ? e(number_format($editValue, 2, ',', ' ')) : '' ?>"
+                                data-suggest="<?= $suggestValue > 0 ? e(number_format((float) $suggestValue, 2, ',', ' ')) : '' ?>"
                                 inputmode="decimal" style="width:130px" placeholder="—"
                                 aria-label="Budget prévu (en euros) pour <?= e($r['label']) ?>">
                         </td>
@@ -175,7 +184,12 @@ $nextMonth = $editFirst->modify('+1 month');
                 </tr>
             </tfoot>
         </table>
-        <button type="submit" class="btn btn-primary">Enregistrer le budget</button>
+        <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center">
+            <button type="submit" class="btn btn-primary">Enregistrer le budget</button>
+            <button type="button" class="btn btn-ghost" id="budget-suggest"
+                title="Remplit les champs « Prévu » avec la moyenne du réalisé des 3 mois précédant le mois édité">Pré-remplir avec le réalisé récent</button>
+            <span class="muted" style="font-size:0.85rem">moyenne réalisée <?= e($suggest['label']) ?> — ajuste puis enregistre ; rien n'est sauvé sans « Enregistrer le budget ».</span>
+        </div>
         <p class="muted" style="font-size:0.85rem">Les montants se saisissent à la française (ex : 250,50 ou 10 000). Laisse vide ou mets 0 pour supprimer une ligne. La ligne « Bilan » compare le résultat (CA − dépenses) prévu au réalisé. <strong>Matière (cafétéria)</strong> se remplit automatiquement avec tes achats enregistrés (page Achats &amp; stock) — inutile de les ressaisir en dépenses.</p>
     </form>
 </div>
@@ -230,4 +244,23 @@ $cell = static fn(float $v): string => $v > 0.0 ? e(formatPrice($v)) : '<span cl
         </tfoot>
     </table>
 </div>
+
+<script>
+(function () {
+    // « Pré-remplir avec le réalisé récent » : recopie dans chaque champ la
+    // suggestion calculée côté CONTRÔLEUR (attribut data-suggest, déjà
+    // formatée en euros à la française). Aucun calcul ni requête ici, aucune
+    // écriture : l'admin ajuste puis valide par « Enregistrer le budget ».
+    var btn = document.getElementById('budget-suggest');
+    if (!btn) {
+        return;
+    }
+    btn.addEventListener('click', function () {
+        var champs = document.querySelectorAll('input[name^="planned["][data-suggest]');
+        for (var i = 0; i < champs.length; i++) {
+            champs[i].value = champs[i].getAttribute('data-suggest') || '';
+        }
+    });
+})();
+</script>
 

@@ -19,7 +19,13 @@ namespace Tests\Integration;
  *   4. mini-grille annuelle en LECTURE SEULE : 12 mois × prévu vs réalisé,
  *      aucun formulaire ni route d'écriture ajoutés ;
  *   5. entrée « À faire » du dashboard : « Aucun budget pour le mois
- *      courant » si vide / « MATIERE à X % de l'enveloppe » dès 85 %.
+ *      courant » si vide / « MATIERE à X % de l'enveloppe » dès 85 % ;
+ *   6. bouton « Pré-remplir avec le réalisé récent » : les suggestions
+ *      sont la MOYENNE du réalisé des 3 mois calendaires précédant le
+ *      mois édité (CA + dépenses par catégorie, achats de stock comptés
+ *      dans MATIERE), arrondie à l'euro, calculées côté contrôleur et
+ *      transportées en data-suggest — RIEN n'est pré-rempli dans les
+ *      champs ni enregistré sans le POST « Enregistrer le budget ».
  *
  * Les dates de test sont relatives à aujourd'hui (mois précédent = mois
  * édité, mois encore avant = période « ailleurs ») : robustes au calendrier
@@ -277,6 +283,102 @@ final class BudgetPageTest extends IntegrationTestCase
     }
 
     // -----------------------------------------------------------------
+    //  6. Suggestions « Pré-remplir avec le réalisé récent » (P2-3)
+    // -----------------------------------------------------------------
+
+    /**
+     * Mois édité = M-1 ; fenêtre de suggestions = M-2, M-3, M-4.
+     *
+     * @return list<\DateTimeImmutable> [M-4, M-3, M-2] (premiers jours).
+     */
+    private function fenetreSuggestions(): array
+    {
+        $m2 = $this->prevPrevMonth;
+
+        return [$m2->modify('-2 months'), $m2->modify('-1 month'), $m2];
+    }
+
+    public function test_suggestions_moyenne_des_3_mois_precedents(): void
+    {
+        [$m4, $m3, $m2] = $this->fenetreSuggestions();
+
+        // CA réalisé : 900 + 1000 + 1100 = 3000 → moyenne 1 000 €.
+        $this->insertSale('s_sug_a', 'TSUGA', $m2->format('Y-m-10 10:00:00'), '900.00');
+        $this->insertSale('s_sug_b', 'TSUGB', $m3->format('Y-m-15 10:00:00'), '1000.00');
+        $this->insertSale('s_sug_c', 'TSUGC', $m4->format('Y-m-20 10:00:00'), '1100.00');
+
+        // MATIERE : dépenses 100 + 150 + 200 = 450, achats de stock
+        // 100 × 3 = 300 → (450 + 300) / 3 = 250 €.
+        $this->insertExpense('exp_sug_a', $m2->format('Y-m-05'), 'MATIERE', 'Courses', '100.00');
+        $this->insertExpense('exp_sug_b', $m3->format('Y-m-05'), 'MATIERE', 'Courses', '150.00');
+        $this->insertExpense('exp_sug_c', $m4->format('Y-m-05'), 'MATIERE', 'Courses', '200.00');
+        $this->insertPurchase('p_sug_a', $m2->format('Y-m-06'), 'PSUG1', '100.00');
+        $this->insertPurchase('p_sug_b', $m3->format('Y-m-06'), 'PSUG1', '100.00');
+        $this->insertPurchase('p_sug_c', $m4->format('Y-m-06'), 'PSUG1', '100.00');
+
+        // FRAIS : 30 + 40 + 42 = 112 → 112/3 = 37,33 → arrondi à l'euro : 37 €.
+        $this->insertExpense('exp_sug_d', $m2->format('Y-m-07'), 'FRAIS', 'Banque', '30.00');
+        $this->insertExpense('exp_sug_e', $m3->format('Y-m-07'), 'FRAIS', 'Banque', '40.00');
+        $this->insertExpense('exp_sug_f', $m4->format('Y-m-07'), 'FRAIS', 'Banque', '42.00');
+
+        // MATERIEL : un seul mois alimenté (60 €) → moyenne 20 €.
+        $this->insertExpense('exp_sug_g', $m3->format('Y-m-08'), 'MATERIEL', 'Petit matos', '60.00');
+        // EVENEMENT et DIVERS : aucun réalisé → suggestion vide.
+
+        $r = $this->request('GET', '/admin/compta/budgets?month=' . $this->prevMonth->format('Y-m'), [], [], $this->rootId);
+        self::assertSame(200, (int) ($r['code'] ?? 0));
+        $body = (string) ($r['body'] ?? '');
+
+        // Les suggestions attendues (moyenne des 3 mois précédents, arrondie
+        // à l'euro, déjà formatée à la française) sont dans data-suggest.
+        self::assertStringContainsString('data-suggest="1 000,00"', $body, 'Suggestion CA = moyenne des CA des 3 mois précédents.');
+        self::assertStringContainsString('data-suggest="250,00"', $body, 'Suggestion MATIERE = dépenses + achats de stock, moyennés.');
+        self::assertStringContainsString('data-suggest="37,00"', $body, 'Suggestion FRAIS arrondie à l’euro (112/3 = 37,33 → 37).');
+        self::assertStringContainsString('data-suggest="20,00"', $body, 'Suggestion MATERIEL = 60 € étalés sur 3 mois.');
+        self::assertStringContainsString('data-suggest=""', $body, 'Catégorie sans réalisé sur la fenêtre → suggestion vide.');
+
+        // RIEN n'est pré-rempli dans les champs eux-mêmes : sans clic (côté
+        // client) ni validation, le formulaire reste vide (aucun budget
+        // seedé pour le mois édité).
+        self::assertStringNotContainsString('value="1 000,00"', $body, 'La suggestion ne doit PAS remplir le champ sans clic.');
+
+        // Indication des mois utilisés : fenêtre M-4 → M-2, en toutes
+        // lettres (abréviations françaises des mois extrémités).
+        self::assertStringContainsString('moyenne réalisée', $body);
+        self::assertStringContainsString(self::abbrMois($m4), $body, 'Le 1er mois de la fenêtre doit être indiqué.');
+        self::assertStringContainsString(self::abbrMois($m2), $body, 'Le dernier mois de la fenêtre doit être indiqué.');
+    }
+
+    public function test_suggestion_sans_clic_rien_n_est_ecrit(): void
+    {
+        $ym = $this->prevMonth->format('Y-m');
+        $this->insertBudget('b_sug_keep', $this->prevMonth, 'CA', '555.00');
+        $this->insertSale('s_sug_side', 'TSUGSIDE', $this->prevPrevMonth->format('Y-m-12 12:00:00'), '300.00');
+
+        $r = $this->request('GET', '/admin/compta/budgets?month=' . $ym, [], [], $this->rootId);
+        self::assertSame(200, (int) ($r['code'] ?? 0));
+        $body = (string) ($r['body'] ?? '');
+
+        // Le bouton est un simple button (jamais un submit) : il ne peut
+        // pas déclencher le POST /save.
+        self::assertStringContainsString(
+            '<button type="button" class="btn btn-ghost" id="budget-suggest"',
+            $body,
+            'Le bouton de pré-remplissage ne doit pas soumettre le formulaire.'
+        );
+
+        // Le champ garde le budget EXISTANT (555 €), pas la suggestion
+        // (300 €) : le GET ne touche ni l'affichage des valeurs ni la base.
+        self::assertStringContainsString('value="555,00"', $body);
+
+        // Aucune écriture : la ligne budget est intacte, aucune ligne
+        // ajoutée (la suggestion n'a créé ni budgets ni quoi que ce soit).
+        $row = $this->pdo->query('SELECT COUNT(*) AS n, COALESCE(SUM(planned_amount), 0) AS total FROM budgets')->fetch();
+        self::assertSame(1, (int) $row['n'], 'Aucune ligne budget ne doit être créée par un simple GET.');
+        self::assertEqualsWithDelta(555.0, (float) $row['total'], 0.001, 'Le budget existant doit être inchangé.');
+    }
+
+    // -----------------------------------------------------------------
     //  Helpers
     // -----------------------------------------------------------------
 
@@ -321,5 +423,32 @@ final class BudgetPageTest extends IntegrationTestCase
             'INSERT INTO expenses (id, spent_at, category, label, amount_ttc, created_by)
              VALUES (?,?,?,?,?,?)'
         )->execute([$id, $spentAt, $category, $label, $amountTtc, 'test@aeic.fr']);
+    }
+
+    /**
+     * Insère un achat de stock directement en base (TTC seulement, entré
+     * en stock : compté par Purchase::statsBetween dans l'enveloppe
+     * MATIERE de la page budgets).
+     */
+    private function insertPurchase(string $id, string $purchasedAt, string $productKey, string $totalTtc): void
+    {
+        $this->pdo->prepare(
+            'INSERT INTO purchases (id, purchased_at, product_key, quantity, total_ttc)
+             VALUES (?,?,?,1,?)'
+        )->execute([$id, $purchasedAt, $productKey, $totalTtc]);
+    }
+
+    /**
+     * Abréviation française d'un mois (même convention que la page :
+     * « oct. », « déc. »…), pour vérifier l'indication des mois utilisés.
+     */
+    private static function abbrMois(\DateTimeImmutable $mois): string
+    {
+        $abbr = [
+            1 => 'janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin',
+            'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.',
+        ];
+
+        return $abbr[(int) $mois->format('n')];
     }
 }
