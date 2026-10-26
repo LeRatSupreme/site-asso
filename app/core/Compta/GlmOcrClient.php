@@ -32,8 +32,13 @@ final class GlmOcrClient
     /** URL de base par défaut de l'API Z.ai (compatible OpenAI). */
     private const DEFAULT_BASE_URL = 'https://api.z.ai/api/paas/v4';
 
-    /** Modèle vision par défaut. */
-    private const DEFAULT_MODEL = 'glm-ocr';
+    /**
+     * Modèle vision par défaut : glm-4.6v — validé en production sur
+     * /chat/completions avec le payload image de ce client. « glm-ocr »
+     * est réservé à un autre canal API de Z.ai et refuse ce payload
+     * (code 1214) : il n'est PAS utilisable via chat/completions.
+     */
+    private const DEFAULT_MODEL = 'glm-4.6v';
 
     /** Délai maximal par défaut d'un appel, en secondes. */
     private const DEFAULT_TIMEOUT_S = 75;
