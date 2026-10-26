@@ -278,6 +278,33 @@ final class Expense extends Model
     }
 
     /**
+     * Total des frais de dépôt banque comptabilisés en dépenses :
+     * catégorie « FRAIS », libellé « Frais de dépôt banque… » (convention
+     * d'écriture d'AdminCashController::deposit et de son miroir kiosque,
+     * un par dépôt, montant CashLedger::DEPOSIT_FEE). Source du bloc
+     * « Banque » de la page Trésorerie — aucun autre calcul ne refait
+     * cette somme.
+     */
+    public static function depositFeesTotal(): float
+    {
+        try {
+            $stmt = self::pdo()->prepare(
+                "SELECT COALESCE(SUM(amount_ttc), 0) AS total
+                 FROM expenses
+                 WHERE category = 'FRAIS' AND label LIKE 'Frais de dépôt banque%'"
+            );
+            $stmt->execute();
+
+            /** @var array<string,mixed> $row */
+            $row = $stmt->fetch();
+        } catch (\Throwable) {
+            return 0.0;
+        }
+
+        return round((float) ($row['total'] ?? 0), 2);
+    }
+
+    /**
      * Totaux d'une période (année obligatoire, mois optionnel).
      *
      * @return array{ttc:float, ht:float, count:int}

@@ -177,6 +177,7 @@ if ($isAdminRole && $systemPageAllowed('ledger')) {
 }
 if ($moduleAllowed(Permissions::MODULE_COMPTA)) {
     $compta['Budgets'] = '/admin/compta/budgets';
+    $compta['Trésorerie'] = '/admin/compta/tresorerie';
 }
 if ($isAdminRole && $systemPageAllowed('cash')) {
     $compta['Caisses'] = '/admin/caisses';
