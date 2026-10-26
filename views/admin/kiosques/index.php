@@ -19,6 +19,7 @@ declare(strict_types=1);
  * @var list<array{id:string,name:string,token:string,pages:list<string>,options:?list<string>,created_by:string,created_at:string,updated_at:?string}> $customKiosques
  * @var list<array{id:string,emoji:string,label:string,desc:string,path:string}> $tileCatalog
  * @var list<array{id:string,emoji:string,label:string,desc:string}> $optionCatalog
+ * @var list<array{key:string,emoji:string,label:string,desc:string,pages:list<string>,options:list<string>}> $presets key ∈ {tresorier, president, cafet}
  */
 ?>
 <style>
@@ -105,6 +106,31 @@ declare(strict_types=1);
     }
     .kq-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.55rem; align-items: center; }
     .kq-actions form { margin: 0; }
+    /* Création express par rôle : un clic pré-remplit le formulaire ci-dessous
+       (aucune soumission automatique — l'admin vérifie puis crée). */
+    .kq-presets {
+        display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 0.6rem; margin: 0.35rem 0 0.2rem;
+    }
+    @media (max-width: 860px) {
+        .kq-presets { grid-template-columns: 1fr; }
+    }
+    .kq-preset {
+        display: flex; align-items: center; gap: 0.55rem; text-align: left;
+        padding: 0.7rem 0.8rem; cursor: pointer;
+        background: rgba(72, 189, 211, 0.05);
+        border: 1px solid rgba(72, 189, 211, 0.28);
+        border-radius: 12px; color: var(--foreground);
+        font: inherit; min-width: 0;
+    }
+    .kq-preset:hover { background: rgba(72, 189, 211, 0.11); }
+    .kq-preset-body { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
+    .kq-preset .kq-label { font-size: 0.9rem; }
+    .kq-preset .kq-desc { font-size: 0.72rem; }
+    .kq-preset-cta {
+        margin-left: auto; font-size: 0.7rem; font-weight: 800; white-space: nowrap;
+        color: var(--primary, #48bdd3);
+    }
 </style>
 
 <div class="compta-head">
@@ -221,7 +247,20 @@ declare(strict_types=1);
                 <span class="kq-label">Créer un kiosque</span>
             </div>
             <p class="kq-desc">Crée autant de kiosques que besoin — un par type de personne (trésorier, bar, membres…). Coche les pages à mettre dessus, puis partage le lien révélé.</p>
-            <form method="post" action="<?= e(url('/admin/kiosques/create')) ?>">
+            <div class="kq-presets" role="group" aria-label="Création express par rôle">
+                <?php foreach ($presets as $preset): ?>
+                <button type="button" class="kq-preset" data-kq-preset="<?= e($preset['key']) ?>"
+                        title="Pré-remplit le formulaire ci-dessous pour le rôle « <?= e($preset['label']) ?> » — vérifie puis crée.">
+                    <span class="kq-emoji"><?= $preset['emoji'] ?></span>
+                    <span class="kq-preset-body">
+                        <span class="kq-label"><?= e($preset['label']) ?></span>
+                        <span class="kq-desc"><?= e($preset['desc']) ?></span>
+                    </span>
+                    <span class="kq-preset-cta">Pré-remplir</span>
+                </button>
+                <?php endforeach; ?>
+            </div>
+            <form method="post" action="<?= e(url('/admin/kiosques/create')) ?>" id="kq-create-form">
                 <?= csrf_field() ?>
                 <div class="kq-field">
                     <label for="kq-new-name">Nom du kiosque</label>
@@ -350,6 +389,18 @@ declare(strict_types=1);
 (function () {
     'use strict';
     var REVEAL_URL = <?= json_encode(url('/admin/kiosques/reveal'), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
+    /* Presets par rôle : pages + options à cocher (données servies par le
+       contrôleur, recalées sur le catalogue — jamais devinées côté client). */
+    var PRESETS = <?= json_encode(
+        array_combine(
+            array_column($presets, 'key'),
+            array_map(
+                static fn (array $p): array => ['name' => $p['label'], 'pages' => $p['pages'], 'options' => $p['options']],
+                $presets
+            )
+        ),
+        JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE
+    ) ?>;
     var MASK = '••••••••';
     var csrfInput = document.querySelector('input[name="_csrf"]');
 
@@ -464,6 +515,31 @@ declare(strict_types=1);
             }
             copy(u);
         });
+    });
+    /* Pré-remplissage par rôle : un clic coche EXACTEMENT les tuiles et
+       options du preset (tout le reste est décoché — état déterministe)
+       dans le formulaire de création ; aucune soumission automatique,
+       l'admin vérifie/ajuste puis clique « Créer le kiosque » (le POST
+       existant reste le seul chemin d'écriture). */
+    document.addEventListener('click', function (e) {
+        var btn = e.target.closest('.kq-preset');
+        if (!btn) return;
+        var preset = PRESETS[btn.getAttribute('data-kq-preset')];
+        var form = document.getElementById('kq-create-form');
+        if (!preset || !form) return;
+
+        var name = form.querySelector('input[name="name"]');
+        form.querySelectorAll('input[name="pages[]"]').forEach(function (cb) {
+            cb.checked = preset.pages.indexOf(cb.value) !== -1;
+        });
+        form.querySelectorAll('input[name="options[]"]').forEach(function (cb) {
+            cb.checked = preset.options.indexOf(cb.value) !== -1;
+        });
+        if (name) {
+            name.value = preset.name;
+            name.focus();
+        }
+        flash(btn, 'Pré-rempli ✓');
     });
 })();
 </script>

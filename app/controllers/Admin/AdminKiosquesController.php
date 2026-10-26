@@ -31,6 +31,80 @@ use App\Models\Setting;
 final class AdminKiosquesController extends AdminBaseController
 {
     /**
+     * PRESETS de création « en 1 clic » par rôle : un clic pré-remplit le
+     * formulaire (nom + tuiles + options), l'admin vérifie/ajuste puis
+     * soumet le POST existant /admin/kiosques/create (garde, CSRF, audit
+     * et jeton générés par le flux ordinaire — le preset n'est qu'un
+     * pré-remplissage, jamais une route de création dédiée).
+     *
+     * Les pages du preset « Trésorier » référencent le jeu de tuiles
+     * ADMIN du catalogue (LEGACY_ADMIN_PAGES, données financières
+     * complètes — dont la tuile « president ») : si le catalogue gagne
+     * une tuile admin, le preset la propose automatiquement.
+     *
+     * @var list<array{key:string,emoji:string,label:string,desc:string,pages:list<string>,options:list<string>}> key ∈ {tresorier, president, cafet}
+     */
+    public const PRESETS = [
+        [
+            'key'     => 'tresorier',
+            'emoji'   => '🧮',
+            'label'   => 'Trésorier',
+            'desc'    => 'Pour le trésorier : toutes les pages kiosque et toutes les données financières (CA, bénéfices, paiements, coûts).',
+            'pages'   => KioskPages::LEGACY_ADMIN_PAGES,
+            'options' => ['benefice', 'paiements', 'couts'],
+        ],
+        [
+            'key'     => 'president',
+            'emoji'   => '🏛️',
+            'label'   => 'Président',
+            'desc'    => "Pour le président : juste le stock et le bénéfice — les 3 chiffres du mois, sans détail des paiements ni des coûts.",
+            'pages'   => ['jour-membre', 'president'],
+            'options' => ['benefice'],
+        ],
+        [
+            'key'     => 'cafet',
+            'emoji'   => '☕',
+            'label'   => 'Resp. cafet',
+            'desc'    => 'Pour le responsable cafétéria : comptages, liste de courses et réappro — sans aucun chiffre financier.',
+            'pages'   => ['inventaire', 'liste-lite', 'reappro-lite'],
+            'options' => [],
+        ],
+    ];
+
+    /**
+     * Presets recalés sur le catalogue COURANT (unique point d'assemblage
+     * des données de preset — la vue et les tests ne lisent jamais la
+     * constante directement) : tuiles/options inconnues écartées, ordre
+     * du catalogue rétabli. Un preset qui deviendrait vide (catalogue
+     * évacué) n'est pas rendu.
+     *
+     * @return list<array{key:string,emoji:string,label:string,desc:string,pages:list<string>,options:list<string>}> key ∈ {tresorier, president, cafet}
+     */
+    public static function presets(): array
+    {
+        $valid = array_fill_keys(KioskPages::validIds(), true);
+
+        $presets = [];
+        foreach (self::PRESETS as $preset) {
+            $pages = [];
+            foreach (KioskPages::validIds() as $id) {
+                if (isset($valid[$id]) && in_array($id, $preset['pages'], true)) {
+                    $pages[] = $id;
+                }
+            }
+            if ($pages === []) {
+                continue;
+            }
+
+            $preset['pages']   = $pages;
+            $preset['options'] = KioskPages::normalizeOptions($preset['options']);
+            $presets[]         = $preset;
+        }
+
+        return $presets;
+    }
+
+    /**
      * Définitions des pages MEMBRES (jeton reappro_kiosk_token) : saisie
      * et suivi, sans données financières sensibles (le récap membres
      * n'affiche que le CA). Aucune URL ici — elle n'est construite qu'à
@@ -182,6 +256,7 @@ final class AdminKiosquesController extends AdminBaseController
             'customKiosques' => Kiosque::all(),
             'tileCatalog'    => KioskPages::all(),
             'optionCatalog'  => KioskPages::optionCatalog(),
+            'presets'        => self::presets(),
         ]);
     }
 
