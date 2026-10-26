@@ -396,4 +396,133 @@ final class RecoCarteRenderTest extends TestCase
         // JAMAIS de code de règle dans l'historique.
         self::assertDoesNotMatchRegularExpression('/\bR\d{1,2}\b/', $html);
     }
+
+    // -----------------------------------------------------------------
+    //  « ✅ Ce qui a marché » : section de tête de l'historique (P1-4)
+    // -----------------------------------------------------------------
+
+    /**
+     * Extrait le HTML d'une section entre son titre et le titre de la
+     * section suivante ( assertions localisées, pas page entière).
+     */
+    private function trancher(string $html, string $depuis, string $jusqua): string
+    {
+        $debut = mb_strpos($html, $depuis);
+        $fin   = mb_strpos($html, $jusqua);
+        self::assertIsInt($debut, "Le marqueur « {$depuis} » est absent du rendu.");
+        self::assertIsInt($fin, "Le marqueur « {$jusqua} » est absent du rendu.");
+
+        return mb_substr($html, $debut, $fin - $debut);
+    }
+
+    public function test_historique_section_ce_qui_a_marche_en_tete_avec_effets_concluants(): void
+    {
+        $effetConcluant = ['etat' => 'concluant', 'effet' => 12.5, 'bas' => 4.0, 'haut' => 21.0, 'jours' => 14, 'note' => ''];
+        $effetAutre = ['etat' => 'concluant', 'effet' => 8.0, 'bas' => 2.0, 'haut' => 14.0, 'jours' => 14, 'note' => ''];
+
+        $vars = [
+            'title'     => 'Idées appliquées',
+            'lignes'    => [],
+            'reussies'  => [
+                $this->ligneHistorique('w1', 'R1', 'Offre fin de semaine : Produit 2', 'idee', 'concluant', $effetConcluant),
+                $this->ligneHistorique('w2', 'R4', 'Mise en avant : Produit 1', 'idee', 'concluant', $effetAutre),
+            ],
+            'proposees' => [],
+            'ignorees'  => [],
+            'seuils'    => [],
+        ];
+        $html = $this->rendreHistorique($vars);
+
+        // Section présente, avec ses 2 idées, EN TÊTE (avant « En cours »).
+        self::assertStringContainsString('✅ Ce qui a marché', $html, 'La section « Ce qui a marché » est absente.');
+        self::assertLessThan(
+            mb_strpos($html, '<h2 class="chart-title">En cours</h2>'),
+            mb_strpos($html, '✅ Ce qui a marché'),
+            'La section « Ce qui a marché » doit être en tête, avant « En cours ».'
+        );
+        $section = $this->trancher($html, '✅ Ce qui a marché', '<h2 class="chart-title">En cours</h2>');
+        self::assertStringContainsString('Offre fin de semaine : Produit 2', $section);
+        self::assertStringContainsString('Mise en avant : Produit 1', $section);
+
+        // Effet mesuré en libellé HUMAIN (EffetMesure::libelle), jamais R#.
+        self::assertMatchesRegularExpression('/Effet mesuré \+12,50 € \[4,00 ; 21,00\] €\/période/u', $section, 'Effet chiffré avec fourchette attendu dans « Ce qui a marché ».');
+        self::assertStringContainsString('Stock à écouler', $section, 'Nature en libellé humain (RecoLibelles).');
+        self::assertDoesNotMatchRegularExpression('/\bR\d{1,2}\b/', $html, 'Aucun code de règle ne doit fuiter.');
+    }
+
+    public function test_historique_section_ce_qui_a_marche_vide_message_neutre(): void
+    {
+        $vars = [
+            'title'     => 'Idées appliquées',
+            'lignes'    => [],
+            'reussies'  => [],
+            'proposees' => [],
+            'ignorees'  => [],
+            'seuils'    => [],
+        ];
+        $html = $this->rendreHistorique($vars);
+
+        $section = $this->trancher($html, '✅ Ce qui a marché', '<h2 class="chart-title">En cours</h2>');
+        self::assertStringContainsString('Aucune idée concluante pour l\'instant.', $section, 'Message neutre attendu quand rien n\'a marché.');
+
+        // Page inchangée par ailleurs : toutes les sections restent là.
+        self::assertStringContainsString('En cours', $html);
+        self::assertStringContainsString('Mesurées', $html);
+        self::assertStringContainsString('Ignorées', $html);
+        self::assertStringContainsString('Idées en attente', $html);
+        self::assertStringContainsString('Seuils du moteur', $html);
+    }
+
+    public function test_kiosque_bloc_ce_qui_a_marche_top3_et_libelles_humains(): void
+    {
+        $concluant = static fn (float $e): array => ['etat' => 'concluant', 'effet' => $e, 'bas' => $e - 5.0, 'haut' => $e + 5.0, 'jours' => 14, 'note' => ''];
+        $ligne = static fn (string $titre, string $conclusion, ?array $effet): array => [
+            'titre'       => $titre,
+            'regle_lib'   => 'Forte marge peu vendue',
+            'applied_at'  => '2026-10-02 10:00:00',
+            'conclusion'  => $conclusion,
+            'libelle'     => $effet !== null ? \App\Core\Compta\Reco\EffetMesure::libelle($effet) : '',
+            'note'        => '',
+            'effet'       => $effet !== null ? (float) $effet['effet'] : 0.0,
+        ];
+
+        $html = $this->rendreKiosque($this->kiosqueVars($this->payloadVide(), [
+            $ligne('Idée réussie 1', 'concluant', $concluant(12.5)),
+            $ligne('Idée réussie 2', 'concluant', $concluant(8.0)),
+            $ligne('Idée réussie 3', 'concluant', $concluant(30.0)),
+            $ligne('Idée réussie 4 (hors top)', 'concluant', $concluant(5.0)), // 4e : coupée par le cap top 3
+            $ligne('Idée concluante négative', 'concluant', $concluant(-50.0)), // concluante mais effet ≤ 0
+            $ligne('Idée non concluante', 'non_concluant', ['etat' => 'non_concluant', 'effet' => 1.0, 'bas' => -3.0, 'haut' => 5.0, 'jours' => 14, 'note' => '']),
+            $ligne('Idée en cours de mesure', '', null),
+        ]));
+
+        $bloc = $this->trancher($html, '<h2 class="ka-chart-title">Ce qui a marché</h2>', '<h2 class="ka-chart-title">Idées appliquées</h2>');
+        self::assertSame(3, substr_count($bloc, 'ça a marché'), 'Le bloc « Ce qui a marché » du kiosque est un TOP 3.');
+        self::assertStringContainsString('Idée réussie 1', $bloc);
+        self::assertStringContainsString('Idée réussie 2', $bloc);
+        self::assertStringContainsString('Idée réussie 3', $bloc);
+        self::assertStringNotContainsString('Idée réussie 4', $bloc, 'Seules les 3 premières concluantes positives sont affichées.');
+        self::assertStringNotContainsString('Idée concluante négative', $bloc, 'Une conclusion à effet négatif n\'est PAS « ce qui a marché ».');
+        self::assertStringNotContainsString('Idée non concluante', $bloc);
+        self::assertStringNotContainsString('Idée en cours de mesure', $bloc);
+
+        // Libellés humains : EffetMesure + RecoLibelles, jamais de code R#.
+        self::assertMatchesRegularExpression('/Effet mesuré \+12,50 € \[7,50 ; 17,50\] €\/période/u', $bloc);
+        self::assertStringContainsString('Forte marge peu vendue', $bloc);
+        self::assertDoesNotMatchRegularExpression('/\bR\d{1,2}\b/', $html);
+
+        // L'historique complet reste inchangé : TOUTES les idées y figurent.
+        $histComplet = mb_substr($html, mb_strpos($html, '<h2 class="ka-chart-title">Idées appliquées</h2>'));
+        self::assertStringContainsString('Idée réussie 4 (hors top)', $histComplet);
+        self::assertStringContainsString('Idée concluante négative', $histComplet);
+    }
+
+    public function test_kiosque_bloc_ce_qui_a_marche_vide_message_neutre(): void
+    {
+        $html = $this->rendreKiosque($this->kiosqueVars($this->payloadVide(), []));
+
+        $bloc = $this->trancher($html, '<h2 class="ka-chart-title">Ce qui a marché</h2>', '<h2 class="ka-chart-title">Idées appliquées</h2>');
+        self::assertStringContainsString('Aucune idée concluante pour l\'instant.', $bloc, 'Message neutre attendu quand aucune idée concluante.');
+        self::assertStringContainsString('Aucune idée appliquée pour l\'instant.', $html, 'L\'historique compact reste inchangé (état vide).');
+    }
 }

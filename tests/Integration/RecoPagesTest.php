@@ -297,6 +297,100 @@ final class RecoPagesTest extends IntegrationTestCase
     }
 
     // -----------------------------------------------------------------
+    //  « ✅ Ce qui a marché » : valorisation des idées concluantes (P1-4)
+    // -----------------------------------------------------------------
+
+    /**
+     * Extrait le HTML d'une section entre son titre et le titre de la
+     * section suivante (assertions localisées, pas page entière).
+     */
+    private function trancher(string $html, string $depuis, string $jusqua): string
+    {
+        $debut = mb_strpos($html, $depuis);
+        $fin   = mb_strpos($html, $jusqua);
+        self::assertIsInt($debut, "Le marqueur « {$depuis} » est absent du rendu.");
+        self::assertIsInt($fin, "Le marqueur « {$jusqua} » est absent du rendu.");
+
+        return mb_substr($html, $debut, $fin - $debut);
+    }
+
+    /**
+     * P1-4 : la page historique rend EN TÊTE la section « ✅ Ce qui a
+     * marché » depuis les données fournies par le contrôleur — les
+     * MESURES CONCLUANTES À EFFET POSITIF uniquement (une conclusion à
+     * effet négatif reste dans « Mesurées », pas dans les réussites),
+     * libellé humain EffetMesure, jamais de code R#.
+     */
+    public function test_historique_section_ce_qui_a_marche_affiche_les_concluantes_positives(): void
+    {
+        $this->seedRecoMesuree('fp_reco_ok', 'R1', 'concluant', ['etat' => 'concluant', 'effet' => 25.0, 'bas' => 18.0, 'haut' => 32.0, 'jours' => 14, 'note' => '']);
+        $this->seedRecoMesuree('fp_reco_nego', 'R2', 'concluant', ['etat' => 'concluant', 'effet' => -50.0, 'bas' => -60.0, 'haut' => -40.0, 'jours' => 14, 'note' => '']);
+        $this->seedRecoMesuree('fp_reco_nc', 'R4', 'non_concluant', ['etat' => 'non_concluant', 'effet' => 1.0, 'bas' => -3.0, 'haut' => 5.0, 'jours' => 14, 'note' => '']);
+
+        $r = $this->request('GET', '/admin/reco/historique', [], [], $this->rootId);
+        self::assertSame(200, (int) ($r['code'] ?? 0), 'Historique reco doit répondre 200.');
+        $body = (string) ($r['body'] ?? '');
+        self::assertStringContainsString('✅ Ce qui a marché', $body, 'La section « Ce qui a marché » est absente de l\'historique.');
+
+        $section = $this->trancher($body, '✅ Ce qui a marché', '<h2 class="chart-title">En cours</h2>');
+        self::assertStringContainsString('Idée test fp_reco_ok', $section, 'L\'idée concluante positive doit apparaître dans « Ce qui a marché ».');
+        self::assertMatchesRegularExpression('/Effet mesuré \+25,00 € \[18,00 ; 32,00\] €\/période/u', $section, 'Effet mesuré en libellé humain (EffetMesure::libelle).');
+        self::assertStringNotContainsString('Idée test fp_reco_nego', $section, 'Une conclusion à effet NÉGATIF n\'est pas « ce qui a marché ».');
+        self::assertStringNotContainsString('Idée test fp_reco_nc', $section, 'Une mesure non concluante n\'est pas « ce qui a marché ».');
+        self::assertDoesNotMatchRegularExpression('/\bR\d{1,2}\b/', $body, 'Aucun code de règle ne doit fuiter dans l\'historique.');
+    }
+
+    /**
+     * P1-4 : sans idée concluante, la section affiche un message neutre
+     * et le reste de la page est inchangé (3 sections + annexes).
+     */
+    public function test_historique_ce_qui_a_marche_vide_message_neutre(): void
+    {
+        $r = $this->request('GET', '/admin/reco/historique', [], [], $this->rootId);
+        self::assertSame(200, (int) ($r['code'] ?? 0));
+        $body = (string) ($r['body'] ?? '');
+
+        $section = $this->trancher($body, '✅ Ce qui a marché', '<h2 class="chart-title">En cours</h2>');
+        self::assertStringContainsString('Aucune idée concluante pour l\'instant.', $section, 'Message neutre attendu quand aucune idée concluante.');
+
+        self::assertStringContainsString('En cours', $body);
+        self::assertStringContainsString('Mesurées', $body);
+        self::assertStringContainsString('Ignorées', $body);
+        self::assertStringContainsString('Seuils du moteur', $body);
+    }
+
+    /**
+     * P1-4 : le kiosque reco porte un bloc compact « Ce qui a marché »
+     * (top 3 des concluantes à effet positif, libellés humains).
+     */
+    public function test_kiosque_reco_bloc_ce_qui_a_marche(): void
+    {
+        $this->pdo->prepare(
+            "INSERT INTO settings (id, `key`, value) VALUES ('set_reco_kt2', 'admin_kiosk_token', ?)
+             ON DUPLICATE KEY UPDATE value = VALUES(value)"
+        )->execute([self::KIOSK_TOKEN]);
+
+        $this->seedRecoMesuree('fp_reco_kiosk_ok', 'R4', 'concluant', ['etat' => 'concluant', 'effet' => 40.0, 'bas' => 30.0, 'haut' => 50.0, 'jours' => 14, 'note' => '']);
+        $this->seedRecoMesuree('fp_reco_kiosk_nego', 'R2', 'concluant', ['etat' => 'concluant', 'effet' => -7.5, 'bas' => -9.0, 'haut' => -6.0, 'jours' => 14, 'note' => '']);
+
+        $r = $this->request('GET', '/kiosque/admin/reco/' . self::KIOSK_TOKEN);
+        self::assertSame(200, (int) ($r['code'] ?? 0), 'Le kiosque reco doit répondre 200 avec le bon jeton.');
+        $body = (string) ($r['body'] ?? '');
+        self::assertStringContainsString('Ce qui a marché', $body, 'Le bloc « Ce qui a marché » est absent du kiosque.');
+
+        $bloc = $this->trancher($body, '<h2 class="ka-chart-title">Ce qui a marché</h2>', '<h2 class="ka-chart-title">Idées appliquées</h2>');
+        self::assertStringContainsString('Idée test fp_reco_kiosk_ok', $bloc);
+        self::assertMatchesRegularExpression('/Effet mesuré \+40,00 € \[30,00 ; 50,00\] €\/période/u', $bloc, 'Effet mesuré en libellé humain.');
+        self::assertStringNotContainsString('Idée test fp_reco_kiosk_nego', $bloc, 'Une conclusion à effet négatif n\'est pas « ce qui a marché ».');
+        self::assertDoesNotMatchRegularExpression('/\bR\d{1,2}\b/', $bloc, 'Aucun code de règle dans le bloc « Ce qui a marché ».');
+
+        // L'historique compact reste inchangé : les deux idées y figurent.
+        $histComplet = mb_substr($body, mb_strpos($body, '<h2 class="ka-chart-title">Idées appliquées</h2>'));
+        self::assertStringContainsString('Idée test fp_reco_kiosk_ok', $histComplet);
+        self::assertStringContainsString('Idée test fp_reco_kiosk_nego', $histComplet);
+    }
+
+    // -----------------------------------------------------------------
     //  Helpers de seeding
     // -----------------------------------------------------------------
 
@@ -340,6 +434,32 @@ final class RecoPagesTest extends IntegrationTestCase
                  product_key, category, price_ttc, is_custom_amount)
              VALUES (?, ?, DATE_SUB(NOW(), INTERVAL 1 DAY), 'CARTE', 2, ?, ?, 'Boissons', 4.00, 0)"
         )->execute([$ref, $ref, $label, $key]);
+    }
+
+    /**
+     * Insère une recommandation APPLIQUÉE avec mesure d'effet DÉJÀ POSÉE
+     * (effet_json + effet_conclusion + effet_checked_at), telle que la
+     * laisserait mesurerEffetsEnAttente(). effet_checked_at posé ⇒ la
+     * mesure paresseuse du passage sur la page ne la retouche pas.
+     *
+     * @param array{etat:string,effet:float,bas:float,haut:float,jours:int,note:string} $effet
+     */
+    private function seedRecoMesuree(string $id, string $regle, string $conclusion, array $effet): void
+    {
+        $this->pdo->prepare(
+            "INSERT INTO recommendations
+                (id, regle, titre, produits_json, payload_json, statut, created_at,
+                 applied_at, effet_json, effet_conclusion, effet_checked_at)
+             VALUES (?, ?, ?, ?, ?, 'appliquee', NOW(), NOW(), ?, ?, NOW())"
+        )->execute([
+            $id,
+            $regle,
+            'Idée test ' . $id,
+            '[{"key":"cola","label":"Cola"}]',
+            (string) json_encode(['bloc' => 'idee'], JSON_UNESCAPED_UNICODE),
+            (string) json_encode($effet, JSON_UNESCAPED_UNICODE),
+            $conclusion,
+        ]);
     }
 
     /**
