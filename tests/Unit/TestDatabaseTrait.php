@@ -6,17 +6,26 @@ namespace Tests\Unit;
 
 use PDO;
 use PDOException;
+use RuntimeException;
+
+require_once __DIR__ . '/../support/db_guard.php';
 
 /**
  * Trait de connexion à la base de test `aeic_test` pour les tests de modèles.
  *
  * Renvoie null (au lieu de lever) si la base n'est pas joignable, afin que
  * les tests puissent être marqués "skipped" plutôt qu'en erreur.
+ *
+ * GARDE ANTI-PRODUCTION (incident TRUNCATE du 26/10/2026) : connect()
+ * refuse, AVANT toute connexion, un DB_NAME autre que `aeic_test` —
+ * p. ex. hérité d'un shell qui aurait sourcé config.env (DB_NAME=aeic).
  */
 trait TestDatabaseTrait
 {
     /**
      * Tente de se connecter à la base de test. Retourne null si impossible.
+     *
+     * @throws RuntimeException si DB_NAME résolu n'est pas `aeic_test`
      */
     protected function connect(): ?PDO
     {
@@ -25,6 +34,8 @@ trait TestDatabaseTrait
         $user = getenv('DB_USER') ?: 'aeic';
         $pass = getenv('DB_PASS') ?: '';
 
+        // Garde anti-production : refus AVANT toute tentative de connexion.
+        aeic_tests_assert_test_database($name);
         try {
             $pdo = new PDO(
                 sprintf('mysql:host=%s;dbname=%s;charset=utf8mb4', $host, $name),
@@ -54,10 +65,18 @@ trait TestDatabaseTrait
      * Vide (TRUNCATE) les tables données dans une transaction, en respectant
      * les contraintes de clé étrangère.
      *
+     * Ceinture et bretelles : re-vérifie le nom de la base RÉELLEMENT
+     * connectée avant le moindre TRUNCATE (la garde de connect() a déjà
+     * filtré, mais reset() est l'opération destructive — jamais sur autre
+     * chose que `aeic_test`).
+     *
      * @param list<string> $tables
      */
     protected function reset(PDO $pdo, array $tables): void
     {
+        $current = $pdo->query('SELECT DATABASE()')->fetchColumn();
+        aeic_tests_assert_test_database((string) $current);
+
         $pdo->exec('SET FOREIGN_KEY_CHECKS = 0');
         foreach ($tables as $table) {
             $pdo->exec('TRUNCATE TABLE `' . $table . '`');

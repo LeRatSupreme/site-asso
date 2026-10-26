@@ -55,6 +55,13 @@ function db(): PDO
         return $pdo;
     }
 
+    require_once dirname(__DIR__) . '/support/db_guard.php';
+
+    // Garde anti-production (incident du 26/10/2026) : le sous-processus ne
+    // peut JAMAIS viser autre chose que la base de test, même si son
+    // environnement était pollué (config.env sourcé dans le shell parent).
+    aeic_tests_assert_test_database(env('DB_NAME', 'aeic_test'));
+
     $pdo = new PDO(
         sprintf('mysql:host=%s;dbname=%s;charset=utf8mb4', env('DB_HOST', '127.0.0.1'), env('DB_NAME', 'aeic_test')),
         env('DB_USER', 'aeic'),

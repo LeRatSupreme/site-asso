@@ -18,7 +18,12 @@ declare(strict_types=1);
  * Active, db() pointe aeic_test (mêmes variables d'environnement que
  * TestDatabaseTrait) : la MÊME base que le PDO injecté aux modèles.
  * Chargé par CostLotStockDbTest via require_once.
+ *
+ * Garde anti-production (incident du 26/10/2026) : comme tous les points
+ * de connexion des tests, db() refuse un DB_NAME autre que `aeic_test`.
  */
+
+require_once __DIR__ . '/../support/db_guard.php';
 
 /**
  * État d'activation du pont (public pour rester simple à lire en test).
@@ -58,6 +63,9 @@ if (!function_exists('db')) {
         $name = getenv('DB_NAME') ?: 'aeic_test';
         $user = getenv('DB_USER') ?: 'aeic';
         $pass = getenv('DB_PASS') ?: '';
+
+        // Garde anti-production : refus AVANT toute tentative de connexion.
+        aeic_tests_assert_test_database($name);
 
         $pdo = new PDO(
             sprintf('mysql:host=%s;dbname=%s;charset=utf8mb4', $host, $name),
