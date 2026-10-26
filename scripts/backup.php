@@ -8,6 +8,7 @@ declare(strict_types=1);
  * Usage (CLI) :  php scripts/backup.php [fichier_sortie.sql]
  */
 
+require_once __DIR__ . '/../vendor/autoload.php';
 require_once __DIR__ . '/../app/config/database.php';
 
 use App\Core\Backup\Backup;
