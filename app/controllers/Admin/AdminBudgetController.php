@@ -109,6 +109,14 @@ final class AdminBudgetController extends AdminBaseController
         // période, comme la colonne de comparaison).
         $editPlanned = $editFromParam !== null ? Budget::forMonth($editY, $editM) : null;
 
+        // Suggestions « Pré-remplir avec le réalisé récent » : moyenne du
+        // réalisé des 3 mois calendaires PRÉCÉDANT le mois édité (le même
+        // que le formulaire, ?month= ou dernier mois couvert). Zéro nouveau
+        // point de calcul — les mêmes lectures que la comparaison ci-dessus
+        // ; le bouton ne fait que remplir le formulaire affiché, rien
+        // n'est enregistré sans « Enregistrer le budget » (save() inchangé).
+        $suggest = $this->suggestionsPour($editY, $editM);
+
         // Mini-grille annuelle (LECTURE SEULE) : 12 mois × prévu vs réalisé
         // pour l'année du mois édité. Zéro recalcul parallèle — mêmes sources
         // que la comparaison ci-dessus (Budget::forMonth, Sale::caBetween,
@@ -183,6 +191,7 @@ final class AdminBudgetController extends AdminBaseController
             'periodOptions'     => ComptaCalc::PERIOD_OPTIONS,
             'editMonth'         => $editMonth,
             'editPlanned'       => $editPlanned,
+            'suggest'           => $suggest,
             'currentMonthValue' => date('Y-m'),
             'annual'            => $annual,
             'rangeLabel'        => $rangeLabel,
@@ -227,5 +236,84 @@ final class AdminBudgetController extends AdminBaseController
         ]);
         $this->setFlash('success', sprintf('%d ligne(s) de budget enregistrée(s).', $count));
         redirect(url('/admin/compta/budgets?month=' . $monthParam));
+    }
+
+    // -----------------------------------------------------------------
+    //  Suggestions de pré-remplissage (lecture seule, jamais d'écriture)
+    // -----------------------------------------------------------------
+
+    /**
+     * Suggestions de budget pour un mois : MOYENNE du réalisé des 3 mois
+     * calendaires précédents, par catégorie (objectif CA + enveloppes de
+     * dépenses), arrondie à l'euro.
+     *
+     * Réutilise exclusivement les lectures existantes de la page, mois
+     * calendaire entier par mois calendaire entier (comme la grille
+     * annuelle) : Sale::caBetween pour le CA, Expense::byCategoryBetween
+     * par catégorie, achats de stock comptés dans MATIERE via
+     * Purchase::statsBetween. Pure lecture : l'admin reste maître — le
+     * bouton remplit le formulaire, l'enregistrement passe par save().
+     *
+     * @return array{values:array<string,int>, label:string}
+     *     values : clé = catégorie, valeur = moyenne arrondie à l'euro
+     *     (0 = aucun réalisé sur la fenêtre) ; label : fenêtre utilisée,
+     *     ex. « oct.–déc. 2026 ».
+     */
+    private function suggestionsPour(int $year, int $month): array
+    {
+        $sums = ['CA' => 0.0];
+        foreach (Expense::CATEGORIES as $cat) {
+            $sums[$cat] = 0.0;
+        }
+
+        // Fenêtre : les 3 mois AVANT le mois édité, du plus ancien au plus
+        // récent. Jour fixé au 1er du mois : « -N months » est sans
+        // ambiguïté (pas de piège du 31).
+        $editedFirst = new \DateTimeImmutable(sprintf('%04d-%02d-01', $year, $month));
+        $window = [
+            $editedFirst->modify('-3 months'),
+            $editedFirst->modify('-2 months'),
+            $editedFirst->modify('-1 month'),
+        ];
+
+        foreach ($window as $m) {
+            $fromDay = $m->format('Y-m-d');
+            $toDay = $m->format('Y-m-t');
+
+            $sums['CA'] += Sale::caBetween($fromDay, $toDay);
+            foreach (Expense::byCategoryBetween($fromDay, $toDay) as $c) {
+                $cat = (string) $c['category'];
+                $sums[$cat] = ($sums[$cat] ?? 0.0) + (float) $c['ttc'];
+            }
+            // Même convention que la comparaison de la page : les achats
+            // de stock (page Achats & stock) nourrissent l'enveloppe
+            // MATIERE en plus des dépenses MATIERE saisies à la main.
+            $sums['MATIERE'] += (float) Purchase::statsBetween($fromDay, $toDay)['ttc'];
+        }
+
+        $values = ['CA' => (int) round($sums['CA'] / 3)];
+        foreach (Expense::CATEGORIES as $cat) {
+            $values[$cat] = (int) round($sums[$cat] / 3);
+        }
+
+        return ['values' => $values, 'label' => self::fenetreSuggestions($window[0], $window[2])];
+    }
+
+    /**
+     * Libellé humain de la fenêtre de suggestions : « oct.–déc. 2026 » ou,
+     * quand elle traverse le passage d'année, « nov. 2026 – janv. 2027 ».
+     */
+    private static function fenetreSuggestions(\DateTimeImmutable $premier, \DateTimeImmutable $dernier): string
+    {
+        $abbr = [
+            1 => 'janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin',
+            'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.',
+        ];
+        $a = $abbr[(int) $premier->format('n')];
+        $b = $abbr[(int) $dernier->format('n')];
+
+        return $premier->format('Y') === $dernier->format('Y')
+            ? sprintf('%s–%s %s', $a, $b, $dernier->format('Y'))
+            : sprintf('%s %s – %s %s', $a, $premier->format('Y'), $b, $dernier->format('Y'));
     }
 }
