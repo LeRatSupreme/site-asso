@@ -13,7 +13,11 @@ namespace App\Core\Compta;
  * Deux sources acceptées :
  *  - champ POST « text » : texte du document collé (200 000 caractères max) ;
  *  - upload multipart « file » : photo ou PDF (10 Mo max, extension ET
- *    MIME réels vérifiés), texte extrait par OCR (Tesseract/Poppler).
+ *    MIME réels vérifiés), texte extrait par OCR — les PHOTOS passent
+ *    d'abord par le moteur vision GLM-OCR (API Z.ai, GlmOcrClient)
+ *    quand une clé est configurée ; sinon, et à la moindre panne de
+ *    l'API, le pipeline local Tesseract/Poppler reste le repli (PDF :
+ *    toujours local, inchangé).
  *
  * Le document est interprété par InvoiceParser (aiguillage METRO / ticket
  * de caisse, clé kind dans la réponse). Pour les PHOTOS et les PDF, quand
@@ -48,7 +52,9 @@ final class InvoiceScan
      * correspondante. Réponse de succès (contrat partagé avec le
      * frontend) : {ok:true, source:'file'|'text', text:..., invoice:{...},
      * audit:{...}} — la clé « audit » porte la base du journal (source,
-     * taille, sha256…) à enrichir par l'appelant. Erreurs : {ok:false,
+     * taille, sha256…, engine = moteur d'extraction d'un fichier :
+     * 'glm-ocr' | 'ensemble' | 'tesseract') à enrichir par l'appelant.
+     * Erreurs : {ok:false,
      * status:int, error:'message lisible'} — 400 (requête invalide),
      * 413 (trop volumineux), 500 (OCR indisponible ou en échec).
      *
@@ -145,6 +151,7 @@ final class InvoiceScan
                     $result = InvoiceEnsemble::consolidate($texts);
                     $text = $result['text'];
                     $invoice = $result['invoice'];
+                    $audit['engine'] = 'ensemble';
                     if ((int) $result['variants'] >= 2) {
                         $invoice['warnings'][] = sprintf(
                             'Extraction consolidée sur %d variantes OCR du PDF — %d ligne(s) fusionnée(s).',
@@ -155,34 +162,78 @@ final class InvoiceScan
                 } else {
                     $text = InvoiceOcr::extractText($tmpPath, $mime);
                     $invoice = InvoiceParser::parse($text);
+                    $audit['engine'] = 'tesseract';
                 }
-            } elseif (!InvoiceOcr::hasImageMagick()) {
-                // Image sans ImageMagick : OCR historique de la photo seule.
-                $text = InvoiceOcr::extractText($tmpPath, $mime);
-                $invoice = InvoiceParser::parse($text);
             } else {
-                // Image avec ImageMagick : OCR ensembliste — variantes de
-                // prétraitement (originale, seuillage, redressement) × deux
-                // modes Tesseract, fusionnées par InvoiceEnsemble. La
-                // variante « dernier recours » (upscale) n'est OCRisée que
-                // si la fusion a donné trop peu de lignes validées.
-                $texts = InvoiceOcr::extractImageTexts($tmpPath);
-                $result = InvoiceEnsemble::consolidate($texts);
-                if (InvoiceEnsemble::needsLastResort($result)) {
-                    $extra = InvoiceOcr::extractLastResortText($tmpPath);
-                    if ($extra !== null) {
-                        $texts[] = $extra;
-                        $result = InvoiceEnsemble::consolidate($texts);
+                // IMAGE (photo jpg/png/webp) : moteur vision GLM-OCR par
+                // API s'il est configuré (GlmOcrClient) — nettement plus
+                // fiable sur les photos de téléphone que Tesseract — avec
+                // repli automatique, à la moindre panne, sur le pipeline
+                // Tesseract historique (photo seule sans ImageMagick, OCR
+                // ensembliste avec). La clé absente contourne ce bloc :
+                // comportement d'origine au pixel près.
+                $glmErreur = null; // message FR quand l'API a échoué
+                $invoice = null;
+
+                if (GlmOcrClient::isConfigured()) {
+                    try {
+                        $text = GlmOcrClient::extractText($tmpPath, $mime);
+                        // Même chemin que le texte collé : la
+                        // transcription est parsée par InvoiceParser
+                        // telle quelle (aucun prétraitement local).
+                        $invoice = InvoiceParser::parse($text);
+                        $audit['engine'] = 'glm-ocr';
+                    } catch (\RuntimeException $e) {
+                        // Message FR déjà lisible : repli local ci-dessous.
+                        $glmErreur = $e->getMessage();
                     }
                 }
-                $text = $result['text'];
-                $invoice = $result['invoice'];
-                if ((int) $result['variants'] >= 2) {
-                    $invoice['warnings'][] = sprintf(
-                        "Extraction consolidée sur %d variantes de l'image (OCR ensembliste) — %d ligne(s) fusionnée(s).",
-                        (int) $result['variants'],
-                        (int) $result['groups']
-                    );
+
+                if ($invoice === null) {
+                    if (!InvoiceOcr::hasImageMagick()) {
+                        // Image sans ImageMagick : OCR historique de la photo seule.
+                        $text = InvoiceOcr::extractText($tmpPath, $mime);
+                        $invoice = InvoiceParser::parse($text);
+                        $audit['engine'] = 'tesseract';
+                    } else {
+                        // Image avec ImageMagick : OCR ensembliste — variantes de
+                        // prétraitement (originale, seuillage, redressement) × deux
+                        // modes Tesseract, fusionnées par InvoiceEnsemble. La
+                        // variante « dernier recours » (upscale) n'est OCRisée que
+                        // si la fusion a donné trop peu de lignes validées.
+                        $texts = InvoiceOcr::extractImageTexts($tmpPath);
+                        $result = InvoiceEnsemble::consolidate($texts);
+                        if (InvoiceEnsemble::needsLastResort($result)) {
+                            $extra = InvoiceOcr::extractLastResortText($tmpPath);
+                            if ($extra !== null) {
+                                $texts[] = $extra;
+                                $result = InvoiceEnsemble::consolidate($texts);
+                            }
+                        }
+                        $text = $result['text'];
+                        $invoice = $result['invoice'];
+                        $audit['engine'] = 'ensemble';
+                        if ((int) $result['variants'] >= 2) {
+                            $invoice['warnings'][] = sprintf(
+                                "Extraction consolidée sur %d variantes de l'image (OCR ensembliste) — %d ligne(s) fusionnée(s).",
+                                (int) $result['variants'],
+                                (int) $result['groups']
+                            );
+                        }
+                    }
+
+                    if ($glmErreur !== null) {
+                        // L'OCR local a pris le relais du moteur cloud :
+                        // l'utilisateur doit savoir pourquoi (la photo est
+                        // souvent moins bien lue par le pipeline local).
+                        $invoice['warnings'] = array_merge(
+                            [sprintf(
+                                "Moteur GLM-OCR indisponible (%s) — repli sur l'OCR local.",
+                                mb_substr($glmErreur, 0, 200)
+                            )],
+                            array_values($invoice['warnings'] ?? [])
+                        );
+                    }
                 }
             }
         } catch (\RuntimeException $e) {
