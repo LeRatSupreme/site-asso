@@ -19,6 +19,9 @@ use App\Core\Compta\StockPublic;
 use App\Core\Compta\SumUpCsvParser;
 use App\Core\Logger;
 use App\Core\Permissions;
+use App\Models\AnalyticsForecastData;
+use App\Models\CashMovement;
+use App\Models\Expense;
 use App\Models\ImportBatch;
 use App\Models\Kiosque;
 use App\Models\Product;
@@ -94,6 +97,51 @@ final class AdminComptaController extends AdminBaseController
         $raw = trim((string) Setting::get($key, (string) $defaut));
 
         return $raw !== '' ? (float) $raw : $defaut;
+    }
+
+    // -----------------------------------------------------------------
+    //  Trésorerie — « Où est l'argent ? »
+    // -----------------------------------------------------------------
+
+    /**
+     * Page Trésorerie : trois blocs + un total, pour le trésorier qui
+     * veut savoir où se trouve l'argent de l'association.
+     *
+     * RÈGLE AGENTS.md (anti-régression) : chaque bloc est STRICTEMENT la
+     * valeur retournée par sa source unique — aucun recalcul parallèle,
+     * aucun nouveau point d'assemblage :
+     *   caisse : CashLedger::balance() (solde théorique du liquide) ;
+     *   banque : Σ dépôts (CashMovement::depositsTotal) − Σ frais de
+     *            dépôt (Expense::depositFeesTotal) — lecture directe des
+     *            deux sources existantes, assemblée ici pour cette page ;
+     *   stock  : AnalyticsForecastData::stockValueAtLastCost(stockBook())
+     *            — point d'assemblage UNIQUE du stock valorisé, partagé
+     *            avec la tuile Président (produits sans coût connu exclus
+     *            par la méthode elle-même).
+     * Le total n'est qu'une somme d'AFFICHAGE des trois blocs ci-dessus,
+     * pas une nouvelle source. Contrat de la vue (tresorerie.php) :
+     * title, user, caisse, banque, banqueDepots, banqueFrais, stock, total.
+     */
+    public function tresorerie(): void
+    {
+        $user = $this->guardCompta();
+
+        $caisse = CashLedger::balance();
+        $depots = CashMovement::depositsTotal();
+        $frais = Expense::depositFeesTotal();
+        $banque = round($depots - $frais, 2);
+        $stock = AnalyticsForecastData::stockValueAtLastCost(AnalyticsForecastData::stockBook());
+
+        $this->renderAdmin('admin/compta/tresorerie', [
+            'title'        => "Où est l'argent ?",
+            'user'         => $user,
+            'caisse'       => $caisse,
+            'banque'       => $banque,
+            'banqueDepots' => $depots,
+            'banqueFrais'  => $frais,
+            'stock'        => $stock,
+            'total'        => round($caisse + $banque + $stock, 2),
+        ]);
     }
 
     // -----------------------------------------------------------------

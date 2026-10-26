@@ -408,6 +408,9 @@ function aeic_register_routes(Router $router): void
     $router->post('/admin/compta/depenses/{id}/delete', [AdminExpenseController::class, 'delete']);
     $router->get('/admin/compta/budgets', [AdminBudgetController::class, 'index']);
     $router->post('/admin/compta/budgets/save', [AdminBudgetController::class, 'save']);
+    // Trésorerie « Où est l'argent ? » : caisse + banque + stock valorisé
+    // (lecture seule, garde compta, chiffres = sources uniques).
+    $router->get('/admin/compta/tresorerie', [AdminComptaController::class, 'tresorerie']);
     $router->get('/admin/compta/achats', [AdminStockController::class, 'purchases']);
     $router->post('/admin/compta/achats/save-bulk', [AdminStockController::class, 'savePurchasesBulk']);
     // Scan d'une facture fournisseur METRO (OCR image/PDF ou texte collé) :

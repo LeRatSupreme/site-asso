@@ -63,6 +63,25 @@ final class CashMovement extends Model
     }
 
     /**
+     * Total des dépôts à la banque (montants DÉPOSÉS, positifs) : les
+     * mouvements DEPOT sont stockés négatifs (sortie de caisse), on
+     * additionne donc les valeurs absolues. Source du bloc « Banque » de
+     * la page Trésorerie — aucun autre calcul ne refait cette somme.
+     */
+    public static function depositsTotal(): float
+    {
+        $stmt = self::pdo()->prepare(
+            'SELECT COALESCE(SUM(ABS(amount)), 0) AS total FROM cash_movements WHERE type = ?'
+        );
+        $stmt->execute([self::TYPE_DEPOT]);
+
+        /** @var array<string,mixed> $row */
+        $row = $stmt->fetch();
+
+        return round((float) ($row['total'] ?? 0), 2);
+    }
+
+    /**
      * Derniers mouvements (historique affiché).
      *
      * @return list<array<string,mixed>>
