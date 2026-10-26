@@ -17,7 +17,9 @@ define('AEIC_VIEWS', AEIC_ROOT . '/views');
 /**
  * Charge un fichier .env simple (KEY=VALUE) sans bibliothèque externe.
  * Les variables sont injectées via putenv() + $_ENV + $_SERVER pour
- * pouvoir être lues par getenv() n'importe où.
+ * pouvoir être lues par getenv() n'importe où — mais sans JAMAIS écraser
+ * une clé déjà définie dans l'environnement réel du process (sémantique
+ * « immutable », cf. phpdotenv) : l'env hérité prime sur config.env.
  *
  * Les lignes vides et les commentaires (# ...) sont ignorés. Aucune
  * interpolation de variables n'est gérée (volontairement : KISS).
@@ -61,9 +63,18 @@ function aeic_load_env(string $path): void
             continue;
         }
 
-        putenv($key . '=' . $value);
-        $_ENV[$key] = $value;
-        $_SERVER[$key] = $value;
+        // Sémantique .env « immutable » : une clé déjà présente dans
+        // l'environnement réel du process (env héritée du shell, putenv
+        // local ou $_ENV) n'est jamais écrasée par config.env. Incident du
+        // 26/10/2026 20:00:39 : le DB_NAME d'un opérateur était
+        // silencieusement remplacé par celui de config.env → rejeu d'un
+        // dump dans la production. Invariant : `DB_NAME=x php …` prime
+        // sur config.env.
+        if (getenv($key, true) === false && getenv($key) === false && !array_key_exists($key, $_ENV)) {
+            putenv($key . '=' . $value);
+            $_ENV[$key] = $value;
+            $_SERVER[$key] = $value;
+        }
     }
 }
 
