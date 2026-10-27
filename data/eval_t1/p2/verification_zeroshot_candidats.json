@@ -1,0 +1,257 @@
+{
+  "generated_at": "2026-10-27T17:31:03+00:00",
+  "modele": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2 (ONNX int8 via fastembed 0.9.1) — fine-tuné P2 (/home/ubuntu/AEIC/data/eval_t1/p2/convert/model-int8-zeroshot)",
+  "seuil": 0.3088,
+  "candidats": [
+    {
+      "a": "Minute Maid",
+      "b": "Minute Maid Pomme",
+      "score": 0.9589
+    },
+    {
+      "a": "Soiree bowling (2 parties / 1 personne)",
+      "b": "Soiree bowling ( 2 personnes )",
+      "score": 0.9405
+    },
+    {
+      "a": "Bowling ( 2 parties )",
+      "b": "Soiree bowling ( 2 personnes )",
+      "score": 0.9008
+    },
+    {
+      "a": "Minute Maid",
+      "b": "Minute Maid Nect Pomme",
+      "score": 0.8822
+    },
+    {
+      "a": "Monster Bleu",
+      "b": "Monster Noire",
+      "score": 0.8615
+    },
+    {
+      "a": "bowling",
+      "b": "Soiree bowling ( 2 personnes )",
+      "score": 0.8334
+    },
+    {
+      "a": "Pepsi",
+      "b": "Pepsi sans sucre",
+      "score": 0.7981
+    },
+    {
+      "a": "Bueno",
+      "b": "Eau",
+      "score": 0.7856
+    },
+    {
+      "a": "Coca sans sucre",
+      "b": "Pepsi sans sucre",
+      "score": 0.7803
+    },
+    {
+      "a": "Bourdon Gauffre LI",
+      "b": "Gauffre",
+      "score": 0.7791
+    },
+    {
+      "a": "gaufre",
+      "b": "Gaufre choco",
+      "score": 0.7758
+    },
+    {
+      "a": "Gauffre",
+      "b": "Gaufre choco",
+      "score": 0.7753
+    },
+    {
+      "a": "Monster Bleue",
+      "b": "Monster Noire",
+      "score": 0.7728
+    },
+    {
+      "a": "Bonbon",
+      "b": "Bonbon Haribo",
+      "score": 0.766
+    },
+    {
+      "a": "Coca Cola",
+      "b": "Coca sans sucre",
+      "score": 0.7598
+    },
+    {
+      "a": "Coca Cherry",
+      "b": "Coca Cola",
+      "score": 0.7522
+    },
+    {
+      "a": "Gauffre",
+      "b": "Gauffre choco",
+      "score": 0.7499
+    },
+    {
+      "a": "Redbull",
+      "b": "redbull red",
+      "score": 0.7475
+    },
+    {
+      "a": "Monster Blanche",
+      "b": "Monster Noire",
+      "score": 0.7382
+    },
+    {
+      "a": "Monster Blanche",
+      "b": "Monster Bleu",
+      "score": 0.735
+    },
+    {
+      "a": "Monster Bleu",
+      "b": "Monster verte (energy)",
+      "score": 0.7341
+    },
+    {
+      "a": "sucette",
+      "b": "sucette 3 sucettes",
+      "score": 0.7336
+    },
+    {
+      "a": "Pepsi",
+      "b": "Pepsi Zero",
+      "score": 0.7217
+    },
+    {
+      "a": "Redbull",
+      "b": "Redbull Bleu",
+      "score": 0.7186
+    },
+    {
+      "a": "Redbull Bleu",
+      "b": "redbull red",
+      "score": 0.711
+    },
+    {
+      "a": "RedBull Blanche",
+      "b": "Redbull Bleu",
+      "score": 0.7081
+    },
+    {
+      "a": "Minute Maid MultiVitamine",
+      "b": "Minute Maid Pomme",
+      "score": 0.7032
+    },
+    {
+      "a": "Coca Zero",
+      "b": "Pepsi Zero",
+      "score": 0.7014
+    },
+    {
+      "a": "Minute Maid MultiVitamine",
+      "b": "Minute Maid Nect Pomme",
+      "score": 0.6976
+    },
+    {
+      "a": "Minute Maid",
+      "b": "Minute Maid MultiVitamine",
+      "score": 0.6971
+    },
+    {
+      "a": "Coca Cola",
+      "b": "Coca Zero",
+      "score": 0.6955
+    },
+    {
+      "a": "Bueno",
+      "b": "Redbull",
+      "score": 0.6864
+    },
+    {
+      "a": "Fanta",
+      "b": "Orangina",
+      "score": 0.6864
+    },
+    {
+      "a": "Coca Cherry",
+      "b": "Coca sans sucre",
+      "score": 0.6838
+    },
+    {
+      "a": "Coca Zero",
+      "b": "Redbull zero",
+      "score": 0.6779
+    },
+    {
+      "a": "Monster Bleue",
+      "b": "Monster verte (energy)",
+      "score": 0.6768
+    },
+    {
+      "a": "RedBull Blanche",
+      "b": "redbull red",
+      "score": 0.6767
+    },
+    {
+      "a": "Redbull",
+      "b": "Redbull_Bleue",
+      "score": 0.6721
+    },
+    {
+      "a": "Monster Bleu",
+      "b": "Monster Rose",
+      "score": 0.6696
+    },
+    {
+      "a": "Monster Noire",
+      "b": "Monster verte (energy)",
+      "score": 0.6694
+    },
+    {
+      "a": "fuze tea",
+      "b": "Lipton Ice Tea",
+      "score": 0.66
+    },
+    {
+      "a": "Gauffre choco",
+      "b": "gaufre",
+      "score": 0.6595
+    },
+    {
+      "a": "Redbull Abricot",
+      "b": "Redbull Bleu",
+      "score": 0.657
+    },
+    {
+      "a": "Monster Blanche",
+      "b": "RedBull Blanche",
+      "score": 0.6553
+    },
+    {
+      "a": "Eau",
+      "b": "Redbull",
+      "score": 0.6547
+    },
+    {
+      "a": "Caprisun tropical",
+      "b": "Oasis Tropical",
+      "score": 0.651
+    },
+    {
+      "a": "Fanta",
+      "b": "Redbull",
+      "score": 0.6499
+    },
+    {
+      "a": "Gaufre choco",
+      "b": "sucette",
+      "score": 0.6493
+    },
+    {
+      "a": "Perrier",
+      "b": "Redbull",
+      "score": 0.6409
+    },
+    {
+      "a": "Redbull Ice",
+      "b": "Redbull Winter",
+      "score": 0.6371
+    }
+  ]
+}
