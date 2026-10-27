@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Core\Compta\Reappro;
 
+use App\Core\Compta\AliasSuggester;
 use App\Core\Compta\StockPublic;
 
 /**
@@ -125,18 +126,104 @@ final class StockBook
             return null;
         }
 
+        $hit = $this->resolveEntry($trim);
+        if ($hit === null) {
+            return null;
+        }
+
+        return ['key' => $hit['key'], 'stock' => $hit['entry']['stock'], 'at' => $hit['entry']['at'], 'via' => $hit['via']];
+    }
+
+    /**
+     * Résolution « souple » pour l'assistant conversationnel (T4) :
+     * resolve() d'abord, puis — si les trois passes échouent — repli par
+     * VARIANTE : le libellé est raboté de ses suffixes de couleur/goût
+     * (AliasSuggester::suggest : « Monster Blanche » → « monster ») puis
+     * re-résolu par les MÊMES passes. Réservé à la suggestion interactive :
+     * resolve() reste la voie stricte des pages réappro.
+     *
+     * Contrairement à resolve(), la clé renvoyée est TOUJOURS la clé
+     * EXACTE du livre (« orig », telle que saisie en inventaire) : le
+     * consommateur (endpoint assistant) expose une clé canonique stable.
+     *
+     * @return null|array{key:string,stock:int,at:?string,via:'exact'|'normalise'|'alias'|'variante'}
+     */
+    public function resolveLoose(string $productKey): ?array
+    {
+        $trim = trim($productKey);
+        if ($trim === '') {
+            return null;
+        }
+
+        $hit = $this->resolveEntry($trim);
+        if ($hit !== null) {
+            return ['key' => $hit['entry']['orig'], 'stock' => $hit['entry']['stock'], 'at' => $hit['entry']['at'], 'via' => $hit['via']];
+        }
+
+        // Variante : rabotage des suffixes de couleur/goût puis re-résolution
+        // par les mêmes passes — jamais de rapprochement ad hoc ici.
+        $variante = AliasSuggester::suggest($trim);
+        if ($variante !== '' && StockPublic::normalizeKey($variante) !== StockPublic::normalizeKey($trim)) {
+            $hit = $this->resolveEntry($variante);
+            if ($hit !== null) {
+                return ['key' => $hit['entry']['orig'], 'stock' => $hit['entry']['stock'], 'at' => $hit['entry']['at'], 'via' => 'variante'];
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Clés candidates pour un libellé introuvable (assistant T4) :
+     * entrées du livre dont la forme normalisée contient celle du libellé
+     * cherché — ou réciproquement (libellé plus large que la clé) — au
+     * maximum $limit, tri alphabétique déterministe. Simple SUGGESTION à
+     * présenter à l'utilisateur : ne décide jamais rien.
+     *
+     * @return list<array{key:string,stock:int}>
+     */
+    public function searchCandidates(string $needle, int $limit = 5): array
+    {
+        $limit = max(1, $limit);
+        $norm = StockPublic::normalizeKey($needle);
+        if ($norm === '') {
+            return [];
+        }
+
+        $out = [];
+        foreach ($this->byNorm as $entryNorm => $e) {
+            if (str_contains($entryNorm, $norm) || str_contains($norm, $entryNorm)) {
+                $out[] = ['key' => $e['orig'], 'stock' => $e['stock']];
+            }
+        }
+        usort($out, static fn (array $a, array $b): int => strcasecmp($a['key'], $b['key']));
+
+        return array_slice($out, 0, $limit);
+    }
+
+    /**
+     * Trois passes de résolution (exacte → normalisée → alias), cœur
+     * partagé de resolve() et resolveLoose().
+     *
+     * @param string $trim Libellé déjà trimé.
+     *
+     * @return null|array{entry:array{stock:int,at:?string,orig:string},via:'exact'|'normalise'|'alias',key:string}
+     *              « key » = clé PRÉSENTÉE (libellé d'entrée pour les passes
+     *              1-2, cible de l'alias pour la passe 3) ; l'entrée du livre
+     *              porte la clé EXACTE d'inventaire (« orig »).
+     */
+    private function resolveEntry(string $trim): ?array
+    {
         // Passe 1 : exacte (casse/espaces de bords ignorés).
         $lk = strtolower($trim);
         if (isset($this->entries[$lk])) {
-            return ['key' => $trim, 'stock' => $this->entries[$lk]['stock'], 'at' => $this->entries[$lk]['at'], 'via' => 'exact'];
+            return ['entry' => $this->entries[$lk], 'via' => 'exact', 'key' => $trim];
         }
 
         // Passe 2 : normalisée (« Redbull  Peach » == « redbull peach »).
         $norm = StockPublic::normalizeKey($trim);
         if ($norm !== '' && isset($this->byNorm[$norm])) {
-            $e = $this->byNorm[$norm];
-
-            return ['key' => $trim, 'stock' => $e['stock'], 'at' => $e['at'], 'via' => 'normalise'];
+            return ['entry' => $this->byNorm[$norm], 'via' => 'normalise', 'key' => $trim];
         }
 
         // Passe 3 : alias (« pepsi Zero » → « Pepsi sans sucre » si l'alias
@@ -146,13 +233,11 @@ final class StockBook
             $cTrim = trim($cible);
             $cLk = strtolower($cTrim);
             if (isset($this->entries[$cLk])) {
-                return ['key' => $cTrim, 'stock' => $this->entries[$cLk]['stock'], 'at' => $this->entries[$cLk]['at'], 'via' => 'alias'];
+                return ['entry' => $this->entries[$cLk], 'via' => 'alias', 'key' => $cTrim];
             }
             $cNorm = StockPublic::normalizeKey($cTrim);
             if ($cNorm !== '' && isset($this->byNorm[$cNorm])) {
-                $e = $this->byNorm[$cNorm];
-
-                return ['key' => $cTrim, 'stock' => $e['stock'], 'at' => $e['at'], 'via' => 'alias'];
+                return ['entry' => $this->byNorm[$cNorm], 'via' => 'alias', 'key' => $cTrim];
             }
         }
 

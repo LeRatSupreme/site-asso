@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Controllers\AccountController;
 use App\Controllers\Admin\AdminAnalyticsController;
+use App\Controllers\Admin\AdminAssistantController;
 use App\Controllers\Admin\AdminBudgetController;
 use App\Controllers\Admin\AdminCafeteriaController;
 use App\Controllers\Admin\AdminCashController;
@@ -29,6 +30,7 @@ use App\Controllers\Admin\AdminStockController;
 use App\Controllers\Admin\AdminTeamController;
 use App\Controllers\Admin\AdminUserController;
 use App\Controllers\AuthController;
+use App\Controllers\AssistantToolsController;
 use App\Controllers\EventController;
 use App\Controllers\GameController;
 use App\Controllers\HealthController;
@@ -106,6 +108,16 @@ function aeic_register_routes(Router $router): void
 
     // Monitoring.
     $router->get('/health', [HealthController::class, 'health']);
+
+    // Outils de l'assistant conversationnel (T4) : JSON LECTURE SEULE
+    // consommé par le pont local (scripts/assistant.py) avec le jeton
+    // serveur ASSISTANT_TOKEN (config.env) en en-tête X-Assistant-Token
+    // — le modèle LLM ne connaît jamais le jeton. Préfixe NON admin :
+    // l'authentification EST le jeton (403 générique sinon, no-store et
+    // rate limit posés par le contrôleur, pattern kiosque). Le nom de
+    // l'outil est validé par liste blanche dans le contrôleur (404 après
+    // vérification du jeton, aucune énumération possible sans lui).
+    $router->get('/internal/assistant/{outil}', [AssistantToolsController::class, 'outil']);
 
     // Sélecteur de langue (FR/EN, cookie 1 an).
     $router->post('/set-lang', [LocaleController::class, 'setLang']);
@@ -289,6 +301,12 @@ function aeic_register_routes(Router $router): void
     $router->post('/admin/notifications/{id}/test', [AdminNotificationController::class, 'test']);
     $router->post('/admin/notifications/recipient', [AdminNotificationController::class, 'addRecipient']);
     $router->post('/admin/notifications/recipient/{index}/delete', [AdminNotificationController::class, 'deleteRecipient']);
+
+    // Assistant conversationnel (T4-G) : page de questions au pont local
+    // scripts/assistant.py — réponse + sources affichées ; le jeton des
+    // outils reste strictement côté serveur (jamais dans la page).
+    $router->get('/admin/assistant', [AdminAssistantController::class, 'index']);
+    $router->post('/admin/assistant/ask', [AdminAssistantController::class, 'ask']);
 
     // Comptabilité & gestion des achats (rôle ADMIN ou TRESORERIE).
     $router->get('/admin/compta', [AdminComptaController::class, 'dashboard']);

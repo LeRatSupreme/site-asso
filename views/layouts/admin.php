@@ -182,6 +182,11 @@ if ($moduleAllowed(Permissions::MODULE_COMPTA)) {
 if ($isAdminRole && $systemPageAllowed('cash')) {
     $compta['Caisses'] = '/admin/caisses';
 }
+// Assistant conversationnel (T4-G) : même garde serveur que la page
+// (guardSystemOrPage('inventory')) — l'entrée suit exactement le garde.
+if ($isAdminRole && $systemPageAllowed('inventory')) {
+    $compta['Assistant'] = '/admin/assistant';
+}
 if ($compta !== []) {
     $sections['Comptabilité'] = $compta;
 }
