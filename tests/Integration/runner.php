@@ -125,6 +125,21 @@ $_SERVER['SERVER_PORT'] = '443';
 $_SERVER['SERVER_NAME'] = 'example.test';
 $_SERVER['HTTP_HOST'] = 'example.test';
 
+// En-têtes HTTP additionnels de la requête simulée (passés en JSON via
+// AEIC_TEST_HEADERS, ex. {"X-Assistant-Token": "..."}) : mappés en
+// HTTP_* comme le ferait le SAPI — sert aux endpoints outils de
+// l'assistant (T4), authentifiés par en-tête et non par session.
+$headersJson = getenv('AEIC_TEST_HEADERS') ?: '';
+if ($headersJson !== '') {
+    $decodedHeaders = json_decode($headersJson, true);
+    if (is_array($decodedHeaders)) {
+        foreach ($decodedHeaders as $headerName => $headerValue) {
+            $serverKey = 'HTTP_' . strtoupper(str_replace('-', '_', (string) $headerName));
+            $_SERVER[$serverKey] = (string) $headerValue;
+        }
+    }
+}
+
 // Query string éventuel inclus dans le chemin (ex. « /admin/compta/annuel?year=2026 ») :
 // alimente $_GET et QUERY_STRING comme le ferait un vrai SAPI — sinon les pages
 // pilotées par filtres GET (analytics, exports CSV, périodes) ne sont pas testables.

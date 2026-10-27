@@ -42,6 +42,7 @@ Thumbs.db
 # T1 — moteur de similarité (Lot B) : venv, cache modèle ONNX int8, bytecode Python
 /.venv-t1/
 /.venv-p2conv/
+/.venv-assistant/
 /data/eval_t1/.cache/
 __pycache__/
 .kilo/
