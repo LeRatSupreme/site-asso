@@ -38,5 +38,21 @@ image_a_scan.jpg
 Thumbs.db
 .idea/
 .vscode/
+
+# T1 — moteur de similarité (Lot B) : venv, cache modèle ONNX int8, bytecode Python
+/.venv-t1/
+/.venv-p2conv/
+/data/eval_t1/.cache/
+__pycache__/
 .kilo/
 tests/cache/
+# T1.5 — quarantaine des fusions auto : état RUNTIME du VPS (jamais committé)
+/data/eval_t1/t15/quarantaine.json
+/data/eval_t1/t15/*.lock
+/data/eval_t1/t15/*.tmp.*
+/data/eval_t1/p2/**/*.onnx
+/data/eval_t1/p2/**/*.safetensors
+/data/eval_t1/p2/**/tokenizer.json
+/data/eval_t1/p2/**/sentencepiece.bpe.model
+/data/eval_t1/p2/_vendor_st570/
+*.whl

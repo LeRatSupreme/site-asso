@@ -1,0 +1,121 @@
+libelle,forme_normalisee,famille,vivant,groupe,ventes,achats,en_stock
+Bonbon,bonbon,bonbon,1,bonbon,14,0,25
+"Bonbon Haribo",bonbonharibo,bonbon,1,bonbonharibo,2,0,0
+Bounty,bounty,bounty,1,bounty,18,1,0
+"Bourdon Gauffre LI",bourdongauffreli,bourdon,1,bourdongauffreli,0,1,0
+bowling,bowling,bowling,1,bowling,17,0,0
+"Bowling ( 2 parties )",bowling2parties,bowling,1,bowling,4,0,0
+"bowling 2personnes",bowling2personnes,bowling,0,bowling2personnes,1,0,0
+Bueno,bueno,bueno,1,bueno,289,1,66
+"Bueno white",buenowhite,bueno,1,buenowhite,407,1,119
+Cacolac,cacolac,cacolac,1,cacolac,12,0,8
+cafe,cafe,cafe,1,cafe,153,1,0
+"cafe allonge",cafeallonge,cafe,1,cafeallonge,19,0,0
+Caprisun,caprisun,caprisun,1,caprisun,17,0,22
+"Caprisun tropical",caprisuntropical,caprisun,1,caprisuntropical,0,1,0
+"Chips BBQ",chipsbbq,chips,0,chipsbbq,13,0,0
+"Chips Nature",chipsnature,chips,1,chips,13,1,8
+"Coca Cherry",cocacherry,coca,1,cocacherry,86,1,25
+"Coca Cola",cocacola,coca,1,coca,109,1,22
+"Coca sans sucre",cocasanssucre,coca,1,cocasanssucre,4,0,0
+"Coca Zero",cocazero,coca,1,cocasanssucre,87,1,39
+Crêpe,crepe,crepe,0,crepe,22,0,0
+Cristaline,cristaline,cristaline,1,cristali5oclpet,6,0,0
+Crunch,crunch,crunch,1,crunch,13,1,24
+"crunch Snak Barres",crunchsnakbarres,crunch,0,crunchsnakbarres,0,0,0
+"custom amount",customamount,custom,0,customamount,3,0,0
+"Décoration halloween | les creation de ju...",decorationhalloween|lescreationdeju,decoration,1,decorationhalloween|lescreationdeju,0,1,0
+Dragibus,dragibus,dragibus,1,dragibus,0,1,30
+"Dr Pepper",drpepper,dr,1,drpepper,23,1,17
+Eau,eau,eau,1,cristali5oclpet,436,1,97
+Fanta,fanta,fanta,1,fanta,6,0,0
+"Fanta Cassis",fantacassis,fanta,0,fantacassis,3,0,0
+"Fanta Citron",fantacitron,fanta,0,fantacitron,3,0,0
+"Fanta Exotique",fantaexotique,fanta,0,fantaexotique,5,0,0
+"Fanta Mangue Dragon",fantamanguedragon,fanta,0,fantamanguedragon,4,0,0
+"Fanta Orange",fantaorange,fanta,1,fanta,15,1,23
+"Fauffres Liegeoise",fauffresliegeoise,fauffres,1,fauffresliegeoise,0,1,0
+"fuze tea",fuzetea,fuze,1,fuzetea,5,1,22
+Gauffre,gauffre,gauffre,1,gauffre,17,0,0
+"Gauffre + boissons (hors boissons energisante)",gauffre+boissonshorsboissonsenergisante,gauffre,1,gauffre+boissonshorsboissonsenergisante,3,0,0
+"Gauffre choco",gauffrechoco,gauffre,1,gauffrechoco,9,0,0
+gaufre,gaufre,gaufre,1,gauffre,18,1,37
+"Gaufre + boissons (hors boissons energisante)",gaufre+boissonshorsboissonsenergisante,gaufre,1,gauffre+boissonshorsboissonsenergisante,3,0,0
+"Gaufre choco",gaufrechoco,gaufre,1,gauffrechoco,9,1,42
+haribo,haribo,haribo,1,bonbonharibo,8,0,23
+"Kinder Bueno",kinderbueno,kinder,1,kinderbueno,0,0,10
+"Kit kat",kitkat,kit,1,kitkat,22,1,27
+Lion,lion,lion,1,lion,19,1,22
+Lion_Peanut,lionpeanut,lion,1,lion,4,0,0
+Lipton,lipton,lipton,1,lipton,8,0,0
+"Lipton Ice Tea",liptonicetea,lipton,1,lipton,65,1,72
+M&Ms,m&ms,m&ms,1,m&ms,48,1,44
+"Madel Coquille",madelcoquille,madel,0,madelcoquille,0,0,0
+Madeleine,madeleine,madeleine,1,madeleine,18,1,21
+Mars,mars,mars,1,mars,72,1,82
+"Menu BBQ",menubbq,menu,0,menubbq,6,0,0
+"Minute Maid",minutemaid,minute,1,minutemaid,0,0,0
+"Minute Maid MultiVitamine",minutemaidmultivitamine,minute,1,minutemaidmultivitamine,29,1,25
+"Minute Maid Multi Vitamines",minutemaidmultivitamines,minute,1,minutemaidmultivitamine,29,0,0
+"Minute Maid Nect Pomme",minutemaidnectpomme,minute,1,minutemaidnectpomme,28,1,22
+"Minute Maid Orange",minutemaidorange,minute,0,minutemaid,5,0,10
+"Minute Maid Pomme",minutemaidpomme,minute,1,minutemaidnectpomme,29,0,0
+"Mister Freeze",misterfreeze,mister,1,misterfreeze,12,0,0
+"Monster Blanche",monsterblanche,monster,1,monsterblanche,269,1,35
+"Monster Bleu",monsterbleu,monster,1,monsterbleu,56,1,18
+"Monster Bleue",monsterbleue,monster,1,monsterbleu,56,0,0
+"Monster Noire",monsternoire,monster,1,monster,22,1,0
+"Monster Rose",monsterrose,monster,1,monsterrose,63,1,13
+"Monster Rose (punch)",monsterrosepunch,monster,1,monsterrose,62,0,0
+"Monster Verte",monsterverte,monster,0,monsterverte,14,0,0
+"Monster verte (energy)",monsterverteenergy,monster,1,monsterverte,14,0,0
+"Montant personnalisé",montantpersonnalise,montant,0,montantpersonnalise,168,0,0
+Nesquik,nesquik,nesquik,1,nesquik,0,1,1
+"Nutella B Ready",nutellabready,nutella,1,nutellabready,30,1,70
+Oasis,oasis,oasis,1,oasis,8,0,0
+"Oasis Ice Tea",oasisicetea,oasis,0,oasisicetea,17,0,0
+"Oasis ice tea the mangue passion",oasisiceteathemanguepassion,oasis,0,oasisiceteathemanguepassion,10,0,0
+"Oasis Pomme Cassis Framboise",oasispommecassisframboise,oasis,1,oasispomcassframslim33cl,50,1,23
+"Oasis pomme poire",oasispommepoire,oasis,1,oasispommepoire,8,1,17
+"Oasis Thémangue Passion",oasisthemanguepassion,oasis,0,oasisthemanguepassion,0,0,0
+"Oasis Tropical",oasistropical,oasis,1,oasis,59,1,23
+Orangina,orangina,orangina,1,orangina,42,1,34
+Panini,panini,panini,0,panini,4,0,0
+Pepper,pepper,pepper,1,drpepper,3,0,0
+Pepsi,pepsi,pepsi,1,pepsi,3,1,25
+"Pepsi sans sucre",pepsisanssucre,pepsi,1,pepsisanssucre,19,0,0
+"Pepsi Zero",pepsizero,pepsi,1,pepsisanssucre,19,1,0
+Perrier,perrier,perrier,1,perrier,27,1,36
+"Pouce vinaigre alc",poucevinaigrealc,pouce,1,poucevinaigrealc,0,1,0
+Pulco,pulco,pulco,1,pulco,10,1,17
+Redbull,redbull,redbull,1,redbull,178,1,12
+"Redbull Abricot",redbullabricot,redbull,1,redbullabricot,60,1,0
+"RedBull Blanche",redbullblanche,redbull,1,redbull,99,1,20
+"Redbull Bleu",redbullbleu,redbull,1,redbullbleu,5,0,21
+Redbull_Bleue,redbullbleue,redbull,1,redbullbleu,1,0,0
+"Redbull Blue",redbullblue,redbull,1,redbullbleu,4,0,0
+"Redbull Ice",redbullice,redbull,1,redbullice,360,1,46
+"Redbull Myrtille",redbullmyrtille,redbull,1,redbullice,19,0,0
+"Redbull Peach",redbullpeach,redbull,1,redbullpeach,148,1,29
+"Redbull Pomme",redbullpomme,redbull,0,redbullpomme,1,0,10
+"redbull red",redbullred,redbull,1,redbullred,6,0,0
+"Redbull Seablue",redbullseablue,redbull,1,redbullseablue,28,1,24
+"Redbull Summer",redbullsummer,redbull,0,redbullsummer,13,0,0
+"Redbull Winter",redbullwinter,redbull,1,redbullwinter,57,1,48
+"Redbull zero",redbullzero,redbull,1,redbullzero,4,1,0
+schweppes,schweppes,schweppes,1,schweppes,1,0,0
+"schweppes agrumes",schweppesagrumes,schweppes,1,schweppes,28,1,0
+Snickers,snickers,snickers,1,snickers,28,1,29
+"Soiree bowling (2 parties / 1 personne)",soireebowling2parties1personne,soiree,1,bowling,13,0,0
+"Soiree bowling ( 2 personnes )",soireebowling2personnes,soiree,1,bowling2personnes,1,0,0
+sucette,sucette,sucette,1,sucette,46,0,0
+"Sucette 1",sucette1,sucette,0,sucette1,0,0,0
+"Sucette 1 sucette",sucette1sucette,sucette,1,sucette,5,0,0
+"Sucette 3",sucette3,sucette,0,sucette3,0,0,0
+"sucette 3 sucettes",sucette3sucettes,sucette,1,sucette3sucettes,24,0,0
+"Surfizz Fruit Graine",surfizzfruitgraine,surfizz,1,surfizzfruitgraine,0,0,0
+"Surfizz Fruits gaine",surfizzfruitsgaine,surfizz,1,surfizzfruitsgaine,0,1,0
+"Tete de mort",tetedemort,tete,1,tetedemort,0,1,0
+Tropico,tropico,tropico,0,tropico,0,0,0
+Twix,twix,twix,1,twix,20,1,32
+"VINAIGRE RIZ ÎL",vinaigrerizil,vinaigre,0,vinaigrerizil,0,0,0

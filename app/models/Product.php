@@ -54,6 +54,28 @@ final class Product extends Model
     }
 
     /**
+     * Fiche jumelle d'une clé produit par NOM EXACT (la fiche cafétéria
+     * vit au nom de la clé — cf. ProductKeyMerge::mergeProductFiches).
+     * Sert à l'archive pré-fusion (T1MergeArchive) : présence, prix,
+     * stock de la fiche AVANT fusion.
+     *
+     * @return array<string,mixed>|null
+     */
+    public static function findByName(string $name): ?array
+    {
+        try {
+            $stmt = static::pdo()->prepare('SELECT * FROM products WHERE name = ? COLLATE utf8mb4_bin LIMIT 1');
+            $stmt->execute([trim($name)]);
+
+            $row = $stmt->fetch();
+        } catch (\Throwable) {
+            return null;
+        }
+
+        return $row ?: null;
+    }
+
+    /**
      * Décrémente atomiquement le stock d'un produit.
      *
      * La condition `stock >= quantité` empêche tout stock négatif ; la requête

@@ -39,10 +39,12 @@ final class AliasSuggester
 
     /**
      * Suffixes de couleur/gout retirés lorsqu'ils terminent le libellé.
+     * Public : prédicat de variante du moteur T1AutoFusion (T1.5) —
+     * même définition partagée, jamais recopiée.
      *
      * @var list<string>
      */
-    private const SUFFIX_STOPWORDS = [
+    public const SUFFIX_STOPWORDS = [
         'white', 'noir', 'black',
         'blanche', 'blanches', 'blanc', 'blancs',
         'bleue', 'bleues', 'bleu', 'bleus',

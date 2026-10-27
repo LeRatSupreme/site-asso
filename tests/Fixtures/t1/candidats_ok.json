@@ -1,0 +1,20 @@
+{
+    "generated_at": "2026-10-27T14:40:00+00:00",
+    "modele": "fixture (tests/Unit/Compta/T1SuggestionsTest.php)",
+    "seuil": 0.5,
+    "candidats": [
+        {"a": "Fantôme", "b": "Caprisun", "score": 0.99},
+        {"a": "Caprisun", "b": "Caprisun tropical", "score": 0.95},
+        {"a": "Pepsi", "b": "Pepsi sans sucre", "score": 0.8},
+        {"a": "Gaufre", "b": "gaufre", "score": 0.6},
+        {"a": "AA égalité", "b": "AA autre", "score": 0.7},
+        {"a": "Égalité Z", "b": "AA autre", "score": 0.7},
+        {"a": "Sans score", "b": "Sans score B"},
+        {"a": "Hors borne", "b": "Hors borne Max", "score": 2.5},
+        {"a": "Entrée sans b", "score": 0.9},
+        {"a": "", "b": "Clé vide", "score": 0.9},
+        {"a": "Identique", "b": "Identique", "score": 0.9},
+        "pas un tableau",
+        {"a": 42, "b": "Clé non chaîne", "score": 0.9}
+    ]
+}

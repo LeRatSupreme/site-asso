@@ -31,6 +31,14 @@ if (!defined('APP_TESTING')) {
     // CSRF/2FA neutralisés) quoi qu'il arrive.
     define('APP_TESTING', true);
 }
+if (!defined('AEIC_T15_QUARANTAINE')) {
+    // T1.5 — quarantaine des fusions auto REDIRIGÉE hors du repo pendant
+    // les tests (tests/cache/ est ignoré) : un chargement de la page
+    // Inventaire en test ne doit JAMAIS écrire la vraie quarantaine
+    // data/eval_t1/t15/quarantaine.json (même comportement que le pont
+    // AEIC_T15 des tests T1AutoFusion).
+    define('AEIC_T15_QUARANTAINE', dirname(__DIR__) . '/tests/cache/t15/quarantaine.json');
+}
 
 /**
  * Lecture d'une variable d'environnement (équivalent minimal de config.php,

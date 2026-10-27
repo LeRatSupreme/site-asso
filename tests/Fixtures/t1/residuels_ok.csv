@@ -1,0 +1,6 @@
+libelle_a,libelle_b,motif,statut
+Caprisun,"Caprisun tropical","spec §1.3 : doublon résiduel non qualifié (D2)",non_qualifie
+"Kinder Bueno",Bueno,"spec §1.3 : doublon résiduel non qualifié (D2)",non_qualifie
+LigneInvalide,,"motif sans libellé b",non_qualifie
+ColonneUnique
+"Paire Égale","Paire Égale","raw identique",non_qualifie

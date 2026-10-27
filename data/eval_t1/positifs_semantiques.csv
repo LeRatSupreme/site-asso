@@ -1,0 +1,51 @@
+libelle_brut,libelle_cible,origine,action_origine,kind,remarque
+"Bonbon Haribo",haribo,product_aliases,,label,"doublons : 2 événements (audit_logs/inventory.merge ; product_aliases/label)"
+"Bowling ( 2 parties )",bowling,product_aliases,,label,"à vérifier : les deux libellés coexistent encore (même famille « bowling »)"
+"CACOLAC BOITE 25CL X6",Cacolac,product_aliases,,appellation,
+"COCA COLA BOITE FAT 33CL","Coca Cola",product_aliases,,appellation,
+"COCACOLA CHERRY SLIM 33CL","Coca Cherry",product_aliases,,appellation,
+"CRISTALI 5OCL PET",Eau,product_aliases,,appellation,
+Coca,"Coca Cola",audit_logs,compta.aliases.merge,,
+"Coca sans sucre","Coca Zero",product_aliases,,label,"doublons : 2 événements (audit_logs/compta.repair.merge_cle ; product_aliases/label) — à vérifier : les deux libellés coexistent encore (même famille « coca »)"
+Cristaline,Eau,product_aliases,,appellation,"doublons : 2 événements (audit_logs/compta.aliases.merge ; product_aliases/appellation)"
+"Crunch snaks barres","crunch Snak Barres",audit_logs,inventory.merge,,
+Fanta,"Fanta Orange",product_aliases,,label,"doublons : 2 événements (audit_logs/compta.aliases.merge ; product_aliases/label) — à vérifier : les deux libellés coexistent encore (même famille « fanta »)"
+Gauffre,gaufre,product_aliases,,label,"doublons : 2 événements (audit_logs/compta.repair.merge_cle ; product_aliases/label)"
+"Gauffre + boissons (hors boissons energisante)","Gaufre + boissons (hors boissons energisante)",product_aliases,,label,
+"Gauffre choco","Gaufre choco",product_aliases,,label,"doublons : 2 événements (audit_logs/compta.repair.merge_cle ; product_aliases/label)"
+Lion_Peanut,Lion,product_aliases,,label,"doublons : 2 événements (audit_logs/compta.aliases.merge ; product_aliases/label) — à vérifier : les deux libellés coexistent encore (même famille « lion »)"
+Lipton,"Lipton Ice Tea",product_aliases,,label,"doublons : 3 événements (audit_logs/compta.aliases.merge ; audit_logs/compta.repair.merge_cle ; product_aliases/label) — à vérifier : les deux libellés coexistent encore (même famille « lipton »)"
+MMS,M&Ms,audit_logs,compta.repair.merge_cle,,
+"MONSTER ULTRA ZERO","Monster Blanche",product_aliases,,appellation,
+"MONSTER ULTRA ZERO BTE 50CL","Monster Blanche",product_aliases,,appellation,
+"Minute Maid Multi Vitamines","Minute Maid MultiVitamine",product_aliases,,label,"doublons : 2 événements (audit_logs/compta.aliases.merge ; product_aliases/label) — à vérifier : les deux libellés coexistent encore (même famille « minute »)"
+MinuteMaid_Pomme,"Minute Maid Nect Pomme",product_aliases,,label,"doublons : 2 événements (audit_logs/compta.aliases.merge ; product_aliases/label) — à vérifier : les deux libellés coexistent encore (même famille « minute »)"
+"Monster Bleue","Monster Bleu",product_aliases,,label,"à vérifier : les deux libellés coexistent encore (même famille « monster »)"
+"Monster Vleu","Monster Bleu",audit_logs,inventory.merge,,
+"Monster rose (punch)","Monster Rose",product_aliases,,label,"à vérifier : les deux libellés coexistent encore (même famille « monster »)"
+"Monster verte (energy)","Monster Verte",product_aliases,,label,"à vérifier : les deux libellés coexistent encore (même famille « monster »)"
+"OASIS POM CASS FRAM SLIM 33CL","Oasis Pomme Cassis Framboise",product_aliases,,appellation,
+"OASIS TROPICAL SLIM BTE 33CL","Oasis Tropical",product_aliases,,appellation,
+Oasis,"Oasis Tropical",product_aliases,,label,"doublons : 2 événements (audit_logs/inventory.merge ; product_aliases/label) — à vérifier : les deux libellés coexistent encore (même famille « oasis »)"
+"PERRIER BOITE SLIM 33CL",Perrier,product_aliases,,appellation,
+"PULCO CITRONNADE SLIM 33CL",Pulco,product_aliases,,appellation,
+Pepper,"Dr Pepper",product_aliases,,label,"doublons : 2 événements (audit_logs/compta.aliases.merge ; product_aliases/label)"
+"Pepsi sans sucre","Pepsi Zero",product_aliases,,label,"à vérifier : les deux libellés coexistent encore (même famille « pepsi »)"
+"Pulco Citronnade",Pulco,audit_logs,inventory.merge,,
+"RED BULL BLUE BOITE 25CL","Redbull Bleu",product_aliases,,appellation,
+"RED BULL ICE BOITE 25CL","Redbull Ice",product_aliases,,appellation,
+"RED BULL PEACH BTE 25CL","Redbull Peach",product_aliases,,appellation,
+"RED BULL RED EDITION 25CL","redbull red",product_aliases,,appellation,
+"RED BULL SEA BLUE BOITE 25CL","Redbull Seablue",product_aliases,,appellation,
+"Redbull Myrtille","Redbull Ice",product_aliases,,label,"doublons : 3 événements (audit_logs/inventory.merge ; audit_logs/compta.aliases.merge ; product_aliases/label) — à vérifier : les deux libellés coexistent encore (même famille « redbull »)"
+"Redbull blue","Redbull Bleu",product_aliases,,label,"doublons : 3 événements (audit_logs/compta.aliases.merge ; audit_logs/inventory.merge ; product_aliases/label) — à vérifier : les deux libellés coexistent encore (même famille « redbull »)"
+Redbull_Blanche,Redbull,product_aliases,,label,"à vérifier : les deux libellés coexistent encore (même famille « redbull »)"
+Redbull_Bleue,"Redbull Bleu",product_aliases,,label,"doublons : 2 événements (audit_logs/compta.aliases.merge ; product_aliases/label) — à vérifier : les deux libellés coexistent encore (même famille « redbull »)"
+"Soiree bowling ( 2 personnes )","bowling 2personnes",product_aliases,,label,
+"Soiree bowling (2 parties / 1 personne)",bowling,product_aliases,,label,
+"Sucette 1 sucette",sucette,product_aliases,,label,"doublons : 2 événements (audit_logs/compta.repair.merge_cle ; product_aliases/label) — à vérifier : les deux libellés coexistent encore (même famille « sucette »)"
+"TROPICO L'ORIG BTE CL SLIM",Tropico,product_aliases,,appellation,
+chips,"Chips Nature",audit_logs,compta.aliases.merge,,"doublons : 2 événements (audit_logs/inventory.merge ; audit_logs/compta.aliases.merge)"
+minutemaid,"Minute Maid Orange",audit_logs,compta.aliases.merge,,"à vérifier : les deux libellés coexistent encore (même famille « minute »)"
+monster,"monster noire",audit_logs,compta.aliases.merge,,
+schweppes,"schweppes agrumes",product_aliases,,label,"doublons : 2 événements (audit_logs/compta.aliases.merge ; product_aliases/label) — à vérifier : les deux libellés coexistent encore (même famille « schweppes »)"
