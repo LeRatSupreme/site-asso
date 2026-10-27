@@ -150,6 +150,39 @@ final class ProductAlias extends Model
     }
 
     /**
+     * Recrée un alias SEULEMENT si son libellé n'existe plus nulle part
+     * (contrairement à save(), qui réaffecterait un libellé vivant) :
+     * primitive de la restauration d'une clé fusionnée (T1MergeArchive) —
+     * un alias migré sur la cible lors de la fusion n'est jamais volé.
+     *
+     * @return bool true si l'alias a été créé, false s'il existait déjà.
+     */
+    public static function ensureAbsentCreate(string $rawDescription, string $productKey): bool
+    {
+        $raw = trim($rawDescription);
+        $productKey = trim($productKey);
+        if ($raw === '' || $productKey === '') {
+            return false;
+        }
+
+        try {
+            if (self::findByRaw($raw) !== null) {
+                return false;
+            }
+            $id = 'alias_' . bin2hex(random_bytes(10));
+            $stmt = self::pdo()->prepare(
+                "INSERT INTO product_aliases (id, raw_description, product_key, kind, created_at)
+                 VALUES (?,?,?, 'label', NOW())"
+            );
+            $stmt->execute([$id, $raw, $productKey]);
+
+            return true;
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    /**
      * Alias produits uniquement (hors appellations de facture/scan) :
      * c'est la liste de la page « Mapping des libellés ».
      *

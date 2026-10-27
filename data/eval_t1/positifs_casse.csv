@@ -1,0 +1,101 @@
+libelle_brut,libelle_cible,origine,action_origine,kind,remarque
+Bounty,bounty,audit_logs,inventory.merge,,"doublons : 2 événements"
+Bowling,bowling,audit_logs,inventory.merge,,
+"Bueno White","Bueno white",audit_logs,inventory.merge,,"doublons : 2 événements"
+Bueno_white,"Bueno white",audit_logs,inventory.merge,,"doublons : 2 événements"
+Café,cafe,audit_logs,inventory.merge,,
+Capri-sun,Caprisun,product_aliases,,label,
+"Coca cherry","Coca Cherry",audit_logs,inventory.merge,,"doublons : 2 événements"
+"Coca zero","Coca Zero",product_aliases,,label,
+Coca-Cola,"Coca Cola",audit_logs,compta.aliases.merge,,
+CocaCola,"Coca Cola",product_aliases,,label,
+Coca_cherry,"Coca Cherry",product_aliases,,label,
+"Custom amount","custom amount",product_aliases,,label,
+"Fanta Cassis","fanta cassis",audit_logs,inventory.merge,,"doublons : 2 événements"
+"Fanta Citron","fanta citron",audit_logs,inventory.merge,,"doublons : 2 événements"
+"Fanta Exotique","fanta exotique",audit_logs,inventory.merge,,"doublons : 2 événements"
+"Fanta Mangue Dragon","fanta mangue dragon",audit_logs,inventory.merge,,"doublons : 2 événements"
+Fanta_Cassis,"Fanta Cassis",product_aliases,,label,
+Fanta_Citron,"Fanta Citron",product_aliases,,label,
+Fanta_Exotique,"Fanta Exotique",product_aliases,,label,
+Fanta_Mangue_Dragon,"Fanta Mangue Dragon",product_aliases,,label,
+Fanta_Orange,"Fanta Orange",product_aliases,,label,
+FuzeTea,"fuze tea",product_aliases,,label,
+Gauffre,gauffre,audit_logs,inventory.merge,,
+Haribo,haribo,audit_logs,inventory.merge,,"doublons : 2 événements"
+KitKat,"Kit kat",audit_logs,inventory.merge,,"doublons : 2 événements"
+MinuteMaid_Orange,"Minute Maid Orange",audit_logs,compta.aliases.merge,,"doublons : 2 événements"
+"Monster Noire","monster noire",audit_logs,inventory.merge,,
+"Monster noire","Monster Noire",audit_logs,compta.product.merge,,"doublons : 3 événements"
+Monster_Rose,"Monster Rose",product_aliases,,label,
+"Nutella B-ready","Nutella B Ready",product_aliases,,label,
+"Oasis (Ice tea / thé mangue passion)","Oasis ice tea the mangue passion",product_aliases,,label,
+"Oasis (Ice tea / thémangue passion)","Oasis ice tea the mangue passion",product_aliases,,label,
+"Oasis (ice tea)","Oasis Ice Tea",product_aliases,,label,
+"Oasis ice tea","Oasis Ice Tea",audit_logs,inventory.merge,,"doublons : 2 événements"
+"Oasis pomme cassis framboise","Oasis Pomme Cassis Framboise",product_aliases,,label,
+"Oasis tropical","Oasis Tropical",product_aliases,,label,
+"Pepsi Zero","pepsi Zero",audit_logs,inventory.merge,,"doublons : 3 événements"
+"Red Bull",RedBull,audit_logs,compta.aliases.merge,,
+"Red Bull Blanche","RedBull Blanche",audit_logs,inventory.merge,,
+"Red Bull Ice","Red Bull ice",audit_logs,compta.product.merge,,"doublons : 2 événements"
+"Red Bull Peach","redbull Peach",audit_logs,inventory.merge,,
+"Red Bull Pomme","Redbull pomme",audit_logs,inventory.merge,,
+"Red Bull Red","Redbull Red",audit_logs,inventory.merge,,
+"Red Bull Sea Blue","Redbull Sea Blue",audit_logs,inventory.merge,,
+"Red Bull Summer","Redbull Summer",audit_logs,inventory.merge,,
+"Red Bull Zero","redbull zero",audit_logs,compta.aliases.merge,,
+"Red bull","Red Bull",audit_logs,inventory.merge,,
+"Red bull ice","Red Bull ice",audit_logs,inventory.merge,,
+"Red bull ice","Redbull Ice",product_aliases,,label,
+"Red bull seablue","Redbull Seablue",product_aliases,,label,
+"Red bull summer","Redbull Summer",product_aliases,,label,
+RedBull,Redbull,audit_logs,compta.product.merge,,"doublons : 2 événements"
+"RedBull Abricot","Redbull Abricot",audit_logs,compta.product.merge,,"doublons : 2 événements"
+"RedBull Abricot","redbull Abricot",audit_logs,compta.product.merge,,"doublons : 2 événements"
+"RedBull Ice","Red Bull ice",audit_logs,compta.aliases.merge,,"doublons : 2 événements"
+"RedBull Ice","Redbull Ice",audit_logs,compta.product.merge,,"doublons : 2 événements"
+"Redbull Abricot","redbull Abricot",audit_logs,compta.product.merge,,
+"Redbull Blanche","RedBull Blanche",product_aliases,,label,
+"Redbull Bleu","RedBull Bleu",audit_logs,inventory.merge,,"doublons : 3 événements"
+"Redbull Peach","redbull Peach",audit_logs,compta.product.merge,,"doublons : 2 événements"
+"Redbull Pomme","Red Bull Pomme",audit_logs,compta.aliases.merge,,
+"Redbull Red","redbull red",audit_logs,compta.repair.merge_cle,,
+"Redbull Sea Blue","Redbull Seablue",audit_logs,compta.repair.merge_cle,,
+"Redbull blanche","RedBull Blanche",audit_logs,compta.product.merge,,
+"Redbull pomme","Redbull Pomme",audit_logs,compta.repair.merge_cle,,
+"Redbull red","Redbull Red",audit_logs,inventory.merge,,
+"Redbull red","redbull red",product_aliases,,label,
+Redbull_Blanche,"Red Bull Blanche",audit_logs,compta.aliases.merge,,
+"Schweppes Agrumes","schweppes agrumes",product_aliases,,label,
+Sucette,sucette,audit_logs,compta.product.merge,,"doublons : 3 événements"
+"Sucette 1 sucette","sucette 1 sucette",audit_logs,compta.product.merge,,
+"Sucette 3 sucettes","sucette 3 sucettes",audit_logs,compta.product.merge,,"doublons : 2 événements"
+cafe,Cafe,audit_logs,compta.product.merge,,"doublons : 2 événements"
+caprisun,Caprisun,audit_logs,compta.product.merge,,"doublons : 2 événements"
+coca,Coca,audit_logs,compta.product.merge,,"doublons : 2 événements"
+"coca cherry","Coca Cherry",audit_logs,compta.product.merge,,"doublons : 2 événements"
+cocacola,"Coca Cola",audit_logs,compta.aliases.merge,,
+crepe,Crêpe,product_aliases,,label,
+cristaline,Cristaline,audit_logs,compta.product.merge,,
+"crunch snaks barres","Crunch snaks barres",audit_logs,inventory.merge,,
+"décoration halloween | les creation de ju...","Décoration halloween | les creation de ju...",audit_logs,inventory.merge,,
+eau,Eau,audit_logs,compta.product.merge,,"doublons : 3 événements"
+"fuze tea","Fuze Tea",audit_logs,compta.product.merge,,"doublons : 2 événements"
+fuzetea,"Fuze Tea",audit_logs,compta.aliases.merge,,
+kitkat,"Kit kat",audit_logs,compta.aliases.merge,,
+"monster noire","Monster noire",audit_logs,inventory.merge,,
+"nutella b ready","Nutella B Ready",audit_logs,compta.product.merge,,
+"oasis ice tea","Oasis Ice Tea",audit_logs,compta.aliases.merge,,
+"oasis pomme poire","Oasis pomme poire",audit_logs,compta.product.merge,,
+"pouce vinaigre alc","Pouce vinaigre alc",audit_logs,inventory.merge,,
+"red bull",RedBull,audit_logs,compta.aliases.merge,,
+"red bull",Redbull,audit_logs,compta.product.merge,,
+"red bull seablue","Red Bull Sea Blue",audit_logs,compta.aliases.merge,,
+redbull,"Red Bull",audit_logs,compta.aliases.merge,,
+"redbull pomme","Red Bull Pomme",audit_logs,compta.aliases.merge,,
+"redbull winter","Redbull Winter",audit_logs,compta.product.merge,,
+"redbull zero","Redbull zero",audit_logs,inventory.merge,,"doublons : 2 événements"
+schweppes,Schweppes,audit_logs,inventory.merge,,
+"tete de mort","Tete de mort",audit_logs,inventory.merge,,
+tropico,Tropico,audit_logs,inventory.merge,,

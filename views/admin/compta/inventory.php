@@ -23,6 +23,10 @@ declare(strict_types=1);
  * @var int $invPage   Page courante de la grille de comptage (lot 4B, 50/page).
  * @var int $invPages  Nombre total de pages.
  * @var int $invTotal  Nombre total de produits à compter (toutes pages).
+ * @var array{dispo:bool,total:int,modele:list<array{source:string,target:string,score:float,ressemblance:int}>,residuels:list<array{source:string,target:string,motif:string}>} $t1Suggestions
+ *            Carte « Suggestions de rapprochement » (T1 lot C) : paires prêtes
+ *            à décider (assemblage unique AdminStockController::inventory —
+ *            clés vivantes, déjà décidées exclues, plafond 20/section).
  */
 ?>
 <div class="compta-head">
@@ -461,6 +465,213 @@ declare(strict_types=1);
         </table>
         <?php endif; ?>
     </details>
+</div>
+
+<div class="card surface glass" id="t1-suggestions-card">
+    <span id="suggestions-rapprochement" aria-hidden="true"></span>
+    <h2 class="card-title">Suggestions de rapprochement</h2>
+    <p class="muted">Des libellés proches peuvent désigner le même produit (ex. « Caprisun » et « Caprisun tropical »). Chaque suggestion présente les deux libellés, celui à conserver en vert, et sa <strong>ressemblance</strong> (pourcentage). Tu restes décisionnaire : <strong>Fusionner</strong> déplace toutes les données d'une clé vers l'autre (irréversible), <strong>Ignorer</strong> ne touche à rien et retire la paire de cette liste.</p>
+
+    <style>
+        .t1-empty { background: rgba(72, 189, 211, 0.08); border-radius: 8px; padding: 10px 12px; }
+        .t1-section { margin: 0 0 14px; }
+        .t1-section-title { font-size: 0.85rem; font-weight: 700; margin: 0 0 4px; }
+        .t1-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 6px 0; border-top: 1px solid var(--border, #e5e7eb); font-size: 0.87rem; }
+        .t1-names { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; min-width: 0; }
+        .t1-keep { color: var(--primary); }
+        .t1-arrow { color: var(--muted, #8892a6); }
+        .t1-motif { color: var(--muted, #8892a6); font-size: 0.78rem; flex-basis: 100%; }
+        .t1-actions { display: flex; gap: 6px; }
+    </style>
+
+    <?php if (!($t1Suggestions['dispo'] ?? false)): ?>
+        <p class="muted t1-empty">Aucune suggestion disponible pour l'instant (générez-les via <code>scripts/t1_similarity.py</code>).</p>
+    <?php elseif (($t1Suggestions['total'] ?? 0) === 0): ?>
+        <p class="muted t1-empty">Toutes les suggestions ont été traitées — aucune ne reste à qualifier pour l'instant.</p>
+    <?php else: ?>
+        <?php if (($t1Suggestions['modele'] ?? []) !== []): ?>
+        <div class="t1-section">
+            <p class="t1-section-title">Suggestions de rapprochement (par ressemblance décroissante) — en vert, la clé suggérée comme cible :</p>
+            <?php foreach ($t1Suggestions['modele'] as $p): ?>
+            <div class="t1-row">
+                <span class="t1-names">
+                    <span><?= e($p['source']) ?></span>
+                    <span class="t1-arrow">→</span>
+                    <strong class="t1-keep"><?= e($p['target']) ?></strong>
+                    <span class="badge badge-muted">ressemblance <?= (int) $p['ressemblance'] ?> %</span>
+                </span>
+                <span class="t1-actions">
+                    <?php // Un formulaire par décision : la confirmation ne s'applique qu'à la fusion (irréversible), jamais à « Ignorer » (1 clic). ?>
+                    <form method="post" action="<?= e(url('/admin/compta/inventaire/t1/decide')) ?>"
+                          data-confirm="Fusionner « <?= e($p['source']) ?> » dans « <?= e($p['target']) ?> ? Action irréversible."
+                          data-confirm-button="Fusionner">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="source" value="<?= e($p['source']) ?>">
+                        <input type="hidden" name="target" value="<?= e($p['target']) ?>">
+                        <input type="hidden" name="decision" value="fusion">
+                        <input type="hidden" name="origine" value="modele">
+                        <input type="hidden" name="score" value="<?= e(number_format($p['score'], 4, '.', '')) ?>">
+                        <button type="submit" class="btn btn-danger btn-sm">Fusionner</button>
+                    </form>
+                    <form method="post" action="<?= e(url('/admin/compta/inventaire/t1/decide')) ?>">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="source" value="<?= e($p['source']) ?>">
+                        <input type="hidden" name="target" value="<?= e($p['target']) ?>">
+                        <input type="hidden" name="decision" value="ignorer">
+                        <input type="hidden" name="origine" value="modele">
+                        <input type="hidden" name="score" value="<?= e(number_format($p['score'], 4, '.', '')) ?>">
+                        <button type="submit" class="btn btn-outline btn-sm">Ignorer</button>
+                    </form>
+                </span>
+            </div>
+            <?php endforeach; ?>
+        </div>
+        <?php endif; ?>
+
+        <?php if (($t1Suggestions['residuels'] ?? []) !== []): ?>
+        <div class="t1-section">
+            <p class="t1-section-title">À qualifier (doutes relevés dans l'analyse, sans ressemblance chiffrée) :</p>
+            <?php foreach ($t1Suggestions['residuels'] as $p): ?>
+            <div class="t1-row">
+                <span class="t1-names">
+                    <span><?= e($p['source']) ?></span>
+                    <span class="t1-arrow">→</span>
+                    <strong class="t1-keep"><?= e($p['target']) ?></strong>
+                </span>
+                <?php if (($p['motif'] ?? '') !== ''): ?>
+                <span class="t1-motif"><?= e($p['motif']) ?></span>
+                <?php endif; ?>
+                <span class="t1-actions">
+                    <form method="post" action="<?= e(url('/admin/compta/inventaire/t1/decide')) ?>"
+                          data-confirm="Fusionner « <?= e($p['source']) ?> » dans « <?= e($p['target']) ?> ? Action irréversible."
+                          data-confirm-button="Fusionner">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="source" value="<?= e($p['source']) ?>">
+                        <input type="hidden" name="target" value="<?= e($p['target']) ?>">
+                        <input type="hidden" name="decision" value="fusion">
+                        <input type="hidden" name="origine" value="residuel">
+                        <button type="submit" class="btn btn-danger btn-sm">Fusionner</button>
+                    </form>
+                    <form method="post" action="<?= e(url('/admin/compta/inventaire/t1/decide')) ?>">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="source" value="<?= e($p['source']) ?>">
+                        <input type="hidden" name="target" value="<?= e($p['target']) ?>">
+                        <input type="hidden" name="decision" value="ignorer">
+                        <input type="hidden" name="origine" value="residuel">
+                        <button type="submit" class="btn btn-outline btn-sm">Ignorer</button>
+                    </form>
+                </span>
+            </div>
+            <?php endforeach; ?>
+        </div>
+        <?php endif; ?>
+
+        <?php $t1Affichees = count($t1Suggestions['modele'] ?? []) + count($t1Suggestions['residuels'] ?? []); ?>
+        <?php if (($t1Suggestions['total'] ?? 0) > $t1Affichees): ?>
+        <p class="muted">+ <?= (int) $t1Suggestions['total'] - $t1Affichees ?> autre(s) paire(s) attendront ces décisions avant d'apparaître ici.</p>
+        <?php endif; ?>
+    <?php endif; ?>
+</div>
+
+<div class="card surface glass" id="t1-auto-card">
+    <span id="fusions-auto" aria-hidden="true"></span>
+    <h2 class="card-title">Fusions automatiques</h2>
+    <p class="muted">Le rapprochement agit seul à deux niveaux, toujours réversible : les doublons de <strong>casse pure</strong> (ex. « Pepsi » / « pepsi ») sont fusionnés immédiatement ; les paires très sûres (même base de nom, ex. « Fanta » / « Fanta Orange ») attendent une <strong>garde de 48 h</strong> pendant laquelle tu peux tout annuler d'un clic. Chaque fusion est archivée avant d'être faite : la clé peut être <strong>restaurée</strong> (son historique de ventes, lui, reste sur la clé conservée). Le reste part en suggestion humaine ci-dessus.</p>
+
+    <?php $t1a = $t1Auto ?? ['en_attente' => [], 'mures' => [], 'appliquees' => [], 'annulees' => []]; ?>
+
+    <?php if (($t1a['en_attente'] ?? []) !== []): ?>
+    <div class="t1-section">
+        <p class="t1-section-title">En quarantaine (48 h, fuseau de Paris) — fusion automatique sauf annulation :</p>
+        <?php foreach ($t1a['en_attente'] as $p): ?>
+        <div class="t1-row">
+            <span class="t1-names">
+                <span><?= e($p['source']) ?></span>
+                <span class="t1-arrow">→</span>
+                <strong class="t1-keep"><?= e($p['target']) ?></strong>
+                <span class="badge badge-muted">ressemblance <?= (int) $p['score'] ?> %</span>
+                <span class="badge badge-muted">dans <?= e($p['reste']) ?></span>
+            </span>
+            <span class="t1-actions">
+                <form method="post" action="<?= e(url('/admin/compta/inventaire/t1/auto/veto')) ?>">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="id" value="<?= e($p['id']) ?>">
+                    <button type="submit" class="btn btn-outline btn-sm">Annuler (garder séparés)</button>
+                </form>
+            </span>
+        </div>
+        <?php endforeach; ?>
+    </div>
+    <?php endif; ?>
+
+    <?php if (($t1a['mures'] ?? []) !== []): ?>
+    <div class="t1-section">
+        <p class="t1-section-title">Mûres — seront fusionnées au prochain chargement de cette page :</p>
+        <?php foreach ($t1a['mures'] as $p): ?>
+        <div class="t1-row">
+            <span class="t1-names">
+                <span><?= e($p['source']) ?></span>
+                <span class="t1-arrow">→</span>
+                <strong class="t1-keep"><?= e($p['target']) ?></strong>
+                <span class="badge badge-muted">ressemblance <?= (int) $p['score'] ?> %</span>
+            </span>
+        </div>
+        <?php endforeach; ?>
+        <form method="post" action="<?= e(url('/admin/compta/inventaire/t1/auto/appliquer')) ?>">
+            <?= csrf_field() ?>
+            <button type="submit" class="btn btn-primary btn-sm">Appliquer maintenant les fusions mûres</button>
+        </form>
+    </div>
+    <?php endif; ?>
+
+    <?php if (($t1a['appliquees'] ?? []) !== []): ?>
+    <div class="t1-section">
+        <p class="t1-section-title">Fusions automatiques appliquées (7 derniers jours) :</p>
+        <?php foreach ($t1a['appliquees'] as $p): ?>
+        <div class="t1-row">
+            <span class="t1-names">
+                <span class="t1-arrow"><?= e($p['quand']) ?></span>
+                <span><?= e($p['source']) ?></span>
+                <span class="t1-arrow">→</span>
+                <strong class="t1-keep"><?= e($p['target']) ?></strong>
+                <?php if (($p['motif'] ?? '') !== ''): ?>
+                <span class="badge badge-muted"><?= ($p['niveau'] ?? 0) === 1 ? 'casse' : e($p['motif']) ?></span>
+                <?php endif; ?>
+            </span>
+            <?php if (($p['audit_id'] ?? '') !== '' && !empty($p['archivable'])): ?>
+            <span class="t1-actions">
+                <form method="post" action="<?= e(url('/admin/compta/inventaire/t1/auto/restaurer')) ?>"
+                      data-confirm="Restaurer la clé « <?= e($p['source']) ?> » (fiche, alias, stock du snapshot) ? Son historique de ventes reste sur « <?= e($p['target']) ?> »."
+                      data-confirm-button="Restaurer">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="audit_id" value="<?= e($p['audit_id']) ?>">
+                    <button type="submit" class="btn btn-outline btn-sm">Restaurer la clé</button>
+                </form>
+            </span>
+            <?php endif; ?>
+        </div>
+        <?php endforeach; ?>
+    </div>
+    <?php endif; ?>
+
+    <?php if (($t1a['annulees'] ?? []) !== []): ?>
+    <div class="t1-section">
+        <p class="t1-section-title">Annulées (jamais fusionnées, traces conservées) :</p>
+        <?php foreach ($t1a['annulees'] as $p): ?>
+        <div class="t1-row">
+            <span class="t1-names">
+                <s><?= e($p['source']) ?></s>
+                <span class="t1-arrow">→</span>
+                <s><?= e($p['target']) ?></s>
+            </span>
+        </div>
+        <?php endforeach; ?>
+    </div>
+    <?php endif; ?>
+
+    <?php if (($t1a['en_attente'] ?? []) === [] && ($t1a['mures'] ?? []) === [] && ($t1a['appliquees'] ?? []) === [] && ($t1a['annulees'] ?? []) === []): ?>
+    <p class="muted t1-empty">Aucune fusion automatique en cours ni récente.</p>
+    <?php endif; ?>
 </div>
 
 <div class="card surface glass" id="merge-card">

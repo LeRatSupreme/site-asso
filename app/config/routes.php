@@ -430,6 +430,17 @@ function aeic_register_routes(Router $router): void
     // Fusion en masse des doublons probables affichés (« Tout fusionner ») :
     // mêmes garde-fous que /merge (guardSystemOrPage('inventory') + CSRF).
     $router->post('/admin/compta/inventaire/merge-all', [AdminStockController::class, 'mergeKeysAll']);
+    // Décision humaine sur une suggestion de rapprochement (T1 lot C,
+    // spec §6) : Fusionner / Ignorer en un clic. Déclarée AVANT les
+    // routes à segment {key} — le routeur matche par ordre.
+    // Mêmes garde-fous que /merge (guardSystemOrPage('inventory') + CSRF).
+    $router->post('/admin/compta/inventaire/t1/decide', [AdminStockController::class, 't1Decide']);
+    // T1.5 — autonomie graduée : veto sur une fusion automatique en
+    // quarantaine, application manuelle des fusions mûres, restauration
+    // d'une clé depuis l'archive de fusion. Mêmes garde-fous.
+    $router->post('/admin/compta/inventaire/t1/auto/veto', [AdminStockController::class, 't1AutoVeto']);
+    $router->post('/admin/compta/inventaire/t1/auto/appliquer', [AdminStockController::class, 't1AutoAppliquer']);
+    $router->post('/admin/compta/inventaire/t1/auto/restaurer', [AdminStockController::class, 't1AutoRestaurer']);
     // Remettre en vente un produit marqué « plus en vente » (groupe Système).
     $router->post('/admin/compta/inventaire/{key}/resume', [AdminStockController::class, 'resume']);
     $router->post('/admin/compta/inventaire/{key}/discontinue', [AdminStockController::class, 'discontinue']);

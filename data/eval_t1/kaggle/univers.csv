@@ -1,0 +1,121 @@
+libelle,forme_normalisee,famille,vivant,groupe
+Bonbon,bonbon,bonbon,1,bonbon
+"Bonbon Haribo",bonbonharibo,bonbon,1,bonbonharibo
+Bounty,bounty,bounty,1,bounty
+"Bourdon Gauffre LI",bourdongauffreli,bourdon,1,bourdongauffreli
+bowling,bowling,bowling,1,bowling
+"Bowling ( 2 parties )",bowling2parties,bowling,1,bowling
+"bowling 2personnes",bowling2personnes,bowling,0,bowling2personnes
+Bueno,bueno,bueno,1,bueno
+"Bueno white",buenowhite,bueno,1,buenowhite
+Cacolac,cacolac,cacolac,1,cacolac
+cafe,cafe,cafe,1,cafe
+"cafe allonge",cafeallonge,cafe,1,cafeallonge
+Caprisun,caprisun,caprisun,1,caprisun
+"Caprisun tropical",caprisuntropical,caprisun,1,caprisuntropical
+"Chips BBQ",chipsbbq,chips,0,chipsbbq
+"Chips Nature",chipsnature,chips,1,chips
+"Coca Cherry",cocacherry,coca,1,cocacherry
+"Coca Cola",cocacola,coca,1,coca
+"Coca sans sucre",cocasanssucre,coca,1,cocasanssucre
+"Coca Zero",cocazero,coca,1,cocasanssucre
+Crêpe,crepe,crepe,0,crepe
+Cristaline,cristaline,cristaline,1,cristali5oclpet
+Crunch,crunch,crunch,1,crunch
+"crunch Snak Barres",crunchsnakbarres,crunch,0,crunchsnakbarres
+"custom amount",customamount,custom,0,customamount
+"Décoration halloween | [PRENOM]",decorationhalloween|prenom,decoration,1,decorationhalloween|prenom
+Dragibus,dragibus,dragibus,1,dragibus
+"Dr Pepper",drpepper,dr,1,drpepper
+Eau,eau,eau,1,cristali5oclpet
+Fanta,fanta,fanta,1,fanta
+"Fanta Cassis",fantacassis,fanta,0,fantacassis
+"Fanta Citron",fantacitron,fanta,0,fantacitron
+"Fanta Exotique",fantaexotique,fanta,0,fantaexotique
+"Fanta Mangue Dragon",fantamanguedragon,fanta,0,fantamanguedragon
+"Fanta Orange",fantaorange,fanta,1,fanta
+"Fauffres Liegeoise",fauffresliegeoise,fauffres,1,fauffresliegeoise
+"fuze tea",fuzetea,fuze,1,fuzetea
+Gauffre,gauffre,gauffre,1,gauffre
+"Gauffre + boissons (hors boissons energisante)",gauffre+boissonshorsboissonsenergisante,gauffre,1,gauffre+boissonshorsboissonsenergisante
+"Gauffre choco",gauffrechoco,gauffre,1,gauffrechoco
+gaufre,gaufre,gaufre,1,gauffre
+"Gaufre + boissons (hors boissons energisante)",gaufre+boissonshorsboissonsenergisante,gaufre,1,gauffre+boissonshorsboissonsenergisante
+"Gaufre choco",gaufrechoco,gaufre,1,gauffrechoco
+haribo,haribo,haribo,1,bonbonharibo
+"Kinder Bueno",kinderbueno,kinder,1,kinderbueno
+"Kit kat",kitkat,kit,1,kitkat
+Lion,lion,lion,1,lion
+Lion_Peanut,lionpeanut,lion,1,lion
+Lipton,lipton,lipton,1,lipton
+"Lipton Ice Tea",liptonicetea,lipton,1,lipton
+M&Ms,m&ms,m&ms,1,m&ms
+"Madel Coquille",madelcoquille,madel,0,madelcoquille
+Madeleine,madeleine,madeleine,1,madeleine
+Mars,mars,mars,1,mars
+"Menu BBQ",menubbq,menu,0,menubbq
+"Minute Maid",minutemaid,minute,1,minutemaid
+"Minute Maid MultiVitamine",minutemaidmultivitamine,minute,1,minutemaidmultivitamine
+"Minute Maid Multi Vitamines",minutemaidmultivitamines,minute,1,minutemaidmultivitamine
+"Minute Maid Nect Pomme",minutemaidnectpomme,minute,1,minutemaidnectpomme
+"Minute Maid Orange",minutemaidorange,minute,0,minutemaid
+"Minute Maid Pomme",minutemaidpomme,minute,1,minutemaidnectpomme
+"Mister Freeze",misterfreeze,mister,1,misterfreeze
+"Monster Blanche",monsterblanche,monster,1,monsterblanche
+"Monster Bleu",monsterbleu,monster,1,monsterbleu
+"Monster Bleue",monsterbleue,monster,1,monsterbleu
+"Monster Noire",monsternoire,monster,1,monster
+"Monster Rose",monsterrose,monster,1,monsterrose
+"Monster Rose (punch)",monsterrosepunch,monster,1,monsterrose
+"Monster Verte",monsterverte,monster,0,monsterverte
+"Monster verte (energy)",monsterverteenergy,monster,1,monsterverte
+"Montant personnalisé",montantpersonnalise,montant,0,montantpersonnalise
+Nesquik,nesquik,nesquik,1,nesquik
+"Nutella B Ready",nutellabready,nutella,1,nutellabready
+Oasis,oasis,oasis,1,oasis
+"Oasis Ice Tea",oasisicetea,oasis,0,oasisicetea
+"Oasis ice tea the mangue passion",oasisiceteathemanguepassion,oasis,0,oasisiceteathemanguepassion
+"Oasis Pomme Cassis Framboise",oasispommecassisframboise,oasis,1,oasispomcassframslim33cl
+"Oasis pomme poire",oasispommepoire,oasis,1,oasispommepoire
+"Oasis Thémangue Passion",oasisthemanguepassion,oasis,0,oasisthemanguepassion
+"Oasis Tropical",oasistropical,oasis,1,oasis
+Orangina,orangina,orangina,1,orangina
+Panini,panini,panini,0,panini
+Pepper,pepper,pepper,1,drpepper
+Pepsi,pepsi,pepsi,1,pepsi
+"Pepsi sans sucre",pepsisanssucre,pepsi,1,pepsisanssucre
+"Pepsi Zero",pepsizero,pepsi,1,pepsisanssucre
+Perrier,perrier,perrier,1,perrier
+"Pouce vinaigre alc",poucevinaigrealc,pouce,1,poucevinaigrealc
+Pulco,pulco,pulco,1,pulco
+Redbull,redbull,redbull,1,redbull
+"Redbull Abricot",redbullabricot,redbull,1,redbullabricot
+"RedBull Blanche",redbullblanche,redbull,1,redbull
+"Redbull Bleu",redbullbleu,redbull,1,redbullbleu
+Redbull_Bleue,redbullbleue,redbull,1,redbullbleu
+"Redbull Blue",redbullblue,redbull,1,redbullbleu
+"Redbull Ice",redbullice,redbull,1,redbullice
+"Redbull Myrtille",redbullmyrtille,redbull,1,redbullice
+"Redbull Peach",redbullpeach,redbull,1,redbullpeach
+"Redbull Pomme",redbullpomme,redbull,0,redbullpomme
+"redbull red",redbullred,redbull,1,redbullred
+"Redbull Seablue",redbullseablue,redbull,1,redbullseablue
+"Redbull Summer",redbullsummer,redbull,0,redbullsummer
+"Redbull Winter",redbullwinter,redbull,1,redbullwinter
+"Redbull zero",redbullzero,redbull,1,redbullzero
+schweppes,schweppes,schweppes,1,schweppes
+"schweppes agrumes",schweppesagrumes,schweppes,1,schweppes
+Snickers,snickers,snickers,1,snickers
+"Soiree bowling (2 parties / 1 personne)",soireebowling2parties1personne,soiree,1,bowling
+"Soiree bowling ( 2 personnes )",soireebowling2personnes,soiree,1,bowling2personnes
+sucette,sucette,sucette,1,sucette
+"Sucette 1",sucette1,sucette,0,sucette1
+"Sucette 1 sucette",sucette1sucette,sucette,1,sucette
+"Sucette 3",sucette3,sucette,0,sucette3
+"sucette 3 sucettes",sucette3sucettes,sucette,1,sucette3sucettes
+"Surfizz Fruit Graine",surfizzfruitgraine,surfizz,1,surfizzfruitgraine
+"Surfizz Fruits gaine",surfizzfruitsgaine,surfizz,1,surfizzfruitsgaine
+"Tete de mort",tetedemort,tete,1,tetedemort
+Tropico,tropico,tropico,0,tropico
+Twix,twix,twix,1,twix
+"VINAIGRE RIZ ÎL",vinaigrerizil,vinaigre,0,vinaigrerizil

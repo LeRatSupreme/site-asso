@@ -1,0 +1,14 @@
+libelle_a,libelle_b,motif,statut
+.,,"spec §1.3 : clé parasite « . » (stock 120) — à supprimer/nettoyer",non_qualifie
+"Bourdon Gauffre LI",gaufre,"spec §1.3 : doublon résiduel non qualifié (D2)",non_qualifie
+Caprisun,"Caprisun tropical","spec §1.3 : doublon résiduel non qualifié (D2)",non_qualifie
+"Fauffres Liegeoise","Bourdon Gauffre LI","spec §1.3 : doublon résiduel non qualifié (D2)",non_qualifie
+"Fauffres Liegeoise",gaufre,"spec §1.3 : doublon résiduel non qualifié (D2)",non_qualifie
+"Kinder Bueno",Bueno,"spec §1.3 : doublon résiduel non qualifié (D2)",non_qualifie
+Lion,Lipton,"auto : near-miss Levenshtein 2 (formes normalisées) non fusionné — à qualifier (D2)",non_qualifie
+M&Ms,Mars,"auto : near-miss Levenshtein 2 (formes normalisées) non fusionné — à qualifier (D2)",non_qualifie
+"Madel Coquille",Madeleine,"spec §1.3 : doublon résiduel non qualifié (D2) — fusion historique auditée mais clé recréée : à requalifier",non_qualifie
+"Oasis ice tea the mangue passion","Oasis Thémangue Passion","spec §1.3 : doublon résiduel non qualifié (D2) — fusion historique auditée mais clé recréée : à requalifier",non_qualifie
+"Sucette 1 sucette","sucette 3 sucettes","auto : near-miss Levenshtein 2 (formes normalisées) non fusionné — à qualifier (D2)",non_qualifie
+"Surfizz Fruit Graine","Surfizz Fruits gaine","spec §1.3 : doublon résiduel non qualifié (D2)",non_qualifie
+cafe,"cafe allonge","spec §1.3 : doublon résiduel non qualifié (D2)",non_qualifie

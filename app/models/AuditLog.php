@@ -15,6 +15,27 @@ final class AuditLog extends Model
     protected static string $table = 'audit_logs';
 
     /**
+     * Une entrée du journal par identifiant (null si absente) — sert à
+     * relire l'archive pré-fusion d'une fusion auto pour la restauration
+     * (T1MergeArchive::restaurer). Tolérante sans base.
+     *
+     * @return array<string,mixed>|null
+     */
+    public static function find(string $id): ?array
+    {
+        try {
+            $stmt = static::pdo()->prepare('SELECT * FROM audit_logs WHERE id = ? LIMIT 1');
+            $stmt->execute([$id]);
+
+            $row = $stmt->fetch();
+        } catch (\Throwable) {
+            return null;
+        }
+
+        return $row ?: null;
+    }
+
+    /**
      * Journalise une action.
      *
      * @param array<string,mixed>|null $details
@@ -149,6 +170,88 @@ final class AuditLog extends Model
             }
 
             return $out;
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    /**
+     * Entity_id DISTINCTS journalisés pour une action donnée.
+     *
+     * Sert de liste noire aux « Suggestions de rapprochement » de
+     * l'inventaire (T1 lot C) : les paires déjà décidées par l'humain
+     * (audit « t1.pair_feedback », entity_id = sha1 de la paire
+     * normalisée) ne doivent plus être suggérées.
+     *
+     * @return list<string>
+     */
+    /**
+     * Fusions automatiques récentes (T1.5) : lignes inventory.merge
+     * d'origine auto (niveaux 1 et 2), les plus récentes d'abord —
+     * alimente la carte « Fusions automatiques » (section appliquées,
+     * bouton de restauration via l'audit id). Tolérante sans base.
+     *
+     * @return list<array<string,mixed>>
+     */
+    public static function autoMerges(int $jours = 7, int $limit = 20): array
+    {
+        try {
+            $stmt = static::pdo()->prepare(
+                'SELECT id, entity_id, details, created_at
+                   FROM audit_logs
+                  WHERE action = ?
+                    AND details LIKE ?
+                    AND created_at >= DATE_SUB(NOW(), INTERVAL ' . max(1, $jours) . ' DAY)
+                  ORDER BY created_at DESC, id DESC
+                  LIMIT ' . max(1, $limit)
+            );
+            $stmt->execute(['inventory.merge', '%"origine":"auto"%']);
+
+            /** @var list<array<string,mixed>> $rows */
+            $rows = $stmt->fetchAll();
+        } catch (\Throwable) {
+            return [];
+        }
+
+        $out = [];
+        foreach ($rows as $row) {
+            $details = json_decode((string) ($row['details'] ?? ''), true);
+            if (!is_array($details)) {
+                continue;
+            }
+            $out[] = [
+                'audit_id'   => (string) $row['id'],
+                'source'     => (string) ($details['source'] ?? ''),
+                'target'     => (string) ($details['target'] ?? ''),
+                'niveau'     => (int) ($details['niveau'] ?? 0),
+                'motif'      => (string) ($details['motif'] ?? ''),
+                'quand'      => (string) ($row['created_at'] ?? ''),
+                'archivable' => isset($details['archive']),
+            ];
+        }
+
+        return $out;
+    }
+
+    public static function entityIdsForAction(string $action): array
+    {
+        try {
+            $stmt = static::pdo()->prepare(
+                'SELECT DISTINCT entity_id FROM audit_logs WHERE action = ? AND entity_id IS NOT NULL'
+            );
+            $stmt->execute([$action]);
+
+            $out = [];
+            /** @var list<string|null> $rows */
+            $rows = $stmt->fetchAll(\PDO::FETCH_COLUMN);
+            foreach ($rows as $id) {
+                $id = (string) $id;
+                if ($id !== '') {
+                    $out[$id] = $id;
+                }
+            }
+
+            return array_values($out);
         } catch (\Throwable) {
             return [];
         }

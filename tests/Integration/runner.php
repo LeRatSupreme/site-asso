@@ -35,6 +35,10 @@ define('APP_ENV', 'dev');
 define('APP_DEBUG', true);
 define('APP_TESTING', true);
 define('APP_URL', rtrim((string) (getenv('APP_URL') ?: 'https://example.test'), '/'));
+// T1.5 — quarantaine des fusions auto redirigée vers tests/cache/ (même
+// chemin que tests/bootstrap.php) : un chargement de page Inventaire en
+// test ne doit JAMAIS écrire la vraie quarantaine data/eval_t1/t15/.
+define('AEIC_T15_QUARANTAINE', dirname(__DIR__, 2) . '/tests/cache/t15/quarantaine.json');
 
 require_once AEIC_ROOT . '/vendor/autoload.php';
 require_once AEIC_ROOT . '/app/config/routes.php';

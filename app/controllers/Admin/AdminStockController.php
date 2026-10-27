@@ -13,7 +13,12 @@ use App\Core\Compta\Kiosk;
 use App\Core\Compta\PurchaseSaver;
 use App\Core\Compta\ReceiptStorage;
 use App\Core\Compta\StockPublic;
+use App\Core\Compta\T1\T1AutoFusion;
+use App\Core\Compta\T1\T1MergeArchive;
+use App\Core\Compta\T1\T1Quarantaine;
+use App\Core\Compta\T1\T1Suggestions;
 use App\Core\Logger;
+use App\Models\AuditLog;
 use App\Models\InventoryCount;
 use App\Models\InventoryTablet;
 use App\Models\Loss;
@@ -699,6 +704,50 @@ final class AdminStockController extends AdminBaseController
         // aperçu des données déplacées, suggestions pré-remplies).
         $keyStats = ProductKeyMerge::keyStats();
 
+        // Autonomie graduée des fusions (T1.5) : UN passage au CHARGEMENT
+        // de la page (décision cadrage : pas de cron) — verrou flock non
+        // bloquant, idempotent, plafonné à T1AutoFusion::MAX_FUSIONS_PAR_PASSAGE
+        // fusions réelles. Niveau 1 (casse pure) immédiat ; niveau 2 déclaré
+        // en quarantaine 48 h ; mûres appliquées. Une erreur quelconque est
+        // journalisée sans bloquer la page (dégradation gracieuse).
+        $t1AutoPassage = [];
+        try {
+            $t1AutoPassage = T1AutoFusion::passage($keyStats);
+        } catch (\Throwable $e) {
+            Logger::warning('t1.auto: passage impossible', ['msg' => $e->getMessage()]);
+        }
+        if (($t1AutoPassage['niveau1'] ?? 0) + ($t1AutoPassage['appliquees'] ?? 0) > 0) {
+            // Des clés ont fusionné : l'état des stats est périmé, on
+            // rafraîchit (une seule fois — le prochain passage est au
+            // prochain chargement).
+            $keyStats = ProductKeyMerge::keyStats();
+        }
+
+        // Données de la carte « Fusions automatiques » : quarantaine en
+        // attente (compte à rebours Paris), mûres, appliquées (7 jours),
+        // annulées — lecture tolérante, jamais bloquante.
+        $t1Quarantaine = new T1Quarantaine(T1AutoFusion::cheminQuarantaine());
+        $t1Auto = self::t15Ecran($t1Quarantaine);
+
+        // Suggestions de rapprochement (T1 lot C, spec §6) : UN SEUL point
+        // d'assemblage — lecture défensive des livrables data/eval_t1,
+        // filtrage par clés vivantes et par paires déjà décidées (liste
+        // noire d'audit), plafond d'affichage. Toujours une structure
+        // exploitable (dégradation gracieuse, jamais d'exception).
+        $t1Suggestions = T1Suggestions::pourInventaire(
+            AEIC_ROOT . '/data/eval_t1/candidats_fusion.json',
+            AEIC_ROOT . '/data/eval_t1/residuels_a_qualifier.csv',
+            $keyStats,
+            // Liste noire : décisions humaines + paires déjà connues de la
+            // quarantaine (en attente : visibles dans la carte dédiée ;
+            // annulées : veto humain, jamais re-suggérées ; appliquées :
+            // clés fusionnées).
+            array_merge(
+                AuditLog::entityIdsForAction(T1Suggestions::ACTION_FEEDBACK),
+                array_keys($t1Quarantaine->idsStatuts())
+            )
+        );
+
         // Valeur du stock : Σ (stock théorique × coût de revient du lot en
         // cours, même source que la page Réappro). Les produits jamais
         // comptés ou à stock nul/négatif ne représentent rien de physique :
@@ -805,6 +854,8 @@ final class AdminStockController extends AdminBaseController
             'gaps'             => InventoryCount::recentGaps(30),
             'keyStats'         => $keyStats,
             'mergeDupes'       => AliasSuggester::groupDuplicates(array_keys($keyStats)),
+            't1Suggestions'    => $t1Suggestions,
+            't1Auto'           => $t1Auto,
             'pending_sessions' => InventoryTablet::pendingSessions(),
             'stockValue'       => round($stockValue, 2),
             'stockUnits'       => $stockUnits,
@@ -1092,6 +1143,10 @@ final class AdminStockController extends AdminBaseController
             redirect($back);
         }
 
+        // Archive pré-fusion (règle T1.5 : TOUTE fusion est archivée —
+        // capture AVANT la fusion, condensé dans le details de l'audit).
+        $t15Archive = T1MergeArchive::capturer($source, $target, ProductKeyMerge::keyStats());
+
         try {
             $moved = ProductKeyMerge::merge($source, $target, Auth::id());
         } catch (\InvalidArgumentException $e) {
@@ -1116,9 +1171,10 @@ final class AdminStockController extends AdminBaseController
         }
 
         $this->audit('inventory.merge', 'product_key', $target, [
-            'source' => $source,
-            'target' => $target,
-            'tables' => $moved,
+            'source'  => $source,
+            'target'  => $target,
+            'tables'  => $moved,
+            'archive' => $t15Archive,
         ]);
 
         $labels = [
@@ -1184,12 +1240,16 @@ final class AdminStockController extends AdminBaseController
         $failures = [];
         foreach ($pairs as $pair) {
             try {
+                // Archive pré-fusion (règle T1.5) capturée AVANT chaque
+                // fusion de la salve.
+                $t15Archive = T1MergeArchive::capturer($pair['from'], $pair['to'], ProductKeyMerge::keyStats());
                 ProductKeyMerge::merge($pair['from'], $pair['to'], Auth::id());
                 $merged++;
                 $this->audit('inventory.merge', 'product_key', $pair['to'], [
-                    'source' => $pair['from'],
-                    'target' => $pair['to'],
-                    'via'    => 'merge-all',
+                    'source'  => $pair['from'],
+                    'target'  => $pair['to'],
+                    'via'     => 'merge-all',
+                    'archive' => $t15Archive,
                 ]);
             } catch (\Throwable $e) {
                 Logger::error('inventory: fusion automatique impossible', [
@@ -1211,6 +1271,344 @@ final class AdminStockController extends AdminBaseController
             );
         }
         redirect($back);
+    }
+
+    /**
+     * Décision humaine sur une suggestion de rapprochement (T1 lot C,
+     * spec §6) : bouton « Fusionner » ou « Ignorer » de la carte
+     * « Suggestions de rapprochement ». Ne remplace PAS mergeKeys()
+     * (inchangé, zéro régression) : mêmes gardes (guardSystemOrPage
+     * + CSRF du routeur), mêmes validations strictes, même fusion
+     * réelle ProductKeyMerge::merge.
+     *
+     *  - decision=fusion : fusion réelle + audit « inventory.merge » à
+     *    l'identique de mergeKeys (parité d'historique, le lot A
+     *    s'appuie dessus) ;
+     *  - decision=ignorer : aucune écriture produit ;
+     *  - dans les DEUX cas : audit « t1.pair_feedback » (boucle P3 —
+     *    paire étiquetée positive si fusion, négative si refus,
+     *    prête pour l'entraînement du palier P2).
+     *
+     * Entrées strictes : source/target (trim, ≤ 255, non vides,
+     * distinctes en comparaison BRUTE, ProductKeyMerge::canMerge),
+     * decision ∈ {fusion, ignorer}, origine ∈ {modele, residuel},
+     * score float ∈ [0,1] optionnel — tout le reste du POST est
+     * ignoré. Une requête invalide n'écrit RIEN (ni fusion ni audit).
+     */
+    public function t1Decide(): void
+    {
+        $this->guardSystemOrPage('inventory');
+
+        $back = url('/admin/compta/inventaire') . '#suggestions-rapprochement';
+
+        $source = trim((string) ($_POST['source'] ?? ''));
+        $target = trim((string) ($_POST['target'] ?? ''));
+        $decision = (string) ($_POST['decision'] ?? '');
+        $origine = (string) ($_POST['origine'] ?? '');
+
+        // Score optionnel : nombre ∈ [0,1], toute autre valeur est
+        // ignorée (journalisée comme absente, jamais refusée pour ça).
+        $scoreBrut = $_POST['score'] ?? null;
+        $score = is_numeric($scoreBrut) ? (float) $scoreBrut : null;
+        if ($score !== null && ($score < 0.0 || $score > 1.0)) {
+            $score = null;
+        }
+
+        if ($source === '' || $target === ''
+            || mb_strlen($source) > 255 || mb_strlen($target) > 255) {
+            $this->setFlash('error', 'Clé source et clé cible requises.');
+            redirect($back);
+        }
+        if ($source === $target) {
+            $this->setFlash('error', 'Les deux clés sont identiques : rien à fusionner.');
+            redirect($back);
+        }
+        if (!ProductKeyMerge::canMerge($source, $target)) {
+            $this->setFlash('error', 'Fusion refusée : la demande est invalide.');
+            redirect($back);
+        }
+        if (
+            !in_array($decision, [T1Suggestions::DECISION_FUSION, T1Suggestions::DECISION_IGNORER], true)
+            || !in_array($origine, [T1Suggestions::ORIGINE_MODELE, T1Suggestions::ORIGINE_RESIDUEL], true)
+        ) {
+            $this->setFlash('error', 'Décision invalide : « fusion » ou « ignorer » attendu.');
+            redirect($back);
+        }
+
+        if ($decision === T1Suggestions::DECISION_FUSION) {
+            // Archive pré-fusion (règle T1.5) : capturée AVANT la fusion,
+            // jointe au details de l'audit à l'identique de mergeKeys.
+            $t15Archive = T1MergeArchive::capturer($source, $target, ProductKeyMerge::keyStats());
+            try {
+                $moved = ProductKeyMerge::merge($source, $target, Auth::id());
+            } catch (\InvalidArgumentException $e) {
+                Logger::warning('inventory: fusion refusée (suggestion de rapprochement)', [
+                    'source' => $source,
+                    'target' => $target,
+                    'msg'    => $e->getMessage(),
+                ]);
+                $this->setFlash('error', 'Fusion refusée : la demande est invalide.');
+                redirect($back);
+            } catch (\Throwable $e) {
+                Logger::error('inventory: fusion impossible (suggestion de rapprochement)', [
+                    'source' => $source,
+                    'target' => $target,
+                    'msg'    => $e->getMessage(),
+                ]);
+                $this->setFlash('error', 'Fusion impossible : une erreur inattendue est survenue. L\'incident a été journalisé.');
+                redirect($back);
+            }
+
+            // Parité d'historique avec mergeKeys : MÊME action d'audit,
+            // mêmes détails (la paire étiquetée vient APRÈS, pour que
+            // le feedback ne soit journalisé que si la fusion a réussi).
+            $this->audit('inventory.merge', 'product_key', $target, [
+                'source'  => $source,
+                'target'  => $target,
+                'tables'  => $moved,
+                'archive' => $t15Archive,
+            ]);
+            $this->setFlash('success', 'Fusion effectuée : ' . self::resumeFusion($moved) . '.');
+        } else {
+            $this->setFlash('success', 'Paire ignorée — elle ne sera plus suggérée.');
+        }
+
+        // Boucle P3 : paire étiquetée par l'humain. entity_id = sha1 de la
+        // paire normalisée (stable, symétrique) — même calcul côté
+        // assemblage pour la liste noire des suggestions.
+        $this->audit(
+            T1Suggestions::ACTION_FEEDBACK,
+            T1Suggestions::ENTITY_TYPE,
+            T1Suggestions::pairEntityId($source, $target),
+            [
+                'a'        => $source,
+                'b'        => $target,
+                'score'    => $score,
+                'decision' => $decision,
+                'origine'  => $origine,
+            ]
+        );
+
+        redirect($back);
+    }
+
+    // ── T1.5 : fusions automatiques (veto, application, restauration) ────
+
+    /**
+     * Structure de la carte « Fusions automatiques » (T1.5) : en attente
+     * (compte à rebours restant, heure locale Paris), mûres, appliquées
+     * (7 derniers jours, tous niveaux, lues du journal d'audit),
+     * annulées — lecture tolérante du fichier de quarantaine.
+     *
+     * @return array{en_attente:list<array<string,mixed>>,mures:list<array<string,mixed>>,appliquees:list<array<string,mixed>>,annulees:list<array<string,mixed>>}
+     */
+    private static function t15Ecran(T1Quarantaine $quarantaine): array
+    {
+        $now = T1AutoFusion::maintenantIso();
+
+        $formater = static function (array $e) use ($now): array {
+            $restant = (int) T1AutoFusion::secondesRestantes((string) ($e['created_at'] ?? ''), $now);
+            $heures = intdiv($restant, 3600);
+            $minutes = intdiv($restant % 3600, 60);
+
+            return [
+                'id'         => (string) ($e['id'] ?? ''),
+                'source'     => (string) ($e['source'] ?? ''),
+                'target'     => (string) ($e['target'] ?? ''),
+                'score'      => (int) round(100 * (float) ($e['score'] ?? 0)),
+                'motif'      => (string) ($e['motif'] ?? ''),
+                'created_at' => (string) ($e['created_at'] ?? ''),
+                'reste'      => $restant <= 0 ? '' : sprintf('%d h %02d', $heures, $minutes),
+            ];
+        };
+
+        $enAttente = [];
+        $mures = [];
+        $annulees = [];
+        try {
+            foreach ($quarantaine->entrees() as $e) {
+                $ligne = $formater($e);
+                $statut = (string) ($e['statut'] ?? '');
+                if ($statut === T1Quarantaine::STATUT_EN_ATTENTE) {
+                    if ($ligne['reste'] === '') {
+                        $mures[] = $ligne;
+                    } else {
+                        $enAttente[] = $ligne;
+                    }
+                } elseif ($statut === T1Quarantaine::STATUT_ANNULE) {
+                    $annulees[] = $ligne;
+                }
+            }
+        } catch (\Throwable) {
+            // Lecture impossible : carte vide, page intacte.
+        }
+
+        return [
+            'en_attente' => $enAttente,
+            'mures'      => $mures,
+            // Appliquées : TOUTES les fusions auto des 7 derniers jours
+            // (niveaux 1 ET 2) lues du journal — chaque ligne porte son
+            // audit id, base du bouton « Restaurer la clé ».
+            'appliquees' => AuditLog::autoMerges(7, 20),
+            'annulees'   => array_slice($annulees, 0, 20),
+        ];
+    }
+
+    /**
+     * Veto humain sur une fusion automatique en quarantaine (T1.5,
+     * niveau 2) : la paire n'est jamais appliquée, reste visible à
+     * l'écran et alimente la boucle P3 (paire négative, origine auto).
+     * Mêmes gardes que t1Decide (guardSystemOrPage + CSRF du routeur).
+     */
+    public function t1AutoVeto(): void
+    {
+        $this->guardSystemOrPage('inventory');
+
+        $back = url('/admin/compta/inventaire') . '#fusions-auto';
+
+        $id = trim((string) ($_POST['id'] ?? ''));
+        if (preg_match('/^[0-9a-f]{40}$/', $id) !== 1) {
+            $this->setFlash('error', 'Paire de quarantaine invalide.');
+            redirect($back);
+        }
+
+        $quarantaine = new T1Quarantaine(T1AutoFusion::cheminQuarantaine());
+        $entree = $quarantaine->trouver($id);
+        if ($entree === null || ($entree['statut'] ?? '') !== T1Quarantaine::STATUT_EN_ATTENTE) {
+            $this->setFlash('error', 'Paire introuvable ou déjà traitée.');
+            redirect($back);
+        }
+
+        $ok = $quarantaine->annuler($id, Auth::id());
+        if (!$ok) {
+            $this->setFlash('error', 'Annulation impossible : réessaie.');
+            redirect($back);
+        }
+
+        // Boucle P3 : un veto est une paire NÉGATIVE (ne jamais fusionner).
+        $this->audit(
+            T1Suggestions::ACTION_FEEDBACK,
+            T1Suggestions::ENTITY_TYPE,
+            $id,
+            [
+                'a'        => (string) $entree['source'],
+                'b'        => (string) $entree['target'],
+                'score'    => (float) ($entree['score'] ?? 0),
+                'decision' => T1Suggestions::DECISION_IGNORER,
+                'origine'  => T1AutoFusion::ORIGINE_AUTO,
+                'motif'    => 'veto_quarantaine',
+            ]
+        );
+
+        $this->setFlash('success', 'Fusion automatique annulée : « ' . $entree['source'] . ' » ne sera pas fusionnée dans « ' . $entree['target'] . ' ».');
+        redirect($back);
+    }
+
+    /**
+     * « Appliquer maintenant les fusions mûres » (T1.5) : rejoue UN
+     * passage complet (mêmes gardes que t1Decide) — seules les
+     * quarantaines de 48 h RÉVOLUES sont fusionnées, les immatures
+     * attendent encore (jamais de court-circuit du veto).
+     */
+    public function t1AutoAppliquer(): void
+    {
+        $this->guardSystemOrPage('inventory');
+
+        $back = url('/admin/compta/inventaire') . '#fusions-auto';
+
+        try {
+            $res = T1AutoFusion::passage(ProductKeyMerge::keyStats());
+        } catch (\Throwable $e) {
+            Logger::error('t1.auto: application manuelle impossible', ['msg' => $e->getMessage()]);
+            $this->setFlash('error', 'Application impossible : l\'incident a été journalisé.');
+            redirect($back);
+        }
+
+        $n = (int) (($res['appliquees'] ?? 0) + ($res['niveau1'] ?? 0));
+        if ($n > 0) {
+            $this->setFlash('success', sprintf('%d fusion(s) automatique(s) appliquée(s).', $n));
+        } else {
+            $this->setFlash('success', 'Aucune fusion mûre à appliquer pour l\'instant (les paires attendent leur quarantaine de 48 h).');
+        }
+        redirect($back);
+    }
+
+    /**
+     * Restaure la clé source d'une fusion archivée (T1.5) : recrée fiche
+     * + alias + stock + lot de coût du snapshot pré-fusion ; l'historique
+     * repointé (ventes, achats…) reste sur la cible (limite documentée à
+     * l'écran). Audit dédié inventory.restore.
+     */
+    public function t1AutoRestaurer(): void
+    {
+        $this->guardSystemOrPage('inventory');
+
+        $back = url('/admin/compta/inventaire') . '#fusions-auto';
+
+        $auditId = trim((string) ($_POST['audit_id'] ?? ''));
+        if ($auditId === '' || mb_strlen($auditId) > 255) {
+            $this->setFlash('error', 'Fusion à restaurer introuvable.');
+            redirect($back);
+        }
+
+        try {
+            $res = T1MergeArchive::restaurer($auditId, Auth::id());
+        } catch (\Throwable $e) {
+            Logger::error('t1.auto: restauration impossible', ['audit' => $auditId, 'msg' => $e->getMessage()]);
+            $this->setFlash('error', 'Restauration impossible : l\'incident a été journalisé.');
+            redirect($back);
+        }
+
+        if (($res['ok'] ?? false) !== true) {
+            $this->setFlash('error', (string) ($res['erreur'] ?? 'Restauration impossible.'));
+            redirect($back);
+        }
+
+        $this->setFlash('success', 'Clé « ' . ($res['restaure']['cle'] ?? '') . ' » restaurée depuis l\'archive (l\'historique des ventes reste sur la clé cible).');
+        redirect($back);
+    }
+
+    /**
+     * Résumé humain d'une fusion réussie (« Fusion effectuée : … »).
+     *
+     * Copie volontaire du libellé de mergeKeys() : NE PAS factoriser
+     * avec lui (le lot C interdit de toucher à mergeKeys — zéro
+     * risque de régression). Toute évolution doit être répercutée
+     * des deux côtés.
+     *
+     * @param array<string,int> $moved Lignes déplacées par table.
+     */
+    private static function resumeFusion(array $moved): string
+    {
+        $labels = [
+            'purchases'        => 'achat(s)',
+            'losses'           => 'perte(s)',
+            'sales'            => 'vente(s)',
+            'aliases'          => 'alias',
+            'aliases_absorbed' => 'alias obsolète absorbé',
+            'aliases_deduped'  => 'doublon(s) d\'alias consolidé(s)',
+            'counts'           => 'comptage(s)',
+            'stocks'           => 'stock additionné',
+            'discontinued'     => 'drapeau « plus en vente »',
+            'costs'            => 'lots de coûts',
+            'promotions'       => 'promotion(s)',
+            'tablet_lines'     => 'ligne(s) de relevé tablette',
+            'infinite'         => 'drapeau « stock infini »',
+            'zero_since'       => 'suivi « à zéro depuis »',
+            'packs'            => 'taille de pack',
+            'checks'           => 'case(s) de liste de courses',
+            'scan_labels'      => 'libellé(s) de scan purgé(s)',
+            'order_items'      => 'ligne(s) de commande caisse',
+            'fiches'           => 'fiche(s) carte',
+        ];
+        $parts = [];
+        foreach ($moved as $table => $n) {
+            if ($n > 0) {
+                $parts[] = $n . ' ' . ($labels[$table] ?? $table);
+            }
+        }
+
+        return $parts === [] ? 'aucune donnée trouvée sur la clé source' : implode(', ', $parts);
     }
 
     // -----------------------------------------------------------------
