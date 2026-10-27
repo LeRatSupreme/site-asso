@@ -1,0 +1,13 @@
+{
+  "id": "adrienremond/aeic-t1-p2-finetune",
+  "title": "aeic-t1-p2-finetune",
+  "code_file": "train.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": false,
+  "enable_internet": false,
+  "dataset_sources": ["adrienremond/aeic-t1-p2-pairs", "adrienremond/aeic-t1-ml-base"],
+  "competition_sources": [],
+  "kernel_sources": []
+}

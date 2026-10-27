@@ -1,0 +1,6 @@
+{
+  "title": "AEIC T1 modele base MiniLM multilingue",
+  "id": "adrienremond/aeic-t1-ml-base",
+  "licenses": [{"name": "Apache-2.0"}],
+  "isPrivate": true
+}
