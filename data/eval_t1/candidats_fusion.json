@@ -1,157 +1,72 @@
 {
-  "generated_at": "2026-10-27T17:30:52+00:00",
+  "generated_at": "2026-10-28T03:39:53+00:00",
   "modele": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2 (ONNX int8 via fastembed 0.9.1)",
-  "seuil": 0.6618,
+  "seuil": 0.7741,
   "candidats": [
     {
       "a": "Soiree bowling (2 parties / 1 personne)",
       "b": "Soiree bowling ( 2 personnes )",
-      "score": 0.9377
-    },
-    {
-      "a": "Minute Maid",
-      "b": "Minute Maid Pomme",
-      "score": 0.8854
-    },
-    {
-      "a": "Redbull",
-      "b": "redbull red",
-      "score": 0.8586
+      "score": 0.9474
     },
     {
       "a": "sucette",
       "b": "sucette 3 sucettes",
-      "score": 0.8497
+      "score": 0.8584
     },
     {
       "a": "Minute Maid",
-      "b": "Minute Maid Nect Pomme",
-      "score": 0.8294
+      "b": "Minute Maid Pomme",
+      "score": 0.8526
+    },
+    {
+      "a": "Redbull",
+      "b": "redbull red",
+      "score": 0.8477
     },
     {
       "a": "Pepsi",
       "b": "Pepsi sans sucre",
-      "score": 0.8168
+      "score": 0.8438
     },
     {
       "a": "Oasis",
       "b": "Oasis pomme poire",
-      "score": 0.8051
-    },
-    {
-      "a": "Bonbon",
-      "b": "Bonbon Haribo",
-      "score": 0.7953
-    },
-    {
-      "a": "Bowling ( 2 parties )",
-      "b": "Soiree bowling ( 2 personnes )",
-      "score": 0.7758
-    },
-    {
-      "a": "Coca Cherry",
-      "b": "Coca Cola",
-      "score": 0.7744
+      "score": 0.8387
     },
     {
       "a": "Pepsi",
       "b": "Pepsi Zero",
-      "score": 0.7679
-    },
-    {
-      "a": "Coca Cola",
-      "b": "Coca sans sucre",
-      "score": 0.756
-    },
-    {
-      "a": "Redbull Blue",
-      "b": "Redbull Seablue",
-      "score": 0.753
-    },
-    {
-      "a": "Bourdon Gauffre LI",
-      "b": "Gauffre",
-      "score": 0.7517
-    },
-    {
-      "a": "Coca sans sucre",
-      "b": "Pepsi sans sucre",
-      "score": 0.7515
-    },
-    {
-      "a": "Redbull",
-      "b": "Redbull Winter",
-      "score": 0.74
-    },
-    {
-      "a": "Redbull Ice",
-      "b": "Redbull Winter",
-      "score": 0.7382
-    },
-    {
-      "a": "Redbull",
-      "b": "Redbull_Bleue",
-      "score": 0.7378
+      "score": 0.8072
     },
     {
       "a": "Oasis pomme poire",
       "b": "Oasis Tropical",
-      "score": 0.7358
-    },
-    {
-      "a": "bowling",
-      "b": "Soiree bowling ( 2 personnes )",
-      "score": 0.7344
-    },
-    {
-      "a": "Coca Cola",
-      "b": "Coca Zero",
-      "score": 0.7144
-    },
-    {
-      "a": "Redbull",
-      "b": "Redbull Ice",
-      "score": 0.714
-    },
-    {
-      "a": "gaufre",
-      "b": "Gaufre choco",
-      "score": 0.7128
-    },
-    {
-      "a": "Redbull",
-      "b": "Redbull Bleu",
-      "score": 0.7118
-    },
-    {
-      "a": "Gauffre",
-      "b": "Gauffre choco",
-      "score": 0.7108
+      "score": 0.7952
     },
     {
       "a": "Minute Maid",
-      "b": "Minute Maid MultiVitamine",
-      "score": 0.7022
+      "b": "Minute Maid Nect Pomme",
+      "score": 0.7914
     },
     {
-      "a": "redbull red",
-      "b": "Redbull Winter",
-      "score": 0.6899
+      "a": "Coca sans sucre",
+      "b": "Pepsi sans sucre",
+      "score": 0.7876
     },
     {
-      "a": "Minute Maid",
-      "b": "Minute Maid Multi Vitamines",
-      "score": 0.6797
+      "a": "Coca Cherry",
+      "b": "Coca Cola",
+      "score": 0.7863
     },
     {
-      "a": "Redbull",
-      "b": "Redbull zero",
-      "score": 0.6721
+      "a": "Bonbon",
+      "b": "Bonbon Haribo",
+      "score": 0.7862
     },
     {
-      "a": "Gauffre",
-      "b": "Gaufre choco",
-      "score": 0.6687
+      "a": "Redbull Blue",
+      "b": "Redbull Seablue",
+      "score": 0.7835
     }
   ]
 }

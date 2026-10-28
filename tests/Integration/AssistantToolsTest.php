@@ -567,8 +567,12 @@ final class AssistantToolsTest extends IntegrationTestCase
     public function test_doublons_en_attente_expose_les_paires_vivantes_sans_decider(): void
     {
         // La paire « Minute Maid » / « Minute Maid Pomme » existe dans le
-        // livrable data/eval_t1/candidats_fusion.json (score 0,8854) : les
-        // DEUX clés seedées vivantes → la paire est exposée telle quelle.
+        // livrable data/eval_t1/candidats_fusion.json : les DEUX clés seedées
+        // vivantes → la paire est exposée telle quelle. Le score du livrable
+        // est recalculé à chaque modèle de rapprochement (89 % avec le modèle
+        // P2 v1, 85 % après la vague 2) : l'attendu est relu dans le livrable
+        // pour ne pas figer le score d'un modèle dans le test — même
+        // convention que T1DecideTest.
         $this->seedVente('s1', 'T1', $this->jourParis(2) . ' 12:00:00', 'Minute Maid', 'Boissons', 2, 3.00);
         $this->seedVente('s2', 'T2', $this->jourParis(2) . ' 12:10:00', 'Minute Maid Pomme', 'Boissons', 1, 1.80);
 
@@ -590,7 +594,21 @@ final class AssistantToolsTest extends IntegrationTestCase
             }
         }
         self::assertNotNull($attendue, 'La paire vivante du livrable doit être exposée (côtés dans un ordre quelconque — habille choisit le côté conservé).');
-        self::assertSame(89, (int) ($attendue['ressemblance'] ?? -1), 'Score 0,8854 → ressemblance 89 (arrondi).');
+
+        // Ressemblance attendue = score du livrable arrondi (T1Suggestions :
+        // (int) round(score * 100)), relu dans candidats_fusion.json.
+        $livrable = json_decode((string) file_get_contents(AEIC_ROOT . '/data/eval_t1/candidats_fusion.json'), true);
+        self::assertIsArray($livrable, 'candidats_fusion.json doit être un JSON lisible.');
+        $scoreAttendu = null;
+        foreach (($livrable['candidats'] ?? []) as $cand) {
+            $cote = [(string) ($cand['a'] ?? ''), (string) ($cand['b'] ?? '')];
+            sort($cote);
+            if ($cote === ['Minute Maid', 'Minute Maid Pomme']) {
+                $scoreAttendu = (int) round(100 * (float) ($cand['score'] ?? 0));
+            }
+        }
+        self::assertNotNull($scoreAttendu, 'La paire seedée doit exister dans le livrable candidats_fusion.json.');
+        self::assertSame($scoreAttendu, (int) ($attendue['ressemblance'] ?? -1), 'La ressemblance exposée doit reprendre le score du livrable (arrondi), tel quel.');
 
         // L'assistant liste, il ne fusionne jamais : mention explicite.
         self::assertStringContainsString('humain', (string) ($c['a_decider_par'] ?? ''));
