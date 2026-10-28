@@ -31,6 +31,7 @@ use App\Controllers\Admin\AdminTeamController;
 use App\Controllers\Admin\AdminUserController;
 use App\Controllers\AuthController;
 use App\Controllers\AssistantToolsController;
+use App\Controllers\CaptchaController;
 use App\Controllers\EventController;
 use App\Controllers\GameController;
 use App\Controllers\HealthController;
@@ -71,6 +72,12 @@ function aeic_register_routes(Router $router): void
     $router->get('/privacy', [PageController::class, 'privacy']);
     $router->get('/cgu', [PageController::class, 'cgu']);
     $router->get('/p/{slug}', [PageController::class, 'show']);
+
+    // CAPTCHA auto-hébergé : image anti-bot (défense des formulaires
+    // publics, jamais mise en cache) + page de démonstration du code saisi.
+    $router->get('/captcha/image', [CaptchaController::class, 'image']);
+    $router->get('/captcha-demo', [CaptchaController::class, 'demo']);
+    $router->post('/captcha-demo', [CaptchaController::class, 'demo']);
 
     // Sondages.
     $router->get('/sondages', [PollController::class, 'index']);

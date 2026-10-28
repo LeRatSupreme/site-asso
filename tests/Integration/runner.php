@@ -212,10 +212,14 @@ register_shutdown_function(static function (): void {
             $headers[] = $h;
         }
     }
+    // Corps binaire (ex. PNG du CAPTCHA) : json_encode échouerait sur des
+    // octets non UTF-8 → transport en base64, signalé par « bodyB64 ».
+    $bodyUtf8 = mb_check_encoding($body, 'UTF-8');
     $payload = [
         'code'      => http_response_code(),
         'headers'   => $headers,
-        'body'      => $body,
+        'body'      => $bodyUtf8 ? $body : base64_encode($body),
+        'bodyB64'   => !$bodyUtf8,
         'session'   => isset($_SESSION) ? $_SESSION : [],
         'sessionId' => session_id(),
     ];
