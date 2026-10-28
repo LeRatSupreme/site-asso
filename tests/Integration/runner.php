@@ -39,6 +39,13 @@ define('APP_URL', rtrim((string) (getenv('APP_URL') ?: 'https://example.test'), 
 // chemin que tests/bootstrap.php) : un chargement de page Inventaire en
 // test ne doit JAMAIS écrire la vraie quarantaine data/eval_t1/t15/.
 define('AEIC_T15_QUARANTAINE', dirname(__DIR__, 2) . '/tests/cache/t15/quarantaine.json');
+// P2-auto (boucle de ré-entraînement automatique) — état/journal/log
+// redirigés vers tests/cache/p2auto/ : jamais data/eval_t1/p2/auto/ (prod)
+// depuis un test (le script lui-même reste remplaçable par la variable
+// d'environnement AEIC_P2AUTO_SCRIPT, honorée uniquement en APP_TESTING).
+define('AEIC_P2AUTO_ETAT', dirname(__DIR__, 2) . '/tests/cache/p2auto/etat.json');
+define('AEIC_P2AUTO_JOURNAL', dirname(__DIR__, 2) . '/tests/cache/p2auto/journal.md');
+define('AEIC_P2AUTO_LOG', dirname(__DIR__, 2) . '/tests/cache/p2auto/retrain.log');
 
 require_once AEIC_ROOT . '/vendor/autoload.php';
 require_once AEIC_ROOT . '/app/config/routes.php';

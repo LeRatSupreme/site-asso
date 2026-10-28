@@ -27,6 +27,10 @@ declare(strict_types=1);
  *            Carte « Suggestions de rapprochement » (T1 lot C) : paires prêtes
  *            à décider (assemblage unique AdminStockController::inventory —
  *            clés vivantes, déjà décidées exclues, plafond 20/section).
+ * @var array{saute:bool,lance:bool,paires:int,seuil:int,statut:string,ligne:string} $t1Retrain
+ *            Boucle de ré-entraînement automatique (P2-auto, brief A1) :
+ *            résultat du passage au chargement — seule « ligne » (calculée
+ *            au centre, T1AutoRetrain::ligneIndicateur) est affichée ici.
  */
 ?>
 <div class="compta-head">
@@ -471,6 +475,10 @@ declare(strict_types=1);
     <span id="suggestions-rapprochement" aria-hidden="true"></span>
     <h2 class="card-title">Suggestions de rapprochement</h2>
     <p class="muted">Des libellés proches peuvent désigner le même produit (ex. « Caprisun » et « Caprisun tropical »). Chaque suggestion présente les deux libellés, celui à conserver en vert, et sa <strong>ressemblance</strong> (pourcentage). Tu restes décisionnaire : <strong>Fusionner</strong> déplace toutes les données d'une clé vers l'autre (irréversible), <strong>Ignorer</strong> ne touche à rien et retire la paire de cette liste.</p>
+
+    <?php if (($t1Retrain['ligne'] ?? '') !== ''): ?>
+    <p class="muted"><?= e($t1Retrain['ligne']) ?></p>
+    <?php endif; ?>
 
     <style>
         .t1-empty { background: rgba(72, 189, 211, 0.08); border-radius: 8px; padding: 10px 12px; }

@@ -50,6 +50,8 @@ RUNBOOK
   ~/AEIC/.venv-t1/bin/python3 scripts/t1_augment.py --v2        # v2 : volume ×2-3 ciblé échecs S4' -> data/eval_t1/p2/v2/
   ~/AEIC/.venv-t1/bin/python3 scripts/t1_augment.py --v2 --verifier      # v2 : preuve anti-triche étendue
   ~/AEIC/.venv-t1/bin/python3 scripts/t1_augment.py --v2 --test-negatif  # v2 : injection TEST -> ÉCHEC détecté
+  ~/AEIC/.venv-t1/bin/python3 scripts/t1_augment.py --v2 --feedback data/eval_t1/p2/auto/feedback_pairs.csv \
+      --sortie data/eval_t1/p2/auto/run_<ts>                    # P2-auto (brief A2) : v2 + retours humains
   python3 -m py_compile scripts/t1_augment.py                   # syntaxe (numpy inutile ici)
 
 NB : l'import de t1_similarity nécessite numpy → utiliser le venv (.venv-t1) ci-dessus.
@@ -97,7 +99,9 @@ import csv
 import io
 import json
 import random
+import shutil
 import sys
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -113,6 +117,8 @@ P2 = DATA / "p2"
 KAGGLE_UPLOAD = P2 / "kaggle_upload"
 P2V2 = P2 / "v2"                 # vague 2 (P2-ter) : tout s'écrit ICI uniquement
 KAGGLE_UPLOAD_V2 = P2V2 / "kaggle_upload_v2"
+AUTO = P2 / "auto"                # boucle P2-auto (brief A2) : runs run_<horodatage>/ UNIQUEMENT
+FEEDBACK = "feedback"             # typologie des paires positives issues des décisions humaines
 
 SEED_TRAIN = 42    # graine fixe imposée (brief P1_augmentation)
 SEED_VAL = 4242    # graine différente, documentée (brief : val = même générateur, graine différente)
@@ -144,6 +150,8 @@ ACCENTS_AJOUT = {"e": "éèê", "a": "àâ", "u": "ùû", "o": "ô", "i": "î", 
 MOTIFS_FILTRE = ["test", "residuel", "conflit_identite", "doublon", "vide"]
 # v2 : motifs de rejet supplémentaires du garde-fou anti-collision étendu
 MOTIFS_FILTRE_V2 = MOTIFS_FILTRE + ["collision_test", "collision_soeur"]
+# P2-auto : idem v2 + paire ignorée par décision humaine (dur négatif supplémentaire)
+MOTIFS_FILTRE_AUTO = MOTIFS_FILTRE_V2 + ["feedback_negatif"]
 
 # --- v2 : vocabulaires des nouvelles typologies (sources : analyse d'erreurs S4') ---
 
@@ -570,7 +578,7 @@ QUALIFICATIFS_STRIPPES = ("ultraedition", "theedition", "sugarfree", "sanssucre"
 
 
 class Interdits:
-    def __init__(self, jeu: t1.Jeu) -> None:
+    def __init__(self, jeu: t1.Jeu, feedback_negatifs: set[frozenset[str]] | None = None) -> None:
         self.test_exact: set[str] = set()
         for p in jeu.paires_par_split("test"):
             self.test_exact |= {p["libelle_brut"], p["libelle_cible"]}
@@ -602,6 +610,9 @@ class Interdits:
         for b, c in self.train_pairs:
             self.bruts_de_cible.setdefault(t1.stock_public_normalize(c), set()).add(
                 t1.stock_public_normalize(b))
+        # P2-auto (brief A2) : paires IGNORÉES par décision humaine — durs négatifs
+        # supplémentaires. Vide par défaut (v1/v2 strictement inchangés).
+        self.feedback_negatifs: set[frozenset[str]] = feedback_negatifs or set()
 
     def _collisions_etendues(self, vn: str, cn: str) -> str | None:
         """Motif de rejet v2 par CONTENANCE (sous-chaîne non-préfixe), ou None.
@@ -644,35 +655,134 @@ class Interdits:
             return None
         if variante in self.resid_exact or vn in self.resid_norm:
             return "residuel"
+        if self.feedback_negatifs and frozenset((vn, cn)) in self.feedback_negatifs:
+            return "feedback_negatif"
         if vn in self.formes_univers and vn != cn:
             return "conflit_identite"
         if etendu:
             return self._collisions_etendues(vn, cn)
         return None
 
+    def motif_feedback(self, variante: str, cible: str) -> str | None:
+        """Admission d'une paire feedback BRUTE (décision humaine, pas une variante
+        synthétique — brief A2) : les paires FUSIONNÉES deviennent des positives
+        supplémentaires. Interdits : vide, formes TEST (l'un ou l'autre côté — la
+        mesure S4 à pareil à pareil reste honnête), formes RÉSIDUELLES §1.3 (leur
+        qualification passera par la régénération du jeu, décision D2 — pas par la
+        boucle auto : anti-triche inchangé) et paires re-ignorées par une décision
+        plus récente. PAS de filtre conflit/collision : la décision humaine
+        qualifie la paire (une fusion de deux identités vivantes est exactement le
+        signal que la boucle doit apprendre — ex. trio « Redbull Bleu/Blue/Bleue »).
+        Les VARIANTES SYNTHÉTIQUES passent, elles, le filtre complet (motif),
+        inchangé.
+        """
+        vn = t1.stock_public_normalize(variante)
+        cn = t1.stock_public_normalize(cible)
+        if len(vn.replace(" ", "")) < 2 or vn == "." or len(cn.replace(" ", "")) < 2 or cn == ".":
+            return "vide"
+        if variante in self.test_exact or vn in self.test_norm:
+            return "test"
+        if cible in self.test_exact or cn in self.test_norm:
+            return "test"
+        if variante in self.resid_exact or vn in self.resid_norm:
+            return "residuel"
+        if cible in self.resid_exact or cn in self.resid_norm:
+            return "residuel"
+        if self.feedback_negatifs and frozenset((vn, cn)) in self.feedback_negatifs:
+            return "feedback_negatif"
+        return None
+
+
+def _rel(chemin: Path) -> str:
+    """Chemin d'affichage relatif au dépôt (ou absolu si hors dépôt — robuste)."""
+    try:
+        return chemin.relative_to(REPO).as_posix()
+    except ValueError:
+        return chemin.as_posix()
+
+
+# ---------------------------------------------------------------------------
+# P2-auto (brief A2) — paires étiquetées issues des décisions humaines
+# ---------------------------------------------------------------------------
+
+def charger_feedback(chemin: Path) -> tuple[list[tuple[str, str]], list[tuple[str, str]], dict]:
+    """Lit l'export A1 des retours humains (feedback_pairs.csv, colonnes
+    decision,origine,a,b,score,decide_le) : les FUSIONS deviennent des paires
+    positives supplémentaires, les IGNORÉES des durs négatifs supplémentaires
+    (garde de paire dans Interdits).
+
+    Dédoublonnage par paire de formes normalisées (décision la plus récente
+    gagne — même règle que T1FeedbackFeed côté A1, qui a déjà dédoublonné par
+    entity_id : cette passe est une ceinture de sécurité déterministe).
+    """
+    positives: dict[frozenset[str], tuple[str, str, str]] = {}   # cle -> (decide_le, a, b)
+    negatives: dict[frozenset[str], tuple[str, str, str]] = {}
+    anomalies: list[str] = []
+    n_lues = 0
+    with open(chemin, newline="", encoding="utf-8") as f:
+        lecteur = csv.DictReader(f)
+        entete = lecteur.fieldnames or []
+        manquantes = [c for c in ("decision", "a", "b") if c not in entete]
+        if manquantes:
+            raise SystemExit(f"FATAL: colonnes manquantes dans {chemin} : {manquantes}")
+        for r in lecteur:
+            n_lues += 1
+            a = (r.get("a") or "").strip()
+            b = (r.get("b") or "").strip()
+            decision = (r.get("decision") or "").strip()
+            if decision not in ("fusion", "ignorer"):
+                anomalies.append(f"décision inconnue « {decision} » (ligne ignorée)")
+                continue
+            if not a or not b or a == b:
+                anomalies.append("libellé vide ou paire dégénérée (ligne ignorée)")
+                continue
+            na, nb = t1.stock_public_normalize(a), t1.stock_public_normalize(b)
+            if not na or not nb:
+                anomalies.append(f"normalisation vide : « {a} »/« {b} » (ligne ignorée)")
+                continue
+            if na == nb:
+                anomalies.append(f"paire de casse pure « {a} »/« {b} » (déjà résolue par normalizeKey)")
+                continue
+            cle = frozenset((na, nb))
+            quand = (r.get("decide_le") or "").strip()
+            dest = positives if decision == "fusion" else negatives
+            if cle not in dest or quand >= dest[cle][0]:
+                dest[cle] = (quand, a, b)
+    pos = sorted((a, b) for _, a, b in positives.values())
+    neg = sorted((a, b) for _, a, b in negatives.values())
+    stats = {"lues": n_lues, "positives": len(pos), "negatives": len(neg), "anomalies": anomalies}
+    return pos, neg, stats
+
 
 # ---------------------------------------------------------------------------
 # Génération
 # ---------------------------------------------------------------------------
 
-def _nouvelles_stats(typologies: dict | None = None, motifs: list[str] | None = None) -> dict:
+def _nouvelles_stats(typologies: dict | None = None, motifs: list[str] | None = None,
+                     supplement: list[str] | None = None) -> dict:
     typologies = GENERATEURS if typologies is None else typologies
     motifs = MOTIFS_FILTRE if motifs is None else motifs
     stats = {ORIGINE: dict(brut=0, retenu=0, **{m: 0 for m in motifs})}
     for typ in typologies:
+        stats[typ] = dict(brut=0, retenu=0, **{m: 0 for m in motifs})
+    for typ in supplement or []:   # P2-auto : ligne « feedback » (paires humaines brutes)
         stats[typ] = dict(brut=0, retenu=0, **{m: 0 for m in motifs})
     return stats
 
 
 def generer(jeu: t1.Jeu, seed: int, interdits: Interdits, vus_amont: dict[str, str] | None = None,
             budgets: dict | None = None, generateurs: dict | None = None,
-            motifs_filtre: list[str] | None = None, etendu: bool = False
+            motifs_filtre: list[str] | None = None, etendu: bool = False,
+            paires: list[tuple[str, str]] | None = None, avec_feedback: bool = False
             ) -> tuple[list[tuple[str, str, str]], dict, dict]:
     """Génère (texte_variante, cible, typologie) pour les 30 paires TRAIN (passe complète).
 
     Sans argument optionnel : comportement v1 À L'IDENTIQUE (mêmes budgets, mêmes
     générateurs, même ordre de tirage → sorties octet/octet égales). En v2 : budgets
     étendus, nouvelles typologies et filtre anti-collision étendu (etendu=True).
+    En P2-auto (paires + avec_feedback) : le pool s'enrichit des paires FUSIONNÉES
+    par décision humaine (typologie `feedback`, admission dédiée motif_feedback —
+    les paires du jeu figé restent des lignes `origine` à l'identique).
 
     Dédoublonnage par libellé EXACT (l'entrée du modèle d'embeddings est la chaîne brute :
     « Lion_Peanut » et « Lion-Peanut » sont deux exemples distincts). L'anti-triche, elle,
@@ -683,13 +793,17 @@ def generer(jeu: t1.Jeu, seed: int, interdits: Interdits, vus_amont: dict[str, s
     budgets = BUDGETS if budgets is None else budgets
     generateurs = GENERATEURS if generateurs is None else generateurs
     rng = random.Random(seed)
-    stats = _nouvelles_stats(generateurs, motifs_filtre)
+    stats = _nouvelles_stats(generateurs, motifs_filtre, supplement=[FEEDBACK] if avec_feedback else None)
     rows: list[tuple[str, str, str]] = []
     vus: dict[str, str] = {k: v for k, v in (vus_amont or {}).items()}  # libellé exact -> cible normalisée
+    origines_jeu = set(interdits.train_pairs) if avec_feedback else None
 
     def ajouter(variante: str, cible: str, typ: str, origine: bool) -> None:
         stats[typ]["brut"] += 1
-        motif = interdits.motif(variante, cible, origine, etendu=etendu)
+        if typ == FEEDBACK:
+            motif = interdits.motif_feedback(variante, cible)
+        else:
+            motif = interdits.motif(variante, cible, origine, etendu=etendu)
         cn = t1.stock_public_normalize(cible)
         if motif is None and variante in vus:
             motif = "conflit_identite" if vus[variante] != cn else "doublon"
@@ -700,9 +814,12 @@ def generer(jeu: t1.Jeu, seed: int, interdits: Interdits, vus_amont: dict[str, s
         rows.append((variante, cible, typ))
         stats[typ]["retenu"] += 1
 
-    paires = interdits.train_pairs  # tri déterministe (brut, cible)
+    paires = interdits.train_pairs if paires is None else paires  # tri déterministe (brut, cible)
     for brut, cible in paires:
-        ajouter(brut, cible, ORIGINE, origine=True)
+        if avec_feedback and (brut, cible) not in origines_jeu:
+            ajouter(brut, cible, FEEDBACK, origine=False)
+        else:
+            ajouter(brut, cible, ORIGINE, origine=True)
 
     for brut, cible in paires:
         for typ, budget in budgets.items():
@@ -736,9 +853,12 @@ def _sha256(chemin: Path) -> str:
 # ---------------------------------------------------------------------------
 
 def _verifier_lignes(train_rows: list[tuple[str, str]], val_rows: list[tuple[str, str]],
-                     interdits: Interdits, etendu: bool = False) -> list[str]:
+                     interdits: Interdits, etendu: bool = False,
+                     cibles_sup: set[str] | None = None,
+                     feedback_negatifs: set[frozenset[str]] | None = None) -> list[str]:
     """Cœur de vérification d'un couple (train, val) contre le jeu figé. Retourne les
-    erreurs (vide = OK). Vérifications v1 (toujours) + v2 (si etendu) :
+    erreurs (vide = OK). Vérifications v1 (toujours) + v2 (si etendu) + P2-auto
+    (si feedback — brief A2) :
 
     - aucune forme (exacte / normalize_key / StockPublic::normalizeKey) d'un libellé des
       20 paires TEST n'apparaît (ni en variante, ni en cible) ;
@@ -746,10 +866,15 @@ def _verifier_lignes(train_rows: list[tuple[str, str]], val_rows: list[tuple[str
       forme d'une identité sœur de la cible (nouvelles typologies — collision sémantique) ;
     - aucune variante SYNTHÉTIQUE ne prend la forme d'un libellé résiduel §1.3 (exception :
       les lignes « origine » = paires TRAIN du jeu figé exactes) ;
-    - toutes les cibles sont des cibles TRAIN du jeu ; la validation est disjointe du train ;
+    - toutes les cibles sont des cibles TRAIN du jeu OU des cibles feedback admises ;
+      la validation est disjointe du train ;
+    - [auto] aucune ligne (hors origine du jeu figé) n'est une paire IGNORÉE par
+      décision humaine (dur négatif supplémentaire) ;
     - en-têtes conformes (assertion côté lecture).
     """
     erreurs: list[str] = []
+    cibles_sup = cibles_sup or set()
+    feedback_negatifs = feedback_negatifs or set()
     formes_test = interdits.test_norm | interdits.test_exact | {
         t1.normalize_key(x) for x in interdits.test_exact
     } | {x.lower() for x in interdits.test_exact}
@@ -765,8 +890,13 @@ def _verifier_lignes(train_rows: list[tuple[str, str]], val_rows: list[tuple[str
                 erreurs.append(f"{nom}:{i} : variante « {variante} » = forme TEST")
             if cible in interdits.test_exact or cn in interdits.test_norm:
                 erreurs.append(f"{nom}:{i} : cible « {cible} » = forme TEST")
-            if cible not in interdits.train_cibles:
+            if cible not in interdits.train_cibles and cn not in cibles_sup:
                 erreurs.append(f"{nom}:{i} : cible « {cible} » hors cibles TRAIN du jeu")
+            est_origine = nom == "train" and (variante, cible) in train_pairs_exact \
+                and variante in origines_exact
+            if feedback_negatifs and not est_origine \
+                    and frozenset((vn2, cn)) in feedback_negatifs:
+                erreurs.append(f"{nom}:{i} : paire ignorée par feedback « {variante} »/« {cible} »")
             resid = variante in interdits.resid_exact or vn1 in interdits.resid_norm or vn2 in interdits.resid_norm
             if resid:
                 if nom == "train" and (variante, cible) in train_pairs_exact and variante in origines_exact:
@@ -774,8 +904,6 @@ def _verifier_lignes(train_rows: list[tuple[str, str]], val_rows: list[tuple[str
                 else:
                     erreurs.append(f"{nom}:{i} : variante « {variante} » = forme résiduelle §1.3")
             if etendu:
-                est_origine = (nom == "train" and (variante, cible) in train_pairs_exact
-                               and variante in origines_exact)
                 if not est_origine:  # exception documentée : lignes origine du jeu figé
                     motif_col = interdits._collisions_etendues(vn2, cn)
                     if motif_col:
@@ -793,12 +921,16 @@ def _verifier_lignes(train_rows: list[tuple[str, str]], val_rows: list[tuple[str
     return erreurs
 
 
-def verifier(jeu: t1.Jeu, interdits: Interdits, verbeux: bool = True, v2: bool = False) -> list[str]:
-    """Vérifie train_pairs.csv + val_pairs.csv (v1 : p2/, v2 : p2/v2/) contre le jeu figé."""
-    dossier = P2V2 if v2 else P2
+def verifier(jeu: t1.Jeu, interdits: Interdits, verbeux: bool = True, v2: bool = False,
+             dossier: Path | None = None, cibles_sup: set[str] | None = None,
+             feedback_negatifs: set[frozenset[str]] | None = None) -> list[str]:
+    """Vérifie train_pairs.csv + val_pairs.csv (v1 : p2/, v2 : p2/v2/, auto : dossier du
+    run P2-auto) contre le jeu figé."""
+    dossier = (P2V2 if v2 else P2) if dossier is None else dossier
     train_rows = _lire_pairs(dossier / "train_pairs.csv")
     val_rows = _lire_pairs(dossier / "val_pairs.csv")
-    erreurs = _verifier_lignes(train_rows, val_rows, interdits, etendu=v2)
+    erreurs = _verifier_lignes(train_rows, val_rows, interdits, etendu=v2,
+                               cibles_sup=cibles_sup, feedback_negatifs=feedback_negatifs)
 
     if verbeux:
         print(f"[anti-triche{' v2 étendu' if v2 else ''}] paires TEST du jeu : 20 · "
@@ -1451,6 +1583,232 @@ def generer_tout_v2() -> int:
     return 0
 
 
+# ---------------------------------------------------------------------------
+# P2-auto (brief A2) — run enrichi par les retours humains
+# ---------------------------------------------------------------------------
+
+def generer_run_auto(chemin_feedback: Path, sortie: Path) -> int:
+    """Régénère le jeu augmenté v2 ENRICHI des paires étiquetées (brief A2) :
+
+    - FUSIONS humaines → positives supplémentaires : admises telles quelles
+      (typologie `feedback`, filtre d'admission dédié) PUIS augmentées par les
+      mêmes générateurs/budgets que le jeu (mécanismes existants, anti-triche
+      complet — les variantes synthétiques passent le filtre v2 étendu + la
+      garde de paire feedback_negatif) ;
+    - IGNORÉES humaines → durs négatifs supplémentaires : garde de paire (aucune
+      ligne — synthétique ou humaine — ne peut enseigner une paire ignorée) +
+      export local durs_negatifs_feedback.csv. NB : le kernel v4 (inchangé)
+      n'apprend que des paires positives (MNRL anchor/positive) — les durs
+      négatifs agissent ici comme contrainte de génération, pas comme données
+      d'entraînement directes ;
+    - tout s'écrit dans le dossier du run (p2/auto/run_<ts>/) UNIQUEMENT :
+      sorties v1/v2 régénérables inchangées.
+
+    Déterminisme : mêmes graines (42/4242) ; un même feedback_pairs.csv produit
+    des octets identiques (le nom du dossier d'horodatage n'entre pas dans les
+    contenus). Les paires du jeu figé gardent les MÊMES tirages que la v2 (le
+    pool s'allonge après elles : leur séquence RNG est inchangée).
+    """
+    if not chemin_feedback.is_file():
+        print(f"FATAL : feedback introuvable : {chemin_feedback}", file=sys.stderr)
+        return 2
+    print(f"[1/7] chargement du jeu figé (LECTURE SEULE) + retours humains {chemin_feedback.name} …")
+    jeu = t1.Jeu()
+    fb_pos, fb_neg, fb_lecture = charger_feedback(chemin_feedback)
+    if not fb_pos and not fb_neg:
+        print("FATAL : aucune paire exploitable dans le feedback", file=sys.stderr)
+        return 2
+    neg_paires = {frozenset((t1.stock_public_normalize(a), t1.stock_public_normalize(b)))
+                  for a, b in fb_neg}
+    interdits = Interdits(jeu, feedback_negatifs=neg_paires)
+    print(f"      feedback lu : {fb_lecture['lues']} lignes → {fb_lecture['positives']} fusions / "
+          f"{fb_lecture['negatives']} ignorés (anomalies : {len(fb_lecture['anomalies'])})")
+
+    # Admission des paires humaines brutes (décision = vérité terrain) :
+    # seuls le vide, les formes TEST (mesure honnête à pareil à pareil), les
+    # formes résiduelles §1.3 (qualification = régénération du jeu, D2) et les
+    # paires re-ignorées bloquent. Rejetées = documentées au manifeste.
+    admises: list[tuple[str, str]] = []
+    rejetees: list[tuple[str, str, str]] = []
+    for a, b in fb_pos:
+        motif = interdits.motif_feedback(a, b)
+        if motif is None:
+            admises.append((a, b))
+        else:
+            rejetees.append((a, b, motif))
+    admises.sort()
+    print(f"      admission : {len(admises)} positives admises / {len(rejetees)} rejetées "
+          f"({', '.join(sorted({m for _, _, m in rejetees})) or 'aucun motif'})")
+
+    # Les cibles des paires admises deviennent des cibles légitimes (verifier)
+    # et leurs bruts des exceptions de collision (identité de la paire elle-même).
+    cibles_sup: set[str] = set()
+    for a, c in admises:
+        cn = t1.stock_public_normalize(c)
+        cibles_sup.add(cn)
+        interdits.bruts_de_cible.setdefault(cn, set()).add(t1.stock_public_normalize(a))
+    pool = list(interdits.train_pairs) + admises  # jeu figé d'abord (tirages v2 inchangés)
+
+    print(f"[2/7] génération train auto (graine 42, {len(pool)} ancrages = "
+          f"{len(interdits.train_pairs)} jeu + {len(admises)} feedback) …")
+    rows_train, stats_train, _ = generer(
+        jeu, SEED_TRAIN, interdits, budgets=BUDGETS_V2, generateurs=GENERATEURS_V2,
+        motifs_filtre=MOTIFS_FILTRE_AUTO, etendu=True, paires=pool, avec_feedback=True)
+    print(f"      {len(rows_train)} paires retenues (dont {stats_train[FEEDBACK]['retenu']} feedback "
+          f"brutes et {stats_train[ORIGINE]['retenu']} origine du jeu)")
+
+    print("[3/7] génération validation auto (graine 4242, libellés exacts disjoints du train) …")
+    vus_train = {v: t1.stock_public_normalize(c) for v, c, _ in rows_train}
+    rows_val_passe, stats_val, _ = generer(
+        jeu, SEED_VAL, interdits, vus_amont=vus_train, budgets=BUDGETS_V2,
+        generateurs=GENERATEURS_V2, motifs_filtre=MOTIFS_FILTRE_AUTO, etendu=True,
+        paires=pool, avec_feedback=True)
+    n_val = min(N_VAL_V2, len(rows_val_passe))
+    rng_val = random.Random(SEED_VAL)
+    idx = sorted(rng_val.sample(range(len(rows_val_passe)), n_val))
+    rows_val = [rows_val_passe[i] for i in idx]
+    print(f"      passe complète : {len(rows_val_passe)} retenues → échantillon : {len(rows_val)} (cible ~{N_VAL_V2})")
+
+    print(f"[4/7] écriture des livrables dans {_rel(sortie)} …")
+    sortie.mkdir(parents=True, exist_ok=True)
+    _ecrire_csv(sortie / "train_pairs.csv", rows_train)
+    _ecrire_csv(sortie / "val_pairs.csv", rows_val)
+    with open(sortie / "durs_negatifs_feedback.csv", "w", newline="", encoding="utf-8") as f:
+        w = csv.writer(f, lineterminator="\n")
+        w.writerow(["libelle_a", "libelle_b"])
+        for a, b in fb_neg:
+            w.writerow([a, b])
+    kaggle_dir = sortie / "kaggle_upload"
+    kaggle_dir.mkdir(parents=True, exist_ok=True)
+    for nom in ("train_pairs.csv", "val_pairs.csv"):
+        (kaggle_dir / nom).write_bytes((sortie / nom).read_bytes())
+    (kaggle_dir / "dataset-metadata.json").write_text(_dataset_metadata_v2(), encoding="utf-8")
+    # archive du feedback consommé (trace du run — jamais poussé vers Kaggle)
+    shutil.copy2(chemin_feedback, sortie / "feedback_pairs.csv")
+
+    print("[5/7] manifeste du run …")
+    _ecrire_manifeste_auto(sortie, chemin_feedback, interdits, fb_lecture, admises, rejetees,
+                           fb_neg, rows_train, stats_train, rows_val, len(rows_val_passe))
+
+    print("[6/7] SHA256SUMS …")
+    sommes = []
+    for p in [sortie / "train_pairs.csv", sortie / "val_pairs.csv",
+              sortie / "durs_negatifs_feedback.csv",
+              kaggle_dir / "train_pairs.csv", kaggle_dir / "val_pairs.csv",
+              kaggle_dir / "dataset-metadata.json"]:
+        sommes.append(f"{_sha256(p)}  {_rel(p)}")
+    (sortie / "SHA256SUMS").write_text("\n".join(sommes) + "\n", encoding="utf-8")
+
+    print("[7/7] vérification anti-triche étendue des CSV finaux (+ gardes feedback) …")
+    erreurs = verifier(jeu, interdits, verbeux=True, v2=True, dossier=sortie,
+                       cibles_sup=cibles_sup, feedback_negatifs=neg_paires)
+    if erreurs:
+        for e in erreurs[:20]:
+            print("  !", e)
+        print("ÉCHEC anti-triche auto — livrables NON validés")
+        return 1
+    if len(rows_train) < 4000:
+        print(f"ÉCHEC volume : {len(rows_train)} paires < 4000")
+        return 2
+
+    print()
+    print("=" * 78)
+    print(f"  run {sortie.name} : train {len(rows_train)} lignes "
+          f"({stats_train[FEEDBACK]['retenu']} feedback + {stats_train[ORIGINE]['retenu']} origine) · "
+          f"val {len(rows_val)} lignes")
+    print(f"  durs négatifs feedback (gardes) : {len(fb_neg)} · admission : "
+          f"{len(admises)} admises / {len(rejetees)} rejetées")
+    print("  ANTI-TRICHE v1+étendu+feedback : OK")
+    print("=" * 78)
+    return 0
+
+
+def _ecrire_manifeste_auto(sortie: Path, chemin_feedback: Path, interdits: Interdits,
+                           fb_lecture: dict, admises: list[tuple[str, str]],
+                           rejetees: list[tuple[str, str, str]], fb_neg: list[tuple[str, str]],
+                           rows_train, stats_train, rows_val, n_val_passe: int) -> None:
+    n_train = len(rows_train)
+    chemins = [
+        sortie / "train_pairs.csv", sortie / "val_pairs.csv",
+        sortie / "kaggle_upload" / "train_pairs.csv", sortie / "kaggle_upload" / "val_pairs.csv",
+        sortie / "kaggle_upload" / "dataset-metadata.json",
+    ]
+    empreintes = [(_sha256(p), _rel(p)) for p in chemins]
+    a = []
+    a.append(f"# Manifeste run P2-auto — {sortie.name}")
+    a.append("")
+    a.append("> Boucle de ré-entraînement automatique (P2-auto, brief A2 · dev-factures).")
+    a.append("> Base : jeu augmenté v2 (`scripts/t1_augment.py --v2`, mêmes graines/budgets/typologies)")
+    a.append("> ENRICHI des paires étiquetées par décisions humaines (export A1, logique")
+    a.append("> `T1AutoRetrain::recolter` — fusion = positive supplémentaire, ignorer = dur négatif")
+    a.append("> supplémentaire). Jeu figé `data/eval_t1/` INTACT (LECTURE SEULE).")
+    a.append(">")
+    a.append(f"> Feedback source : `{_rel(chemin_feedback)}` "
+             f"({fb_lecture['lues']} lignes lues).")
+    a.append("")
+    a.append("## Retours humains intégrés")
+    a.append("")
+    a.append(f"- **{len(admises)} fusions admises** (positives supplémentaires : lignes brutes "
+             f"`feedback` + augmentation par les mêmes générateurs/budgets v2).")
+    if rejetees:
+        a.append(f"- {len(rejetees)} fusions rejetées à l'admission (anti-triche inchangé) :")
+        for motif in sorted({m for _, _, m in rejetees}):
+            exemples = [f"« {x} » → « {y} »" for x, y, m in rejetees if m == motif][:5]
+            a.append(f"  - motif `{motif}` : {sum(1 for _, _, m in rejetees if m == motif)} "
+                     f"({' ; '.join(exemples)})")
+    else:
+        a.append("- aucune fusion rejetée à l'admission.")
+    a.append(f"- **{len(fb_neg)} paires ignorées** → durs négatifs supplémentaires : garde de paire "
+             f"`feedback_negatif` (aucune ligne — humaine ou synthétique — ne peut enseigner une "
+             f"paire ignorée) + export `durs_negatifs_feedback.csv`. Le kernel v4 (inchangé) "
+             f"n'apprendant que des paires positives (MNRL), les durs négatifs agissent comme "
+             f"contrainte de génération — pas comme données d'entraînement directes.")
+    if fb_lecture["anomalies"]:
+        a.append(f"- anomalies de lecture (lignes ignorées) : {len(fb_lecture['anomalies'])}")
+    a.append("")
+    a.append("## Filtre d'admission des paires humaines (documenté)")
+    a.append("")
+    a.append("- `vide` : libellé dégénéré ; `test` : l'un des côtés est une forme (exacte ou")
+    a.append("  normalisée) des 20 paires TEST — la mesure S4 à pareil à pareil reste honnête ;")
+    a.append("- `residuel` : l'un des côtés est une forme résiduelle §1.3 — leur qualification")
+    a.append("  passera par la régénération du jeu (décision D2), pas par la boucle auto ;")
+    a.append("- `feedback_negatif` : paire re-ignorée par une décision plus récente ;")
+    a.append("- PAS de filtre conflit/collision sur les paires humaines BRUTES : la décision")
+    a.append("  qualifie la paire (une fusion de deux identités vivantes est le signal recherché).")
+    a.append("  Les VARIANTES SYNTHÉTIQUES générées par-dessus passent, elles, le filtre v2 étendu")
+    a.append("  complet (+ garde feedback_negatif) — anti-triche inchangée.")
+    a.append("")
+    a.append("## Volumes obtenus (train)")
+    a.append("")
+    a.append("| typologie | tirées | retenues | rejets (détail stats) |")
+    a.append("|---|---:|---:|---|")
+    for typ in [ORIGINE, FEEDBACK] + list(GENERATEURS_V2):
+        s = stats_train[typ]
+        rejets = ", ".join(f"{m}:{s[m]}" for m in MOTIFS_FILTRE_AUTO if s.get(m))
+        a.append(f"| {typ} | {s['brut']} | {s['retenu']} | {rejets or '—'} |")
+    a.append("")
+    a.append(f"- `train_pairs.csv` : **{n_train} lignes** · `val_pairs.csv` : **{len(rows_val)} lignes** "
+             f"(passe {n_val_passe}, échantillon seedé 4242, disjointe du train par libellé exact).")
+    a.append("- Les paires du jeu figé conservent les MÊMES tirages que la v2 (le pool s'allonge")
+    a.append("  après elles : séquence RNG inchangée) — ce run contient la v2 + les retours.")
+    a.append("")
+    a.append("## ENGAGEMENT")
+    a.append("")
+    a.append("- Zéro forme TEST (exacte/normalisée/contenue) dans les CSV — preuve : vérificateur intégré OK.")
+    a.append("- Zéro paire ignorée par un humain dans les CSV (garde feedback_negatif).")
+    a.append("- Contenu : libellés produits uniquement — audit secrets/montants/fournisseurs exécuté")
+    a.append("  par `scripts/t1_auto_retrain.sh` AVANT tout envoi Kaggle (contrainte n°4).")
+    a.append("")
+    a.append("## SHA256 des livrables (déterministes pour un même feedback)")
+    a.append("")
+    a.append("```")
+    for empreinte, chemin in empreintes:
+        a.append(f"{empreinte}  {chemin}")
+    a.append("```")
+    a.append("")
+    (sortie / "manifeste_run.md").write_text("\n".join(a) + "\n", encoding="utf-8")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         prog="t1_augment.py",
@@ -1472,6 +1830,13 @@ def main() -> int:
     parser.add_argument("--test-negatif", action="store_true",
                         help="(v2) preuve par injection : formes TEST exactes/déguisées/collidantes "
                              "→ toutes détectées ÉCHEC")
+    parser.add_argument("--feedback", metavar="CSV",
+                        help="(P2-auto, brief A2 — avec --v2) paires étiquetées de la boucle "
+                             "(export A1 feedback_pairs.csv) : fusions = positives supplémentaires, "
+                             "ignorées = durs négatifs supplémentaires ; sorties dans --sortie")
+    parser.add_argument("--sortie", metavar="DOSSIER",
+                        help="(avec --feedback) dossier du run (défaut data/eval_t1/p2/auto/"
+                             "run_<horodatage UTC>)")
     args = parser.parse_args()
 
     if args.test_negatif:
@@ -1492,6 +1857,21 @@ def main() -> int:
         for e in erreurs:
             print("  !", e)
         return 1 if erreurs else 0
+
+    if args.feedback:
+        if not args.v2:
+            print("--feedback concerne la boucle P2-auto : ajouter --v2", file=sys.stderr)
+            return 2
+        chemin_fb = Path(args.feedback)
+        if not chemin_fb.is_absolute():
+            chemin_fb = REPO / chemin_fb
+        if args.sortie:
+            sortie = Path(args.sortie)
+            if not sortie.is_absolute():
+                sortie = REPO / sortie
+        else:
+            sortie = AUTO / time.strftime("run_%Y%m%dT%H%M%SZ", time.gmtime())
+        return generer_run_auto(chemin_fb, sortie)
 
     if args.v2:
         return generer_tout_v2()

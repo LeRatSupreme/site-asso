@@ -258,6 +258,63 @@ final class AuditLog extends Model
     }
 
     /**
+     * Lignes BRUTES d'une action (id, entity_id, details JSON, created_at),
+     * les plus récentes d'abord (created_at DESC, id DESC) — alimente la
+     * récolte des retours de la boucle de ré-entraînement (P2-auto,
+     * T1FeedbackFeed) : le parsage défensif des details vit côté classe
+     * pure. $apresUtc (forme « Y-m-d H:i:s », UTC — fuseau de session
+     * forcé par db()) borne le volume ; null = tout l'historique.
+     * Tolérante sans base : liste vide.
+     *
+     * @return list<array<string,mixed>>
+     */
+    public static function rowsForAction(string $action, ?string $apresUtc = null, int $limit = 10000): array
+    {
+        try {
+            $sql = 'SELECT id, entity_id, details, created_at
+                      FROM audit_logs
+                     WHERE action = ? AND entity_id IS NOT NULL';
+            $params = [$action];
+            if ($apresUtc !== null) {
+                $sql .= ' AND created_at > ?';
+                $params[] = $apresUtc;
+            }
+            $sql .= ' ORDER BY created_at DESC, id DESC LIMIT ' . max(1, $limit);
+            $stmt = static::pdo()->prepare($sql);
+            $stmt->execute($params);
+
+            /** @var list<array<string,mixed>> $rows */
+            $rows = $stmt->fetchAll();
+
+            // Les details JSON sont éclatés en clés plates pour la
+            // consommation par la classe pure (a, b, score, decision,
+            // origine) — une ligne illisible garde ses champs bruts et
+            // sera ignorée en aval.
+            $out = [];
+            foreach ($rows as $row) {
+                $ligne = [
+                    'id'         => (string) ($row['id'] ?? ''),
+                    'entity_id'  => (string) ($row['entity_id'] ?? ''),
+                    'created_at' => (string) ($row['created_at'] ?? ''),
+                ];
+                $details = json_decode((string) ($row['details'] ?? ''), true);
+                if (is_array($details)) {
+                    foreach (['a', 'b', 'score', 'decision', 'origine'] as $champ) {
+                        if (array_key_exists($champ, $details)) {
+                            $ligne[$champ] = $details[$champ];
+                        }
+                    }
+                }
+                $out[] = $ligne;
+            }
+
+            return $out;
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    /**
      * Construit la clause WHERE paramétrée partagée par searchFilters() et
      * countFilters(). Toute valeur de filtre vide ou invalide est ignorée.
      *

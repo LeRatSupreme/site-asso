@@ -39,6 +39,15 @@ if (!defined('AEIC_T15_QUARANTAINE')) {
     // AEIC_T15 des tests T1AutoFusion).
     define('AEIC_T15_QUARANTAINE', dirname(__DIR__) . '/tests/cache/t15/quarantaine.json');
 }
+if (!defined('AEIC_P2AUTO_ETAT')) {
+    // P2-auto (boucle de ré-entraînement) — même discipline : l'état, le
+    // journal et le log de la boucle sont REDIRIGÉS vers tests/cache/
+    // pendant les tests ; data/eval_t1/p2/auto/ (prod) et le jeu figé
+    // data/eval_t1/ racine restent INTACTS depuis tout contexte de test.
+    define('AEIC_P2AUTO_ETAT', dirname(__DIR__) . '/tests/cache/p2auto/etat.json');
+    define('AEIC_P2AUTO_JOURNAL', dirname(__DIR__) . '/tests/cache/p2auto/journal.md');
+    define('AEIC_P2AUTO_LOG', dirname(__DIR__) . '/tests/cache/p2auto/retrain.log');
+}
 
 /**
  * Lecture d'une variable d'environnement (équivalent minimal de config.php,

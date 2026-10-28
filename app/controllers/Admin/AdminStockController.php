@@ -14,6 +14,7 @@ use App\Core\Compta\PurchaseSaver;
 use App\Core\Compta\ReceiptStorage;
 use App\Core\Compta\StockPublic;
 use App\Core\Compta\T1\T1AutoFusion;
+use App\Core\Compta\T1\T1AutoRetrain;
 use App\Core\Compta\T1\T1MergeArchive;
 use App\Core\Compta\T1\T1Quarantaine;
 use App\Core\Compta\T1\T1Suggestions;
@@ -748,6 +749,21 @@ final class AdminStockController extends AdminBaseController
             )
         );
 
+        // Boucle de ré-entraînement automatique (P2-auto, brief A1) : UN
+        // passage au chargement — récolte des retours t1.pair_feedback
+        // postérieurs au dernier entraînement (les fusions auto de CE
+        // passage comptent déjà), recomptage idempotent du compteur et,
+        // si le seuil (30) est atteint, lancement du pipeline
+        // scripts/t1_auto_retrain.sh EN ARRIÈRE-PLAN (verrou, jamais
+        // bloquant pour la page). L'indicateur de la carte « Suggestions
+        // de rapprochement » est calculé au centre (ligne prête).
+        $t1Retrain = ['ligne' => ''];
+        try {
+            $t1Retrain = T1AutoRetrain::passage();
+        } catch (\Throwable $e) {
+            Logger::warning('t1.retrain: passage impossible', ['msg' => $e->getMessage()]);
+        }
+
         // Valeur du stock : Σ (stock théorique × coût de revient du lot en
         // cours, même source que la page Réappro). Les produits jamais
         // comptés ou à stock nul/négatif ne représentent rien de physique :
@@ -856,6 +872,7 @@ final class AdminStockController extends AdminBaseController
             'mergeDupes'       => AliasSuggester::groupDuplicates(array_keys($keyStats)),
             't1Suggestions'    => $t1Suggestions,
             't1Auto'           => $t1Auto,
+            't1Retrain'        => $t1Retrain,
             'pending_sessions' => InventoryTablet::pendingSessions(),
             'stockValue'       => round($stockValue, 2),
             'stockUnits'       => $stockUnits,
