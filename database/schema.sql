@@ -877,4 +877,18 @@ CREATE TABLE IF NOT EXISTS kiosques (
     UNIQUE KEY uniq_kiosques_token (token)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- -------------------------------------------------------------------
+--  Réglages du CAPTCHA auto-hébergé (anti-bot) : table dédiée, peut
+--  rester VIDE — les défauts vivent dans le code (CaptchaService::DEFAULTS)
+--  et toute valeur est clampée aux bornes strictes côté PHP.
+--  (migration 2026_captcha_settings.sql)
+-- -------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS captcha_settings (
+    id         VARCHAR(255) NOT NULL PRIMARY KEY,
+    `key`      VARCHAR(100) NOT NULL,
+    value      VARCHAR(255) NOT NULL DEFAULT '',
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uniq_captcha_key (`key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 SET FOREIGN_KEY_CHECKS = 1;
