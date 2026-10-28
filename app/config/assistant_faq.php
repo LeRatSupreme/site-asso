@@ -1,0 +1,140 @@
+<?php
+
+declare(strict_types=1);
+
+/**
+ * FAQ de l'assistant conversationnel PUBLIC de l'AEIC (fast-path).
+ *
+ * Ce fichier est DÉDIÉ et volontairement éditable : chaque entrée dont un
+ * déclencheur apparaît dans la question est répondue INSTANTANÉMENT par
+ * PublicAssistant, sans aucun appel au llama-server local. Les faits
+ * reprennent uniquement des informations PUBLIQUES (mêmes faits que le
+ * prompt app/config/assistant_public.php).
+ *
+ * Format : liste ORDONNÉE d'entrées
+ *   ['declencheurs' => [...phrases...], 'reponse' => '...'].
+ *
+ * Règles de rédaction à conserver si édition :
+ *  - déclencheurs écrits DÉJÀ NORMALISÉS : minuscules sans accents, sans
+ *    ponctuation, un seul espace entre les mots (la question est
+ *    normalisée pareil avant comparaison par sous-chaîne) ;
+ *  - l'entrée gagnante est celle dont le déclencheur LE PLUS LONG est
+ *    sous-chaîne de la question (« salut, c'est quoi l'AEIC ? » tombe sur
+ *    l'entrée AEIC, pas sur la salutation) ; à égalité de longueur, la
+ *    PREMIÈRE entrée du fichier gagne — c'est pourquoi les salutations
+ *    (déclencheurs les plus génériques) sont volontairement en DERNIER ;
+ *  - réponses TRÈS COURTES (1 à 2 phrases), sans émoji ni symbole
+ *    décoratif, orientant vers la bonne page du site.
+ */
+
+return [
+    [
+        'declencheurs' => [
+            'aeic',
+            'bde',
+            'c est quoi l aeic',
+            'qu est ce que l aeic',
+            'c est quoi le bde',
+            'qu est ce que le bde',
+            'qui etes vous',
+            'qui es tu',
+            'presente toi',
+            'presente l asso',
+        ],
+        'reponse' => "L'AEIC, c'est l'association des étudiants en informatique de l'IUT de Calais : le BDE info du BUT Informatique de l'ULCO. Présentation complète sur la page /presentation du site.",
+    ],
+    [
+        'declencheurs' => [
+            'adresse',
+            'ou vous trouver',
+            'ou etes vous',
+            'ou se trouve',
+            'ou est l aeic',
+            'localisation',
+            'rue louis david',
+        ],
+        'reponse' => "Nous sommes au 19 rue Louis David, 62100 Calais, à l'IUT. La page /presentation du site explique comment nous trouver.",
+    ],
+    [
+        'declencheurs' => [
+            'adhesion',
+            'adher',      // racine : adhérer, j'adhère, adhérents…
+            'inscri',     // racine : s'inscrire, je m'inscris, inscription…
+            'membre',
+            'devenir membre',
+            'comment rejoindre',
+            'rejoindre l asso',
+        ],
+        'reponse' => "L'adhésion à l'AEIC est gratuite et se fait en ligne depuis la page /register du site.",
+    ],
+    [
+        'declencheurs' => [
+            'evenement',
+            'evenements',
+            'soiree',
+            'soirees',
+            'sortie',
+            'sorties',
+            'afterwork',
+            'afterworks',
+            'bbq',
+            'bowling',
+            'bar',
+            'nuit de l info',
+            'nuit de linfo',
+            'activite',
+            'activites',
+        ],
+        'reponse' => "Au programme : afterworks, BBQ, bowling, sorties bar et la Nuit de l'Info. Le calendrier complet est sur la page /events du site.",
+    ],
+    [
+        'declencheurs' => [
+            'cafeteria',
+            'cafe',
+            'boisson',
+            'boissons',
+            'encas',
+            'manger',
+            'boire',
+            'nourriture',
+        ],
+        'reponse' => "L'AEIC tient une cafétéria à prix étudiant à l'IUT de Calais, avec boissons et encas.",
+    ],
+    [
+        'declencheurs' => [
+            'jeu',
+            'jeux',
+            'jouer',
+            'wordle',
+            'memory',
+            'snake',
+            'tetris',
+            'enigme',
+            'classement',
+        ],
+        'reponse' => "Le site propose des jeux en ligne gratuits : Wordle (FR/EN), Memory, Snake, Tetris et une énigme quotidienne avec classement. C'est sur la page /jeux.",
+    ],
+    [
+        'declencheurs' => [
+            'contact',
+            'contacter',
+            'vous joindre',
+            'joindre',
+            'email',
+            'mail',
+            'ecrire',
+        ],
+        'reponse' => "Tu peux nous écrire à calais.aeic@gmail.com. Toutes les infos de l'asso sont aussi sur la page /presentation du site.",
+    ],
+    [
+        'declencheurs' => [
+            'bonjour',
+            'salut',
+            'coucou',
+            'hello',
+            'bonsoir',
+            'hey',
+        ],
+        'reponse' => "Salut ! Je suis l'assistant de l'AEIC. Pose ta question sur l'asso, ses événements, la cafétéria, les jeux ou l'adhésion.",
+    ],
+];
