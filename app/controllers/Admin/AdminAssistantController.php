@@ -91,10 +91,22 @@ final class AdminAssistantController extends AdminBaseController
     {
         $user = $this->guardSystemOrPage('inventory');
 
+        // Chips des questions préparées actives (V1+ rapidité) : tolérant
+        // à la table absente — la page reste identique sans elles.
+        try {
+            $chips = array_map(
+                static fn (array $l): array => ['question' => (string) ($l['question_affichee'] ?? '')],
+                \App\Models\AssistantQuestionPreparee::actives()
+            );
+        } catch (\Throwable) {
+            $chips = [];
+        }
+
         $this->renderAdmin('admin/assistant', [
             'user'       => $user,
             'askUrl'     => url('/admin/assistant/ask'),
             'historique' => $this->historiquePourAffichage(),
+            'chips'      => $chips,
         ]);
     }
 
@@ -131,6 +143,30 @@ final class AdminAssistantController extends AdminBaseController
         }
         if (mb_strlen($question) > self::QUESTION_MAX) {
             $this->json(['ok' => false, 'error' => 'Question trop longue (' . self::QUESTION_MAX . ' caractères maximum).'], 400);
+        }
+
+        // FAST-PATH (V1+ rapidité) : question préparée active au routage
+        // frais → on REJOUE les appels d'outils (boucle locale + jeton,
+        // même mécanique que le pont) et on forme la réponse SANS LLM
+        // (~1-3 s au lieu de 20-120 s). Tout échec → null → voie LLM
+        // normale ci-dessous, silencieusement. Désactivé en exécution à
+        // blanc (tests du pont).
+        if (getenv('ASSISTANT_DRY_RUN') !== '1') {
+            $rapide = \App\Core\Assistant\FastPath::tenter($question);
+            if (is_array($rapide)) {
+                $this->historiser($question, (string) $rapide['reponse']);
+                $this->json([
+                    'ok'            => true,
+                    'reponse'       => $rapide['reponse'],
+                    'sources'       => $rapide['sources'],
+                    'appels'        => $rapide['appels'],
+                    'duree_ms'      => $rapide['duree_ms'],
+                    'avertissement' => '',
+                    'mode'          => $rapide['mode'],
+                    'marque'        => $rapide['marque'],
+                    'historique'    => $this->historiquePourAffichage(),
+                ]);
+            }
         }
 
         if (!is_file(self::PONT_PYTHON) || !is_file(self::PONT_SCRIPT)) {

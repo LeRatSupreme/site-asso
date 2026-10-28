@@ -266,8 +266,12 @@ final class PublicAssistant
      * translittération simple des accents (é→e…), toute ponctuation et
      * tout espacement multiple ramenés à UN espace, bords tronqués.
      * Ex. « Salut, c'est quoi l'AEIC ? » → « salut c est quoi l aeic ».
+     *
+     * Publique : partagée avec la V1 questions préparées
+     * (AgentQuestions::normaliser) — UNE seule règle de normalisation
+     * questions pour tout le site.
      */
-    private static function normaliserTexte(string $texte): string
+    public static function normaliserTexte(string $texte): string
     {
         $texte = mb_strtolower($texte, 'UTF-8');
 

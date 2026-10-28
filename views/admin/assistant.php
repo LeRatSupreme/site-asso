@@ -46,6 +46,17 @@ declare(strict_types=1);
         </div>
     </form>
 
+    <?php $chipsActives = is_array($chips ?? null) ? $chips : []; ?>
+    <?php if ($chipsActives !== []): ?>
+        <div id="assistant-chips" class="assistant-chips" aria-label="Questions préparées (réponse rapide)">
+            <?php foreach ($chipsActives as $chip): ?>
+                <?php if (is_array($chip) && (string) ($chip['question'] ?? '') !== ''): ?>
+                    <button type="button" class="assistant-chip" data-question="<?= e((string) $chip['question']) ?>">⚡ <?= e((string) $chip['question']) ?></button>
+                <?php endif; ?>
+            <?php endforeach; ?>
+        </div>
+    <?php endif; ?>
+
     <?php $bulles = is_array($historique ?? null) ? $historique : []; ?>
     <div id="assistant-conversation" class="assistant-conversation"<?php if ($bulles === []): ?> hidden<?php endif; ?>>
         <div class="assistant-conversation-tete">
@@ -71,6 +82,16 @@ declare(strict_types=1);
 </section>
 
 <style>
+    .assistant-chips { display: flex; flex-wrap: wrap; gap: 0.45rem; margin-top: 0.75rem; }
+    .assistant-chip {
+        font-size: 0.82rem; padding: 0.35rem 0.7rem; cursor: pointer;
+        border-radius: 999px; font-family: inherit;
+        border: 1px solid rgba(72, 189, 211, 0.35);
+        background: rgba(72, 189, 211, 0.08);
+        color: var(--foreground, inherit);
+    }
+    .assistant-chip:hover { background: rgba(72, 189, 211, 0.18); }
+
     .assistant-libelle {
         position: absolute; width: 1px; height: 1px; margin: -1px;
         overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
@@ -273,7 +294,8 @@ declare(strict_types=1);
         var dureeS = Math.round(Number(json.duree_ms || 0)) / 1000;
         var appels = Number(json.appels || 0);
         var meta = 'Réponse en ' + dureeS.toFixed(1).replace('.', ',') + ' s · '
-            + appels + ' appel' + (appels > 1 ? 's' : '') + ' d\'outil';
+            + appels + ' appel' + (appels > 1 ? 's' : '') + ' d\'outil'
+            + (json.marque ? ' · ' + String(json.marque) : '');
         texte(zone, 'p', meta).className = 'assistant-meta';
 
         if (json.avertissement) {
@@ -335,6 +357,16 @@ declare(strict_types=1);
             champ.focus();
         });
     });
+
+    // Chips des questions préparées : remplissent le champ (aucun envoi
+    // automatique — l'utilisateur reste maître du clic « Poser »).
+    var chips = document.querySelectorAll('.assistant-chip');
+    for (var c = 0; c < chips.length; c++) {
+        chips[c].addEventListener('click', function () {
+            champ.value = this.getAttribute('data-question') || '';
+            champ.focus();
+        });
+    }
 
     // « Nouvelle conversation » (T4-P1-B) : purge de la mémoire serveur
     // (POST reset=1), puis affichage vidé — aucune question requise.

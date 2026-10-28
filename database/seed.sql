@@ -244,3 +244,48 @@ INSERT IGNORE INTO wordle_words (word, language, length, difficulty) VALUES
     ('CHICKEN', 'en', 7, 'difficile'),
     ('LIBRARY', 'en', 7, 'difficile'),
     ('DOLPHIN', 'en', 7, 'difficile');
+
+-- -------------------------------------------------------------------
+--  Questions préparées de l'assistant admin (V1+) : 8 questions de
+--  démarrage (issues du journal de prod) pour le fast-path sans LLM.
+--  INSERT IGNORE : réexécutable sans écraser les questions éditées /
+--  gabarits personnalisés depuis la page Agent.
+--  (migration 2026_assistant_questions_preparees.sql)
+-- -------------------------------------------------------------------
+INSERT IGNORE INTO assistant_questions_preparees
+  (question_norm, question_affichee, categorie, active, ordre, routage_json, gabarit_reponse, mapping_json, source_journal, cree_le)
+VALUES
+  ('il me reste combien de bueno',
+   'Il me reste combien de Bueno ?', 'quantite', 1, 1,
+   '[{"outil":"stock_produit","params":{"nom":"Bueno"}}]',
+   'Il vous reste {stock} unités de {cle_canonique} en stock. Dernier comptage : {dernier_comptage}.',
+   '{"stock":"stock","cle_canonique":"cle_canonique","dernier_comptage":"dernier_comptage"}',
+   1, NOW()),
+  ('combien me reste t il de coca cola',
+   'Combien me reste-t-il de Coca Cola ?', 'quantite', 1, 2,
+   '[{"outil":"stock_produit","params":{"nom":"Coca Cola"}}]',
+   NULL, NULL, 1, NOW()),
+  ('qu est ce qu il faut que je rachete',
+   'Qu''est-ce qu''il faut que je rachète ?', 'restock', 1, 3,
+   '[{"outil":"produits_a_commander","params":{}}]',
+   NULL, NULL, 1, NOW()),
+  ('comment ca a marche cette semaine',
+   'Comment ça a marché cette semaine ?', 'performance', 1, 4,
+   '[{"outil":"ventes_periode","params":{"debut":{"relatif":"semaine_courante.debut"},"fin":{"relatif":"semaine_courante.fin"}}}]',
+   NULL, NULL, 1, NOW()),
+  ('quelles ont ete mes ventes entre le 20 et le 26 octobre 2026',
+   'Quelles ont été mes ventes entre le 20 et le 26 octobre 2026 ?', 'ventes', 1, 5,
+   '[{"outil":"ventes_periode","params":{"debut":"2026-10-20","fin":"2026-10-26"}}]',
+   NULL, NULL, 1, NOW()),   -- dates ABSOLLES (dans la question) : TTL 7 jours
+  ('quelles ont ete mes ventes la semaine derniere',
+   'Quelles ont été mes ventes la semaine dernière ?', 'ventes', 1, 6,
+   '[{"outil":"ventes_periode","params":{"debut":{"relatif":"semaine_precedente.debut"},"fin":{"relatif":"semaine_precedente.fin"}}}]',
+   NULL, NULL, 1, NOW()),
+  ('quelle est ma marge sur les monster blanche sur les 7 derniers jours',
+   'Quelle est ma marge sur les Monster Blanche sur les 7 derniers jours ?', 'marge', 1, 7,
+   '[{"outil":"marge_produit","params":{"nom":"Monster Blanche","debut":{"relatif":"jours_glissants:7"},"fin":{"relatif":"semaine_courante.fin"}}}]',
+   NULL, NULL, 1, NOW()),
+  ('y a t il des doublons de produits en attente de decision',
+   'Y a-t-il des doublons de produits en attente de décision ?', 'autre', 1, 8,
+   '[{"outil":"doublons_en_attente","params":{}}]',
+   NULL, NULL, 1, NOW());

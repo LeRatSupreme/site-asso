@@ -187,6 +187,11 @@ if ($isAdminRole && $systemPageAllowed('cash')) {
 if ($isAdminRole && $systemPageAllowed('inventory')) {
     $compta['Assistant'] = '/admin/assistant';
 }
+// Page « Agent » (questions préparées + agrégat du journal) : même
+// garde serveur que la page Assistant (guardSystemOrPage('inventory')).
+if ($isAdminRole && $systemPageAllowed('inventory')) {
+    $compta['Agent'] = '/admin/agent';
+}
 if ($compta !== []) {
     $sections['Comptabilité'] = $compta;
 }

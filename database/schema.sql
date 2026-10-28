@@ -891,4 +891,30 @@ CREATE TABLE IF NOT EXISTS captcha_settings (
     UNIQUE KEY uniq_captcha_key (`key`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- -------------------------------------------------------------------
+--  Questions préparées de l'assistant admin (V1+ « rapidité ») :
+--  correspondance EXACTE question normalisée → routage d'outils
+--  (fast-path sans LLM), avec gabarit de réponse pré-écrit à
+--  placeholders {nom} (gabarit_reponse + mapping_json, rempli sur le
+--  résultat LIVE de l'outil) et params de routage dynamiques
+--  {"relatif":"semaine_courante.debut"} recalculés à chaque exécution.
+--  Seeds de démarrage : database/seed.sql (8 questions).
+--  (migration 2026_assistant_questions_preparees.sql)
+-- -------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS assistant_questions_preparees (
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    question_norm VARCHAR(190) NOT NULL,             -- question normalisée (règle FAQ publique) — correspondance EXACTE du fast-path
+    question_affichee VARCHAR(500) NOT NULL,         -- variante lisible la plus fréquente (chips, tableaux)
+    categorie ENUM('quantite','restock','performance','ventes','marge','autre') NOT NULL DEFAULT 'autre',
+    active TINYINT(1) NOT NULL DEFAULT 1,
+    ordre INT NOT NULL DEFAULT 0,
+    routage_json TEXT NOT NULL,                      -- [{outil, params:{cle: scalaire | {relatif:"..."}}}]
+    gabarit_reponse TEXT NULL,                       -- phrase pré-écrite à placeholders {nom} (NULL → formateur générique)
+    mapping_json TEXT NULL,                          -- {"placeholder":"chemin.json.pointe"} dans le résultat d'outil
+    source_journal TINYINT(1) NOT NULL DEFAULT 0,
+    cree_le DATETIME NOT NULL,                       -- capture du routage (TTL : 7 j si dates figées, 30 j sinon)
+    UNIQUE KEY uq_question_norm (question_norm),
+    INDEX idx_aqp_active_ordre (active, ordre)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 SET FOREIGN_KEY_CHECKS = 1;
