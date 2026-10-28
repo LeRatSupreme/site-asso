@@ -84,6 +84,7 @@ $mapsUrl = 'https://www.google.com/maps/search/?api=1&query='
     <link rel="stylesheet" href="<?= e(assetVersioned('css/pages.css')) ?>">
     <link rel="stylesheet" href="<?= e(assetVersioned('css/kit.css')) ?>">
     <link rel="stylesheet" href="<?= e(rootAssetVersioned('/css/payments.css')) ?>">
+    <link rel="stylesheet" href="<?= e(assetVersioned('css/assistant.css')) ?>">
     <?php if (str_starts_with($currentPath ?? '', '/sondages')): ?>
         <link rel="stylesheet" href="<?= e(rootAssetVersioned('/css/polls.css')) ?>">
     <?php endif; ?>
@@ -346,9 +347,11 @@ $mapsUrl = 'https://www.google.com/maps/search/?api=1&query='
         })();
     </script>
 
-    <?php if (Auth::check()): ?>
-        <script>window.AEIC_CSRF = <?= json_encode(csrf_token()) ?>;</script>
-    <?php endif; ?>
+    <?php /* CSRF exposé à TOUS les visiteurs — y compris anonymes : le widget
+       assistant public (POST /assistant/ask) en a besoin. csrf_token()
+       démarre la session si nécessaire (déjà ouverte via Auth::check()
+       plus haut, avant toute sortie). */ ?>
+    <script>window.AEIC_CSRF = <?= json_encode(csrf_token()) ?>;</script>
     <script>window.AEIC_I18N = {
         notifEmpty: <?= json_encode(t('nav.notifications.empty')) ?>,
         justNow: <?= json_encode($lang === 'fr' ? "à l'instant" : ($lang === 'en' ? 'just now' : ($lang === 'de' ? 'gerade eben' : ($lang === 'es' ? 'justo ahora' : ($lang === 'zh' ? '刚刚' : ($lang === 'ja' ? 'たった今' : 'przed chwilą')))))) ?>,
@@ -507,6 +510,43 @@ $mapsUrl = 'https://www.google.com/maps/search/?api=1&query='
             });
         })();
     </script>
+
+    <!-- Assistant public : widget chat flottant bas-droite (bulle + panneau).
+         Styles dédiés assets/css/assistant.css, logique assets/js/assistant.js
+         (rendu textContent uniquement). Présent uniquement dans CE layout. -->
+    <button type="button" class="assistant-bubble" id="assistant-bubble"
+            aria-label="Ouvrir le chat assistant" aria-expanded="false" aria-controls="assistant-panel"
+            title="Assistant AEIC">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+    </button>
+
+    <div class="assistant-panel" id="assistant-panel" role="dialog" aria-label="Chat assistant AEIC" hidden>
+        <div class="assistant-head">
+            <div class="assistant-head-info">
+                <span class="assistant-head-title">Assistant AEIC</span>
+            </div>
+            <button type="button" class="assistant-icon-btn" id="assistant-clear"
+                    aria-label="Effacer la conversation" title="Effacer la conversation">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            </button>
+            <button type="button" class="assistant-icon-btn" id="assistant-close"
+                    aria-label="Fermer le chat assistant" title="Fermer le chat assistant">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+            </button>
+        </div>
+        <div class="assistant-log" id="assistant-log" role="log" aria-live="polite" aria-label="Messages de la conversation"></div>
+        <form class="assistant-form" id="assistant-form">
+            <textarea class="assistant-input" id="assistant-input" rows="1" maxlength="500"
+                      placeholder="Pose ta question…" aria-label="Ta question" autocomplete="off"></textarea>
+            <button type="submit" class="assistant-send" id="assistant-send" aria-label="Envoyer" title="Envoyer">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m22 2-7 20-4-9-9-4z"/><path d="M22 2 11 13"/></svg>
+            </button>
+        </form>
+        <div class="assistant-foot">
+            <span class="assistant-count" id="assistant-count">0 / 500</span>
+        </div>
+    </div>
+    <script src="<?= e(assetVersioned('js/assistant.js')) ?>" defer></script>
 
     <!-- PWA : enregistrement du service worker -->
     <script>if ('serviceWorker' in navigator) { window.addEventListener('load', function () { navigator.serviceWorker.register('/sw.js').catch(function () {}); }); }</script>

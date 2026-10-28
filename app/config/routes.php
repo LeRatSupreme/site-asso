@@ -30,6 +30,7 @@ use App\Controllers\Admin\AdminStockController;
 use App\Controllers\Admin\AdminTeamController;
 use App\Controllers\Admin\AdminUserController;
 use App\Controllers\AuthController;
+use App\Controllers\AssistantPublicController;
 use App\Controllers\AssistantToolsController;
 use App\Controllers\CaptchaController;
 use App\Controllers\EventController;
@@ -72,6 +73,16 @@ function aeic_register_routes(Router $router): void
     $router->get('/privacy', [PageController::class, 'privacy']);
     $router->get('/cgu', [PageController::class, 'cgu']);
     $router->get('/p/{slug}', [PageController::class, 'show']);
+
+    // Assistant conversationnel PUBLIC (widget chat bas-droite, sans
+    // authentification) : POST JSON direct au llama-server local — un
+    // chemin SÉPARÉ de l'assistant admin (aucun pont Python, aucun
+    // outil, aucune donnée interne ; prompt public dédié dans
+    // app/config/assistant_public.php). CSRF standard du routeur (le
+    // front envoie le jeton de la page) ; rate limit 10/5 min/IP +
+    // sémaphore 2 appels LLM gérés par App\Core\Assistant\PublicAssistant.
+    $router->post('/assistant/ask', [AssistantPublicController::class, 'ask']);
+    $router->get('/assistant/ask', [AssistantPublicController::class, 'askGet']);
 
     // CAPTCHA auto-hébergé : image anti-bot (défense des formulaires
     // publics, jamais mise en cache) + page de démonstration du code saisi.
