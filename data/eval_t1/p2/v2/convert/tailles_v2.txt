@@ -1,0 +1,10 @@
+finetuned_v2_fp32.onnx : 470281736 o
+finetuned_v2_int8.onnx : 118111289 o (118.1 Mo)
+prod v1 int8 (kernel v3) : 118111289 o
+ref zero-shot Xenova : 118054609 o
+opset référence : 11
+cos(int8_v2,fp32_v2) min/moy : 0.936073/0.985479
+cos(ref_int8,base_fp32) min/moy : 0.832801/0.979863
+cos(int8_v2,int8_v1_prod) min/moy : 0.7100/0.9450
+cos(int8_v2,int8_zero) min/moy : 0.3966/0.8192
+parité tokenizer : OK sur 241 libellés
