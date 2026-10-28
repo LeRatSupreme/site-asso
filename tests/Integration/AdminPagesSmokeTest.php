@@ -38,6 +38,20 @@ final class AdminPagesSmokeTest extends IntegrationTestCase
     private string $rootId  = 'u_smoke_root';
     private string $eleveId = 'u_smoke_eleve';
 
+    /**
+     * Routes GET « POST-only » : enregistrées en GET uniquement pour
+     * répondre un 405 JSON PROPRE (avec Allow: POST) au lieu du 405/404
+     * brut du routeur — comportement documenté du contrôleur, pas un bug.
+     *
+     * Ex. /assistant/ask : le chat public (AssistantPublicController) ne
+     * s'interroge qu'en POST ; son askGet() renvoie volontairement 405.
+     *
+     * @var list<string>
+     */
+    private const GET_POST_SEULES = [
+        '/assistant/ask',
+    ];
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -154,8 +168,16 @@ final class AdminPagesSmokeTest extends IntegrationTestCase
             // Route paramétrée appelée avec une valeur inexistante : le
             // contrôleur DOIT répondre gracieusement — 404 (page introuvable)
             // ou 403 (route à jeton secret, ex. /kiosque/reappro/{token}) —
-            // jamais 500. Les routes concrètes restent limitées à 200/302.
-            $autorisés = $page['parameterized'] ? [200, 302, 404, 403] : [200, 302];
+            // jamais 500. Les routes concrètes restent limitées à 200/302,
+            // sauf les endpoints POST-only (self::GET_POST_SEULES) dont le
+            // 405 en GET est le contrat documenté (voir constante).
+            $autorisés = [200, 302];
+            if ($page['parameterized']) {
+                $autorisés[] = 404;
+                $autorisés[] = 403;
+            } elseif (in_array($path, self::GET_POST_SEULES, true)) {
+                $autorisés[] = 405;
+            }
             if (!in_array($code, $autorisés, true)) {
                 $failures[] = sprintf(
                     'GET %s → code HTTP %d inattendu : %s',
@@ -171,6 +193,49 @@ final class AdminPagesSmokeTest extends IntegrationTestCase
             $failures,
             count($failures) . " page(s) en erreur :\n" . implode("\n", $failures)
         );
+    }
+
+    // -----------------------------------------------------------------
+    //  Endpoints POST-only : contrat 405 en GET
+    // -----------------------------------------------------------------
+
+    /**
+     * Les routes GET_POST_SEULES doivent répondre EXACTEMENT 405 en GET
+     * avec un corps JSON d'erreur propre (jamais 500, jamais une page HTML
+     * cassée) : c'est le contrat documenté de ces endpoints conversationnels.
+     */
+    public function test_endpoints_post_seuls_repondent_405_propre_en_get(): void
+    {
+        self::assertNotSame(
+            [],
+            self::GET_POST_SEULES,
+            'La liste des endpoints POST-only ne doit jamais être vide : elle documente un contrat actif.'
+        );
+
+        foreach (self::GET_POST_SEULES as $path) {
+            $r    = $this->request('GET', $path, [], [], $this->rootId);
+            $code = (int) ($r['code'] ?? 0);
+            $body = (string) ($r['body'] ?? '');
+
+            self::assertSame(
+                405,
+                $code,
+                sprintf('GET %s doit répondre 405 (POST-only documenté), code reçu : %d.', $path, $code)
+            );
+            self::assertNull(
+                $this->bodyError($body),
+                sprintf('GET %s : le corps 405 ne doit contenir aucun marqueur d’erreur PHP.', $path)
+            );
+            $décode = json_decode($body, true);
+            self::assertIsArray(
+                $décode,
+                sprintf('GET %s : le corps 405 doit être un JSON propre ({"ok":false,…}).', $path)
+            );
+            self::assertFalse(
+                (bool) ($décode['ok'] ?? null),
+                sprintf('GET %s : le JSON 405 doit porter ok=false.', $path)
+            );
+        }
     }
 
     // -----------------------------------------------------------------
