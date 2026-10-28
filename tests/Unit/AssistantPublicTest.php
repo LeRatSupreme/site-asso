@@ -240,6 +240,38 @@ final class AssistantPublicTest extends TestCase
         self::assertIsInt($seconde['latency_ms']);
     }
 
+    public function test_fichiers_runtime_sont_0666_reouvrables_cli_et_web(): void
+    {
+        // Incident 28/10 (prod) : un journal/verrou créé par un run CLI
+        // ubuntu (umask → 0664, owner ubuntu) empêchait Apache www-data
+        // de rouvrir les fichiers (fopen 'c' échoue → 503 « occupé »
+        // déterministe pour tout le web). Tout fichier runtime de
+        // l'assistant doit donc finir en 0666, ré-ouvrable par l'autre
+        // utilisateur du VPS mono-admin.
+
+        // 1) Journal écrit par traiter().
+        $journal = $this->tmp . '/assistant_public.jsonl';
+        $s = $this->service();
+        $s->traiter('Bonjour', null, '1.2.3.4'); // 503 (LLM down) mais journal écrit
+        clearstatcache(true, $journal);
+        self::assertFileExists($journal);
+        self::assertSame(0666, fileperms($journal) & 0777);
+
+        // 2) Fichier de slot acquis (API privée → réflexion, pas de
+        // nouvelle API publique inventée pour le test).
+        $acquerir = new \ReflectionMethod(PublicAssistant::class, 'acquerirSlot');
+        $handle = $acquerir->invoke($s);
+        self::assertIsResource($handle);
+
+        $lock = $this->tmp . '/assistant_public.0.lock'; // slot 0 essayé en premier
+        clearstatcache(true, $lock);
+        self::assertFileExists($lock);
+        self::assertSame(0666, fileperms($lock) & 0777);
+
+        $liberer = new \ReflectionMethod(PublicAssistant::class, 'libererSlot');
+        $liberer->invoke($s, $handle);
+    }
+
     // -------------------------------------------------------------
     //  Helpers : extraction et hachage IP
     // -------------------------------------------------------------
