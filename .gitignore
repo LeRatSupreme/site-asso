@@ -67,3 +67,4 @@ tests/cache/
 /data/eval_t1/t4p2/kaggle_upload/train.csv
 # P2-auto — état runtime, CSV/feedback et runs de la boucle (jamais dans git ; seuls les petits manifestes documentés seraient à committer manuellement)
 /data/eval_t1/p2/auto/
+data/eval_t1/t4p2/full/
