@@ -1,0 +1,234 @@
+{
+  "mission": "AEIC T4-P2 smoke pipeline LoRA (kernel v5 OFFLINE CPU, vague 3 brief C) — entrainement complet DIFFERE (GPU)",
+  "offline": {
+    "mode": "100% offline : zero pip, zero reseau, zero telechargement",
+    "env": {
+      "HF_HUB_OFFLINE": "1",
+      "TRANSFORMERS_OFFLINE": "1"
+    },
+    "kernel_metadata": {
+      "enable_gpu": false,
+      "enable_internet": false
+    }
+  },
+  "datasets": {
+    "corpus": {
+      "id": "adrienremond/aeic-assistant-corpus",
+      "sha256": {
+        "train.jsonl": "42afde0b828924ba376d714f00b604b118d3f46e1814452d9c0b5da1c40d721b",
+        "val.jsonl": "4f9420778b7f783a78782db65f9cd6d4274fa5dfb8eae55f5455913aea700737"
+      },
+      "convs": {
+        "train": 446,
+        "val": 74
+      },
+      "note": "corpus vague 3 rapport A, anonymisation renforcee, revue dev-secu VERDICT B CONFORME 2026-10-28"
+    },
+    "base_model": {
+      "id": "adrienremond/aeic-qwen3-1p7b-hf",
+      "hf_repo": "Qwen/Qwen3-1.7B",
+      "mounted_at": "/kaggle/input/datasets/adrienremond/aeic-qwen3-1p7b-hf",
+      "integrity_sha256_vs_hf_lfs_oid": {
+        "model-00001-of-00002.safetensors": {
+          "sha256": "169ad53ec313c3a34b06c0809216e4fc072cce444a5d4ff2b59690d064130ed5",
+          "ok": true
+        },
+        "model-00002-of-00002.safetensors": {
+          "sha256": "912becff8d60672aa8628ef08c05898d9adf17c2ad4ae3caf99b065622fdeff9",
+          "ok": true
+        },
+        "tokenizer.json": {
+          "sha256": "aeb13307a71acd8fe81861d94ad54ab689df773318809eed3cbe794b4492dae4",
+          "ok": true
+        }
+      },
+      "decision": "Qwen3-1.7B pour le smoke (Qwen3-4B = 8.05 Go uploadable mais ~260 s/step CPU : ne tient pas dans le garde-fou 1500 s ; full run 4B differe au deblocage GPU)"
+    }
+  },
+  "config": {
+    "seed": 42,
+    "lora": {
+      "implementation": "pure-torch LoRA (repli apres echec peft: ImportError)",
+      "peft_version": null,
+      "peft_error": "peft present mais echec: ImportError: Found an incompatible version of torchao. Found version 0.10.0, but only versions above 0.16.0 are supported",
+      "r": 16,
+      "alpha": 32,
+      "dropout": 0.0,
+      "targets": [
+        "q_proj",
+        "k_proj",
+        "v_proj",
+        "o_proj"
+      ],
+      "parametres_entrainables": 6422528,
+      "parametres_total": 1726997504
+    },
+    "lr": 0.0002,
+    "steps_target": 100,
+    "batch_size": 1,
+    "max_len": 2048,
+    "rendu": "ChatML via template officiel du tokenizer Qwen3 (apply_chat_template, tools=...) rendu COMPLET par conversation ; spans assistant localises par double sonde prefixe avec assertions strictes ; en-tete et bloc think vide injecte MASQUES (prefilles a l'inference llama.cpp/Qwen3 non-thinking, jamais generes par le modele)",
+    "perte": "cross-entropy sur tokens assistant uniquement",
+    "time_budget_seconds": 1500,
+    "finalization_reserve_seconds": 180,
+    "training_cutoff_seconds": 1320,
+    "versions_reelles": {
+      "torch": "2.11.0+cpu",
+      "transformers": "5.16.1",
+      "peft": null,
+      "numpy": "2.1.3"
+    },
+    "torch_threads": 4,
+    "dtype": "float32 (CPU)"
+  },
+  "data_stats": {
+    "exemples": 446,
+    "longueur_tokens": {
+      "min": 1129,
+      "median": 1401,
+      "p95": 1721,
+      "max": 1782
+    },
+    "ecartees_trop_longues": 0,
+    "ecartees_sans_tokens_assistant": 0
+  },
+  "history": [
+    {
+      "step": 1,
+      "conv": "t4p2-F1-marge-005",
+      "famille": "F1_outil_direct",
+      "seq_len": 1346,
+      "tokens_assistant": 135,
+      "loss": 1.178542,
+      "seconds": 117.3
+    },
+    {
+      "step": 2,
+      "conv": "t4p2-F1-marge-010",
+      "famille": "F1_outil_direct",
+      "seq_len": 1360,
+      "tokens_assistant": 141,
+      "loss": 0.681357,
+      "seconds": 97.6
+    },
+    {
+      "step": 3,
+      "conv": "t4p2-F3-sec-005",
+      "famille": "F3_piege_injection",
+      "seq_len": 1129,
+      "tokens_assistant": 63,
+      "loss": 4.118524,
+      "seconds": 76.9
+    },
+    {
+      "step": 4,
+      "conv": "t4p2-F2-019",
+      "famille": "F2_suivi_memoire",
+      "seq_len": 1370,
+      "tokens_assistant": 128,
+      "loss": 0.876179,
+      "seconds": 106.2
+    },
+    {
+      "step": 5,
+      "conv": "t4p2-F3-chiffre-013",
+      "famille": "F3_piege_injection",
+      "seq_len": 1398,
+      "tokens_assistant": 161,
+      "loss": 0.919622,
+      "seconds": 116.1
+    },
+    {
+      "step": 6,
+      "conv": "t4p2-F4-refus-038",
+      "famille": "F4_hors_sujet",
+      "seq_len": 1144,
+      "tokens_assistant": 82,
+      "loss": 2.083233,
+      "seconds": 85.0
+    },
+    {
+      "step": 7,
+      "conv": "t4p2-F2-007",
+      "famille": "F2_suivi_memoire",
+      "seq_len": 1362,
+      "tokens_assistant": 124,
+      "loss": 0.695117,
+      "seconds": 100.5
+    },
+    {
+      "step": 8,
+      "conv": "t4p2-F1-doublons-007",
+      "famille": "F1_outil_direct",
+      "seq_len": 1468,
+      "tokens_assistant": 86,
+      "loss": 1.3952,
+      "seconds": 117.4
+    },
+    {
+      "step": 9,
+      "conv": "t4p2-F1-stock-013",
+      "famille": "F1_outil_direct",
+      "seq_len": 1233,
+      "tokens_assistant": 83,
+      "loss": 1.002864,
+      "seconds": 121.3
+    },
+    {
+      "step": 10,
+      "conv": "t4p2-F1-stock-026",
+      "famille": "F1_outil_direct",
+      "seq_len": 1211,
+      "tokens_assistant": 76,
+      "loss": 0.910944,
+      "seconds": 107.4
+    },
+    {
+      "step": 11,
+      "conv": "t4p2-F1-ventes-016",
+      "famille": "F1_outil_direct",
+      "seq_len": 1396,
+      "tokens_assistant": 141,
+      "loss": 0.350267,
+      "seconds": 105.9
+    },
+    {
+      "step": 12,
+      "conv": "t4p2-F6-012",
+      "famille": "F6_cas_limites",
+      "seq_len": 1235,
+      "tokens_assistant": 107,
+      "loss": 0.743241,
+      "seconds": 84.5
+    }
+  ],
+  "steps_executed": 12,
+  "loss_debut": 1.992808,
+  "loss_fin": 0.668151,
+  "loss_premier_step": 1.178542,
+  "loss_dernier_step": 0.743241,
+  "loss_descendante": true,
+  "time_budget_hit": true,
+  "nan_hit": false,
+  "adapter": {
+    "dir": "/kaggle/working/adapter",
+    "files": {
+      "adapter_config.json": 657,
+      "adapter_model.safetensors": 25720088
+    },
+    "format": "PEFT (adapter_config.json + adapter_model.safetensors)",
+    "rechargeable_par_full_run": true
+  },
+  "merge_verify": {
+    "mode": "deltas W += (B@A)*alpha/r appliques + forward 32 tokens",
+    "logits_ok": true,
+    "logits_max_abs": 32.91,
+    "seconds": 2.3
+  },
+  "differe": {
+    "sauvegarde_modele_fusionne": "4 Go, inutile au smoke ; full run GPU fera merge + export GGUF",
+    "export_gguf": "llama.cpp absent de l'image offline ; aucun convertisseur GGUF disponible sans pip -> NON pretendu prouve, cf. RAPPORT_PIPELINE.md",
+    "entrainement_complet": "CPU Kaggle trop lent ; relance au deblocage GPU (verification telephone utilisateur), corpus 446 convs"
+  },
+  "total_seconds": 1397.7
+}

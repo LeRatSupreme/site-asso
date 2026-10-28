@@ -1,0 +1,13 @@
+{
+  "id": "adrienremond/aeic-t4p2-qlora-smoke",
+  "title": "aeic-t4p2-qlora-smoke",
+  "code_file": "train.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": false,
+  "enable_internet": false,
+  "dataset_sources": ["adrienremond/aeic-assistant-corpus", "adrienremond/aeic-qwen3-1p7b-hf"],
+  "competition_sources": [],
+  "kernel_sources": []
+}

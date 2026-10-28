@@ -57,3 +57,11 @@ tests/cache/
 /data/eval_t1/p2/**/sentencepiece.bpe.model
 /data/eval_t1/p2/_vendor_st570/
 *.whl
+# T4-P2 — préparation fine-tuning : modèles/adapter binaires et corpus > 1 Mo (jamais dans git)
+/data/eval_t1/t4p2/base_model_hf/
+/data/eval_t1/t4p2/kernel_output_v5/adapter/adapter_model.safetensors
+/data/eval_t1/t4p2/tests_local/micro_model/
+/data/eval_t1/t4p2/tests_local/out_micro/adapter/adapter_model.safetensors
+/data/eval_t1/t4p2/corpus/train.jsonl
+/data/eval_t1/t4p2/kaggle_upload/train.jsonl
+/data/eval_t1/t4p2/kaggle_upload/train.csv

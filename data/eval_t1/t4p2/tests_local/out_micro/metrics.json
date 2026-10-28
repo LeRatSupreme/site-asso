@@ -1,0 +1,141 @@
+{
+  "mission": "AEIC T4-P2 smoke pipeline LoRA (kernel v5 OFFLINE CPU, vague 3 brief C) — entrainement complet DIFFERE (GPU)",
+  "offline": {
+    "mode": "100% offline : zero pip, zero reseau, zero telechargement",
+    "env": {
+      "HF_HUB_OFFLINE": "1",
+      "TRANSFORMERS_OFFLINE": "1"
+    },
+    "kernel_metadata": {
+      "enable_gpu": false,
+      "enable_internet": false
+    }
+  },
+  "datasets": {
+    "corpus": {
+      "id": "adrienremond/aeic-assistant-corpus",
+      "sha256": {
+        "train.jsonl": "42afde0b828924ba376d714f00b604b118d3f46e1814452d9c0b5da1c40d721b",
+        "val.jsonl": "4f9420778b7f783a78782db65f9cd6d4274fa5dfb8eae55f5455913aea700737"
+      },
+      "convs": {
+        "train": 446,
+        "val": 74
+      },
+      "note": "corpus vague 3 rapport A, anonymisation renforcee, revue dev-secu VERDICT B CONFORME 2026-10-28"
+    },
+    "base_model": {
+      "id": "adrienremond/aeic-qwen3-1p7b-hf",
+      "hf_repo": "Qwen/Qwen3-1.7B",
+      "mounted_at": "/home/ubuntu/AEIC/data/eval_t1/t4p2/tests_local/kaggle_input_stub_micro/datasets/adrienremond/aeic-qwen3-1p7b-hf",
+      "integrity_sha256_vs_hf_lfs_oid": {},
+      "decision": "Qwen3-1.7B pour le smoke (Qwen3-4B = 8.05 Go uploadable mais ~260 s/step CPU : ne tient pas dans le garde-fou 1500 s ; full run 4B differe au deblocage GPU)"
+    }
+  },
+  "config": {
+    "seed": 42,
+    "lora": {
+      "implementation": "peft",
+      "peft_version": "0.21.2",
+      "peft_error": null,
+      "r": 16,
+      "alpha": 32,
+      "dropout": 0.0,
+      "targets": [
+        "q_proj",
+        "k_proj",
+        "v_proj",
+        "o_proj"
+      ],
+      "parametres_entrainables": 14336,
+      "parametres_total": 9812352
+    },
+    "lr": 0.0002,
+    "steps_target": 3,
+    "batch_size": 1,
+    "max_len": 2048,
+    "rendu": "ChatML via template officiel du tokenizer Qwen3 (apply_chat_template, tools=...) rendu COMPLET par conversation ; spans assistant localises par double sonde prefixe avec assertions strictes ; en-tete et bloc think vide injecte MASQUES (prefilles a l'inference llama.cpp/Qwen3 non-thinking, jamais generes par le modele)",
+    "perte": "cross-entropy sur tokens assistant uniquement",
+    "time_budget_seconds": 600,
+    "finalization_reserve_seconds": 120,
+    "training_cutoff_seconds": 480,
+    "versions_reelles": {
+      "torch": "2.14.1+cpu",
+      "transformers": "5.21.0",
+      "peft": "0.21.2",
+      "numpy": "2.5.4"
+    },
+    "torch_threads": 4,
+    "dtype": "float32 (CPU)"
+  },
+  "data_stats": {
+    "exemples": 446,
+    "longueur_tokens": {
+      "min": 1129,
+      "median": 1401,
+      "p95": 1721,
+      "max": 1782
+    },
+    "ecartees_trop_longues": 0,
+    "ecartees_sans_tokens_assistant": 0
+  },
+  "history": [
+    {
+      "step": 1,
+      "conv": "t4p2-F1-marge-005",
+      "famille": "F1_outil_direct",
+      "seq_len": 1346,
+      "tokens_assistant": 135,
+      "loss": 11.909398,
+      "seconds": 2.1
+    },
+    {
+      "step": 2,
+      "conv": "t4p2-F1-marge-010",
+      "famille": "F1_outil_direct",
+      "seq_len": 1360,
+      "tokens_assistant": 141,
+      "loss": 11.921457,
+      "seconds": 1.5
+    },
+    {
+      "step": 3,
+      "conv": "t4p2-F3-sec-005",
+      "famille": "F3_piege_injection",
+      "seq_len": 1129,
+      "tokens_assistant": 63,
+      "loss": 11.955749,
+      "seconds": 1.2
+    }
+  ],
+  "steps_executed": 3,
+  "loss_debut": 11.928868,
+  "loss_fin": 11.928868,
+  "loss_premier_step": 11.909398,
+  "loss_dernier_step": 11.955749,
+  "loss_descendante": false,
+  "time_budget_hit": false,
+  "nan_hit": false,
+  "adapter": {
+    "dir": "/home/ubuntu/AEIC/data/eval_t1/t4p2/tests_local/out_micro/adapter",
+    "files": {
+      "README.md": 5378,
+      "adapter_config.json": 1218,
+      "adapter_model.safetensors": 59392
+    },
+    "format": "PEFT natif peft.save_pretrained",
+    "rechargeable_par_full_run": true
+  },
+  "merge_verify": {
+    "mode": "peft merge_and_unload + forward 32 tokens",
+    "logits_ok": true,
+    "logits_max_abs": 1.185,
+    "seconds": 0.0
+  },
+  "differe": {
+    "sauvegarde_modele_fusionne": "4 Go, inutile au smoke ; full run GPU fera merge + export GGUF",
+    "export_gguf": "llama.cpp absent de l'image offline ; aucun convertisseur GGUF disponible sans pip -> NON pretendu prouve, cf. RAPPORT_PIPELINE.md",
+    "entrainement_complet": "CPU Kaggle trop lent ; relance au deblocage GPU (verification telephone utilisateur), corpus 446 convs"
+  },
+  "total_seconds": 17.9
+}
