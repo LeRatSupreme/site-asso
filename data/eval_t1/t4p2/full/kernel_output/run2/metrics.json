@@ -1,0 +1,113 @@
+{
+  "mission": "AEIC T4-P2 entraînement COMPLET LoRA Qwen3-4B + A/B 40 questions val + export GGUF Q4_K_M (kernel v6 GPU, succède au smoke v5 prouvé)",
+  "protocole": {
+    "seed": 42,
+    "lora_r": 16,
+    "lora_alpha": 32,
+    "lora_targets": [
+      "q_proj",
+      "k_proj",
+      "v_proj",
+      "o_proj"
+    ],
+    "lr": 0.0002,
+    "batch_size": 4,
+    "max_len": 2048,
+    "epochs_min": 3,
+    "epochs_max": 6,
+    "early_stop_patience": 2,
+    "time_budget_s": 10800,
+    "train_cutoff_s": 5700,
+    "gguf_reserve_s": 1500,
+    "final_reserve_s": 600
+  },
+  "boot": {
+    "python": "3.13.15",
+    "torch": "2.11.0+cu128",
+    "transformers": "5.16.1",
+    "numpy": "2.1.3",
+    "gpu": "Tesla T4",
+    "compute_dtype": "torch.bfloat16",
+    "grad_scaler": false,
+    "faisabilite_gguf": {
+      "git": true,
+      "cmake": true,
+      "cc": true,
+      "pip": true,
+      "free_gb_tmp": 1126.1,
+      "free_gb_working": 20.9,
+      "gpu": "Tesla T4",
+      "bf16_supporte": true
+    },
+    "reseau_autorise": [
+      "huggingface.co (snapshot_download Qwen/Qwen3-4B)",
+      "pypi.org (pip gguf, peft --no-deps)",
+      "github.com (clone llama.cpp)"
+    ],
+    "torchao_desinstalle": true,
+    "gguf_version": "?"
+  },
+  "donnees": {
+    "corpus": {
+      "id": "adrienremond/aeic-assistant-corpus",
+      "sha256": {
+        "train.jsonl": {
+          "sha256": "42afde0b828924ba376d714f00b604b118d3f46e1814452d9c0b5da1c40d721b",
+          "ok": true
+        },
+        "val.jsonl": {
+          "sha256": "4f9420778b7f783a78782db65f9cd6d4274fa5dfb8eae55f5455913aea700737",
+          "ok": true
+        }
+      },
+      "convs": {
+        "train": 446,
+        "val": 74
+      },
+      "note": "corpus figé revu dev-secu CONFORME 2026-10-28"
+    },
+    "base_model": {
+      "hf_repo": "Qwen/Qwen3-4B",
+      "source": "hub HF officiel (internet autorisé)",
+      "integrity_sha256_vs_hf_lfs_oid": {
+        "model-00001-of-00003.safetensors": {
+          "sha256": "328a91d3122359d5547f9d79521205bc0a46e1f79a792dfe650e99fc2d651223",
+          "ok": true
+        },
+        "model-00002-of-00003.safetensors": {
+          "sha256": "6cd087b316306a68c562436b5492edbcf6e16c6dba3a1308279caa5a58e21ca5",
+          "ok": true
+        },
+        "model-00003-of-00003.safetensors": {
+          "sha256": "e4bf436957184f4eeb86a80e9db394503f1f56446b2e6b7edeac5b81470f4ca1",
+          "ok": true
+        },
+        "tokenizer.json": {
+          "sha256": "aeb13307a71acd8fe81861d94ad54ab689df773318809eed3cbe794b4492dae4",
+          "ok": true
+        }
+      }
+    }
+  },
+  "total_seconds": 104.1,
+  "rendu": {
+    "exemples_train": 446,
+    "exemples_val": 74,
+    "longueur_tokens_train": {
+      "min": 1129,
+      "median": 1401,
+      "p95": 1721,
+      "max": 1782
+    },
+    "ecartees": 0,
+    "part_tokens_assistant_pct": 9.03,
+    "methode": "template ChatML OFFICIEL (apply_chat_template tools=...), spans assistant par double sonde v5, assertions strictes, en-tête + think vide masqués"
+  },
+  "lora": {
+    "implementation": "peft",
+    "peft_version": "0.20.0",
+    "peft_error": null,
+    "parametres_entrainables": 11796480,
+    "parametres_total": 4034264576
+  }
+}
