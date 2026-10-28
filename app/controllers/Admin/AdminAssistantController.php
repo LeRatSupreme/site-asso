@@ -30,6 +30,13 @@ use App\Core\RateLimiter;
  * affiche TOUJOURS les sources renvoyées par le pont (outil appelé +
  * paramètres) et un avertissement quand une réponse chiffrée n'est
  * adossée à aucun appel d'outil (audit R4 répliqué côté page).
+ *
+ * Mémoire de conversation (T4-P1-B) : l'historique des 6 derniers
+ * échanges vit en SESSION PHP (clé dédiée, purgée après 30 min
+ * d'inactivité — et à la déconnexion : Auth::logout() vide toute la
+ * session). Il est transmis au pont par FICHIER temporaire (jamais en
+ * ligne de commande), injecté par le pont entre le préfixe système
+ * stable et la question courante ; « reset=1 » purge la mémoire.
  */
 final class AdminAssistantController extends AdminBaseController
 {
@@ -54,6 +61,28 @@ final class AdminAssistantController extends AdminBaseController
     /** Plafond de sortie lue sur le tube stdout du pont (garde-fou). */
     private const SORTIE_MAX = 2_097_152;
 
+    // -------------------------------------------------------------
+    //  Mémoire de conversation (T4-P1-B — brief V1-B)
+    // -------------------------------------------------------------
+
+    /** Clé session : ['ts' => horodatage, 'echanges' => [['q','r'], …]]. */
+    private const CLE_SESSION = 'assistant_conversation';
+
+    /** Échanges mémorisés maximum (contrat du pont : 12 messages). */
+    private const MAX_ECHANGES = 6;
+
+    /** Purge de la mémoire après 30 minutes d'inactivité. */
+    private const DUREE_VIE_S = 1800;
+
+    /** Bornes du contexte transmis au pont (le pont revalide — contrat
+     *  scripts/assistant.py : CONTEXTE_MESSAGE_MAX_CARACTERES, …_TOTAL_…). */
+    private const CONTEXTE_MESSAGE_MAX = 800;
+    private const CONTEXTE_TOTAL_MAX   = 4000;
+
+    /** Réponse mémorisée tronquée à (l'affichage garde l'essentiel,
+     *  le contexte est re-tronqué par messagesContexte). */
+    private const REPONSE_STOCKEE_MAX = 2000;
+
     /**
      * La page : champ de question + zone de réponse (rendu côté navigateur
      * en AJAX vers ask(), ci-dessous).
@@ -63,8 +92,9 @@ final class AdminAssistantController extends AdminBaseController
         $user = $this->guardSystemOrPage('inventory');
 
         $this->renderAdmin('admin/assistant', [
-            'user'    => $user,
-            'askUrl'  => url('/admin/assistant/ask'),
+            'user'       => $user,
+            'askUrl'     => url('/admin/assistant/ask'),
+            'historique' => $this->historiquePourAffichage(),
         ]);
     }
 
@@ -77,6 +107,13 @@ final class AdminAssistantController extends AdminBaseController
     public function ask(): void
     {
         $user = $this->guardSystemOrPage('inventory');
+
+        // « Nouvelle conversation » (T4-P1-B) : purge de la mémoire de
+        // session, sans question ni mobilisation du modèle.
+        if (trim((string) ($_POST['reset'] ?? '')) === '1') {
+            unset($_SESSION[self::CLE_SESSION]);
+            $this->json(['ok' => true, 'historique' => []]);
+        }
 
         // Rate limit par utilisateur : une question = jusqu'à 2 minutes de
         // modèle local ; le même clic spammerait le service.
@@ -106,7 +143,28 @@ final class AdminAssistantController extends AdminBaseController
         // max_execution_time — on l'annule quand même par précaution.
         set_time_limit(0);
 
-        [$code, $sortie, $err, $expire] = $this->executerPont($question);
+        // Mémoire multi-tours (T4-P1-B) : historique de session → fichier
+        // temporaire (0600, jamais en ligne de commande) transmis au pont,
+        // qui l'injecte après le préfixe système stable puis re-tronque.
+        $fichierContexte = '';
+        $messages = $this->messagesContexte($this->lireHistorique());
+        if ($messages !== []) {
+            $fichierContexte = (string) tempnam(sys_get_temp_dir(), 'aeic-ctx-');
+            file_put_contents($fichierContexte, json_encode($messages, JSON_UNESCAPED_UNICODE), LOCK_EX);
+        }
+
+        // Exécution à blanc (tests d'intégration : ASSISTANT_DRY_RUN=1,
+        // jamais posée en production) : le pont imprime le prompt construit
+        // sans appeler le LLM — permet de vérifier l'historique transmis.
+        $dryRun = getenv('ASSISTANT_DRY_RUN') === '1';
+
+        try {
+            [$code, $sortie, $err, $expire] = $this->executerPont($question, $fichierContexte, $dryRun);
+        } finally {
+            if ($fichierContexte !== '') {
+                @unlink($fichierContexte);
+            }
+        }
 
         if ($expire) {
             Logger::error('assistant page: timeout côté page', ['user' => (string) ($user['id'] ?? '')]);
@@ -118,7 +176,25 @@ final class AdminAssistantController extends AdminBaseController
         // on y lit le message à afficher.
         $session = json_decode($sortie, true);
 
+        if ($dryRun) {
+            // Mode à blanc : on renvoie les messages construits (préfixe
+            // système + historique + question) et on mémorise l'échange
+            // exactement comme en production — c'est ce qui permet de
+            // tester la mémoire sur DEUX questions liées.
+            $messagesPont = is_array($session) && is_array($session['messages'] ?? null)
+                ? $session['messages']
+                : [];
+            $this->historiser($question, '(exécution à blanc)');
+            $this->json([
+                'ok'         => true,
+                'reponse'    => '(exécution à blanc)',
+                'dry_run'    => ['messages' => $messagesPont],
+                'historique' => $this->historiquePourAffichage(),
+            ]);
+        }
+
         if ($code === 0 && is_array($session) && ($session['ok'] ?? false) === true) {
+            $this->historiser($question, (string) ($session['reponse'] ?? ''));
             $this->json($this->formaterReussite($session));
         }
 
@@ -172,24 +248,148 @@ final class AdminAssistantController extends AdminBaseController
             'appels'       => $appels,
             'duree_ms'     => (int) ($session['duree_ms'] ?? 0),
             'avertissement' => $avertissement,
+            // Mémoire multi-tours (T4-P1-B) : conversation complète
+            // (bulles) pour rafraîchir l'affichage de la page.
+            'historique'   => $this->historiquePourAffichage(),
         ];
+    }
+
+    // -----------------------------------------------------------------
+    //  Mémoire de conversation (T4-P1-B)
+    // -----------------------------------------------------------------
+
+    /**
+     * Historique de conversation encore valide en session.
+     *
+     * Purge silencieuse si la clé est absente, malformée ou plus vieille
+     * que DUREE_VIE_S (30 min) ; la déconnexion purge aussi (Auth::logout()
+     * vide $_SESSION). Renvoie au plus MAX_ECHANGES échanges ['q','r']. 
+     *
+     * @return array<int,array{q:string,r:string}>
+     */
+    private function lireHistorique(): array
+    {
+        $stockee = $_SESSION[self::CLE_SESSION] ?? null;
+        if (!is_array($stockee)) {
+            return [];
+        }
+        $ts = (int) ($stockee['ts'] ?? 0);
+        $echanges = $stockee['echanges'] ?? null;
+        if (!is_array($echanges) || $ts === 0 || (time() - $ts) > self::DUREE_VIE_S) {
+            unset($_SESSION[self::CLE_SESSION]);
+
+            return [];
+        }
+
+        $propres = [];
+        foreach ($echanges as $echange) {
+            if (is_array($echange) && is_string($echange['q'] ?? null) && is_string($echange['r'] ?? null)) {
+                $propres[] = ['q' => $echange['q'], 'r' => $echange['r']];
+            }
+        }
+
+        return array_slice($propres, -self::MAX_ECHANGES);
+    }
+
+    /**
+     * Mémorise un échange réussi (question + réponse) et rafraîchit
+     * l'horodatage de la mémoire.
+     */
+    private function historiser(string $question, string $reponse): void
+    {
+        $echanges = $this->lireHistorique();
+        $echanges[] = [
+            'q' => mb_substr($question, 0, self::QUESTION_MAX),
+            'r' => mb_substr($reponse, 0, self::REPONSE_STOCKEE_MAX),
+        ];
+        if (count($echanges) > self::MAX_ECHANGES) {
+            $echanges = array_slice($echanges, -self::MAX_ECHANGES);
+        }
+        $_SESSION[self::CLE_SESSION] = ['ts' => time(), 'echanges' => $echanges];
+    }
+
+    /**
+     * Historique → messages {role, content} transmis au pont.
+     *
+     * Bornes du contrat scripts/assistant.py : chaque message ≤ 800
+     * caractères, total ≤ 4 000 — les échanges les plus anciens sautent
+     * en premier, et la conversation ne démarre jamais par une réponse.
+     * Le pont revalide ces mêmes bornes (défense en profondeur).
+     *
+     * @param array<int,array{q:string,r:string}> $echanges
+     *
+     * @return list<array{role:string,content:string}>
+     */
+    private function messagesContexte(array $echanges): array
+    {
+        $messages = [];
+        foreach ($echanges as $echange) {
+            $q = mb_substr($echange['q'], 0, self::CONTEXTE_MESSAGE_MAX);
+            $r = mb_substr($echange['r'], 0, self::CONTEXTE_MESSAGE_MAX);
+            if ($q !== '') {
+                $messages[] = ['role' => 'user', 'content' => $q];
+            }
+            if ($r !== '') {
+                $messages[] = ['role' => 'assistant', 'content' => $r];
+            }
+        }
+
+        $total = 0;
+        foreach ($messages as $message) {
+            $total += mb_strlen($message['content']);
+        }
+        while ($messages !== [] && $total > self::CONTEXTE_TOTAL_MAX) {
+            $total -= mb_strlen(array_shift($messages)['content']);
+        }
+        while ($messages !== [] && $messages[0]['role'] === 'assistant') {
+            array_shift($messages);
+        }
+
+        return $messages;
+    }
+
+    /**
+     * Historique formaté pour l'affichage (bulles de la page, échappement
+     * e() côté vue — jamais de HTML stocké en session).
+     *
+     * @return list<array{role:'user'|'assistant',texte:string}>
+     */
+    private function historiquePourAffichage(): array
+    {
+        $bulles = [];
+        foreach ($this->lireHistorique() as $echange) {
+            $bulles[] = ['role' => 'user', 'texte' => $echange['q']];
+            $bulles[] = ['role' => 'assistant', 'texte' => $echange['r']];
+        }
+
+        return $bulles;
     }
 
     /**
      * Exécute le pont en sous-processus SANS shell : la commande est un
      * tableau d'arguments (proc_open ne passe plus par /bin/sh — aucune
      * interprétation des caractères de la question, injection impossible
-     * par construction, plus sûr encore qu'escapeshellarg).
+     * par construction, plus sûr encore qu'escapeshellarg). L'historique
+     * de conversation passe par FICHIER (--context), jamais en argument.
      *
      * Lecture des tubes en non-bloquant avec stream_select jusqu'au
      * budget de TIMEOUT_S ; au-delà le processus est tué.
      *
      * @return array{0:int,1:string,2:string,3:bool} [code de sortie, stdout, stderr, timeout ?]
      */
-    private function executerPont(string $question): array
+    private function executerPont(string $question, string $fichierContexte = '', bool $dryRun = false): array
     {
+        $commande = [self::PONT_PYTHON, self::PONT_SCRIPT, '--json', $question];
+        if ($fichierContexte !== '') {
+            $commande[] = '--context';
+            $commande[] = $fichierContexte;
+        }
+        if ($dryRun) {
+            $commande[] = '--dry-run';
+        }
+
         $processus = proc_open(
-            [self::PONT_PYTHON, self::PONT_SCRIPT, '--json', $question],
+            $commande,
             [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
             $tubes,
             AEIC_ROOT

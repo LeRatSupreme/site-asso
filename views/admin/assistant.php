@@ -14,8 +14,14 @@ declare(strict_types=1);
  * font-size ≥ 16 px) ; la mise en page est fluide, sans largeur fixe
  * (leçon n°13 : mobile-friendly). Caractères UTF-8 directs (leçon n°10).
  *
- * @var array<string,mixed> $user   Utilisateur connecté (garde inventory).
- * @var string              $askUrl URL du endpoint POST interne (ask).
+ * Mémoire de conversation (T4-P1-B) : l'historique de la session est
+ * affiché en bulles sobres (rendu serveur échappé e() au chargement,
+ * puis reconstruction par textContent après chaque réponse) ; le bouton
+ * « Nouvelle conversation » purge la mémoire (POST reset=1).
+ *
+ * @var array<string,mixed> $user        Utilisateur connecté (garde inventory).
+ * @var string              $askUrl      URL du endpoint POST interne (ask).
+ * @var list<array{role:string,texte:string}> $historique Bulles de la session.
  */
 ?>
 <div class="compta-head">
@@ -40,6 +46,22 @@ declare(strict_types=1);
         </div>
     </form>
 
+    <?php $bulles = is_array($historique ?? null) ? $historique : []; ?>
+    <div id="assistant-conversation" class="assistant-conversation"<?php if ($bulles === []): ?> hidden<?php endif; ?>>
+        <div class="assistant-conversation-tete">
+            <p class="assistant-conversation-titre">Conversation de cette session</p>
+            <button type="button" id="assistant-reset" class="btn btn-ghost btn-sm">Nouvelle conversation</button>
+        </div>
+        <div id="assistant-bulles" class="assistant-bulles">
+            <?php foreach ($bulles as $bulle): ?>
+                <div class="assistant-bulle <?= $bulle['role'] === 'user' ? 'assistant-bulle-user' : 'assistant-bulle-assistant' ?>">
+                    <p class="assistant-bulle-role"><?= $bulle['role'] === 'user' ? 'Toi' : 'Assistant' ?></p>
+                    <p class="assistant-bulle-texte"><?= e((string) $bulle['texte']) ?></p>
+                </div>
+            <?php endforeach; ?>
+        </div>
+    </div>
+
     <div id="assistant-resultat" class="assistant-resultat" hidden aria-live="polite"></div>
 
     <p class="card-meta">
@@ -52,6 +74,42 @@ declare(strict_types=1);
     .assistant-libelle {
         position: absolute; width: 1px; height: 1px; margin: -1px;
         overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
+    }
+
+    /* Mémoire de conversation (T4-P1-B) : bulles sobres façon cartes glass,
+       sans framework, fluides en mobile (leçon n°13). */
+    .assistant-conversation { margin-top: 1.2rem; }
+    .assistant-conversation-tete {
+        display: flex; flex-wrap: wrap; align-items: center;
+        justify-content: space-between; gap: 0.5rem;
+    }
+    .assistant-conversation-titre {
+        margin: 0; font-size: 0.75rem; font-weight: 700;
+        text-transform: uppercase; letter-spacing: 0.06em;
+        color: var(--muted, #8892a6);
+    }
+    .assistant-bulles {
+        display: flex; flex-direction: column; gap: 0.55rem; margin-top: 0.6rem;
+    }
+    .assistant-bulle {
+        max-width: min(92%, 46rem);
+        padding: 0.6rem 0.85rem; border-radius: 14px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        background: rgba(255, 255, 255, 0.04);
+    }
+    .assistant-bulle-user {
+        align-self: flex-end;
+        background: rgba(72, 189, 211, 0.10);
+        border-color: rgba(72, 189, 211, 0.25);
+    }
+    .assistant-bulle-assistant { align-self: flex-start; }
+    .assistant-bulle-role {
+        margin: 0 0 0.2rem; font-size: 0.7rem; font-weight: 700;
+        color: var(--muted, #8892a6);
+    }
+    .assistant-bulle-texte {
+        margin: 0; white-space: pre-wrap; overflow-wrap: anywhere;
+        font-size: 0.95rem; line-height: 1.5;
     }
     .assistant-saisie { display: flex; flex-wrap: wrap; gap: 0.6rem; }
     .assistant-champ {
@@ -118,7 +176,10 @@ declare(strict_types=1);
     var forme = document.getElementById('assistant-forme');
     var champ = document.getElementById('assistant-question');
     var bouton = document.getElementById('assistant-poser');
+    var boutonReset = document.getElementById('assistant-reset');
     var zone = document.getElementById('assistant-resultat');
+    var conversation = document.getElementById('assistant-conversation');
+    var zoneBulles = document.getElementById('assistant-bulles');
     if (!carton || !forme || !champ || !bouton || !zone) return;
 
     var urlAsk = carton.getAttribute('data-ask-url') || '';
@@ -137,6 +198,23 @@ declare(strict_types=1);
 
     function viderZone() {
         while (zone.firstChild) zone.removeChild(zone.firstChild);
+    }
+
+    // Mémoire de conversation (T4-P1-B) : reconstruction des bulles par
+    // textContent uniquement — jamais de innerHTML sur une donnée serveur.
+    function afficherConversation(historique) {
+        if (!conversation || !zoneBulles) return;
+        while (zoneBulles.firstChild) zoneBulles.removeChild(zoneBulles.firstChild);
+        for (var j = 0; j < historique.length; j++) {
+            var entree = historique[j];
+            var bulle = document.createElement('div');
+            bulle.className = 'assistant-bulle ' + (entree.role === 'user'
+                ? 'assistant-bulle-user' : 'assistant-bulle-assistant');
+            texte(bulle, 'p', entree.role === 'user' ? 'Toi' : 'Assistant').className = 'assistant-bulle-role';
+            texte(bulle, 'p', String(entree.texte || '')).className = 'assistant-bulle-texte';
+            zoneBulles.appendChild(bulle);
+        }
+        conversation.hidden = historique.length === 0;
     }
 
     function afficherAttente(question) {
@@ -169,8 +247,17 @@ declare(strict_types=1);
     function afficherReponse(json, question) {
         viderZone();
         zone.hidden = false;
-        texte(zone, 'p', 'Q : ' + question).className = 'assistant-question-posee';
-        texte(zone, 'p', String(json.reponse || '')).className = 'assistant-reponse';
+
+        // La conversation complète (bulles, dernière question comprise)
+        // est renvoyée par le serveur : la zone de résultat ne répète pas
+        // la réponse, elle montre sources, durée et avertissement. Garde :
+        // sans historique (vieille page en cache), réponse isolée.
+        if (Array.isArray(json.historique) && json.historique.length > 0) {
+            afficherConversation(json.historique);
+        } else {
+            texte(zone, 'p', 'Q : ' + question).className = 'assistant-question-posee';
+            texte(zone, 'p', String(json.reponse || '')).className = 'assistant-reponse';
+        }
 
         var sources = json.sources || [];
         if (sources.length > 0) {
@@ -248,5 +335,33 @@ declare(strict_types=1);
             champ.focus();
         });
     });
+
+    // « Nouvelle conversation » (T4-P1-B) : purge de la mémoire serveur
+    // (POST reset=1), puis affichage vidé — aucune question requise.
+    if (boutonReset) {
+        boutonReset.addEventListener('click', function () {
+            boutonReset.disabled = true;
+            fetch(urlAsk, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'X-CSRF-Token': jetonCsrf },
+                body: new URLSearchParams({ reset: '1' })
+            }).then(function (reponse) {
+                return reponse.json().catch(function () { return null; });
+            }).then(function (json) {
+                boutonReset.disabled = false;
+                if (json && json.ok === true) {
+                    afficherConversation([]);
+                    viderZone();
+                    zone.hidden = true;
+                } else {
+                    afficherErreur('Impossible de réinitialiser la conversation — recharge la page.');
+                }
+            }).catch(function () {
+                boutonReset.disabled = false;
+                afficherErreur('Connexion interrompue — la conversation n\'a pas été réinitialisée.');
+            });
+        });
+    }
 })();
 </script>
