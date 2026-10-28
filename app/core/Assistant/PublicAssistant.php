@@ -393,6 +393,13 @@ final class PublicAssistant
             if ($handle === false) {
                 continue;
             }
+            // Umask du process créateur hétérogène (CLI ubuntu vs Apache
+            // www-data sur le VPS mono-admin) : un verrou créé 0664 par
+            // l'un doit rester ouvrable par l'autre, sinon fopen 'c'
+            // échoue côté web et tout /assistant/ask répond 503 « occupé »
+            // (incident réel du 28/10 : locks 0664 owner ubuntu → web 503
+            // déterministe). chmod explicite, idempotent, échec silencieux.
+            @chmod($this->cheminLock . '.' . $i . '.lock', 0o666);
             if (flock($handle, LOCK_EX | LOCK_NB)) {
                 return $handle;
             }
@@ -445,7 +452,15 @@ final class PublicAssistant
         ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
         if ($ligne !== false) {
-            @file_put_contents($this->journalPath, $ligne . "\n", FILE_APPEND | LOCK_EX);
+            $ecrit = @file_put_contents($this->journalPath, $ligne . "\n", FILE_APPEND | LOCK_EX);
+            if ($ecrit !== false) {
+                // Même raison que les verrous : umask du process créateur
+                // hétérogène (CLI ubuntu vs Apache www-data sur le VPS
+                // mono-admin) — le journal écrit par l'un doit rester
+                // ouvrable par l'autre (incident réel du 28/10). Idempotent,
+                // coût négligeable à 10 req/5 min, échec silencieux.
+                @chmod($this->journalPath, 0o666);
+            }
         }
 
         return ['http' => $http, 'ok' => $ok, 'reply' => $reply, 'error' => $error];
