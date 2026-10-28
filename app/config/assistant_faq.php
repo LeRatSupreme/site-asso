@@ -52,6 +52,7 @@ return [
             'ou est l aeic',
             'localisation',
             'rue louis david',
+            'etablissement',
         ],
         'reponse' => "Nous sommes au 19 rue Louis David, 62100 Calais, à l'IUT. La page /presentation du site explique comment nous trouver.",
     ],
@@ -64,6 +65,10 @@ return [
             'devenir membre',
             'comment rejoindre',
             'rejoindre l asso',
+            'creer un compte',
+            'creer compte',
+            'creer mon compte',
+            'compte',
         ],
         'reponse' => "L'adhésion à l'AEIC est gratuite et se fait en ligne depuis la page /register du site.",
     ],
@@ -101,15 +106,18 @@ return [
         'reponse' => "L'AEIC tient une cafétéria à prix étudiant à l'IUT de Calais, avec boissons et encas.",
     ],
     [
+        // NB : les noms de jeux SEULS ('tetris', 'wordle', 'snake',
+        // 'memory', 'enigme') sont volontairement ABSENTS : « c'est quoi
+        // Tetris ? » doit tomber sur le LLM (culture générale), tandis que
+        // « jeu/jeux/jouer/classement » renvoie la liste ; les expressions
+        // « un jeu », « votre jeu », « jeu gratuit » sont matchées par sous-chaîne,
+        // donc pas besoin de les décliner (« un jeu de tetris », etc.).
         'declencheurs' => [
-            'jeu',
+            'un jeu',
+            'votre jeu',
+            'jeu gratuit',
             'jeux',
             'jouer',
-            'wordle',
-            'memory',
-            'snake',
-            'tetris',
-            'enigme',
             'classement',
         ],
         'reponse' => "Le site propose des jeux en ligne gratuits : Wordle (FR/EN), Memory, Snake, Tetris et une énigme quotidienne avec classement. C'est sur la page /jeux.",
@@ -125,6 +133,25 @@ return [
             'ecrire',
         ],
         'reponse' => "Tu peux nous écrire à calais.aeic@gmail.com. Toutes les infos de l'asso sont aussi sur la page /presentation du site.",
+    ],
+    // Politesse / smalltalk — placées juste AVANT les salutations (les
+    // génériques restent en dernier) : « comment ca va » (13) est plus long
+    // que « bonjour » (7), et à égalité (« ca va » vs « salut », 5) la
+    // première entrée du fichier gagne.
+    [
+        'declencheurs' => [
+            'comment ca va',
+            'comment sa va',
+            'ca va',
+            'sa va',
+        ],
+        'reponse' => "Ça va bien, merci ! Et toi ? Si tu as une question sur l'AEIC, ses événements, sa cafétéria ou ses jeux, je suis là.",
+    ],
+    [
+        'declencheurs' => [
+            'merci',
+        ],
+        'reponse' => "De rien, avec plaisir ! Les infos de l'asso sont aussi sur les pages /presentation, /events et /jeux du site.",
     ],
     [
         'declencheurs' => [
