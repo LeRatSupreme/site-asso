@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Controllers\AccountController;
+use App\Controllers\Admin\AdminAgentController;
 use App\Controllers\Admin\AdminAnalyticsController;
 use App\Controllers\Admin\AdminAssistantController;
 use App\Controllers\Admin\AdminBudgetController;
@@ -325,6 +326,19 @@ function aeic_register_routes(Router $router): void
     // outils reste strictement côté serveur (jamais dans la page).
     $router->get('/admin/assistant', [AdminAssistantController::class, 'index']);
     $router->post('/admin/assistant/ask', [AdminAssistantController::class, 'ask']);
+
+    // Page « Agent » (V1+ rapidité) : questions types préparées depuis le
+    // journal de l'assistant (agrégat, filtrage anti-doublon, gabarits
+    // pré-réponses + aperçu, activer/réordonner/supprimer) — le fast-path
+    // de AdminAssistantController::ask() rejoue leur routage sans LLM.
+    // Même garde que la page Assistant ; CSRF central (POST non kiosque).
+    $router->get('/admin/agent', [AdminAgentController::class, 'index']);
+    $router->post('/admin/agent/prepare', [AdminAgentController::class, 'prepare']);
+    $router->post('/admin/agent/toggle', [AdminAgentController::class, 'toggle']);
+    $router->post('/admin/agent/deplacer', [AdminAgentController::class, 'deplacer']);
+    $router->post('/admin/agent/supprimer', [AdminAgentController::class, 'supprimer']);
+    $router->post('/admin/agent/gabarit', [AdminAgentController::class, 'gabarit']);
+    $router->post('/admin/agent/apercu', [AdminAgentController::class, 'apercu']);
 
     // Comptabilité & gestion des achats (rôle ADMIN ou TRESORERIE).
     $router->get('/admin/compta', [AdminComptaController::class, 'dashboard']);
