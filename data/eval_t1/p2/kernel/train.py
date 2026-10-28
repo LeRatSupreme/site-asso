@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Kernel Kaggle P3 v3 — Fine-tune AEIC T1-P2, 100% OFFLINE, CPU
+Kernel Kaggle P3 v4 — Fine-tune AEIC T1-P2, 100% OFFLINE, CPU
 ==============================================================
 
 Mission inchangee : fine-tuner `paraphrase-multilingual-MiniLM-L12-v2` sur les
@@ -25,9 +25,18 @@ cf. kernel_README_v3.md) :
     exige `datasets`, non garanties preinstallees ; voir kernel_README_v3.md).
   - Entrainement CPU assumé (enable_gpu=false, honnete).
 
+v4 (vague 2 « P2-ter », brief C) — SEULES modifications vs v3 :
+  - MAX_EPOCHS 5 -> 8 (jusqu'a 8 si l'early stopping le permet ;
+    batch, LR, graine, patience, MIN_EPOCHS inchanges) ;
+  - garde-fou horloge TIME_BUDGET_S 3300 -> 3600 s (donnees x2,58 :
+    4 595 paires train au lieu de 1 783).
+  Aucun autre changement : memes datasets prives, memes colonnes,
+  meme MNRL, meme early stopping, offline strict identique (zero
+  pip, zero reseau, aucun import nouveau).
+
 Contraintes de protocole (identiques v2, brief P3) :
   - perte MultipleNegativesRankingLoss, anchor=texte_variante, positive=cible ;
-  - batch 64 ; LR 2e-5 ; epochs min 3, max 5 ; graine 42 partout ;
+  - batch 64 ; LR 2e-5 ; epochs min 3, max 8 (brief v4) ; graine 42 partout ;
   - EARLY STOPPING documente ci-dessous ; MNRL conserve ;
   - AUCUNE donnee autre que les datasets attaches (aucun autre fichier lu) ;
   - sorties : /kaggle/working/model (format sentence-transformers complet) +
@@ -71,10 +80,10 @@ MODEL_SAFETENSORS_SHA256 = (
 )
 BATCH_SIZE = 64          # brief v3 : fourchette 32-64
 LR = 2e-5
-MIN_EPOCHS = 3           # brief v3 : epochs 3..5 max
-MAX_EPOCHS = 5
+MIN_EPOCHS = 3           # seuil min inchangé (briefs v3/v4)
+MAX_EPOCHS = 8           # brief v4 (vague 2) : jusqu'à 8 si l'early stopping le permet (v3 : 5)
 PATIENCE = 2             # early stopping : 2 epochs consecutives sans gain de R@1
-TIME_BUDGET_S = 3300     # garde-fou horloge : ~55 min (brief v3 : rester < ~60 min)
+TIME_BUDGET_S = 3600     # garde-fou horloge : 60 min (brief v4 : volume x2,58 -> 3600 s ; v3 : 3300)
 MODEL_DIR = "/kaggle/working/model"
 METRICS_PATH = "/kaggle/working/metrics.json"
 INPUT_ROOT = "/kaggle/input"
@@ -292,7 +301,7 @@ def main():
 
     final_rec = history[-1]
     metrics = {
-        "mission": "AEIC T1-P2 fine-tune (brief P3, kernel v3 OFFLINE CPU)",
+        "mission": "AEIC T1-P2 fine-tune (brief P3, kernel v4 OFFLINE CPU, vague 2 P2-ter)",
         "offline": {"mode": "100% offline : zero pip, zero reseau, zero telechargement",
                     "env": {"HF_HUB_OFFLINE": os.environ.get("HF_HUB_OFFLINE"),
                             "TRANSFORMERS_OFFLINE": os.environ.get("TRANSFORMERS_OFFLINE")},
