@@ -388,6 +388,289 @@ final class AssistantToolsTest extends IntegrationTestCase
     }
 
     // -----------------------------------------------------------------
+    //  Outil 4 — marge_produit (T4-P1)
+    // -----------------------------------------------------------------
+
+    public function test_marge_produit_sans_jeton_refuse_403_generique(): void
+    {
+        $this->entetes = [];
+        $r = $this->request(
+            'GET',
+            '/internal/assistant/marge_produit?nom=Coca&debut=2026-10-20&fin=2026-10-21'
+        );
+
+        self::assertSame(403, (int) ($r['code'] ?? 0));
+        self::assertSame(['erreur' => 'Accès refusé.'], $this->corps($r));
+        self::assertTrue($this->aEntete($r, 'Cache-Control: no-store, max-age=0'), 'La réponse doit être no-store.');
+    }
+
+    public function test_marge_produit_parametres_invalides_refuses_en_400(): void
+    {
+        // Nom absent.
+        $r = $this->request('GET', '/internal/assistant/marge_produit?debut=2026-10-20&fin=2026-10-21');
+        self::assertSame(400, (int) ($r['code'] ?? 0));
+        self::assertStringContainsString('nom', (string) ($this->corps($r)['erreur'] ?? ''));
+
+        // Nom trop long (> 255 caractères).
+        $r = $this->request(
+            'GET',
+            '/internal/assistant/marge_produit?nom=' . str_repeat('a', 256) . '&debut=2026-10-20&fin=2026-10-21'
+        );
+        self::assertSame(400, (int) ($r['code'] ?? 0));
+
+        // Dates invalides (non ISO, 13e mois) et bornes inversées.
+        foreach (
+            [
+                '?nom=Coca&debut=octobre&fin=2026-10-21',
+                '?nom=Coca&debut=2026-13-01&fin=2026-10-21',
+                '?nom=Coca&debut=2026-10-25&fin=2026-10-20',
+            ] as $query
+        ) {
+            $r = $this->request('GET', '/internal/assistant/marge_produit' . $query);
+            self::assertSame(400, (int) ($r['code'] ?? 0), "Requête « {$query} » doit être refusée en 400.");
+        }
+    }
+
+    public function test_marge_produit_valeurs_conformes_a_la_regle_compta(): void
+    {
+        // Lot de coût 1,00 € depuis longtemps (as-of chaque vente) ;
+        // 2 ventes : 2×2,50 € puis 1×2,50 € → CA 7,50 €, coût 3,00 €,
+        // marge 4,50 € soit 60,00 % (MÊME règle que le bénéfice par
+        // produit d'AdminComptaController::products : profit/ca×100).
+        $stmt = $this->pdo->prepare(
+            'INSERT INTO product_costs (id, product_key, cost_price, valid_from) VALUES (?,?,?,?)'
+        );
+        $stmt->execute(['pc1', 'Coca cola', 1.000, '2026-01-01']);
+        $this->seedVente('s1', 'T1', '2026-10-20 12:00:00', 'Coca cola', 'Boissons', 2, 5.00);
+        $this->seedVente('s2', 'T2', '2026-10-21 12:00:00', 'Coca cola', 'Boissons', 1, 2.50);
+        $this->seedComptage('c1', 'Coca cola', '2026-10-19 10:00:00', 4);
+
+        $r = $this->request(
+            'GET',
+            '/internal/assistant/marge_produit?nom=' . rawurlencode('Coca cola')
+                . '&debut=2026-10-20&fin=2026-10-21'
+        );
+        $c = $this->corps($r);
+
+        self::assertSame(200, (int) ($r['code'] ?? 0));
+        self::assertSame('marge_produit', $c['outil'] ?? '');
+        self::assertTrue((bool) ($c['trouve'] ?? false));
+        self::assertSame('Coca cola', $c['cle_ventes'] ?? '');
+        self::assertSame(['debut' => '2026-10-20', 'fin' => '2026-10-21'], $c['periode'] ?? null);
+        self::assertSame(3, (int) ($c['quantite_vendue'] ?? -1));
+        self::assertEqualsWithDelta(7.50, (float) ($c['ca_eur'] ?? -1), 0.001);
+        self::assertEqualsWithDelta(3.00, (float) ($c['cout_eur'] ?? -1), 0.001);
+        self::assertEqualsWithDelta(4.50, (float) ($c['marge_eur'] ?? -1), 0.001);
+
+        // Même règle que la page Bénéfice par produit (ComptaCalc partagée).
+        self::assertEqualsWithDelta(
+            \App\Core\Compta\ComptaCalc::marginPercent(4.50, 7.50),
+            (float) ($c['marge_pct'] ?? -1),
+            0.0001,
+            'marge_pct doit suivre ComptaCalc::marginPercent (profit/ca×100).'
+        );
+        self::assertEqualsWithDelta(60.0, (float) ($c['marge_pct'] ?? -1), 0.001);
+        self::assertEqualsWithDelta(1.000, (float) ($c['cout_lot_actuel_eur'] ?? -1), 0.001, 'Lot en cours as-of.');
+    }
+
+    public function test_marge_produit_somme_les_graphies_de_casse_differente(): void
+    {
+        // Régression bloquée (règle anti-rapprochement) : « Coca cola » et
+        // « coca cola » sont UN produit — une demande en casse différente
+        // « COCA COLA » doit renvoyer la marge des DEUX lignes (la collation
+        // CI de MySQL les groupe d'ailleurs en une seule ligne SQL : 2×2,50 €
+        // + 1×2,00 € = CA 7,00 €, coût 3×1,00 €).
+        $stmt = $this->pdo->prepare(
+            'INSERT INTO product_costs (id, product_key, cost_price, valid_from) VALUES (?,?,?,?)'
+        );
+        $stmt->execute(['pc1', 'Coca cola', 1.000, '2026-01-01']);
+        $this->seedVente('s1', 'T1', '2026-10-20 12:00:00', 'Coca cola', 'Boissons', 2, 5.00);
+        $this->seedVente('s2', 'T2', '2026-10-20 12:30:00', 'coca cola', 'Boissons', 1, 2.00);
+        $this->seedComptage('c1', 'Coca cola', '2026-10-19 10:00:00', 4);
+
+        $r = $this->request(
+            'GET',
+            '/internal/assistant/marge_produit?nom=' . rawurlencode('COCA COLA')
+                . '&debut=2026-10-20&fin=2026-10-20'
+        );
+        $c = $this->corps($r);
+
+        self::assertSame(200, (int) ($r['code'] ?? 0));
+        self::assertTrue((bool) ($c['trouve'] ?? false), 'Casse différente : le produit DOIT être trouvé (résolveur partagé).');
+        self::assertSame(3, (int) ($c['quantite_vendue'] ?? -1), 'Les deux graphies sont sommées.');
+        self::assertEqualsWithDelta(7.00, (float) ($c['ca_eur'] ?? -1), 0.001);
+        self::assertEqualsWithDelta(3.00, (float) ($c['cout_eur'] ?? -1), 0.001);
+        self::assertEqualsWithDelta(4.00, (float) ($c['marge_eur'] ?? -1), 0.001);
+    }
+
+    public function test_marge_produit_introuvable_repond_false_avec_candidats(): void
+    {
+        $this->seedComptage('c1', 'Monster Blanche', '2026-10-25 10:00:00', 13);
+        $this->seedVente('s1', 'T1', '2026-10-20 12:00:00', 'Monster Blanche', 'Monster', 1, 1.80);
+
+        $r = $this->request(
+            'GET',
+            '/internal/assistant/marge_produit?nom=Monst&debut=2026-10-20&fin=2026-10-21'
+        );
+        $c = $this->corps($r);
+
+        self::assertSame(200, (int) ($r['code'] ?? 0));
+        self::assertFalse((bool) ($c['trouve'] ?? true));
+        self::assertArrayNotHasKey('ca_eur', $c, 'Aucun chiffre quand le produit est introuvable.');
+        self::assertSame(
+            [['cle' => 'Monster Blanche', 'stock' => 13]],
+            $c['candidats'] ?? null,
+            'Candidats du livre de stock, comme stock_produit.'
+        );
+    }
+
+    public function test_marge_produit_exclut_les_ventes_hors_periode(): void
+    {
+        $stmt = $this->pdo->prepare(
+            'INSERT INTO product_costs (id, product_key, cost_price, valid_from) VALUES (?,?,?,?)'
+        );
+        $stmt->execute(['pc1', 'Coca cola', 1.000, '2026-01-01']);
+        $this->seedComptage('c1', 'Coca cola', '2026-10-19 10:00:00', 4);
+        // Dans la période [j-6 ; j-3] : 1 vente. Hors période : avant (j-8)
+        // et après (j-1) → exclues, bornes incluses.
+        $this->seedVente('s1', 'T1', $this->jourParis(5) . ' 12:00:00', 'Coca cola', 'Boissons', 1, 2.00);
+        $this->seedVente('s2', 'T2', $this->jourParis(8) . ' 12:00:00', 'Coca cola', 'Boissons', 5, 10.00);
+        $this->seedVente('s3', 'T3', $this->jourParis(1) . ' 12:00:00', 'Coca cola', 'Boissons', 3, 6.00);
+
+        $r = $this->request(
+            'GET',
+            '/internal/assistant/marge_produit?nom=' . rawurlencode('coca cola')
+                . '&debut=' . $this->jourParis(6) . '&fin=' . $this->jourParis(3)
+        );
+        $c = $this->corps($r);
+
+        self::assertTrue((bool) ($c['trouve'] ?? false));
+        self::assertSame(1, (int) ($c['quantite_vendue'] ?? -1), 'Seule la vente dans la période compte.');
+        self::assertEqualsWithDelta(2.00, (float) ($c['ca_eur'] ?? -1), 0.001);
+        self::assertEqualsWithDelta(1.00, (float) ($c['cout_eur'] ?? -1), 0.001);
+    }
+
+    // -----------------------------------------------------------------
+    //  Outil 5 — doublons_en_attente (T4-P1)
+    // -----------------------------------------------------------------
+
+    public function test_doublons_en_attente_sans_jeton_refuse_403_generique(): void
+    {
+        $this->entetes = [];
+        $r = $this->request('GET', '/internal/assistant/doublons_en_attente');
+
+        self::assertSame(403, (int) ($r['code'] ?? 0));
+        self::assertSame(['erreur' => 'Accès refusé.'], $this->corps($r));
+        self::assertTrue($this->aEntete($r, 'Cache-Control: no-store, max-age=0'), 'La réponse doit être no-store.');
+    }
+
+    public function test_doublons_en_attente_expose_les_paires_vivantes_sans_decider(): void
+    {
+        // La paire « Minute Maid » / « Minute Maid Pomme » existe dans le
+        // livrable data/eval_t1/candidats_fusion.json (score 0,8854) : les
+        // DEUX clés seedées vivantes → la paire est exposée telle quelle.
+        $this->seedVente('s1', 'T1', $this->jourParis(2) . ' 12:00:00', 'Minute Maid', 'Boissons', 2, 3.00);
+        $this->seedVente('s2', 'T2', $this->jourParis(2) . ' 12:10:00', 'Minute Maid Pomme', 'Boissons', 1, 1.80);
+
+        $r = $this->request('GET', '/internal/assistant/doublons_en_attente');
+        $c = $this->corps($r);
+
+        self::assertSame(200, (int) ($r['code'] ?? 0));
+        self::assertSame('doublons_en_attente', $c['outil'] ?? '');
+        self::assertTrue((bool) ($c['dispo'] ?? false), 'Livrables data/eval_t1 présents.');
+        self::assertGreaterThanOrEqual(1, (int) ($c['total_suggestions'] ?? 0));
+
+        $paires = $c['suggestions_modele'] ?? [];
+        $attendue = null;
+        foreach ($paires as $p) {
+            $cote = [($p['source'] ?? ''), ($p['target'] ?? '')];
+            sort($cote);
+            if ($cote === ['Minute Maid', 'Minute Maid Pomme']) {
+                $attendue = $p;
+            }
+        }
+        self::assertNotNull($attendue, 'La paire vivante du livrable doit être exposée (côtés dans un ordre quelconque — habille choisit le côté conservé).');
+        self::assertSame(89, (int) ($attendue['ressemblance'] ?? -1), 'Score 0,8854 → ressemblance 89 (arrondi).');
+
+        // L'assistant liste, il ne fusionne jamais : mention explicite.
+        self::assertStringContainsString('humain', (string) ($c['a_decider_par'] ?? ''));
+
+        // Structure compacte : sections quarantaine toujours présentes.
+        self::assertIsArray($c['quarantaine']['en_attente'] ?? null);
+        self::assertIsArray($c['quarantaine']['mures'] ?? null);
+    }
+
+    public function test_doublons_en_attente_quarantaine_compacte_et_mures(): void
+    {
+        // Quarantaine REDIRIGÉE (tests/bootstrap.php → tests/cache/t15/):
+        // fixture écrite puis supprimée — jamais la vraie.
+        $chemin = dirname(__DIR__, 2) . '/tests/cache/t15/quarantaine.json';
+        @mkdir(dirname($chemin), 0777, true);
+        $paris = new \DateTimeZone('Europe/Paris');
+        $maintenant = new \DateTimeImmutable('now', $paris);
+        $fixture = [
+            'version' => 1,
+            'paires' => [
+                [
+                    'id' => str_repeat('a', 40),
+                    'source' => 'Foo',
+                    'target' => 'foo',
+                    'score' => 0.9123,
+                    'motif' => 'casse',
+                    'niveau' => 2,
+                    'created_at' => $maintenant->modify('-40 hours')->format(DATE_ATOM),
+                    'statut' => 'en_attente',
+                    'applied_at' => null,
+                ],
+                [
+                    'id' => str_repeat('b', 40),
+                    'source' => 'Bar',
+                    'target' => 'bar',
+                    'score' => 0.9,
+                    'motif' => 'casse',
+                    'niveau' => 2,
+                    'created_at' => $maintenant->modify('-60 hours')->format(DATE_ATOM),
+                    'statut' => 'en_attente',
+                    'applied_at' => null,
+                ],
+                [
+                    'id' => str_repeat('c', 40),
+                    'source' => 'Baz',
+                    'target' => 'baz',
+                    'score' => 0.95,
+                    'motif' => 'casse',
+                    'niveau' => 2,
+                    'created_at' => $maintenant->modify('-30 hours')->format(DATE_ATOM),
+                    'statut' => 'annulee',
+                    'applied_at' => null,
+                ],
+            ],
+        ];
+        file_put_contents($chemin, json_encode($fixture, JSON_UNESCAPED_UNICODE));
+
+        try {
+            $r = $this->request('GET', '/internal/assistant/doublons_en_attente');
+            $c = $this->corps($r);
+
+            self::assertSame(200, (int) ($r['code'] ?? 0));
+            $q = $c['quarantaine'] ?? [];
+            self::assertSame(1, (int) ($q['nb_en_attente'] ?? -1), 'La paire annulée ne compte pas.');
+            self::assertSame(1, (int) ($q['nb_mures'] ?? -1), 'Créée il y a 60 h > 48 h : mûre.');
+
+            $attente = $q['en_attente'][0] ?? [];
+            self::assertSame(str_repeat('a', 40), $attente['id'] ?? '');
+            self::assertSame('Foo', $attente['source'] ?? '');
+            self::assertSame(91, (int) ($attente['score_pct'] ?? -1), 'Score 0,9123 → 91 %.');
+            self::assertGreaterThanOrEqual(7, (int) ($attente['reste_heures'] ?? -1));
+            self::assertLessThanOrEqual(8, (int) ($attente['reste_heures'] ?? -1), '40 h écoulées → ~8 h restantes.');
+
+            self::assertSame(str_repeat('b', 40), ($q['mures'][0] ?? [])['id'] ?? '');
+        } finally {
+            @unlink($chemin);
+        }
+    }
+
+    // -----------------------------------------------------------------
     //  Lecture seule stricte
     // -----------------------------------------------------------------
 
@@ -407,6 +690,43 @@ final class AssistantToolsTest extends IntegrationTestCase
         }
 
         self::assertSame($avant, $this->comptagesTables(), 'Aucune table ne doit être modifiée par les outils assistant.');
+    }
+
+    public function test_les_deux_nouveaux_outils_ne_modifient_aucune_table_ni_fichier(): void
+    {
+        $this->seedVente('s1', 'T1', $this->jourParis(2) . ' 12:00:00', 'Coca cola', 'Boissons', 3, 3.00);
+        $this->seedComptage('c1', 'Coca cola', $this->jourParis(1) . ' 10:00:00', 4);
+
+        $avant = $this->comptagesTables();
+        $fichiers = [
+            AEIC_ROOT . '/data/eval_t1/candidats_fusion.json',
+            AEIC_ROOT . '/data/eval_t1/residuels_a_qualifier.csv',
+            AEIC_ROOT . '/data/eval_t1/t15/quarantaine.json', // la VRAIE, jamais la redirection test.
+        ];
+        $empreintes = array_map(
+            static fn (string $f): string => is_file($f) ? md5_file($f) : 'absent',
+            $fichiers
+        );
+
+        $r1 = $this->request(
+            'GET',
+            '/internal/assistant/marge_produit?nom=' . rawurlencode('coca cola')
+                . '&debut=' . $this->jourParis(7) . '&fin=' . $this->jourParis(0)
+        );
+        $r2 = $this->request('GET', '/internal/assistant/doublons_en_attente');
+
+        self::assertSame(200, (int) ($r1['code'] ?? 0));
+        self::assertSame(200, (int) ($r2['code'] ?? 0));
+
+        self::assertSame($avant, $this->comptagesTables(), 'Aucune table modifiée par les 2 nouveaux outils.');
+        self::assertSame(
+            $empreintes,
+            array_map(
+                static fn (string $f): string => is_file($f) ? md5_file($f) : 'absent',
+                $fichiers
+            ),
+            'Les livrables T1 et la vraie quarantaine doivent rester intacts (lecture seule).'
+        );
     }
 
     /**

@@ -143,6 +143,18 @@ abstract class IntegrationTestCase extends TestCase
         }
     }
 
+    /**
+     * Bascule sur une NOUVELLE session vide : simule un second navigateur
+     * (les requêtes suivantes ne partagent plus la session précédente).
+     * Sert aux tests d'isolation entre utilisateurs (p. ex. mémoire de
+     * conversation de l'assistant, T4-P1-B : deux sessions distinctes).
+     */
+    protected function nouvelleSession(): void
+    {
+        $this->sessionId = 'test-' . bin2hex(random_bytes(8));
+        $this->lastSessionId = $this->sessionId;
+    }
+
     protected function tearDown(): void
     {
         $this->pdo = null;
