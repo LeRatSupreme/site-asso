@@ -1,0 +1,12 @@
+e920d95bb1012f7f68b0c278300596971b03550385fab6138f23c915bedf4d8c  ./run1/metrics.json
+871ca510c99701addc13ba557b29bc5517020eead90f4669fb4b2fe0a3f9bdf4  ./run1/aeic-t4p2-qlora-full.log
+e823bd2be4f6f8ec8f737c16c2bb1beb775ebb58deccede5e5cd1cc2ed7dde6c  ./run2/metrics.json
+9611269a934ead0b217abfd4ae5e418668613def6159c263fb660a3759fb59de  ./run2/aeic-t4p2-qlora-full.log
+9264887d46f0ffa31625eeaa1adfc159ba3bc60b67f329376b8eee8b1c7fe906  ./run_v7/metrics.json
+0ae3784a33df12cb9f1f7998e3a7e1fc5011a047cb1919112ce05c0cf0ec0c30  ./run_v7/aeic-t4p2-qlora-full.log
+1963b65df1b9331253d29c6bd611f97fd3b8588d3229ebb2a6ca5b0e89d3e4ae  ./run_v7/attempt1_v7_0_error/aeic-t4p2-qlora-full.log
+ad926a337875c72ce4ab0801ef9f1e992621ae316bf7893bf50240faeb18e59d  ./run_v7/attempt1_v7_0_error/metrics.json
+a30a32e7e5d2b5cf8e440bd25ebe71843d91b176d04f55381a30063d12396c7e  ./run_v7/adapter/README.md
+ebd82d801bdaa5240a5adc8f9b7a53b6d48d056855b43a9d2475c06a897f3deb  ./run_v7/adapter/adapter_config.json
+81d8d0ad9854694cb06aee0f09aca49b377bb3c391282fbd702d7905ba0b07e1  ./run_v7/adapter/adapter_model.safetensors
+da74813e31a7145e3303850e40d1abdd146be95db3edbeebd43a31ad9a061e1f  ./run_v7/aeic-qwen3-4b-tools-Q4_K_M.gguf

@@ -1,0 +1,70 @@
+--- /tmp/v70_pull/aeic-t4p2-qlora-full.py	2026-10-28 12:21:35.878530083 +0000
++++ /home/ubuntu/AEIC/data/eval_t1/t4p2/full/kernel/train.py	2026-10-28 12:20:44.070882776 +0000
+@@ -13,7 +13,9 @@
+     APRÈS attachement LoRA : activations par couche non conservées ;
+   - micro-batch 2 + accumulation de gradient x2 (batch effectif 4, lr
+     conservé, graine/ordre déterministes inchangés) ;
+-  - repli automatique micro-batch 1 + accumulation x4 si OOM au 1er step ;
++  - repli automatique micro-batch 1 + accumulation x4 si OOM, à n'importe
++    quel step, une seule fois (v7.1 : run v7.0 a passé les steps 1-2 puis OOM
++    au step 3, séquences ~1700+ en backend math T4) ;
+   - preuves mémoire : dry-run forward+backward avant/après checkpointing au
+     boot + pic VRAM du 1er step réel (v6b plantait exactement à ce point).
+ 
+@@ -148,7 +150,10 @@
+ VAL_MIN_DELTA = 1e-4
+ BATCH_SIZE = 2                 # v7 : micro-batch 2 (v6b batch 4 -> OOM T4)
+ GRAD_ACCUM_STEPS = 2           # v7 : batch effectif 4 conservé (2 x 2)
+-EVAL_BATCH_SIZE = 8
++EVAL_BATCH_SIZE = 2             # v7.1 : marge mémoire (backend math, seq
++                                # ~1782) ; loss pondérée par tokens ->
++                                # strictement identique quelle que soit la
++                                # taille de batch
+ DRY_RUN_SEQ = 512              # v7 : dry-run mémoire avant/après checkpointing
+ ATTN_IMPL = "sdpa"             # v7 : explicite + backends sondés au boot
+ MAX_LEN = 2048
+@@ -652,7 +657,7 @@
+ 
+ 
+ def main():
+-    global BATCH_SIZE, GRAD_ACCUM_STEPS      # v7 : repli OOM au 1er step
++    global BATCH_SIZE, GRAD_ACCUM_STEPS      # v7.1 : repli OOM à tout step
+     t_start = time.time()
+     os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+     metrics = {"mission": ("AEIC T4-P2 entraînement COMPLET LoRA Qwen3-4B + "
+@@ -1176,19 +1181,29 @@
+                           f"seq={rec['seq_max']} tok={step_tok} "
+                           f"{rec['seconds']}s", flush=True)
+                 except Exception as oom_exc:                   # noqa: BLE001
+-                    # garde-fou v7 : repli UNIQUEMENT au tout 1er step du run
+-                    if (not _est_oom(oom_exc) or epoch != 1 or si != 0
+-                            or ep_steps or history_steps or oom_fallback_done):
++                    # garde-fou v7.1 : repli à N'IMPORTE QUEL step, une seule
++                    # fois (v7.0 : OOM au step 3 après 2 steps réussis —
++                    # l'ancienne garde « 1er step uniquement » ne tir jamais)
++                    if not _est_oom(oom_exc) or oom_fallback_done:
+                         raise
+                     oom_fallback_done = True
+-                    print(f"[train] OOM CUDA au 1er step "
+-                          f"({type(oom_exc).__name__}) -> repli v7 : "
++                    print(f"[train] OOM CUDA (epoch {epoch}, step {si + 1} — "
++                          f"{type(oom_exc).__name__}) -> repli v7 : "
+                           f"micro-batch 1 + accumulation 4 (batch effectif 4 "
+-                          f"conservé, lr inchangé)", flush=True)
++                          f"conservé, lr inchangé), epoch {epoch} relancée "
++                          f"depuis le début", flush=True)
+                     del oom_exc
+                     optimizer.zero_grad(set_to_none=True)
+                     gc.collect()
+                     torch.cuda.empty_cache()
++                    if metrics["memoire"].get("pic_premier_step_gb") \
++                            is not None:
++                        metrics["memoire"]["pic_premier_step_micro2_gb"] = \
++                            metrics["memoire"]["pic_premier_step_gb"]
++                    # epoch relancée de zéro : compteurs + historique de
++                    # l'epoch en cours remis à plat (sinon double comptage)
++                    ep_loss, ep_tok, ep_steps = 0.0, 0, 0
++                    history_steps.clear()
+                     BATCH_SIZE = 1
+                     GRAD_ACCUM_STEPS = 4
+                     metrics["protocole"]["batch_size"] = 1
