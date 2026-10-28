@@ -30,8 +30,15 @@ use App\Core\RateLimiter;
  *    réponse (json() du contrôleur fait exit) ;
  *  - fail-closed : tout échec réseau/parse → 503 générique, détail en
  *    Logger::error uniquement, jamais dans la réponse ;
+ *  - FAQ fast-path (app/config/assistant_faq.php) : question dont un
+ *    déclencheur apparaît (après normalisation casse/accents/ponctuation,
+ *    déclencheur le plus long gagnant) → réponse pré-rédigée http 200
+ *    instantanée, SANS sémaphore ni appel LLM (l'historique n'est pas
+ *    nécessaire : il n'est validé que sur le chemin LLM) ;
  *  - journal d'observation logs/assistant_public.jsonl : une ligne par
- *    requête {ts, ip_hash, question, reply, latency_ms, status} — l'IP
+ *    requête {ts, ip_hash, question, reply, latency_ms, status, faq} —
+ *    le champ additif faq (true/false) distingue réponses pré-rédigées
+ *    et générations LLM (le front ignore les champs inconnus) ; l'IP
  *    n'est JAMAIS écrite en clair (sha256 tronqué, sel APP_KEY).
  *
  * Toutes les dépendances (storage rate limit, URL LLM, journal, locks)
@@ -45,9 +52,10 @@ final class PublicAssistant
     /** Modèle servi par llama-server (constante LLM_MODELE du pont admin). */
     private const LLM_MODELE = 'Qwen3-4B';
 
-    /** Génération publique : sobre et courte (pas de réflexion, peu de tokens). */
+    /** Génération publique : sobre et très courte (FAQ de secours ~40
+     *  mots → 200 tokens suffisent largement, préfill+génère moins cher). */
     private const TEMPERATURE = 0.4;
-    private const MAX_TOKENS  = 400;
+    private const MAX_TOKENS  = 200;
 
     /** Timeout curl : 60 s pour la connexion, 60 s au total (contrat). */
     private const TIMEOUT_CONNECT_S = 60;
@@ -101,7 +109,8 @@ final class PublicAssistant
 
     /**
      * Traite une requête POST /assistant/ask de bout en bout :
-     * rate limit → validation → sémaphore → appel LLM → journal.
+     * rate limit → validation question → FAQ (fast-path, pas de LLM)
+     * → validation history → sémaphore → appel LLM → journal.
      *
      * @param mixed $questionRaw $_POST['question'] (string attendue).
      * @param mixed $historyRaw  $_POST['history'] (string JSON optionnelle).
@@ -115,23 +124,31 @@ final class PublicAssistant
         // pour une IP déjà à saturation.
         $cle = 'assistant_public:' . $ip;
         if ($this->limiter->tooManyAttempts($cle, self::RATE_MAX, self::RATE_FENETRE_S)) {
-            return $this->conclure(429, false, null, self::MSG_RATE, $questionRaw, 0, $ip);
+            return $this->conclure(429, false, null, self::MSG_RATE, $questionRaw, 0, $ip, false);
         }
         $this->limiter->hit($cle);
 
         $question = self::validerQuestion($questionRaw);
         if ($question === null) {
-            return $this->conclure(400, false, null, self::MSG_INVALIDE, $questionRaw, 0, $ip);
+            return $this->conclure(400, false, null, self::MSG_INVALIDE, $questionRaw, 0, $ip, false);
+        }
+
+        // FAQ fast-path : réponse pré-rédigée instantanée. AVANT le
+        // sémaphore et la validation de l'historique (inutile ici, la
+        // réponse ne dépend que de la question courante) — zéro appel LLM.
+        $reponseFaq = self::chercherFaq($question);
+        if ($reponseFaq !== null) {
+            return $this->conclure(200, true, $reponseFaq, null, $questionRaw, 0, $ip, true);
         }
 
         $history = self::validerHistory($historyRaw);
         if ($history === null) {
-            return $this->conclure(400, false, null, self::MSG_INVALIDE, $questionRaw, 0, $ip);
+            return $this->conclure(400, false, null, self::MSG_INVALIDE, $questionRaw, 0, $ip, false);
         }
 
         $slot = $this->acquerirSlot();
         if ($slot === null) {
-            return $this->conclure(503, false, null, self::MSG_OCCUPE, $questionRaw, 0, $ip);
+            return $this->conclure(503, false, null, self::MSG_OCCUPE, $questionRaw, 0, $ip, false);
         }
 
         $debut    = microtime(true);
@@ -150,7 +167,7 @@ final class PublicAssistant
                 'http'  => $reponse['http'],
             ]);
 
-            return $this->conclure(503, false, null, self::MSG_INDISPONIBLE, $questionRaw, $latencyMs, $ip);
+            return $this->conclure(503, false, null, self::MSG_INDISPONIBLE, $questionRaw, $latencyMs, $ip, false);
         }
 
         $reply = self::extractReply($reponse['body']);
@@ -159,10 +176,10 @@ final class PublicAssistant
                 'http' => $reponse['http'],
             ]);
 
-            return $this->conclure(503, false, null, self::MSG_INDISPONIBLE, $questionRaw, $latencyMs, $ip);
+            return $this->conclure(503, false, null, self::MSG_INDISPONIBLE, $questionRaw, $latencyMs, $ip, false);
         }
 
-        return $this->conclure(200, true, $reply, null, $questionRaw, $latencyMs, $ip);
+        return $this->conclure(200, true, $reply, null, $questionRaw, $latencyMs, $ip, false);
     }
 
     // -----------------------------------------------------------------
@@ -238,6 +255,78 @@ final class PublicAssistant
         }
 
         return $messages;
+    }
+
+    // -----------------------------------------------------------------
+    //  FAQ fast-path (app/config/assistant_faq.php) — zéro appel LLM
+    // -----------------------------------------------------------------
+
+    /**
+     * Normalisation partagée question/déclencheurs : minuscules,
+     * translittération simple des accents (é→e…), toute ponctuation et
+     * tout espacement multiple ramenés à UN espace, bords tronqués.
+     * Ex. « Salut, c'est quoi l'AEIC ? » → « salut c est quoi l aeic ».
+     */
+    private static function normaliserTexte(string $texte): string
+    {
+        $texte = mb_strtolower($texte, 'UTF-8');
+
+        // Translittération manuelle volontairement simple (iconv
+        // ASCII//TRANSLIT dépend de la locale) : suffisant pour le français
+        // courant.
+        $texte = strtr($texte, [
+            'à' => 'a', 'á' => 'a', 'â' => 'a', 'ä' => 'a', 'å' => 'a',
+            'ç' => 'c',
+            'é' => 'e', 'è' => 'e', 'ê' => 'e', 'ë' => 'e',
+            'ì' => 'i', 'í' => 'i', 'î' => 'i', 'ï' => 'i',
+            'ò' => 'o', 'ó' => 'o', 'ô' => 'o', 'ö' => 'o',
+            'ù' => 'u', 'ú' => 'u', 'û' => 'u', 'ü' => 'u',
+            'ý' => 'y', 'ÿ' => 'y', 'œ' => 'oe', 'æ' => 'ae',
+        ]);
+
+        // Tout ce qui n'est pas lettre/chiffre (ponctuation, apostrophes,
+        // espacements multiples…) → un seul espace.
+        $texte = (string) preg_replace('/[^\p{L}\p{N}]+/u', ' ', $texte);
+
+        return trim($texte);
+    }
+
+    /**
+     * Cherche une réponse FAQ pour la question : entrée gagnante = celle
+     * dont le déclencheur LE PLUS LONG est sous-chaîne de la question
+     * normalisée ; à égalité de longueur, la première entrée du fichier
+     * gagne (ordre conservé par le parcours). Aucun match → null (chemin
+     * LLM classique).
+     */
+    private static function chercherFaq(string $question): ?string
+    {
+        /** @var list<array{declencheurs: list<string>, reponse: string}> $faq */
+        $faq = require AEIC_ROOT . '/app/config/assistant_faq.php';
+
+        $normalisee = self::normaliserTexte($question);
+        if ($normalisee === '') {
+            return null;
+        }
+
+        $meilleure  = null;
+        $longueurMax = 0;
+        foreach ($faq as $entree) {
+            foreach ($entree['declencheurs'] as $declencheur) {
+                // Déclencheurs stockés déjà normalisés ; re-normaliser est
+                // idempotent et pardonnant à l'édition du fichier.
+                $declencheur = self::normaliserTexte((string) $declencheur);
+                if ($declencheur === '') {
+                    continue;
+                }
+                if (mb_strlen($declencheur) > $longueurMax
+                    && mb_strpos($normalisee, $declencheur) !== false) {
+                    $meilleure  = (string) $entree['reponse'];
+                    $longueurMax = mb_strlen($declencheur);
+                }
+            }
+        }
+
+        return $meilleure;
     }
 
     // -----------------------------------------------------------------
@@ -429,6 +518,8 @@ final class PublicAssistant
      * refus 400/429/503 — l'utilisateur veut « regarder un peu »), puis
      * renvoie le verdict. Un échec d'écriture ne casse jamais la réponse.
      *
+     * @param bool $faq        true si la réponse vient du fast-path FAQ.
+     *
      * @return array{http:int, ok:bool, reply:?string, error:?string}
      */
     private function conclure(
@@ -438,7 +529,8 @@ final class PublicAssistant
         ?string $error,
         mixed $questionBrut,
         int $latencyMs,
-        string $ip
+        string $ip,
+        bool $faq = false
     ): array {
         $ligne = json_encode([
             'ts'         => (new \DateTimeImmutable('now', new \DateTimeZone('Europe/Paris')))->format(DATE_ATOM),
@@ -449,6 +541,7 @@ final class PublicAssistant
             'reply'      => mb_substr($reply ?? '', 0, self::JOURNAL_REPLY_MAX),
             'latency_ms' => $latencyMs,
             'status'     => $http,
+            'faq'        => $faq,
         ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
         if ($ligne !== false) {

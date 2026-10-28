@@ -87,7 +87,9 @@ final class AssistantPublicTest extends TestCase
         ];
 
         foreach ($invalides as $history) {
-            $r = $s->traiter('Bonjour', $history, '1.2.3.4');
+            // Question volontairement HORS FAQ : elle doit bien atteindre la
+            // validation de l'historique (le fast-path FAQ la court-circuiterait).
+            $r = $s->traiter('Météo demain ?', $history, '1.2.3.4');
             self::assertSame(400, $r['http'], 'doit rejeter : ' . var_export($history, true));
             self::assertSame('Message invalide.', $r['error']);
         }
@@ -132,7 +134,8 @@ final class AssistantPublicTest extends TestCase
         $history = '[{"role":"user","content":"' . "\x80\x81" . '"}]';
         self::assertNull(PublicAssistant::validerHistory($history));
 
-        $r = $this->service()->traiter('Bonjour', $history, '1.2.3.4');
+        // Question volontairement HORS FAQ : l'historique doit être validé.
+        $r = $this->service()->traiter('Météo demain ?', $history, '1.2.3.4');
         self::assertSame(400, $r['http']);
         self::assertSame('Message invalide.', $r['error']);
 
@@ -162,7 +165,7 @@ final class AssistantPublicTest extends TestCase
         self::assertSame('Qwen3-4B', $payload['model']);
         self::assertSame($messages, $payload['messages']);
         self::assertSame(0.4, $payload['temperature']);
-        self::assertSame(400, $payload['max_tokens']);
+        self::assertSame(200, $payload['max_tokens']);
         self::assertFalse($payload['stream']);
         self::assertSame(['enable_thinking' => false], $payload['chat_template_kwargs']);
         // L'assistant public n'a AUCUN outil : jamais de tools ni tool_choice.
@@ -182,6 +185,9 @@ final class AssistantPublicTest extends TestCase
         // Garde-fous obligatoires présents dans le prompt éditable.
         self::assertStringContainsString('DONNÉES', $prompt);
         self::assertStringContainsString('AUCUNE donnée interne', $prompt);
+        // Le « Style » impose désormais des réponses très courtes SANS
+        // émoji ni symbole décoratif (accélération de l'assistant public).
+        self::assertMatchesRegularExpression('/moji/i', $prompt);
     }
 
     // -------------------------------------------------------------
@@ -190,7 +196,9 @@ final class AssistantPublicTest extends TestCase
 
     public function test_llm_injoignable_renvoie_503_generique(): void
     {
-        $r = $this->service()->traiter('Qui es-tu ?', null, '1.2.3.4');
+        // Question volontairement HORS FAQ (sinon le fast-path répondrait 200
+        // sans jamais toucher au LLM).
+        $r = $this->service()->traiter('Quelle est la météo demain ?', null, '1.2.3.4');
 
         self::assertFalse($r['ok']);
         self::assertSame(503, $r['http']);
@@ -222,22 +230,127 @@ final class AssistantPublicTest extends TestCase
         $path = $this->tmp . '/assistant_public.jsonl';
         $s = $this->service();
 
-        $s->traiter('', null, '1.2.3.4');              // 400
-        $s->traiter('Bonjour', null, '1.2.3.4');       // 503 (LLM down)
+        $s->traiter('', null, '1.2.3.4');                        // 400 (question invalide)
+        $s->traiter('Bonjour', null, '1.2.3.4');                 // 200 FAQ (LLM non appelé)
+        $s->traiter('Météo à Calais demain ?', null, '1.2.3.4'); // 503 (hors FAQ, LLM down)
 
         $lignes = array_values(array_filter(explode("\n", (string) @file_get_contents($path))));
-        self::assertCount(2, $lignes);
+        self::assertCount(3, $lignes);
 
         $premiere = json_decode($lignes[0], true);
         self::assertSame(400, $premiere['status']);
         self::assertSame('', $premiere['reply']);
+        self::assertFalse($premiere['faq']);
 
         $seconde = json_decode($lignes[1], true);
-        self::assertSame(503, $seconde['status']);
+        self::assertSame(200, $seconde['status']);
         self::assertSame('Bonjour', $seconde['question']);
+        self::assertSame(self::reponseFaqPour('bonjour'), $seconde['reply']);
+        self::assertTrue($seconde['faq']); // ligne journal avec faq:true
         self::assertMatchesRegularExpression('/^[0-9a-f]{16}$/', $seconde['ip_hash']);
         self::assertNotSame('', $seconde['ts']);
         self::assertIsInt($seconde['latency_ms']);
+
+        $troisieme = json_decode($lignes[2], true);
+        self::assertSame(503, $troisieme['status']);
+        self::assertFalse($troisieme['faq']);
+    }
+
+    // -------------------------------------------------------------
+    //  FAQ fast-path (réponses pré-rédigées, zéro appel LLM)
+    // -------------------------------------------------------------
+
+    public function test_faq_match_exact_et_variantes_casse_accents_ponctuation(): void
+    {
+        $attendu = self::reponseFaqPour('c est quoi l aeic');
+        $s = $this->service();
+
+        foreach ([
+            "C'est quoi l'AEIC ?",           // exact
+            "C'EST QUOI L'AEIC ?",           // casse
+            'c est quoi l aeic',              // ponctuation absente
+            "c'est quoi l'aéic ?",           // accent
+            "  Qu'est-ce  que l'AEIC ?!  ",  // ponctuation + espaces multiples
+        ] as $question) {
+            $r = $s->traiter($question, null, '8.8.4.4');
+            self::assertSame(200, $r['http'], 'doit répondre en FAQ : ' . $question);
+            self::assertTrue($r['ok']);
+            self::assertNull($r['error']);
+            self::assertSame($attendu, $r['reply']);
+        }
+    }
+
+    public function test_faq_priorite_au_declencheur_le_plus_long(): void
+    {
+        // « salut, c'est quoi l'AEIC ? » contient « salut » (5) ET
+        // « c est quoi l aeic » (17) : l'entrée AEIC gagne, pas la
+        // salutation.
+        $r = $this->service()->traiter("Salut, c'est quoi l'AEIC ?", null, '8.8.4.4');
+
+        self::assertSame(200, $r['http']);
+        self::assertSame(self::reponseFaqPour('c est quoi l aeic'), $r['reply']);
+        self::assertNotSame(self::reponseFaqPour('salut'), $r['reply']);
+    }
+
+    public function test_hors_faq_va_au_chemin_llm_503_faq_false(): void
+    {
+        $path = $this->tmp . '/assistant_public.jsonl';
+        $s = $this->service();
+
+        $r = $s->traiter('Quelle est la météo demain ?', null, '8.8.4.4');
+
+        // Port fermé : le chemin LLM classique est bien emprunté → 503.
+        self::assertFalse($r['ok']);
+        self::assertSame(503, $r['http']);
+        self::assertSame("L'assistant est indisponible, réessaie dans un instant.", $r['error']);
+
+        // Journal : la ligne porte bien faq:false (génération LLM).
+        $lignes = array_values(array_filter(explode("\n", (string) @file_get_contents($path))));
+        self::assertCount(1, $lignes);
+        self::assertFalse(json_decode($lignes[0], true)['faq']);
+    }
+
+    public function test_faq_reponse_instantanee_200_sans_llm_ni_semaphore(): void
+    {
+        $path = $this->tmp . '/assistant_public.jsonl';
+        $s = $this->service();
+
+        // Historique invalide + LLM injoignable : la FAQ répond quand même
+        // — elle est consultée AVANT la validation de l'historique et
+        // AVANT le sémaphore (aucun appel réseau engagé).
+        $r = $s->traiter('Bonjour', 'ce n est pas du json', '8.8.4.4');
+
+        self::assertSame(200, $r['http']);
+        self::assertTrue($r['ok']);
+        self::assertSame(self::reponseFaqPour('bonjour'), $r['reply']);
+
+        // Le fast-path n'a touché ni les slots du sémaphore…
+        self::assertFileDoesNotExist($this->tmp . '/assistant_public.0.lock');
+        self::assertFileDoesNotExist($this->tmp . '/assistant_public.1.lock');
+
+        // …ni le réseau : réponse instantanée (latency 0) et faq:true.
+        $lignes = array_values(array_filter(explode("\n", (string) @file_get_contents($path))));
+        self::assertCount(1, $lignes);
+        $ligne = json_decode($lignes[0], true);
+        self::assertTrue($ligne['faq']);
+        self::assertSame(0, $ligne['latency_ms']);
+    }
+
+    /**
+     * Relit app/config/assistant_faq.php et renvoie la réponse de l'entrée
+     * portant ce déclencheur (déclencheurs stockés déjà normalisés).
+     */
+    private static function reponseFaqPour(string $declencheur): string
+    {
+        /** @var list<array{declencheurs: list<string>, reponse: string}> $faq */
+        $faq = require AEIC_ROOT . '/app/config/assistant_faq.php';
+        foreach ($faq as $entree) {
+            if (in_array($declencheur, $entree['declencheurs'], true)) {
+                return $entree['reponse'];
+            }
+        }
+
+        self::fail('Déclencheur inconnu dans assistant_faq.php : ' . $declencheur);
     }
 
     public function test_fichiers_runtime_sont_0666_reouvrables_cli_et_web(): void

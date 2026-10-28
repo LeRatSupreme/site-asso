@@ -21,7 +21,7 @@
     var MAX_CONTENT  = 800; // limite serveur par contenu d'item d'historique
     var TIMEOUT_MS   = 65000;
     var MSG_INDISPO  = "L'assistant est indisponible, réessaie dans un instant.";
-    var WELCOME      = "Salut 👋 Je suis l'assistant de l'AEIC — pose-moi tes questions sur l'asso, les événements, la cafétéria ou les jeux du site !";
+    var WELCOME      = "Salut, je suis l'assistant de l'AEIC — pose-moi tes questions sur l'asso, les événements, la cafétéria ou les jeux du site !";
 
     var bubble = document.getElementById('assistant-bubble');
     var panel  = document.getElementById('assistant-panel');
