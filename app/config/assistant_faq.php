@@ -161,6 +161,32 @@ return [
         ],
         'reponse' => "Tu peux nous écrire à calais.aeic@gmail.com. Toutes les infos de l'asso sont aussi sur la page /presentation du site.",
     ],
+    [
+        // CRÉATEUR DU SITE / TECHNO — question réelle du widget public
+        // (journal 28/10, signalée 4 nuits par les selfreview). Faits
+        // 100 % vérifiables publiquement : footer (« Développé par
+        // Adrien Remond », aremond.ovh) et /legal Article 10 « Site
+        // développé par Remond Adrien, étudiant en informatique, dans le
+        // cadre d'un projet associatif bénévole ». AUCUNE mention
+        // publique de techno (PHP…) → la réponse n'en cite pas.
+        // Anti-hijack : chaque déclencheur contient « site » ou
+        // « technologie »/« developpe »/« construit » — « qui a créé
+        // l'AEIC ? » (l'association) ne matche PAS et reste sur l'entrée
+        // identité AEIC ('aeic').
+        'declencheurs' => [
+            'qui a cree ce site',
+            'qui a cree le site',
+            'qui a fait le site',
+            'qui a fait ce site',
+            'quelle technologie',
+            'qui a developpe',
+            'qui a developpe le site',
+            'avec quoi le site',
+            'comment le site a ete fait',
+            'qui a construit le site',
+        ],
+        'reponse' => "Le site de l'AEIC a été développé par Adrien Remond, étudiant en informatique, dans le cadre d'un projet associatif bénévole. Les crédits complets sont sur la page /legal du site.",
+    ],
     // Politesse / smalltalk — placées juste AVANT les salutations (les
     // génériques restent en dernier) : « comment ca va » (13) est plus long
     // que « bonjour » (7), et à égalité (« ca va » vs « salut », 5) la
