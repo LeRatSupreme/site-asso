@@ -50,10 +50,10 @@ final class ProductCategory extends Model
     }
 
     /** Distance d'édition maximale entre deux noms considérés comme quasi-doublons. */
-    private const FUZZY_MAX_DISTANCE = 1;
+    public const FUZZY_MAX_DISTANCE = 1;
 
     /** Longueur minimale (forme normalisée) pour appliquer la distance floue. */
-    private const FUZZY_MIN_LENGTH = 4;
+    public const FUZZY_MIN_LENGTH = 4;
 
     /**
      * Crée la catégorie si absente, en ABSORBANT les quasi-doublons

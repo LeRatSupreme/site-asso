@@ -689,6 +689,71 @@ final class AssistantToolsTest extends IntegrationTestCase
     }
 
     // -----------------------------------------------------------------
+    //  Outil 6 — catalogue_anomalies (veille qualité catalogue)
+    // -----------------------------------------------------------------
+
+    public function test_catalogue_anomalies_sans_jeton_refuse_403_generique(): void
+    {
+        $this->entetes = [];
+        $r = $this->request('GET', '/internal/assistant/catalogue_anomalies');
+
+        self::assertSame(403, (int) ($r['code'] ?? 0));
+        self::assertSame(['erreur' => 'Accès refusé.'], $this->corps($r));
+        self::assertTrue($this->aEntete($r, 'Cache-Control: no-store, max-age=0'), 'La réponse doit être no-store.');
+    }
+
+    /** Liste blanche (200, pas le 404 « Outil inconnu ») + JSON champs français des 6 familles. */
+    public function test_catalogue_anomalies_liste_blanche_et_champs_francais(): void
+    {
+        // CatalogueQc lit aussi products/product_categories : reset dédié
+        // (absent du setUp() commun — les autres outils n'y touchent pas).
+        $this->reset(['products', 'product_categories']);
+        $this->pdo->exec("INSERT INTO product_categories (id, name, `order`, is_active) VALUES ('cat_qc', 'Boissons', 0, 1)");
+        $this->pdo->exec("INSERT INTO products (id, name, price, category_id, is_active) VALUES ('p_qc', 'Orangina ancien', 2.50, 'cat_qc', 1)");
+
+        $r = $this->request('GET', '/internal/assistant/catalogue_anomalies');
+        $c = $this->corps($r);
+
+        self::assertSame(200, (int) ($r['code'] ?? 0), 'catalogue_anomalies doit être dans la liste blanche du contrôleur (sinon 404 « Outil inconnu. »).');
+        self::assertSame('catalogue_anomalies', $c['outil'] ?? '');
+        self::assertMatchesRegularExpression('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/', (string) ($c['genere_le'] ?? ''), 'Horodatage Paris compact.');
+
+        // Les SIX familles : comptes exacts + listes compactes, clés stables.
+        $familles = [
+            'fiches_jamais_vendues', 'cles_sans_fiche', 'categories_vides',
+            'quasi_doublons_categories', 'prix_suspects', 'fiches_dormantes',
+        ];
+        foreach ($familles as $famille) {
+            self::assertArrayHasKey($famille, $c['totaux'] ?? [], "La famille $famille doit avoir son compte exact.");
+            self::assertIsArray($c[$famille] ?? null, "La famille $famille doit avoir sa liste compacte.");
+        }
+
+        // La fixture (fiche active jamais vendue) sort avec ses champs français.
+        self::assertSame(1, (int) ($c['totaux']['fiches_jamais_vendues'] ?? -1));
+        $item = $c['fiches_jamais_vendues'][0] ?? [];
+        self::assertSame('Orangina ancien', $item['produit'] ?? '');
+        self::assertSame('Boissons', $item['categorie'] ?? '');
+        self::assertSame(2.5, $item['prix_eur'] ?? -1);
+        self::assertArrayHasKey('jamais_achetee', $item, 'Champ français « jamais_achetee » attendu (candidat [SÛR]).');
+    }
+
+    public function test_catalogue_anomalies_ne_modifie_aucune_table(): void
+    {
+        $this->reset(['products', 'product_categories']);
+        $this->seedVente('s1', 'T1', $this->jourParis(2) . ' 12:00:00', 'Coca cola', 'Boissons', 3, 3.00);
+        $this->seedComptage('c1', 'Coca cola', $this->jourParis(1) . ' 10:00:00', 4);
+        $this->pdo->exec("INSERT INTO product_categories (id, name, `order`, is_active) VALUES ('cat_qc', 'Boissons', 0, 1)");
+        $this->pdo->exec("INSERT INTO products (id, name, price, category_id, is_active) VALUES ('p_qc', 'Fantome', 2.50, 'cat_qc', 1)");
+
+        $avant = $this->comptagesTables();
+
+        $r = $this->request('GET', '/internal/assistant/catalogue_anomalies');
+
+        self::assertSame(200, (int) ($r['code'] ?? 0));
+        self::assertSame($avant, $this->comptagesTables(), 'catalogue_anomalies est strictement LECTURE SEULE : l\'assistant signale, il ne corrige jamais.');
+    }
+
+    // -----------------------------------------------------------------
     //  Lecture seule stricte
     // -----------------------------------------------------------------
 

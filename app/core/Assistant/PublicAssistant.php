@@ -131,6 +131,7 @@ final class PublicAssistant
     private string $journalPath;
     private string $journalKioskPath;
     private string $cheminLock;
+    private int $timeoutTotalS;
 
     /**
      * @param RateLimiter|null $limiter        Compteur partagé (défaut : cache/ratelimit).
@@ -142,19 +143,26 @@ final class PublicAssistant
      *                                         sémaphore protège le llama-server, pas l'endpoint.
      * @param string|null      $journalKioskPath Fichier JSONL kiosque (défaut :
      *                                         logs/assistant_kiosk.jsonl).
+     * @param int|null         $timeoutTotalS  Timeout curl TOTAL par appel LLM, en secondes
+     *                                         (défaut : TIMEOUT_TOTAL_S = 60 s, contrat public/kiosque).
+     *                                         Seuls les consommateurs CLI longs (veille catalogue :
+     *                                         analyse d'un rapport complet, 300 s en contexte cron)
+     *                                         l'augmentent — le chemin web garde la valeur du contrat.
      */
     public function __construct(
         ?RateLimiter $limiter = null,
         ?string $llmUrl = null,
         ?string $journalPath = null,
         ?string $cheminLock = null,
-        ?string $journalKioskPath = null
+        ?string $journalKioskPath = null,
+        ?int $timeoutTotalS = null
     ) {
         $this->limiter        = $limiter ?? new RateLimiter();
         $this->llmUrl         = $llmUrl ?? self::LLM_URL_DEFAUT;
         $this->journalPath    = $journalPath ?? (AEIC_ROOT . '/logs/assistant_public.jsonl');
         $this->cheminLock     = $cheminLock ?? (AEIC_ROOT . '/cache/assistant_public');
         $this->journalKioskPath = $journalKioskPath ?? (AEIC_ROOT . '/logs/assistant_kiosk.jsonl');
+        $this->timeoutTotalS  = $timeoutTotalS ?? self::TIMEOUT_TOTAL_S;
     }
 
     /**
@@ -647,7 +655,7 @@ final class PublicAssistant
             CURLOPT_POSTFIELDS     => $corps,
             CURLOPT_HTTPHEADER     => ['Content-Type: application/json', 'Accept: application/json'],
             CURLOPT_CONNECTTIMEOUT => self::TIMEOUT_CONNECT_S,
-            CURLOPT_TIMEOUT        => self::TIMEOUT_TOTAL_S,
+            CURLOPT_TIMEOUT        => $this->timeoutTotalS,
             CURLOPT_RETURNTRANSFER => true,
             // Cible locale : aucun proxy d'environnement ne doit détourner
             // l'appel (durcissement).
