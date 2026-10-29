@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Controllers;
 
+use App\Core\Compta\CatalogueQc;
 use App\Core\Compta\ComptaCalc;
 use App\Core\Compta\Dashboard\Data;
 use App\Core\Compta\Kiosk;
@@ -29,6 +30,7 @@ use App\Models\Sale;
  *   GET /internal/assistant/ventes_periode?debut=AAAA-MM-JJ&fin=AAAA-MM-JJ
  *   GET /internal/assistant/stock_produit?nom=<libellé produit>
  *   GET /internal/assistant/produits_a_commander
+ *   GET /internal/assistant/catalogue_anomalies   (veille qualité catalogue)
  *
  * Le nom d'outil est validé par liste blanche (outil()) : 404 « Outil
  * inconnu. » APRÈS la vérification du jeton — aucune énumération sans lui.
@@ -60,6 +62,7 @@ final class AssistantToolsController extends Controller
     private const TOOL_REAPPRO  = 'produits_a_commander';
     private const TOOL_MARGE    = 'marge_produit';
     private const TOOL_DOUBLONS = 'doublons_en_attente';
+    private const TOOL_CATALOGUE = 'catalogue_anomalies';
 
     /** Rate limit : 20 requêtes par minute et par IP. */
     private const RATE_MAX     = 20;
@@ -96,11 +99,12 @@ final class AssistantToolsController extends Controller
 
     /** Liste blanche des outils : nom d'URL → action du contrôleur. */
     private const OUTILS = [
-        self::TOOL_VENTES   => 'ventesPeriode',
-        self::TOOL_STOCK    => 'stockProduit',
-        self::TOOL_REAPPRO  => 'produitsACommander',
-        self::TOOL_MARGE    => 'margeProduit',
-        self::TOOL_DOUBLONS => 'doublonsEnAttente',
+        self::TOOL_VENTES    => 'ventesPeriode',
+        self::TOOL_STOCK     => 'stockProduit',
+        self::TOOL_REAPPRO   => 'produitsACommander',
+        self::TOOL_MARGE     => 'margeProduit',
+        self::TOOL_DOUBLONS  => 'doublonsEnAttente',
+        self::TOOL_CATALOGUE => 'catalogueAnomalies',
     ];
 
     /**
@@ -485,6 +489,29 @@ final class AssistantToolsController extends Controller
             ],
             'a_decider_par' => 'humain (écran Inventaire — l\'assistant ne fusionne jamais)',
         ]);
+    }
+
+    /**
+     * Outil 6 — anomalies du catalogue (veille qualité) : résultat EXACT
+     * de CatalogueQc::anomalies() (point d'assemblage unique, partagé
+     * avec scripts/catalogue_watchdog.php) : fiches actives jamais
+     * vendues, clés de vente récentes sans fiche, catégories vides,
+     * quasi-doublons de catégories, prix suspects, fiches dormantes en
+     * stock. LECTURE SEULE : l'assistant ne corrige RIEN — chaque action
+     * (purge, désactivation, prix…) reste une décision humaine (écrans
+     * admin existants), seul le watchdog applique la purge auditée.
+     */
+    private function catalogueAnomalies(): void
+    {
+        $this->ouvrir();
+
+        try {
+            $anomalies = CatalogueQc::anomalies();
+        } catch (\Throwable $e) {
+            $this->echecInterne(self::TOOL_CATALOGUE, $e);
+        }
+
+        $this->json(['outil' => self::TOOL_CATALOGUE] + $anomalies);
     }
 
     // -----------------------------------------------------------------

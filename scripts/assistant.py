@@ -5,14 +5,16 @@ T4 — Pont d'orchestration de l'assistant AEIC (llama-server ↔ endpoints outi
 
 Mission T4 (spécification docs-plans/T4_ASSISTANT_QWEN3.md §2.3/§2.4,
 contraintes /tmp/t4_briefs/00_CONTRAINTES.md) : boucle de tool-calling du
-modèle local Qwen3-4B vers les 5 endpoints LECTURE SEULE (T4-E + T4-P1,
-AssistantToolsController) :
+modèle local Qwen3-4B vers les 6 endpoints LECTURE SEULE (T4-E + T4-P1,
+AssistantToolsController ; le 6e — veille qualité catalogue — est un
+ajout post-T4 strictement additif) :
 
     GET https://…/internal/assistant/ventes_periode?debut=…&fin=…
     GET https://…/internal/assistant/stock_produit?nom=…
     GET https://…/internal/assistant/produits_a_commander
     GET https://…/internal/assistant/marge_produit?nom=…&debut=…&fin=…
     GET https://…/internal/assistant/doublons_en_attente
+    GET https://…/internal/assistant/catalogue_anomalies
 
 Le modèle CHOISIT l'outil et FORMULE la réponse ; il ne calcule ni n'invente
 aucun chiffre (spéc §0) — toute réponse affiche ses sources (outil + paramètres).
@@ -44,7 +46,8 @@ SÉCURITÉ (contraintes T4 n°3-4, spéc §2.5)
   - JETON : ASSISTANT_TOKEN lu dans config.env — jamais en dur, jamais
     affiché, et JAMAIS transmis au modèle : seul ce pont l'ajoute en en-tête
     « X-Assistant-Token ».
-  - WHITELIST EN DUR : exactement 5 outils, requêtes GET uniquement,
+  - WHITELIST EN DUR : exactement 6 outils (5 endpoints T4 + catalogue_anomalies,
+    veille qualité), requêtes GET uniquement,
     destination 127.0.0.1:443 avec SNI/Host « asso.aremond.ovh » (vhost
     dédié + certificat vérifié : trafic strictement local, chiffé et
     authentifié). Timeout endpoint : 10 s.
@@ -283,6 +286,20 @@ def definitions_outils() -> list[dict]:
                 "parameters": {"type": "object", "properties": {}},
             },
         },
+        {
+            "type": "function",
+            "function": {
+                "name": "catalogue_anomalies",
+                "description": (
+                    "Anomalies du catalogue produits (contrôle qualité lecture "
+                    "seule) : fiches actives jamais vendues, clés de vente récentes "
+                    "sans fiche, catégories vides ou quasi-doublons, prix suspects "
+                    "(≤ 0 €, 1,00 € avec coût supérieur, sous le coût), fiches "
+                    "dormantes avec du stock. Sans paramètre."
+                ),
+                "parameters": {"type": "object", "properties": {}},
+            },
+        },
     ]
 
 
@@ -293,6 +310,7 @@ OUTILS_AUTORISES: dict[str, list[str]] = {
     "produits_a_commander": [],
     "marge_produit": ["nom", "debut", "fin"],
     "doublons_en_attente": [],
+    "catalogue_anomalies": [],
 }
 
 #: Appel d'outil émis EN TEXTE par le modèle (au lieu du format tool_calls) :
@@ -611,6 +629,9 @@ def valider_arguments(nom: str, arguments: dict) -> tuple[dict | None, str | Non
         return {"nom": libelle, "debut": debut, "fin": fin}, None
 
     if nom == "doublons_en_attente":
+        return {}, None
+
+    if nom == "catalogue_anomalies":
         return {}, None
 
     return None, f"Erreur : outil « {nom} » inconnu."

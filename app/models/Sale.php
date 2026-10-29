@@ -1275,6 +1275,49 @@ final class Sale extends Model
     }
 
     /**
+     * Dernière vente et quantité totale par clé canonique (clé de vente
+     * ou description de repli — même COALESCE que consumptionBetween),
+     * sur TOUT l'historique, hors montants personnalisés.
+     *
+     * Point d'assemblage unique des contrôles « jamais vendu / vendu
+     * récemment / dormant » du contrôle qualité catalogue (CatalogueQc) :
+     * une seule requête groupée au lieu d'une par produit.
+     *
+     * @return array<string,array{last:?string,qty:int}> Clé canonique =>
+     *         date (AAAA-MM-JJ) de sa dernière vente et quantité totale
+     *         vendue. Jamais vendue = absente de la carte.
+     */
+    public static function lastSoldByProduct(): array
+    {
+        $sql = 'SELECT COALESCE(product_key, description) AS product_key,
+                       DATE(MAX(sold_at)) AS last_day,
+                       SUM(quantity) AS qty
+                FROM sales
+                WHERE is_custom_amount = 0
+                GROUP BY COALESCE(product_key, description)';
+
+        try {
+            $rows = self::pdo()->query($sql)->fetchAll();
+        } catch (\Throwable) {
+            return [];
+        }
+
+        $out = [];
+        foreach ($rows as $row) {
+            $key = (string) ($row['product_key'] ?? '');
+            if ($key === '') {
+                continue;
+            }
+            $out[$key] = [
+                'last' => ($row['last_day'] ?? null) ? (string) $row['last_day'] : null,
+                'qty'  => (int) $row['qty'],
+            ];
+        }
+
+        return $out;
+    }
+
+    /**
      * Date de la toute première vente importée (ou null si aucune).
      */
     public static function firstSoldDay(): ?string
