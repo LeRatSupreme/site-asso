@@ -73,6 +73,13 @@ final class AssistantToolsController extends Controller
     /** Candidats proposés quand un libellé produit est introuvable. */
     private const CANDIDATS_LIMITE = 5;
 
+    /** Seuil de fraîcheur d'un comptage (jours calendaires, Paris) :
+     * au-delà, le stock théorique (dernier comptage + mouvements)
+     * dérive et doit être signalé comme peu fiable (mission T2 : le
+     * cas réel « Monster verte » re-questions ×5 avec un comptage de
+     * 44 j — l'utilisateur doit savoir que le chiffre est vieux). */
+    private const FRAICHEUR_SEUIL_JOURS = 30;
+
     /** Entrées de quarantaine détaillées par section (cap compact). */
     private const QUARANTAINE_LIMITE = 10;
 
@@ -196,6 +203,14 @@ final class AssistantToolsController extends Controller
             $candidats
         );
 
+        // Fraîcheur du comptage (champs STRICTEMENT ADDITIFS — contrat T4) :
+        // âge en jours du dernier comptage + avertissement lisible quand il
+        // dépasse le seuil (vide sinon), pour le fast-path et le LLM.
+        $fraicheur = self::fraicheurJours(is_string($trouve['at'] ?? null) ? $trouve['at'] : null);
+        $avertissement = ($fraicheur !== null && $fraicheur > self::FRAICHEUR_SEUIL_JOURS)
+            ? 'comptage ancien (' . $fraicheur . ' j), fiabilité limitée'
+            : '';
+
         $this->json([
             'outil'            => self::TOOL_STOCK,
             'nom_demande'      => $nom,
@@ -203,6 +218,8 @@ final class AssistantToolsController extends Controller
             'cle_canonique'    => $trouve['key'] ?? null,
             'stock'            => $trouve['stock'] ?? null,
             'dernier_comptage' => $trouve['at'] ?? null,
+            'fraicheur_jours'  => $fraicheur,
+            'avertissement'    => $avertissement,
             'resolution'       => $trouve['via'] ?? null,
             'candidats'        => $candidatsFr,
         ]);
@@ -510,6 +527,25 @@ final class AssistantToolsController extends Controller
         }
 
         return checkdate((int) $m[2], (int) $m[3], (int) $m[1]);
+    }
+
+    /**
+     * Âge en JOURS CALENDAIRES (Paris) du dernier comptage : seule la
+     * partie DATE du timestamp compte (un comptage du 15/09 à 23 h a le
+     * même âge qu'à 8 h — convention « jours de Paris » du reste des
+     * outils). Null si la date est inconnue ou illisible.
+     */
+    private static function fraicheurJours(?string $at): ?int
+    {
+        if ($at === null || !self::jourIsoValide(substr($at, 0, 10))) {
+            return null;
+        }
+
+        $paris = new \DateTimeZone('Europe/Paris');
+        $comptage = new \DateTimeImmutable(substr($at, 0, 10), $paris);
+        $aujourdhui = new \DateTimeImmutable('today', $paris);
+
+        return (int) $aujourdhui->diff($comptage)->days;
     }
 
     /**
