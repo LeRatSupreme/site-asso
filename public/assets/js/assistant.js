@@ -1,21 +1,42 @@
 /*
  * AEIC — Widget assistant public (chat flottant bas-droite).
- * Chargé (defer) UNIQUEMENT par views/layouts/public.php.
+ * Chargé (defer) par views/layouts/public.php ET views/layouts/kiosk.php
+ * (le présent script s'adapte au contexte, cf. détection kiosque ci-dessous).
  *
  * Sécurité rendu : les messages (utilisateur, LLM, erreurs) sont
  * construits EXCLUSIVEMENT via createElement + createTextNode —
  * JAMAIS innerHTML, même si le modèle répète du HTML.
  *
- * Contrat serveur (POST /assistant/ask, form-urlencoded) :
- *   question (1..500), history (JSON 0..6 × {role, content 1..800}),
- *   _csrf (window.AEIC_CSRF) → 200 {ok,reply} | 400/429/503 {ok,error}.
+ * Contrat serveur (POST form-urlencoded) :
+ *   - site public : POST /assistant/ask — question (1..500),
+ *     history (JSON 0..6 × {role, content 1..800}), _csrf
+ *     (window.AEIC_CSRF) ;
+ *   - kiosque (body.kiosk-body) : POST /kiosque/assistant/ask/{jeton}
+ *     — mêmes champs SANS _csrf (le jeton secret de l'URL EST
+ *     l'authentification) ;
+ *   réponses identiques : 200 {ok,reply} | 400/404/429/503 {ok,error}.
  * Latence LLM jusqu'à 60 s : indicateur « réfléchit… » + bouton
  * désactivé + timeout client 65 s (AbortController).
  */
 (function () {
     'use strict';
 
-    var ENDPOINT     = '/assistant/ask';
+    // Contexte d'exécution : le layout kiosque pose body.kiosk-body. Sur
+    // une page kiosque, toutes les URLs sont de la forme /kiosque/.../{jeton}
+    // (cf. config/routes.php) : le jeton est le DERNIER segment non vide de
+    // location.pathname, repris tel quel (déjà sous forme URL). Hors kiosque
+    // (site public), le comportement reste STRICTEMENT inchangé : même
+    // endpoint /assistant/ask avec _csrf.
+    var IS_KIOSK = document.body.classList.contains('kiosk-body');
+    var ENDPOINT = '/assistant/ask';
+    var USE_CSRF = true;
+    if (IS_KIOSK) {
+        var segments = location.pathname.split('/').filter(function (s) { return s !== ''; });
+        var kioskToken = segments.length > 0 ? segments[segments.length - 1] : '';
+        ENDPOINT = '/kiosque/assistant/ask/' + kioskToken;
+        USE_CSRF = false;
+    }
+
     var MAX_QUESTION = 500;
     var MAX_HISTORY  = 6;   // items envoyés dans `history` (le serveur valide)
     var MAX_CONTENT  = 800; // limite serveur par contenu d'item d'historique
@@ -178,7 +199,10 @@
         var params = new URLSearchParams();
         params.set('question', question);
         params.set('history', JSON.stringify(payloadHistory));
-        params.set('_csrf', window.AEIC_CSRF || '');
+        // Kiosque : PAS de champ _csrf — le jeton de l'URL est l'auth.
+        if (USE_CSRF) {
+            params.set('_csrf', window.AEIC_CSRF || '');
+        }
 
         fetch(ENDPOINT, {
             method: 'POST',

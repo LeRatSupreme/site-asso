@@ -443,6 +443,17 @@ function aeic_register_routes(Router $router): void
     // Caisses (mouvement DEPOT + dépense automatique de frais bancaires).
     $router->get('/kiosque/admin/caisse/depot/{token}', [KioskComptageController::class, 'caisseDepot']);
     $router->post('/kiosque/admin/caisse/depot/{token}', [KioskComptageController::class, 'caisseDepotSave']);
+    // Assistant conversationnel des pages KIOSQUE : POST JSON au
+    // llama-server local (même moteur que /assistant/ask — PublicAssistant
+    // ::traiterKiosk). Le JETON du kiosque EST l'authentification : exempté
+    // du CSRF de session par le routeur (préfixe /kiosque/), comme tous
+    // les autres POST kiosque. Jeton inconnu → 404 générique (aucune
+    // énumération) ; rate limit DÉDIÉ par IP+jeton (indépendant du site
+    // public) ; journal dédié logs/assistant_kiosk.jsonl. Le modèle ne
+    // voit AUCUNE donnée interne, même pour un kiosque trésorier/président
+    // (prompt app/config/assistant_kiosk.php + FAQ partagée).
+    $router->post('/kiosque/assistant/ask/{token}', [AssistantPublicController::class, 'askKiosk']);
+    $router->get('/kiosque/assistant/ask/{token}', [AssistantPublicController::class, 'askKioskGet']);
 
     // Suivi avancé : dépenses, budgets, achats, inventaire, pertes, événements, rapport annuel.
     $router->get('/admin/compta/depenses', [AdminExpenseController::class, 'index']);

@@ -4,17 +4,33 @@ declare(strict_types=1);
 
 namespace App\Core\Assistant;
 
+use App\Core\Compta\KioskPages;
 use App\Core\Logger;
 use App\Core\RateLimiter;
+use App\Models\Kiosque;
+use App\Models\Setting;
 
 /**
  * Assistant conversationnel PUBLIC de l'AEIC (widget chat du site).
  *
+ * Deux chemins, UN seul moteur (un seul point d'assemblage) :
+ *  - traiter()      → endpoint POST /assistant/ask (site public) ;
+ *  - traiterKiosk()  → endpoint POST /kiosque/assistant/ask/{token}
+ *    (pages kiosque : le JETON du kiosque EST l'authentification —
+ *    kiosques personnalisés et jetons legacy admin/membres).
+ * Les deux partagent validation, FAQ (app/config/assistant_faq.php),
+ * sémaphore (2 slots protégeant le MÊME llama-server), appel LLM et
+ * mécanique de journal — seuls le prompt (app/config/
+ * assistant_public.php vs assistant_kiosk.php), la clé de rate limit et
+ * le fichier de journal (logs/assistant_public.jsonl vs
+ * logs/assistant_kiosk.jsonl, avec champ additif « kiosk ») diffèrent.
+ *
  * Chemin volontairement SÉPARÉ de l'assistant admin (pont Python +
- * AssistantToolsController) : ici, aucun outil, aucun jeton, aucune
- * donnée interne — juste un prompt public éditable (app/config/
- * assistant_public.php) envoyé au llama-server local (API compatible
- * OpenAI, même format que scripts/assistant.py en mode direct).
+ * AssistantToolsController) : ici, aucun outil, aucun jeton d'outil,
+ * aucune donnée interne — juste un prompt public/kiosque éditable
+ * (app/config/assistant_public.php, assistant_kiosk.php) envoyé au
+ * llama-server local (API compatible OpenAI, même format que
+ * scripts/assistant.py en mode direct).
  *
  * Contrat figé avec le widget front (messages EXACTS) :
  *  - 400 {"ok":false,"error":"Message invalide."}
@@ -22,6 +38,8 @@ use App\Core\RateLimiter;
  *  - 503 {"ok":false,"error":"L'assistant est occupé, réessaie dans un instant."}   (sémaphore plein)
  *  - 503 {"ok":false,"error":"L'assistant est indisponible, réessaie dans un instant."} (LLM down/timeout)
  *  - 200 {"ok":true,"reply":"..."}
+ *  - kiosque uniquement — 404 {"ok":false,"error":"Kiosque introuvable."}
+ *    (jeton inconnu/révoqué, fail-closed sans énumération)
  *
  * Garde-fous :
  *  - rate limit 10 questions / 5 min / IP (RateLimiter partagé, fichiers) ;
@@ -39,10 +57,13 @@ use App\Core\RateLimiter;
  *    requête {ts, ip_hash, question, reply, latency_ms, status, faq} —
  *    le champ additif faq (true/false) distingue réponses pré-rédigées
  *    et générations LLM (le front ignore les champs inconnus) ; l'IP
- *    n'est JAMAIS écrite en clair (sha256 tronqué, sel APP_KEY).
+ *    n'est JAMAIS écrite en clair (sha256 tronqué, sel APP_KEY) ;
+ *    le chemin kiosque journalise pareil dans logs/assistant_kiosk.jsonl
+ *    avec un champ additif « kiosk » (nom du kiosque).
  *
- * Toutes les dépendances (storage rate limit, URL LLM, journal, locks)
- * sont injectables pour les tests unitaires (tests/Unit/AssistantPublicTest).
+ * Toutes les dépendances (storage rate limit, URL LLM, journaux, locks)
+ * sont injectables pour les tests unitaires (tests/Unit/AssistantPublicTest,
+ * tests/Unit/AssistantKioskTest).
  */
 final class PublicAssistant
 {
@@ -83,28 +104,49 @@ final class PublicAssistant
     public const MSG_OCCUPE       = "L'assistant est occupé, réessaie dans un instant.";
     public const MSG_INDISPONIBLE = "L'assistant est indisponible, réessaie dans un instant.";
 
+    /** Jeton kiosque inconnu/révoqué : message générique unique (pas
+     *  d'énumération possible), même discipline que les autres pages
+     *  kiosque face à un mauvais jeton. */
+    public const MSG_KIOSK_INTROUVABLE = 'Kiosque introuvable.';
+
+    /** Rôles affichés pour les jetons LEGACY (settings), quand la requête
+     *  ne vient pas d'un kiosque personnalisé (table kiosques). */
+    public const ROLE_KIOSK_ADMIN_LEGACY   = 'Bureau (admin)';
+    public const ROLE_KIOSK_MEMBRE_LEGACY  = 'Équipe cafétéria';
+
+    /** Longueur max du nom de kiosque injecté dans le prompt kiosk
+     *  (donnée admin-controlled → nettoyée, cf. nettoyerRoleKiosk). */
+    public const KIOSK_ROLE_MAX = 60;
+
     private RateLimiter $limiter;
     private string $llmUrl;
     private string $journalPath;
+    private string $journalKioskPath;
     private string $cheminLock;
 
     /**
-     * @param RateLimiter|null $limiter     Compteur partagé (défaut : cache/ratelimit).
-     * @param string|null      $llmUrl      Cible LLM (défaut : llama-server local).
-     * @param string|null      $journalPath Fichier JSONL (défaut : logs/assistant_public.jsonl).
-     * @param string|null      $cheminLock  Préfixe des fichiers de sémaphore (défaut :
-     *                                      cache/assistant_public → .0.lock / .1.lock).
+     * @param RateLimiter|null $limiter        Compteur partagé (défaut : cache/ratelimit).
+     * @param string|null      $llmUrl         Cible LLM (défaut : llama-server local).
+     * @param string|null      $journalPath    Fichier JSONL public (défaut : logs/assistant_public.jsonl).
+     * @param string|null      $cheminLock     Préfixe des fichiers de sémaphore (défaut :
+     *                                         cache/assistant_public → .0.lock / .1.lock). Les
+     *                                         chemins public ET kiosque partagent CES slots : le
+     *                                         sémaphore protège le llama-server, pas l'endpoint.
+     * @param string|null      $journalKioskPath Fichier JSONL kiosque (défaut :
+     *                                         logs/assistant_kiosk.jsonl).
      */
     public function __construct(
         ?RateLimiter $limiter = null,
         ?string $llmUrl = null,
         ?string $journalPath = null,
-        ?string $cheminLock = null
+        ?string $cheminLock = null,
+        ?string $journalKioskPath = null
     ) {
-        $this->limiter     = $limiter ?? new RateLimiter();
-        $this->llmUrl      = $llmUrl ?? self::LLM_URL_DEFAUT;
-        $this->journalPath = $journalPath ?? (AEIC_ROOT . '/logs/assistant_public.jsonl');
-        $this->cheminLock  = $cheminLock ?? (AEIC_ROOT . '/cache/assistant_public');
+        $this->limiter        = $limiter ?? new RateLimiter();
+        $this->llmUrl         = $llmUrl ?? self::LLM_URL_DEFAUT;
+        $this->journalPath    = $journalPath ?? (AEIC_ROOT . '/logs/assistant_public.jsonl');
+        $this->cheminLock     = $cheminLock ?? (AEIC_ROOT . '/cache/assistant_public');
+        $this->journalKioskPath = $journalKioskPath ?? (AEIC_ROOT . '/logs/assistant_kiosk.jsonl');
     }
 
     /**
@@ -120,40 +162,227 @@ final class PublicAssistant
      */
     public function traiter(mixed $questionRaw, mixed $historyRaw, string $ip): array
     {
+        return $this->executer(
+            'assistant_public:' . $ip,
+            self::promptSysteme(),
+            null,
+            $questionRaw,
+            $historyRaw,
+            $ip
+        );
+    }
+
+    // -----------------------------------------------------------------
+    //  Chemin KIOSQUE (jeton = authentification)
+    // -----------------------------------------------------------------
+
+    /**
+     * Traite une requête POST /kiosque/assistant/ask/{token} de bout en
+     * bout : résolution du rôle par le jeton → rate limit DÉDIÉ (clé
+     * IP+jeton, indépendante de la clé publique) → même pipeline que le
+     * public (question → FAQ partagée → history → sémaphore → LLM →
+     * journal kiosk DÉDIÉ avec champ « kiosk »).
+     *
+     * Le modèle ne voit AUCUNE donnée interne, quel que soit le kiosque
+     * (même trésorier/président) : le prompt kiosk ne contient que le
+     * nom du kiosque (nettoyé) et les labels de ses pages.
+     *
+     * Jeton inconnu/révoqué → 404 générique fail-closed, sans énumération
+     * (message unique, journalisé avec kiosk vide) ; il ne consomme pas
+     * le compteur de rate limit — la clé contient le jeton, chaque sonde
+     * d'énumération aurait de toute façon sa propre clé.
+     *
+     * @param mixed $questionRaw $_POST['question'] (string attendue).
+     * @param mixed $historyRaw  $_POST['history'] (string JSON optionnelle).
+     *
+     * @return array{http:int, ok:bool, reply:?string, error:?string}
+     */
+    public function traiterKiosk(string $token, mixed $questionRaw, mixed $historyRaw, string $ip): array
+    {
+        $kiosk = self::resoudreKiosk($token);
+        if ($kiosk === null) {
+            return $this->conclure(404, false, null, self::MSG_KIOSK_INTROUVABLE, $questionRaw, 0, $ip, false, '');
+        }
+
+        // Clé DÉDIÉE (jamais « assistant_public: ») : un kiosque saturé ne
+        // pénalise ni le site public ni les autres kiosques, et réciproquement.
+        // Jeton TRIMÉ comme dans resoudreKiosk() : sinon un jeton paddé
+        // d'espacements (%20, %09 décodés par le routage) passerait la
+        // résolution mais créerait une clé de compteur distincte à chaque
+        // padding — limite 10/5 min contournable.
+        $cle = 'assistant_kiosk:' . self::hashIp($ip) . ':' . substr(sha1(trim($token)), 0, 8);
+
+        return $this->executer(
+            $cle,
+            self::buildPromptKiosk($kiosk['role'], $kiosk['pages']),
+            $kiosk['role'],
+            $questionRaw,
+            $historyRaw,
+            $ip
+        );
+    }
+
+    /**
+     * Résout le rôle d'affichage d'un jeton kiosque :
+     *  1. kiosque personnalisé (Kiosque::findByToken, timing-safe) → son
+     *     nom + les ids de ses tuiles ;
+     *  2. jeton ADMIN legacy (settings.admin_kiosk_token) → « Bureau
+     *     (admin) » + LEGACY_ADMIN_PAGES ;
+     *  3. jeton MEMBRES legacy (settings.reappro_kiosk_token) →
+     *     « Équipe cafétéria » + LEGACY_MEMBER_PAGES ;
+     *  sinon null (→ 404 générique). Ordre personnalisé → legacy, comme
+     *  KioskComptageController::hubUrlFor (et à la différence de
+     *  KioskPages::tokenOptions, qui teste les jetons legacy d'abord) ;
+     *  mêmes comparaisons hash_equals que ces deux gardes.
+     *
+     * @return array{role:string, pages:list<string>}|null
+     */
+    public static function resoudreKiosk(string $token): ?array
+    {
+        $given = trim($token);
+        if ($given === '') {
+            return null;
+        }
+
+        try {
+            $k = Kiosque::findByToken($given);
+        } catch (\Throwable) {
+            // Table kiosques absente (migration non appliquée) : les
+            // kiosques personnalisés sont simplement inactifs.
+            $k = null;
+        }
+        if ($k !== null) {
+            return ['role' => (string) $k['name'], 'pages' => $k['pages']];
+        }
+
+        $admin = trim((string) Setting::get('admin_kiosk_token', ''));
+        if ($admin !== '' && hash_equals($admin, $given)) {
+            return ['role' => self::ROLE_KIOSK_ADMIN_LEGACY, 'pages' => KioskPages::LEGACY_ADMIN_PAGES];
+        }
+
+        $membre = trim((string) Setting::get('reappro_kiosk_token', ''));
+        if ($membre !== '' && hash_equals($membre, $given)) {
+            return ['role' => self::ROLE_KIOSK_MEMBRE_LEGACY, 'pages' => KioskPages::LEGACY_MEMBER_PAGES];
+        }
+
+        return null;
+    }
+
+    /**
+     * Construit le prompt système KIOSQUE (app/config/assistant_kiosk.php)
+     * avec {ROLE} et {PAGES} remplacés (strtr) :
+     *  - le rôle est NETTOYÉ (nettoyerRoleKiosk) par construction : un nom
+     *    de kiosque forgé en admin ne peut pas réécrire le prompt ;
+     *  - les pages deviennent les labels du catalogue (KioskPages), ids
+     *    inconnus ignorés (même tolérance que le hub) ; kiosque sans
+     *    tuile connue → « aucune ».
+     *
+     * @param list<string> $pages ids de tuiles (catalogue KioskPages)
+     */
+    public static function buildPromptKiosk(string $role, array $pages): string
+    {
+        $labels = [];
+        foreach ($pages as $pageId) {
+            $tuile = KioskPages::get((string) $pageId);
+            if ($tuile !== null) {
+                $labels[] = $tuile['label'];
+            }
+        }
+
+        return strtr(self::promptSystemeKiosk(), [
+            '{ROLE}'  => self::nettoyerRoleKiosk($role),
+            '{PAGES}' => $labels === [] ? 'aucune' : implode(', ', $labels),
+        ]);
+    }
+
+    /**
+     * Nettoie un nom de kiosque (donnée admin-controlled) avant injection
+     * dans le prompt système :
+     *  - trim, puis tout retour ligne / tabulation / séparateur Unicode →
+     *    espace, et espaces multiples ramenés à un seul : SANS saut de
+     *    ligne, un nom ne peut pas ouvrir une nouvelle section markdown
+     *    (« ## … ») dans le prompt — c'est la défense anti-injection ;
+     *  - tronqué à KIOSK_ROLE_MAX caractères (borne la surcharge) ;
+     *  - vide après nettoyage → « Kiosque » (le prompt reste cohérent).
+     *
+     * Choix volontairement simple et robuste (pas d'échappement HTML : la
+     * sortie ne part que dans un prompt LLM et un journal JSON).
+     */
+    public static function nettoyerRoleKiosk(string $role): string
+    {
+        $role = trim($role);
+        $role = (string) preg_replace('/[\r\n\t\v\f\x{0085}\x{2028}\x{2029}]+/u', ' ', $role);
+        $role = (string) preg_replace('/ {2,}/', ' ', $role);
+        $role = trim(mb_substr($role, 0, self::KIOSK_ROLE_MAX));
+
+        return $role === '' ? 'Kiosque' : $role;
+    }
+
+    /**
+     * Prompt système kiosque (fichier DÉDIÉ éditable, placeholders
+     * {ROLE}/{PAGES} remplacés par buildPromptKiosk).
+     */
+    private static function promptSystemeKiosk(): string
+    {
+        /** @var string $prompt */
+        $prompt = require AEIC_ROOT . '/app/config/assistant_kiosk.php';
+
+        return $prompt;
+    }
+
+    /**
+     * Pipeline partagé public/kiosque : rate limit → validation question
+     * → FAQ → validation history → sémaphore → LLM → journal.
+     *
+     * @param string      $cle       Clé de rate limit (publique ou kiosk).
+     * @param string      $promptSysteme Prompt système déjà construit.
+     * @param string|null $kiosk     null → chemin public ; sinon le nom du
+     *                               kiosque (journal kiosk + champ « kiosk »).
+     *
+     * @return array{http:int, ok:bool, reply:?string, error:?string}
+     */
+    private function executer(
+        string $cle,
+        string $promptSysteme,
+        ?string $kiosk,
+        mixed $questionRaw,
+        mixed $historyRaw,
+        string $ip
+    ): array {
         // Garde anti-abus d'abord : le travail coûteux n'est jamais engagé
         // pour une IP déjà à saturation.
-        $cle = 'assistant_public:' . $ip;
         if ($this->limiter->tooManyAttempts($cle, self::RATE_MAX, self::RATE_FENETRE_S)) {
-            return $this->conclure(429, false, null, self::MSG_RATE, $questionRaw, 0, $ip, false);
+            return $this->conclure(429, false, null, self::MSG_RATE, $questionRaw, 0, $ip, false, $kiosk);
         }
         $this->limiter->hit($cle);
 
         $question = self::validerQuestion($questionRaw);
         if ($question === null) {
-            return $this->conclure(400, false, null, self::MSG_INVALIDE, $questionRaw, 0, $ip, false);
+            return $this->conclure(400, false, null, self::MSG_INVALIDE, $questionRaw, 0, $ip, false, $kiosk);
         }
 
         // FAQ fast-path : réponse pré-rédigée instantanée. AVANT le
         // sémaphore et la validation de l'historique (inutile ici, la
         // réponse ne dépend que de la question courante) — zéro appel LLM.
+        // FAQ PARTAGÉE public/kiosque (app/config/assistant_faq.php).
         $reponseFaq = self::chercherFaq($question);
         if ($reponseFaq !== null) {
-            return $this->conclure(200, true, $reponseFaq, null, $questionRaw, 0, $ip, true);
+            return $this->conclure(200, true, $reponseFaq, null, $questionRaw, 0, $ip, true, $kiosk);
         }
 
         $history = self::validerHistory($historyRaw);
         if ($history === null) {
-            return $this->conclure(400, false, null, self::MSG_INVALIDE, $questionRaw, 0, $ip, false);
+            return $this->conclure(400, false, null, self::MSG_INVALIDE, $questionRaw, 0, $ip, false, $kiosk);
         }
 
         $slot = $this->acquerirSlot();
         if ($slot === null) {
-            return $this->conclure(503, false, null, self::MSG_OCCUPE, $questionRaw, 0, $ip, false);
+            return $this->conclure(503, false, null, self::MSG_OCCUPE, $questionRaw, 0, $ip, false, $kiosk);
         }
 
         $debut    = microtime(true);
         $reponse  = $this->callLlm(
-            self::buildPayload(self::buildMessages(self::promptSysteme(), $history, $question))
+            self::buildPayload(self::buildMessages($promptSysteme, $history, $question))
         );
         $latencyMs = (int) round((microtime(true) - $debut) * 1000);
 
@@ -161,25 +390,27 @@ final class PublicAssistant
         // exit (json()) — le verrou ne doit jamais lui survivre.
         $this->libererSlot($slot);
 
+        $origine = $kiosk === null ? 'assistant public' : 'assistant kiosk';
+
         if ($reponse['erreur'] !== null) {
-            Logger::error('assistant public: appel LLM en échec', [
+            Logger::error($origine . ': appel LLM en échec', [
                 'errno' => $reponse['errno'],
                 'http'  => $reponse['http'],
             ]);
 
-            return $this->conclure(503, false, null, self::MSG_INDISPONIBLE, $questionRaw, $latencyMs, $ip, false);
+            return $this->conclure(503, false, null, self::MSG_INDISPONIBLE, $questionRaw, $latencyMs, $ip, false, $kiosk);
         }
 
         $reply = self::extractReply($reponse['body']);
         if ($reply === null) {
-            Logger::error('assistant public: réponse LLM inexploitable', [
+            Logger::error($origine . ': réponse LLM inexploitable', [
                 'http' => $reponse['http'],
             ]);
 
-            return $this->conclure(503, false, null, self::MSG_INDISPONIBLE, $questionRaw, $latencyMs, $ip, false);
+            return $this->conclure(503, false, null, self::MSG_INDISPONIBLE, $questionRaw, $latencyMs, $ip, false, $kiosk);
         }
 
-        return $this->conclure(200, true, $reply, null, $questionRaw, $latencyMs, $ip, false);
+        return $this->conclure(200, true, $reply, null, $questionRaw, $latencyMs, $ip, false, $kiosk);
     }
 
     // -----------------------------------------------------------------
@@ -519,10 +750,16 @@ final class PublicAssistant
 
     /**
      * Journalise la requête (une ligne JSON par requête, y compris les
-     * refus 400/429/503 — l'utilisateur veut « regarder un peu »), puis
+     * refus 400/404/429/503 — l'utilisateur veut « regarder un peu »), puis
      * renvoie le verdict. Un échec d'écriture ne casse jamais la réponse.
      *
-     * @param bool $faq        true si la réponse vient du fast-path FAQ.
+     * @param bool        $faq   true si la réponse vient du fast-path FAQ.
+     * @param string|null $kiosk null → journal public (logs/assistant_public
+     *                           .jsonl) ; chaîne (même vide) → journal kiosk
+     *                           DÉDIÉ logs/assistant_kiosk.jsonl avec champ
+     *                           additif « kiosk » (nom du kiosque, vide pour
+     *                           un jeton inconnu) : l'observation public et
+     *                           kiosk reste séparable.
      *
      * @return array{http:int, ok:bool, reply:?string, error:?string}
      */
@@ -534,9 +771,10 @@ final class PublicAssistant
         mixed $questionBrut,
         int $latencyMs,
         string $ip,
-        bool $faq = false
+        bool $faq = false,
+        ?string $kiosk = null
     ): array {
-        $ligne = json_encode([
+        $donnees = [
             'ts'         => (new \DateTimeImmutable('now', new \DateTimeZone('Europe/Paris')))->format(DATE_ATOM),
             'ip_hash'    => self::hashIp($ip),
             'question'   => is_string($questionBrut)
@@ -546,17 +784,25 @@ final class PublicAssistant
             'latency_ms' => $latencyMs,
             'status'     => $http,
             'faq'        => $faq,
-        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        ];
+
+        $journal = $this->journalPath;
+        if ($kiosk !== null) {
+            $donnees['kiosk'] = $kiosk;
+            $journal          = $this->journalKioskPath;
+        }
+
+        $ligne = json_encode($donnees, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
         if ($ligne !== false) {
-            $ecrit = @file_put_contents($this->journalPath, $ligne . "\n", FILE_APPEND | LOCK_EX);
+            $ecrit = @file_put_contents($journal, $ligne . "\n", FILE_APPEND | LOCK_EX);
             if ($ecrit !== false) {
                 // Même raison que les verrous : umask du process créateur
                 // hétérogène (CLI ubuntu vs Apache www-data sur le VPS
                 // mono-admin) — le journal écrit par l'un doit rester
                 // ouvrable par l'autre (incident réel du 28/10). Idempotent,
                 // coût négligeable à 10 req/5 min, échec silencieux.
-                @chmod($this->journalPath, 0o666);
+                @chmod($journal, 0o666);
             }
         }
 
