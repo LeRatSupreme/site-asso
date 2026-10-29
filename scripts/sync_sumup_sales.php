@@ -21,6 +21,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../vendor/autoload.php';
 require_once __DIR__ . '/../app/config/database.php';
 
+use App\Core\Compta\ProductAutoSync;
 use App\Core\Compta\StockPublic;
 use App\Core\Compta\SumUpApiClient;
 use App\Core\Compta\SumUpSalesSync;
@@ -63,9 +64,35 @@ try {
     // « cafe allonge ») — après le mapping pour que les clés canoniques
     // soient déjà posées.
     $renamed = 0;
+    $cards = [];
     if (!$dryRun && $stats['inserted'] > 0) {
         Sale::syncAliasCategories();
         $renamed = Sale::applyPriceVariants();
+
+        // Synchro carte ciblée (mission E — asymétrie « Minute Maid
+        // Pomme ») : l'import CSV admin crée les fiches des nouveaux
+        // libellés VENDUS via ProductAutoSync ; le cron, qui insère les
+        // ventes de la borne chaque minute, doit faire de même, sinon la
+        // fiche n'apparaît que si un CSV est importé à la main. Les
+        // gardes de ProductAutoSync s'appliquent (vente réelle exigée,
+        // libellés OCR bruts exclus). Jamais bloquant.
+        try {
+            $stmt = db()->prepare(
+                'SELECT DISTINCT COALESCE(product_key, description) AS p
+                 FROM sales WHERE import_batch_id = ?'
+            );
+            $stmt->execute([$stats['batch_id']]);
+            $keys = [];
+            foreach ($stmt->fetchAll() as $row) {
+                $key = trim((string) ($row['p'] ?? ''));
+                if ($key !== '') {
+                    $keys[] = $key;
+                }
+            }
+            $cards = ProductAutoSync::ensureKeys($keys)['created'];
+        } catch (Throwable) {
+            // La synchro SumUp ne doit jamais casser à cause de la carte.
+        }
 
         // Les ventes insérées déduisent le théorique : la carte publique suit.
         StockPublic::invalidate();
@@ -85,6 +112,12 @@ try {
     // reclassement (le cron tourne chaque minute, inutile de polluer le log).
     if ($renamed > 0) {
         echo '[' . $logTs . '] variantes par prix : ' . $renamed . " ligne(s) reclassée(s)\n";
+    }
+
+    // Fiches carte créées : idem, une ligne seulement quand il y en a.
+    if ($cards !== []) {
+        echo '[' . $logTs . '] carte : ' . count($cards) . " fiche(s) créée(s) ("
+            . implode(', ', array_slice($cards, 0, 5)) . ")\n";
     }
 } catch (Throwable $e) {
     fwrite(STDERR, '[' . $logTs . '] ERREUR synchro SumUp : ' . $e->getMessage() . "\n");

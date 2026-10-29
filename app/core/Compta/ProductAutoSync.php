@@ -13,13 +13,27 @@ use App\Models\Sale;
  * Création AUTOMATIQUE des fiches produits de la carte cafétéria.
  *
  * La carte publique « Notre carte » liste les lignes de la table `products`.
- * Quand un NOUVEAU libellé apparaît dans la compta (vente SumUp importée,
- * achat, perte, comptage), sa fiche n'existait pas et il restait invisible
- * sur la carte jusqu'à création manuelle. Cette classe comble l'écart :
- * elle collecte tous les libellés connus de l'inventaire, détecte ceux qui
- * ne sont couverts par aucune fiche existante (mêmes règles d'appariement
- * tolérant que StockPublic::stockForMenuProduct()) et crée les fiches
- * manquantes avec catégorie, prix et stock déduits.
+ * Quand un NOUVEAU libellé apparaît dans la compta, sa fiche n'existait
+ * pas et il restait invisible sur la carte jusqu'à création manuelle.
+ * Cette classe comble l'écart — sous trois gardes (mission E) qui
+ * ferment les trous par lesquels les fiches « pourries » entraient :
+ *
+ *  A. un achat « hors stock » (no_stock = 1 : conso bureau, fournitures)
+ *     ne crée JAMAIS de fiche — ni par la passe ciblée (PurchaseSaver
+ *     n'envoie pas ces clés) ni par la passe globale (les achats ne
+ *     contribuent plus de libellés) ;
+ *  B. un libellé OCR de facture brut (clé encore égale à une entrée de
+ *     la file scan_labels — règle PurchaseSaver::isRawScanLabel) est
+ *     exclu MÊME via sync() global, y compris s'il a été vendu tel quel
+ *     à la borne : la fiche attend le nom court saisi par l'utilisateur ;
+ *  C. une fiche publique n'est créée que sur VENTE réelle : un achat,
+ *     une perte, un comptage ou un stock de référence seul ne suffit
+ *     jamais. Les libellés connus de la passe globale viennent donc des
+ *     VENTES seules (achat/perte/comptage ne fournissent plus de clés).
+ *
+ * RÉTROACTIF INTERDIT : la synchro ne supprime JAMAIS une fiche existante
+ * (même « pourrie ») — les gardes ne s'appliquent qu'aux créations
+ * futures ; le nettoyage de l'existant est un acte admin manuel.
  *
  * Aucun échec ne doit jamais se propager vers l'appelant : la compta et le
  * site public ne doivent pas casser à cause de la synchro. Chaque étape
@@ -51,6 +65,9 @@ final class ProductAutoSync
         'adhesion',
         'cotisation',
         'test',
+        // Services vendus à la borne, pas des produits rayonnables :
+        // « Bowling » n'atterrit jamais en Snacks (garde C).
+        'bowling',
     ];
 
     /**
@@ -138,9 +155,11 @@ final class ProductAutoSync
      * Synchronise la carte : crée les fiches des libellés connus de
      * l'inventaire non couverts par un produit existant.
      *
-     * Libellés connus = union, dédupliquée, des ventes (product_key ou
-     * description), des achats, des pertes, des comptages et des stocks
-     * saisis sur la page Réappro.
+     * Garde C — les libellés connus viennent des VENTES seules
+     * (product_key ou description) : un achat, une perte, un comptage
+     * ou un stock de référence seul ne justifie plus jamais une fiche
+     * publique (les fiches des libellés vendus non encore achetés/
+     * comptés gardent un stock déduit — voir knownStock).
      *
      * @return array{created: list<string>, skipped: int} created = noms des
      *                                                    produits créés, skipped = libellés ignorés
@@ -153,8 +172,10 @@ final class ProductAutoSync
 
     /**
      * Même traitement que sync(), limité aux libellés passés — utilisé
-     * juste après la création d'un achat, d'une perte ou d'un comptage
-     * précis, pour ne rescanner que les clés concernées.
+     * juste après l'insertion de ventes (cron SumUp) pour ne rescanner
+     * que les clés concernées. Les gardes B et C s'appliquent aussi à
+     * cette passe ciblée : un libellé jamais vendu ou encore égal à un
+     * libellé OCR brut de la file scan_labels ne crée rien.
      *
      * @param list<string> $keys Libellés bruts (product_key ou description).
      *
@@ -270,6 +291,16 @@ final class ProductAutoSync
             $theoretical = [];
         }
 
+        // Garde B — libellés OCR bruts de la file scan_labels, lus une
+        // seule fois pour toute la passe (règle PurchaseSaver::isRawScanLabel).
+        $scanLabels = self::scanQueueLabels();
+
+        // Garde C — libellés réellement VENDUS, lus une seule fois : une
+        // fiche publique n'est jamais créée sans vente (la passe globale
+        // ne reçoit déjà que des libellés vendus ; la passe ciblée,
+        // appelée après un achat/une perte, est filtrée ici).
+        $sold = self::soldKeysMap();
+
         foreach ($labels as $label) {
             $label = trim((string) $label);
 
@@ -279,6 +310,19 @@ final class ProductAutoSync
             }
 
             if (StockPublic::matchesAnyProduct($label, $existingNames)) {
+                $skipped++;
+                continue;
+            }
+
+            // Garde C : jamais vendu → jamais de fiche publique.
+            if (!self::isSoldLabel($label, $sold)) {
+                $skipped++;
+                continue;
+            }
+
+            // Garde B : la clé est encore un libellé OCR brut non traité
+            // (file « Nouvelles appellations ») → pas de fiche au nom long.
+            if (self::matchesRawScanLabel($label, $scanLabels)) {
                 $skipped++;
                 continue;
             }
@@ -312,8 +356,13 @@ final class ProductAutoSync
     }
 
     /**
-     * Libellés connus de l'inventaire : ventes, achats, pertes, comptages
-     * et stocks saisis — union dédupliquée, vides retirés.
+     * Libellés connus de l'inventaire : les VENTES seules (garde C —
+     * product_key ou description, union dédupliquée, vides retirés).
+     * Les achats, pertes, comptages et stocks de référence ne
+     * contribuent PLUS de libellés : ils ne justifient pas une fiche
+     * publique (un achat « hors stock » ou un comptage isolé ne doit
+     * pas faire entrer un faux produit sur la carte) ; ils restent lus
+     * par knownStock() pour le STOCK des fiches réellement créées.
      *
      * @return list<string>
      */
@@ -322,22 +371,6 @@ final class ProductAutoSync
         $labels = [];
 
         foreach (Sale::distinctProducts() as $label) {
-            $labels[] = (string) $label;
-        }
-
-        foreach (self::distinctKeys('purchases') as $label) {
-            $labels[] = $label;
-        }
-
-        foreach (self::distinctKeys('losses') as $label) {
-            $labels[] = $label;
-        }
-
-        foreach (array_keys(InventoryCount::lastCountsMap()) as $label) {
-            $labels[] = (string) $label;
-        }
-
-        foreach (array_keys(ProductStock::allMap()) as $label) {
             $labels[] = (string) $label;
         }
 
@@ -350,28 +383,101 @@ final class ProductAutoSync
     }
 
     /**
-     * Clés distinctes non vides d'une table d'inventaire (purchases,
-     * losses) — ces modèles n'exposent pas de méthode dédiée, la requête
-     * est exécutée directement sur la connexion partagée.
+     * Formes des libellés réellement vendus, pour la garde C : index
+     * exact ET normalisé (StockPublic::normalizeKey — casse, accents,
+     * séparateurs et espaces repliés) pour rester tolérant aux variantes
+     * d'écriture entre la clé passée et les ventes stockées.
+     *
+     * Une erreur de lecture (base indisponible) retourne une carte
+     * VIDE : aucune vente lisible → aucune création (conservateur).
+     *
+     * @return array{exact: array<string,true>, normalized: array<string,true>}
+     */
+    private static function soldKeysMap(): array
+    {
+        $exact = [];
+        $normalized = [];
+
+        try {
+            foreach (Sale::distinctProducts() as $sold) {
+                $sold = trim((string) $sold);
+                if ($sold === '') {
+                    continue;
+                }
+                $exact[$sold] = true;
+                $normalized[StockPublic::normalizeKey($sold)] = true;
+            }
+        } catch (\Throwable) {
+            // Ventes illisibles : impossible de justifier une fiche.
+            return ['exact' => [], 'normalized' => []];
+        }
+
+        return ['exact' => $exact, 'normalized' => $normalized];
+    }
+
+    /**
+     * Le libellé est-il réellement VENDU (garde C) ? Match exact, sinon
+     * normalisé — jamais par simple strtolower (règle anti-régression
+     * du projet : tout rapprochement de noms passe par les formes
+     * partagées StockPublic::normalizeKey).
+     *
+     * @param array{exact: array<string,true>, normalized: array<string,true>} $sold
+     */
+    private static function isSoldLabel(string $label, array $sold): bool
+    {
+        if (isset($sold['exact'][$label])) {
+            return true;
+        }
+
+        $key = StockPublic::normalizeKey($label);
+
+        return $key !== '' && isset($sold['normalized'][$key]);
+    }
+
+    /**
+     * Libellés OCR de la file « Nouvelles appellations » (scan_labels),
+     * lus une fois par passe — table optionnelle, absente = file vide.
      *
      * @return list<string>
      */
-    private static function distinctKeys(string $table): array
+    private static function scanQueueLabels(): array
     {
         try {
-            $rows = \db()
-                ->query("SELECT DISTINCT product_key FROM {$table} WHERE product_key <> ''")
-                ->fetchAll();
+            $rows = \db()->query('SELECT label FROM scan_labels')->fetchAll();
         } catch (\Throwable) {
             return [];
         }
 
-        $keys = [];
+        $labels = [];
         foreach ($rows as $row) {
-            $keys[] = (string) ($row['product_key'] ?? '');
+            $label = trim((string) ($row['label'] ?? ''));
+            if ($label !== '') {
+                $labels[] = $label;
+            }
         }
 
-        return $keys;
+        return $labels;
+    }
+
+    /**
+     * Le libellé est-il encore un libellé OCR BRUT non traité (garde B)
+     * — c.-à-d. égal (à la casse/accents/espaces près) à une entrée de
+     * la file scan_labels ? Réutilise la règle partagée
+     * PurchaseSaver::isRawScanLabel : la clé du test est la même que
+     * celle de la passe ciblée des achats, un libellé vendu tel quel à
+     * la borne est donc exclu ici aussi.
+     *
+     * @param list<string> $scanLabels Entrées de la file scan_labels.
+     */
+    private static function matchesRawScanLabel(string $label, array $scanLabels): bool
+    {
+        foreach ($scanLabels as $scanLabel) {
+            if (PurchaseSaver::isRawScanLabel($scanLabel, $label)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

@@ -144,14 +144,20 @@ final class PurchaseSaver
                 }
                 $products[$key] = true;
 
+                // Garde A (mission E) — les lignes « hors stock »
+                // (no_stock = conso bureau, fournitures…) ne déclenchent
+                // JAMAIS la synchro carte : ce ne sont pas des produits
+                // rayonnables, ils ne doivent pas créer de fiche publique.
+                //
                 // Libellé scan non traité (le « produit » EST le
                 // libellé OCR brut) : PAS de fiche automatique — la clé
                 // reste dans la file « Nouvelles appellations » jusqu'à
                 // ce que l'utilisateur saisisse le nom court. Les clés
                 // saisies à la main (sans libellé d'origine) et les
                 // lignes reconnues/corrigées (libellé ≠ clé) continuent
-                // de créer une fiche comme avant.
-                if (!self::isRawScanLabel((string) ($line['raw_label'] ?? ''), $key)) {
+                // de solliciter la synchro — c'est ProductAutoSync qui
+                // décide en dernier ressort (garde C : vente réelle).
+                if (!$noStock && !self::isRawScanLabel((string) ($line['raw_label'] ?? ''), $key)) {
                     $syncKeys[$key] = true;
                 }
 

@@ -96,9 +96,10 @@ final class AdminLossController extends AdminBaseController
             'reason'      => $reason,
         ]);
 
-        // Synchro automatique de la carte pour ce produit : une perte est
-        // parfois la première trace d'un produit jamais vendu ni compté.
-        // Jamais bloquant.
+        // Synchro automatique de la carte pour ce produit : une perte ne
+        // crée plus de fiche à elle seule (garde C de ProductAutoSync —
+        // seule une VENTE justifie une fiche publique) ; l'appel reste
+        // pour le cas où le libellé a AUSSI été vendu. Jamais bloquant.
         $sync = ['created' => []];
         try {
             $sync = ProductAutoSync::ensureKeys([$productKey]);
