@@ -281,8 +281,11 @@ final class AdminCafeteriaController extends AdminBaseController
             redirect(url('/admin/cafeteria/categories'));
         }
 
-        $created = ProductCategory::ensure($name, Auth::id());
-        $this->audit('category.ensure', 'product_category', null, ['name' => $name]);
+        // Bouton admin explicite → $auto = false : création auditée
+        // 'category.save' (source « admin »), donc JAMAIS purgeable par la
+        // purge des catégories auto-créées vides (mission E) ; l'audit est
+        // écrit par le modèle lui-même (entité = la catégorie créée).
+        $created = ProductCategory::ensure($name, Auth::id(), false) !== null;
 
         $this->setFlash(
             'success',
@@ -303,7 +306,9 @@ final class AdminCafeteriaController extends AdminBaseController
 
         $created = 0;
         foreach (ProductAlias::distinctCategories() as $name) {
-            if (ProductCategory::ensure(trim($name), Auth::id())) {
+            // Bouton admin explicite → $auto = false (audit 'category.save',
+            // jamais purgeable — même choix prudent que addMappingCategory).
+            if (ProductCategory::ensure(trim($name), Auth::id(), false) !== null) {
                 $created++;
             }
         }

@@ -316,11 +316,21 @@ final class AdminComptaController extends AdminBaseController
 
         // ── Les catégories utilisées par le mapping existent aussi dans la
         //       carte (page Catégories de la cafétéria) : création
-        //       silencieuse si absente. Jamais bloquant pour l'import.
+        //       silencieuse si absente (quasi-doublons ABSORBÉS par
+        //       ProductCategory::ensure). Jamais bloquant pour l'import.
         try {
             foreach (ProductAlias::distinctCategories() as $cat) {
                 ProductCategory::ensure($cat, $user['id'] ?? null);
             }
+
+            // ── Purge des catégories auto-créées (audit 'category.ensure')
+            //       devenues VIDES (0 produit, 0 alias par nom) : une
+            //       catégorie posée par un import antérieur dont l'alias a
+            //       été renommé depuis n'a plus lieu d'être. CONSERVATEUR :
+            //       les catégories créées/retouchées via le formulaire
+            //       admin ('category.save') ou sans trace d'audit restent
+            //       INTOUCHABLES. Jamais bloquant pour l'import.
+            ProductCategory::purgeAutoCreatedEmpty($user['id'] ?? null);
         } catch (\Throwable) {
             // La compta ne doit jamais casser à cause de la synchro carte.
         }
