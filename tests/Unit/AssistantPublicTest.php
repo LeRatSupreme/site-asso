@@ -385,6 +385,42 @@ final class AssistantPublicTest extends TestCase
         self::assertNotSame(self::reponseFaqPour('a quelle heure'), $r['reply']);
     }
 
+    public function test_faq_createur_du_site_matche_question_reelle_et_ne_hijacke_pas_identite(): void
+    {
+        // Question réelle posée au widget public (journal 28/10, signalée
+        // 4 nuits par les selfreview). Faits 100 % vérifiables
+        // publiquement : footer (« Développé par Adrien Remond ») et /legal
+        // Article 10 — aucune techno (PHP…) n'est écrite publiquement,
+        // la réponse n'en cite donc pas.
+        $attendu = self::reponseFaqPour('qui a cree ce site');
+        $s = $this->service();
+
+        foreach ([
+            'Qui a créé ce site web et avec quelle technologie est-il développé ?', // question réelle du journal
+            'Qui a fait ce site ?',
+            'Avec quoi le site a été fait ?',
+            'Qui a construit le site de l AEIC ?',
+        ] as $question) {
+            $r = $s->traiter($question, null, '8.8.4.4');
+            self::assertSame(200, $r['http'], 'doit répondre en FAQ : ' . $question);
+            self::assertTrue($r['ok']);
+            self::assertSame($attendu, $r['reply'], 'entrée créateur du site (le plus long) : ' . $question);
+        }
+
+        // Anti-hijack : « qui a créé l'AEIC ? » parle de l'ASSOCIATION, pas
+        // du site — c'est l'entrée identité AEIC qui répond ('aeic'),
+        // jamais l'entrée créateur du site. « c'est quoi l'AEIC » pareil.
+        foreach ([
+            'Qui a créé l AEIC ?',
+            "C'est quoi l'AEIC ?",
+        ] as $question) {
+            $r = $s->traiter($question, null, '8.8.4.4');
+            self::assertSame(200, $r['http']);
+            self::assertSame(self::reponseFaqPour('c est quoi l aeic'), $r['reply'], 'identité AEIC, pas créateur du site : ' . $question);
+            self::assertNotSame($attendu, $r['reply']);
+        }
+    }
+
     public function test_hors_faq_va_au_chemin_llm_503_faq_false(): void
     {
         $path = $this->tmp . '/assistant_public.jsonl';
