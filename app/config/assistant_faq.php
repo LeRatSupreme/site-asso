@@ -106,6 +106,33 @@ return [
         'reponse' => "L'AEIC tient une cafétéria à prix étudiant à l'IUT de Calais, avec boissons et encas.",
     ],
     [
+        // HORAIRES de la cafétéria — placée juste APRÈS l'entrée cafétéria
+        // générique : les formes longues ci-dessous (« a quelle heure » 14,
+        // « horaires de la cafeteria » 24) battent « cafeteria » (9) du
+        // match générique. Les mots seuls « ouvre »/« ferme »/« ouvert »
+        // sont volontairement ABSENTS : le déclencheur le plus long
+        // gagne, ils hijackeraient « quand ouvre la soirée » (cf. fix
+        // « jeu » → « déjeuner ») — seules des formes longues/sûres ici.
+        'declencheurs' => [
+            'horaire',
+            'horaires',
+            'heures ouverture',
+            'heures d ouverture',
+            'a quelle heure',
+            'quand ouvert',
+            'quand ouvre la cafeteria',
+            'cafeteria ouvre',
+            'ouverture cafeteria',
+            'ouverture de la cafeteria',
+            'horaires de la cafeteria',
+            'horaire de la cafeteria',
+            'creneau',
+            'creneaux',
+            'pauses cafet',
+        ],
+        'reponse' => "La cafétéria ouvre aux pauses : 8h20-8h30, 9h50-10h10, 14h20-14h35 et 15h55-16h15, du lundi au vendredi. Fermée le week-end et les jours fériés.",
+    ],
+    [
         // NB : les noms de jeux SEULS ('tetris', 'wordle', 'snake',
         // 'memory', 'enigme') sont volontairement ABSENTS : « c'est quoi
         // Tetris ? » doit tomber sur le LLM (culture générale), tandis que

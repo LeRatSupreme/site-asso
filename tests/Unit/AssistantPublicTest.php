@@ -190,6 +190,23 @@ final class AssistantPublicTest extends TestCase
         self::assertMatchesRegularExpression('/moji/i', $prompt);
     }
 
+    public function test_prompt_public_mentionne_les_horaires_de_la_cafeteria(): void
+    {
+        // Voie LLM : le prompt éditable porte la même ligne horaires que
+        // la FAQ (mêmes faits publics sur les deux chemins, formule
+        // générique week-end/jours fériés — aucune date figée).
+        /** @var string $prompt */
+        $prompt = require AEIC_ROOT . '/app/config/assistant_public.php';
+
+        self::assertStringContainsString('Horaires : 4 créneaux aux pauses', $prompt);
+        self::assertStringContainsString('8h20-8h30', $prompt);
+        self::assertStringContainsString('9h50-10h10', $prompt);
+        self::assertStringContainsString('14h20-14h35', $prompt);
+        self::assertStringContainsString('15h55-16h15', $prompt);
+        self::assertStringContainsString('du lundi au vendredi', $prompt);
+        self::assertStringContainsString('week-end et les jours fériés', $prompt);
+    }
+
     // -------------------------------------------------------------
     //  Réponses : 503 LLM down, 429 burst, journal
     // -------------------------------------------------------------
@@ -256,6 +273,35 @@ final class AssistantPublicTest extends TestCase
         self::assertFalse($troisieme['faq']);
     }
 
+    public function test_journal_champ_origin_vps_ou_humain(): void
+    {
+        // Selfreview 06h : les requêtes émises DEPUIS le VPS comptaient
+        // pour du trafic étudiant (26/58 questions). Chaque ligne du
+        // journal porte désormais origin « vps » si l'IP client est
+        // exactement l'IP publique du VPS (comparaison string stricte),
+        // « humain » sinon (champ additif, le front ignore les champs
+        // inconnus, ip_hash reste).
+        $path = $this->tmp . '/assistant_public.jsonl';
+        $s = $this->service();
+
+        $s->traiter('Bonjour', null, '51.254.129.80'); // IP publique du VPS
+        $s->traiter('Bonjour', null, '1.2.3.4');       // IP visiteur
+
+        $lignes = array_values(array_filter(explode("\n", (string) @file_get_contents($path))));
+        self::assertCount(2, $lignes);
+
+        $vps    = json_decode($lignes[0], true);
+        $humain = json_decode($lignes[1], true);
+
+        self::assertSame('vps', $vps['origin']);
+        self::assertSame('humain', $humain['origin']);
+
+        // ip_hash inchangé : présent, 16 hex, jamais l'IP en clair.
+        self::assertMatchesRegularExpression('/^[0-9a-f]{16}$/', $vps['ip_hash']);
+        self::assertMatchesRegularExpression('/^[0-9a-f]{16}$/', $humain['ip_hash']);
+        self::assertStringNotContainsString('51.254.129.80', $lignes[0]);
+    }
+
     // -------------------------------------------------------------
     //  FAQ fast-path (réponses pré-rédigées, zéro appel LLM)
     // -------------------------------------------------------------
@@ -290,6 +336,53 @@ final class AssistantPublicTest extends TestCase
         self::assertSame(200, $r['http']);
         self::assertSame(self::reponseFaqPour('c est quoi l aeic'), $r['reply']);
         self::assertNotSame(self::reponseFaqPour('salut'), $r['reply']);
+    }
+
+    public function test_faq_horaires_cafeteria_matche_questions_courantes(): void
+    {
+        // Info pôle : la cafétéria ouvre aux pauses 8h20-8h30, 9h50-10h10,
+        // 14h20-14h35 et 15h55-16h15 du lundi au vendredi. « a quelle
+        // heure ouvre la cafeteria le mardi » doit recevoir les 4
+        // créneaux PRÉCIS, pas la réponse générique cafétéria (non-réponse
+        // flaguée 3 nuits par les rapports selfreview) : le déclencheur
+        // horaires le plus long bat « cafeteria » (9).
+        $attendu = self::reponseFaqPour('a quelle heure');
+        $s = $this->service();
+
+        foreach ([
+            'a quelle heure ouvre la cafeteria le mardi',     // déjà normalisé
+            'À quelle heure ouvre la cafétéria le mardi ?',   // accents + casse + ponctuation
+            'Quels sont les horaires de la cafétéria ?',
+            'Quand ouvre la cafétéria ?',
+            "Heures d'ouverture de la cafétéria ?",
+            'Quels sont les créneaux de la cafet ?',
+        ] as $question) {
+            $r = $s->traiter($question, null, '8.8.4.4');
+            self::assertSame(200, $r['http'], 'doit répondre en FAQ : ' . $question);
+            self::assertTrue($r['ok']);
+            self::assertSame($attendu, $r['reply'], 'créneaux horaires (le plus long), pas la réponse générique cafétéria : ' . $question);
+        }
+
+        // Les 4 créneaux exacts sont dans la réponse FAQ.
+        self::assertStringContainsString('8h20-8h30', $attendu);
+        self::assertStringContainsString('9h50-10h10', $attendu);
+        self::assertStringContainsString('14h20-14h35', $attendu);
+        self::assertStringContainsString('15h55-16h15', $attendu);
+        self::assertStringContainsString('week-end et les jours fériés', $attendu);
+    }
+
+    public function test_faq_horaires_ne_hijacke_pas_les_evenements(): void
+    {
+        // Piège connu (règle « le déclencheur le plus long gagne », cf.
+        // fix « jeu » → « déjeuner ») : « ouvre »/« ferme »/« ouvert »
+        // seuls hijackeraient les questions événements. « quand ouvre la
+        // soirée » contient « quand ouvre » mais AUCUN déclencheur
+        // horaires → elle reste sur l'entrée événements (soiree).
+        $r = $this->service()->traiter('Quand ouvre la soirée ?', null, '8.8.4.4');
+
+        self::assertSame(200, $r['http']);
+        self::assertSame(self::reponseFaqPour('soiree'), $r['reply']);
+        self::assertNotSame(self::reponseFaqPour('a quelle heure'), $r['reply']);
     }
 
     public function test_hors_faq_va_au_chemin_llm_503_faq_false(): void

@@ -54,9 +54,11 @@ use App\Models\Setting;
  *    instantanée, SANS sémaphore ni appel LLM (l'historique n'est pas
  *    nécessaire : il n'est validé que sur le chemin LLM) ;
  *  - journal d'observation logs/assistant_public.jsonl : une ligne par
- *    requête {ts, ip_hash, question, reply, latency_ms, status, faq} —
- *    le champ additif faq (true/false) distingue réponses pré-rédigées
- *    et générations LLM (le front ignore les champs inconnus) ; l'IP
+ *    requête {ts, ip_hash, origin, question, reply, latency_ms, status,
+ *    faq} — le champ additif faq (true/false) distingue réponses
+ *    pré-rédigées et générations LLM, le champ additif origin (« vps » /
+ *    « humain ») distingue le trafic du serveur lui-même du trafic
+ *    étudiant (le front ignore les champs inconnus) ; l'IP
  *    n'est JAMAIS écrite en clair (sha256 tronqué, sel APP_KEY) ;
  *    le chemin kiosque journalise pareil dans logs/assistant_kiosk.jsonl
  *    avec un champ additif « kiosk » (nom du kiosque).
@@ -85,6 +87,12 @@ final class PublicAssistant
     /** Rate limit : 10 questions / 5 minutes / IP. */
     public const RATE_MAX        = 10;
     public const RATE_FENETRE_S  = 300;
+
+    /** IP publique du VPS hébergeant le site : une requête client dont
+     *  l'IP est exactement celle-ci vient du serveur lui-même (cron,
+     *  healthcheck, monitoring…), pas d'un visiteur — étiquetée « vps »
+     *  dans le journal (comparaison string stricte, sinon « humain »). */
+    private const IP_VPS = '51.254.129.80';
 
     /** Appels LLM simultanés maximum (2 slots flock). */
     private const SLOTS_MAX = 2;
@@ -777,6 +785,11 @@ final class PublicAssistant
         $donnees = [
             'ts'         => (new \DateTimeImmutable('now', new \DateTimeZone('Europe/Paris')))->format(DATE_ATOM),
             'ip_hash'    => self::hashIp($ip),
+            // Origine de la requête (champ additif, le front ignore les
+            // champs inconnus) : le trafic du VPS lui-même ne doit plus
+            // compter pour du trafic étudiant dans les rapports
+            // d'observation (selfreview 06h : 26/58 questions VPS).
+            'origin'     => $ip === self::IP_VPS ? 'vps' : 'humain',
             'question'   => is_string($questionBrut)
                 ? mb_substr(trim($questionBrut), 0, self::JOURNAL_QUESTION_MAX)
                 : '',
