@@ -745,6 +745,8 @@ def _formater_stock_rapide(donnees: dict, nom_demande: str) -> str:
     """Met en forme le JSON de stock_produit SANS LLM — mêmes libellés que
     le fast-path PHP (AgentQuestions::formaterStock) ; tout champ absent a
     un repli, aucun chiffre n'est inventé (contrat à champs français stables).
+    L'avertissement de fraîcheur (comptage > 30 j, mission T2) est affiché
+    tel quel quand le contrôleur le fournit, sinon rien (vieux journaux).
     """
     if donnees.get("trouve") is not True:
         candidats = donnees.get("candidats") or []
@@ -762,12 +764,18 @@ def _formater_stock_rapide(donnees: dict, nom_demande: str) -> str:
     stock = donnees.get("stock")
     comptage = donnees.get("dernier_comptage")
     suite = f" (dernier comptage : {comptage})" if comptage else ""
+    avertissement = str(donnees.get("avertissement") or "").strip()
     alerte = (
+        " " + avertissement[:1].upper() + avertissement[1:] + "."
+        if avertissement
+        else ""
+    )
+    anomalie = (
         " Anomalie : stock négatif (survente) à vérifier."
         if isinstance(stock, (int, float)) and stock < 0
         else ""
     )
-    return f"Stock de {nom} : {stock} unité(s){suite}.{alerte}"
+    return f"Stock de {nom} : {stock} unité(s){suite}.{alerte}{anomalie}"
 
 
 def fast_path_stock(question: str, jeton: str, deadline: float) -> Session | None:

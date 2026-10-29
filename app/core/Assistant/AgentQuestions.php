@@ -288,8 +288,15 @@ final class AgentQuestions
         $stock = $r['stock'] ?? '?';
         $comptage = (string) ($r['dernier_comptage'] ?? '');
         $suite = $comptage !== '' ? ' (dernier comptage : ' . $comptage . ')' : '';
+        // Signal de fraîcheur T2 : l'avertissement du contrôleur (comptage
+        // > 30 j) est affiché tel quel — champ additif, absent des vieux
+        // journaux → aucun texte fantôme.
+        $avertissement = trim((string) ($r['avertissement'] ?? ''));
+        $alerte = $avertissement !== ''
+            ? ' ' . mb_strtoupper(mb_substr($avertissement, 0, 1)) . mb_substr($avertissement, 1) . '.'
+            : '';
 
-        return 'Stock de ' . $nom . ' : ' . $stock . ' unité(s)' . $suite . '.';
+        return 'Stock de ' . $nom . ' : ' . $stock . ' unité(s)' . $suite . '.' . $alerte;
     }
 
     private static function formaterVentes(array $r): string
