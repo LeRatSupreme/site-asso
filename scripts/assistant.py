@@ -431,13 +431,14 @@ def requete_llm(
         "max_tokens": MAX_TOKENS_LLM,
         "stream": False,
     }
+    # T0 : temperature=0 — détermination du bug dégénéré intermittent (axe 1 selfreview).
     if reflexion:
         # Recommandations Qwen3 mode réflexion.
-        charge["temperature"] = 0.6
+        charge["temperature"] = 0
         charge["top_p"] = 0.95
     else:
         # Mode direct (défaut du pont : ~x5 plus rapide, tool-calling validé).
-        charge["temperature"] = 0.7
+        charge["temperature"] = 0
         charge["top_p"] = 0.8
         charge["chat_template_kwargs"] = {"enable_thinking": False}
 
@@ -643,6 +644,182 @@ def tronquer_resultat(corps: str) -> tuple[str, bool]:
 
 
 # ---------------------------------------------------------------------------
+# Fast-path admin « stock de X » (T3 — 54 % du trafic admin, p50 33 s → < 2 s)
+# ---------------------------------------------------------------------------
+
+#: Déterminant français possible entre le mot d'intention et le nom produit.
+_DETERMINANTS_PRODUIT = r"(?:de\s+la\s+|de\s+l'|du\s+|des\s+|d'|de\s+)"
+
+#: Questions « combien reste-t-il de X », « stock de X », « il y a du X »… :
+#: du plus SPÉCIFIQUE au plus générique (le premier motif qui matche gagne
+#: — les génériques sont filtrés par MOTS_NON_PRODUITS). Groupe « produit »
+#: = tout le reste de la question après le déterminant.
+MOTIFS_STOCK_PRODUIT: tuple[re.Pattern[str], ...] = (
+    # « Combien reste-t-il de Coca ? », « reste-t-il du coca ».
+    re.compile(
+        r"\b(?:combien\s+)?(?:il\s+)?(?:me\s+|te\s+|nous\s+|vous\s+)?(?:en\s+)?"
+        r"reste(?:-|\s)?t(?:-|\s)?il\s+" + _DETERMINANTS_PRODUIT + r"(?P<produit>.+)",
+        re.I,
+    ),
+    # « combien il reste de X », « tu sais combien il me reste de X ».
+    re.compile(
+        r"\bcombien\s+(?:il\s+)?(?:me\s+|te\s+|nous\s+|vous\s+)?(?:en\s+)?reste.*?"
+        + _DETERMINANTS_PRODUIT
+        + r"(?P<produit>.+)",
+        re.I,
+    ),
+    # « il me reste du X », « il en reste de la X ».
+    re.compile(
+        r"\bil\s+(?:me\s+|te\s+|nous\s+|vous\s+|en\s+)?reste\s+"
+        + _DETERMINANTS_PRODUIT
+        + r"(?P<produit>.+)",
+        re.I,
+    ),
+    # « stock de X », « quel est le stock du X ».
+    re.compile(
+        r"\bstock\s+" + _DETERMINANTS_PRODUIT + r"(?P<produit>.+)", re.I
+    ),
+    # « il y a (combien) de X ».
+    re.compile(
+        r"\bil\s+y\s+a\s+(?:combien\s+)?" + _DETERMINANTS_PRODUIT + r"(?P<produit>.+)",
+        re.I,
+    ),
+    # « combien de X », « il me reste combien de X » (le plus générique).
+    re.compile(
+        r"\bcombien\s+" + _DETERMINANTS_PRODUIT + r"(?P<produit>.+)", re.I
+    ),
+)
+
+#: Mots qui signalent une question NON-stock (ventes, marge, délais…) : si le
+#: nom extrait en contient UN, la question part en voie LLM normale (fail-soft
+#: on ne répond jamais « stock » à une question de CA/marge/période).
+MOTS_NON_PRODUITS = frozenset(
+    {
+        "vente", "ventes", "benef", "benefs", "benefice", "benefices",
+        "bénéfice", "bénéfices", "marge", "marges", "ca", "chiffre", "chiffres",
+        "affaire", "affaires", "argent", "monnaie", "euro", "euros", "profit",
+        "profits", "perte", "pertes", "recette", "recettes", "depense",
+        "depenses", "dépense", "dépenses", "transaction", "transactions",
+        "ticket", "tickets", "commande", "commandes", "commander", "racheter",
+        "acheter", "revendre", "vendre", "vendu", "vendus", "vendue", "vendues",
+        "gagne", "gagné", "gagnes", "gagnés", "gagnee", "gagnée", "encaisse",
+        "encaissé", "monde", "temps", "aujourd'hui", "hier", "demain", "matin",
+        "soir", "semaine", "semaines", "mois", "jour", "jours", "journee",
+        "journée", "annee", "année", "an", "ans", "adherent", "adherents",
+        "adhérent", "adhérents", "membre", "membres", "eleve", "eleves",
+        "élève", "élèves", "personne", "personnes", "client", "clients",
+        "kiosque", "stand", "doublon", "doublons", "fusion", "fusions",
+        "solde", "soldes", "credit", "credits", "crédit", "crédits",
+        "stock", "reste",
+    }
+)
+
+
+def detecter_question_stock(question: str) -> str | None:
+    """Détecte une question de STOCK PRODUIT pure et extrait le nom produit.
+
+    T3 : regex en amont du tour LLM. Renvoie le nom tel que saisi (le même
+    paramètre « nom » que l'outil stock_produit — la résolution nom → stock
+    reste ENTIEREMENT côté serveur, StockBook du contrôleur), ou None si la
+    question n'est pas une question de stock évidente (ambiguïté, mots de
+    ventes/marge/période, pas de nom plausible) → voie LLM normale.
+    """
+    question_normale = question.replace("’", "'")
+    for motif in MOTIFS_STOCK_PRODUIT:
+        correspondance = motif.search(question_normale)
+        if not correspondance:
+            continue
+        produit = re.sub(r"\s+", " ", correspondance.group("produit")).strip()
+        produit = re.sub(r"[\s?!.…]+\s*$", "", produit).strip()
+        produit = re.sub(r"\s+en\s+stock$", "", produit, flags=re.I).strip()
+        if not produit or len(produit) > 255 or not any(c.isalpha() for c in produit):
+            continue
+        mots = re.findall(r"[a-zà-öø-ÿœæ0-9']+", produit.lower())
+        if any(mot in MOTS_NON_PRODUITS for mot in mots):
+            continue
+        return produit
+    return None
+
+
+def _formater_stock_rapide(donnees: dict, nom_demande: str) -> str:
+    """Met en forme le JSON de stock_produit SANS LLM — mêmes libellés que
+    le fast-path PHP (AgentQuestions::formaterStock) ; tout champ absent a
+    un repli, aucun chiffre n'est inventé (contrat à champs français stables).
+    """
+    if donnees.get("trouve") is not True:
+        candidats = donnees.get("candidats") or []
+        libelles = ", ".join(
+            f"{c.get('cle')} ({c.get('stock')} unités)"
+            for c in candidats
+            if isinstance(c, dict) and c.get("cle")
+        )
+        suite = f" Candidats proches : {libelles}." if libelles else ""
+        return (
+            f"Produit « {donnees.get('nom_demande') or nom_demande} » introuvable "
+            f"dans le livre de stock.{suite}"
+        )
+    nom = donnees.get("cle_canonique") or nom_demande
+    stock = donnees.get("stock")
+    comptage = donnees.get("dernier_comptage")
+    suite = f" (dernier comptage : {comptage})" if comptage else ""
+    alerte = (
+        " Anomalie : stock négatif (survente) à vérifier."
+        if isinstance(stock, (int, float)) and stock < 0
+        else ""
+    )
+    return f"Stock de {nom} : {stock} unité(s){suite}.{alerte}"
+
+
+def fast_path_stock(question: str, jeton: str, deadline: float) -> Session | None:
+    """Répond SANS tour LLM à une question « stock de X » (T3).
+
+    Réutilise EXACTEMENT le chemin de la boucle d'outils (aucune logique
+    produit dupliquée) : valider_arguments → requete_outil →
+    tronquer_resultat → _source. Renvoie None si la question ne matche pas
+    ou si l'appel échoue (statut ≠ 200, JSON illisible) → la voie LLM
+    normale reste alors inchangée (fallback fail-soft).
+    """
+    produit = detecter_question_stock(question)
+    if produit is None:
+        return None
+
+    arguments, erreur = valider_arguments("stock_produit", {"nom": produit})
+    if erreur is not None:
+        return None
+
+    session = Session(question=question)
+    debut_appel = time.monotonic()
+    reponse_outil = requete_outil("stock_produit", arguments, jeton, deadline)
+    statut = reponse_outil["statut_http"]
+    resultats, _tronque = tronquer_resultat(reponse_outil["corps"])
+    session.appels.append(
+        {
+            "outil": "stock_produit",
+            "arguments": arguments,
+            "statut_http": statut,
+            "ms": round((time.monotonic() - debut_appel) * 1000),
+            "resultat": resultats,
+        }
+    )
+    if statut != 200:
+        return None  # échec d'appel → voie LLM normale (échec honnête au pire)
+
+    try:
+        donnees = json.loads(reponse_outil["corps"])
+    except ValueError:
+        return None
+    if not isinstance(donnees, dict):
+        return None
+
+    session.reponse = _formater_stock_rapide(donnees, arguments["nom"])
+    session.ok = bool(session.reponse.strip())
+    if not session.ok:
+        return None
+    session.sources.append(_source("stock_produit", arguments))
+    return session
+
+
+# ---------------------------------------------------------------------------
 # Boucle d'orchestration (question → LLM → outils → réponse + sources)
 # ---------------------------------------------------------------------------
 
@@ -686,6 +863,13 @@ def poser_question(
         question=question, reflexion=reflexion, contexte_messages=len(contexte or [])
     )
     deadline = time.monotonic() + TIMEOUT_GLOBAL_S
+
+    # T3 — fast-path « stock de X » : réponse directe par l'outil, SANS tour
+    # LLM ; None (pas de match / échec d'appel) → voie LLM normale ci-dessous.
+    session_rapide = fast_path_stock(question, jeton, deadline)
+    if session_rapide is not None:
+        return session_rapide
+
     messages: list[dict] = construire_messages(question, contexte)
     deja_relance_sans_source = False
 
@@ -1007,7 +1191,8 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help=(
             "affiche le prompt construit (préfixe + historique + question) "
-            "sans appeler le LLM ni les outils"
+            "et le chemin choisi (fast-path stock ou voie LLM) sans appeler "
+            "le LLM ni les outils"
         ),
     )
     arguments = parseur.parse_args(argv)
@@ -1026,12 +1211,18 @@ def main(argv: list[str] | None = None) -> int:
     if arguments.dry_run:
         # Exécution à blanc (tests d'intégration) : le prompt construit est
         # affiché en JSON — aucun appel LLM, outil ou journal. Aucun jeton
-        # nécessaire (rien n'est exécuté).
+        # nécessaire (rien n'est exécuté). Le chemin T3 est indiqué par la
+        # détection regex SEULE (aucun appel réseau en dry-run).
+        produit_rapide = detecter_question_stock(question)
         print(
             json.dumps(
                 {
                     "dry_run": True,
                     "question": question,
+                    "chemin": (
+                        "fast_path_stock" if produit_rapide is not None else "llm_outils"
+                    ),
+                    "fast_path_produit": produit_rapide,
                     "contexte_messages": len(contexte or []),
                     "messages": construire_messages(question, contexte),
                 },
