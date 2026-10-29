@@ -52,6 +52,19 @@ final class AdminPagesSmokeTest extends IntegrationTestCase
         '/assistant/ask',
     ];
 
+    /**
+     * Idem pour les routes POST-only PARAMÉTRÉES : motifs bruts du
+     * routeur (avec {param}), comparés AVANT substitution. Le 405 en
+     * GET y est le contrat documenté quel que soit le paramètre — ex.
+     * /kiosque/assistant/ask/{token} (AssistantPublicController::
+     * askKioskGet renvoie 405 sans même regarder le jeton).
+     *
+     * @var list<string>
+     */
+    private const GET_POST_SEULES_PARAMETREES = [
+        '/kiosque/assistant/ask/{token}',
+    ];
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -118,8 +131,10 @@ final class AdminPagesSmokeTest extends IntegrationTestCase
     /**
      * Pages GET paramétrées, appelées avec des valeurs inexistantes
      * (réponse gracieuse attendue : 200, 302 ou 404 — jamais 500).
+     * « pattern » porte le motif brut, pour reconnaître les routes
+     * POST-only paramétrées (self::GET_POST_SEULES_PARAMETREES).
      *
-     * @return list<array{path:string, parameterized:true}>
+     * @return list<array{path:string, pattern:string, parameterized:true}>
      */
     private function parameterizedPaths(): array
     {
@@ -128,6 +143,7 @@ final class AdminPagesSmokeTest extends IntegrationTestCase
             if (str_contains($pattern, '{')) {
                 $paths[] = [
                     'path'          => (string) preg_replace('#\{[^}]+\}#', 'inexistant-smoke', $pattern),
+                    'pattern'       => $pattern,
                     'parameterized' => true,
                 ];
             }
@@ -170,11 +186,15 @@ final class AdminPagesSmokeTest extends IntegrationTestCase
             // ou 403 (route à jeton secret, ex. /kiosque/reappro/{token}) —
             // jamais 500. Les routes concrètes restent limitées à 200/302,
             // sauf les endpoints POST-only (self::GET_POST_SEULES) dont le
-            // 405 en GET est le contrat documenté (voir constante).
+            // 405 en GET est le contrat documenté (voir constante) ; idem
+            // pour les POST-only paramétrés (GET_POST_SEULES_PARAMETREES).
             $autorisés = [200, 302];
             if ($page['parameterized']) {
                 $autorisés[] = 404;
                 $autorisés[] = 403;
+                if (in_array($page['pattern'], self::GET_POST_SEULES_PARAMETREES, true)) {
+                    $autorisés[] = 405;
+                }
             } elseif (in_array($path, self::GET_POST_SEULES, true)) {
                 $autorisés[] = 405;
             }
@@ -212,7 +232,18 @@ final class AdminPagesSmokeTest extends IntegrationTestCase
             'La liste des endpoints POST-only ne doit jamais être vide : elle documente un contrat actif.'
         );
 
-        foreach (self::GET_POST_SEULES as $path) {
+        // Chemins concrets + motifs paramétrés substitués (le 405 des
+        // endpoints POST-only paramétrés ne dépend PAS du paramètre :
+        // ex. askKioskGet renvoie 405 sans même regarder le jeton).
+        $chemins = array_merge(
+            self::GET_POST_SEULES,
+            array_map(
+                static fn (string $motif): string => (string) preg_replace('#\{[^}]+\}#', 'inexistant-smoke', $motif),
+                self::GET_POST_SEULES_PARAMETREES
+            )
+        );
+
+        foreach ($chemins as $path) {
             $r    = $this->request('GET', $path, [], [], $this->rootId);
             $code = (int) ($r['code'] ?? 0);
             $body = (string) ($r['body'] ?? '');
