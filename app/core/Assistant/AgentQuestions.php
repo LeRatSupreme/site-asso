@@ -21,6 +21,17 @@ final class AgentQuestions
     /** Whitelist des outils — miroir de AssistantToolsController::OUTILS. */
     public const OUTILS_VALIDES = ['ventes_periode', 'stock_produit', 'produits_a_commander', 'marge_produit', 'doublons_en_attente'];
 
+    /** Libellés du décompte catalogue_anomalies (pluriel, singulier) —
+     *  miroir ordonné des familles CatalogueQc::TYPES (veille qualité). */
+    private const LIBELLES_ANOMALIES = [
+        'fiches_jamais_vendues'     => ['fiches jamais vendues', 'fiche jamais vendue'],
+        'cles_sans_fiche'           => ['clés de vente sans fiche', 'clé de vente sans fiche'],
+        'categories_vides'          => ['catégories vides', 'catégorie vide'],
+        'quasi_doublons_categories' => ['quasi-doublons de catégories', 'quasi-doublon de catégories'],
+        'prix_suspects'             => ['prix suspects', 'prix suspect'],
+        'fiches_dormantes'          => ['fiches dormantes avec stock', 'fiche dormante avec stock'],
+    ];
+
     /** Appels d'outils maximum par routage (miroir du pont : MAX_APPELS_OUTILS). */
     public const APPELS_MAX = 4;
 
@@ -272,6 +283,7 @@ final class AgentQuestions
             'produits_a_commander' => self::formaterReappro($r),
             'marge_produit' => self::formaterMarge($r),
             'doublons_en_attente' => self::formaterDoublons($r),
+            'catalogue_anomalies' => self::formaterCatalogueAnomalies($r),
             default => 'Résultat de l\'outil ' . $outil . ' récupéré.',
         };
     }
@@ -366,6 +378,30 @@ final class AgentQuestions
             . ' (quarantaine : ' . (string) ($quarantaine['nb_en_attente'] ?? 0) . ' en attente, '
             . (string) ($quarantaine['nb_mures'] ?? 0) . ' mûres).'
             . ' Décision par un humain (écran Inventaire) — l\'assistant ne fusionne jamais.';
+    }
+
+    /**
+     * Décompte COURT des anomalies du catalogue par famille (M2 — gabarit
+     * 0-tour-LLM du pont, miroir exact côté Python : mêmes libellés, même
+     * ordre que CatalogueQc::TYPES) ; le détail par produit reste au
+     * rapport de la veille qualité (logs/catalogue_watchdog/YYYY-MM-DD.md).
+     */
+    private static function formaterCatalogueAnomalies(array $r): string
+    {
+        $totaux = is_array($r['totaux'] ?? null) ? $r['totaux'] : [];
+        $parties = [];
+        foreach (self::LIBELLES_ANOMALIES as $type => [$pluriel, $singulier]) {
+            $total = (int) ($totaux[$type] ?? 0);
+            if ($total > 0) {
+                $parties[] = $total . ' ' . ($total === 1 ? $singulier : $pluriel);
+            }
+        }
+        if ($parties === []) {
+            return 'Aucune anomalie du catalogue détectée.';
+        }
+
+        return 'Anomalies du catalogue : ' . implode(', ', $parties)
+            . '. Le détail par produit est dans le rapport de la veille qualité ; toute correction reste une décision humaine.';
     }
 
     /** @return string libellé « a, b, c » des candidats proches (cap 5). */

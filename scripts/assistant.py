@@ -39,6 +39,21 @@ Usage :
     … --dry-run     # affiche le prompt construit (préfixe + historique +
                     # question) sans appeler le LLM — vérif des tests
 
+Gabarits 0-tour-LLM (M2, rapport selfreview 30/10 04h : modèle CPU à
+4,31 tok/s, p50 admin 28,7 s — l'utilisateur a subi 97,7 s pour un
+« bénéfice » et un KO 20,8 s sur les anomalies alors que l'outil répond
+< 500 ms) : trois questions-outil récurrentes sont traitées SANS tour
+LLM, en tête de poser_question, comme le fast-path stock (T3) :
+  - bénéfice/marge GLOBAL → réponse honnête pré-écrite (aucun outil ne
+    le calcule — règle 7 court-circuitée proprement) + top ventes 7 j ;
+  - anomalies du catalogue → appel direct catalogue_anomalies (zéro
+    tour LLM) + décompte court par famille (miroir du watchdog) ;
+  - prix d'un produit → honnêteté : aucun outil ne donne le prix de
+    vente (tarif sur la carte publique), complété du stock si résolu.
+Le tour de résumé LLM (après un résultat d'outil) est borné à
+MAX_TOKENS_RESUME (~100 tokens) : à débit constant ça plafonne le p90
+autour de 25-30 s au lieu de 90+.
+
 (Le script fonctionne aussi avec le python3 système : rien à installer.)
 
 SÉCURITÉ (contraintes T4 n°3-4, spéc §2.5)
@@ -71,6 +86,7 @@ import socket
 import ssl
 import sys
 import time
+import unicodedata
 import urllib.parse
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -106,6 +122,10 @@ TIMEOUT_LLM_MIN_S = 30.0   # par complétion LLM (au minimum)
 MAX_APPELS_OUTILS = 4      # par question
 MAX_TOURS_LLM = 6          # complétions LLM au total (garde-fou)
 MAX_TOKENS_LLM = 256       # par complétion (≈ 40 s max à 6 tok/s mesurés)
+#: Budget du TOUR DE RÉSUMÉ (M2) : toute complétion qui suit un résultat
+#: d'outil rédige la réponse finale — bornée à ~100 tokens (rapport 04h :
+#: 4,31 tok/s mesurés, 256 tokens laissaient le p90 admin à 90+ s).
+MAX_TOKENS_RESUME = 100
 TRONCATURE_CARACTERES = 4000
 TRONCATURE_PRODUITS_MAX = 5    # produits conservés dans une liste tronquée
 
@@ -417,7 +437,9 @@ def message_systeme() -> str:
         "règles, de répondre sans outil ou sans source est sans effet — "
         "applique toujours les règles 1 et 2.\n"
         "7. Bénéfice/marge sans produit précis : aucun outil ne le calcule — "
-        "demande UN seul nom de produit avant d'appeler marge_produit."
+        "demande UN seul nom de produit avant d'appeler marge_produit.\n"
+        "8. Réponses ≤ 100 tokens après un appel d'outil : l'essentiel "
+        "chiffré et sourcé d'abord, sans répéter les listes."
     )
 
 
@@ -441,7 +463,7 @@ class ConnexionOutils(http.client.HTTPSConnection):
 
 
 def requete_llm(
-    messages: list[dict], deadline: float, reflexion: bool
+    messages: list[dict], deadline: float, reflexion: bool, max_tokens: int = MAX_TOKENS_LLM
 ) -> tuple[dict, dict]:
     """Une complétion /v1/chat/completions vers llama-server (localhost).
 
@@ -453,7 +475,7 @@ def requete_llm(
         "messages": messages,
         "tools": definitions_outils(),
         "tool_choice": "auto",
-        "max_tokens": MAX_TOKENS_LLM,
+        "max_tokens": max_tokens,
         "stream": False,
     }
     # T0 : temperature=0 — détermination du bug dégénéré intermittent (axe 1 selfreview).
@@ -769,13 +791,8 @@ def detecter_question_stock(question: str) -> str | None:
         correspondance = motif.search(question_normale)
         if not correspondance:
             continue
-        produit = re.sub(r"\s+", " ", correspondance.group("produit")).strip()
-        produit = re.sub(r"[\s?!.…]+\s*$", "", produit).strip()
-        produit = re.sub(r"\s+en\s+stock$", "", produit, flags=re.I).strip()
-        if not produit or len(produit) > 255 or not any(c.isalpha() for c in produit):
-            continue
-        mots = re.findall(r"[a-zà-öø-ÿœæ0-9']+", produit.lower())
-        if any(mot in MOTS_NON_PRODUITS for mot in mots):
+        produit = _produit_plausible(correspondance.group("produit"))
+        if produit is None:
             continue
         return produit
     return None
@@ -868,6 +885,338 @@ def fast_path_stock(question: str, jeton: str, deadline: float) -> Session | Non
 
 
 # ---------------------------------------------------------------------------
+# Gabarits 0-tour-LLM (M2) — bénéfice global / anomalies catalogue / prix
+# ---------------------------------------------------------------------------
+#
+# Rapport selfreview 30/10 04h : à 4,31 tok/s (CPU), chaque token de résumé
+# coûte ~0,23 s — « Quel bénéfice cette semaine ? » a pris 97,7 s pour finir
+# en « précisez un produit », et « anomalies du catalogue » a fini KO en
+# 20,8 s alors que l'outil répond < 500 ms. Même contrat que le fast-path
+# stock (T3) : détection pure en tête de poser_question, appel d'outil via
+# la voie existante (requete_outil → tronquer_resultat → _source), réponse
+# mise en forme SANS LLM, échec → None → voie LLM normale (fail-soft).
+
+#: Déterminant/article possible entre le mot d'intention prix et le produit.
+_ARTICLES_PRIX = (
+    r"(?:de\s+la\s+|de\s+l'|du\s+|des\s+|d'|de\s+|le\s+|la\s+|les\s+|un\s+|une\s+|l')?"
+)
+
+#: Questions « c'est combien X », « combien ça coûte X », « prix de X » :
+#: du plus SPÉCIFIQUE au plus générique — le fast-path stock (T3) passe
+#: AVANT et garde « combien de X » (quantité) ; seul un énoncé de PRIX
+#: explicite arrive ici.
+MOTIFS_PRIX_PRODUIT: tuple[re.Pattern[str], ...] = (
+    # « c'est combien le Coca », « c'est combien un coca ».
+    re.compile(
+        r"\bc'?est\s+combien\s+" + _ARTICLES_PRIX + r"(?P<produit>.+)", re.I
+    ),
+    # « combien coûte le Coca », « combien ça coûte un coca ».
+    re.compile(
+        r"\bcombien\s+(?:(?:ca|cela)\s+)?coute\s+"
+        + _ARTICLES_PRIX
+        + r"(?P<produit>.+)",
+        re.I,
+    ),
+    # « ça coûte combien le Coca ».
+    re.compile(
+        r"\b(?:ca|cela)\s+coute\s+combien\s+"
+        + _ARTICLES_PRIX
+        + r"(?P<produit>.+)",
+        re.I,
+    ),
+    # « prix de X », « prix du X », « quel est le prix de X ».
+    re.compile(
+        r"\bprix\s+" + _DETERMINANTS_PRODUIT + r"(?P<produit>.+)", re.I
+    ),
+)
+
+#: Mots signalant une question de BÉNÉFICE/MARGE (globale ou produit).
+MOTS_BENEFICE = frozenset(
+    {
+        "benefice", "benefices", "benef", "benefs", "bénéfice", "bénéfices",
+        "marge", "marges", "profit", "profits", "perte", "pertes",
+        "gain", "gains", "gagne", "gagné", "gagnes", "gagnés",
+        "gagnee", "gagnée", "encaisse", "encaissé",
+    }
+)
+
+#: Mots purement grammaticaux/fleuris : une question bénéfice qui ne
+#: contient QUE ces mots + MOTS_NON_PRODUITS + MOTS_BENEFICE porte sur le
+#: GLOBAL (aucun produit cité) ; tout autre mot = probable produit → voie
+#: LLM normale (fail-soft, même garde que le fast-path stock).
+MOTS_FLOUS_BENEFICE = frozenset(
+    {
+        "a", "ai", "as", "au", "aux", "avec", "actuellement",
+        "aeic", "asso", "association", "cafet", "cafeteria", "caisse",
+        "brut", "brute", "c'est", "calcule", "calculer", "ce", "cet",
+        "cette", "ces", "combien", "d", "d'", "d'un", "d'une", "dans",
+        "de", "depuis", "des", "deux", "dernier", "derniere",
+        "derniers", "dernieres", "dire", "dis", "dit", "donne", "donnes",
+        "donner", "du", "est", "est-ce", "estime", "estimer", "ete",
+        "été", "etait", "était", "fait", "faire", "fais", "globale",
+        "global", "globalement", "il", "elle", "ils", "elles", "j",
+        "j'ai", "je", "l", "l'", "la", "le", "les", "leur", "leurs",
+        "ma", "me", "mes", "moi", "mon", "montre", "montres", "n",
+        "n'a", "net", "nette", "nos", "notre", "nous", "on", "ou",
+        "par", "passe", "passé", "passee", "passée", "pendant", "peux",
+        "peut", "peuvent", "pour", "present", "presente", "qu",
+        "qu'est", "qu'on", "qu'il", "qu'elle", "quel", "quelle",
+        "quelles", "quels", "que", "qui", "quoi", "sais", "sait",
+        "sans", "sa", "savez", "savons", "ses", "son", "sous", "sur",
+        "t", "te", "toi", "total", "totale", "tu", "un", "une",
+        "vois", "vous", "y",
+    }
+)
+
+#: Décompte court des anomalies du catalogue : libellés (pluriel,
+#: singulier) miroir (même ordre) des familles CatalogueQc::TYPES — la
+#: mise en forme longuement détaillée reste celle du watchdog
+#: (logs/catalogue_watchdog/YYYY-MM-DD.md).
+LIBELLES_ANOMALIES: tuple[tuple[str, str, str], ...] = (
+    ("fiches_jamais_vendues", "fiches jamais vendues", "fiche jamais vendue"),
+    ("cles_sans_fiche", "clés de vente sans fiche", "clé de vente sans fiche"),
+    ("categories_vides", "catégories vides", "catégorie vide"),
+    ("quasi_doublons_categories", "quasi-doublons de catégories", "quasi-doublon de catégories"),
+    ("prix_suspects", "prix suspects", "prix suspect"),
+    ("fiches_dormantes", "fiches dormantes avec stock", "fiche dormante avec stock"),
+)
+
+#: Familles de mots pour la détection « anomalies du catalogue » (sur texte
+#: sans accents) : un mot d'anomalie + un compagnon « catalogue » (fiches,
+#: catégories, prix…) ; « anomalies de stock » ne matche PAS (survente
+#: d'UN produit → voie LLM/stock, pas la veille qualité du catalogue).
+_MOTS_ANOMALIE = ("anomalie", "incoherence", "probleme", "defaut", "suspect")
+_MOTS_CATALOGUE = (
+    "catalogue", "catalog", "carte", "fiche", "produit", "article", "prix",
+)
+
+
+def _sans_accents(texte: str) -> str:
+    """Minuscule sans accents (détection des gabarits : les questions
+    réelles mélangent casse et accents — « incohérences », « coûte »…)."""
+    decompose = unicodedata.normalize("NFKD", texte.lower())
+    return decompose.encode("ascii", "ignore").decode("ascii")
+
+
+def _produit_plausible(produit_brut: str) -> str | None:
+    """Nettoie et valide un nom de produit extrait par regex (mêmes règles
+    que le fast-path stock : ni vide, ni trop long, au moins une lettre,
+    aucun mot signalant une question NON-produit)."""
+    produit = re.sub(r"\s+", " ", produit_brut).strip()
+    produit = re.sub(r"[\s?!.…]+\s*$", "", produit).strip()
+    produit = re.sub(r"\s+en\s+stock$", "", produit, flags=re.I).strip()
+    if not produit or len(produit) > 255 or not any(c.isalpha() for c in produit):
+        return None
+    mots = re.findall(r"[a-zà-öø-ÿœæ0-9']+", produit.lower())
+    if any(mot in MOTS_NON_PRODUITS for mot in mots):
+        return None
+    return produit
+
+
+def question_benefice_global(question: str) -> bool:
+    """Vrai si la question porte sur un bénéfice/marge SANS produit précis.
+
+    Tout mot hors vocabulaire connu (bénéfice + temps/métier via
+    MOTS_NON_PRODUITS + mots grammaticaux) est traité comme un nom de
+    produit possible → False (voie LLM normale, marge_produit) — jamais
+    le gabarit ne doit répondre « précisez un produit » à une question
+    qui en cite un (ex. « marge des Monster Blanche »).
+    """
+    question_normale = question.replace("’", "'")
+    mots = re.findall(r"[a-zà-öø-ÿœæ0-9']+", question_normale.lower())
+    if not any(mot in MOTS_BENEFICE for mot in mots):
+        return False
+    return all(
+        mot in MOTS_BENEFICE
+        or mot in MOTS_NON_PRODUITS
+        or mot in MOTS_FLOUS_BENEFICE
+        or mot.isdigit()
+        for mot in mots
+    )
+
+
+def question_anomalies_catalogue(question: str) -> bool:
+    """Vrai si la question porte sur les anomalies du CATALOGUE (veille
+    qualité — familles CatalogueQc::TYPES)."""
+    norm = _sans_accents(question)
+    return any(mot in norm for mot in _MOTS_ANOMALIE) and any(
+        mot in norm for mot in _MOTS_CATALOGUE
+    )
+
+
+def detecter_question_prix(question: str) -> str | None:
+    """Détecte une question de PRIX d'un produit (« c'est combien X »,
+    « combien ça coûte X », « prix de X ») et extrait le nom produit
+    (texte sans accents — la résolution nom → fiche reste côté serveur,
+    StockBook tolère la casse et les accents). None sinon → voie LLM."""
+    norm = _sans_accents(question.replace("’", "'"))
+    for motif in MOTIFS_PRIX_PRODUIT:
+        correspondance = motif.search(norm)
+        if not correspondance:
+            continue
+        produit = _produit_plausible(correspondance.group("produit"))
+        if produit is not None:
+            return produit
+    return None
+
+
+def _appel_outil_direct(
+    session: Session, nom: str, arguments: dict, jeton: str, deadline: float
+) -> dict | None:
+    """Exécute UN appel d'outil whitelisté pour un gabarit 0-tour-LLM et
+    le trace dans la session (même journal que la boucle d'outils).
+
+    Renvoie le corps JSON décodé si HTTP 200 et objet, sinon None (l'appel
+    en échec reste journalisé ; la source n'est ajoutée qu'au succès —
+    règle « jamais de chiffre sans source »).
+    """
+    debut_appel = time.monotonic()
+    reponse_outil = requete_outil(nom, arguments, jeton, deadline)
+    statut = reponse_outil["statut_http"]
+    resultats, _tronque = tronquer_resultat(reponse_outil["corps"])
+    session.appels.append(
+        {
+            "outil": nom,
+            "arguments": arguments,
+            "statut_http": statut,
+            "ms": round((time.monotonic() - debut_appel) * 1000),
+            "resultat": resultats,
+        }
+    )
+    if statut != 200:
+        return None
+    try:
+        donnees = json.loads(reponse_outil["corps"])
+    except ValueError:
+        return None
+    if not isinstance(donnees, dict):
+        return None
+    session.sources.append(_source(nom, arguments))
+    return donnees
+
+
+def _formater_anomalies_rapide(donnees: dict) -> str:
+    """Décompte COURT des anomalies par famille — mêmes libellés que le
+    formateur PHP (AgentQuestions::formaterCatalogueAnomalies, miroir de
+    CatalogueQc::TYPES) ; le détail par produit reste au watchdog."""
+    totaux = donnees.get("totaux") or {}
+    parties = []
+    for cle, pluriel, singulier in LIBELLES_ANOMALIES:
+        total = totaux.get(cle, 0)
+        if isinstance(total, (int, float)) and total > 0:
+            total = int(total)
+            parties.append(f"{total} {singulier if total == 1 else pluriel}")
+    if not parties:
+        return "Aucune anomalie du catalogue détectée."
+    return (
+        "Anomalies du catalogue : "
+        + ", ".join(parties)
+        + ". Le détail par produit est dans le rapport de la veille qualité ; "
+        "toute correction reste une décision humaine."
+    )
+
+
+def gabarit_benefice_global(question: str, jeton: str, deadline: float) -> Session | None:
+    """Gabarit (a) — bénéfice/marge GLOBAL sans produit : réponse honnête
+    pré-écrite (règle 7 du message système, court-circuitée proprement :
+    « Quel bénéfice cette semaine ? » a pris 97,7 s le 29/10 pour finir en
+    « précisez un produit ») + proposition des produits les plus vendus
+    (top 3 de ventes_periode sur 7 jours — fait sourcé, zéro tour LLM).
+    L'appel d'outil est un BONUS : s'il échoue, la réponse honnête sort
+    quand même (sans suggestion, sans chiffre).
+    """
+    if not question_benefice_global(question):
+        return None
+
+    session = Session(question=question, gabarit="benefice_global")
+    aujourdhui = dt.date.today()
+    arguments = {
+        "debut": (aujourdhui - dt.timedelta(days=6)).isoformat(),
+        "fin": aujourdhui.isoformat(),
+    }
+    ventes = _appel_outil_direct(
+        session, "ventes_periode", arguments, jeton, deadline
+    )
+    suggestions = ""
+    if isinstance(ventes, dict):
+        top = ventes.get("top_produits") or []
+        libelles = [
+            f"{p.get('produit')} ({p.get('quantite')} u.)"
+            for p in top[:3]
+            if isinstance(p, dict) and p.get("produit")
+        ]
+        if libelles:
+            suggestions = (
+                " Produits les plus vendus ces 7 derniers jours : "
+                + ", ".join(libelles)
+                + "."
+            )
+    session.reponse = (
+        "Aucun outil ne calcule le bénéfice global : la marge se calcule pour "
+        "UN produit à la fois. Donne-moi un seul nom de produit (ex. « Coca "
+        "Cola ») et je calcule sa marge sur la période." + suggestions
+    )
+    session.ok = True
+    return session
+
+
+def gabarit_anomalies_catalogue(
+    question: str, jeton: str, deadline: float
+) -> Session | None:
+    """Gabarit (b) — anomalies du catalogue : appel DIRECT de l'outil
+    catalogue_anomalies (réutilise requete_outil, zéro tour LLM — le
+    29/10 ce chemin a fini KO en 20,8 s avec un message incohérent
+    « délai 120 s » alors que l'outil répond < 500 ms) + décompte court
+    par famille. Échec d'appel → None → voie LLM normale (fail-soft)."""
+    if not question_anomalies_catalogue(question):
+        return None
+
+    session = Session(question=question, gabarit="anomalies_catalogue")
+    donnees = _appel_outil_direct(
+        session, "catalogue_anomalies", {}, jeton, deadline
+    )
+    if donnees is None:
+        return None
+    session.reponse = _formater_anomalies_rapide(donnees)
+    session.ok = bool(session.reponse.strip())
+    if not session.ok:
+        return None
+    return session
+
+
+def gabarit_prix_produit(question: str, jeton: str, deadline: float) -> Session | None:
+    """Gabarit (c) — prix d'un produit : HONNÊTETÉ d'abord — aucun des 6
+    outils ne donne le prix de vente (stock_produit → stock ; marge_produit
+    → marge sur période ; produits_a_commander → coûts d'achat) : le tarif
+    est sur la carte de la cafétéria (page d'accueil publique). Le stock du
+    produit est ajouté si l'appel aboutit (disponibilité utile, sourcée) —
+    en cas d'échec, la réponse honnête sort quand même, sans chiffre.
+    """
+    produit = detecter_question_prix(question)
+    if produit is None:
+        return None
+
+    session = Session(question=question, gabarit="prix_produit")
+    noyau = (
+        "Aucun outil de l'assistant ne donne le prix de vente : les tarifs "
+        "sont sur la carte de la cafétéria (page d'accueil du site)."
+    )
+    arguments, erreur = valider_arguments("stock_produit", {"nom": produit})
+    stock = (
+        _appel_outil_direct(session, "stock_produit", arguments, jeton, deadline)
+        if erreur is None
+        else None
+    )
+    session.reponse = (
+        noyau
+        if stock is None
+        else noyau + " " + _formater_stock_rapide(stock, produit)
+    )
+    session.ok = True
+    return session
+
+
+# ---------------------------------------------------------------------------
 # Boucle d'orchestration (question → LLM → outils → réponse + sources)
 # ---------------------------------------------------------------------------
 
@@ -886,6 +1235,7 @@ class Session:
     reflexion: bool = False
     chiffre_sans_source: bool = False
     contexte_messages: int = 0  # historique multi-tours injecté (T4-P1-B)
+    gabarit: str = ""  # gabarit 0-tour-LLM (M2) : nom, vide sinon
 
     def duree_ms(self) -> int:
         return sum(t.get("ms", 0) for t in self.tours) + sum(
@@ -918,6 +1268,19 @@ def poser_question(
     if session_rapide is not None:
         return session_rapide
 
+    # M2 — gabarits 0-tour-LLM (rapport 04h : 4,31 tok/s × résumés longs →
+    # p50 28,7 s, p90 90+ ; bénéfice global subi 97,7 s, anomalies KO
+    # 20,8 s) : réponse déterministe quand le fait existe déjà, honnête
+    # quand aucun outil ne le couvre. Même contrat fail-soft que T3.
+    for gabarit in (
+        gabarit_benefice_global,
+        gabarit_anomalies_catalogue,
+        gabarit_prix_produit,
+    ):
+        session_rapide = gabarit(question, jeton, deadline)
+        if session_rapide is not None:
+            return session_rapide
+
     messages: list[dict] = construire_messages(question, contexte)
     deja_relance_sans_source = False
 
@@ -926,7 +1289,16 @@ def poser_question(
             if time.monotonic() >= deadline:
                 raise TimeoutError("budget global de 120 s épuisé")
 
-            message, meta = requete_llm(messages, deadline, reflexion)
+            # M2 — budget de résumé borné : toute complétion qui SUIT un
+            # résultat d'outil rédige la réponse finale en ≤ 100 tokens
+            # (à 4,31 tok/s mesurés, 256 tokens laissaient le p90 à 90+ s).
+            resume = any(m.get("role") == "tool" for m in messages)
+            message, meta = requete_llm(
+                messages,
+                deadline,
+                reflexion,
+                max_tokens=MAX_TOKENS_RESUME if resume else MAX_TOKENS_LLM,
+            )
             messages.append(message)
             session.tours.append(
                 {
@@ -1111,6 +1483,7 @@ def journaliser(session: Session) -> None:
             "reflexion": session.reflexion,
             "chiffre_sans_source": session.chiffre_sans_source,
             "contexte_messages": session.contexte_messages,
+            "gabarit": session.gabarit,
             "appels_outils": session.appels,
             "tours_llm": session.tours,
             "reponse": session.reponse,
@@ -1274,18 +1647,27 @@ def main(argv: list[str] | None = None) -> int:
     if arguments.dry_run:
         # Exécution à blanc (tests d'intégration) : le prompt construit est
         # affiché en JSON — aucun appel LLM, outil ou journal. Aucun jeton
-        # nécessaire (rien n'est exécuté). Le chemin T3 est indiqué par la
-        # détection regex SEULE (aucun appel réseau en dry-run).
+        # nécessaire (rien n'est exécuté). Le chemin T3/M2 est indiqué par
+        # la détection regex SEULE (aucun appel réseau en dry-run).
         produit_rapide = detecter_question_stock(question)
+        produit_prix = None
+        if produit_rapide is not None:
+            chemin = "fast_path_stock"
+        elif question_benefice_global(question):
+            chemin = "gabarit_benefice_global"
+        elif question_anomalies_catalogue(question):
+            chemin = "gabarit_anomalies_catalogue"
+        else:
+            produit_prix = detecter_question_prix(question)
+            chemin = "gabarit_prix_produit" if produit_prix is not None else "llm_outils"
         print(
             json.dumps(
                 {
                     "dry_run": True,
                     "question": question,
-                    "chemin": (
-                        "fast_path_stock" if produit_rapide is not None else "llm_outils"
-                    ),
+                    "chemin": chemin,
                     "fast_path_produit": produit_rapide,
+                    "gabarit_prix_produit": produit_prix,
                     "contexte_messages": len(contexte or []),
                     "messages": construire_messages(question, contexte),
                 },
@@ -1317,6 +1699,7 @@ def main(argv: list[str] | None = None) -> int:
                     "appels_outils": session.appels,
                     "tours_llm": session.tours,
                     "duree_ms": session.duree_ms(),
+                    "gabarit": session.gabarit,
                     "erreur": session.erreur,
                 },
                 ensure_ascii=False,
