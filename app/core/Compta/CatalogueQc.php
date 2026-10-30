@@ -42,7 +42,20 @@ use App\Models\Sale;
  *      alors que le lot d'achat vaut 15,20 €) ; prix < coût unitaire
  *      courant (vente à perte) ;
  *  (f) fiches DORMANTES : dernière vente > 45 jours avec du stock
- *      théorique (> 0) qui dort.
+ *      théorique (> 0) qui dort ;
+ *  (g) DOUBLONS D'APPELLATIONS : libellés d'alias qui normalisent
+ *      identiquement (« Coca cherry » 80 occurrences et « Coca_cherry »
+ *      6, cible « coca cherry ») alors qu'une seule entrée doit
+ *      exister. Deux niveaux :
+ *       - « simple » : tous les libellés pointent vers la MÊME clé —
+ *         la fusion des compteurs/lignes d'alias suffit (garde
+ *         ProductAlias::save / consolidateFor, tracée 'alias.fusion') ;
+ *       - « lourde » [À DÉCIDER] : les doublons portent des clés
+ *         DISTINCTES — tout doit fusionner par ProductKeyMerge
+ *         (ventes, lots de coûts, stocks, comptages, fiches, alias),
+ *         jamais automatiquement ; les données attachées aux clés
+ *         concernées (fiche/ventes/coûts) sont signalées pour éclairer
+ *         la décision.
  *
  * Le stock vient du livre UNIQUE (AnalyticsForecastData::stockBook() →
  * StockBook), jamais de products.stock ; les coûts du lot courant par
@@ -78,6 +91,7 @@ final class CatalogueQc
         'quasi_doublons_categories' => 'Quasi-doublons de catégories',
         'prix_suspects'            => 'Prix suspects',
         'fiches_dormantes'         => 'Fiches dormantes (stock immobilisé)',
+        'alias_doublons'           => 'Doublons d\'appellations (formes normalisées identiques)',
     ];
 
     private function __construct()
@@ -155,6 +169,7 @@ final class CatalogueQc
             'quasi_doublons_categories' => self::quasiDoublonsCategories($categories),
             'prix_suspects'             => self::prixSuspects($fiches, $aujourdhui),
             'fiches_dormantes'          => self::fichesDormantes($fiches, $ventesNorm, $book, $aujourdhui),
+            'alias_doublons'            => self::aliasDoublons($ventesNorm, $fichesNorm),
         ];
         foreach (self::TYPES as $type => $_libelle) {
             $liste = $listes[$type];
@@ -507,6 +522,170 @@ final class CatalogueQc
         usort($anomalies, static fn (array $a, array $b): int => [$b['jours_sans_vente'], -$a['stock']] <=> [$a['jours_sans_vente'], -$b['stock']]);
 
         return $anomalies;
+    }
+
+    // -----------------------------------------------------------------
+    //  (g) Doublons d'appellations (alias)
+    // -----------------------------------------------------------------
+
+    /**
+     * Libellés d'alias qui NORMALISENT identiquement (StockPublic
+     * ::normalizeKey — « Coca cherry » / « Coca_cherry ») alors qu'une
+     * seule entrée doit exister (RÈGLE anti-doublons : la garde
+     * ProductAlias::save empêche les nouveaux doublons, cette veille
+     * signale les doublons HÉRITÉS d'avant-garde, et les comptages de
+     * ventes par libellé montrent l'enjeu).
+     *
+     * Deux niveaux (décision utilisateur W4) :
+     *  - « simple » (a_decider = false) : tous les libellés pointent
+     *    vers la MÊME clé — la fusion des compteurs/lignes d'alias
+     *    suffit (chemin ProductAlias::save / consolidateFor) ;
+     *  - « lourde » (a_decider = true, [À DÉCIDER] dans le rapport) :
+     *    les doublons portent des clés DISTINCTES — tout doit fusionner
+     *    par ProductKeyMerge (ventes, lots de coûts, stocks, comptages,
+     *    fiches, alias), jamais automatiquement. « donnees_attachees »
+     *    liste les familles de données portées par les clés concernées
+     *    (fiche/ventes/coûts) pour éclairer la décision.
+     *
+     * @param array<string,array{label:string,last:?string,qty:int}> $ventesNorm
+     * @param array<string,array{active:bool,row:array<string,mixed>}> $fichesNorm
+     *
+     * @return list<array<string,mixed>>
+     */
+    private static function aliasDoublons(array $ventesNorm, array $fichesNorm): array
+    {
+        // Coûts par clé normalisée (une seule lecture, via l'API publique
+        // du modèle — aucun accès SQL direct depuis la veille).
+        $coutsNorm = [];
+        try {
+            foreach (ProductCost::all() as $lot) {
+                $norm = StockPublic::normalizeKey((string) ($lot['product_key'] ?? ''));
+                if ($norm !== '') {
+                    $coutsNorm[$norm] = true;
+                }
+            }
+        } catch (\Throwable) {
+            $coutsNorm = [];
+        }
+
+        // Groupes de libellés par forme normalisée (occurrences de ventes
+        // par libellé brut — Sale::allDescriptions, appariement ci).
+        $occurrencesBrutes = [];
+        foreach (self::occurrencesParLibelle() as $desc => $n) {
+            $occurrencesBrutes[mb_strtolower($desc)] = (int) $n;
+        }
+        $parNorm = [];
+        foreach (ProductAlias::all() as $alias) {
+            $raw = trim((string) ($alias['raw_description'] ?? ''));
+            $norm = StockPublic::normalizeKey($raw);
+            $cibleNorm = StockPublic::normalizeKey((string) ($alias['product_key'] ?? ''));
+            if ($norm === '' || $cibleNorm === '') {
+                continue;
+            }
+            $parNorm[$norm][] = [
+                'raw'         => $raw,
+                'occurrences' => $occurrencesBrutes[mb_strtolower($raw)] ?? 0,
+                'cible'       => (string) $alias['product_key'],
+                'cible_norm'  => $cibleNorm,
+            ];
+        }
+
+        $anomalies = [];
+        foreach ($parNorm as $rows) {
+            if (count($rows) < 2) {
+                continue;
+            }
+
+            // Libellés par occurrences décroissantes puis ordre alphabétique.
+            usort($rows, static function (array $a, array $b): int {
+                if ($a['occurrences'] !== $b['occurrences']) {
+                    return $b['occurrences'] <=> $a['occurrences'];
+                }
+
+                return strcasecmp($a['raw'], $b['raw']);
+            });
+
+            $ciblesNorm = array_values(array_unique(array_column($rows, 'cible_norm')));
+            $ciblesBrutes = array_values(array_unique(array_column($rows, 'cible')));
+            $memeCle = count($ciblesNorm) === 1;
+
+            // Données attachées aux clés DISTINCTES impliquées (fiche,
+            // ventes, coûts) : à clé commune, rien à déplacer.
+            $donneesAttachees = [];
+            $commune = $memeCle ? $ciblesNorm[0] : null;
+            foreach ($ciblesNorm as $cibleNorm) {
+                if ($cibleNorm === $commune) {
+                    continue;
+                }
+                if (isset($fichesNorm[$cibleNorm])) {
+                    $donneesAttachees['fiche'] = true;
+                }
+                if (isset($ventesNorm[$cibleNorm])) {
+                    $donneesAttachees['ventes'] = true;
+                }
+                if (isset($coutsNorm[$cibleNorm])) {
+                    $donneesAttachees['couts'] = true;
+                }
+            }
+
+            $lourde = !$memeCle;
+
+            $anomalies[] = [
+                'libelles'             => array_map(
+                    static fn (array $r): string => self::tronque((string) $r['raw']),
+                    $rows
+                ),
+                'cibles'               => array_map(
+                    static fn (string $c): string => self::tronque($c),
+                    $ciblesBrutes
+                ),
+                'occurrences_par_libelle' => array_combine(
+                    array_map(static fn (array $r): string => self::tronque((string) $r['raw']), $rows),
+                    array_map(static fn (array $r): int => (int) $r['occurrences'], $rows)
+                ),
+                'occurrences_total'    => array_sum(array_map(static fn (array $r): int => (int) $r['occurrences'], $rows)),
+                'niveau'               => $lourde ? 'lourde' : 'simple',
+                'a_decider'            => $lourde,
+                'donnees_attachees'    => array_keys($donneesAttachees),
+            ];
+        }
+
+        // Enjeu décroissant (occurrences totales), puis ordre stable.
+        usort($anomalies, static function (array $a, array $b): int {
+            if ($a['occurrences_total'] !== $b['occurrences_total']) {
+                return $b['occurrences_total'] <=> $a['occurrences_total'];
+            }
+
+            return strcasecmp((string) $a['libelles'][0], (string) $b['libelles'][0]);
+        });
+
+        return $anomalies;
+    }
+
+    /**
+     * Occurrences de ventes par libellé brut : descriptions distinctes
+     * des ventes (Sale::allDescriptions — COUNT(*) par description,
+     * point d'assemblage existant de l'auto-détection de doublons),
+     * appariées aux libellés d'alias en comparaison insensible à la
+     * casse (collation ci).
+     *
+     * @return array<string,int>
+     */
+    private static function occurrencesParLibelle(): array
+    {
+        $out = [];
+        try {
+            foreach (Sale::allDescriptions() as $row) {
+                $desc = trim((string) ($row['description'] ?? ''));
+                if ($desc !== '') {
+                    $out[$desc] = (int) ($row['occurrences'] ?? 0);
+                }
+            }
+        } catch (\Throwable) {
+            return [];
+        }
+
+        return $out;
     }
 
     // -----------------------------------------------------------------

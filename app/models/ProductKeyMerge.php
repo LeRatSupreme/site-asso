@@ -517,7 +517,11 @@ final class ProductKeyMerge extends Model
         $pdo->prepare('UPDATE products SET stock = stock + ? WHERE id = ?')->execute([$srcStock, $tgtFiche]);
 
         try {
-            $pdo->prepare('DELETE FROM products WHERE id = ?')->execute([$srcFiche]);
+            // Chemin LÉGITIME reconnu par la garde « l'inventaire est
+            // sacré » (Product::deleteRowAfterMerge) : toutes les données
+            // de la clé source viennent d'être déplacées dans cette même
+            // transaction — la fiche jumelle devenue vide peut disparaître.
+            Product::deleteRowAfterMerge($srcFiche);
         } catch (\Throwable $e) {
             // Repli : contrainte inattendue — la fiche source est
             // désactivée au lieu d'être supprimée (jamais de blocage).

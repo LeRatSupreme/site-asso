@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Core\Compta\StockPublic;
+
 /**
  * Modèle des produits cafétéria.
  */
@@ -150,10 +152,114 @@ final class Product extends Model
         return $id;
     }
 
+    /**
+     * Supprime une fiche produit — REFUSÉ si sa clé porte un historique.
+     *
+     * RÈGLE « L'INVENTAIRE EST SACRÉ » : une clé/fiche produit qui porte
+     * des comptages (inventory_counts) ou des ventes (sales) n'est jamais
+     * supprimée durablement — elle se désactive ou se fusionne
+     * (ProductKeyMerge, qui déplace TOUT avant de supprimer via
+     * deleteRowAfterMerge : seule exception documentée à cette garde).
+     *
+     * Appariement de la clé (le nom de la fiche) aux données d'historique
+     * par la primitive partagée StockPublic::normalizeKey (casse, accents,
+     * ponctuation et espacements repliés) : une vente sous « Coca_cherry »
+     * protège la fiche « Coca cherry » — jamais de strtolower ad hoc.
+     *
+     * @throws ProductDeletionRefusedException Historique inventaire/ventes présent.
+     */
     public static function deleteRow(string $id): void
+    {
+        $fiche = self::find($id);
+        if ($fiche !== null && self::porteHistorique((string) ($fiche['name'] ?? ''))) {
+            throw new ProductDeletionRefusedException(sprintf(
+                '« %s » : produit avec historique inventaire/ventes — désactivez-le ou fusionnez la clé.',
+                (string) ($fiche['name'] ?? $id)
+            ));
+        }
+
+        $stmt = static::pdo()->prepare('DELETE FROM products WHERE id = ?');
+        $stmt->execute([$id]);
+    }
+
+    /**
+     * Suppression de fiche RÉSERVÉE au chemin de fusion ProductKeyMerge.
+     *
+     * Exception documentée à la garde de deleteRow() : la fusion déplace
+     * D'ABORD toutes les données de la clé source (ventes, comptages,
+     * achats, pertes, coûts, caisse, stock… même transaction) puis
+     * supprime la fiche jumelle devenue vide — ce chemin légitime,
+     * audité par l'appelant, ne doit jamais être bloqué par la garde.
+     */
+    public static function deleteRowAfterMerge(string $id): void
     {
         $stmt = static::pdo()->prepare('DELETE FROM products WHERE id = ?');
         $stmt->execute([$id]);
+    }
+
+    /**
+     * La clé d'une fiche porte-t-elle un historique protégé (comptages
+     * d'inventaire ou ventes) ?
+     *
+     * Deux passes, comme les résolveurs partagés : correspondance EXACTE
+     * d'abord (la collation ci couvre déjà casse/accents), puis repli par
+     * forme NORMALISÉE (StockPublic::normalizeKey) pour les variantes de
+     * ponctuation/espacement (« Coca_cherry » ~ « Coca cherry »). Les
+     * ventes sans clé résolue comptent par leur description (même
+     * convention COALESCE que Sale::lastSoldByProduct).
+     *
+     * Échec de lecture = refus (fail-safe : dans le doute, l'inventaire
+     * est sacré — on ne supprime pas ce qu'on n'a pas pu vérifier).
+     */
+    public static function porteHistorique(string $name): bool
+    {
+        $name = trim($name);
+        if ($name === '') {
+            return false;
+        }
+
+        try {
+            $pdo = static::pdo();
+
+            $counts = $pdo->prepare('SELECT COUNT(*) FROM inventory_counts WHERE product_key = ?');
+            $counts->execute([$name]);
+            if ((int) $counts->fetchColumn() > 0) {
+                return true;
+            }
+
+            $sales = $pdo->prepare(
+                "SELECT COUNT(*) FROM sales
+                 WHERE product_key = ?
+                    OR ((product_key IS NULL OR product_key = '') AND description = ?)"
+            );
+            $sales->execute([$name, $name]);
+            if ((int) $sales->fetchColumn() > 0) {
+                return true;
+            }
+
+            $norm = StockPublic::normalizeKey($name);
+            if ($norm === '') {
+                return false;
+            }
+
+            $cles = [];
+            foreach ($pdo->query('SELECT DISTINCT product_key FROM inventory_counts WHERE product_key IS NOT NULL') as $row) {
+                $cles[] = (string) $row['product_key'];
+            }
+            foreach ($pdo->query('SELECT DISTINCT COALESCE(product_key, description) AS k FROM sales') as $row) {
+                $cles[] = (string) $row['k'];
+            }
+
+            foreach ($cles as $cle) {
+                if ($cle !== '' && StockPublic::normalizeKey($cle) === $norm) {
+                    return true;
+                }
+            }
+        } catch (\Throwable) {
+            return true; // Fail-safe : lecture impossible → refus de supprimer.
+        }
+
+        return false;
     }
 
     /**

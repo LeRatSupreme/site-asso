@@ -15,6 +15,7 @@ use App\Models\OrderWorkflow;
 use App\Models\Product;
 use App\Models\ProductAlias;
 use App\Models\ProductCategory;
+use App\Models\ProductDeletionRefusedException;
 use App\Models\Sale;
 use App\Models\User;
 
@@ -156,7 +157,17 @@ final class AdminCafeteriaController extends AdminBaseController
     {
         $this->guardModule(Permissions::MODULE_CAFETERIA);
 
-        Product::deleteRow($id);
+        // RÈGLE « L'INVENTAIRE EST SACRÉ » : une fiche qui porte des
+        // comptages ou des ventes n'est jamais supprimée durablement —
+        // le refus vient de la garde unique (Product::deleteRow).
+        try {
+            Product::deleteRow($id);
+        } catch (ProductDeletionRefusedException $e) {
+            $this->audit('product.delete_refused', 'product', $id, ['raison' => $e->getMessage()]);
+            $this->setFlash('error', $e->getMessage());
+            redirect(url('/admin/cafeteria'));
+        }
+
         $this->audit('product.delete', 'product', $id);
         $this->setFlash('success', 'Produit supprimé.');
         redirect(url('/admin/cafeteria'));
