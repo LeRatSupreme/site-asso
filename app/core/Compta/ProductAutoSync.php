@@ -96,6 +96,14 @@ final class ProductAutoSync
         // Services vendus à la borne, pas des produits rayonnables :
         // « Bowling » n'atterrit jamais en Snacks (garde C).
         'bowling',
+        // FORMULES (menu combiné), pas des produits rayonnables : la
+        // clé « Gaufre + boissons (hors boissons energisante) » (borne,
+        // 3 ventes) ne doit jamais donner de fiche carte — une formule
+        // n'a ni stock ni rayon propres. Entrée NORMALISÉE sans espaces
+        // (« Gaufre + boissons … » → « gaufre+boissons… » : le « + » n'est
+        // pas un séparateur de normalizeKey), attrapée en « contient »
+        // (sans le « s » final : couvre « boisson » ET « boissons »).
+        'gaufre+boisson',
     ];
 
     /**
