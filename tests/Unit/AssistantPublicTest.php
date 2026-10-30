@@ -341,11 +341,11 @@ final class AssistantPublicTest extends TestCase
     public function test_faq_horaires_cafeteria_matche_questions_courantes(): void
     {
         // Info pôle : la cafétéria ouvre aux pauses 8h20-8h30, 9h50-10h10,
-        // 14h20-14h35 et 15h55-16h15 du lundi au vendredi. « a quelle
-        // heure ouvre la cafeteria le mardi » doit recevoir les 4
-        // créneaux PRÉCIS, pas la réponse générique cafétéria (non-réponse
-        // flaguée 3 nuits par les rapports selfreview) : le déclencheur
-        // horaires le plus long bat « cafeteria » (9).
+        // 14h20-14h35 et 15h55-16h15 du lundi au vendredi. Depuis la
+        // fusion 30/10 en UNE entrée canonique (fix fastpath_incomplet),
+        // toutes ces formulations reçoivent la réponse AVEC les 4
+        // créneaux — plus de réponse générique sans horaire (flaguée
+        // 3 nuits par les rapports selfreview).
         $attendu = self::reponseFaqPour('a quelle heure');
         $s = $this->service();
 
@@ -360,10 +360,43 @@ final class AssistantPublicTest extends TestCase
             $r = $s->traiter($question, null, '8.8.4.4');
             self::assertSame(200, $r['http'], 'doit répondre en FAQ : ' . $question);
             self::assertTrue($r['ok']);
-            self::assertSame($attendu, $r['reply'], 'créneaux horaires (le plus long), pas la réponse générique cafétéria : ' . $question);
+            self::assertSame($attendu, $r['reply'], 'entrée canonique cafétéria avec les 4 créneaux : ' . $question);
         }
 
         // Les 4 créneaux exacts sont dans la réponse FAQ.
+        self::assertStringContainsString('8h20-8h30', $attendu);
+        self::assertStringContainsString('9h50-10h10', $attendu);
+        self::assertStringContainsString('14h20-14h35', $attendu);
+        self::assertStringContainsString('15h55-16h15', $attendu);
+        self::assertStringContainsString('week-end et les jours fériés', $attendu);
+    }
+
+    public function test_faq_cafeteria_degradee_recoit_les_creneaux_complets(): void
+    {
+        // Bug fastpath_incomplet prouvé 2× en A/B en une nuit (rapport
+        // 30/10 04h : « a quelle heur ouvre la cafeterai le vendredi »
+        // servie en 132 ms SANS aucun horaire ; 02h : « cafet ouvre a
+        // kel heure le mardi » → même réponse générique). Les fautes
+        // cassaient les déclencheurs longs de l'ancienne entrée horaires
+        // et laissaient gagner la réponse générique. Fix : fusion en UNE
+        // entrée canonique « cafétéria » — la racine « cafet » suffit,
+        // la réponse embarque TOUJOURS les 4 créneaux.
+        $attendu = self::reponseFaqPour('cafet');
+        $s = $this->service();
+
+        foreach ([
+            'a quelle heur ouvre la cafeterai le vendredi svp ?',  // fautes (04h, 132 ms sans horaire)
+            'quand souvre la cafet',                               // abrégé
+            'cafet ouvre a kel heure le mardi',                    // SMS réel du 02h
+            'a kel heure la cafet est ouverte',                    // abréviations
+        ] as $question) {
+            $r = $s->traiter($question, null, '8.8.4.4');
+            self::assertSame(200, $r['http'], 'doit répondre en FAQ : ' . $question);
+            self::assertTrue($r['ok']);
+            self::assertSame($attendu, $r['reply'], 'entrée canonique cafétéria avec créneaux : ' . $question);
+        }
+
+        // La réponse canonique contient bien les 4 créneaux complets.
         self::assertStringContainsString('8h20-8h30', $attendu);
         self::assertStringContainsString('9h50-10h10', $attendu);
         self::assertStringContainsString('14h20-14h35', $attendu);
@@ -383,6 +416,34 @@ final class AssistantPublicTest extends TestCase
         self::assertSame(200, $r['http']);
         self::assertSame(self::reponseFaqPour('soiree'), $r['reply']);
         self::assertNotSame(self::reponseFaqPour('a quelle heure'), $r['reply']);
+    }
+
+    public function test_faq_cafeteria_ne_hijacke_pas_evenements_identite_ni_createur(): void
+    {
+        // Contrepartie de l'entrée canonique cafétéria (fusion 30/10 :
+        // déclencheurs d'intention temporelle inclus) : les questions
+        // SANS racine cafétéria ne doivent pas être détournées —
+        // « quand ouvre la soirée » reste événements, « c'est quoi
+        // l'AEIC » reste identité, « qui a créé ce site » reste
+        // créateur. « qu'est-ce qu'on mange à la cafet » (racine cafet,
+        // sans intention temporelle) reste bien sur la cafétéria.
+        $s = $this->service();
+
+        $r = $s->traiter('Quand ouvre la soirée ?', null, '8.8.4.4');
+        self::assertSame(200, $r['http']);
+        self::assertSame(self::reponseFaqPour('soiree'), $r['reply']);
+
+        $r = $s->traiter("C'est quoi l'AEIC ?", null, '8.8.4.4');
+        self::assertSame(200, $r['http']);
+        self::assertSame(self::reponseFaqPour('c est quoi l aeic'), $r['reply']);
+
+        $r = $s->traiter('Qui a créé ce site ?', null, '8.8.4.4');
+        self::assertSame(200, $r['http']);
+        self::assertSame(self::reponseFaqPour('qui a cree ce site'), $r['reply']);
+
+        $r = $s->traiter("Qu'est-ce qu'on mange à la cafet ?", null, '8.8.4.4');
+        self::assertSame(200, $r['http']);
+        self::assertSame(self::reponseFaqPour('cafet'), $r['reply']);
     }
 
     public function test_faq_createur_du_site_matche_question_reelle_et_ne_hijacke_pas_identite(): void

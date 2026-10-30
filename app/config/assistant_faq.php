@@ -93,8 +93,33 @@ return [
         'reponse' => "Au programme : afterworks, BBQ, bowling, sorties bar et la Nuit de l'Info. Le calendrier complet est sur la page /events du site.",
     ],
     [
+        // CAFÉTÉRIA — entrée CANONIQUE UNIQUE (fusion 30/10 des anciennes
+        // entrées « cafétéria générique » + « horaires cafétéria »,
+        // cause du bug fastpath_incomplet prouvé 2× en A/B : « a quelle
+        // heur ouvre la cafeterai le vendredi » et « cafet ouvre a kel
+        // heure le mardi » étaient servies en 132 ms SANS aucun horaire
+        // — les fautes (« heur », « cafeterai ») cassaient les
+        // déclencheurs longs de l'entrée horaires et laissaient gagner
+        // le déclencheur court « cafe » de l'entrée générique).
+        // UNE seule vérité : la réponse embarque TOUJOURS les 4
+        // créneaux, donc toute racine cafétéria (« cafet », « cafe »,
+        // « cafeteria »…) suffit — plus de concurrence entre entrées
+        // sœurs, inutile d'ajouter au matcher une règle « racine
+        // cafétéria ET token temporel » (étage court abandonné au
+        // profit de cette fusion). Les déclencheurs d'intention
+        // temporelle ci-dessous restent pour les questions SANS racine
+        // cafétéria (« a quelle heure… », « les créneaux », …).
+        // Anti-hijack conservé : les mots seuls « ouvre »/« ferme »/
+        // « ouvert »/« quand »/« heure »/« paus » restent ABSENTS (règle
+        // du déclencheur le plus long : ils détourneraient « quand
+        // ouvre la soirée » → événements, cf. fix « jeu » →
+        // « déjeuner »). « cafe » est sous-chaîne de « cafet » et
+        // « cafeteria » : il attrape aussi les fautes « cafeterai »,
+        // « la cafet »…
         'declencheurs' => [
+            // Racines cafétéria.
             'cafeteria',
+            'cafet',
             'cafe',
             'boisson',
             'boissons',
@@ -102,18 +127,7 @@ return [
             'manger',
             'boire',
             'nourriture',
-        ],
-        'reponse' => "L'AEIC tient une cafétéria à prix étudiant à l'IUT de Calais, avec boissons et encas.",
-    ],
-    [
-        // HORAIRES de la cafétéria — placée juste APRÈS l'entrée cafétéria
-        // générique : les formes longues ci-dessous (« a quelle heure » 14,
-        // « horaires de la cafeteria » 24) battent « cafeteria » (9) du
-        // match générique. Les mots seuls « ouvre »/« ferme »/« ouvert »
-        // sont volontairement ABSENTS : le déclencheur le plus long
-        // gagne, ils hijackeraient « quand ouvre la soirée » (cf. fix
-        // « jeu » → « déjeuner ») — seules des formes longues/sûres ici.
-        'declencheurs' => [
+            // Intention temporelle — formes LONGUES sûres seulement.
             'horaire',
             'horaires',
             'heures ouverture',
@@ -130,7 +144,7 @@ return [
             'creneaux',
             'pauses cafet',
         ],
-        'reponse' => "La cafétéria ouvre aux pauses : 8h20-8h30, 9h50-10h10, 14h20-14h35 et 15h55-16h15, du lundi au vendredi. Fermée le week-end et les jours fériés.",
+        'reponse' => "L'AEIC tient une cafétéria à prix étudiant à l'IUT de Calais, avec boissons et encas. Elle ouvre aux pauses : 8h20-8h30, 9h50-10h10, 14h20-14h35 et 15h55-16h15, du lundi au vendredi ; fermée le week-end et les jours fériés.",
     ],
     [
         // NB : les noms de jeux SEULS ('tetris', 'wordle', 'snake',
