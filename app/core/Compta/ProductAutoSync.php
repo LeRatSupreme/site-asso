@@ -6,6 +6,7 @@ namespace App\Core\Compta;
 
 use App\Models\InventoryCount;
 use App\Models\Product;
+use App\Models\ProductAlias;
 use App\Models\ProductStock;
 use App\Models\Sale;
 
@@ -30,6 +31,33 @@ use App\Models\Sale;
  *     une perte, un comptage ou un stock de référence seul ne suffit
  *     jamais. Les libellés connus de la passe globale viennent donc des
  *     VENTES seules (achat/perte/comptage ne fournissent plus de clés).
+ *
+ * MISSION W1 — appariement « déjà couvert par une fiche » à FRONTIÈRE
+ * DE MOT (isCoveredCard). L'ancienne inclusion symétrique sans
+ * frontière rattachait toute clé courte contenue dans une clé longue à
+ * la fiche courte, bloquant la création des fiches des VARIANTES
+ * vivantes (dossier dev-couts M3, 8 clés) : « Oasis pomme poire » était
+ * avalé par la fiche « Oasis », « Pepsi » par « Pepsi Zero », « Gaufre
+ * choco » par « gaufre », « Redbull zero » et « redbull red » par
+ * « Redbull », « Minute Maid Pomme » par la famille « Minute Maid »,
+ * « cafe allonge » par « cafe », « Crunch » par « crunch Snak Barres ».
+ * La règle arbitée, en paliers décroissants de confiance :
+ *   1. égalité exacte des clés normalisées (StockPublic::normalizeKey) ;
+ *   2. ALIAS admin (product_aliases : libellé → clé canonique) dont la
+ *      cible EST une fiche existante — la vérité curatée gagne toujours
+ *      (même lecture que StockPublic::matchKeyViaAlias) ;
+ *   3. inclusion UNIQUEMENT par MOTS ENTIERS en préfixe ou suffixe du
+ *      nom brut (frontière garantie par construction — séparateur ou
+ *      majuscule de jonction), aiguille >= 4 caractères normalisés,
+ *      et uniquement si le résidu est soit un CONDITIONNEMENT (mêmes
+ *      mots alphabétiques : « Sucette 1 sucette » reste sur « sucette »,
+ *      « Coca-Cola 33cl » sur « Coca Cola »), soit un DESCRIPTEUR
+ *      MULTI-mots UNIQUE dans la carte (« Crunch » reste sur « crunch
+ *      Snak Barres », même produit). Un qualificatif de variante à un
+ *      seul mot (« Zero », « White »…) ne rattache JAMAIS : « Pepsi » ≠
+ *      « Pepsi Zero », « Coca Zero » ≠ « Coca » → variantes créables.
+ * Anti-régression : ces rapprochements restent hors de tout map ad hoc
+ * strtolower — normalisation et alias partagés avec StockPublic.
  *
  * RÉTROACTIF INTERDIT : la synchro ne supprime JAMAIS une fiche existante
  * (même « pourrie ») — les gardes ne s'appliquent qu'aux créations
@@ -295,6 +323,10 @@ final class ProductAutoSync
         // seule fois pour toute la passe (règle PurchaseSaver::isRawScanLabel).
         $scanLabels = self::scanQueueLabels();
 
+        // Alias admin (product_aliases), lus une seule fois pour toute
+        // la passe : palier 2 de l'appariement « déjà couvert » (W1).
+        $aliasTargets = self::aliasTargetsMap();
+
         // Garde C — libellés réellement VENDUS, lus une seule fois : une
         // fiche publique n'est jamais créée sans vente (la passe globale
         // ne reçoit déjà que des libellés vendus ; la passe ciblée,
@@ -309,7 +341,10 @@ final class ProductAutoSync
                 continue;
             }
 
-            if (StockPublic::matchesAnyProduct($label, $existingNames)) {
+            // Déjà couvert par une fiche existante ? Règle W1 à frontière
+            // de mot (voir isCoveredCard) : une variante vivante n'est
+            // plus avalée par la fiche famille — elle devient créable.
+            if (self::isCoveredCard($label, $existingNames, $aliasTargets)) {
                 $skipped++;
                 continue;
             }
@@ -353,6 +388,219 @@ final class ProductAutoSync
         }
 
         return ['created' => $created, 'skipped' => $skipped];
+    }
+
+    // -----------------------------------------------------------------
+    //  Appariement « déjà couvert » (mission W1 — frontière de mot)
+    // -----------------------------------------------------------------
+
+    /**
+     * Le libellé est-il déjà couvert par une des fiches existantes ?
+     *
+     * Paliers décroissants de confiance (mission W1 — voir la doc de
+     * classe pour les 8 clés débloquées) :
+     *
+     *  1. égalité exacte des clés normalisées (casse/accents/espaces
+     *     ignorés — StockPublic::normalizeKey) ;
+     *  2. ALIAS admin : product_aliases mène le libellé à une clé
+     *     canonique qui EST une fiche existante (égalité normalisée,
+     *     jamais par inclusion — même lecture que
+     *     StockPublic::matchKeyViaAlias). C'est la vérité curatée :
+     *     « Sucette 1 sucette » → « sucette », « Oasis » → « Oasis
+     *     Tropical » restent rattachés par DECISION, pas par heuristique ;
+     *  3. inclusion heuristique, uniquement par MOTS ENTIERS en préfixe
+     *     ou suffixe (frontière de mot garantie par construction) et
+     *     aiguille >= 4 caractères :
+     *       a. fiche ⊂ libellé : le résidu du libellé doit être un pur
+     *          CONDITIONNEMENT — mêmes mots alphabétiques, seuls les
+     *          jetons chiffrés/unités diffèrent (« Sucette 1 sucette »,
+     *          « Coca-Cola 33cl »). Sinon le libellé est une VARIANTE
+     *          (« Oasis pomme poire », « cafe allonge », « Coca Zero »)
+     *          → créable ;
+     *       b. libellé ⊂ fiche : le reste de la fiche doit être un
+     *          DESCRIPTEUR MULTI-mots (forme du produit : « Snak
+     *          Barres ») ET unique dans la carte : « Crunch » reste
+     *          sur « crunch Snak Barres » (même produit). Un seul mot
+     *          de reste (« Zero », « White ») est un qualificatif de
+     *          variante → jamais rattaché (« Pepsi » ≠ « Pepsi Zero ») ;
+     *          plusieurs candidats → raccourci ambigu, refusé.
+     *
+     * Anti-régression : aucune jointure strtolower ad hoc — tout passe
+     * par les normalisations partagées (StockPublic::normalizeKey,
+     * AliasSuggester::normalizeKey) et les alias curatés. L'ancienne
+     * inclusion sans frontière (StockPublic::matchesAnyProduct) reste
+     * celle de l'affichage du STOCK (StockPublic::matchKey), plus
+     * tolérante par nature — les deux usages divergent volontairement.
+     *
+     * @param list<string>         $existingNames Noms bruts des fiches existantes.
+     * @param array<string,string> $aliasTargets  raw normalisé → cible normalisée.
+     */
+    private static function isCoveredCard(string $label, array $existingNames, array $aliasTargets): bool
+    {
+        $labelKey = StockPublic::normalizeKey($label);
+        if ($labelKey === '') {
+            return false;
+        }
+
+        // 1) Égalité exacte des clés normalisées.
+        foreach ($existingNames as $name) {
+            if (StockPublic::normalizeKey((string) $name) === $labelKey) {
+                return true;
+            }
+        }
+
+        // 2) Alias admin : le libellé mène à une clé canonique qui est
+        // une fiche existante (égalité normalisée uniquement).
+        if (isset($aliasTargets[$labelKey])) {
+            $target = $aliasTargets[$labelKey];
+            foreach ($existingNames as $name) {
+                if (StockPublic::normalizeKey((string) $name) === $target) {
+                    return true;
+                }
+            }
+        }
+
+        // 3) Inclusion à frontière de mot, par mots entiers uniquement.
+        $labelAlpha = self::alphaWordSet($label);
+        $shorthandCandidates = 0;
+
+        foreach ($existingNames as $name) {
+            $name = (string) $name;
+            $nameKey = StockPublic::normalizeKey($name);
+
+            // 3a) Fiche ⊂ libellé : résidu = conditionnement seul
+            // (mêmes mots alphabétiques). Sinon variante → créable.
+            if (
+                strlen($nameKey) >= 4
+                && self::isWholeWordEnd($name, $label)
+                && self::alphaWordSet($name) === $labelAlpha
+            ) {
+                return true;
+            }
+
+            // 3b) Libellé ⊂ fiche : reste = descripteur multi-mots.
+            if (strlen($labelKey) >= 4 && self::isWholeWordEnd($label, $name)) {
+                $descriptor = array_diff(self::alphaWordSet($name), $labelAlpha);
+                if (count($descriptor) >= 2) {
+                    $shorthandCandidates++;
+                }
+            }
+        }
+
+        // Raccourci retenu uniquement s'il est NON ambigu (un seul
+        // candidat dans toute la carte : « Crunch » → « crunch Snak
+        // Barres » ; deux fiches « Fanta … » → « Fanta » créable).
+        return $shorthandCandidates === 1;
+    }
+
+    /**
+     * Carte des alias admin (une lecture par passe) : libellé brut
+     * normalisé → clé canonique normalisée. Base indisponible → carte
+     * vide (les paliers 1 et 3 restent autonomes, jamais de fatal).
+     *
+     * @return array<string,string>
+     */
+    private static function aliasTargetsMap(): array
+    {
+        $map = [];
+
+        try {
+            foreach (ProductAlias::all() as $alias) {
+                $raw = StockPublic::normalizeKey((string) ($alias['raw_description'] ?? ''));
+                $target = StockPublic::normalizeKey((string) ($alias['product_key'] ?? ''));
+                if ($raw !== '' && $target !== '') {
+                    $map[$raw] = $target;
+                }
+            }
+        } catch (\Throwable) {
+            return [];
+        }
+
+        return $map;
+    }
+
+    /**
+     * Mots d'un nom BRUT, découpés aux frontières naturelles : séparateurs
+     * non alphanumériques ET jonctions minuscule→majuscule (camelCase :
+     * « RedBull Blanche » → [Red, Bull, Blanche]). La frontière de mot
+     * du matcher est donc garantie PAR CONSTRUCTION — jamais d'inclusion
+     * au milieu d'un mot (« oasis » ⊄ « axeloasis » par ex.).
+     *
+     * @return list<string>
+     */
+    private static function naturalWords(string $raw): array
+    {
+        $raw = trim($raw);
+        if ($raw === '') {
+            return [];
+        }
+
+        $words = preg_split(
+            '/([^\p{L}\p{N}]+|(?<=[\p{Ll}\p{N}])(?=\p{Lu}))/u',
+            $raw,
+            -1,
+            PREG_SPLIT_NO_EMPTY
+        );
+
+        return $words === false ? [] : $words;
+    }
+
+    /**
+     * Le nom court est-il un PRÉFIXE ou un SUFFIXE du nom long PAR MOTS
+     * ENTIERS (la jonction tombe sur une frontière de mot naturelle,
+     * cf. naturalWords) ? Préfixe/suffixe uniquement — jamais le milieu
+     * (arbitrage W1 : « de vrais préfixes/suffixes l'un de l'autre »).
+     */
+    private static function isWholeWordEnd(string $shortRaw, string $longRaw): bool
+    {
+        $shortKey = StockPublic::normalizeKey($shortRaw);
+        $longKey = StockPublic::normalizeKey($longRaw);
+
+        if ($shortKey === '' || $longKey === '' || strlen($shortKey) >= strlen($longKey)) {
+            return false;
+        }
+
+        $words = self::naturalWords($longRaw);
+        $count = count($words);
+        if ($count < 2) {
+            return false;
+        }
+
+        for ($k = 1; $k < $count; $k++) {
+            if (StockPublic::normalizeKey(implode('', array_slice($words, 0, $k))) === $shortKey) {
+                return true; // préfixe par mots entiers
+            }
+            if (StockPublic::normalizeKey(implode('', array_slice($words, $count - $k))) === $shortKey) {
+                return true; // suffixe par mots entiers
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Ensemble TRIÉ des mots purement ALPHABÉTIQUES d'un nom (jetons
+     * chiffrés et unités exclus : « 33cl », « 1 », « x24 » = pur
+     * conditionnement). « Sucette 1 sucette » → [sucette] : mêmes mots
+     * que « sucette », donc rattaché ; « Oasis pomme poire » →
+     * [oasis, poire, pomme] ≠ [oasis], donc variante créable.
+     *
+     * @return list<string>
+     */
+    private static function alphaWordSet(string $raw): array
+    {
+        $set = [];
+        foreach (self::naturalWords($raw) as $word) {
+            $norm = AliasSuggester::normalizeKey($word);
+            if ($norm !== '' && preg_match('/\d/', $norm) !== 1) {
+                $set[$norm] = true;
+            }
+        }
+
+        $words = array_keys($set);
+        sort($words);
+
+        return $words;
     }
 
     /**
