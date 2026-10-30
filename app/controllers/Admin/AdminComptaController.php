@@ -1315,7 +1315,7 @@ final class AdminComptaController extends AdminBaseController
         $this->guardCompta();
 
         $data = $_POST;
-        if (ProductAlias::save($data) === '') {
+        if (ProductAlias::save($data, Auth::id()) === '') {
             $this->setFlash('error', 'Libellé et produit canonique requis.');
         } else {
             $raw = (string) ($data['raw_description'] ?? '');
@@ -1408,7 +1408,7 @@ final class AdminComptaController extends AdminBaseController
                 'product_key'     => $productKey,
                 'category'        => $category,
                 'kind'            => 'appellation',
-            ]);
+            ], Auth::id());
             Sale::applyAliasCategory($raw, $category !== '' ? $category : null, $productKey);
             if ($category !== '') {
                 ProductCategory::ensure($category, Auth::id());
@@ -1615,7 +1615,7 @@ final class AdminComptaController extends AdminBaseController
             $prev = ProductAlias::findByRaw($raw);
             $category = $prev !== null ? ($prev['category'] ?? null) : null;
 
-            if (ProductAlias::save(['raw_description' => $raw, 'product_key' => $key, 'category' => $category]) !== '') {
+            if (ProductAlias::save(['raw_description' => $raw, 'product_key' => $key, 'category' => $category], Auth::id()) !== '') {
                 $applied++;
                 $details[] = $raw . ' -> ' . $key;
             }

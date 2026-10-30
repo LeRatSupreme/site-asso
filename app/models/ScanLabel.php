@@ -80,6 +80,14 @@ final class ScanLabel extends Model
      * Mémorise les libellés d'un scan (occurrence +1 si déjà connu,
      * création sinon). Silencieux en cas de panne.
      *
+     * RÈGLE ANTI-DOUBLONS D'APPELLATIONS : deux libellés de même forme
+     * NORMALISÉE (« Coca cherry » 80 occurrences et « Coca_cherry » 6)
+     * ne font QU'UNE seule entrée — l'événement courant incrémente la
+     * ligne canonique du groupe (la plus fréquente) et les lignes sœurs
+     * redondantes sont FUSIONNÉES dedans (occurrences additionnées,
+     * première vue conservée, trace 'alias.fusion' 80+6→86) — jamais
+     * supprimées sans absorption.
+     *
      * @param list<string> $labels
      */
     private static function upsertLabels(array $labels): void
@@ -90,25 +98,151 @@ final class ScanLabel extends Model
 
         try {
             $pdo = self::pdo();
-            $upd = $pdo->prepare(
-                'UPDATE scan_labels SET occurrences = occurrences + 1, last_seen = NOW() WHERE label = ?'
-            );
-            $ins = $pdo->prepare(
-                'INSERT INTO scan_labels (id, label) VALUES (?, ?)'
-            );
             foreach ($labels as $label) {
-                $upd->execute([$label]);
-                if ($upd->rowCount() === 0) {
-                    try {
-                        $ins->execute(['scan_' . bin2hex(random_bytes(10)), $label]);
-                    } catch (\Throwable) {
-                        // Doublon concurrent : re-tenter l'incrément.
-                        $upd->execute([$label]);
-                    }
-                }
+                self::memoriserUnLibelle($pdo, trim((string) $label));
             }
         } catch (\Throwable) {
             // Silencieux : le scan reste utilisable sans file.
+        }
+    }
+
+    /**
+     * Mémorise UN libellé : incrément de la ligne canonique de son
+     * groupe de forme normalisée (fusion des sœurs redondantes au
+     * passage), ou création si le libellé est inconnu à toute écriture
+     * près.
+     */
+    private static function memoriserUnLibelle(\PDO $pdo, string $label): void
+    {
+        $label = trim($label);
+        if ($label === '') {
+            return;
+        }
+
+        $canonique = self::ligneCanonique($pdo, $label);
+        if ($canonique === null) {
+            try {
+                $pdo->prepare('INSERT INTO scan_labels (id, label) VALUES (?, ?)')
+                    ->execute(['scan_' . bin2hex(random_bytes(10)), $label]);
+
+                return;
+            } catch (\Throwable) {
+                // Doublon concurrent (UNIQUE ci) : retomber sur la ligne
+                // existante pour ne pas perdre l'occurrence.
+                $canonique = self::ligneCanonique($pdo, $label);
+                if ($canonique === null) {
+                    return;
+                }
+            }
+        }
+
+        self::fusionnerSoeursNormalisees($pdo, $canonique);
+        $pdo->prepare('UPDATE scan_labels SET occurrences = occurrences + 1, last_seen = NOW() WHERE id = ?')
+            ->execute([(string) $canonique['id']]);
+    }
+
+    /**
+     * Ligne canonique d'un libellé : la plus fréquence des lignes de
+     * même forme NORMALISÉE (StockPublic::normalizeKey — l'entrée la
+     * plus utilisée est l'entrée canonique), à égalité la plus ancienne
+     * puis l'id le plus petit (déterminisme). Null si le libellé est
+     * inconnu à toute écriture près.
+     *
+     * @return array<string,mixed>|null
+     */
+    private static function ligneCanonique(\PDO $pdo, string $label): ?array
+    {
+        $norm = StockPublic::normalizeKey($label);
+        if ($norm === '') {
+            return null;
+        }
+
+        $meilleure = null;
+        foreach ($pdo->query('SELECT id, label, occurrences, first_seen FROM scan_labels')->fetchAll() as $row) {
+            if (StockPublic::normalizeKey((string) $row['label']) !== $norm) {
+                continue;
+            }
+            if ($meilleure === null || self::cmpLigneCanonique($row, $meilleure) < 0) {
+                $meilleure = $row;
+            }
+        }
+
+        return $meilleure;
+    }
+
+    /** Ordre canonique : occurrences décroissantes, puis ancienneté, puis id. */
+    private static function cmpLigneCanonique(array $a, array $b): int
+    {
+        $oa = (int) ($a['occurrences'] ?? 0);
+        $ob = (int) ($b['occurrences'] ?? 0);
+        if ($oa !== $ob) {
+            return $ob <=> $oa;
+        }
+
+        $fa = (string) ($a['first_seen'] ?? '');
+        $fb = (string) ($b['first_seen'] ?? '');
+        if ($fa !== $fb) {
+            return $fa <=> $fb;
+        }
+
+        return strcmp((string) $a['id'], (string) $b['id']);
+    }
+
+    /**
+     * FUSIONNE (jamais une suppression nue) les lignes sœurs de même
+     * forme normalisée dans la ligne canonique : occurrences
+     * ADDITIONNÉES, première vue la plus ancienne conservée, puis la
+     * ligne physique redondante disparaît — aucune perte de compteur
+     * ni d'historique. Trace d'audit « alias.fusion » avec les
+     * compteurs avant/après (ex. 80+6→86), jamais bloquante.
+     *
+     * @param array<string,mixed> $canonique Ligne conservée (id, label, occurrences, first_seen).
+     */
+    private static function fusionnerSoeursNormalisees(\PDO $pdo, array $canonique): void
+    {
+        $norm = StockPublic::normalizeKey((string) $canonique['label']);
+        if ($norm === '') {
+            return;
+        }
+
+        $avant = [(string) $canonique['label'] => (int) ($canonique['occurrences'] ?? 0)];
+        $total = (int) ($canonique['occurrences'] ?? 0);
+        $absorbees = [];
+
+        $maj = $pdo->prepare(
+            'UPDATE scan_labels SET occurrences = occurrences + ?, first_seen = LEAST(first_seen, ?) WHERE id = ?'
+        );
+        $del = $pdo->prepare('DELETE FROM scan_labels WHERE id = ?');
+
+        foreach ($pdo->query('SELECT id, label, occurrences, first_seen FROM scan_labels')->fetchAll() as $row) {
+            if ((string) $row['id'] === (string) $canonique['id']) {
+                continue;
+            }
+            if (StockPublic::normalizeKey((string) $row['label']) !== $norm) {
+                continue;
+            }
+
+            $maj->execute([(int) ($row['occurrences'] ?? 0), (string) ($row['first_seen'] ?? ''), (string) $canonique['id']]);
+            $del->execute([(string) $row['id']]);
+
+            $avant[(string) $row['label']] = (int) ($row['occurrences'] ?? 0);
+            $total += (int) ($row['occurrences'] ?? 0);
+            $absorbees[] = (string) $row['label'];
+        }
+
+        if ($absorbees === []) {
+            return;
+        }
+
+        try {
+            AuditLog::log('alias.fusion', null, 'scan_label', (string) $canonique['id'], [
+                'conserve'          => (string) $canonique['label'],
+                'absorbe'           => $absorbees,
+                'occurrences_avant' => $avant,
+                'occurrences_apres' => $total,
+            ]);
+        } catch (\Throwable) {
+            // La fusion est faite : la trace ne doit jamais la faire échouer.
         }
     }
 

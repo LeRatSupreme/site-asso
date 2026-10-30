@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Core\Compta\StockPublic;
+use App\Core\Logger;
 
 /**
  * Mapping libellés CSV SumUp -> produit canonique (table `product_aliases`).
@@ -106,9 +107,18 @@ final class ProductAlias extends Model
      * jamais une appellation) ; un kind explicite reclasse la ligne
      * (ressaisir un libellé sur la page appellations le déplace).
      *
+     * RÈGLE ANTI-DOUBLONS D'APPELLATIONS : un libellé qui NORMALISE
+     * (StockPublic::normalizeKey : casse, accents, ponctuation,
+     * espacements) comme une ligne existante — « Coca_cherry » face à
+     * « Coca cherry » — FUSIONNE avec elle : la ligne existante est mise
+     * à jour (cible, catégorie, kind), JAMAIS une seconde ligne. La
+     * fusion est tracée 'alias.fusion' avec les occurrences de ventes
+     * avant/après (ex. 80+6→86) — aucune perte de compteur ni de cible.
+     *
      * @param array<string,mixed> $data
+     * @param string|null         $userId Auteur (audit de la fusion), null en import CLI.
      */
-    public static function save(array $data): string
+    public static function save(array $data, ?string $userId = null): string
     {
         $raw = trim((string) ($data['raw_description'] ?? ''));
         $productKey = trim((string) ($data['product_key'] ?? ''));
@@ -123,7 +133,17 @@ final class ProductAlias extends Model
         }
 
         $existing = self::findByRaw($raw);
+        $doublonNormalise = null;
+        if ($existing === null) {
+            // Garde anti-doublons : libellé inconnu à l'écriture près mais
+            // de même forme NORMALISÉE qu'une ligne existante → FUSION sur
+            // cette ligne (la plus ancienne du groupe fait référence).
+            $doublonNormalise = self::findByNormalizedRaw($raw);
+            $existing = $doublonNormalise;
+        }
+
         if ($existing !== null) {
+            $cibleAvant = (string) $existing['product_key'];
             if ($kind !== '') {
                 $stmt = self::pdo()->prepare(
                     'UPDATE product_aliases SET product_key = ?, category = ?, kind = ? WHERE id = ?'
@@ -134,6 +154,10 @@ final class ProductAlias extends Model
                     'UPDATE product_aliases SET product_key = ?, category = ? WHERE id = ?'
                 );
                 $stmt->execute([$productKey, $category, $existing['id']]);
+            }
+
+            if ($doublonNormalise !== null) {
+                self::tracerFusion($doublonNormalise, $raw, $cibleAvant, $productKey, $userId);
             }
 
             return (string) $existing['id'];
@@ -147,6 +171,115 @@ final class ProductAlias extends Model
         $stmt->execute([$id, $raw, $productKey, $category, $kind !== '' ? $kind : 'label']);
 
         return $id;
+    }
+
+    /**
+     * Première ligne d'alias de même forme NORMALISÉE que le libellé
+     * (la plus ancienne du groupe fait référence), null si aucune :
+     * même repliement que resolve() — « Coca_cherry » retrouve la ligne
+     * « Coca cherry ». Garde structurelle anti-doublons d'appellations.
+     *
+     * @return array<string,mixed>|null
+     */
+    private static function findByNormalizedRaw(string $raw): ?array
+    {
+        $norm = StockPublic::normalizeKey($raw);
+        if ($norm === '') {
+            return null;
+        }
+
+        try {
+            /** @var list<array<string,mixed>> $rows */
+            $rows = self::pdo()
+                ->query('SELECT * FROM product_aliases ORDER BY created_at ASC, id ASC')
+                ->fetchAll();
+        } catch (\Throwable) {
+            return null;
+        }
+
+        foreach ($rows as $row) {
+            if (StockPublic::normalizeKey((string) ($row['raw_description'] ?? '')) === $norm) {
+                return $row;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Trace d'audit d'une FUSION d'appellations (« alias.fusion ») :
+     * libellé conservé, libellé absorbé (disparaît physiquement mais
+     * ses données sont d'abord fusionnées), cible avant/après et
+     * occurrences de ventes avant/après (ex. 80+6→86) — jamais une
+     * simple suppression silencieuse. La trace ne doit jamais faire
+     * échouer la fusion elle-même.
+     *
+     * @param array<string,mixed> $ligne Ligne d'alias conservée (avant mise à jour).
+     */
+    private static function tracerFusion(array $ligne, string $absorbe, string $cibleAvant, string $cibleApres, ?string $userId): void
+    {
+        $conserve = (string) ($ligne['raw_description'] ?? '');
+        $avant = self::occurrencesVentes([$conserve, $absorbe]);
+
+        try {
+            AuditLog::log('alias.fusion', $userId, 'product_alias', (string) $ligne['id'], [
+                'conserve'            => $conserve,
+                'absorbe'             => $absorbe,
+                'cible_avant'         => $cibleAvant,
+                'cible_apres'         => $cibleApres,
+                'occurrences_avant'   => $avant,
+                'occurrences_apres'   => array_sum($avant),
+            ]);
+        } catch (\Throwable $e) {
+            Logger::warning('alias: trace de fusion impossible', [
+                'conserve' => $conserve,
+                'absorbe'  => $absorbe,
+                'msg'      => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * Occurrences réelles (ventes) de libellés bruts : lignes de vente
+     * dont la clé résolue (COALESCE(product_key, description), même
+     * convention que Sale::lastSoldByProduct) s'écrit comme le libellé
+     * (comparaison insensible à la casse/accents, collation ci).
+     *
+     * @param list<string> $labels
+     *
+     * @return array<string,int> Libellé demandé → nombre de ventes (0 si aucune).
+     */
+    private static function occurrencesVentes(array $labels): array
+    {
+        $labels = array_values(array_unique(array_map('trim', $labels)));
+        $labels = array_values(array_filter($labels, static fn (string $l): bool => $l !== ''));
+        $out = array_fill_keys($labels, 0);
+        if ($labels === []) {
+            return $out;
+        }
+
+        try {
+            $placeholders = implode(',', array_fill(0, count($labels), '?'));
+            $stmt = self::pdo()->prepare(
+                'SELECT COALESCE(product_key, description) AS k, COUNT(*) AS n
+                 FROM sales
+                 WHERE COALESCE(product_key, description) IN (' . $placeholders . ')
+                 GROUP BY k'
+            );
+            $stmt->execute($labels);
+            foreach ($stmt->fetchAll() as $row) {
+                $k = (string) $row['k'];
+                foreach ($labels as $label) {
+                    if (strcasecmp($label, $k) === 0) {
+                        $out[$label] += (int) $row['n'];
+                    }
+                }
+            }
+        } catch (\Throwable) {
+            // Sans lecture des ventes, la fusion reste tracée (compteurs à 0).
+        }
+
+        return $out;
     }
 
     /**

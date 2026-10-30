@@ -23,7 +23,12 @@ use PHPUnit\Framework\TestCase;
  *  (d) QUASI-DOUBLONS de catégories (distance 1 / même forme) ;
  *  (e) PRIX SUSPECTS : prix <= 0, prix 1,00 € avec coût > 1 €
  *      (défaut Surfizz), prix sous le coût ;
- *  (f) fiche DORMANTE avec stock théorique immobilisé.
+ *  (f) fiche DORMANTE avec stock théorique immobilisé ;
+ *  (g) DOUBLONS D'APPELLATIONS : libellés d'alias de même forme
+ *      normalisée — niveau « simple » (même clé : fusion de
+ *      compteurs suffit) vs « lourde » [À DÉCIDER] (clés distinctes
+ *      → fusion ProductKeyMerge complète requise, données attachées
+ *      signalées).
  *
  * Plus le cas SAIN (0 anomalie sur un catalogue cohérent) et les
  * LIMITES de sortie compacte (listes plafonnées à 20 items, totaux
@@ -350,7 +355,69 @@ final class CatalogueQcTest extends TestCase
         self::assertSame('Invendu 01', $r['fiches_jamais_vendues'][0]['produit']);
     }
 
-    /** Libellé ultra-long : tronqué à LIBELLE_MAX caractères (sortie compacte). */
+    // -----------------------------------------------------------------
+    //  (g) Doublons d'appellations (alias)
+    // -----------------------------------------------------------------
+
+    /** Doublon SIMPLE : deux libellés de même forme normalisée vers la
+     *  MÊME clé — la fusion des compteurs/lignes d'alias suffit. */
+    public function test_alias_doublons_simple_meme_cle(): void
+    {
+        // Lignes héritées (la garde de ProductAlias::save empêche désormais
+        // leur création) : « Coca cherry » et « Coca_cherry » → cible commune.
+        $this->seedAlias('a1', 'Coca cherry', 'coca cherry', 'Boissons');
+        $this->seedAlias('a2', 'Coca_cherry', 'coca cherry', null);
+        $this->seedVente('s1', 'T1', $this->jourParis(2) . ' 12:00:00', 'Coca cherry', 'Boissons', 2, 2.00);
+        $this->seedVente('s2', 'T1', $this->jourParis(2) . ' 12:05:00', 'Coca cherry', 'Boissons', 1, 2.00);
+        $this->seedVente('s3', 'T1', $this->jourParis(3) . ' 12:00:00', 'Coca_cherry', null, 1, 2.00);
+
+        $r = CatalogueQc::anomalies();
+
+        self::assertSame(1, $r['totaux']['alias_doublons']);
+        $item = $r['alias_doublons'][0];
+        self::assertSame(['Coca cherry', 'Coca_cherry'], $item['libelles'], 'Occurrences décroissantes puis alphabétique.');
+        self::assertSame(['coca cherry'], $item['cibles'], 'Même clé pour tous les libellés.');
+        self::assertSame(['Coca cherry' => 2, 'Coca_cherry' => 1], $item['occurrences_par_libelle']);
+        self::assertSame(3, $item['occurrences_total']);
+        self::assertSame('simple', $item['niveau'], 'Même clé : fusion de compteurs suffit.');
+        self::assertFalse($item['a_decider']);
+        self::assertSame([], $item['donnees_attachees'], 'Rien à déplacer à clé commune.');
+    }
+
+    /** Doublon LOURD [À DÉCIDER] : clés DISTINCTES porteuses de données
+     *  — la fusion ProductKeyMerge complète est requise. */
+    public function test_alias_doublons_lourde_cles_distinctes(): void
+    {
+        $this->seedAlias('a1', 'Pulco Citronnade', 'Pulco Citronnade', 'Boissons');
+        $this->seedAlias('a2', 'Pulco_Citronnade', 'pulco', null);
+        // Données attachées aux clés distinctes : ventes + lot de coûts.
+        $this->seedVente('s1', 'T1', $this->jourParis(2) . ' 12:00:00', 'Pulco Citronnade', 'Boissons', 2, 2.00);
+        $this->seedLot('l1', 'pulco', 1.200, $this->jourParis(30));
+
+        $r = CatalogueQc::anomalies();
+
+        self::assertSame(1, $r['totaux']['alias_doublons']);
+        $item = $r['alias_doublons'][0];
+        self::assertSame('lourde', $item['niveau'], 'Clés distinctes : fusion ProductKeyMerge requise.');
+        self::assertTrue($item['a_decider'], 'Marquée [À DÉCIDER] : jamais automatique.');
+        self::assertContains('ventes', $item['donnees_attachees']);
+        self::assertContains('couts', $item['donnees_attachees']);
+        self::assertCount(2, $item['cibles'], 'Les deux clés distinctes sont listées.');
+    }
+
+    /** Deux libellés de formes normalisées DIFFÉRENTES : pas d'anomalie. */
+    public function test_alias_sans_doublon_pas_d_anomalie(): void
+    {
+        $this->seedAlias('a1', 'Coca cherry', 'coca cherry', 'Boissons');
+        $this->seedAlias('a2', 'Coca zero', 'coca', null);
+
+        $r = CatalogueQc::anomalies();
+
+        self::assertSame(0, $r['totaux']['alias_doublons']);
+        self::assertSame([], $r['alias_doublons']);
+    }
+
+    /** Libellés ultra-longs tronqués dans la sortie (champ additif stable). */
     public function test_libelle_tres_long_tronque(): void
     {
         $this->seedCategorie('cat1', 'Boissons');
@@ -395,7 +462,7 @@ final class CatalogueQcTest extends TestCase
         $stmt->execute([$id, $nom, $prix, $categorieId, $actif ? 1 : 0]);
     }
 
-    private function seedVente(string $id, string $ref, string $quand, string $cle, string $categorie, int $qty, float $prix): void
+    private function seedVente(string $id, string $ref, string $quand, string $cle, ?string $categorie, int $qty, float $prix): void
     {
         $stmt = $this->pdo()->prepare(
             'INSERT INTO sales (id, transaction_ref, sold_at, payment_method, quantity, description, product_key, category, price_ttc)
@@ -413,7 +480,7 @@ final class CatalogueQcTest extends TestCase
         $stmt->execute([$id, $quand, $cle, $qty, $qty]);
     }
 
-    private function seedAlias(string $id, string $libelle, string $cleCanonique, string $categorie): void
+    private function seedAlias(string $id, string $libelle, string $cleCanonique, ?string $categorie): void
     {
         $stmt = $this->pdo()->prepare(
             'INSERT INTO product_aliases (id, raw_description, product_key, category, kind) VALUES (?,?,?,?,\'label\')'

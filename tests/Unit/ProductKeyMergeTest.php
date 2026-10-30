@@ -117,6 +117,16 @@ final class ProductKeyMergeTest extends TestCase
             ->execute([$key, $by]);
     }
 
+    /** Alias « hérité » inséré en SQL direct : simule un doublon de forme
+     *  normalisée créé AVANT la garde anti-doublons de ProductAlias::save. */
+    private function addLegacyAlias(string $raw, string $key, ?string $category): void
+    {
+        $this->pdo->prepare(
+            'INSERT INTO product_aliases (id, raw_description, product_key, category, created_at)
+             VALUES (?, ?, ?, ?, NOW())'
+        )->execute(['alias_' . bin2hex(random_bytes(6)), $raw, $key, $category]);
+    }
+
     private function addZeroSince(string $key, string $at = '2026-09-05 08:00:00'): void
     {
         $this->pdo->prepare('INSERT INTO product_zero_since (product_key, zero_since) VALUES (?, ?)')
@@ -541,11 +551,14 @@ final class ProductKeyMergeTest extends TestCase
 
         // Doublons de forme normalisée déjà sur la cible + alias de la source.
         // NB : la collation ci de raw_description interdit deux libellés ne
-        // différant que par la casse (save() ferait un upsert) — les
-        // doublons réels ne diffèrent que par la ponctuation/séparateurs.
+        // différant que par la casse (save() ferait un upsert) — et depuis la
+        // RÈGLE anti-doublons d'appellations, save() FUSIONNE aussi les
+        // libellés de même forme normalisée : ces lignes sont donc insérées
+        // en SQL direct pour simuler les doublons HÉRITÉS (créés avant la
+        // garde), que consolidateFor doit toujours réduire à une ligne.
         ProductAlias::save(['raw_description' => 'Coca Cherry', 'product_key' => $target, 'category' => 'Boissons']);
-        ProductAlias::save(['raw_description' => 'Coca_cherry', 'product_key' => $target, 'category' => 'ex: Spécial']);
-        ProductAlias::save(['raw_description' => 'Coca.cherry', 'product_key' => $source]);
+        $this->addLegacyAlias('Coca_cherry', $target, 'ex: Spécial');
+        $this->addLegacyAlias('Coca.cherry', $source, null);
 
         // Le libellé le plus vendu (« Coca Cherry », 3 ventes) doit survivre.
         $this->addSale('Coca Cherry', $target, 'Boissons');
