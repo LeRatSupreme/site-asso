@@ -5,7 +5,14 @@ declare(strict_types=1);
 /**
  * Auto-détection des doublons de libellés.
  *
+ * Deux sections (contrat AdminComptaController::autoMappingRows()) :
+ *  - « À mapper » : rows NON handled — formulaire éditable inchangé
+ *    (mêmes noms de champs, mêmes indices d'origine) ;
+ *  - « Déjà couverts » : rows handled, regroupées par clé résolue —
+ *    lecture seule, AUCUN champ dans le POST d'application.
+ *
  * @var list<array<string,mixed>> $rows
+ * @var list<array<string,mixed>> $covered
  * @var list<string> $productKeys
  */
 ?>
@@ -14,17 +21,32 @@ declare(strict_types=1);
     <p class="muted">
         Chaque libellé CSV rencontré est regroupé vers une <strong>clé canonique
         suggérée</strong> (normalisation : minuscules, accents retirés, séparateurs
-        uniformisés, suffixes de couleur/gout retirés). La colonne « Produit
-        canonique » est <strong>éditable</strong> : corrigez avant d'appliquer.
-        Les libellés déjà aliasés sont signalés ; modifier leur clé canonique
-        déclenche une <strong>fusion complète</strong> — ventes, achats, coûts
-        de revient (lots), stock, packs et historiques de l'ancienne clé sont
+        uniformisés, suffixes de couleur/gout retirés). L'écran est scindé en deux
+        sections : <strong>À mapper</strong> — colonne « Produit canonique »
+        <strong>éditable</strong>, corrigez avant d'appliquer — et <strong>Déjà
+        couverts</strong> — libellés qui résolvent déjà vers une clé (lecture
+        seule). Les libellés déjà aliasés sont signalés ; modifier leur clé
+        canonique déclenche une <strong>fusion complète</strong> — ventes, achats,
+        coûts de revient (lots), stock, packs et historiques de l'ancienne clé sont
         transférés vers la nouvelle <strong>sans perte</strong>.
     </p>
 
     <?php if ($rows === []): ?>
         <p class="muted">Aucune vente à analyser. Importez d'abord un rapport SumUp.</p>
     <?php else: ?>
+        <?php
+        // Rows à mapper = NON handled : une ligne handled est déjà couverte
+        // (résolution alias exact ou repli normalisé) — rendu readonly dans
+        // « Déjà couverts », exclue du POST d'application. Les indices
+        // d'ORIGINE ($i sur $rows complet) sont conservés : le formulaire
+        // et aliasesApply() restent strictement inchangés.
+        $pendingIdx = [];
+        foreach ($rows as $i => $r) {
+            if (empty($r['handled'])) {
+                $pendingIdx[] = $i;
+            }
+        }
+        ?>
         <!-- Cibles proposées : clés produits EXISTANTES (fusion vers une
              clé connue = zéro doublon créé ; la saisie libre reste possible). -->
         <datalist id="product-keys">
@@ -32,6 +54,11 @@ declare(strict_types=1);
             <option value="<?= e($pk) ?>"></option>
             <?php endforeach; ?>
         </datalist>
+
+        <h3 class="mapping-section-title">À mapper</h3>
+        <?php if ($pendingIdx === []): ?>
+            <p class="muted">Rien à mapper — tous les libellés sont couverts.</p>
+        <?php else: ?>
         <form method="post" action="<?= e(url('/admin/compta/aliases/apply')) ?>" id="alias-apply-form">
             <?= csrf_field() ?>
             <div class="table-wrap">
@@ -45,7 +72,8 @@ declare(strict_types=1);
                         </tr>
                     </thead>
                     <tbody>
-                        <?php foreach ($rows as $i => $r): ?>
+                        <?php foreach ($pendingIdx as $i): ?>
+                            <?php $r = $rows[$i]; ?>
                             <tr<?= !empty($r['already']) ? ' class="row-muted"' : '' ?>>
                                 <td>
                                     <code><?= e((string) $r['raw']) ?></code>
@@ -77,6 +105,66 @@ declare(strict_types=1);
                 <a class="btn btn-outline" href="<?= e(url('/admin/compta/aliases')) ?>">Annuler</a>
             </div>
         </form>
+        <?php endif; ?>
+
+        <?php if ($covered !== []): ?>
+            <h3 class="mapping-section-title">Déjà couverts</h3>
+            <p class="muted">
+                Lecture seule : ces libellés résolvent déjà vers leur clé canonique
+                (alias exact ou repli normalisé) — aucune action, ils ne figurent
+                pas dans le formulaire ci-dessus.
+            </p>
+            <div class="table-wrap">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Clé canonique</th>
+                            <th>Occurrences</th>
+                            <th>Libellés sources</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($covered as $g): ?>
+                            <?php
+                            $resolvedTo = (string) ($g['resolved_to'] ?? '');
+                            if ($resolvedTo === '') {
+                                continue;
+                            }
+                            $gLabels = is_array($g['labels'] ?? null) ? $g['labels'] : [];
+                            ?>
+                            <tr class="row-muted">
+                                <td>
+                                    <span class="badge badge-info">résout vers</span>
+                                    <strong><?= e($resolvedTo) ?></strong>
+                                </td>
+                                <td><?= (int) ($g['occurrences'] ?? 0) ?></td>
+                                <td>
+                                    <?php if ($gLabels === []): ?>
+                                        <span class="muted">—</span>
+                                    <?php else: ?>
+                                        <details class="covered-sources">
+                                            <summary><?= count($gLabels) ?> libellé(s)</summary>
+                                            <ul>
+                                                <?php foreach ($gLabels as $l): ?>
+                                                    <?php $via = (string) ($l['via'] ?? ''); ?>
+                                                    <li>
+                                                        <code><?= e((string) ($l['label'] ?? '')) ?></code>
+                                                        <span class="muted">(<?= (int) ($l['occurrences'] ?? 0) ?> fois)</span>
+                                                        <?php if ($via !== ''): ?>
+                                                            <span class="badge badge-<?= $via === 'alias' ? 'success' : 'muted' ?>"><?= e($via) ?></span>
+                                                        <?php endif; ?>
+                                                    </li>
+                                                <?php endforeach; ?>
+                                            </ul>
+                                        </details>
+                                    <?php endif; ?>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        <?php endif; ?>
     <?php endif; ?>
 </div>
 
@@ -87,6 +175,9 @@ declare(strict_types=1);
 }
 .fusion-note strong { color: #fbbf24; }
 tr.is-fusion > td { border-top-color: rgba(251, 191, 36, 0.35); }
+.mapping-section-title { font-size: 0.95rem; margin: 1.25rem 0 0.55rem; }
+.covered-sources summary { cursor: pointer; }
+.covered-sources ul { margin: 0.35rem 0 0.2rem 1.1rem; list-style: disc; }
 </style>
 
 <script>

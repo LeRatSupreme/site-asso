@@ -1530,38 +1530,120 @@ final class AdminComptaController extends AdminBaseController
      * Suggère un mapping canonique pour chaque libellé rencontré, en regroupant
      * les variantes (Bueno_white / Bueno, Coca_cherry / Coca cherry...) via une
      * heuristique déterministe. Affiche un tableau éditable avant application.
+     *
+     * L'assemblage des lignes (suggestion + résolution RÉELLE de chaque
+     * libellé + regroupement « déjà couverts ») vit dans
+     * autoMappingRows(), point d'assemblage unique de cet écran.
      */
     public function aliasesAuto(): void
     {
         $user = $this->guardCompta();
 
-        $descriptions = Sale::allDescriptions();
+        $mapping = self::autoMappingRows(Sale::allDescriptions());
 
+        $this->renderAdmin('admin/compta/aliases_auto', [
+            'title' => 'Auto-détection des doublons',
+            'user'  => $user,
+            'rows'  => $mapping['rows'],
+            // Groupes « déjà couverts » : libellés qui résolvent DÉJÀ vers
+            // une clé canonique (alias exact ou repli normalisé), regroupés
+            // par clé — rendu readonly côté vue, jamais dans le POST
+            // d'application (aliasesApply reste inchangé).
+            'covered'     => $mapping['covered'],
+            // Toutes les clés produits existantes : datalist du champ
+            // « Produit canonique » — choisir une cible EXISTANTE évite
+            // les fautes de frappe, première cause de doublons.
+            'productKeys' => ProductKeyMerge::allKeys(),
+        ]);
+    }
+
+    /**
+     * Assemblage UNIQUE des lignes de l'écran « Auto-détection des
+     * doublons » (Suggestions de mapping) : pour chaque libellé des
+     * ventes, suggestion heuristique ET résolution RÉELLE par la chaîne
+     * de mapping de l'import (ProductAlias::resolve : alias EXACT puis
+     * repli normalisé StockPublic::normalizeKey).
+     *
+     * Pourquoi la résolution réelle : après une consolidation/fusion,
+     * une orthographe absorbée (« Coca_cherry » dans « Coca cherry »)
+     * n'a PLUS sa ligne d'alias mais résout très bien vers sa cible —
+     * l'écran ne doit pas la re-présenter comme « à mapper » (bruit +
+     * risque de re-saisie inutile).
+     *
+     * CONTRAT pour la vue :
+     *  - 'rows' : une ligne par libellé, tri par clé canonique suggérée
+     *    puis occurrences décroissantes. Champs : raw, occurrences,
+     *    suggested, canonical, already (inchangés — le formulaire et
+     *    aliasesApply() restent intacts) PLUS resolved_to (clé canonique
+     *    réellement renvoyée par la chaîne de résolution, '' si aucune),
+     *    via ('alias' | 'normalisé' | null) et handled (booléen). Une
+     *    ligne handled est déjà couverte : rendu readonly, SANS champ
+     *    dans le POST d'application.
+     *  - 'covered' : groupes des libellés handled par clé résolue (une
+     *    seule entrée par clé), occurrences additionnées, tri par
+     *    occurrences décroissantes puis clé. Champs : resolved_to (clé
+     *    canonique commune), occurrences (total du groupe), labels
+     *    (list<array{label:string, occurrences:int, via:string}> —
+     *    libellés sources individuels, pour un détail dépliable).
+     *
+     * @param list<array<string,mixed>> $descriptions Sortie de Sale::allDescriptions() ({description, occurrences, last_seen}).
+     *
+     * @return array{rows: list<array<string,mixed>>, covered: list<array<string,mixed>>}
+     */
+    public static function autoMappingRows(array $descriptions): array
+    {
         // Mapping déjà existant (raw -> product_key), pour pré-sélectionner.
         $existing = [];
         foreach (ProductAlias::all() as $alias) {
             $existing[(string) $alias['raw_description']] = (string) $alias['product_key'];
         }
 
-        // Suggestion : on regroupe par clé canonique suggérée.
+        // Clés produits vivantes (union des 7 tables) : la cible d'un repli
+        // normalisé doit exister pour que le libellé soit « couvert ».
+        // L'index est normalisé (StockPublic::normalizeKey) car l'UNION SQL
+        // déduplique en collation ci — « redbull ice » et « Redbull Ice »
+        // n'y figurent qu'en une seule graphie : la casse ne doit pas
+        // décider de la couverture.
+        $liveKeys = [];
+        foreach (ProductKeyMerge::allKeys() as $k) {
+            $liveKeys[StockPublic::normalizeKey($k)] = true;
+        }
+
         $rows = [];
-        $groups = [];
+        $covered = [];
         foreach ($descriptions as $d) {
             $raw = (string) ($d['description'] ?? '');
             if ($raw === '') {
                 continue;
             }
+            $occurrences = (int) ($d['occurrences'] ?? 0);
             $suggested = AliasSuggester::suggest($raw);
-            $current = $existing[$raw] ?? $suggested;
+
+            // Résolution réelle : handled = alias exact, OU repli normalisé
+            // vers une clé VIVANTE (une cible disparue après une fusion
+            // ratée n'est pas « couverte » : le libellé reste à mapper).
+            [$resolvedTo, $via] = self::resolveLabel($raw);
+            $handled = $via === 'alias'
+                || ($via === 'normalisé' && isset($liveKeys[StockPublic::normalizeKey($resolvedTo)]));
 
             $rows[] = [
-                'raw'        => $raw,
-                'occurrences'=> (int) ($d['occurrences'] ?? 0),
-                'suggested'  => $suggested,
-                'canonical'  => $current,
-                'already'    => isset($existing[$raw]),
+                'raw'         => $raw,
+                'occurrences' => $occurrences,
+                'suggested'   => $suggested,
+                'canonical'   => $existing[$raw] ?? $suggested,
+                'already'     => isset($existing[$raw]),
+                'resolved_to' => $resolvedTo,
+                'via'         => $via,
+                'handled'     => $handled,
             ];
-            $groups[$current][] = $raw;
+
+            if ($handled) {
+                $group = $covered[$resolvedTo]
+                    ?? ['resolved_to' => $resolvedTo, 'occurrences' => 0, 'labels' => []];
+                $group['occurrences'] += $occurrences;
+                $group['labels'][] = ['label' => $raw, 'occurrences' => $occurrences, 'via' => $via];
+                $covered[$resolvedTo] = $group;
+            }
         }
 
         // Trie par clé canonique suggérée, puis occurrences décroissantes.
@@ -1574,15 +1656,49 @@ final class AdminComptaController extends AdminBaseController
             return $b['occurrences'] <=> $a['occurrences'];
         });
 
-        $this->renderAdmin('admin/compta/aliases_auto', [
-            'title' => 'Auto-détection des doublons',
-            'user'  => $user,
-            'rows'  => $rows,
-            // Toutes les clés produits existantes : datalist du champ
-            // « Produit canonique » — choisir une cible EXISTANTE évite
-            // les fautes de frappe, première cause de doublons.
-            'productKeys' => ProductKeyMerge::allKeys(),
-        ]);
+        // Groupes couverts : occurrences décroissantes puis clé (les plus
+        // gros regroupements — le bruit à faire taire — en tête).
+        $covered = array_values($covered);
+        usort($covered, static function (array $a, array $b): int {
+            if ($a['occurrences'] !== $b['occurrences']) {
+                return $b['occurrences'] <=> $a['occurrences'];
+            }
+
+            return strnatcasecmp($a['resolved_to'], $b['resolved_to']);
+        });
+
+        return ['rows' => $rows, 'covered' => $covered];
+    }
+
+    /**
+     * Résolution RÉELLE d'un libellé par la chaîne de mapping de
+     * l'import (ProductAlias::resolve : alias EXACT d'abord, puis
+     * repli par forme NORMALISÉE — StockPublic::normalizeKey — sur une
+     * autre orthographe de la même ligne d'alias). Jamais de lookup
+     * ad hoc : c'est le point de résolution partagé qui fait foi.
+     *
+     * @return array{0:string, 1:?string} [clé canonique ('' si non résolu), voie : 'alias' | 'normalisé' | null]
+     */
+    private static function resolveLabel(string $label): array
+    {
+        try {
+            $exact = ProductAlias::findByRaw($label);
+            if ($exact !== null) {
+                $key = trim((string) ($exact['product_key'] ?? ''));
+                if ($key !== '') {
+                    return [$key, 'alias'];
+                }
+            }
+
+            $resolved = ProductAlias::resolve($label);
+            if ($resolved !== null && $resolved !== '') {
+                return [$resolved, 'normalisé'];
+            }
+        } catch (\Throwable) {
+            // Alias illisibles : libellé considéré non résolu (éditable).
+        }
+
+        return ['', null];
     }
 
     /**
