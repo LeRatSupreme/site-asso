@@ -48,4 +48,7 @@ function db(): PDO
 }
 
 // Démarrage automatique de la session (nécessaire pour Auth + CSRF).
+// NB : les routes crawlers (/sitemap.xml, /sitemaps.xml) n'en démarrent
+// pas — la garde vit dans Auth::startSession(), appelé aussi par
+// Auth::check() plus bas dans index.php.
 Auth::startSession();
