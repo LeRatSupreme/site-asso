@@ -174,6 +174,21 @@ final class ProductAutoSyncTest extends TestCase
         self::assertSame(0, $this->productCount(), 'Aucune fiche « Bowling », donc rien en Snacks.');
     }
 
+    /** Une FORMULE (menu combiné) n'est pas un produit rayonnable : jamais de fiche automatique (exclusion W3). */
+    public function test_formule_gaufre_boissons_ne_cree_pas_de_fiche(): void
+    {
+        // Libellé exact tel que vendu à la borne (mission W3, 30/10/2026).
+        $this->insertSale('T-FORM-1', 'Gaufre + boissons (hors boissons energisante)', 2.0);
+
+        $global = ProductAutoSync::sync();
+        self::assertSame([], $global['created'], 'Une formule « Gaufre + boissons » ne doit jamais créer de fiche.');
+
+        $targeted = ProductAutoSync::ensureKeys(['Gaufre + boissons (hors boissons energisante)']);
+        self::assertSame([], $targeted['created']);
+
+        self::assertSame(0, $this->productCount());
+    }
+
     // -----------------------------------------------------------------
     //  Garde B — libellés OCR bruts (file scan_labels)
     // -----------------------------------------------------------------
