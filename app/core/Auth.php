@@ -31,12 +31,38 @@ final class Auth
 
     /**
      * Démarre la session si elle ne l'est pas déjà.
+     *
+     * EXCEPTION — routes crawlers (/sitemap.xml, /sitemaps.xml) : aucune
+     * session n'y est démarrée, où qu'elle soit demandée (bootstrap via
+     * database.php, contrôle 2FA via Auth::check() dans index.php…).
+     * Un sitemap ne doit porter NI cookie de session (un PHPSESSID sur un
+     * XML est atypique pour les fetchers stricts type Search Console), NI
+     * les en-têtes « Pragma: no-cache » / « Expires » (1981) que
+     * session_start() pose via le cache_limiter « nocache » et qui
+     * contredisent le Cache-Control public posé par SeoController. Ces
+     * routes ne touchent ni Auth ni CSRF : le comportement de toutes les
+     * autres pages est inchangé. NB : /robots.txt est un fichier statique
+     * servi par Apache, il ne passe jamais par ici.
      */
     public static function startSession(): void
     {
+        if (self::routeSansSession()) {
+            return;
+        }
+
         if (session_status() === PHP_SESSION_NONE) {
             session_start();
         }
+    }
+
+    /**
+     * La requête courante vise-t-elle une route servie sans session ?
+     */
+    private static function routeSansSession(): bool
+    {
+        $uri = parse_url((string) ($_SERVER['REQUEST_URI'] ?? ''), PHP_URL_PATH);
+
+        return in_array($uri, ['/sitemap.xml', '/sitemaps.xml'], true);
     }
 
     /**
