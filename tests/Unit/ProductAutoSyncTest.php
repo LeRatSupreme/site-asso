@@ -241,8 +241,141 @@ final class ProductAutoSyncTest extends TestCase
     }
 
     // -----------------------------------------------------------------
+    //  Mission W1 — appariement à frontière de mot (variantes ≠ fiches)
+    // -----------------------------------------------------------------
+
+    /**
+     * « oasis pomme poire » (variante vivante) crée SA fiche : la fiche
+     * famille « Oasis » ne l'avale plus (ancienne inclusion sans
+     * frontière — clé du dossier dev-couts M3).
+     */
+    public function test_variante_oasis_pomme_poire_ne_matche_plus_la_fiche_oasis(): void
+    {
+        $this->insertCard('Oasis');
+        $this->insertSale('T-OPP-1', 'oasis pomme poire');
+
+        $res = ProductAutoSync::ensureKeys(['oasis pomme poire']);
+        self::assertSame(['Oasis pomme poire'], $res['created'], '« oasis pomme poire » doit redevenir créable : ≠ « Oasis ».');
+        self::assertSame(2, $this->productCount(), 'La variante obtient sa propre fiche à côté de la famille.');
+    }
+
+    /** « cafe allonge » ≠ « cafe » : variante créable (aiguille de 4 caractères exactement). */
+    public function test_cafe_allonge_cree_sa_fiche(): void
+    {
+        $this->insertCard('cafe');
+        $this->insertSale('T-CA-1', 'cafe allonge');
+
+        $res = ProductAutoSync::ensureKeys(['cafe allonge']);
+        self::assertSame(['Cafe allonge'], $res['created'], 'L\'allongé (2 dosettes) est un AUTRE produit que le café simple.');
+    }
+
+    /** « Coca Zero » ≠ « Coca » : le qualificatif de variante ne fond jamais le libellé dans la famille. */
+    public function test_coca_zero_ne_matche_pas_coca(): void
+    {
+        $this->insertCard('Coca');
+        $this->insertSale('T-CZ-1', 'Coca Zero');
+
+        $res = ProductAutoSync::ensureKeys(['Coca Zero']);
+        self::assertSame(['Coca Zero'], $res['created']);
+    }
+
+    /**
+     * « Pepsi » ≠ « Pepsi Zero » : une clé courte ne s'attache pas à une
+     * fiche VARIANTE (reste d'un seul mot = qualificatif, pas une forme
+     * de produit) → la fiche « Pepsi » est créée.
+     */
+    public function test_pepsi_ne_s_attache_pas_a_pepsi_zero(): void
+    {
+        $this->insertCard('Pepsi Zero');
+        $this->insertSale('T-PEP-1', 'Pepsi');
+
+        $res = ProductAutoSync::ensureKeys(['Pepsi']);
+        self::assertSame(['Pepsi'], $res['created'], 'Le Pepsi classique est un produit distinct du Pepsi Zero.');
+    }
+
+    /**
+     * « Crunch » reste rattaché à « crunch Snak Barres » (même produit,
+     * arbitrage W1) : descripteur MULTI-mots « Snak Barres » unique dans
+     * la carte → raccourci non ambigu, aucune fiche doublon créée.
+     */
+    public function test_crunch_raccourci_non_ambigu_reste_rattache(): void
+    {
+        $this->insertCard('crunch Snak Barres');
+        $this->insertSale('T-CRU-1', 'Crunch');
+
+        $res = ProductAutoSync::ensureKeys(['Crunch']);
+        self::assertSame([], $res['created'], '« Crunch » = « crunch Snak Barres » : le rapprochement doit rester.');
+        self::assertSame(1, $this->productCount(), 'Aucune fiche doublon « Crunch » à côté de « crunch Snak Barres ».');
+    }
+
+    /**
+     * Raccourci AMBIGU refusé : « Fanta » face à plusieurs fiches « Fanta … »
+     * ne choisit pas — la fiche « Fanta » est créée (l'admin arbitrera).
+     */
+    public function test_raccourci_ambigu_refuse(): void
+    {
+        $this->insertCard('Fanta Orange');
+        $this->insertCard('Fanta Citron');
+        $this->insertSale('T-FA-1', 'Fanta');
+
+        $res = ProductAutoSync::ensureKeys(['Fanta']);
+        self::assertSame(['Fanta'], $res['created'], 'Deux candidats → refus de choisir par heuristique.');
+    }
+
+    /**
+     * Conditionnement seul = même produit : « Sucette 1 sucette » reste
+     * sur « sucette » et « Coca-Cola 33cl » sur « Coca Cola » (mêmes mots
+     * alphabétiques, seuls les jetons chiffrés diffèrent).
+     */
+    public function test_conditionnement_seul_reste_rattache(): void
+    {
+        $this->insertCard('sucette');
+        $this->insertSale('T-SU-1', 'Sucette 1 sucette');
+        self::assertSame(
+            [],
+            ProductAutoSync::ensureKeys(['Sucette 1 sucette'])['created'],
+            '« Sucette 1 sucette » reste rattaché à « sucette » (conditionnement seul).'
+        );
+
+        $this->insertCard('Coca Cola');
+        $this->insertSale('T-CC-1', 'Coca-Cola 33cl');
+        self::assertSame(
+            [],
+            ProductAutoSync::ensureKeys(['Coca-Cola 33cl'])['created'],
+            '« Coca-Cola 33cl » reste rattaché à « Coca Cola » (contenance seule).'
+        );
+        self::assertSame(2, $this->productCount());
+    }
+
+    /**
+     * Alias admin (product_aliases) : vérité curatée — « Oasis » mène à
+     * la fiche « Oasis Tropical », aucune création (même lecture que
+     * StockPublic::matchKeyViaAlias : égalité normalisée, jamais d'inclusion).
+     */
+    public function test_alias_admin_relie_le_libelle_a_sa_fiche(): void
+    {
+        $this->insertCard('Oasis Tropical');
+        $this->pdo()->exec(
+            "INSERT INTO product_aliases (id, raw_description, product_key, kind) VALUES ('al_w1', 'Oasis', 'Oasis Tropical', 'label')"
+        );
+        $this->insertSale('T-OA-1', 'Oasis');
+
+        self::assertSame([], ProductAutoSync::ensureKeys(['Oasis'])['created']);
+        self::assertSame(1, $this->productCount());
+    }
+
+    // -----------------------------------------------------------------
     //  Helpers
     // -----------------------------------------------------------------
+
+    /** Insère une fiche carte existante (pré-condition des tests W1). */
+    private function insertCard(string $name): void
+    {
+        $this->pdo()->prepare(
+            'INSERT INTO products (id, name, category_id, price, stock, is_available, is_active, `order`)
+             VALUES (?, ?, ?, 1.000, 0, 1, 1, 1)'
+        )->execute(['prod_' . bin2hex(random_bytes(6)), $name, 'cat_boissons']);
+    }
 
     private function pdo(): PDO
     {
