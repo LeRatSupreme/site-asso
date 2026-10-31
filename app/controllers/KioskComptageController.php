@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Controllers;
 
 use App\Core\Compta\CashLedger;
+use App\Core\Compta\Edt\CalendarContext;
 use App\Core\Compta\InvoiceScan;
 use App\Core\Compta\KioskPages;
 use App\Core\Compta\ProductAutoSync;
@@ -896,6 +897,15 @@ final class KioskComptageController extends Controller
             $hours[$i]['pct'] = $hoursMax > 0 ? round($row['ca'] / $hoursMax * 100, 2) : 0.0;
         }
 
+        // Ligne de contexte CALENDRIER UNIVERITAIRE (mission E2) : texte
+        // factuel prêt à afficher (« Vacances universitaires : reprise des
+        // cours le 02/11. ») quand la semaine courante est morte ou que le
+        // prochain jour de cours n'est pas demain ; null en semaine
+        // normale. Une seule source : CalendarContext::ligneRecap — la
+        // vue (page + auto-refresh JSON, la clé voyage dans $stats) ne
+        // fait qu'afficher la chaîne, jamais la composer.
+        $calendrier = CalendarContext::ligneRecap($todayDt);
+
         return [
             'date'         => $today,
             'ca'           => $ca,
@@ -919,6 +929,7 @@ final class KioskComptageController extends Controller
             ],
             'hours'        => $hours,
             'hoursMax'     => $hoursMax,
+            'calendrier'   => $calendrier,
             'top'          => $top,
             'computed_at'  => (new \DateTimeImmutable('now', $paris))->format('H:i:s'),
         ];

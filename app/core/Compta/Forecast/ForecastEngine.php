@@ -112,7 +112,25 @@ final class ForecastEngine
      *                                        slow_periods (?array{facteur:float,
      *                                        ranges:list<array{start,end}>} périodes
      *                                        creuses saisies à la main, cf.
-     *                                        SlowPeriods).
+     *                                        SlowPeriods),
+     *                                        calendar (?array{facteur:float,
+     *                                        explication:?string} facteur
+     *                                        calendrier universitaire des
+     *                                        suggestions — sortie de
+     *                                        CalendarContext::facteurReappro,
+     *                                        transmise par ReapproDemande).
+     *                                        POLITIQUE (mission E2) : le
+     *                                        facteur module UNIQUEMENT les
+     *                                        quantités de commande (lo/hi,
+     *                                        safety_demand, suggestion — la
+     *                                        liste de courses dérive son
+     *                                        besoin de hi, même échelle)
+     *                                        ; unites/part (prévision
+     *                                        d'affichage, invariant Σ unites
+     *                                        × prix ≈ CA prévu), le bénéfice
+     *                                        (dérivé de unites) et les
+     *                                        prix/coûts unitaires restent
+     *                                        INTACTS ; 1.0 = neutre.
      *
      * @return array Forme EXACTE décrite dans la doc de classe (consommée par vues/contrôleur).
      */
@@ -133,6 +151,14 @@ final class ForecastEngine
         }
         $slow        = is_array($opts['slow_periods'] ?? null) ? $opts['slow_periods'] : null;
         $btDraws     = max(1, (int) ($opts['backtest_draws'] ?? min($draws, Hyper::BACKTEST_DRAWS_MAX)));
+        // Facteur calendrier universitaire (option « calendar », cf.
+        // CalendarContext::facteurReappro) : 1.0/absent = aucune modulation.
+        // Borné [0 ; 1] — une valeur absurde ne peut JAMAIS majorer les
+        // suggestions (borne haute prudente) ni les rendre négatives.
+        $calOpt      = is_array($opts['calendar'] ?? null) ? $opts['calendar'] : null;
+        $facteurCal  = $calOpt !== null
+            ? min(1.0, max(0.0, (float) ($calOpt['facteur'] ?? 1.0)))
+            : 1.0;
 
         // 1-4. Nettoyage, ajustements, backtest, calibration conforme.
         $split   = Clean::splitPast($data->days, $todayKey);
@@ -636,6 +662,27 @@ final class ForecastEngine
             $draws,
             $caPrevu7j
         );
+
+        // Facteur calendrier universitaire (semaines sans cours) : module
+        // UNIQUEMENT les quantités de COMMANDE (lo/hi — bornes de la
+        // demande à couvrir, arrondies au-dessous : sur-commander pendant
+        // une semaine morte fait jeter — safety_demand, suggestion) ;
+        // unites/part (prévision d'affichage, invariant de calibration
+        // Σ unites × prix ≈ CA prévu) et bénéfice (dérivé de unites juste
+        // après) restent à l'échelle pleine, les prix/coûts unitaires sont
+        // INTACTS. À facteur 1.0 : no-op strict (mêmes sorties mot pour
+        // mot, testé par EngineCalendarTest).
+        if ($facteurCal < 1.0) {
+            foreach ($produits as &$pRow) {
+                $pRow['lo'] = (float) floor((float) $pRow['lo'] * $facteurCal);
+                $pRow['hi'] = (float) floor((float) $pRow['hi'] * $facteurCal);
+                $pRow['safety_demand'] = (int) floor((int) $pRow['safety_demand'] * $facteurCal);
+                if ($pRow['suggestion'] !== null) {
+                    $pRow['suggestion'] = (int) floor((int) $pRow['suggestion'] * $facteurCal);
+                }
+            }
+            unset($pRow);
+        }
         $benefice = ProfitForecast::compute($produits, $caFenetre);
 
         // 12. Anomalies et notes.
@@ -673,6 +720,12 @@ final class ForecastEngine
             'wape_baseline_recent'  => $bt['wape_b2_recent'] !== null ? $bt['wape_b2_recent'] * 100.0 : null,
             'conformal_q90'         => $confQ90,
             'conformal_mean_hw'     => $confMhw,
+            // Facteur calendrier universitaire appliqué aux quantités
+            // suggérées (null = aucune option calendar passée, 1.0 =
+            // calendrier neutre) — trace chiffrée du « pourquoi » des
+            // suggestions réduites/annulées, l'explication humaine est
+            // dans notes[] et CalendarContext::facteurReappro().
+            'facteur_calendrier'    => $calOpt !== null ? $facteurCal : null,
         ];
 
         // Stocks négatifs parmi les produits retenus (survente) :
@@ -724,6 +777,16 @@ final class ForecastEngine
                 (new \DateTimeImmutable($plage['end']))->format('d/m'),
                 SlowPeriods::facteurFr((float) ($slow['facteur'] ?? 1.0))
             );
+        }
+        // Calendrier universitaire (mission E2) : la ligne d'explication
+        // factuelle (« Semaine sans cours du 26/10 au 30/10 : suggestions
+        // annulées ») vient TELLE QUELLE de CalendarContext — le moteur ne
+        // reformule pas, une seule source du libellé.
+        if ($calOpt !== null && $facteurCal < 1.0) {
+            $notes[] = (string) ($calOpt['explication'] ?? sprintf(
+                'Calendrier universitaire : suggestions réduites ×%s.',
+                SlowPeriods::facteurFr($facteurCal)
+            ));
         }
         // Désaisonnalisation de l'entrée : les journées creuses passées ont
         // été ramenées au niveau normal AVANT l'apprentissage — le facteur

@@ -6,6 +6,7 @@ namespace App\Core;
 
 use App\Core\Compta\CashLedger;
 use App\Core\Compta\ComptaCalc;
+use App\Core\Compta\Edt\CalendarContext;
 use App\Models\InventoryCount;
 use App\Models\ProductDiscontinued;
 use App\Models\Sale;
@@ -509,6 +510,16 @@ final class SmsReport
 
     /**
      * Message rendu pour un message programmé donné.
+     *
+     * Enrichissement CALENDRIER UNIVERITAIRE (mission E2) : quand la
+     * semaine courante est morte (publiée sans cours) ou que le prochain
+     * jour de cours n'est pas demain, une ligne factuelle issue des
+     * données EDT (« Vacances universitaires : reprise des cours le
+     * 02/11. ») est AJOUTÉE au message rendu — quel que soit le modèle
+     * (la ligne ne dépend pas d'un {placeholder} que les modèles
+     * existants ne contiennent pas). AUCUN envoi nouveau n'est créé pour
+     * autant : c'est le récap DÉJÀ programmé qui est enrichi, la garde
+     * « journée sans vente » du cron reste en amont.
      */
     public static function buildFor(array $schedule, ?string $day = null): string
     {
@@ -517,7 +528,25 @@ final class SmsReport
             $template = self::DEFAULT_TEMPLATE;
         }
 
-        return self::renderTemplate($template, self::varsFor($day));
+        $message = self::renderTemplate($template, self::varsFor($day));
+
+        // Date du rapport en Europe/Paris (le serveur peut être en UTC) :
+        // midi local du jour, arbitraire et stable — seule la DATE compte
+        // (semaine courante, prochain jour de cours), jamais l'heure.
+        try {
+            $jour = $day ?: date('Y-m-d');
+            $ligne = CalendarContext::ligneRecap(
+                new \DateTimeImmutable($jour . ' 12:00', new \DateTimeZone('Europe/Paris'))
+            );
+            if ($ligne !== null) {
+                $message = trim($message) . "\n" . $ligne;
+            }
+        } catch (\Throwable) {
+            // Date illisible ou calendrier indisponible : message intact,
+            // l'enrichissement ne doit JAMAIS faire échouer un envoi.
+        }
+
+        return $message;
     }
 
     /**
