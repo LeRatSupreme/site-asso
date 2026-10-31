@@ -143,6 +143,58 @@ final class AssistantToolsTest extends IntegrationTestCase
             ->format('Y-m-d');
     }
 
+    /** Lundi Paris de la semaine courante ou de la prochaine. */
+    private function lundiParis(bool $prochaine = false): string
+    {
+        $modif = $prochaine ? 'monday next week' : 'monday this week';
+
+        return (new \DateTimeImmutable('today', new \DateTimeZone('Europe/Paris')))
+            ->modify($modif)
+            ->format('Y-m-d');
+    }
+
+    /** Vide le cache EDT de test (APP_TESTING détourne CalendarContext/EdtCalendar
+     * vers tests/cache/edt avec fetch null : jamais de réseau, jamais de cache réel). */
+    private function viderCacheEdt(): void
+    {
+        foreach (glob(AEIC_ROOT . '/tests/cache/edt/iut-*.json') ?: [] as $fichier) {
+            @unlink($fichier);
+        }
+    }
+
+    /** Écrit un cache EDT de test (format EdtCalendar v1, FRAIS : servi tel
+     * quel, aucun appel réseau — un cours « CM » par jour donné, midi UTC
+     * = même jour local Paris). */
+    private function ecrireCacheEdt(string $deptIut, array $jours): void
+    {
+        $dir = AEIC_ROOT . '/tests/cache/edt';
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0777, true);
+        }
+        $events = [];
+        foreach (array_values($jours) as $i => $jour) {
+            $events[] = [
+                'uid'    => 'edt-test-' . $deptIut . '-' . $i,
+                'start'  => $jour . 'T12:00:00.000Z',
+                'end'    => $jour . 'T14:00:00.000Z',
+                'title'  => 'Test CM',
+                'subject' => 'Test CM',
+                'kind'   => 'CM',
+                'room'   => 'S1',
+                'groups' => ['BUT'],
+            ];
+        }
+        file_put_contents(
+            $dir . '/' . $deptIut . '.json',
+            json_encode([
+                'version'    => 1,
+                'fetched_at' => time(),
+                'roots'      => [['id' => 1, 'name' => 'BUT']],
+                'events'     => $events,
+            ], JSON_UNESCAPED_UNICODE)
+        );
+    }
+
     // -----------------------------------------------------------------
     //  Authentification
     // -----------------------------------------------------------------
@@ -751,6 +803,140 @@ final class AssistantToolsTest extends IntegrationTestCase
 
         self::assertSame(200, (int) ($r['code'] ?? 0));
         self::assertSame($avant, $this->comptagesTables(), 'catalogue_anomalies est strictement LECTURE SEULE : l\'assistant signale, il ne corrige jamais.');
+    }
+
+    // -----------------------------------------------------------------
+    //  Outil 7 — edt_iut (emploi du temps IUT ULCO, mission E3)
+    // -----------------------------------------------------------------
+
+    public function test_edt_iut_sans_jeton_refuse_403_generique(): void
+    {
+        $this->entetes = [];
+        $r = $this->request('GET', '/internal/assistant/edt_iut');
+
+        self::assertSame(403, (int) ($r['code'] ?? 0));
+        self::assertSame(['erreur' => 'Accès refusé.'], $this->corps($r));
+        self::assertTrue($this->aEntete($r, 'Cache-Control: no-store, max-age=0'), 'La réponse doit être no-store.');
+    }
+
+    public function test_edt_iut_parametres_invalides_refuses_en_400(): void
+    {
+        $this->viderCacheEdt();
+
+        $r = $this->request('GET', '/internal/assistant/edt_iut?dept=meca');
+        self::assertSame(400, (int) ($r['code'] ?? 0));
+        self::assertStringContainsString('dept', (string) ($this->corps($r)['erreur'] ?? ''));
+
+        $r = $this->request('GET', '/internal/assistant/edt_iut?semaine=hier');
+        self::assertSame(400, (int) ($r['code'] ?? 0));
+        self::assertStringContainsString('semaine', (string) ($this->corps($r)['erreur'] ?? ''));
+    }
+
+    /** Fail-closed honnête : calendrier EDT totalement vide (API down, aucun
+     * cache) → 503 « Données EDT indisponibles. », JAMAIS un 500 ni une
+     * « semaine sans cours » inventée sur du vide. */
+    public function test_edt_iut_calendrier_indisponible_fail_closed_honnete(): void
+    {
+        $this->viderCacheEdt();
+
+        $r = $this->request('GET', '/internal/assistant/edt_iut?semaine=courante');
+
+        self::assertSame(503, (int) ($r['code'] ?? 0), 'Panne calendrier : refus honnête 503, pas de 500.');
+        self::assertSame('Données EDT indisponibles.', $this->corps($r)['erreur'] ?? '');
+        self::assertTrue($this->aEntete($r, 'Cache-Control: no-store, max-age=0'));
+    }
+
+    /** Contrat JSON champs français (semaine, départements, source citée) :
+     * fixtures déterministes — INFO a UN cours le lundi courant et UN le
+     * lundi prochain, GEA/GEII vides (lundi prochain est TOUJOURS strictement
+     * postérieur à aujourd'hui, quel que soit le jour d'exécution). */
+    public function test_edt_iut_contrat_json_semaine_courante(): void
+    {
+        $this->viderCacheEdt();
+        $lundi = $this->lundiParis();
+        $lundiProchaine = $this->lundiParis(true);
+        $this->ecrireCacheEdt('iut-info', [$lundi, $lundiProchaine]);
+
+        $avant = $this->comptagesTables();
+
+        $r = $this->request('GET', '/internal/assistant/edt_iut?semaine=courante');
+        $c = $this->corps($r);
+
+        self::assertSame(200, (int) ($r['code'] ?? 0), 'edt_iut doit être dans la liste blanche (sinon 404 « Outil inconnu. »).');
+        self::assertSame('edt_iut', $c['outil'] ?? '');
+        self::assertSame(['info', 'gea', 'geii'], $c['depts'] ?? null, 'dept=tous → les trois départements.');
+        self::assertSame('courante', $c['semaine'] ?? '');
+        self::assertSame($lundi, $c['lundi'] ?? '');
+        self::assertSame((new \DateTimeImmutable($lundi))->modify('+4 days')->format('Y-m-d'), $c['vendredi'] ?? '');
+        self::assertSame(1, (int) ($c['creneaux'] ?? -1), 'Un seul créneau INFO sur la semaine (cours du lundi).');
+        self::assertSame(1, (int) ($c['jours_actifs'] ?? -1));
+        self::assertTrue((bool) ($c['avec_cours'] ?? false));
+        self::assertFalse((bool) ($c['hors_horizon'] ?? true), 'Semaine dans l’horizon publié (lundi ≤ dernier jour connu).');
+        self::assertSame('Semaine de cours', $c['label'] ?? '');
+        self::assertSame($lundiProchaine, $c['prochain_jour_cours'] ?? '', 'Prochain jour de cours strictement après aujourd’hui.');
+        self::assertSame('edt-ulco.fr via EdtCalendar (cache 6h)', $c['source'] ?? '', 'La source edt-ulco.fr est citée (exigence coordinateur).');
+
+        self::assertSame($avant, $this->comptagesTables(), 'edt_iut est strictement LECTURE SEULE (aucune table touchée).');
+    }
+
+    /** Vue département : GEA sans cours cette semaine publiée → « Semaine
+     * sans cours » (pas hors horizon : la semaine est publiée, il n’y a
+     * simplement aucun cours GEA), prochain jour de cours GEA = null. */
+    public function test_edt_iut_dept_sans_cours_et_horizon_honnete(): void
+    {
+        $this->viderCacheEdt();
+        $lundiProchaine = $this->lundiParis(true);
+        $this->ecrireCacheEdt('iut-info', [$this->lundiParis(), $lundiProchaine]);
+
+        $r = $this->request('GET', '/internal/assistant/edt_iut?dept=gea&semaine=courante');
+        $c = $this->corps($r);
+
+        self::assertSame(200, (int) ($r['code'] ?? 0));
+        self::assertSame(['gea'], $c['depts'] ?? null, 'dept=gea → seul GEA.');
+        self::assertSame(0, (int) ($c['creneaux'] ?? -1));
+        self::assertSame(0, (int) ($c['jours_actifs'] ?? -1));
+        self::assertFalse((bool) ($c['avec_cours'] ?? true));
+        self::assertFalse((bool) ($c['hors_horizon'] ?? true), 'INFO publie des cours : la semaine est publiée, GEA n’a juste pas de cours.');
+        self::assertSame('Semaine sans cours (vacances ?)', $c['label'] ?? '');
+        self::assertArrayHasKey('prochain_jour_cours', $c, 'Le champ est TOUJOURS présent (stable), null quand rien n’est publié.');
+        self::assertNull($c['prochain_jour_cours'], 'Aucun cours GEA publié : null, pas une date inventée.');
+
+        // La même semaine vue INFO : cours présents, label de cours.
+        $r = $this->request('GET', '/internal/assistant/edt_iut?dept=info&semaine=prochaine');
+        $c = $this->corps($r);
+        self::assertSame(200, (int) ($r['code'] ?? 0));
+        self::assertSame(['info'], $c['depts'] ?? null);
+        self::assertSame($lundiProchaine, $c['lundi'] ?? '');
+        self::assertSame(1, (int) ($c['creneaux'] ?? -1));
+        self::assertSame('Semaine de cours', $c['label'] ?? '');
+        self::assertFalse((bool) ($c['hors_horizon'] ?? true));
+    }
+
+    /** Vue « aujourdhui » (défaut) : un cours GEA aujourd’hui → jour de cours,
+     * prochain jour = le lundi prochain INFO (strictement après aujourd’hui,
+     * déterministe quel que soit le jour d’exécution). */
+    public function test_edt_iut_vue_aujourdhui_par_defaut(): void
+    {
+        $this->viderCacheEdt();
+        $lundiProchaine = $this->lundiParis(true);
+        $aujourdhui = $this->jourParis(0);
+        // INFO ne publie QUE le lundi prochain : « aujourd’hui » ne peut
+        // jamais le chevaucher, peu importe le jour d’exécution.
+        $this->ecrireCacheEdt('iut-info', [$lundiProchaine]);
+        $this->ecrireCacheEdt('iut-gea', [$aujourdhui]);
+
+        $r = $this->request('GET', '/internal/assistant/edt_iut');
+        $c = $this->corps($r);
+
+        self::assertSame(200, (int) ($r['code'] ?? 0));
+        self::assertSame('aujourdhui', $c['semaine'] ?? '', 'Défaut sans paramètre : aujourdhui.');
+        self::assertSame($aujourdhui, $c['jour'] ?? '');
+        self::assertSame(1, (int) ($c['creneaux'] ?? -1), 'Le cours GEA du jour compte.');
+        self::assertSame(1, (int) ($c['jours_actifs'] ?? -1));
+        self::assertTrue((bool) ($c['avec_cours'] ?? false));
+        self::assertSame('Jour de cours', $c['label'] ?? '');
+        self::assertSame($lundiProchaine, $c['prochain_jour_cours'] ?? '');
+        self::assertArrayNotHasKey('lundi', $c, 'Vue jour : pas de champ semaine.');
     }
 
     // -----------------------------------------------------------------

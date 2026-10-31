@@ -79,6 +79,7 @@ require_once __DIR__ . '/../app/config/database.php';
 
 use App\Core\Assistant\PublicAssistant;
 use App\Core\Compta\CatalogueQc;
+use App\Core\Compta\Edt\CalendarContext;
 use App\Models\ProductCategory;
 
 /** Prompt analyste qualité (mission VEILLE LLM CATALOGUE — texte imposé). */
@@ -197,9 +198,18 @@ if (!$dryRun) {
     $purgees = ProductCategory::purgeAutoCreatedEmpty('system:catalogue_watchdog');
 }
 
+// ── (d-bis) Contexte calendrier universitaire (corrélation ventes ↔ EDT) ─────
+
+// La veille qualité lit le contexte calendrier chaque matin (mission E3) :
+// semaine morte en cours/prochaine + prochain jour de cours — dérivé des
+// données edt-ulco.fr via CalendarContext (point d'assemblage unique,
+// aucun nom de vacances en dur). Fail-soft : calendrier indisponible →
+// valeurs null, la veille qualité du catalogue reste la référence.
+$contexteCalendrier = contexteCalendrier($maintenant);
+
 // ── (e) Rapport + journal + affichage ────────────────────────────────────────
 
-$rapport = rendreRapport($anomalies, $analyse, $latenceLlmMs, $purgees, $sansLlm, $maintenant);
+$rapport = rendreRapport($anomalies, $analyse, $latenceLlmMs, $purgees, $sansLlm, $maintenant, $contexteCalendrier);
 
 if ($dryRun) {
     echo $prefixe . '--dry-run : collecte terminée, ' . $nbTotal . ' anomalie(s), AUCUNE écriture (rapport, journal et purge neutralisés).' . PHP_EOL;
@@ -229,6 +239,10 @@ $ligneJournal = json_encode(
         'purgees'        => $purgees,
         'latence_llm_ms' => $latenceLlmMs,
         'statut'         => $statut,
+        // Additif E3 : contexte calendrier du jour (semaines mortes +
+        // prochain jour de cours) — corrélation ventes ↔ vacances visible
+        // chaque matin, null si l'EDT est indisponible.
+        'contexte_calendrier' => $contexteCalendrier,
     ],
     JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
 ) . PHP_EOL;
@@ -250,10 +264,42 @@ exit(0);
 // ── Fonctions locales ────────────────────────────────────────────────────────
 
 /**
- * Rendu Markdown du rapport complet : résumé, analyse LLM éventuelle,
- * puis anomalies détaillées type par type (données brutes compactes).
+ * Contexte calendrier universitaire du jour (mission E3 — corrélation
+ * ventes ↔ calendrier dans la veille quotidienne) : ligne factuelle de
+ * la semaine EN COURS et de la semaine PROCHAINE via
+ * CalendarContext::ligneRecap (formulation dérivée des données EDT,
+ * aucun nom de vacances en dur) + prochain jour de cours publié
+ * (CalendarContext::pourPeriode). Fail-soft : indisponibilité → null.
  *
- * @param array<string,mixed> $anomalies Sortie de CatalogueQc::anomalies().
+ * @return array{en_cours:?string, prochaine:?string, prochain_jour_cours:?string}
+ */
+function contexteCalendrier(DateTimeImmutable $maintenant): array
+{
+    $vide = ['en_cours' => null, 'prochaine' => null, 'prochain_jour_cours' => null];
+    try {
+        $journee = CalendarContext::pourPeriode(
+            $maintenant->format('Y-m-d'),
+            $maintenant->format('Y-m-d'),
+            $maintenant
+        );
+
+        return [
+            'en_cours'            => CalendarContext::ligneRecap($maintenant),
+            'prochaine'           => CalendarContext::ligneRecap($maintenant->modify('monday next week')),
+            'prochain_jour_cours' => $journee['journee']['prochain_cours_fr'] ?? null,
+        ];
+    } catch (Throwable) {
+        return $vide;
+    }
+}
+
+/**
+ * Rendu Markdown du rapport complet : résumé, contexte calendrier,
+ * analyse LLM éventuelle, puis anomalies détaillées type par type
+ * (données brutes compactes).
+ *
+ * @param array<string,mixed>  $anomalies           Sortie de CatalogueQc::anomalies().
+ * @param array{en_cours:?string, prochaine:?string, prochain_jour_cours:?string} $contexteCalendrier
  */
 function rendreRapport(
     array $anomalies,
@@ -261,7 +307,8 @@ function rendreRapport(
     ?int $latenceLlmMs,
     int $purgees,
     bool $sansLlm,
-    DateTimeImmutable $maintenant
+    DateTimeImmutable $maintenant,
+    array $contexteCalendrier
 ): string {
     $totaux = is_array($anomalies['totaux'] ?? null) ? $anomalies['totaux'] : [];
 
@@ -277,6 +324,16 @@ function rendreRapport(
         $lignes[] = '- ' . $libelle . ' : **' . (int) ($totaux[$type] ?? 0) . '**';
     }
     $lignes[] = '- catégories vides purgées (auto-créées, audit `category.purge`) : **' . $purgees . '**';
+
+    // Mission E3 — contexte calendrier universitaire : la corrélation
+    // ventes ↔ vacances devient visible chaque matin (une baisse de CA
+    // pendant une semaine morte s'explique, ce n'est pas une anomalie).
+    $lignes[] = '';
+    $lignes[] = '## Contexte calendrier universitaire (EDT ULCO — edt-ulco.fr)';
+    $lignes[] = '';
+    $lignes[] = '- Semaine en cours : ' . ($contexteCalendrier['en_cours'] ?? 'cours prévus (aucune semaine morte signalée)');
+    $lignes[] = '- Semaine prochaine : ' . ($contexteCalendrier['prochaine'] ?? 'cours prévus (aucune semaine morte signalée)');
+    $lignes[] = '- Prochain jour de cours : ' . ($contexteCalendrier['prochain_jour_cours'] ?? 'inconnu (données EDT indisponibles ou hors horizon publié)');
 
     if (!$sansLlm) {
         $lignes[] = '';
