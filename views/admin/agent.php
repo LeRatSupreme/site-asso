@@ -17,6 +17,7 @@ declare(strict_types=1);
  * @var int                       $nbGroupes    Questions distinctes totales.
  * @var int                       $totalLignes  Lignes du journal agrégées.
  * @var bool                      $journalPresent
+ * @var int                       $nb_preparables Questions du journal préparables (toutes, hors limite d'affichage).
  * @var list<array<string,mixed>> $preparees    Questions préparées.
  * @var array<string,string>      $categories
  */
@@ -30,7 +31,16 @@ declare(strict_types=1);
 </div>
 
 <section class="card surface glass" id="questions-posees">
-    <h2 class="card-title">Questions posées (journal)</h2>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:0.6rem;flex-wrap:wrap;">
+        <h2 class="card-title">Questions posées (journal)</h2>
+        <?php $nbPreparables = (int) ($nb_preparables ?? 0); ?>
+        <form method="post" action="<?= e(url('/admin/agent/prepare-all')) ?>" class="agent-inline">
+            <?= csrf_field() ?>
+            <button type="submit" class="btn btn-primary btn-sm"<?= $nbPreparables === 0 ? ' disabled title="Aucune question préparable dans le journal"' : '' ?>>
+                Tout préparer<?= $nbPreparables > 0 ? ' (' . e((string) $nbPreparables) . ')' : '' ?>
+            </button>
+        </form>
+    </div>
     <?php if (!($journalPresent ?? false)): ?>
         <p class="muted">Journal introuvable : aucune question enregistrée pour l'instant.</p>
     <?php else: ?>
