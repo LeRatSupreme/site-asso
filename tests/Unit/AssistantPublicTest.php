@@ -252,25 +252,40 @@ final class AssistantPublicTest extends TestCase
         $s->traiter('Météo à Calais demain ?', null, '1.2.3.4'); // 503 (hors FAQ, LLM down)
 
         $lignes = array_values(array_filter(explode("\n", (string) @file_get_contents($path))));
-        self::assertCount(3, $lignes);
+        // LOG-02 (mission 31/10) : la voie LLM écrit une entrée « start »
+        // AVANT l'appel (un process tué laisse au moins cette trace) puis
+        // l'entrée finale (même id, phase=fin) → 4 lignes pour 3 requêtes.
+        self::assertCount(4, $lignes);
 
         $premiere = json_decode($lignes[0], true);
         self::assertSame(400, $premiere['status']);
         self::assertSame('', $premiere['reply']);
         self::assertFalse($premiere['faq']);
+        self::assertSame('llm', $premiere['mode']); // rejet AVANT la FAQ : voie llm
 
         $seconde = json_decode($lignes[1], true);
         self::assertSame(200, $seconde['status']);
         self::assertSame('Bonjour', $seconde['question']);
         self::assertSame(self::reponseFaqPour('bonjour'), $seconde['reply']);
         self::assertTrue($seconde['faq']); // ligne journal avec faq:true
+        self::assertSame('fastpath', $seconde['mode']); // KPI part fastpath greppable
+        self::assertFalse($seconde['tronque']);
         self::assertMatchesRegularExpression('/^[0-9a-f]{16}$/', $seconde['ip_hash']);
         self::assertNotSame('', $seconde['ts']);
         self::assertIsInt($seconde['latency_ms']);
 
-        $troisieme = json_decode($lignes[2], true);
+        $start = json_decode($lignes[2], true);
+        self::assertSame('start', $start['phase']);
+        self::assertSame('llm', $start['mode']);
+        self::assertSame('Météo à Calais demain ?', $start['question']);
+        self::assertNotSame('', $start['id']);
+
+        $troisieme = json_decode($lignes[3], true);
         self::assertSame(503, $troisieme['status']);
         self::assertFalse($troisieme['faq']);
+        self::assertSame('llm', $troisieme['mode']);
+        self::assertSame('fin', $troisieme['phase']);
+        self::assertSame($start['id'], $troisieme['id']); // recollée par id
     }
 
     public function test_journal_champ_origin_vps_ou_humain(): void
@@ -278,23 +293,27 @@ final class AssistantPublicTest extends TestCase
         // Selfreview 06h : les requêtes émises DEPUIS le VPS comptaient
         // pour du trafic étudiant (26/58 questions). Chaque ligne du
         // journal porte désormais origin « vps » si l'IP client est
-        // exactement l'IP publique du VPS (comparaison string stricte),
-        // « humain » sinon (champ additif, le front ignore les champs
-        // inconnus, ip_hash reste).
+        // l'IP publique du VPS OU une boucle locale (127.0.0.1/::1 —
+        // hairpin NAT cassé : les tests via --resolve arrivent en
+        // 127.0.0.1, selfreview 31/10 02h faiblesse n°1), « humain »
+        // sinon (champ additif, le front ignore les champs inconnus).
         $path = $this->tmp . '/assistant_public.jsonl';
         $s = $this->service();
 
         $s->traiter('Bonjour', null, '51.254.129.80'); // IP publique du VPS
         $s->traiter('Bonjour', null, '1.2.3.4');       // IP visiteur
+        $s->traiter('Bonjour', null, '127.0.0.1');     // boucle locale (sondes --resolve)
 
         $lignes = array_values(array_filter(explode("\n", (string) @file_get_contents($path))));
-        self::assertCount(2, $lignes);
+        self::assertCount(3, $lignes);
 
-        $vps    = json_decode($lignes[0], true);
-        $humain = json_decode($lignes[1], true);
+        $vps     = json_decode($lignes[0], true);
+        $humain  = json_decode($lignes[1], true);
+        $reboucl = json_decode($lignes[2], true);
 
         self::assertSame('vps', $vps['origin']);
         self::assertSame('humain', $humain['origin']);
+        self::assertSame('vps', $reboucl['origin'], 'boucle locale = trafic du serveur (origin vps)');
 
         // ip_hash inchangé : présent, 16 hex, jamais l'IP en clair.
         self::assertMatchesRegularExpression('/^[0-9a-f]{16}$/', $vps['ip_hash']);
@@ -494,10 +513,13 @@ final class AssistantPublicTest extends TestCase
         self::assertSame(503, $r['http']);
         self::assertSame("L'assistant est indisponible, réessaie dans un instant.", $r['error']);
 
-        // Journal : la ligne porte bien faq:false (génération LLM).
+        // Journal : entrée « start » AVANT l'appel (LOG-02) puis la ligne
+        // de verdict, toutes deux voie LLM (faq:false, mode:llm).
         $lignes = array_values(array_filter(explode("\n", (string) @file_get_contents($path))));
-        self::assertCount(1, $lignes);
-        self::assertFalse(json_decode($lignes[0], true)['faq']);
+        self::assertCount(2, $lignes);
+        self::assertSame('start', json_decode($lignes[0], true)['phase']);
+        self::assertFalse(json_decode($lignes[1], true)['faq']);
+        self::assertSame('llm', json_decode($lignes[1], true)['mode']);
     }
 
     public function test_faq_reponse_instantanee_200_sans_llm_ni_semaphore(): void
