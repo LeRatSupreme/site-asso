@@ -334,6 +334,7 @@ function aeic_register_routes(Router $router): void
     // Même garde que la page Assistant ; CSRF central (POST non kiosque).
     $router->get('/admin/agent', [AdminAgentController::class, 'index']);
     $router->post('/admin/agent/prepare', [AdminAgentController::class, 'prepare']);
+    $router->post('/admin/agent/prepare-all', [AdminAgentController::class, 'prepareAll']);
     $router->post('/admin/agent/toggle', [AdminAgentController::class, 'toggle']);
     $router->post('/admin/agent/deplacer', [AdminAgentController::class, 'deplacer']);
     $router->post('/admin/agent/supprimer', [AdminAgentController::class, 'supprimer']);

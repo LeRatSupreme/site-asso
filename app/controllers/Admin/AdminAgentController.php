@@ -17,6 +17,10 @@ use App\Models\AssistantQuestionPreparee;
  *   POST /admin/agent/prepare      → capte le routage du dernier succès
  *                                    (filtrage anti-doublon + auto-
  *                                    génération du gabarit de réponse)
+ *   POST /admin/agent/prepare-all  → « Tout préparer » : la MÊME
+ *                                    logique appliquée à tous les
+ *                                    groupes préparables du journal
+ *                                    (aucun contournement du filtrage)
  *   POST /admin/agent/toggle       → active/désactive une question
  *   POST /admin/agent/deplacer     → réordonne ( Monter / Descendre )
  *   POST /admin/agent/supprimer    → supprime une question préparée
@@ -43,14 +47,19 @@ use App\Models\AssistantQuestionPreparee;
  */
 final class AdminAgentController extends AdminBaseController
 {
-    /** Chemin du journal des sessions du pont (lecture seule). */
-    private const JOURNAL = AEIC_ROOT . '/logs/assistant.jsonl';
-
     /** Cap de lignes lues (agrégat d'une page : le journal peut croître). */
     private const JOURNAL_LIGNES_MAX = 5000;
 
     /** Groupes affichés (triés par fréquence) : garde la page lisible. */
     private const GROUPES_MAX = 60;
+
+    /** Motifs d'échec internes de preparerGroupe() — les autres viennent
+     * du verdict AgentQuestions::preparable() (déjà compacts). */
+    private const MOTIF_SANS_ROUTAGE = 'aucun succès routé au journal';
+    private const MOTIF_ENREGISTREMENT = 'enregistrement impossible (détail journalisé)';
+
+    /** Motifs d'ignorés distincts cités dans le flash du batch (~5 max). */
+    private const MOTIFS_IGNOREES_MAX = 5;
 
     /** Libellés français des catégories. */
     private const CATEGORIES = [
@@ -73,6 +82,15 @@ final class AdminAgentController extends AdminBaseController
         $groupes = $this->agreger();
         $totalLignes = array_sum(array_column($groupes, 'frequence'));
 
+        // MÊME verdict que la boucle « Tout préparer » : celui attaché
+        // par agreger() (verdict preparable() par groupe) — jamais un
+        // recalcul divergent ; le contrôleur reste l'unique point
+        // d'assemblage de cette donnée.
+        $nbPreparables = count(array_filter(
+            $groupes,
+            static fn (array $g): bool => $g['preparable']['ok'] === true
+        ));
+
         $preparees = AssistantQuestionPreparee::toutes();
         foreach ($preparees as $i => $p) {
             $routage = AgentQuestions::routageValide((string) ($p['routage_json'] ?? ''));
@@ -85,8 +103,9 @@ final class AdminAgentController extends AdminBaseController
             'user'          => \App\Core\Auth::user(),
             'groupes'       => array_slice($groupes, 0, self::GROUPES_MAX),
             'nbGroupes'     => count($groupes),
+            'nb_preparables'=> $nbPreparables,
             'totalLignes'   => $totalLignes,
-            'journalPresent'=> is_file(self::JOURNAL),
+            'journalPresent'=> is_file(self::journalChemin()),
             'preparees'     => $preparees,
             'categories'    => self::CATEGORIES,
         ]);
@@ -115,54 +134,10 @@ final class AdminAgentController extends AdminBaseController
             if ($groupe['norm'] !== $norm) {
                 continue;
             }
-            if ($groupe['routage'] === null) {
-                $this->setFlash('error', 'Aucun succès routé au journal pour cette question (aucun appel d\'outil en HTTP 200) — repose-la d\'abord à l\'assistant.');
-                redirect(url('/admin/agent'));
 
-                return;
-            }
-
-            // Filtrage steer V1+ n°3 : jamais préparable sans condition
-            // (répétée côté serveur — le bouton est déjà désactivé en vue).
-            $verdict = AgentQuestions::preparable(
-                $groupe['frequence'],
-                $groupe['categorie_outil'],
-                $groupe['injection'],
-                $groupe['routage'] !== null
-            );
-            if (!$verdict['ok']) {
-                $this->setFlash('error', 'Non préparable : ' . $verdict['motif'] . '.');
-                redirect(url('/admin/agent'));
-
-                return;
-            }
-
-            // AUTO-GÉNÉRATION du gabarit (steer V1+ n°1) : templatysation
-            // de la dernière réponse ok sur le résultat d'outil qui l'a
-            // nourrie ; rien de templatysable → gabarit NULL (formateur
-            // générique du fast-path).
-            $gabarit = null;
-            $mappingJson = null;
-            $premiers = (array) ($groupe['derniers_resultats'] ?? []);
-            if ($groupe['derniere_reponse'] !== '' && $premiers !== []) {
-                $genere = \App\Core\Assistant\Gabarits::generer($groupe['derniere_reponse'], $premiers[0]);
-                if ($genere !== null) {
-                    $gabarit = $genere['gabarit'];
-                    $mappingJson = (string) json_encode($genere['mapping'], JSON_UNESCAPED_UNICODE);
-                }
-            }
-
-            try {
-                AssistantQuestionPreparee::upsertDepuisJournal(
-                    $norm,
-                    mb_substr($question, 0, 500),
-                    (string) json_encode($groupe['routage'], JSON_UNESCAPED_UNICODE),
-                    $gabarit,
-                    $mappingJson
-                );
-            } catch (\Throwable $e) {
-                Logger::error('agent: préparation impossible', ['question' => $norm, 'msg' => $e->getMessage()]);
-                $this->setFlash('error', 'Préparation impossible (détail journalisé).');
+            $motif = $this->preparerGroupe($groupe, $question);
+            if ($motif !== null) {
+                $this->setFlash('error', $this->messageEchecPreparation($motif));
                 redirect(url('/admin/agent'));
 
                 return;
@@ -177,6 +152,119 @@ final class AdminAgentController extends AdminBaseController
 
         $this->setFlash('error', 'Question introuvable dans le journal.');
         redirect(url('/admin/agent'));
+    }
+
+    /**
+     * « Tout préparer » : applique à TOUS les groupes de l'agrégat la
+     * même logique que prepare() (via preparerGroupe — verdict
+     * preparable() recontrôlé pour CHAQUE groupe, aucun contournement
+     * du filtrage : non préparable ou sans routage → ignoré) ; flash
+     * résumé + UN SEUL audit pour tout le batch.
+     */
+    public function prepareAll(): void
+    {
+        $this->guardSystemOrPage('inventory');
+
+        $preparees = 0;
+        $ignorees = 0;
+        $motifs = [];
+        foreach ($this->agreger() as $groupe) {
+            $motif = $this->preparerGroupe($groupe, (string) $groupe['affichee']);
+            if ($motif === null) {
+                $preparees++;
+            } else {
+                $ignorees++;
+                if (!in_array($motif, $motifs, true)) {
+                    $motifs[] = $motif;
+                }
+            }
+        }
+
+        $this->audit('agent.prepare_all', 'assistant_question', 'batch', ['preparees' => $preparees, 'ignorees' => $ignorees]);
+
+        $resume = $preparees . ' question' . ($preparees > 1 ? 's' : '') . ' préparée' . ($preparees > 1 ? 's' : '') . '.';
+        if ($ignorees > 0) {
+            $exemples = array_slice($motifs, 0, self::MOTIFS_IGNOREES_MAX);
+            $resume .= ' ' . $ignorees . ' ignorée' . ($ignorees > 1 ? 's' : '') . ' : '
+                . implode(' ; ', $exemples)
+                . (count($motifs) > count($exemples) ? '…' : '') . '.';
+        }
+        $this->setFlash($preparees > 0 ? 'success' : 'warning', $resume);
+        redirect(url('/admin/agent'));
+    }
+
+    // -----------------------------------------------------------------
+    //  Préparation partagée (unitaire + batch)
+    // -----------------------------------------------------------------
+
+    /**
+     * Cœur partagé de « Préparer » et « Tout préparer » : recontrôle
+     * côté serveur le verdict preparable(), auto-génère le gabarit de
+     * réponse puis enregistre (upsert) la question préparée.
+     *
+     * @param array<string,mixed> $groupe   Groupe issu de agreger()
+     * @param string              $question Libellé enregistré (affichage)
+     *
+     * @return string|null Motif d'échec (compact), null si préparée
+     */
+    private function preparerGroupe(array $groupe, string $question): ?string
+    {
+        if ($groupe['routage'] === null) {
+            return self::MOTIF_SANS_ROUTAGE;
+        }
+
+        // Filtrage steer V1+ n°3 : jamais préparable sans condition
+        // (répétée côté serveur — le bouton est déjà désactivé en vue).
+        $verdict = AgentQuestions::preparable(
+            $groupe['frequence'],
+            $groupe['categorie_outil'],
+            $groupe['injection'],
+            $groupe['routage'] !== null
+        );
+        if (!$verdict['ok']) {
+            return $verdict['motif'];
+        }
+
+        // AUTO-GÉNÉRATION du gabarit (steer V1+ n°1) : templatysation
+        // de la dernière réponse ok sur le résultat d'outil qui l'a
+        // nourrie ; rien de templatysable → gabarit NULL (formateur
+        // générique du fast-path).
+        $gabarit = null;
+        $mappingJson = null;
+        $premiers = (array) ($groupe['derniers_resultats'] ?? []);
+        if ($groupe['derniere_reponse'] !== '' && $premiers !== []) {
+            $genere = \App\Core\Assistant\Gabarits::generer($groupe['derniere_reponse'], $premiers[0]);
+            if ($genere !== null) {
+                $gabarit = $genere['gabarit'];
+                $mappingJson = (string) json_encode($genere['mapping'], JSON_UNESCAPED_UNICODE);
+            }
+        }
+
+        try {
+            AssistantQuestionPreparee::upsertDepuisJournal(
+                (string) $groupe['norm'],
+                mb_substr($question, 0, 500),
+                (string) json_encode($groupe['routage'], JSON_UNESCAPED_UNICODE),
+                $gabarit,
+                $mappingJson
+            );
+        } catch (\Throwable $e) {
+            Logger::error('agent: préparation impossible', ['question' => $groupe['norm'], 'msg' => $e->getMessage()]);
+
+            return self::MOTIF_ENREGISTREMENT;
+        }
+
+        return null;
+    }
+
+    /** Message flash exact du « Préparer » unitaire pour un motif d'échec. */
+    private function messageEchecPreparation(string $motif): string
+    {
+        return match ($motif) {
+            self::MOTIF_SANS_ROUTAGE   => 'Aucun succès routé au journal pour cette question (aucun appel d\'outil en HTTP 200) — repose-la d\'abord à l\'assistant.',
+            self::MOTIF_ENREGISTREMENT => 'Préparation impossible (détail journalisé).',
+            default                    => 'Non préparable : ' . $motif . '.',
+        };
     }
 
     /** Active/désactive une question préparée (chips + fast-path). */
@@ -441,6 +529,22 @@ final class AdminAgentController extends AdminBaseController
     }
 
     /**
+     * Chemin du journal des sessions du pont (lecture seule) : même
+     * résolution que FastPath::journaliser() — AEIC_ASSISTANT_JOURNAL
+     * (non vide) l'emporte, sinon logs/assistant.jsonl (défaut
+     * strictement inchangé sans env).
+     */
+    private static function journalChemin(): string
+    {
+        $chemin = trim((string) getenv('AEIC_ASSISTANT_JOURNAL'));
+        if ($chemin === '') {
+            $chemin = AEIC_ROOT . '/logs/assistant.jsonl';
+        }
+
+        return $chemin;
+    }
+
+    /**
      * Lit le journal (JSONL), en tolérant les lignes invalides ; borné
      * aux JOURNAL_LIGNES_MAX dernières lignes.
      *
@@ -448,10 +552,10 @@ final class AdminAgentController extends AdminBaseController
      */
     private function lireJournal(): array
     {
-        if (!is_file(self::JOURNAL)) {
+        if (!is_file(self::journalChemin())) {
             return [];
         }
-        $lignes = file(self::JOURNAL, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+        $lignes = file(self::journalChemin(), FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
         if (!is_array($lignes)) {
             return [];
         }
