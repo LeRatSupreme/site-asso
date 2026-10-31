@@ -1849,6 +1849,43 @@ def _source(nom: str, arguments: dict) -> str:
 # ---------------------------------------------------------------------------
 
 
+# Détection légère d'injection de prompt (INJECT-08, mission 31/10 soir).
+# Mêmes familles de motifs FR/EN que PublicAssistant::suspectInjection
+# (PHP) : ignorer les consignes/instructions, révéler le prompt système,
+# instructions internes, extraction de données personnelles (DPD).
+# Aucun blocage (la tenue est solide) : marquage suspect_injection au
+# journal uniquement.
+_MOTIFS_SUSPECT_INJECTION: tuple[re.Pattern[str], ...] = (
+    re.compile(
+        r"\b(?:ignore|ignorer|oublie|disregard|forget)\b.{0,40}?"
+        r"\b(?:consignes?|instructions?|rules)\b"
+    ),
+    re.compile(
+        r"\b(?:revele|montre|donne|affiche|reveal|show|print|paste)\b.{0,30}?\bprompt\b"
+    ),
+    re.compile(r"\b(?:system|developer|dev) prompt\b"),
+    re.compile(r"\b(?:instructions?|consignes?)\s+internes?\b"),
+    re.compile(r"\b(?:internal|secret)\s+instructions?\b"),
+    re.compile(
+        r"\b(?:revele|donne|montre|liste|affiche|exporte)\b.{0,40}?\bdonnees personnelles\b"
+    ),
+)
+
+
+def _suspect_injection(question: str) -> bool:
+    """Vrai si la question matche un motif d'injection de prompt.
+
+    Même normalisation que le côté PHP : minuscule sans accents, tout ce
+    qui n'est pas lettre/chiffre ramené à un espace (les deux détecteurs
+    doivent marquer les mêmes questions — un script KPI couvre les deux
+    journaux).
+    """
+    q = re.sub(r"[^a-z0-9]+", " ", _sans_accents(question)).strip()
+    if not q:
+        return False
+    return any(m.search(q) for m in _MOTIFS_SUSPECT_INJECTION)
+
+
 def _horodatage_journal() -> str:
     """Horodatage ISO Europe/Paris (seconde) — champ « horodatage » et
     alias « ts » (unification admin/public, bonus LOG-02)."""
@@ -1882,6 +1919,7 @@ def journaliser_debut(session: Session) -> None:
             "horodatage": _horodatage_journal(),
             "question": session.question,
             "mode": "llm",
+            **({"suspect_injection": True} if _suspect_injection(session.question) else {}),
         }
     )
 
@@ -1914,6 +1952,10 @@ def journaliser(session: Session) -> None:
     if session.id_journal:
         entree["id"] = session.id_journal
         entree["phase"] = "fin"
+    if _suspect_injection(session.question):
+        # INJECT-08 : champ additif UNIQUEMENT si suspect (l'absence du
+        # champ = false), même convention que les journaux PHP.
+        entree["suspect_injection"] = True
     entree["ts"] = entree["horodatage"]
     entree["reply"] = session.reponse
     _ecrire_entree_journal(entree)

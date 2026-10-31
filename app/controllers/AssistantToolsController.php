@@ -4,11 +4,10 @@ declare(strict_types=1);
 
 namespace App\Controllers;
 
+use App\Core\Assistant\AssistantOutils;
 use App\Core\Compta\CatalogueQc;
 use App\Core\Compta\ComptaCalc;
 use App\Core\Compta\Dashboard\Data;
-use App\Core\Compta\Edt\CalendarContext;
-use App\Core\Compta\Edt\EdtCalendar;
 use App\Core\Compta\Kiosk;
 use App\Core\Compta\StockPublic;
 use App\Core\Compta\T1\T1AutoFusion;
@@ -61,28 +60,16 @@ use App\Models\Sale;
 final class AssistantToolsController extends Controller
 {
     private const TOOL_VENTES   = 'ventes_periode';
-    private const TOOL_STOCK    = 'stock_produit';
+    private const TOOL_STOCK    = AssistantOutils::OUTIL_STOCK;
     private const TOOL_REAPPRO  = 'produits_a_commander';
     private const TOOL_MARGE    = 'marge_produit';
     private const TOOL_DOUBLONS = 'doublons_en_attente';
     private const TOOL_CATALOGUE = 'catalogue_anomalies';
-    private const TOOL_EDT      = 'edt_iut';
+    private const TOOL_EDT      = AssistantOutils::OUTIL_EDT;
 
-    /** Départements IUT demandables (valeur d'URL → ids Calais d'EdtCalendar,
-     * point d'assemblage unique de l'EDT — jamais de recalcul ici). */
-    private const EDT_DEPTS = [
-        'tous' => ['iut-info', 'iut-gea', 'iut-geii'],
-        'info' => ['iut-info'],
-        'gea'  => ['iut-gea'],
-        'geii' => ['iut-geii'],
-    ];
-
-    /** Noms courts affichés dans la réponse (même vocabulaire que le
-     * paramètre « dept » : info/gea/geii). */
-    private const EDT_DEPTS_COURTS = ['iut-info' => 'info', 'iut-gea' => 'gea', 'iut-geii' => 'geii'];
-
-    /** Vues acceptées du paramètre « semaine ». */
-    private const EDT_SEMAINES = ['aujourdhui' => true, 'courante' => true, 'prochaine' => true];
+    /** Départements/vues edt_iut, seuil de fraîcheur comptage et garde
+     *  produit : UN seul point d'assemblage, partagé avec les gabarits
+     *  publics (AssistantOutils — EDT-PUB-13/STOCK-PUB-14, 31/10 soir). */
 
     /** Rate limit : 20 requêtes par minute et par IP. */
     private const RATE_MAX     = 20;
@@ -92,16 +79,6 @@ final class AssistantToolsController extends Controller
      *  chaque entrée paie ~28 ms de préfill CPU ; le modèle n'énumère de
      *  toute façon que ~5 produits dans ses réponses). */
     private const TOP_LIMITE = 5;
-
-    /** Candidats proposés quand un libellé produit est introuvable. */
-    private const CANDIDATS_LIMITE = 5;
-
-    /** Seuil de fraîcheur d'un comptage (jours calendaires, Paris) :
-     * au-delà, le stock théorique (dernier comptage + mouvements)
-     * dérive et doit être signalé comme peu fiable (mission T2 : le
-     * cas réel « Monster verte » re-questions ×5 avec un comptage de
-     * 44 j — l'utilisateur doit savoir que le chiffre est vieux). */
-    private const FRAICHEUR_SEUIL_JOURS = 30;
 
     /** Entrées de quarantaine détaillées par section (cap compact). */
     private const QUARANTAINE_LIMITE = 10;
@@ -159,10 +136,10 @@ final class AssistantToolsController extends Controller
         $debut = trim((string) ($_GET['debut'] ?? ''));
         $fin   = trim((string) ($_GET['fin'] ?? ''));
 
-        if (!self::jourIsoValide($debut)) {
+        if (!AssistantOutils::jourIsoValide($debut)) {
             $this->repondreErreur(400, 'Paramètre « debut » invalide (date ISO AAAA-MM-JJ attendue).');
         }
-        if (!self::jourIsoValide($fin)) {
+        if (!AssistantOutils::jourIsoValide($fin)) {
             $this->repondreErreur(400, 'Paramètre « fin » invalide (date ISO AAAA-MM-JJ attendue).');
         }
         if ($debut > $fin) {
@@ -214,40 +191,16 @@ final class AssistantToolsController extends Controller
             $this->repondreErreur(400, 'Paramètre « nom » invalide (1 à 255 caractères attendu).');
         }
 
+        // Assemblage partagé AssistantOutils (gabarits publics inclus —
+        // STOCK-PUB-14) : structure JSON fixe, résolution StockBook +
+        // garde de fraîcheur du comptage.
         try {
-            $livre  = AnalyticsForecastData::stockBook();
-            $trouve = $livre->resolveLoose($nom);
-            $candidats = $trouve === null ? $livre->searchCandidates($nom, self::CANDIDATS_LIMITE) : [];
+            $reponse = AssistantOutils::stockProduit($nom);
         } catch (\Throwable $e) {
             $this->echecInterne(self::TOOL_STOCK, $e);
         }
 
-        // Candidats en champs français stables (cle + stock), tri du résolveur.
-        $candidatsFr = array_map(
-            static fn (array $c): array => ['cle' => $c['key'], 'stock' => $c['stock']],
-            $candidats
-        );
-
-        // Fraîcheur du comptage (champs STRICTEMENT ADDITIFS — contrat T4) :
-        // âge en jours du dernier comptage + avertissement lisible quand il
-        // dépasse le seuil (vide sinon), pour le fast-path et le LLM.
-        $fraicheur = self::fraicheurJours(is_string($trouve['at'] ?? null) ? $trouve['at'] : null);
-        $avertissement = ($fraicheur !== null && $fraicheur > self::FRAICHEUR_SEUIL_JOURS)
-            ? 'comptage ancien (' . $fraicheur . ' j), fiabilité limitée'
-            : '';
-
-        $this->json([
-            'outil'            => self::TOOL_STOCK,
-            'nom_demande'      => $nom,
-            'trouve'           => $trouve !== null,
-            'cle_canonique'    => $trouve['key'] ?? null,
-            'stock'            => $trouve['stock'] ?? null,
-            'dernier_comptage' => $trouve['at'] ?? null,
-            'fraicheur_jours'  => $fraicheur,
-            'avertissement'    => $avertissement,
-            'resolution'       => $trouve['via'] ?? null,
-            'candidats'        => $candidatsFr,
-        ]);
+        $this->json($reponse);
     }
 
     /**
@@ -331,10 +284,10 @@ final class AssistantToolsController extends Controller
         if ($nom === '' || mb_strlen($nom) > 255) {
             $this->repondreErreur(400, 'Paramètre « nom » invalide (1 à 255 caractères attendu).');
         }
-        if (!self::jourIsoValide($debut)) {
+        if (!AssistantOutils::jourIsoValide($debut)) {
             $this->repondreErreur(400, 'Paramètre « debut » invalide (date ISO AAAA-MM-JJ attendue).');
         }
-        if (!self::jourIsoValide($fin)) {
+        if (!AssistantOutils::jourIsoValide($fin)) {
             $this->repondreErreur(400, 'Paramètre « fin » invalide (date ISO AAAA-MM-JJ attendue).');
         }
         if ($debut > $fin) {
@@ -384,7 +337,7 @@ final class AssistantToolsController extends Controller
             // de stock (même comportement que stock_produit), jamais deviné.
             $candidats = array_map(
                 static fn (array $c): array => ['cle' => $c['key'], 'stock' => $c['stock']],
-                $resolu === null ? $livre->searchCandidates($nom, self::CANDIDATS_LIMITE) : []
+                $resolu === null ? $livre->searchCandidates($nom, AssistantOutils::CANDIDATS_LIMITE) : []
             );
             $this->json([
                 'outil'        => self::TOOL_MARGE,
@@ -555,159 +508,28 @@ final class AssistantToolsController extends Controller
         $dept    = trim((string) ($_GET['dept'] ?? 'tous'));
         $semaine = trim((string) ($_GET['semaine'] ?? 'aujourdhui'));
 
-        $deptsIut = self::EDT_DEPTS[$dept] ?? null;
+        $deptsIut = AssistantOutils::EDT_DEPTS[$dept] ?? null;
         if ($deptsIut === null) {
             $this->repondreErreur(400, 'Paramètre « dept » invalide (info, gea, geii ou tous attendu).');
         }
-        if (!isset(self::EDT_SEMAINES[$semaine])) {
+        if (!isset(AssistantOutils::EDT_SEMAINES[$semaine])) {
             $this->repondreErreur(400, 'Paramètre « semaine » invalide (aujourdhui, courante ou prochaine attendu).');
         }
 
-        $now = new \DateTimeImmutable('now', new \DateTimeZone('Europe/Paris'));
-
+        // Assemblage partagé AssistantOutils (gabarit public EDT-PUB-13
+        // inclus) : structure JSON fixe, données EdtCalendar via les
+        // injecteurs CalendarContext.
         try {
-            // Injecteurs partagés CalendarContext : production = défauts
-            // EdtCalendar (curl + cache/edt), test = calendrier vide hors-ligne.
-            [$fetch, $dir] = CalendarContext::injecteurs(null, null);
-            $plage = EdtCalendar::plagePubliee($fetch, $dir);
-            if ($plage['fin'] === null) {
-                // Aucune donnée EDT publiée nulle part : refus honnête,
-                // jamais de « semaine sans cours » inventée sur du vide.
-                Logger::warning('assistant: edt_iut sans donnees (calendrier EDT vide)');
+            $reponse = AssistantOutils::edtIut($dept, $semaine);
+            if ($reponse === null) {
                 $this->repondreErreur(503, 'Données EDT indisponibles.');
             }
-
-            if ($semaine === 'aujourdhui') {
-                $jour   = $now->format('Y-m-d');
-                $infos  = EdtCalendar::jourInfos($jour, $fetch, $dir);
-                $n      = self::edtSommeDept($infos['par_dept'], $deptsIut);
-                $reponse = [
-                    'outil'        => self::TOOL_EDT,
-                    'depts'        => self::edtNomsCourts($dept),
-                    'semaine'      => 'aujourdhui',
-                    'jour'         => $jour,
-                    'creneaux'     => $n,
-                    'jours_actifs' => $n > 0 ? 1 : 0,
-                    'avec_cours'   => $n > 0,
-                    'hors_horizon' => strcmp($jour, (string) $plage['fin']) > 0,
-                    'label'        => $n > 0
-                        ? 'Jour de cours'
-                        : (strcmp($jour, (string) $plage['fin']) > 0
-                            ? 'Au-delà de l\'horizon publié'
-                            : 'Jour sans cours (vacances ?)'),
-                    'stale'        => (bool) $infos['stale'],
-                ];
-            } else {
-                $lundi = $now->modify($semaine === 'courante' ? 'monday this week' : 'monday next week')->format('Y-m-d');
-                $s = EdtCalendar::semaineInfos($lundi, $fetch, $dir);
-
-                if ($dept === 'tous') {
-                    $n      = (int) $s['creneaux_total'];
-                    $actifs = (int) $s['jours_actifs'];
-                } else {
-                    // Vue departement : somme des jours ouvrés via jourInfos
-                    // (mémoïsé par EdtCalendar — une seule lecture du calendrier).
-                    $n = 0;
-                    $actifs = 0;
-                    for ($i = 0; $i < CalendarContext::JOURS_OUVRES_SEMAINE; $i++) {
-                        $d = (new \DateTimeImmutable($lundi))->modify("+{$i} day")->format('Y-m-d');
-                        $c = self::edtSommeDept(EdtCalendar::jourInfos($d, $fetch, $dir)['par_dept'], $deptsIut);
-                        $n += $c;
-                        if ($c > 0) {
-                            $actifs++;
-                        }
-                    }
-                }
-                $reponse = [
-                    'outil'        => self::TOOL_EDT,
-                    'depts'        => self::edtNomsCourts($dept),
-                    'semaine'      => $semaine,
-                    'lundi'        => $lundi,
-                    'vendredi'     => (new \DateTimeImmutable($lundi))->modify('+4 days')->format('Y-m-d'),
-                    'creneaux'     => $n,
-                    'jours_actifs' => $actifs,
-                    'avec_cours'   => $n > 0,
-                    'hors_horizon' => (bool) $s['hors_horizon'],
-                    'label'        => $n > 0
-                        ? 'Semaine de cours'
-                        : ((bool) $s['hors_horizon']
-                            ? 'Au-delà de l\'horizon publié'
-                            : 'Semaine sans cours (vacances ?)'),
-                    'stale'        => (bool) $s['stale'],
-                ];
-            }
-
-            $reponse['prochain_jour_cours'] = self::edtProchainJourCours($now, $deptsIut, $plage['fin'], $fetch, $dir);
-            $reponse['source'] = 'edt-ulco.fr via EdtCalendar (cache 6h)';
-
             $this->json($reponse);
         } catch (\Throwable $e) {
             $this->echecInterne(self::TOOL_EDT, $e);
         }
     }
 
-    /**
-     * Noms courts de la réponse (« tous » → les trois départements).
-     *
-     * @return list<string>
-     */
-    private static function edtNomsCourts(string $dept): array
-    {
-        if ($dept !== 'tous') {
-            return [$dept];
-        }
-
-        return array_values(self::EDT_DEPTS_COURTS);
-    }
-
-    /**
-     * Créneaux des départements demandés dans le tableau par_dept de
-     * EdtCalendar::jourInfos (['tous'] = somme de tous).
-     *
-     * @param array<string,int> $parDept
-     * @param list<string>      $deptsIut
-     */
-    private static function edtSommeDept(array $parDept, array $deptsIut): int
-    {
-        $somme = 0;
-        foreach ($deptsIut as $d) {
-            $somme += (int) ($parDept[$d] ?? 0);
-        }
-
-        return $somme;
-    }
-
-    /**
-     * Premier jour de cours STRICTEMENT postérieur à aujourd'hui pour les
-     * départements demandés, borné par l'horizon publié : « tous » réutilise
-     * EdtCalendar::prochainJourCours tel quel ; un sous-ensemble departement
-     * est scanné jour par jour via jourInfos (données déjà en mémoire —
-     * aucune nouvelle lecture du calendrier).
-     *
-     * @param list<string> $deptsIut
-     */
-    private static function edtProchainJourCours(
-        \DateTimeImmutable $now,
-        array $deptsIut,
-        ?string $finPubliee,
-        ?callable $fetch,
-        ?string $dir
-    ): ?string {
-        $aujourdhui = $now->format('Y-m-d');
-        if ($deptsIut === self::EDT_DEPTS['tous']) {
-            return EdtCalendar::prochainJourCours($aujourdhui, $fetch, $dir);
-        }
-        if ($finPubliee === null) {
-            return null;
-        }
-        for ($d = $now->modify('+1 day'); strcmp($d->format('Y-m-d'), $finPubliee) <= 0; $d = $d->modify('+1 day')) {
-            if (self::edtSommeDept(EdtCalendar::jourInfos($d->format('Y-m-d'), $fetch, $dir)['par_dept'], $deptsIut) > 0) {
-                return $d->format('Y-m-d');
-            }
-        }
-
-        return null;
-    }
 
     // -----------------------------------------------------------------
     //  Garde commune : no-store + rate limit + jeton serveur
@@ -737,37 +559,6 @@ final class AssistantToolsController extends Controller
             Logger::warning('assistant: jeton invalide ou absent', ['ip' => client_ip()]);
             $this->repondreErreur(403, 'Accès refusé.');
         }
-    }
-
-    /**
-     * Jour ISO AAAA-MM-JJ strict et réellement valide (checkdate).
-     */
-    private static function jourIsoValide(string $jour): bool
-    {
-        if (preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $jour, $m) !== 1) {
-            return false;
-        }
-
-        return checkdate((int) $m[2], (int) $m[3], (int) $m[1]);
-    }
-
-    /**
-     * Âge en JOURS CALENDAIRES (Paris) du dernier comptage : seule la
-     * partie DATE du timestamp compte (un comptage du 15/09 à 23 h a le
-     * même âge qu'à 8 h — convention « jours de Paris » du reste des
-     * outils). Null si la date est inconnue ou illisible.
-     */
-    private static function fraicheurJours(?string $at): ?int
-    {
-        if ($at === null || !self::jourIsoValide(substr($at, 0, 10))) {
-            return null;
-        }
-
-        $paris = new \DateTimeZone('Europe/Paris');
-        $comptage = new \DateTimeImmutable(substr($at, 0, 10), $paris);
-        $aujourdhui = new \DateTimeImmutable('today', $paris);
-
-        return (int) $aujourdhui->diff($comptage)->days;
     }
 
     /**

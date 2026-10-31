@@ -59,7 +59,10 @@ use App\Models\Setting;
  *    réponses pré-rédigées et générations LLM, le champ additif mode
  *    (« fastpath » | « llm », LOG-02 31/10) rend le KPI « part fastpath »
  *    greppable, tronque signale une génération coupée par la limite de
- *    tokens, le champ additif origin (« vps » / « humain ») distingue le
+ *    tokens, suspect_injection (INJECT-08 31/10 soir — champ additif
+ *    présent UNIQUEMENT si suspectInjection() matche) marque les
+ *    tentatives d'injection détectées (sans blocage), le champ additif
+ *    origin (« vps » / « humain ») distingue le
  *    trafic du serveur lui-même (IP publique ou boucle locale) du trafic
  *    étudiant (le front ignore les champs inconnus) ; l'IP
  *    n'est JAMAIS écrite en clair (sha256 tronqué, sel APP_KEY) ;
@@ -176,8 +179,9 @@ final class PublicAssistant
 
     /**
      * Traite une requête POST /assistant/ask de bout en bout :
-     * rate limit → validation question → FAQ (fast-path, pas de LLM)
-     * → validation history → sémaphore → appel LLM → journal.
+     * rate limit → validation question → GABARITS (EDT/stock, zéro
+     * tour LLM, fail-soft) → FAQ (fast-path, pas de LLM) → validation
+     * history → sémaphore → appel LLM → journal.
      *
      * @param mixed $questionRaw $_POST['question'] (string attendue).
      * @param mixed $historyRaw  $_POST['history'] (string JSON optionnelle).
@@ -386,6 +390,23 @@ final class PublicAssistant
             return $this->conclure(400, false, null, self::MSG_INVALIDE, $questionRaw, 0, $ip, false, $kiosk);
         }
 
+        // GABARITS publics (EDT-PUB-13 / STOCK-PUB-14, mission 31/10
+        // soir) : réponse instantanée à ZÉRO tour LLM pour les questions
+        // à donnée publique dérivée (cours/vacances IUT via EdtCalendar,
+        // stock cafétéria par produit via le livre de stock UNIQUE) —
+        // AVANT la FAQ : une question longue « Bonjour… il vous reste des
+        // Kinder Bueno… » ne doit pas être détournée par le déclencheur
+        // court « bonjour » (preuve 31/10 15:08 : réponse salutation
+        // servie à la question stock), et AVANT le sémaphore (aucun
+        // appel LLM). Fail-soft : null → la FAQ puis la voie LLM
+        // classiques reprennent, un gabarit ne bloque jamais une
+        // question qu'il ne sait pas traiter.
+        $debutGabarit = microtime(true);
+        $reponseGabarit = PublicGabarits::edt($question) ?? PublicGabarits::stock($question);
+        if ($reponseGabarit !== null) {
+            return $this->conclure(200, true, $reponseGabarit, null, $questionRaw, (int) round((microtime(true) - $debutGabarit) * 1000), $ip, false, $kiosk, false, null, true);
+        }
+
         // FAQ fast-path : réponse pré-rédigée instantanée. AVANT le
         // sémaphore et la validation de l'historique (inutile ici, la
         // réponse ne dépend que de la question courante) — zéro appel LLM.
@@ -410,7 +431,7 @@ final class PublicAssistant
         // moins cette ligne ; l'entrée finale (conclure) porte le même id
         // et phase=fin (appariement par id).
         $idQuestion = bin2hex(random_bytes(8));
-        $this->ecrireJournal([
+        $entreeStart = [
             'phase'    => 'start',
             'id'       => $idQuestion,
             'ts'       => self::horodatageJournal(),
@@ -420,7 +441,11 @@ final class PublicAssistant
                 ? mb_substr(trim($questionRaw), 0, self::JOURNAL_QUESTION_MAX)
                 : '',
             'mode'     => 'llm',
-        ], $kiosk === null ? $this->journalPath : $this->journalKioskPath);
+        ];
+        if (is_string($questionRaw) && self::suspectInjection($questionRaw)) {
+            $entreeStart['suspect_injection'] = true;
+        }
+        $this->ecrireJournal($entreeStart, $kiosk === null ? $this->journalPath : $this->journalKioskPath);
 
         $debut    = microtime(true);
         $reponse  = $this->callLlm(
@@ -546,12 +571,30 @@ final class PublicAssistant
      */
     public static function normaliserTexte(string $texte): string
     {
+        $texte = self::sansAccents($texte);
+
+        // Tout ce qui n'est pas lettre/chiffre (ponctuation, apostrophes,
+        // espacements multiples…) → un seul espace.
+        $texte = (string) preg_replace('/[^\p{L}\p{N}]+/u', ' ', $texte);
+
+        return trim($texte);
+    }
+
+    /**
+     * Minuscule + translittération SIMPLE des accents (é→e…, œ→oe,
+     * æ→ae), ponctuation et espacements PRÉSERVÉS — même convention que
+     * scripts/assistant.py::_sans_accents (NFKD ascii), utilisée par les
+     * détecteurs de gabarits (PublicGabarits) pour que les deux voies
+     * (CLI admin, public) matchent les MÊMES questions.
+     */
+    public static function sansAccents(string $texte): string
+    {
         $texte = mb_strtolower($texte, 'UTF-8');
 
         // Translittération manuelle volontairement simple (iconv
         // ASCII//TRANSLIT dépend de la locale) : suffisant pour le français
         // courant.
-        $texte = strtr($texte, [
+        return strtr($texte, [
             'à' => 'a', 'á' => 'a', 'â' => 'a', 'ä' => 'a', 'å' => 'a',
             'ç' => 'c',
             'é' => 'e', 'è' => 'e', 'ê' => 'e', 'ë' => 'e',
@@ -560,12 +603,47 @@ final class PublicAssistant
             'ù' => 'u', 'ú' => 'u', 'û' => 'u', 'ü' => 'u',
             'ý' => 'y', 'ÿ' => 'y', 'œ' => 'oe', 'æ' => 'ae',
         ]);
+    }
 
-        // Tout ce qui n'est pas lettre/chiffre (ponctuation, apostrophes,
-        // espacements multiples…) → un seul espace.
-        $texte = (string) preg_replace('/[^\p{L}\p{N}]+/u', ' ', $texte);
+    /**
+     * Détection LÉGÈRE d'injection de prompt sur la question (INJECT-08,
+     * mission 31/10 soir) : quelques motifs FR/EN sur le texte normalisé
+     * (normaliserTexte) — « ignore (toutes les) consignes/instructions
+     * (précédentes) », « révèle(-moi) (ton) prompt (système/system) »,
+     * « montre tes instructions internes », extraction de « données
+     * personnelles » (variantes DPD). VOLONTAIREMENT tolérante (une
+     * fausse alerte ne coûte qu'un champ de journal) et SANS blocage :
+     * la tenue de l'assistant face aux injections est déjà solide
+     * (refus propre 31/10 02:03) — seul le marquage
+     * suspect_injection=true au journal manquait.
+     */
+    public static function suspectInjection(string $question): bool
+    {
+        $q = self::normaliserTexte($question);
+        if ($q === '') {
+            return false;
+        }
 
-        return trim($texte);
+        $motifs = [
+            // Ignorer les consignes/instructions précédentes (FR + EN).
+            '/\b(?:ignore|ignorer|oublie|disregard|forget)\b.{0,40}?\b(?:consignes?|instructions?|rules)\b/',
+            // Révéler / montrer le prompt (FR + EN).
+            '/\b(?:revele|montre|donne|affiche|reveal|show|print|paste)\b.{0,30}?\bprompt\b/',
+            '/\b(?:system|developer|dev) prompt\b/',
+            // Instructions / consignes internes.
+            '/\b(?:instructions?|consignes?)\s+internes?\b/',
+            '/\b(?:internal|secret)\s+instructions?\b/',
+            // Extraction de données personnelles (variantes DPD/RGPD).
+            '/\b(?:revele|donne|montre|liste|affiche|exporte)\b.{0,40}?\bdonnees personnelles\b/',
+        ];
+
+        foreach ($motifs as $motif) {
+            if (preg_match($motif, $q) === 1) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -848,7 +926,8 @@ final class PublicAssistant
         bool $faq = false,
         ?string $kiosk = null,
         bool $tronque = false,
-        ?string $idQuestion = null
+        ?string $idQuestion = null,
+        bool $gabarit = false
     ): array {
         $donnees = [
             'ts'         => self::horodatageJournal(),
@@ -867,13 +946,27 @@ final class PublicAssistant
             'status'     => $http,
             'faq'        => $faq,
             // LOG-02 (mission 31/10) : chemin ayant produit la réponse —
-            // « fastpath » (FAQ pré-rédigée) ou « llm » (générations et
-            // rejets de la voie LLM : jamais de FAQ) ; KPI « part fastpath »
-            // enfin greppable. Il n'y a pas de gabarit côté public : seuls
-            // fastpath/llm existent ici (gabarit = gabarits admin).
-            'mode'       => $faq ? 'fastpath' : 'llm',
+            // « fastpath » (FAQ pré-rédigée), « gabarit » (EDT-PUB-13 /
+            // STOCK-PUB-14 : réponse dérivée de données, zéro tour LLM)
+            // ou « llm » (générations et rejets de la voie LLM : jamais
+            // de FAQ) ; KPI « part fastpath+gabarit » greppable — le
+            // chemin réel est TOUJOURS étiqueté (MODE-15 : aucun chemin
+            // sans tour LLM n'est compté « llm »).
+            'mode'       => $gabarit ? 'gabarit' : ($faq ? 'fastpath' : 'llm'),
             'tronque'    => $tronque,
+            // DUREE-16 (mission 31/10 soir) : alias duree_ms (même valeur
+            // que latency_ms, même nom que le journal admin
+            // logs/assistant.jsonl) — la latence publique devient
+            // traçable a posteriori par UN seul script KPI.
+            'duree_ms'   => $latencyMs,
         ];
+        // INJECT-08 (mission 31/10 soir) : marquage léger des questions
+        // d'injection de prompt (champ additif UNIQUEMENT si suspect —
+        // l'absence du champ = false, les lignes ordinaires ne grossissent
+        // pas). Aucun blocage : la tenue de l'assistant est déjà solide.
+        if (is_string($questionBrut) && self::suspectInjection($questionBrut)) {
+            $donnees['suspect_injection'] = true;
+        }
         if ($idQuestion !== null) {
             $donnees['id']    = $idQuestion;
             $donnees['phase'] = 'fin';

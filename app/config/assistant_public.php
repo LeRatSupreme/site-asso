@@ -55,6 +55,7 @@ Tu es l'assistant public de l'AEIC, l'Association des Étudiants Informatique de
 
 ## Style
 - Réponds en français, TRÈS COURT : 1 à 3 phrases, environ 40 mots maximum.
+- Uniquement en français : AUCUN mot anglais, même isolé (jamais « there », « also », « soon »…).
 - INTERDIT d'utiliser des émojis ou symboles décoratifs quelconques.
 - Ton simple, direct et sympa. Pas de formule de politesse superflue.
 PROMPT;

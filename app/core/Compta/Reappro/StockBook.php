@@ -146,7 +146,7 @@ final class StockBook
      * EXACTE du livre (« orig », telle que saisie en inventaire) : le
      * consommateur (endpoint assistant) expose une clé canonique stable.
      *
-     * @return null|array{key:string,stock:int,at:?string,via:'exact'|'normalise'|'alias'|'variante'}
+     * @return null|array{key:string,stock:int,at:?string,via:'exact'|'normalise'|'alias'|'variante'|'mots'}
      */
     public function resolveLoose(string $productKey): ?array
     {
@@ -170,7 +170,57 @@ final class StockBook
             }
         }
 
+        // Passe mots (résolution lâche, STOCK-PUB-14 31/10) : le libellé
+        // cite la clé avec des mots décoratifs (marque, conditionnement,
+        // article…) — « Kinder Bueno » pour la clé « Bueno », « un coca »
+        // pour « Coca ». Une entrée matche si TOUS les mots de sa clé
+        // sont des mots du libellé demandé ; la clé la plus longue (la
+        // plus précise) gagne ; zéro match ou ÉGALITÉ entre deux clés →
+        // null (jamais de choix arbitraire — « Kinder Bueno » avec des
+        // clés « Bueno » ET « Kinder » resterait introuvable).
+        $motsDemande = self::motsNormalises($trim);
+        if ($motsDemande !== []) {
+            $meilleure = null;
+            $nbMots    = 0;
+            $egalite   = false;
+            foreach ($this->byNorm as $entryNorm => $e) {
+                $motsCle = self::motsNormalises($entryNorm);
+                if ($motsCle === [] || count(array_diff($motsCle, $motsDemande)) !== 0) {
+                    continue;
+                }
+                if (count($motsCle) > $nbMots) {
+                    $meilleure = $e;
+                    $nbMots    = count($motsCle);
+                    $egalite   = false;
+                } elseif (count($motsCle) === $nbMots && $meilleure !== null) {
+                    $egalite = true;
+                }
+            }
+            if ($meilleure !== null && !$egalite) {
+                return ['key' => $meilleure['orig'], 'stock' => $meilleure['stock'], 'at' => $meilleure['at'], 'via' => 'mots'];
+            }
+        }
+
         return null;
+    }
+
+    /**
+     * Mots normalisés uniques d'un libellé (minuscule sans accents,
+     * séparateurs → découpage) — base de la passe mots de resolveLoose :
+     * « Kinder Bueno » → ['kinder', 'bueno'].
+     *
+     * @return list<string>
+     */
+    private static function motsNormalises(string $libelle): array
+    {
+        $norm = AliasSuggester::normalizeKey($libelle);
+        if ($norm === '') {
+            return [];
+        }
+
+        $mots = preg_split('/[^a-z0-9]+/', $norm, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+
+        return array_values(array_unique($mots));
     }
 
     /**

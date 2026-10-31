@@ -57,10 +57,17 @@ return [
         'reponse' => "Nous sommes au 19 rue Louis David, 62100 Calais, à l'IUT. La page /presentation du site explique comment nous trouver.",
     ],
     [
+        // ADHÉSION — réponse FIXE validée 31/10 08h09 par le chemin LLM
+        // (FAST-07 : 9,8 s de génération pour une réponse immuable →
+        // fast-path). Déclencheurs élargis aux fautes courantes : « aderer »
+        // (sans h — preuve 08h09), « adesion », racine « cotis » (cotisation).
         'declencheurs' => [
             'adhesion',
-            'adher',      // racine : adhérer, j'adhère, adhérents…
-            'inscri',     // racine : s'inscrire, je m'inscris, inscription…
+            'adesion',      // faute courante sans h
+            'adher',        // racine : adhérer, j'adhère, adhérents…
+            'aderer',       // faute courante sans h (preuve journal 31/10 08h09)
+            'inscri',       // racine : s'inscrire, je m'inscris, inscription…
+            'cotis',        // racine : cotisation, cotiser
             'membre',
             'devenir membre',
             'comment rejoindre',
@@ -70,14 +77,17 @@ return [
             'creer mon compte',
             'compte',
         ],
-        'reponse' => "L'adhésion à l'AEIC est gratuite et se fait en ligne depuis la page /register du site.",
+        'reponse' => "L'adhésion est gratuite. Vous pouvez vous inscrire en ligne depuis la page /register.",
     ],
     [
         'declencheurs' => [
             'evenement',
             'evenements',
+            'evennement',   // faute courante double n (KB-06 : preuves 30/10 00:03
+            'evennements',  // et 31/10 04:03 passées au LLM avec scorie EN/FR)
             'soiree',
             'soirees',
+            'soire',        // racine : « soiré » (faute), soirée…
             'sortie',
             'sorties',
             'afterwork',
@@ -89,6 +99,12 @@ return [
             'nuit de linfo',
             'activite',
             'activites',
+            // Formulations familières (KB-06) — volontairement LONGUES
+            // (14+) pour ne pas détourner « la cafétéria est ouverte ce
+            // week-end ? » (racine cafétéria + semaine/week-end → entrée
+            // cafétéria) : seules les intentions « programme » matchent.
+            'quoi ce week end',
+            'quoi ce weekend',
         ],
         'reponse' => "Au programme : afterworks, BBQ, bowling, sorties bar et la Nuit de l'Info. Le calendrier complet est sur la page /events du site.",
     ],
