@@ -51,7 +51,11 @@ LLM, en tête de poser_question, comme le fast-path stock (T3) :
   - cours/EDT IUT (« il y a cours cette semaine ? ») → appel direct
     edt_iut (zéro tour LLM) + ligne courte sourcée edt-ulco.fr ;
   - prix d'un produit → honnêteté : aucun outil ne donne le prix de
-    vente (tarif sur la carte publique), complété du stock si résolu.
+    vente (tarif sur la carte publique), complété du stock si résolu ;
+  - rachats/réappro (RACHAT-03, mission 31/10) → appel direct
+    produits_a_commander + liste courte (quantité au pack, coût total) —
+    « qu'est-ce qu'il faut que je rachète ? » a fini DEUX fois en
+    timeout 120 s (30/10 09:27/09:30) alors que l'outil répond ~292 ms.
 Le tour de résumé LLM (après un résultat d'outil) est borné à
 MAX_TOKENS_RESUME (~100 tokens) : à débit constant ça plafonne le p90
 autour de 25-30 s au lieu de 90+.
@@ -910,6 +914,7 @@ def fast_path_stock(question: str, jeton: str, deadline: float) -> Session | Non
         return None
 
     session = Session(question=question)
+    session.mode = "fastpath"
     debut_appel = time.monotonic()
     reponse_outil = requete_outil("stock_produit", arguments, jeton, deadline)
     statut = reponse_outil["statut_http"]
@@ -988,12 +993,22 @@ MOTIFS_PRIX_PRODUIT: tuple[re.Pattern[str], ...] = (
 )
 
 #: Mots signalant une question de BÉNÉFICE/MARGE (globale ou produit).
+#: RACHAT-03 (mission 31/10) : élargi au langage naturel — « Comment ça
+#: a MARCHÉ cette semaine ? » (77,8 s de LLM le 30/10 09:25), « ça a
+#: VENDU/TOURNÉ/DONNÉ quoi ? ». Participes passés de performance
+#: commerciale ; le présent « donne/donner » reste volontairement HORS
+#: liste (trop générique — « donne-moi les ventes » doit rester voie LLM).
 MOTS_BENEFICE = frozenset(
     {
         "benefice", "benefices", "benef", "benefs", "bénéfice", "bénéfices",
         "marge", "marges", "profit", "profits", "perte", "pertes",
         "gain", "gains", "gagne", "gagné", "gagnes", "gagnés",
         "gagnee", "gagnée", "encaisse", "encaissé",
+        "marche", "marché", "marches", "marchés",
+        "vendu", "vendus", "vendue", "vendues",
+        "tourne", "tournes", "tourné", "tournés",
+        "tournee", "tournée", "tournees", "tournées",
+        "donné", "donnés", "donnée", "données",
     }
 )
 
@@ -1005,8 +1020,9 @@ MOTS_FLOUS_BENEFICE = frozenset(
     {
         "a", "ai", "as", "au", "aux", "avec", "actuellement",
         "aeic", "asso", "association", "cafet", "cafeteria", "caisse",
-        "brut", "brute", "c'est", "calcule", "calculer", "ce", "cet",
-        "cette", "ces", "combien", "d", "d'", "d'un", "d'une", "dans",
+        "brut", "brute", "bien", "c'est", "calcule", "calculer", "ce",
+        "cet", "cette", "ces", "combien", "ca", "ça", "comment",
+        "d", "d'", "d'un", "d'une", "dans",
         "de", "depuis", "des", "deux", "dernier", "derniere",
         "derniers", "dernieres", "dire", "dis", "dit", "donne", "donnes",
         "donner", "du", "est", "est-ce", "estime", "estimer", "ete",
@@ -1185,7 +1201,7 @@ def gabarit_benefice_global(question: str, jeton: str, deadline: float) -> Sessi
     if not question_benefice_global(question):
         return None
 
-    session = Session(question=question, gabarit="benefice_global")
+    session = Session(question=question, gabarit="benefice_global", mode="gabarit")
     aujourdhui = dt.date.today()
     arguments = {
         "debut": (aujourdhui - dt.timedelta(days=6)).isoformat(),
@@ -1228,7 +1244,7 @@ def gabarit_anomalies_catalogue(
     if not question_anomalies_catalogue(question):
         return None
 
-    session = Session(question=question, gabarit="anomalies_catalogue")
+    session = Session(question=question, gabarit="anomalies_catalogue", mode="gabarit")
     donnees = _appel_outil_direct(
         session, "catalogue_anomalies", {}, jeton, deadline
     )
@@ -1241,13 +1257,132 @@ def gabarit_anomalies_catalogue(
     return session
 
 
+#: Questions de RACHAT/réapprovisionnement (RACHAT-03, mission 31/10) :
+#: famille « rachat/rachète/racheter » sur texte sans accents — la
+#: question réelle « Qu'est-ce qu'il faut que je rachète ? » a fini DEUX
+#: fois en « Délai dépassé 120 s » (30/10 09:27/09:30) alors que l'outil
+#: produits_a_commander répond ~292 ms.
+_MOTIFS_RACHAT = (
+    re.compile(r"\brachats?\b", re.I),
+    re.compile(r"\brachet(?:e|es|er|ez|ons|ent|ée?|ées?)\b", re.I),
+)
+
+
+def question_rachats(question: str) -> bool:
+    """Vrai si la question demande la liste de RACHATS/réappro (gabarit
+    produits_a_commander, SANS tour LLM). Une question de STOCK d'un
+    produit précis ne matche pas : le fast-path T3 (detecter_question_
+    stock) garde la priorité — on ne sert jamais une liste globale à la
+    place du stock d'un produit cité.
+    """
+    norm = _sans_accents(question.replace("’", "'"))
+    if not any(motif.search(norm) for motif in _MOTIFS_RACHAT):
+        return False
+    return detecter_question_stock(question) is None
+
+
+def _formater_rachats_rapide(donnees: dict) -> str:
+    """Résume la liste de réappro SANS LLM — MÊME sémantique que la page
+    Réappro (Data::analyseReappro : état « a_commander » = alerte réelle,
+    « a_compter » = suggestion spéculative, comptage absent/ancien) :
+    alertes d'abord (quantité au pack, coût ligne, coût total), produits
+    à compter ensuite (noms seuls — aucune décision sur du non compté).
+    Aucun chiffre inventé : chaque valeur vient du JSON de l'outil.
+    """
+    produits = [p for p in (donnees.get("produits") or []) if isinstance(p, dict)]
+    alertes = [
+        p
+        for p in produits
+        if isinstance(p.get("a_commander"), (int, float))
+        and p["a_commander"] > 0
+        and p.get("etat") != "a_compter"
+    ]
+    a_compter = [
+        p
+        for p in produits
+        if isinstance(p.get("a_commander"), (int, float))
+        and p["a_commander"] > 0
+        and p.get("etat") == "a_compter"
+    ]
+    if not alertes and not a_compter:
+        return (
+            "Rien à racheter : aucun produit à commander pour couvrir les "
+            "7 prochains jours."
+        )
+
+    lignes: list[str] = []
+    for p in alertes[:5]:
+        detail = f"{p.get('produit')} : {int(p['a_commander'])} u."
+        if isinstance(p.get("pack"), (int, float)) and p["pack"] > 1:
+            detail += f" (pack de {int(p['pack'])})"
+        if isinstance(p.get("cout_ligne_eur"), (int, float)):
+            detail += f", {p['cout_ligne_eur']:.2f} €"
+        lignes.append(detail)
+
+    cout_total = sum(
+        float(p.get("cout_ligne_eur") or 0)
+        for p in alertes
+        if isinstance(p.get("cout_ligne_eur"), (int, float))
+    )
+    parties: list[str] = []
+    if alertes:
+        suite = f" (+{len(alertes) - 5} autres)" if len(alertes) > 5 else ""
+        parties.append(
+            f"À racheter ({len(alertes)} alerte"
+            f"{'s' if len(alertes) > 1 else ''}) : "
+            + " ; ".join(lignes)
+            + suite
+            + f". Coût total estimé : {cout_total:.2f} € pour couvrir 7 jours."
+        )
+    else:
+        parties.append("Aucune alerte de réappro ferme.")
+    if a_compter:
+        noms = ", ".join(str(p.get("produit")) for p in a_compter[:5])
+        suite = f" (+{len(a_compter) - 5} autres)" if len(a_compter) > 5 else ""
+        parties.append(
+            f"À compter d'abord (stock non compté récemment, suggestion "
+            f"indicative) : {noms}{suite}."
+        )
+    return " ".join(parties)
+
+
+def gabarit_rachats(question: str, jeton: str, deadline: float) -> Session | None:
+    """Gabarit (e) — rachats/réappro : appel DIRECT de l'outil
+    produits_a_commander (zéro tour LLM) + liste courte (quantité au
+    pack, coût ligne, coût total). Échec d'appel → None → voie LLM
+    normale (fail-soft, même contrat que les autres gabarits)."""
+    if not question_rachats(question):
+        return None
+
+    session = Session(question=question, gabarit="rachats", mode="gabarit")
+    donnees = _appel_outil_direct(
+        session, "produits_a_commander", {}, jeton, deadline
+    )
+    if donnees is None:
+        return None
+    session.reponse = _formater_rachats_rapide(donnees)
+    session.ok = bool(session.reponse.strip())
+    if not session.ok:
+        return None
+    return session
+
+
 #: Mots signifiant la question porte sur l'EMPLOI DU TEMPS / les cours de
 #: l'IUT (sur texte sans accents). « edt » en mot entier (l'edt, l'EDT) ;
-#: « cours » en mot entier (il y a cours, reprise des cours).
+#: « cours » en mot entier (il y a cours, reprise des cours) ; et depuis
+#: la mission E3 (31/10, pic de reprise lundi 02/11) « vacances »,
+#: « étudiant(s) » et « reprise » portent SEULS l'intention EDT : « les
+#: étudiants sont-ils en vacances ? » / « c'est quand la reprise ? » ne
+#: citent ni « cours » ni « edt » — ces questions partaient sur 60-96 s
+#: de LLM pour une réponse tronquée, parfois fausse (31/10 04h07), alors
+#: que le gabarit edt_iut répond < 1 s.
 _MOTIFS_EDT = (
     re.compile(r"\bedt\b", re.I),
     re.compile(r"\bcours\b", re.I),
     re.compile(r"emploi\s+du\s+temps", re.I),
+    re.compile(r"\bvacances?\b", re.I),
+    re.compile(r"\betudiante?s?\b", re.I),
+    re.compile(r"\breprise\b", re.I),
 )
 
 #: Marqueurs d'interrogation/temporalité qui, AVEC un mot EDT, déclenchent
@@ -1278,9 +1413,10 @@ def question_edt_iut(question: str) -> dict | None:
     """Détecte une question sur les COURS/EDT de l'IUT et extrait les
     arguments edt_iut (dept, semaine — partiels, les défauts sont côté
     serveur). Renvoie None si la question n'est pas une interrogation
-    EDT évidente : il faut un mot EDT (cours/edt/emploi du temps) ET un
-    marqueur d'interrogation, SANS aucun mot de question produits/ventes
-    (« combien de… » part sur le fast-path stock, jamais ici).
+    EDT évidente : il faut un mot EDT (cours/edt/emploi du temps/
+    vacances/étudiants/reprise) ET un marqueur d'interrogation, SANS
+    aucun mot de question produits/ventes (« combien de… » part sur le
+    fast-path stock, jamais ici).
     """
     norm = _sans_accents(question.replace("’", "'"))
     if any(mot in _MOTS_NON_EDT for mot in re.findall(r"[a-z0-9']+", norm)):
@@ -1364,7 +1500,7 @@ def gabarit_edt_iut(question: str, jeton: str, deadline: float) -> Session | Non
     if arguments is None:
         return None
 
-    session = Session(question=question, gabarit="edt_iut")
+    session = Session(question=question, gabarit="edt_iut", mode="gabarit")
     donnees = _appel_outil_direct(session, "edt_iut", arguments, jeton, deadline)
     if donnees is None:
         return None
@@ -1387,7 +1523,7 @@ def gabarit_prix_produit(question: str, jeton: str, deadline: float) -> Session 
     if produit is None:
         return None
 
-    session = Session(question=question, gabarit="prix_produit")
+    session = Session(question=question, gabarit="prix_produit", mode="gabarit")
     noyau = (
         "Aucun outil de l'assistant ne donne le prix de vente : les tarifs "
         "sont sur la carte de la cafétéria (page d'accueil du site)."
@@ -1427,6 +1563,15 @@ class Session:
     chiffre_sans_source: bool = False
     contexte_messages: int = 0  # historique multi-tours injecté (T4-P1-B)
     gabarit: str = ""  # gabarit 0-tour-LLM (M2) : nom, vide sinon
+    # LOG-02 (mission 31/10) : chemin ayant produit la réponse —
+    # fastpath (T3 stock) | gabarit (M2) | llm (boucle outils) ; tronque
+    # = au moins un tour coupé par la limite de tokens (finish_reason
+    # =length — réponse relancée courte ou refusée, jamais servie coupée).
+    mode: str = "llm"
+    tronque: bool = False
+    # id de l'entrée « start » (voie LLM uniquement), recollé en phase=fin
+    # par journaliser() — une question tuée laisse au moins la trace start.
+    id_journal: str = ""
 
     def duree_ms(self) -> int:
         return sum(t.get("ms", 0) for t in self.tours) + sum(
@@ -1465,6 +1610,7 @@ def poser_question(
     # quand aucun outil ne le couvre. Même contrat fail-soft que T3.
     for gabarit in (
         gabarit_benefice_global,
+        gabarit_rachats,
         gabarit_anomalies_catalogue,
         gabarit_edt_iut,
         gabarit_prix_produit,
@@ -1473,8 +1619,15 @@ def poser_question(
         if session_rapide is not None:
             return session_rapide
 
+    # LOG-02 (mission 31/10) : trace « start » AVANT les tours LLM — une
+    # question tuée en cours de génération (garde 60 s du selfreview
+    # 08h11, timeout client, kill) laisse AU MOINS cette ligne, complétée
+    # par journaliser() (même id, phase=fin).
+    journaliser_debut(session)
+
     messages: list[dict] = construire_messages(question, contexte)
     deja_relance_sans_source = False
+    deja_relance_tronque = False
 
     try:
         for _ in range(MAX_TOURS_LLM):
@@ -1523,6 +1676,39 @@ def poser_question(
                         }
                     )
                     continue
+
+                # Garde finish_reason=length (mission 31/10 : réponse
+                # tronquée documentée 31/10 04h07, parfois FAUSSE — « Les
+                # étudiants ne sont pas en vacances… 2026-11- ») : une
+                # réponse coupée par la limite de tokens n'est JAMAIS
+                # servie telle quelle — une relance « très courte »
+                # d'abord (même mécanisme que R3), échec honnête ensuite.
+                if (
+                    meta.get("finish_reason") == "length"
+                    and (message.get("content") or "").strip()
+                ):
+                    session.tronque = True
+                    if not deja_relance_tronque:
+                        deja_relance_tronque = True
+                        messages.append(
+                            {
+                                "role": "user",
+                                "content": (
+                                    "Erreur : ta réponse a été coupée par la "
+                                    "limite de tokens et ne peut pas être servie. "
+                                    "Reformule la même information de façon "
+                                    "complète mais très courte : une seule "
+                                    "phrase de moins de 30 mots."
+                                ),
+                            }
+                        )
+                        continue
+                    session.ok = False
+                    session.erreur = (
+                        "réponse tronquée par la limite de tokens "
+                        "(finish_reason=length) — non servie"
+                    )
+                    return session
 
                 # Réponse finale : le contenu du modèle, tel quel.
                 session.reponse = message.get("content") or ""
@@ -1663,28 +1849,74 @@ def _source(nom: str, arguments: dict) -> str:
 # ---------------------------------------------------------------------------
 
 
-def journaliser(session: Session) -> None:
-    """Ajoute la session au journal JSONL (hors jeton, hors réflexion modèle)."""
+def _horodatage_journal() -> str:
+    """Horodatage ISO Europe/Paris (seconde) — champ « horodatage » et
+    alias « ts » (unification admin/public, bonus LOG-02)."""
+    return dt.datetime.now(ZoneInfo("Europe/Paris")).isoformat(timespec="seconds")
+
+
+def _ecrire_entree_journal(entree: dict) -> None:
+    """Ajoute UNE ligne au journal JSONL (best-effort, jamais bloquant)."""
     try:
         JOURNAL_JSONL.parent.mkdir(parents=True, exist_ok=True)
-        entree = {
-            "horodatage": dt.datetime.now(ZoneInfo("Europe/Paris")).isoformat(timespec="seconds"),
-            "question": session.question,
-            "ok": session.ok,
-            "duree_ms": session.duree_ms(),
-            "reflexion": session.reflexion,
-            "chiffre_sans_source": session.chiffre_sans_source,
-            "contexte_messages": session.contexte_messages,
-            "gabarit": session.gabarit,
-            "appels_outils": session.appels,
-            "tours_llm": session.tours,
-            "reponse": session.reponse,
-            "erreur": session.erreur,
-        }
         with JOURNAL_JSONL.open("a", encoding="utf-8") as sortie:
             sortie.write(json.dumps(entree, ensure_ascii=False) + "\n")
     except OSError as e:  # journal best-effort : jamais bloquant
         print(f"(journalisation impossible : {type(e).__name__})", file=sys.stderr)
+
+
+def journaliser_debut(session: Session) -> None:
+    """Écrit l'entrée « start » AVANT les tours LLM (LOG-02, mission
+    31/10) : une question tuée en cours de génération (garde 60 s,
+    timeout client, kill — preuve 31/10 08h11 : zéro trace) laisse AU
+    MOINS cette ligne. L'entrée finale de journaliser() porte le même
+    « id » et phase=fin : les deux lignes se recollent par id."""
+    session.id_journal = (
+        dt.datetime.now(ZoneInfo("Europe/Paris")).strftime("%Y%m%dT%H%M%S%f")[:-3]
+        + f"-{os.getpid()}"
+    )
+    _ecrire_entree_journal(
+        {
+            "phase": "start",
+            "id": session.id_journal,
+            "horodatage": _horodatage_journal(),
+            "question": session.question,
+            "mode": "llm",
+        }
+    )
+
+
+def journaliser(session: Session) -> None:
+    """Ajoute la session au journal JSONL (hors jeton, hors réflexion modèle).
+
+    Champs LOG-02 (mission 31/10) : mode (fastpath|gabarit|llm — le KPI
+    « part des réponses fastpath » devient greppable), tronque (au moins
+    un tour coupé par la limite de tokens), id/phase (appariement avec
+    l'entrée « start » de la voie LLM) ; alias ts/reply (mêmes noms que
+    les journaux PHP) pour UN script KPI couvrant tout.
+    """
+    entree = {
+        "horodatage": _horodatage_journal(),
+        "question": session.question,
+        "ok": session.ok,
+        "duree_ms": session.duree_ms(),
+        "reflexion": session.reflexion,
+        "chiffre_sans_source": session.chiffre_sans_source,
+        "contexte_messages": session.contexte_messages,
+        "gabarit": session.gabarit,
+        "mode": session.mode,
+        "tronque": session.tronque,
+        "appels_outils": session.appels,
+        "tours_llm": session.tours,
+        "reponse": session.reponse,
+        "erreur": session.erreur,
+    }
+    if session.id_journal:
+        entree["id"] = session.id_journal
+        entree["phase"] = "fin"
+    entree["ts"] = entree["horodatage"]
+    entree["reply"] = session.reponse
+    _ecrire_entree_journal(entree)
 
 
 # ---------------------------------------------------------------------------
@@ -1706,9 +1938,12 @@ def afficher_session(session: Session) -> None:
 
     if session.sources:
         print("\nSources : " + " ; ".join(session.sources))
+    mention_gabarit = f" · gabarit {session.gabarit}" if session.gabarit else ""
+    troncature = " · ⚠ réponse tronquée (finish_reason=length)" if session.tronque else ""
     print(
         f"\n({len(session.appels)} appel(s) d'outil · {len(session.tours)} tour(s) LLM "
-        f"· {session.duree_ms() / 1000:.1f} s · journal : {JOURNAL_JSONL.name})"
+        f"· mode {session.mode}{mention_gabarit}{troncature}"
+        f" · {session.duree_ms() / 1000:.1f} s · journal : {JOURNAL_JSONL.name})"
     )
 
 
@@ -1848,6 +2083,8 @@ def main(argv: list[str] | None = None) -> int:
             chemin = "fast_path_stock"
         elif question_benefice_global(question):
             chemin = "gabarit_benefice_global"
+        elif question_rachats(question):
+            chemin = "gabarit_rachats"
         elif question_anomalies_catalogue(question):
             chemin = "gabarit_anomalies_catalogue"
         elif (arguments_edt := question_edt_iut(question)) is not None:
@@ -1896,6 +2133,8 @@ def main(argv: list[str] | None = None) -> int:
                     "tours_llm": session.tours,
                     "duree_ms": session.duree_ms(),
                     "gabarit": session.gabarit,
+                    "mode": session.mode,
+                    "tronque": session.tronque,
                     "erreur": session.erreur,
                 },
                 ensure_ascii=False,

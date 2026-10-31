@@ -55,13 +55,19 @@ use App\Models\Setting;
  *    nécessaire : il n'est validé que sur le chemin LLM) ;
  *  - journal d'observation logs/assistant_public.jsonl : une ligne par
  *    requête {ts, ip_hash, origin, question, reply, latency_ms, status,
- *    faq} — le champ additif faq (true/false) distingue réponses
- *    pré-rédigées et générations LLM, le champ additif origin (« vps » /
- *    « humain ») distingue le trafic du serveur lui-même du trafic
+ *    faq, mode, tronque} — le champ additif faq (true/false) distingue
+ *    réponses pré-rédigées et générations LLM, le champ additif mode
+ *    (« fastpath » | « llm », LOG-02 31/10) rend le KPI « part fastpath »
+ *    greppable, tronque signale une génération coupée par la limite de
+ *    tokens, le champ additif origin (« vps » / « humain ») distingue le
+ *    trafic du serveur lui-même (IP publique ou boucle locale) du trafic
  *    étudiant (le front ignore les champs inconnus) ; l'IP
  *    n'est JAMAIS écrite en clair (sha256 tronqué, sel APP_KEY) ;
  *    le chemin kiosque journalise pareil dans logs/assistant_kiosk.jsonl
- *    avec un champ additif « kiosk » (nom du kiosque).
+ *    avec un champ additif « kiosk » (nom du kiosque) ; la voie LLM
+ *    écrit en plus une entrée « start » AVANT l'appel (phase/id) — un
+ *    process tué en cours de génération laisse au moins cette trace,
+ *    l'entrée finale porte le même id et phase=fin.
  *
  * Toutes les dépendances (storage rate limit, URL LLM, journaux, locks)
  * sont injectables pour les tests unitaires (tests/Unit/AssistantPublicTest,
@@ -89,9 +95,12 @@ final class PublicAssistant
     public const RATE_FENETRE_S  = 300;
 
     /** IP publique du VPS hébergeant le site : une requête client dont
-     *  l'IP est exactement celle-ci vient du serveur lui-même (cron,
-     *  healthcheck, monitoring…), pas d'un visiteur — étiquetée « vps »
-     *  dans le journal (comparaison string stricte, sinon « humain »). */
+     *  l'IP est celle-ci, OU une boucle locale (127.0.0.1, ::1 — sondes
+     *  et tests émis depuis le serveur via curl --resolve, le hairpin
+     *  NAT du VPS étant cassé depuis le 30/10), vient du serveur
+     *  lui-même (cron, healthcheck, monitoring, tests…), pas d'un
+     *  visiteur — étiquetée « vps » dans le journal (cf. origine()),
+     *  sinon « humain ». */
     private const IP_VPS = '51.254.129.80';
 
     /** Appels LLM simultanés maximum (2 slots flock). */
@@ -396,6 +405,23 @@ final class PublicAssistant
             return $this->conclure(503, false, null, self::MSG_OCCUPE, $questionRaw, 0, $ip, false, $kiosk);
         }
 
+        // LOG-02 (mission 31/10) : trace « start » AVANT l'appel LLM — un
+        // process tué en cours de génération (timeout, kill) laisse au
+        // moins cette ligne ; l'entrée finale (conclure) porte le même id
+        // et phase=fin (appariement par id).
+        $idQuestion = bin2hex(random_bytes(8));
+        $this->ecrireJournal([
+            'phase'    => 'start',
+            'id'       => $idQuestion,
+            'ts'       => self::horodatageJournal(),
+            'ip_hash'  => self::hashIp($ip),
+            'origin'   => self::origine($ip),
+            'question' => is_string($questionRaw)
+                ? mb_substr(trim($questionRaw), 0, self::JOURNAL_QUESTION_MAX)
+                : '',
+            'mode'     => 'llm',
+        ], $kiosk === null ? $this->journalPath : $this->journalKioskPath);
+
         $debut    = microtime(true);
         $reponse  = $this->callLlm(
             self::buildPayload(self::buildMessages($promptSysteme, $history, $question))
@@ -414,7 +440,7 @@ final class PublicAssistant
                 'http'  => $reponse['http'],
             ]);
 
-            return $this->conclure(503, false, null, self::MSG_INDISPONIBLE, $questionRaw, $latencyMs, $ip, false, $kiosk);
+            return $this->conclure(503, false, null, self::MSG_INDISPONIBLE, $questionRaw, $latencyMs, $ip, false, $kiosk, false, $idQuestion);
         }
 
         $reply = self::extractReply($reponse['body']);
@@ -423,10 +449,10 @@ final class PublicAssistant
                 'http' => $reponse['http'],
             ]);
 
-            return $this->conclure(503, false, null, self::MSG_INDISPONIBLE, $questionRaw, $latencyMs, $ip, false, $kiosk);
+            return $this->conclure(503, false, null, self::MSG_INDISPONIBLE, $questionRaw, $latencyMs, $ip, false, $kiosk, false, $idQuestion);
         }
 
-        return $this->conclure(200, true, $reply, null, $questionRaw, $latencyMs, $ip, false, $kiosk);
+        return $this->conclure(200, true, $reply, null, $questionRaw, $latencyMs, $ip, false, $kiosk, self::reponseTronquee($reponse['body']), $idQuestion);
     }
 
     // -----------------------------------------------------------------
@@ -711,6 +737,32 @@ final class PublicAssistant
         return $contenu === '' ? null : $contenu;
     }
 
+    /**
+     * Vrai si la complétion s'est arrêtée sur la limite de tokens
+     * (finish_reason = « length ») : la réponse est coupée en plein
+     * milieu — journalisée tronque=true (LOG-02, mission 31/10), pour
+     * distinguer les générations complètes des coupées dans le journal
+     * d'observation. Corps absent/invalide → false (rien à affirmer).
+     */
+    public static function reponseTronquee(?string $body): bool
+    {
+        if ($body === null || $body === '') {
+            return false;
+        }
+
+        $data = json_decode($body, true);
+        if (!is_array($data)) {
+            return false;
+        }
+
+        $choices = $data['choices'] ?? null;
+        if (!is_array($choices) || !is_array($choices[0] ?? null)) {
+            return false;
+        }
+
+        return ($choices[0]['finish_reason'] ?? null) === 'length';
+    }
+
     // -----------------------------------------------------------------
     //  Sémaphore 2 slots (flock) — protège llama-server
     // -----------------------------------------------------------------
@@ -776,6 +828,12 @@ final class PublicAssistant
      *                           additif « kiosk » (nom du kiosque, vide pour
      *                           un jeton inconnu) : l'observation public et
      *                           kiosk reste séparable.
+     * @param bool        $tronque      true si la génération s'est arrêtée sur
+     *                                  la limite de tokens (finish_reason=length).
+     * @param string|null $idQuestion   id de l'entrée « start » (voie LLM) :
+     *                                  l'entrée finale porte le même id et
+     *                                  phase=fin ; null pour les verdicts
+     *                                  rendus AVANT l'appel LLM (FAQ, 429…).
      *
      * @return array{http:int, ok:bool, reply:?string, error:?string}
      */
@@ -788,16 +846,19 @@ final class PublicAssistant
         int $latencyMs,
         string $ip,
         bool $faq = false,
-        ?string $kiosk = null
+        ?string $kiosk = null,
+        bool $tronque = false,
+        ?string $idQuestion = null
     ): array {
         $donnees = [
-            'ts'         => (new \DateTimeImmutable('now', new \DateTimeZone('Europe/Paris')))->format(DATE_ATOM),
+            'ts'         => self::horodatageJournal(),
             'ip_hash'    => self::hashIp($ip),
             // Origine de la requête (champ additif, le front ignore les
-            // champs inconnus) : le trafic du VPS lui-même ne doit plus
-            // compter pour du trafic étudiant dans les rapports
+            // champs inconnus) : le trafic du VPS lui-même (IP publique OU
+            // boucle locale — hairpin NAT cassé, tests via --resolve) ne
+            // doit plus compter pour du trafic étudiant dans les rapports
             // d'observation (selfreview 06h : 26/58 questions VPS).
-            'origin'     => $ip === self::IP_VPS ? 'vps' : 'humain',
+            'origin'     => self::origine($ip),
             'question'   => is_string($questionBrut)
                 ? mb_substr(trim($questionBrut), 0, self::JOURNAL_QUESTION_MAX)
                 : '',
@@ -805,7 +866,18 @@ final class PublicAssistant
             'latency_ms' => $latencyMs,
             'status'     => $http,
             'faq'        => $faq,
+            // LOG-02 (mission 31/10) : chemin ayant produit la réponse —
+            // « fastpath » (FAQ pré-rédigée) ou « llm » (générations et
+            // rejets de la voie LLM : jamais de FAQ) ; KPI « part fastpath »
+            // enfin greppable. Il n'y a pas de gabarit côté public : seuls
+            // fastpath/llm existent ici (gabarit = gabarits admin).
+            'mode'       => $faq ? 'fastpath' : 'llm',
+            'tronque'    => $tronque,
         ];
+        if ($idQuestion !== null) {
+            $donnees['id']    = $idQuestion;
+            $donnees['phase'] = 'fin';
+        }
 
         $journal = $this->journalPath;
         if ($kiosk !== null) {
@@ -813,6 +885,17 @@ final class PublicAssistant
             $journal          = $this->journalKioskPath;
         }
 
+        $this->ecrireJournal($donnees, $journal);
+
+        return ['http' => $http, 'ok' => $ok, 'reply' => $reply, 'error' => $error];
+    }
+
+    /**
+     * Écrit une ligne du journal d'observation (JSONL, append atomique
+     * LOCK_EX). Un échec d'écriture ne casse jamais la réponse.
+     */
+    private function ecrireJournal(array $donnees, string $journal): void
+    {
         $ligne = json_encode($donnees, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
         if ($ligne !== false) {
@@ -826,8 +909,27 @@ final class PublicAssistant
                 @chmod($journal, 0o666);
             }
         }
+    }
 
-        return ['http' => $http, 'ok' => $ok, 'reply' => $reply, 'error' => $error];
+    /** Horodatage ATOM Europe/Paris du journal (champ « ts », toutes
+     *  lignes : start comme fin). */
+    private static function horodatageJournal(): string
+    {
+        return (new \DateTimeImmutable('now', new \DateTimeZone('Europe/Paris')))->format(DATE_ATOM);
+    }
+
+    /**
+     * Origine de la requête : « vps » si l'IP est l'IP publique du VPS
+     * OU une boucle locale (127.0.0.1, ::1 — depuis le 30/10 le hairpin
+     * NAT du VPS est cassé : les tests/sondes émis depuis le serveur via
+     * curl --resolve …:127.0.0.1 arrivent en boucle locale et doivent
+     * rester « vps », sinon ils polluent le trafic « humain » des
+     * rapports d'usage — selfreview 31/10 02h faiblesse n°1), « humain »
+     * sinon. UN seul point d'assemblage de cette règle.
+     */
+    private static function origine(string $ip): string
+    {
+        return in_array($ip, [self::IP_VPS, '127.0.0.1', '::1'], true) ? 'vps' : 'humain';
     }
 
     /**
