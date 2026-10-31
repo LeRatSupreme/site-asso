@@ -5,9 +5,8 @@ T4 — Pont d'orchestration de l'assistant AEIC (llama-server ↔ endpoints outi
 
 Mission T4 (spécification docs-plans/T4_ASSISTANT_QWEN3.md §2.3/§2.4,
 contraintes /tmp/t4_briefs/00_CONTRAINTES.md) : boucle de tool-calling du
-modèle local Qwen3-4B vers les 6 endpoints LECTURE SEULE (T4-E + T4-P1,
-AssistantToolsController ; le 6e — veille qualité catalogue — est un
-ajout post-T4 strictement additif) :
+modèle local Qwen3-4B vers les 7 endpoints LECTURE SEULE (T4-E + T4-P1 +
+ajouts post-T4 strictement additifs — veille qualité catalogue, EDT IUT) :
 
     GET https://…/internal/assistant/ventes_periode?debut=…&fin=…
     GET https://…/internal/assistant/stock_produit?nom=…
@@ -15,6 +14,7 @@ ajout post-T4 strictement additif) :
     GET https://…/internal/assistant/marge_produit?nom=…&debut=…&fin=…
     GET https://…/internal/assistant/doublons_en_attente
     GET https://…/internal/assistant/catalogue_anomalies
+    GET https://…/internal/assistant/edt_iut?dept=…&semaine=…
 
 Le modèle CHOISIT l'outil et FORMULE la réponse ; il ne calcule ni n'invente
 aucun chiffre (spéc §0) — toute réponse affiche ses sources (outil + paramètres).
@@ -48,6 +48,8 @@ LLM, en tête de poser_question, comme le fast-path stock (T3) :
     le calcule — règle 7 court-circuitée proprement) + top ventes 7 j ;
   - anomalies du catalogue → appel direct catalogue_anomalies (zéro
     tour LLM) + décompte court par famille (miroir du watchdog) ;
+  - cours/EDT IUT (« il y a cours cette semaine ? ») → appel direct
+    edt_iut (zéro tour LLM) + ligne courte sourcée edt-ulco.fr ;
   - prix d'un produit → honnêteté : aucun outil ne donne le prix de
     vente (tarif sur la carte publique), complété du stock si résolu.
 Le tour de résumé LLM (après un résultat d'outil) est borné à
@@ -61,8 +63,9 @@ SÉCURITÉ (contraintes T4 n°3-4, spéc §2.5)
   - JETON : ASSISTANT_TOKEN lu dans config.env — jamais en dur, jamais
     affiché, et JAMAIS transmis au modèle : seul ce pont l'ajoute en en-tête
     « X-Assistant-Token ».
-  - WHITELIST EN DUR : exactement 6 outils (5 endpoints T4 + catalogue_anomalies,
-    veille qualité), requêtes GET uniquement,
+  - WHITELIST EN DUR : exactement 7 outils (5 endpoints T4 +
+    catalogue_anomalies veille qualité + edt_iut emploi du temps IUT),
+    requêtes GET uniquement,
     destination 127.0.0.1:443 avec SNI/Host « asso.aremond.ovh » (vhost
     dédié + certificat vérifié : trafic strictement local, chiffé et
     authentifié). Timeout endpoint : 10 s.
@@ -204,7 +207,7 @@ def charger_jeton() -> str:
 
 
 def definitions_outils() -> list[dict]:
-    """Définitions OpenAI-style des 5 endpoints (spéc §2.3 : schémas stricts)."""
+    """Définitions OpenAI-style des 7 endpoints (spéc §2.3 : schémas stricts)."""
     return [
         {
             "type": "function",
@@ -320,6 +323,39 @@ def definitions_outils() -> list[dict]:
                 "parameters": {"type": "object", "properties": {}},
             },
         },
+        {
+            "type": "function",
+            "function": {
+                "name": "edt_iut",
+                "description": (
+                    "Emploi du temps de l'IUT ULCO Calais (départements INFO, GEA, "
+                    "GEII — source edt-ulco.fr, cache 6 h) : y a-t-il cours "
+                    "aujourd'hui, cette semaine ou la semaine prochaine (vacances "
+                    "universitaires comprises), jours de cours actifs, créneaux et "
+                    "prochain jour de cours publié."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "dept": {
+                            "type": "string",
+                            "enum": ["info", "gea", "geii", "tous"],
+                            "description": (
+                                "Département interrogé ; « tous » par défaut."
+                            ),
+                        },
+                        "semaine": {
+                            "type": "string",
+                            "enum": ["aujourdhui", "courante", "prochaine"],
+                            "description": (
+                                "Vue demandée : journée courante (défaut), semaine "
+                                "en cours ou semaine prochaine."
+                            ),
+                        },
+                    },
+                },
+            },
+        },
     ]
 
 
@@ -331,6 +367,7 @@ OUTILS_AUTORISES: dict[str, list[str]] = {
     "marge_produit": ["nom", "debut", "fin"],
     "doublons_en_attente": [],
     "catalogue_anomalies": [],
+    "edt_iut": ["dept", "semaine"],
 }
 
 #: Appel d'outil émis EN TEXTE par le modèle (au lieu du format tool_calls) :
@@ -656,6 +693,26 @@ def valider_arguments(nom: str, arguments: dict) -> tuple[dict | None, str | Non
     if nom == "catalogue_anomalies":
         return {}, None
 
+    if nom == "edt_iut":
+        dept = str(arguments.get("dept") or "").strip()
+        semaine = str(arguments.get("semaine") or "").strip()
+        if dept and dept not in ("info", "gea", "geii", "tous"):
+            return None, (
+                "Erreur : edt_iut accepte dept = info, gea, geii ou tous "
+                "(facultatif, tous par défaut)."
+            )
+        if semaine and semaine not in ("aujourdhui", "courante", "prochaine"):
+            return None, (
+                "Erreur : edt_iut accepte semaine = aujourdhui, courante ou "
+                "prochaine (facultatif, aujourdhui par défaut)."
+            )
+        propres = {}
+        if dept:
+            propres["dept"] = dept
+        if semaine:
+            propres["semaine"] = semaine
+        return propres, None
+
     return None, f"Erreur : outil « {nom} » inconnu."
 
 
@@ -885,7 +942,7 @@ def fast_path_stock(question: str, jeton: str, deadline: float) -> Session | Non
 
 
 # ---------------------------------------------------------------------------
-# Gabarits 0-tour-LLM (M2) — bénéfice global / anomalies catalogue / prix
+# Gabarits 0-tour-LLM (M2) — bénéfice global / anomalies catalogue / EDT / prix
 # ---------------------------------------------------------------------------
 #
 # Rapport selfreview 30/10 04h : à 4,31 tok/s (CPU), chaque token de résumé
@@ -1184,6 +1241,140 @@ def gabarit_anomalies_catalogue(
     return session
 
 
+#: Mots signifiant la question porte sur l'EMPLOI DU TEMPS / les cours de
+#: l'IUT (sur texte sans accents). « edt » en mot entier (l'edt, l'EDT) ;
+#: « cours » en mot entier (il y a cours, reprise des cours).
+_MOTIFS_EDT = (
+    re.compile(r"\bedt\b", re.I),
+    re.compile(r"\bcours\b", re.I),
+    re.compile(r"emploi\s+du\s+temps", re.I),
+)
+
+#: Marqueurs d'interrogation/temporalité qui, AVEC un mot EDT, déclenchent
+#: le gabarit : point d'interrogation, question, ou repère de temps (la
+#: question réelle « il y a cours cette semaine à l IUT ? » en a trois).
+_MOTIFS_INTERROGATION_EDT = (
+    re.compile(r"\?"),
+    re.compile(r"\b(?:est-ce|y\s+a|ya|a-t-il|quand|reprise|vacances|semaine|aujourd|demain|prochain|prochaine|iut|lycee)\b", re.I),
+)
+
+#: Mots disqualifiants : une question produits/ventes (« combien de… »,
+#: stock, marge…) ne doit JAMAIS partir sur le gabarit EDT — exigence de
+#: la mission E3 (le fast-path stock garde « combien de X » quantité).
+_MOTS_NON_EDT = frozenset(
+    {
+        "combien", "vente", "ventes", "benefice", "benefices", "benef",
+        "benefs", "marge", "marges", "profit", "profits", "perte",
+        "pertes", "gain", "gains", "stock", "reste", "produit",
+        "produits", "article", "articles", "commande", "commandes",
+        "commander", "racheter", "acheter", "prix", "coute", "coutent",
+        "ca", "chiffre", "chiffres", "euro", "euros", "argent",
+        "vendu", "vendus", "vendue", "vendues",
+    }
+)
+
+
+def question_edt_iut(question: str) -> dict | None:
+    """Détecte une question sur les COURS/EDT de l'IUT et extrait les
+    arguments edt_iut (dept, semaine — partiels, les défauts sont côté
+    serveur). Renvoie None si la question n'est pas une interrogation
+    EDT évidente : il faut un mot EDT (cours/edt/emploi du temps) ET un
+    marqueur d'interrogation, SANS aucun mot de question produits/ventes
+    (« combien de… » part sur le fast-path stock, jamais ici).
+    """
+    norm = _sans_accents(question.replace("’", "'"))
+    if any(mot in _MOTS_NON_EDT for mot in re.findall(r"[a-z0-9']+", norm)):
+        return None
+    if not any(m.search(norm) for m in _MOTIFS_EDT):
+        return None
+    if not any(m.search(norm) for m in _MOTIFS_INTERROGATION_EDT):
+        return None
+
+    arguments: dict = {}
+    for dept in ("info", "gea", "geii"):
+        if re.search(r"\b" + dept + r"\b", norm):
+            arguments["dept"] = dept
+            break
+    if re.search(r"\bprochaine?\b", norm):
+        arguments["semaine"] = "prochaine"
+    elif re.search(r"\bsemaine\b", norm):
+        arguments["semaine"] = "courante"
+    elif re.search(r"\b(?:aujourd|demain)\b", norm):
+        arguments["semaine"] = "aujourdhui"
+    return arguments
+
+
+def _formater_edt_rapide(donnees: dict, arguments: dict) -> str:
+    """Met en forme le JSON d'edt_iut SANS LLM — ligne courte factuelle
+    (« Cette semaine : sans cours (vacances universitaires), reprise le
+    02/11. Source : edt-ulco.fr »). Tout champ absent a un repli neutre,
+    aucune date n'est inventée (prochain jour de cours tel que publié).
+    """
+    semaine = str(arguments.get("semaine") or "aujourdhui")
+    entete = {
+        "courante": "Cette semaine",
+        "prochaine": "La semaine prochaine",
+        "aujourdhui": "Aujourd'hui",
+    }.get(semaine, "Aujourd'hui")
+    dept = str(arguments.get("dept") or "tous")
+    if dept != "tous":
+        entete += " (" + dept.upper() + ")"
+
+    prochain = donnees.get("prochain_jour_cours")
+    reprise = ""
+    if isinstance(prochain, str) and len(prochain) == 10:
+        reprise = f"{prochain[8:10]}/{prochain[5:7]}"
+
+    if donnees.get("hors_horizon"):
+        ligne = f"{entete} : pas encore publié dans l'EDT (horizon d'affichage limité)."
+        if reprise:
+            ligne += f" Prochain jour de cours publié : {reprise}."
+    elif donnees.get("avec_cours"):
+        jours = donnees.get("jours_actifs")
+        creneaux = donnees.get("creneaux")
+        details = []
+        if isinstance(jours, int):
+            details.append(f"{jours} jour{'s' if jours > 1 else ''} de cours")
+        if isinstance(creneaux, int):
+            details.append(f"{creneaux} créneau{'x' if creneaux > 1 else ''}")
+        ligne = f"{entete} : cours"
+        if details:
+            ligne += " (" + ", ".join(details) + ")"
+        ligne += "."
+        if reprise:
+            ligne += f" Prochain jour de cours : {reprise}."
+    elif reprise:
+        ligne = f"{entete} : sans cours (vacances universitaires), reprise le {reprise}."
+    else:
+        ligne = (
+            f"{entete} : sans cours (vacances universitaires), "
+            "reprise non publiée pour l'instant."
+        )
+    return ligne + " Source : edt-ulco.fr."
+
+
+def gabarit_edt_iut(question: str, jeton: str, deadline: float) -> Session | None:
+    """Gabarit (d) — cours/EDT de l'IUT : appel DIRECT de l'outil edt_iut
+    (zéro tour LLM — l'outil lit le cache EdtCalendar et répond < 500 ms)
+    + ligne courte sourcée edt-ulco.fr (« Cette semaine : sans cours
+    (vacances universitaires), reprise le 02/11. Source : edt-ulco.fr »).
+    Échec d'appel (503 données EDT indisponibles, réseau) → None → voie
+    LLM normale (fail-soft, même contrat que les autres gabarits)."""
+    arguments = question_edt_iut(question)
+    if arguments is None:
+        return None
+
+    session = Session(question=question, gabarit="edt_iut")
+    donnees = _appel_outil_direct(session, "edt_iut", arguments, jeton, deadline)
+    if donnees is None:
+        return None
+    session.reponse = _formater_edt_rapide(donnees, arguments)
+    session.ok = bool(session.reponse.strip())
+    if not session.ok:
+        return None
+    return session
+
+
 def gabarit_prix_produit(question: str, jeton: str, deadline: float) -> Session | None:
     """Gabarit (c) — prix d'un produit : HONNÊTETÉ d'abord — aucun des 6
     outils ne donne le prix de vente (stock_produit → stock ; marge_produit
@@ -1275,6 +1466,7 @@ def poser_question(
     for gabarit in (
         gabarit_benefice_global,
         gabarit_anomalies_catalogue,
+        gabarit_edt_iut,
         gabarit_prix_produit,
     ):
         session_rapide = gabarit(question, jeton, deadline)
@@ -1651,12 +1843,15 @@ def main(argv: list[str] | None = None) -> int:
         # la détection regex SEULE (aucun appel réseau en dry-run).
         produit_rapide = detecter_question_stock(question)
         produit_prix = None
+        arguments_edt = None
         if produit_rapide is not None:
             chemin = "fast_path_stock"
         elif question_benefice_global(question):
             chemin = "gabarit_benefice_global"
         elif question_anomalies_catalogue(question):
             chemin = "gabarit_anomalies_catalogue"
+        elif (arguments_edt := question_edt_iut(question)) is not None:
+            chemin = "gabarit_edt_iut"
         else:
             produit_prix = detecter_question_prix(question)
             chemin = "gabarit_prix_produit" if produit_prix is not None else "llm_outils"
@@ -1667,6 +1862,7 @@ def main(argv: list[str] | None = None) -> int:
                     "question": question,
                     "chemin": chemin,
                     "fast_path_produit": produit_rapide,
+                    "gabarit_edt": arguments_edt,
                     "gabarit_prix_produit": produit_prix,
                     "contexte_messages": len(contexte or []),
                     "messages": construire_messages(question, contexte),

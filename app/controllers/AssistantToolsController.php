@@ -7,6 +7,8 @@ namespace App\Controllers;
 use App\Core\Compta\CatalogueQc;
 use App\Core\Compta\ComptaCalc;
 use App\Core\Compta\Dashboard\Data;
+use App\Core\Compta\Edt\CalendarContext;
+use App\Core\Compta\Edt\EdtCalendar;
 use App\Core\Compta\Kiosk;
 use App\Core\Compta\StockPublic;
 use App\Core\Compta\T1\T1AutoFusion;
@@ -31,6 +33,7 @@ use App\Models\Sale;
  *   GET /internal/assistant/stock_produit?nom=<libellé produit>
  *   GET /internal/assistant/produits_a_commander
  *   GET /internal/assistant/catalogue_anomalies   (veille qualité catalogue)
+ *   GET /internal/assistant/edt_iut?dept=…&semaine=… (cours IUT ULCO)
  *
  * Le nom d'outil est validé par liste blanche (outil()) : 404 « Outil
  * inconnu. » APRÈS la vérification du jeton — aucune énumération sans lui.
@@ -63,6 +66,23 @@ final class AssistantToolsController extends Controller
     private const TOOL_MARGE    = 'marge_produit';
     private const TOOL_DOUBLONS = 'doublons_en_attente';
     private const TOOL_CATALOGUE = 'catalogue_anomalies';
+    private const TOOL_EDT      = 'edt_iut';
+
+    /** Départements IUT demandables (valeur d'URL → ids Calais d'EdtCalendar,
+     * point d'assemblage unique de l'EDT — jamais de recalcul ici). */
+    private const EDT_DEPTS = [
+        'tous' => ['iut-info', 'iut-gea', 'iut-geii'],
+        'info' => ['iut-info'],
+        'gea'  => ['iut-gea'],
+        'geii' => ['iut-geii'],
+    ];
+
+    /** Noms courts affichés dans la réponse (même vocabulaire que le
+     * paramètre « dept » : info/gea/geii). */
+    private const EDT_DEPTS_COURTS = ['iut-info' => 'info', 'iut-gea' => 'gea', 'iut-geii' => 'geii'];
+
+    /** Vues acceptées du paramètre « semaine ». */
+    private const EDT_SEMAINES = ['aujourdhui' => true, 'courante' => true, 'prochaine' => true];
 
     /** Rate limit : 20 requêtes par minute et par IP. */
     private const RATE_MAX     = 20;
@@ -105,6 +125,7 @@ final class AssistantToolsController extends Controller
         self::TOOL_MARGE     => 'margeProduit',
         self::TOOL_DOUBLONS  => 'doublonsEnAttente',
         self::TOOL_CATALOGUE => 'catalogueAnomalies',
+        self::TOOL_EDT       => 'edtIut',
     ];
 
     /**
@@ -512,6 +533,180 @@ final class AssistantToolsController extends Controller
         }
 
         $this->json(['outil' => self::TOOL_CATALOGUE] + $anomalies);
+    }
+
+    /**
+     * Outil 7 — emploi du temps de l'IUT (INFO/GEA/GEII, ULCO Calais) :
+     * y a-t-il cours aujourd'hui / cette semaine / la semaine prochaine,
+     * combien de jours actifs et de créneaux, et quel est le prochain jour
+     * de cours publié. Toute la donnée vient d'EdtCalendar (point
+     * d'assemblage unique de l'EDT edt-ulco.fr, cache 6 h) via les
+     * injecteurs PARTAGÉS de CalendarContext — zéro duplication, la
+     * source edt-ulco.fr est citée dans la réponse (exigence coordinateur).
+     *
+     * Fail-closed honnête : calendrier totalement vide (API down sans
+     * aucun cache) → 503 « Données EDT indisponibles. », jamais de 500 ;
+     * un cache périmé est servi avec stale=true (politique EdtCalendar).
+     */
+    private function edtIut(): void
+    {
+        $this->ouvrir();
+
+        $dept    = trim((string) ($_GET['dept'] ?? 'tous'));
+        $semaine = trim((string) ($_GET['semaine'] ?? 'aujourdhui'));
+
+        $deptsIut = self::EDT_DEPTS[$dept] ?? null;
+        if ($deptsIut === null) {
+            $this->repondreErreur(400, 'Paramètre « dept » invalide (info, gea, geii ou tous attendu).');
+        }
+        if (!isset(self::EDT_SEMAINES[$semaine])) {
+            $this->repondreErreur(400, 'Paramètre « semaine » invalide (aujourdhui, courante ou prochaine attendu).');
+        }
+
+        $now = new \DateTimeImmutable('now', new \DateTimeZone('Europe/Paris'));
+
+        try {
+            // Injecteurs partagés CalendarContext : production = défauts
+            // EdtCalendar (curl + cache/edt), test = calendrier vide hors-ligne.
+            [$fetch, $dir] = CalendarContext::injecteurs(null, null);
+            $plage = EdtCalendar::plagePubliee($fetch, $dir);
+            if ($plage['fin'] === null) {
+                // Aucune donnée EDT publiée nulle part : refus honnête,
+                // jamais de « semaine sans cours » inventée sur du vide.
+                Logger::warning('assistant: edt_iut sans donnees (calendrier EDT vide)');
+                $this->repondreErreur(503, 'Données EDT indisponibles.');
+            }
+
+            if ($semaine === 'aujourdhui') {
+                $jour   = $now->format('Y-m-d');
+                $infos  = EdtCalendar::jourInfos($jour, $fetch, $dir);
+                $n      = self::edtSommeDept($infos['par_dept'], $deptsIut);
+                $reponse = [
+                    'outil'        => self::TOOL_EDT,
+                    'depts'        => self::edtNomsCourts($dept),
+                    'semaine'      => 'aujourdhui',
+                    'jour'         => $jour,
+                    'creneaux'     => $n,
+                    'jours_actifs' => $n > 0 ? 1 : 0,
+                    'avec_cours'   => $n > 0,
+                    'hors_horizon' => strcmp($jour, (string) $plage['fin']) > 0,
+                    'label'        => $n > 0
+                        ? 'Jour de cours'
+                        : (strcmp($jour, (string) $plage['fin']) > 0
+                            ? 'Au-delà de l\'horizon publié'
+                            : 'Jour sans cours (vacances ?)'),
+                    'stale'        => (bool) $infos['stale'],
+                ];
+            } else {
+                $lundi = $now->modify($semaine === 'courante' ? 'monday this week' : 'monday next week')->format('Y-m-d');
+                $s = EdtCalendar::semaineInfos($lundi, $fetch, $dir);
+
+                if ($dept === 'tous') {
+                    $n      = (int) $s['creneaux_total'];
+                    $actifs = (int) $s['jours_actifs'];
+                } else {
+                    // Vue departement : somme des jours ouvrés via jourInfos
+                    // (mémoïsé par EdtCalendar — une seule lecture du calendrier).
+                    $n = 0;
+                    $actifs = 0;
+                    for ($i = 0; $i < CalendarContext::JOURS_OUVRES_SEMAINE; $i++) {
+                        $d = (new \DateTimeImmutable($lundi))->modify("+{$i} day")->format('Y-m-d');
+                        $c = self::edtSommeDept(EdtCalendar::jourInfos($d, $fetch, $dir)['par_dept'], $deptsIut);
+                        $n += $c;
+                        if ($c > 0) {
+                            $actifs++;
+                        }
+                    }
+                }
+                $reponse = [
+                    'outil'        => self::TOOL_EDT,
+                    'depts'        => self::edtNomsCourts($dept),
+                    'semaine'      => $semaine,
+                    'lundi'        => $lundi,
+                    'vendredi'     => (new \DateTimeImmutable($lundi))->modify('+4 days')->format('Y-m-d'),
+                    'creneaux'     => $n,
+                    'jours_actifs' => $actifs,
+                    'avec_cours'   => $n > 0,
+                    'hors_horizon' => (bool) $s['hors_horizon'],
+                    'label'        => $n > 0
+                        ? 'Semaine de cours'
+                        : ((bool) $s['hors_horizon']
+                            ? 'Au-delà de l\'horizon publié'
+                            : 'Semaine sans cours (vacances ?)'),
+                    'stale'        => (bool) $s['stale'],
+                ];
+            }
+
+            $reponse['prochain_jour_cours'] = self::edtProchainJourCours($now, $deptsIut, $plage['fin'], $fetch, $dir);
+            $reponse['source'] = 'edt-ulco.fr via EdtCalendar (cache 6h)';
+
+            $this->json($reponse);
+        } catch (\Throwable $e) {
+            $this->echecInterne(self::TOOL_EDT, $e);
+        }
+    }
+
+    /**
+     * Noms courts de la réponse (« tous » → les trois départements).
+     *
+     * @return list<string>
+     */
+    private static function edtNomsCourts(string $dept): array
+    {
+        if ($dept !== 'tous') {
+            return [$dept];
+        }
+
+        return array_values(self::EDT_DEPTS_COURTS);
+    }
+
+    /**
+     * Créneaux des départements demandés dans le tableau par_dept de
+     * EdtCalendar::jourInfos (['tous'] = somme de tous).
+     *
+     * @param array<string,int> $parDept
+     * @param list<string>      $deptsIut
+     */
+    private static function edtSommeDept(array $parDept, array $deptsIut): int
+    {
+        $somme = 0;
+        foreach ($deptsIut as $d) {
+            $somme += (int) ($parDept[$d] ?? 0);
+        }
+
+        return $somme;
+    }
+
+    /**
+     * Premier jour de cours STRICTEMENT postérieur à aujourd'hui pour les
+     * départements demandés, borné par l'horizon publié : « tous » réutilise
+     * EdtCalendar::prochainJourCours tel quel ; un sous-ensemble departement
+     * est scanné jour par jour via jourInfos (données déjà en mémoire —
+     * aucune nouvelle lecture du calendrier).
+     *
+     * @param list<string> $deptsIut
+     */
+    private static function edtProchainJourCours(
+        \DateTimeImmutable $now,
+        array $deptsIut,
+        ?string $finPubliee,
+        ?callable $fetch,
+        ?string $dir
+    ): ?string {
+        $aujourdhui = $now->format('Y-m-d');
+        if ($deptsIut === self::EDT_DEPTS['tous']) {
+            return EdtCalendar::prochainJourCours($aujourdhui, $fetch, $dir);
+        }
+        if ($finPubliee === null) {
+            return null;
+        }
+        for ($d = $now->modify('+1 day'); strcmp($d->format('Y-m-d'), $finPubliee) <= 0; $d = $d->modify('+1 day')) {
+            if (self::edtSommeDept(EdtCalendar::jourInfos($d->format('Y-m-d'), $fetch, $dir)['par_dept'], $deptsIut) > 0) {
+                return $d->format('Y-m-d');
+            }
+        }
+
+        return null;
     }
 
     // -----------------------------------------------------------------

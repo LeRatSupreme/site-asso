@@ -422,9 +422,14 @@ final class CalendarContext
      * obtient un contexte neutre déterministe. En production : défauts
      * EdtCalendar (curl + cache/edt).
      *
+     * PUBLIC (partagé) : tout consommateur des données EDT côté requête
+     * (CalendarContext, AssistantToolsController::edtIut) récupère ses
+     * injecteurs ICI — la politique « hors-ligne en test, défauts en
+     * production » n'est définie qu'à UN seul endroit.
+     *
      * @return array{0:?callable(string):?string, 1:?string}
      */
-    private static function injecteurs(?callable $fetchUrl, ?string $cacheDir): array
+    public static function injecteurs(?callable $fetchUrl, ?string $cacheDir): array
     {
         if ($fetchUrl !== null || $cacheDir !== null) {
             return [$fetchUrl, $cacheDir];

@@ -19,6 +19,8 @@ declare(strict_types=1);
  * @var array<string,mixed> $day_track     Estimation du jour (window, hour, trop_tot, estimate, cum_actual, cum_expected, actual_so_far, expected_so_far, delta_pct|null, projection_eod, ecart_eur, intervalle_h|null, dans_intervalle|null, confiance, notes)
  * @var array<string,mixed> $weekday       Par jour de semaine {labels, ca (modèle : attendu prochaine occurrence), lo/hi (bande ~80 %), obs (moyenne brute observée|null), se, next_date, qty, tx, days_count (occ), today_index, best?{index,label,ca,n}|null, creuse_note?string|null}
  * @var array<string,mixed> $hourly        Par heure {labels, ca_avg, peak_hour, today_ca, today_expected, today_projete, now_hour, trop_tot, s}
+ * @var array<string,mixed> $calendrier    Contexte calendrier universitaire de la période affichée (CalendarContext::pourPeriode : plage_publiee{debut,fin,stale}, semaines_mortes[{lundi,vendredi,debut_fr,fin_fr,label,hors_horizon}], journee{date,cours,creneaux,prochain_cours,prochain_cours_fr}) — bandeau « vacances » + annotations des graphiques (mission E2).
+ * @var array<string,mixed> $reappro_meta  Base énoncée de la carte Réappro {demande,fenetre,creuse,calendrier,stock,date_stock} (ReapproDemande::meta ; « calendrier » non null ⇔ suggestions modulées, facteur < 1).
  * @var float $goal                        Objectif hebdomadaire affiché (GET ?goal= ou sauvegarde POST /admin/analytics/objectif)
  * @var list<string> $products             Produits distincts (sélecteur tendance)
  * @var string $productSelected            Produit suivi par la tendance hebdo
@@ -58,6 +60,48 @@ $iconSvg = static function (string $name): string {
 // Onglets de l'espace Ventes (partiel partagé avec /admin/compta et le
 // bilan annuel — lot 4) : cette page est l'onglet « Analyses ».
 $activeTab = $activeTab ?? 'analyses';
+
+// ---- Contexte calendrier universitaire (mission E2) ----
+// Bandeau + annotations « vacances » : les données viennent UNIQUEMENT du
+// contrôleur (CalendarContext::pourPeriode — contrat documenté dans son
+// docblock) ; la vue ne recalcule RIEN du calendrier EDT, elle choisit
+// seulement si une semaine morte en cours ou imminente de la période
+// mérite un bandeau discret, et la formule avec les libellés du backend
+// (aucun nom de vacances en dur).
+$calJournee = is_array($calendrier['journee'] ?? null) ? $calendrier['journee'] : [];
+$calMortes  = array_values(array_filter(
+    is_array($calendrier['semaines_mortes'] ?? null) ? $calendrier['semaines_mortes'] : [],
+    'is_array'
+));
+$calBanner  = null;
+$calToday   = (string) ($calJournee['date'] ?? '');
+if ($calMortes !== [] && preg_match('/^\d{4}-\d{2}-\d{2}$/', $calToday) === 1) {
+    // Lundi de la semaine courante — même convention que CalendarContext
+    // (lundi → vendredi) : couvre aussi le samedi/dimanche d'une semaine
+    // morte entamée.
+    $calLundiCourant = (new DateTimeImmutable($calToday))->modify('monday this week')->format('Y-m-d');
+    foreach ($calMortes as $calSem) {
+        if (!is_array($calSem)) {
+            continue;
+        }
+        $calLun = (string) ($calSem['lundi'] ?? '');
+        if ($calLun === $calLundiCourant) {
+            // Vacances EN COURS : la reprise est le prochain jour de cours publié.
+            $calReprise = trim((string) ($calJournee['prochain_cours_fr'] ?? ''));
+            $calBanner  = $calReprise !== ''
+                ? 'Vacances universitaires — reprise des cours le ' . $calReprise
+                : "Vacances universitaires — aucune reprise de cours publiée pour l'instant.";
+            break;
+        }
+        if ($calLun !== '' && strcmp($calLun, $calToday) > 0) {
+            // Première semaine morte imminente de la période affichée.
+            $calBanner = 'Vacances universitaires — semaine sans cours du '
+                . (string) ($calSem['debut_fr'] ?? $calLun) . ' au '
+                . (string) ($calSem['fin_fr'] ?? (string) ($calSem['vendredi'] ?? ''));
+            break;
+        }
+    }
+}
 ?>
 <?php require AEIC_VIEWS . '/partials/_tabs_ventes.php'; ?>
 
@@ -73,6 +117,13 @@ $activeTab = $activeTab ?? 'analyses';
             </p>
         </div>
     </div>
+
+    <?php if ($calBanner !== null): ?>
+    <!-- Bandeau contexte « vacances universitaires » (mission E2) :
+         composant existant alert-info (discret, informatif), libellés
+         100 % issus du backend, rien si pas de contexte pertinent. -->
+    <div class="alert alert-info" role="note"><?= e($calBanner) ?></div>
+    <?php endif; ?>
 
     <!-- ============================================================ -->
     <!--  Barre de filtres globaux (GET, partageable)                  -->
@@ -203,6 +254,20 @@ $activeTab = $activeTab ?? 'analyses';
                 <h2 class="chart-title">Le chiffre d'affaires et le bénéfice, période par période</h2>
                 <span class="chart-sub" id="trend-sub"></span>
             </div>
+            <?php if ($calMortes !== []): ?>
+                <?php
+                // Légende courte des semaines mortes de la période (mission
+                // E2) : dates du backend (debut_fr/fin_fr) ; le marquage
+                // (barres + libellés grisés, script en bas de page) n'existe
+                // qu'aux granularités jour/semaine — un mois CONTENANT une
+                // semaine morte n'est pas « mort ».
+                $calNote = 'Semaines sans cours : ' . implode(' · ', array_map(
+                    static fn (array $s): string => (string) ($s['debut_fr'] ?? '') . '–' . (string) ($s['fin_fr'] ?? ''),
+                    $calMortes
+                )) . (in_array($filters['granularity'], ['day', 'week'], true) ? ' — barres et libellés grisés' : '');
+                ?>
+                <span class="chart-sub fc-note"><?= e($calNote) ?></span>
+            <?php endif; ?>
             <div class="chart-canvas"><canvas id="chart-trend" height="120"></canvas></div>
         </div>
 
@@ -723,6 +788,16 @@ $activeTab = $activeTab ?? 'analyses';
                 <h2 class="chart-title">Réapprovisionnement</h2>
                 <span class="chart-sub">besoins estimés — horizon 7 jours ouverts · <?= e($reapproBasis) ?></span>
             </div>
+            <?php if (!empty($reapproMeta['calendrier'])): ?>
+                <?php
+                // Modulation calendrier universitaire (mission E2) : texte
+                // factuel du backend (ReapproDemande::meta — « calendrier »
+                // non null ⇔ facteur < 1, ex. « Semaine sans cours du
+                // 26/10 au 30/10 : suggestions réduites ×0,6 »).
+                $calReapproTxt = rtrim(trim((string) $reapproMeta['calendrier']), '.') . '.';
+                ?>
+                <p class="chart-sub fc-note" title="Quantités suggérées modulées par le calendrier universitaire (semaines sans cours de l'horizon de couverture).">📅 <?= e($calReapproTxt) ?></p>
+            <?php endif; ?>
             <?php if ($reappro === []): ?>
                 <p class="muted fc-empty">Aucune suggestion de réapprovisionnement.</p>
             <?php else: ?>
@@ -998,4 +1073,110 @@ const ANALYTICS_BOOT = {
     produitsUrl: '<?= e(url('/admin/compta/produits')) ?>',
     categorie: '<?= e($filters['category']) ?>'
 };
+</script>
+<script>
+/* Mission E2 — annotation « semaines sans cours » du graphique des ventes
+   de la période (#chart-trend). Source : îlot JSON ci-dessus
+   (payload.calendrier, exposé par AdminAnalyticsController depuis
+   CalendarContext::pourPeriode) — ce script ne déduit RIEN du calendrier
+   EDT, il mappe les semaines mortes sur les buckets de l'axe (mêmes bornes
+   qu'Analytics::enumerateBuckets : jours consécutifs depuis filters.from,
+   fenêtres de 7 jours en granularité semaine).
+
+   CHOIX DE MÉCANISME (documenté, zéro nouvelle dépendance) : le plugin
+   officiel d'annotation Chart.js n'est pas vendorisé ; sans lui, une bande
+   de fond (dataset area) ou des pointillés verticaux ne peuvent pas être
+   alignés précisément sur un axe catégoriel (bords interpolés au centre
+   des barres → demi-barres débordantes). Mécanisme retenu : grisage EXACT
+   des barres CA et des libellés d'axe des buckets couverts par une semaine
+   morte (couleurs scriptables Chart.js), + légende courte rendue côté
+   serveur (chart-sub fc-note ci-dessus) + rappel en tooltip. Sans semaine
+   morte affichable, ce script ne modifie RIEN (non-régression).
+
+   Exécution : DOMContentLoaded — les scripts defer (Chart.js, analytics.js)
+   ont déjà construit le graphique à ce stade (un defer s'exécute avant
+   DOMContentLoaded ; l'inline ne fait qu'enregistrer le listener). */
+document.addEventListener('DOMContentLoaded', function () {
+    'use strict';
+    if (typeof Chart === 'undefined' || typeof Chart.getChart !== 'function') { return; }
+    var island = document.getElementById('analytics-data');
+    var data = null;
+    try { data = island ? JSON.parse(island.textContent) : null; } catch (err) { data = null; }
+    if (!data || !data.calendrier || !Array.isArray(data.calendrier.semaines_mortes)) { return; }
+    var mortes = data.calendrier.semaines_mortes;
+    if (mortes.length === 0) { return; }
+    var chart = Chart.getChart('chart-trend');
+    if (!chart) { return; }
+
+    var f = data.filters || {};
+    var gran = f.granularity === 'week' ? 'week' : (f.granularity === 'month' ? 'month' : 'day');
+    if (gran === 'month') {
+        // Un mois CONTENANT une semaine morte n'est pas mort : aucune barre
+        // marquée, seule la légende serveur l'indique.
+        return;
+    }
+
+    var DAY = 86400000;
+    function isoMs(s) {
+        var p = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s || ''));
+        return p ? Date.UTC(Number(p[1]), Number(p[2]) - 1, Number(p[3])) : NaN;
+    }
+    var fromMs = isoMs(f.from);
+    if (isNaN(fromMs)) { return; }
+
+    // Plages mortes [lundi ; vendredi] en ms UTC (arithmétique par jours
+    // entiers — jamais de fuseau ni d'heure d'été dans la comparaison).
+    var plages = [];
+    mortes.forEach(function (s) {
+        var lo = isoMs(s && s.lundi);
+        var hi = isoMs(s && s.vendredi);
+        if (!isNaN(lo) && !isNaN(hi)) {
+            plages.push({ lo: lo, hi: hi, txt: String((s && s.debut_fr) || '') + '–' + String((s && s.fin_fr) || '') });
+        }
+    });
+    if (plages.length === 0) { return; }
+
+    // Barre i → semaine morte couvrante (null si aucune).
+    var n = chart.data.labels ? chart.data.labels.length : 0;
+    var morteBarre = new Array(n);
+    var une = false;
+    for (var i = 0; i < n; i++) {
+        var t = fromMs + i * (gran === 'week' ? 7 * DAY : DAY);
+        morteBarre[i] = null;
+        for (var k = 0; k < plages.length; k++) {
+            var p = plages[k];
+            var couvert = gran === 'day'
+                ? (t >= p.lo && t <= p.hi)
+                : (p.lo >= t && p.lo <= t + 6 * DAY);
+            if (couvert) { morteBarre[i] = p; une = true; break; }
+        }
+    }
+    if (!une) { return; }
+
+    var CA_BG = 'rgba(72,189,211,.55)';
+    var CA_BG_MORTE = 'rgba(148,163,184,.35)';
+    var bars = chart.data.datasets && chart.data.datasets[0];
+    if (bars && bars.type === 'bar') {
+        bars.backgroundColor = function (ctx) {
+            return morteBarre[ctx.dataIndex] ? CA_BG_MORTE : CA_BG;
+        };
+    }
+    var axeX = chart.options.scales && chart.options.scales.x;
+    if (axeX) {
+        axeX.ticks = axeX.ticks || {};
+        axeX.ticks.color = function (ctx) {
+            return morteBarre[ctx.index] ? 'rgba(159,179,200,.5)' : Chart.defaults.color;
+        };
+    }
+    var tooltip = chart.options.plugins && chart.options.plugins.tooltip;
+    if (tooltip) {
+        tooltip.callbacks = tooltip.callbacks || {};
+        tooltip.callbacks.afterBody = function (items) {
+            var it = items && items[0];
+            var p = it ? morteBarre[it.dataIndex] : null;
+            return p ? 'Semaine sans cours : ' + p.txt : '';
+        };
+    }
+    chart.update();
+});
 </script>
