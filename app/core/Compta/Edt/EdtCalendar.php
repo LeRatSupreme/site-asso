@@ -263,6 +263,27 @@ final class EdtCalendar
     }
 
     /**
+     * Plage PUBLIÉE du calendrier chargé : premier et dernier jour local
+     * connus, TOUS évènements confondus y compris les « Fermeture » (une
+     * semaine publiée « en fermeture » est une vacances CONNUE, pas un
+     * trou — c'est le même critère que l'horizon de semaineInfos).
+     * Point d'assemblage pour les contextes dérivés (CalendarContext) :
+     * savoir qu'une semaine est ENTIÈREMENT publiée (lundi ≥ debut et
+     * vendredi ≤ fin) avant de la déclarer « morte », et ne lister que
+     * les semaines mortes évaluables d'une période affichée. Calendrier
+     * vide (API down sans cache) → [null, null] : tout est alors hors
+     * horizon, les consommateurs prudents restent neutres.
+     *
+     * @return array{debut:?string, fin:?string, stale:bool}
+     */
+    public static function plagePubliee(?callable $fetchUrl = null, ?string $cacheDir = null): array
+    {
+        $cal = self::calendrier($fetchUrl, $cacheDir);
+
+        return ['debut' => $cal['debut'], 'fin' => $cal['horizon'], 'stale' => $cal['stale']];
+    }
+
+    /**
      * Première date STRICTEMENT postérieure à $date avec au moins un
      * créneau (tous départements confondus), bornée par l'horizon publié
      * (null si aucun cours connu dans l'horizon du cache).
@@ -309,9 +330,11 @@ final class EdtCalendar
      * normalise chaque évènement : jour local (Europe/Paris) et filtrage
      * des évènements « Fermeture » qui ne sont pas des cours. Les ~15
      * appels réseau éventuels partagent le budget BUDGET_REGEN_S.
+     * « debut »/« horizon » bornent la plage PUBLIÉE en comptant TOUT
+     * évènement connu (fermetures comprises) — cf. plagePubliee().
      *
      * @return array{events:array<string,list<array{_jour:string}>>,
-     *               horizon:?string, stale:bool}
+     *               debut:?string, horizon:?string, stale:bool}
      */
     private static function calendrier(?callable $fetchUrl, ?string $cacheDir): array
     {
@@ -324,14 +347,20 @@ final class EdtCalendar
         $events = [];
         $stale = false;
         $horizon = null;
+        $debut = null;
         foreach (self::DEPTS as $dept) {
             $payload = self::chargerDept($dept, $fetch, $dir, $echeance);
             $stale = $stale || $payload['stale'];
             $events[$dept] = [];
             foreach ($payload['events'] as $e) {
                 $jour = self::jourLocal($e['start'] ?? null);
-                if ($jour !== null && ($horizon === null || strcmp($jour, $horizon) > 0)) {
-                    $horizon = $jour; // dernier jour publié, fermetures incluses.
+                if ($jour !== null) {
+                    if ($horizon === null || strcmp($jour, $horizon) > 0) {
+                        $horizon = $jour; // dernier jour publié, fermetures incluses.
+                    }
+                    if ($debut === null || strcmp($jour, $debut) < 0) {
+                        $debut = $jour; // premier jour connu, fermetures incluses.
+                    }
                 }
                 if (!self::estCours($e)) {
                     continue; // « Fermeture IUT … » : pas un cours.
@@ -344,7 +373,7 @@ final class EdtCalendar
             }
         }
 
-        return ['events' => $events, 'horizon' => $horizon, 'stale' => $stale];
+        return ['events' => $events, 'debut' => $debut, 'horizon' => $horizon, 'stale' => $stale];
     }
 
     /**

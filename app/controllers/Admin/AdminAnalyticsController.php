@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Controllers\Admin;
 
 use App\Core\Compta\ComptaCalc;
+use App\Core\Compta\Edt\CalendarContext;
 use App\Core\Compta\Forecast\SlowPeriods;
 use App\Core\Compta\KioskPages;
 use App\Models\Analytics;
@@ -285,6 +286,29 @@ final class AdminAnalyticsController extends AdminBaseController
         // 21/10/2026) ; le contrôleur ne fait que mapper les sorties.
         $demande  = ReapproDemande::calculer($this->filter('fw', ''), $now, $goal);
 
+        // ---- Contexte CALENDRIER UNIVERITAIRE de la période affichée ----
+        // (mission E2) : données d'ANNOTATION pour la vue/le JS (semaines
+        // mortes de la période, plage publiée EDT, prochain jour de cours).
+        // CONTRAT (consommé par dev-frontend, aucune vue ne recalcule) :
+        //  'calendrier' => [
+        //    'plage_publiee'  => ['debut'=>'Y-m-d'|null, 'fin'=>'Y-m-d'|null,
+        //                         'stale'=>bool] — fenêtre de fiabilité EDT
+        //                        (cache ~J-14 → J+60) ; null = calendrier
+        //                        indisponible, ne rien afficher de péremptoire ;
+        //    'semaines_mortes' => [ ['lundi'=>'Y-m-d', 'vendredi'=>'Y-m-d',
+        //        'debut_fr'=>'d/m', 'fin_fr'=>'d/m', 'label'=>string,
+        //        'hors_horizon'=>false], … ] — semaines ENTIÈREMENT publiées
+        //        sans aucun cours chevauchant [from ; to] (hors_horizon
+        //        toujours false : une semaine non publiée n'est jamais
+        //        listée morte) → bandeaux/annotations « vacances » sur les
+        //        graphiques de la période ;
+        //    'journee' => ['date', 'cours'=>bool, 'creneaux'=>int,
+        //        'prochain_cours'=>'Y-m-d'|null,
+        //        'prochain_cours_fr'=>'mar. 03/11'|null] — journée COURANTE
+        //        (indépendante des filtres) pour le bandeau « reprise ».
+        // En APP_TESTING : calendrier vide hors-ligne → neutre déterministe.
+        $calendrierCtx = CalendarContext::pourPeriode((string) $from, (string) $to, $now);
+
         $fw        = $demande['fw'];
         $trackFrom = $demande['trackFrom'];
         $dataset   = $demande['dataset'];
@@ -444,6 +468,7 @@ final class AdminAnalyticsController extends AdminBaseController
             'goal'       => $goal,
             'meta'       => $meta,
             'historique' => $historique,
+            'calendrier' => $calendrierCtx,
             'periode_creuse' => [
                 'raw'     => $creuseRaw,
                 'actives' => array_map(
@@ -513,6 +538,7 @@ final class AdminAnalyticsController extends AdminBaseController
             'meta'           => $meta,
             'reco'           => $recoPayload,
             'historique'     => $historique,
+            'calendrier'     => $calendrierCtx,
             'periode_creuse' => [
                 'raw'     => $creuseRaw,
                 'actives' => array_map(

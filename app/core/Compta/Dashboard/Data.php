@@ -6,6 +6,7 @@ namespace App\Core\Compta\Dashboard;
 
 use App\Core\Compta\CardFees;
 use App\Core\Compta\ComptaCalc;
+use App\Core\Compta\Edt\CalendarContext;
 use App\Models\Analytics;
 use App\Models\Budget;
 use App\Models\CashCount;
@@ -399,15 +400,40 @@ final class Data
      * produits marqués « plus en vente » sont exclus (voir
      * ProductDiscontinued).
      *
-     * @param int         $targetDays Horizon de couverture, en jours calendaires.
-     * @param string|null $fromDay    Début de la période d'analyse (inclus).
-     * @param string|null $toDay      Fin de la période d'analyse (inclus).
-     * @param int         $calDays    Jours calendaires de la période (week-end inclus).
+     * FACTEUR CALENDRIER UNIVERITAIRE (mission E2) : l'horizon de couverture
+     * couvre des semaines qui peuvent être sans cours — les quantités
+     * suggérées (need, to_order, to_order_raw) sont alors modulées par
+     * CalendarContext::facteurReappro (semaine 100 % morte → 0, semaine
+     * partielle → prorata jours actifs/5, hors horizon publié → NEUTRE
+     * 1.0 : on ne réduit jamais sur des données absentes). Le facteur
+     * n'agit QUE sur ces quantités : les moyennes observées
+     * (avg_day/week/month), l'autonomie et les COÛTS unitaires sont
+     * inchangés (order_cost suit mécaniquement qté × coût inchangé). Un
+     * horizon 100 % mort (facteur 0) retire AUSSI l'état « reorder » et
+     * l'alerte associée : commander pendant une semaine morte est du
+     * bruit — la semaine de reprise re-déclenchera l'alerte sur son
+     * propre horizon.
      *
-     * @return array{rows:list<array<string,mixed>>, alerts:int}
+     * @param int                $targetDays Horizon de couverture, en jours calendaires.
+     * @param array<string,mixed>|null $calendrier Facteur calendrier PRÉCALCULÉ
+     *                                        ({facteur:float, explication:?string}, sortie
+     *                                        CalendarContext::facteurReappro) — null = calculé
+     *                                        ici (production). L'injection sert aux tests et
+     *                                        à la trace avant/après chiffrée.
+     *
+     * @return array{rows:list<array<string,mixed>>, alerts:int, calendrier:array{facteur:float, explication:?string}}
      */
-    public static function analyseReappro(int $targetDays, ?string $fromDay, ?string $toDay, int $calDays): array
+    public static function analyseReappro(int $targetDays, ?string $fromDay, ?string $toDay, int $calDays, ?array $calendrier = null): array
     {
+        // Facteur calendrier universitaire de l'horizon de couverture
+        // (injectable pour tests/trace ; panne EDT → 1.0 silencieux) :
+        // module UNIQUEMENT les quantités suggérées — cf. docblock.
+        if ($calendrier === null) {
+            $now = new \DateTimeImmutable('now', new \DateTimeZone('Europe/Paris'));
+            $calendrier = CalendarContext::facteurReappro($now, max(1, $targetDays));
+        }
+        $fCal = min(1.0, max(0.0, (float) ($calendrier['facteur'] ?? 1.0)));
+
         // 100 % basé sur les ventes SumUp : chaque produit du CSV est listé,
         // sa catégorie vient du CSV, et son stock est le théorique issu de
         // l'inventaire (même source que la page Inventaire).
@@ -472,10 +498,14 @@ final class Data
                 ? max(0, (int) floor($stock / $avgDay))
                 : null;
 
-            $need   = (int) ceil($avgDay * $targetDays);
-            // Un stock négatif (survente) majore la quantité à commander :
-            // reconstituer le niveau perdu en plus de couvrir le besoin.
-            $toOrderRaw = max(0, $need - ($stock ?? 0));
+            // Besoin de l'horizon MODULÉ par le calendrier universitaire
+            // (facteur 0 = semaine morte : besoin nul) ; un horizon 100 %
+            // mort n'ordonne RIEN, pas même la reconstitution d'un stock
+            // négatif — la semaine de reprise le couvrira sur son propre
+            // horizon. Les moyennes observées et l'autonomie (faits)
+            // restent à l'échelle pleine.
+            $need   = (int) ceil($avgDay * $targetDays * $fCal);
+            $toOrderRaw = $fCal <= 0.0 ? 0 : max(0, $need - ($stock ?? 0));
 
             // Pack d'achat : arrondi au multiple supérieur (besoin brut 2,
             // pack de 12 → commander 12). 0/absent = commande à l'unité.
@@ -504,6 +534,11 @@ final class Data
                 $state = 'ok';
             } elseif ($stock === null) {
                 $state = 'unknown';
+            } elseif ($fCal <= 0.0) {
+                // Horizon de couverture 100 % mort : aucune suggestion,
+                // aucune alerte (cf. docblock — le bruit de vacances n'a
+                // pas à réclamer une commande).
+                $state = 'ok';
             } elseif ($stock <= 0 || ($autonomy !== null && $autonomy < 7)) {
                 $state = 'reorder';
             } else {
@@ -547,6 +582,10 @@ final class Data
             return $aa <=> $bb;
         });
 
-        return ['rows' => $rows, 'alerts' => $alerts];
+        return [
+            'rows'       => $rows,
+            'alerts'     => $alerts,
+            'calendrier' => ['facteur' => $fCal, 'explication' => $calendrier['explication'] ?? null],
+        ];
     }
 }

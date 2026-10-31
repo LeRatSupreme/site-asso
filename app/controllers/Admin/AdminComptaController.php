@@ -2155,13 +2155,16 @@ final class AdminComptaController extends AdminBaseController
             'totalUnits'  => $totalUnits,
             'totalCost'   => round($totalCost, 2),
             'missingCost' => $missingCost,
-            // Encart « Base de calcul » (identique à la page Réappro) :
+            // Encart « Base de calcul » (identique au Réappro) :
             // valeurs factuelles issues du payload ReapproDemande (fw) et
             // de la couverture choisie — jamais recalculées en vue.
+            // « calendrier » : énoncé factuel du facteur EDT appliqué aux
+            // suggestions (null en semaine normale — rien à afficher).
             'basis'       => [
                 'ventes'      => sprintf('%d derniers jours', (int) ($demande['fw'] ?? 30)),
                 'couverture'  => (string) $covers[$coverKey]['label'],
                 'source'      => self::BASE_CALCUL_SOURCE,
+                'calendrier'  => $demande['meta']['calendrier'] ?? null,
             ],
             // Faux = masque TOUT chiffre financier (bénévole, jeton membres).
             'showMoney'   => $showMoney,
@@ -2298,6 +2301,10 @@ final class AdminComptaController extends AdminBaseController
             'ventes'     => $ventes,
             'couverture' => (string) $periods[$periodKey]['label'],
             'source'     => self::BASE_CALCUL_SOURCE,
+            // Énoncé factuel du facteur EDT appliqué aux quantités à
+            // commander (null en semaine normale) — même donnée que la
+            // sortie Data::analyseReappro['calendrier'], jamais recalculée.
+            'calendrier' => $data['calendrier']['explication'] ?? null,
         ];
 
         if ($kiosk) {
