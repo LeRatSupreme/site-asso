@@ -133,6 +133,106 @@ final class StockBookTest extends TestCase
     }
 
     /**
+     * Passe MOTS de resolveLoose (STOCK-PUB-14) : le libellé cite la clé
+     * avec des mots décoratifs — « un coca » rejoint la clé « Coca »
+     * (exacte → normalisée → alias → variante ont toutes échoué avant).
+     * La clé renvoyée est la clé EXACTE du livre (« orig »), via 'mots'.
+     */
+    public function test_resolve_loose_passe_mots_libelle_decore_rejoint_la_cle(): void
+    {
+        $book = new StockBook(
+            ['Coca' => 5],
+            ['Coca' => ['at' => '2026-10-29 09:00:00', 'qty' => 5, 'gap' => 0]],
+            []
+        );
+
+        $e = $book->resolveLoose('un coca');
+        self::assertNotNull($e);
+        self::assertSame('mots', $e['via'], 'les mots décoratifs (« un ») ne doivent pas masquer la clé.');
+        self::assertSame('Coca', $e['key'], 'clé EXACTE du livre, pas le libellé saisi.');
+        self::assertSame(5, $e['stock']);
+        self::assertSame('2026-10-29 09:00:00', $e['at']);
+
+        // Exemple du docblock : « Kinder Bueno » pour la clé « Bueno ».
+        // (La clé multi-mots « Kinder Bueno » est agglomérée en « kinderbueno »
+        // par la normalisation : elle ne peut PAS matcher mot à mot — seule
+        // la clé un-mot « Bueno » est citée par le libellé.)
+        $book2 = new StockBook(['Bueno' => 2, 'Kinder Bueno' => 7], [], []);
+        $e2 = $book2->resolveLoose('un Kinder Bueno');
+        self::assertNotNull($e2);
+        self::assertSame('mots', $e2['via']);
+        self::assertSame('Bueno', $e2['key']);
+        self::assertSame(2, $e2['stock']);
+    }
+
+    /**
+     * Règle d'ÉGALITÉ de la passe mots : « Kinder Bueno » quand les clés
+     * « Bueno » ET « Kinder » existent toutes deux → null, JAMAIS de choix
+     * arbitraire entre deux clés également citées (comportement documenté
+     * dans resolveLoose — cas concret du commentaire).
+     */
+    public function test_resolve_loose_passe_mots_egalite_null_kinder_bueno(): void
+    {
+        $book = new StockBook(
+            ['Bueno' => 2, 'Kinder' => 9],
+            [
+                'Bueno'  => ['at' => '2026-10-20 10:00:00', 'qty' => 2, 'gap' => 0],
+                'Kinder' => ['at' => '2026-10-21 11:00:00', 'qty' => 9, 'gap' => 0],
+            ],
+            []
+        );
+
+        self::assertNull($book->resolveLoose('Kinder Bueno'), 'deux clés citées à égalité (1 mot chacune) : introuvable, pas de tirage au sort.');
+        self::assertNull($book->resolveLoose('kinder   bueno'), 'casse/espacements : même égalité, même null.');
+    }
+
+    /**
+     * Passe mots sans AUCUN candidat : la clé du livre n'est pas citée
+     * par le libellé → null (à lister « à compter », comme resolve()).
+     */
+    public function test_resolve_loose_passe_mots_sans_candidat_null(): void
+    {
+        $book = new StockBook(
+            ['Coca 33cl' => 5],
+            ['Coca 33cl' => ['at' => '2026-10-21 20:00:00', 'qty' => 5, 'gap' => 0]],
+            []
+        );
+
+        // Produit totalement absent du livre.
+        self::assertNull($book->resolveLoose('Pepsi'));
+
+        // Mots du libellé ≠ mots de la clé (« coca », « 33cl » non cités).
+        self::assertNull($book->resolveLoose('Eau gazeuse'));
+    }
+
+    /**
+     * Ordre des passes de resolveLoose : exacte/normale AVANT variante
+     * AVANT mots — et la clé renvoyée est TOUJOURS la clé EXACTE du livre
+     * (contrat du point d'accès assistant : clé canonique stable).
+     */
+    public function test_resolve_loose_variante_avant_mots_et_cle_exacte_renvoyee(): void
+    {
+        $book = new StockBook(
+            ['Bueno' => 4],
+            ['Bueno' => ['at' => '2026-10-22 12:00:00', 'qty' => 4, 'gap' => 0]],
+            []
+        );
+
+        // Suffixe couleur rabattu (AliasSuggester) : via 'variante', PAS 'mots'.
+        $e = $book->resolveLoose('Bueno white');
+        self::assertNotNull($e);
+        self::assertSame('variante', $e['via']);
+        self::assertSame('Bueno', $e['key'], 'clé EXACTE d\'inventaire, pas « Bueno white ».');
+        self::assertSame(4, $e['stock']);
+
+        // Passe exacte d'abord : resolveLoose ne dégrade jamais en mots.
+        $e2 = $book->resolveLoose('bueno');
+        self::assertNotNull($e2);
+        self::assertSame('exact', $e2['via']);
+        self::assertSame('Bueno', $e2['key']);
+    }
+
+    /**
      * Valeur € du stock : Σ max(0, stock) × coût PAR CLÉ EXACTE ; sans
      * coût connu (absent ou NULL), le produit est ignoré — aucune valeur
      * inventée.
