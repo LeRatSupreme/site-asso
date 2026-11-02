@@ -216,10 +216,28 @@ final class AssistantKioskTest extends TestCase
         self::assertSame(503, $r['http']);
         self::assertSame("L'assistant est indisponible, réessaie dans un instant.", $r['error']);
 
+        // LOG-02 (mission 31/10) : la voie LLM écrit D'ABORD une entrée
+        // « start » AVANT l'appel (un process tué pendant la génération
+        // laisse au moins cette trace) puis l'entrée finale recollée par
+        // le même id → 2 lignes (et non 1 : contrat post-0440cc3, même
+        // épinglage que AssistantPublicTest sur le journal public).
         $lignes = $this->lignesJournalKiosk();
-        self::assertCount(1, $lignes);
-        self::assertSame(PublicAssistant::ROLE_KIOSK_MEMBRE_LEGACY, $lignes[0]['kiosk']);
-        self::assertFalse($lignes[0]['faq']);
+        self::assertCount(2, $lignes, 'Voie LLM kiosk = une entrée start puis une entrée fin (LOG-02).');
+
+        $start = $lignes[0];
+        self::assertSame('start', $start['phase']);
+        self::assertSame('llm', $start['mode']);
+        self::assertSame('Météo demain ?', $start['question']);
+        self::assertMatchesRegularExpression('/^[0-9a-f]{16}$/', (string) ($start['id'] ?? ''), 'id de la start = bin2hex(random_bytes(8)).');
+        self::assertArrayNotHasKey('status', $start, 'La start précède l\'appel : elle ne porte AUCUN verdict.');
+
+        $fin = $lignes[1];
+        self::assertSame('fin', $fin['phase']);
+        self::assertSame($start['id'], $fin['id'], 'L\'entrée finale doit être recollée à la start par le même id.');
+        self::assertSame(503, $fin['status']);
+        self::assertFalse($fin['faq']);
+        self::assertSame('llm', $fin['mode']);
+        self::assertSame(PublicAssistant::ROLE_KIOSK_MEMBRE_LEGACY, $fin['kiosk'], 'L\'attribution du rôle legacy porte sur l\'entrée finale.');
 
         // Le sémaphore kiosk partage les MÊMES slots que le public (il
         // protège le llama-server) : le passage par le chemin LLM a créé

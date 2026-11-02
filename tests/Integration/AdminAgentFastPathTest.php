@@ -16,7 +16,11 @@ namespace Tests\Integration;
  *     de test du contrôleur), la même question préparée N'EMPRUNTE PAS
  *     le fast-path et le pont répond normalement (prompt construit).
  *  3. Page /admin/agent : l'agrégat du journal s'affiche, les payloads
- *     d'injection du journal sont rendus INERTES (échappés).
+ *     d'injection du journal sont rendus INERTES (échappés) — depuis un
+ *     journal CONTRÔLÉ sous tests/cache/ (l'assertion est auto-portante :
+ *     le payload historique du journal réel a disparu avec la
+ *     reconstitution post-incident du 31/10), le « top question » restant
+ *     vérifié sur le journal réel avec skip propre.
  *  4. Sans session admin : la page est refusée.
  *  7. Aperçu live du gabarit depuis la page Agent (validation 7 du
  *     steer V1+) : les outils sont rejoués en lecture seule, le flash
@@ -32,9 +36,10 @@ final class AdminAgentFastPathTest extends IntegrationTestCase
 {
     private string $adminId = 'u_agent_fp';
 
-    /** true : la requête courante (page Agent) doit lire le VRAI journal
-     * — on ne pose alors PAS l'override AEIC_ASSISTANT_JOURNAL, qui ne
-     * sert qu'à isoler les ÉCRITURES du fast-path vers tests/cache/. */
+    /** true : la/les requête(s) courante(s) (page Agent) doiT/vent lire
+     * le VRAI journal — on ne pose alors PAS l'override
+     * AEIC_ASSISTANT_JOURNAL, qui ne sert qu'à isoler les ÉCRITURES du
+     * fast-path ET à brancher la page sur un journal CONTRÔLÉ tests/cache/. */
     private bool $lireJournalReel = false;
 
     protected function setUp(): void
@@ -63,6 +68,16 @@ final class AdminAgentFastPathTest extends IntegrationTestCase
         }
 
         return $env;
+    }
+
+    public static function tearDownAfterClass(): void
+    {
+        // Journal contrôlé jetable (même hygiène qu'AdminAgentPrepareAllTest) :
+        // setUp() le détruit au DÉBUT de chaque test, ici on garantit qu'il
+        // ne survit pas non plus à la DERNIÈRE exécution de la classe — il
+        // peut contenir le payload d'injection du test d'inertie.
+        @unlink(self::cheminJournalTest());
+        parent::tearDownAfterClass();
     }
 
     public function test_question_preparee_repond_rapide_et_sourcee_en_fastpath(): void
@@ -147,7 +162,7 @@ final class AdminAgentFastPathTest extends IntegrationTestCase
         self::assertSame('Il me reste combien de Bueno ?', $corps['dry_run']['messages'][count($corps['dry_run']['messages']) - 1]['content'] ?? null);
     }
 
-    public function test_la_page_agent_affiche_l_agregat_et_rend_les_payloads_inertes(): void
+    public function test_la_page_agent_affiche_l_agregat_du_journal_reel(): void
     {
         // L'agrégat affiché provient du VRAI logs/assistant.jsonl (lecture
         // seule) : s'il est absent ou ne contient pas la question attendue
@@ -178,9 +193,28 @@ final class AdminAgentFastPathTest extends IntegrationTestCase
         self::assertStringContainsString('Questions préparées', $html);
         self::assertStringContainsString('Il me reste combien de Bueno ?', $html, 'Le top question du journal doit apparaître.');
         self::assertStringContainsString(e("Qu'est-ce qu'il faut que je rachète ?"), $html, 'La question préparée doit apparaître (échappée par e(), comme tout le journal).');
+    }
 
-        // Payload d'injection RÉEL du journal : rendu ÉCHAPPÉ (inerte).
+    public function test_les_payloads_d_injection_sont_rendus_inertes_depuis_un_journal_controle(): void
+    {
+        // Découplé du journal réel (option 2 du diagnostic dev-secu) : le
+        // payload historique a disparu lors de la reconstitution du 31/10,
+        // l'ancienne assertion produisait un FAUX ÉCHEC sur tout
+        // environnement au journal reconstitué. Il est désormais posé dans
+        // le journal isolé tests/cache/…jsonl lu par la page via l'override
+        // AEIC_ASSISTANT_JOURNAL (même mécanisme que
+        // AdminAgentPrepareAllTest::Q_INJECTION) : ce test est
+        // DÉTERMINISTE — indépendant de l'état du journal de production
+        // (lireJournalReel reste false : l'override est posé par extraEnv)
+        // comme du contenu préexistant de la base (setUp réinitialise et
+        // sème les siennes).
         $extrait = '"; rm -rf / ; $(touch /tmp/pwned_secu)';
+        file_put_contents(self::cheminJournalTest(), self::entreeJournalControle($extrait) . "\n");
+
+        $r = $this->request('GET', '/admin/agent', [], [], $this->adminId);
+        self::assertSame(200, (int) ($r['code'] ?? 0));
+        $html = (string) ($r['body'] ?? '');
+        self::assertStringContainsString('Questions posées', $html, 'L\'agrégat du journal contrôlé doit s\'afficher.');
         self::assertStringContainsString(e($extrait), $html, 'Le payload doit être rendu échappé (htmlspecialchars).');
         self::assertStringNotContainsString($extrait, $html, 'Le payload brut ne doit JAMAIS apparaître tel quel.');
         self::assertStringContainsString('⚠', $html, 'Le badge d\'injection suspectée doit être signalé.');
@@ -253,6 +287,32 @@ final class AdminAgentFastPathTest extends IntegrationTestCase
     private static function cheminJournalTest(): string
     {
         return dirname(__DIR__) . '/cache/assistant_fastpath_' . (string) getmypid() . '.jsonl';
+    }
+
+    /**
+     * Ligne JSONL au format réel du journal admin (logs/assistant.jsonl,
+     * même modèle qu'AdminAgentPrepareAllTest::entree) : succès routé
+     * stock_produit portant la question donnée — la page doit agréger
+     * cette entrée, la signaler ⚠ (injection suspectée) et la rendre
+     * ÉCHAPPÉE, sans jamais exécuter quoi que ce soit.
+     */
+    private static function entreeJournalControle(string $question): string
+    {
+        return (string) json_encode([
+            'horodatage'    => '2026-10-28T10:00:00+01:00',
+            'question'      => $question,
+            'ok'            => true,
+            'duree_ms'      => 1500,
+            'appels_outils' => [[
+                'outil'       => 'stock_produit',
+                'arguments'   => ['nom' => 'Evian'],
+                'statut_http' => 200,
+                'ms'          => 300,
+                'resultat'    => '{"outil":"stock_produit","nom_demande":"Evian","trouve":true,"cle_canonique":"Evian","stock":10}',
+            ]],
+            'reponse' => 'Il reste 10 Evian.',
+            'erreur'  => '',
+        ], JSON_UNESCAPED_UNICODE);
     }
 
     /** Jeton serveur des outils (config.env) — lu, jamais affiché. */
