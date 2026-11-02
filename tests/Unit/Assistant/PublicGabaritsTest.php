@@ -79,6 +79,13 @@ final class PublicGabaritsTest extends TestCase
         // INFO : le SEUL cours de l'univers, le lundi prochain (la reprise).
         $this->ecrireCacheEdt('iut-info', [$this->cours('iut-info', 'reprise-lp', $lundiProchain)]);
 
+        // GEII : cache FRAIS mais vide (aucun évènement) — depuis
+        // EDT-PUB-13-SUITE le repli daté s'affiche dès qu'UN département
+        // est stale : sans ce fichier, GEII serait « sans cache = stale »
+        // et TOUTES les réponses EDT de la suite porteraient « (calendrier
+        // du …) ». Ici l'univers est propre : stale=false partout.
+        $this->ecrireCacheEdt('iut-geii', []);
+
         EdtCalendar::reinitialiserMemo(); // la mémo ne doit pas masquer les fichiers fraîchement écrits.
     }
 
@@ -169,6 +176,82 @@ final class PublicGabaritsTest extends TestCase
         self::assertNull(PublicGabarits::edt("il y a cours cette semaine à l'IUT ?"));
     }
 
+    /**
+     * PRIORITÉ horaires > gabarit EDT (EDT-PUB-13-SUITE, preuves réelles
+     * 01/11 08h08 à 4 753 ms et 02/11 02h02 à 4 946 ms en mode gabarit,
+     * réponse EDT décalée) : une question EXPLICITE sur les horaires,
+     * même longue et pleine de mots EDT (« étudiant », « cours »), n'est
+     * JAMAIS avalée par le gabarit EDT → null → fast-path horaires FAQ.
+     * La question courte fautive « c ou et a kel heure souvre la
+     * cafeteria de lasso le lundi ? » (déjà bien routée) reste épingle :
+     * ne pas la casser.
+     */
+    public function test_edt_questions_horaires_explicites_jamais_interceptees(): void
+    {
+        self::assertNull(
+            PublicGabarits::edt('Bonjour, je suis étudiant à l\'IUT et je me demandais si vous pouviez me dire à quelle heure ouvre la cafétéria de l\'asso le lundi matin parce que j\'aimerais passer prendre un café avant mon premier cours mais je ne sais pas si vous êtes ouverts dès 8h ou seulement à la première pause ?'),
+            'preuve 01/11 08h08 : « étudiant » + « cours » + « heure » → horaires, pas EDT.'
+        );
+        self::assertNull(
+            PublicGabarits::edt('Bonjour je suis étudiant à l\'IUT et je me demandais si vous sauriez à quelle heure ouvre la cafétéria lundi matin parce que j\'ai cours très tôt et je voudrais prendre un café avant mon premier cours ?'),
+            'preuve 02/11 02h02 : même forme, même verdict.'
+        );
+        self::assertNull(
+            PublicGabarits::edt('c ou et a kel heure souvre la cafeteria de lasso le lundi ?'),
+            'question courte fautive : déjà routée horaires, à ne pas casser.'
+        );
+    }
+
+    /**
+     * Calibration questionHoraires (privé → réflexion) : vrais positifs
+     * sur les preuves réelles (fautes « kel heure », « souvre » incluses),
+     * AUCUN faux positif sur les questions EDT/stock légitimes.
+     */
+    public function test_question_horaires_calibration_vrais_et_faux_positifs(): void
+    {
+        $qh = new \ReflectionMethod(PublicGabarits::class, 'questionHoraires');
+
+        self::assertTrue($qh->invoke(null, 'à quelle heure ouvre la cafétéria ?'));
+        self::assertTrue($qh->invoke(null, 'c ou et a kel heure souvre la cafeteria de lasso le lundi ?'), 'fautes « kel heure » + « souvre ».');
+        self::assertTrue($qh->invoke(null, "quels sont les horaires d'ouverture ?"));
+        self::assertTrue($qh->invoke(null, 'vous êtes ouverts le samedi ?'));
+
+        self::assertFalse($qh->invoke(null, 'c est quand la reprise des cours ?'), 'question EDT légitime.');
+        self::assertFalse($qh->invoke(null, 'il y a cours cette semaine à l\'IUT ?'));
+        self::assertFalse($qh->invoke(null, 'il vous reste des Kinder Bueno ?'), 'question stock légitime.');
+    }
+
+    /**
+     * REPLI daté (EDT-PUB-13-SUITE) : caches PÉRIMÉS (TTL 6 h dépassé) +
+     * fetch hors-ligne (régénération impossible) → le gabarit sert quand
+     * même les données avec la DATE du cache servi (jour Paris du dernier
+     * fetch) — jamais de fraîcheur survendue, jamais > ~2,5 s au mur.
+     */
+    public function test_edt_repli_cache_perime_servi_avec_sa_date(): void
+    {
+        self::assertSame(21600, EdtCalendar::CACHE_TTL_S, 'TTL 6 h.');
+        self::assertSame(2.0, EdtCalendar::FETCH_TIMEOUT_S, 'timeout unitaire 2 s.');
+        self::assertSame(2.0, AssistantOutils::EDT_BUDGET_S, 'budget assistant 2 s, échéance stricte partagée par toutes les voies.');
+
+        $expire = time() - EdtCalendar::CACHE_TTL_S - 1;
+        foreach (glob(AEIC_ROOT . '/tests/cache/edt/iut-*.json') ?: [] as $fichier) {
+            $cache = json_decode((string) file_get_contents($fichier), true);
+            $cache['fetched_at'] = $expire;
+            file_put_contents($fichier, json_encode($cache));
+        }
+        EdtCalendar::reinitialiserMemo();
+
+        $du = (new \DateTimeImmutable('@' . $expire))
+            ->setTimezone(new \DateTimeZone('Europe/Paris'))
+            ->format('d/m');
+
+        self::assertSame(
+            "Cette semaine : sans cours (vacances universitaires), reprise le {$this->lundiProchainFr} (calendrier du {$du}). Source : edt-ulco.fr.",
+            PublicGabarits::edt("il y a cours cette semaine à l'IUT ?"),
+            'repli servi AVEC sa date, ligne sinon identique.'
+        );
+    }
+
     // -----------------------------------------------------------------
     //  Gabarit stock — détection, PRODUITS_MAX, garde-fous (STOCK-PUB-14)
     // -----------------------------------------------------------------
@@ -230,6 +313,148 @@ final class PublicGabaritsTest extends TestCase
     {
         self::assertNull(PublicGabarits::stock('il y a des soirées cette semaine ?'), '« soirées » : domaine événements, pas un produit.');
         self::assertNull(PublicGabarits::stock('combien reste-t-il de monde ?'), '« monde » : question de fréquentation, pas un produit.');
+    }
+
+    // -----------------------------------------------------------------
+    //  Gabarit produits — questions génériques cafétéria (GENERIC-PUB-17)
+    // -----------------------------------------------------------------
+
+    /**
+     * PRIORITÉ horaires explicites > produits génériques, produit précis
+     * > générique (questionProduitsGenerique, privé → réflexion) :
+     * calibration sur les preuves réelles (« kOi vOus avEz a bOire et a
+     * mAngEr a la cafEtErIa ? », « koi vous avez comme snacks ? » — 5
+     * preuves servies horaires par erreur) et les non-cibles.
+     */
+    public function test_question_produits_generique_calibration(): void
+    {
+        $qpg = new \ReflectionMethod(PublicGabarits::class, 'questionProduitsGenerique');
+
+        self::assertTrue($qpg->invoke(null, 'kOi vOus avEz a bOire et a mAngEr a la cafEtErIa ?'), 'preuve live 01/11 04:04 (casse/diacritiques quelconques).');
+        self::assertTrue($qpg->invoke(null, 'koi vous avez comme snacks ?'));
+        self::assertTrue($qpg->invoke(null, 'vous avez des encas ?'));
+        self::assertTrue($qpg->invoke(null, 'il y a des boissons ?'), '« boissons » seul : générique, pas un produit précis.');
+
+        self::assertFalse($qpg->invoke(null, 'a quelle heure ouvre la cafeteria ?'), 'horaires explicites : fast-path horaires, prioritaire.');
+        self::assertFalse($qpg->invoke(null, 'vous avez quoi a boire et la cafeteria ouvre a quelle heure ?'), "question mixte : l'intention horaires prime.");
+        self::assertFalse($qpg->invoke(null, 'il vous reste du coca a boire ?'), 'produit PRÉCIS extractible : le gabarit stock le garde.');
+        self::assertFalse($qpg->invoke(null, 'c est quand la reprise des cours ?'), 'question EDT, pas produits.');
+    }
+
+    /**
+     * Le gabarit produits INTERCEPTE les questions génériques : réponse
+     * non nulle, JAMAIS les horaires (« 8h20 », « Elle ouvre aux pauses »),
+     * aucun prix. Sans base (contexte test, livre vide) la réponse
+     * honnête FIXE est servie — jamais une liste inventée par le LLM.
+     */
+    public function test_produits_question_generique_interceptee_pas_les_horaires(): void
+    {
+        foreach ([
+            'kOi vOus avEz a bOire et a mAngEr a la cafEtErIa ?',
+            'koi vous avez comme snacks ?',
+            'il y a des boissons ?',
+        ] as $question) {
+            $r = PublicGabarits::produits($question);
+            self::assertNotNull($r, "question générique détectée : {$question}");
+            self::assertStringNotContainsString('8h20', $r, 'pas la réponse horaires.');
+            self::assertStringNotContainsString('Elle ouvre aux pauses', $r);
+            self::assertStringNotContainsString('€', $r, 'aucun prix ni coût exposé.');
+        }
+    }
+
+    /**
+     * Non-cibles du gabarit produits : horaires explicites (priorité
+     * fast-path horaires), produit précis (gabarit stock), question
+     * hors cafeteria → null → voie classique.
+     */
+    public function test_produits_non_cibles_renvoyees_voie_classique(): void
+    {
+        self::assertNull(PublicGabarits::produits('a quelle heure ouvre la cafeteria lundi ?'), 'horaires explicites prioritaires.');
+        self::assertNull(PublicGabarits::produits('il vous reste des Kinder Bueno ?'), 'produit précis : gabarit stock.');
+        self::assertNull(PublicGabarits::produits('c est quoi l AEIC ?'), 'hors domaine produits.');
+    }
+
+    /**
+     * Déférence stock → produits : un « produit » extrait qui est un mot
+     * GÉNÉRIQUE (« des snacks ? ») rend la main au gabarit liste — plus
+     * JAMAIS « Je ne trouve pas « snacks »… » sur une question générique.
+     */
+    public function test_stock_defere_les_segments_generiques_au_gabarit_liste(): void
+    {
+        self::assertNull(PublicGabarits::stock('il y a des snacks ?'), '« snacks » : générique, pas « produit introuvable ».');
+        self::assertNull(PublicGabarits::stock('il vous reste de quoi boire et manger ?'));
+
+        // Non-régression : un produit PRÉCIS reste traité par stock().
+        self::assertNotNull(PublicGabarits::stock('il vous reste des Kinder Bueno ?'));
+    }
+
+    /**
+     * Post-review GENERIC-PUB-17 : un segment GÉNÉRIQUE peut être
+     * MULTI-MOTS (« quoi boire ») — chaque mot est vérifié contre la
+     * liste générique. Régression épinglée : la garde comptait les mots
+     * (tout segment à 2+ mots rejeté d'office) et « …de quoi boire… »
+     * servait « Je ne trouve pas « quoi boire »… » au lieu de déférer
+     * au gabarit liste.
+     */
+    public function test_produits_segment_generique_multi_mots_selection_pas_introuvable(): void
+    {
+        // Formulation du défaut : « quoi boire » (2 mots) n'est PLUS un
+        // « produit introuvable » — stock() défère, jamais ce message.
+        self::assertNull(
+            PublicGabarits::stock('il vous reste de quoi boire ?'),
+            '« quoi boire » : segment générique multi-mots, stock() rend la main.'
+        );
+
+        // Avec un marqueur générique (« à manger »), le gabarit liste
+        // intercepte : la sélection (réponse honnête fixe, livre vide
+        // en test), pas « produit introuvable ».
+        $r = PublicGabarits::produits('il vous reste de quoi boire et à manger ?');
+        self::assertNotNull($r, 'question générique multi-mots : le gabarit liste l’intercepte.');
+        self::assertStringNotContainsString('Je ne trouve pas', $r);
+        self::assertNull(PublicGabarits::stock('il vous reste de quoi boire et à manger ?'));
+
+        // Non-régression du contrat « TOUT mot du segment générique » :
+        // un produit PRÉCIS dans un segment multi-mots reste du stock.
+        self::assertNotNull(PublicGabarits::stock('il vous reste du coca à boire ?'));
+    }
+
+    /**
+     * Mise en forme publique de la sélection (formaterProduits, privé →
+     * réflexion) : familles nom + unités restantes (disponibilité déjà
+     * publique produit par produit), invitation produit par produit,
+     * dernier comptage cité, garde de fraîcheur IDENTIQUE à la voie admin
+     * dès 30 j, AUCUN prix/coût/marge.
+     */
+    public function test_formater_produits_selection_courte_sourcee_sans_prix(): void
+    {
+        self::assertSame(10, AssistantOutils::SELECTION_MAX, 'MAX ~10 familles, jamais l\'inventaire.');
+
+        $formater = new \ReflectionMethod(PublicGabarits::class, 'formaterProduits');
+
+        $r = $formater->invoke(null, [
+            'familles' => [
+                ['nom' => 'Bueno', 'stock' => 119],
+                ['nom' => 'Eau', 'stock' => 57],
+                ['nom' => 'Mars', 'stock' => 47],
+            ],
+            'dernier_comptage' => '2026-10-23 13:34:59',
+            'fraicheur_jours'  => 10,
+            'avertissement'    => '',
+        ]);
+        self::assertSame(
+            'En ce moment à la cafétéria (sélection) : Bueno (119), Eau (57), Mars (47). Demande-moi produit par produit pour savoir si ton préféré est dispo. Dernier comptage : 2026-10-23 13:34:59.',
+            $r
+        );
+        self::assertStringNotContainsString('€', $r, 'aucun prix ni coût exposé.');
+
+        // Garde de fraîcheur > 30 j : même phrase que la voie admin.
+        $r2 = $formater->invoke(null, [
+            'familles' => [['nom' => 'Eau', 'stock' => 57]],
+            'dernier_comptage' => '2026-09-01 10:00:00',
+            'fraicheur_jours'  => 44,
+            'avertissement'    => 'comptage ancien (44 j), fiabilité limitée',
+        ]);
+        self::assertStringContainsString('Comptage ancien (44 j), fiabilité limitée.', $r2);
     }
 
     /**

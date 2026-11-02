@@ -23,6 +23,23 @@ namespace App\Core\Assistant;
  *               MÊME garde de fraîcheur que la voie admin (« comptage
  *               ancien (X j), fiabilité limitée » dès 30 j).
  *
+ * EDT-PUB-13-SUITE (mission 02/11) : une question EXPLICITE sur les
+ * HORAIRES est PRIORITAIRE sur le gabarit EDT — la question longue
+ * réelle « …à quelle heure ouvre la cafétéria lundi matin avant mon
+ * premier cours… » (preuves 01/11 08h08, 02/11 02h02 : « étudiant » +
+ * « cours » la captait → réponse EDT décalée) retombe sur le fast-path
+ * horaires de la FAQ. Le repli EDT sert le cache périmé AVEC sa date
+ * (« calendrier du JJ/MM », jour Paris du dernier fetch).
+ *
+ * GENERIC-PUB-17 (mission 02/11) : troisième gabarit produits() pour
+ * les questions GÉNÉRIQUES (« vous avez quoi à boire et à manger à la
+ * cafétéria ? », « koi vous avez comme snacks ? » — servies horaires
+ * par erreur, 5 preuves) → courte sélection de familles issues du
+ * livre UNIQUE (AssistantOutils::stockSelection, MAX ~10, nom +
+ * disponibilité, AUCUN prix/coût/marge). Priorité : horaires
+ * explicites > produits génériques (les questions « à quelle heure »
+ * restent sur le fast-path horaires).
+ *
  * Arbitrage STOCK-PUB-14 (orchestrateur 31/10) : la cafétéria est un
  * domaine annoncé de l'assistant public, la disponibilité d'UN produit
  * est une info légitime — mais JAMAIS de liste d'inventaire : réponse
@@ -64,6 +81,20 @@ final class PublicGabarits
         'commander', 'racheter', 'acheter', 'prix', 'coute', 'coutent',
         'ca', 'chiffre', 'chiffres', 'euro', 'euros', 'argent',
         'vendu', 'vendus', 'vendue', 'vendues',
+    ];
+
+    /** Mots signalant une question EXPLICITE sur les HORAIRES (ouvertures,
+     *  pauses, fermetures — même vocabulaire que les déclencheurs longs de
+     *  l'entrée cafétéria de la FAQ, fautes tolérées : « heur », « souvre »
+     *  pour « s'ouvre »). PRIORITAIRES sur les gabarits EDT et produits :
+     *  une question horaires, même longue et pleine de mots EDT (« cours »,
+     *  « étudiant »), reste sur le fast-path horaires (EDT-PUB-13-SUITE). */
+    private const MOTS_HORAIRES = [
+        'horaire', 'horaires', 'heure', 'heures', 'heur',
+        'ouvre', 'ouvres', 'ouvert', 'ouverte', 'ouverts', 'ouvertes',
+        'ouvrez', 'ouvrira', 'souvre', 'ferme', 'fermes', 'fermee',
+        'fermees', 'fermeture', 'ouverture', 'pauses', 'creneau',
+        'creneaux',
     ];
 
     // -----------------------------------------------------------------
@@ -147,6 +178,25 @@ final class PublicGabarits
      *  STOCK-PUB-14 : 1-2 produits, jamais une liste d'inventaire). */
     public const PRODUITS_MAX = 2;
 
+    /** Phrases signalant une question GÉNÉRIQUE sur l'offre cafétéria
+     *  (GENERIC-PUB-17) — sur texte sans accents : « à boire », « à
+     *  manger », snacks, encas, nourriture, boissons. */
+    private const MOTIF_PRODUITS_GENERIQUES = '/a\s+boire|a\s+manger|\bsnacks?\b|\bencas\b|\bnourriture\b|\bboissons?\b/ui';
+
+    /** Mots GÉNÉRIQUES seuls (« des snacks ? », « à boire ») : extraits
+     *  comme « produit » par les motifs stock mais sans produit précis
+     *  derrière — la question est GÉNÉRIQUE, le gabarit liste la
+     *  sélection, pas « produit introuvable ». Un segment n'est générique
+     *  que si TOUT ses mots le sont (« coca à boire » garde son produit
+     *  précis — « boire »/« manger »/« quoi » et articles inclus). */
+    private const MOTS_GENERIQUES = [
+        'snack', 'snacks', 'encas', 'nourriture', 'boisson', 'boissons',
+        'gouter', 'gouters', 'boire', 'manger', 'quoi', 'comme',
+        'quel', 'quelle', 'quels', 'quelles',
+        'un', 'une', 'des', 'du', 'de', 'd', 'la', 'le', 'les', 'l',
+        'et', 'ou', 'a', 'au', 'aux', 'en', 'y', 'pour',
+    ];
+
     // -----------------------------------------------------------------
     //  Gabarit edt — cours/vacances IUT (EDT-PUB-13)
     // -----------------------------------------------------------------
@@ -162,6 +212,13 @@ final class PublicGabarits
     {
         $norm = str_replace('’', "'", PublicAssistant::sansAccents($question));
 
+        // PRIORITÉ horaires (EDT-PUB-13-SUITE) : une question EXPLICITE
+        // sur les horaires n'est JAMAIS avalée par le gabarit EDT, même
+        // longue et pleine de mots EDT — le fast-path horaires (FAQ) la
+        // garde (preuves 01/11 08h08, 02/11 02h02).
+        if (self::questionHoraires($question)) {
+            return null;
+        }
         if (preg_match_all("/[a-z0-9']+/u", $norm, $mots) !== false) {
             foreach ($mots[0] as $mot) {
                 if (in_array($mot, self::MOTS_NON_EDT, true)) {
@@ -258,6 +315,19 @@ final class PublicGabarits
             $ligne = $entete . ' : sans cours (vacances universitaires), reprise non publiée pour l\'instant.';
         }
 
+        // REPLI daté (EDT-PUB-13-SUITE) : cache périmé servi (fetch
+        // avorté/timeout 2 s) → la réponse dit l'ÂGE de son calendrier
+        // (jour Paris du dernier fetch, champ cache_du) — jamais de
+        // fraîcheur survendue.
+        if ((bool) ($donnees['stale'] ?? false)) {
+            $cacheDu = trim((string) ($donnees['cache_du'] ?? ''));
+            if ($cacheDu !== '') {
+                // La parenthèse se colle à la dernière phrase factuelle
+                // (« … reprise le 09/11 (calendrier du 02/11). Source… »).
+                $ligne = rtrim($ligne, '.') . " (calendrier du {$cacheDu}).";
+            }
+        }
+
         return $ligne . ' Source : edt-ulco.fr.';
     }
 
@@ -292,6 +362,14 @@ final class PublicGabarits
             ),
             static fn (string $s): bool => $s !== ''
         ));
+        // GENERIC-PUB-17 : un « produit » qui est en fait un mot GÉNÉRIQUE
+        // (« des snacks ? », « à boire ») n'est pas un produit précis —
+        // la question est générique, le gabarit liste la sélection.
+        foreach ($segments as $segment) {
+            if (self::produitGenerique($segment)) {
+                return null;
+            }
+        }
         if (count($segments) > self::PRODUITS_MAX) {
             return 'Pose ta question produit par produit (un ou deux à la fois) : je vérifie chaque stock un à un.';
         }
@@ -407,5 +485,149 @@ final class PublicGabarits
         // public on dit simplement qu'il n'y en a plus, sans le détail
         // interne « survente » servi au CLI admin.
         return "Stock de {$nom} : épuisé pour l'instant{$suite}.{$alerte}";
+    }
+
+    // -----------------------------------------------------------------
+    //  Gabarit produits — offre générique cafétéria (GENERIC-PUB-17)
+    // -----------------------------------------------------------------
+
+    /**
+     * Réponse gabarit à une question GÉNÉRIQUE sur l'offre de la
+     * cafétéria (« vous avez quoi à boire et à manger à la cafétéria ? »,
+     * « koi vous avez comme snacks ? » — 5 preuves servies horaires par
+     * erreur), ou null (question non générique, horaires explicites,
+     * produit précis → gabarit stock, base injoignable) → voie classique.
+     *
+     * Priorité de routage (arbitrage GENERIC-PUB-17) : horaires
+     * EXPLICITES > produits génériques — la question « à quelle heure… »
+     * reste sur le fast-path horaires ; un produit PRÉCIS reste sur le
+     * gabarit stock. Données : AssistantOutils::stockSelection (livre
+     * UNIQUE, MAX ~10 familles, nom + disponibilité, AUCUN prix).
+     */
+    public static function produits(string $question): ?string
+    {
+        if (!self::questionProduitsGenerique($question)) {
+            return null;
+        }
+
+        try {
+            $selection = AssistantOutils::stockSelection();
+        } catch (\Throwable) {
+            return null; // fail-soft : la voie LLM reprend
+        }
+        if ($selection['familles'] === []) {
+            // Livre vide/injoignable : réponse honnête FIXE, JAMAIS un
+            // repli LLM qui inventerait une liste de produits.
+            return "Je n'arrive pas à consulter la liste des produits de la cafétéria pour l'instant, repasse dans un instant.";
+        }
+
+        return self::formaterProduits($selection);
+    }
+
+    /**
+     * Question GÉNÉRIQUE sur l'offre (marqueurs « à boire/à manger/
+     * snacks/encas/nourriture/boissons »), SANS horaires explicites
+     * (priorité fast-path horaires) et SANS produit précis extractible
+     * par les motifs stock (le gabarit stock garde « il vous reste du
+     * coca à boire ? » — le produit précis prime sur le générique).
+     */
+    private static function questionProduitsGenerique(string $question): bool
+    {
+        if (self::questionHoraires($question)) {
+            return false;
+        }
+        $norm = str_replace('’', "'", PublicAssistant::sansAccents($question));
+        if (preg_match(self::MOTIF_PRODUITS_GENERIQUES, $norm) !== 1) {
+            return false;
+        }
+
+        // Produit PRÉCIS extractible ET non générique → gabarit stock
+        // (« il vous reste du coca à boire ? » garde sa réponse produit).
+        $extrait = self::extraireProduit($question);
+
+        return $extrait === null || self::produitGenerique($extrait);
+    }
+
+    /**
+     * La question porte EXPLICITEMENT sur les horaires (un mot du
+     * vocabulaire horaires, fautes tolérées) ? Prioritaire sur les
+     * gabarits EDT et produits — les questions « à quelle heure »
+     * rejoignent le fast-path horaires de la FAQ.
+     */
+    private static function questionHoraires(string $question): bool
+    {
+        $norm = str_replace('’', "'", PublicAssistant::sansAccents($question));
+        // Mots SANS apostrophe : « s'ouvre » → « ouvre », « d'ouverture »
+        // → « ouverture » (les mots horaires n'ont pas d'apostrophe).
+        if (preg_match_all('/[a-z0-9]+/u', $norm, $mots) !== false) {
+            foreach ($mots[0] as $mot) {
+                if (in_array($mot, self::MOTS_HORAIRES, true)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Un segment de question est-il purement GÉNÉRIQUE (« snacks »,
+     * « à boire », « quoi boire ») et sans produit précis ? TOUT mot du
+     * segment doit être générique/article : « coca à boire » contient
+     * « coca » → pas générique (gabarit stock). (Déférence du gabarit
+     * stock vers le gabarit liste, GENERIC-PUB-17.)
+     */
+    private static function produitGenerique(string $segment): bool
+    {
+        $norm = str_replace('’', "'", PublicAssistant::sansAccents($segment));
+        // Garde sur ÉCHEC d'extraction uniquement : un segment peut être
+        // MULTI-MOTS (« quoi boire ») — c'est la boucle qui vérifie ensuite
+        // que CHAQUE mot est générique (compter les mots rejetait « quoi
+        // boire » d'office → « produit introuvable » au lieu de la liste).
+        if (preg_match_all('/[a-z0-9]+/u', $norm, $mots) === false || $mots[0] === []) {
+            return false;
+        }
+        foreach ($mots[0] as $mot) {
+            if (!in_array($mot, self::MOTS_GENERIQUES, true)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Met en forme la sélection publique : familles disponibles (nom +
+     * unités restantes, MAX ~10), invitation à demander produit par
+     * produit pour la dispo exacte, dernier comptage cité, garde de
+     * fraîcheur IDENTIQUE à la voie admin dès 30 j. Aucun prix ni coût
+     * (arbitrage GENERIC-PUB-17 : prix de vente non exposés ailleurs
+     * publiquement → rien).
+     *
+     * @param array<string, mixed> $selection Réponse AssistantOutils::stockSelection().
+     */
+    private static function formaterProduits(array $selection): string
+    {
+        $noms = [];
+        foreach ((array) ($selection['familles'] ?? []) as $famille) {
+            $nom = trim((string) ($famille['nom'] ?? ''));
+            if ($nom !== '') {
+                $noms[] = $nom . ' (' . (int) ($famille['stock'] ?? 0) . ')';
+            }
+        }
+
+        $ligne = 'En ce moment à la cafétéria (sélection) : ' . implode(', ', $noms)
+            . '. Demande-moi produit par produit pour savoir si ton préféré est dispo.';
+
+        $comptage = (string) ($selection['dernier_comptage'] ?? '');
+        if ($comptage !== '') {
+            $ligne .= " Dernier comptage : {$comptage}.";
+        }
+        $avertissement = trim((string) ($selection['avertissement'] ?? ''));
+        if ($avertissement !== '') {
+            $ligne .= ' ' . mb_strtoupper(mb_substr($avertissement, 0, 1)) . mb_substr($avertissement, 1) . '.';
+        }
+
+        return $ligne;
     }
 }

@@ -540,12 +540,83 @@ final class AssistantPublicTest extends TestCase
         self::assertFileDoesNotExist($this->tmp . '/assistant_public.0.lock');
         self::assertFileDoesNotExist($this->tmp . '/assistant_public.1.lock');
 
-        // …ni le réseau : réponse instantanée (latency 0) et faq:true.
+        // …ni le réseau : réponse instantanée, faq:true — DUREE-16
+        // (mission 02/11) : la latence fast-path est MESURÉE depuis le
+        // DÉBUT de la requête (UNE horloge en tête d'executer) : int ≥ 0
+        // — 0 ms est légitime sur machine rapide, plus de 0 factice — et
+        // l'alias duree_ms porte la même valeur.
         $lignes = array_values(array_filter(explode("\n", (string) @file_get_contents($path))));
         self::assertCount(1, $lignes);
         $ligne = json_decode($lignes[0], true);
         self::assertTrue($ligne['faq']);
-        self::assertSame(0, $ligne['latency_ms']);
+        self::assertSame('fastpath', $ligne['mode']);
+        self::assertIsInt($ligne['latency_ms']);
+        self::assertGreaterThanOrEqual(0, $ligne['latency_ms']);
+        self::assertLessThan(100, $ligne['latency_ms'], 'fast-path sans réseau : < 100 ms attendus.');
+        self::assertSame($ligne['latency_ms'], $ligne['duree_ms'], 'alias duree_ms = latency_ms (DUREE-16).');
+    }
+
+    /**
+     * EDT-PUB-13-SUITE, preuve réelle 01/11 08h08 (4 753 ms, mode
+     * gabarit, réponse EDT décalée) et 02/11 02h02 (4 946 ms) : une
+     * question LONGUE et EXPLICITE sur les horaires (« étudiant »,
+     * « cours » présents) doit être servie par le FAST-PATH horaires de
+     * la FAQ — horaires explicites > gabarit EDT.
+     */
+    public function test_question_longue_horaires_repond_horaires_pas_edt(): void
+    {
+        $path = $this->tmp . '/assistant_public.jsonl';
+        $s = $this->service();
+
+        $preuves = [
+            'Bonjour, je suis étudiant à l\'IUT et je me demandais si vous pouviez me dire à quelle heure ouvre la cafétéria de l\'asso le lundi matin parce que j\'aimerais passer prendre un café avant mon premier cours mais je ne sais pas si vous êtes ouverts dès 8h ou seulement à la première pause ?',
+            'Bonjour je suis étudiant à l\'IUT et je me demandais si vous sauriez à quelle heure ouvre la cafétéria lundi matin parce que j\'ai cours très tôt et je voudrais prendre un café avant mon premier cours ?',
+        ];
+        foreach ($preuves as $question) {
+            $r = $s->traiter($question, null, '8.8.4.4');
+
+            self::assertSame(200, $r['http'], 'réponse servie (pas de repli LLM).');
+            self::assertTrue($r['ok']);
+            self::assertSame(self::reponseFaqPour('a quelle heure'), $r['reply'], 'réponse HORAIRES (entrée cafétéria), pas une ligne EDT.');
+        }
+
+        $lignes = array_values(array_filter(explode("\n", (string) @file_get_contents($path))));
+        self::assertCount(count($preuves), $lignes);
+        foreach ($lignes as $brut) {
+            $ligne = json_decode($brut, true);
+            self::assertSame('fastpath', $ligne['mode'], 'horaires explicites > gabarit EDT.');
+            self::assertTrue($ligne['faq']);
+            self::assertIsInt($ligne['duree_ms']);
+        }
+    }
+
+    /**
+     * GENERIC-PUB-17, preuve live 01/11 04:04 (« kOi vOus avEz a bOire et
+     * a mAngEr a la cafEtErIa ? » servie HORAIRES en 0 ms) : la question
+     * générique est interceptée par le GABARIT produits — jamais les
+     * horaires. Sans base (contexte test, livre vide) la réponse honnête
+     * FIXE est servie ; en production elle porte la sélection (max ~10
+     * familles, épingle dans PublicGabaritsTest).
+     */
+    public function test_question_generique_produits_repond_gabarit_pas_les_horaires(): void
+    {
+        $path = $this->tmp . '/assistant_public.jsonl';
+        $s = $this->service();
+
+        $r = $s->traiter('kOi vOus avEz a bOire et a mAngEr a la cafEtErIa ?', null, '8.8.4.4');
+
+        self::assertSame(200, $r['http']);
+        self::assertTrue($r['ok']);
+        self::assertStringNotContainsString('8h20', $r['reply'], 'pas la réponse horaires.');
+        self::assertStringNotContainsString('Elle ouvre aux pauses', $r['reply']);
+
+        $lignes = array_values(array_filter(explode("\n", (string) @file_get_contents($path))));
+        self::assertCount(1, $lignes);
+        $ligne = json_decode($lignes[0], true);
+        self::assertSame('gabarit', $ligne['mode'], 'interception par le gabarit produits (GENERIC-PUB-17).');
+        self::assertFalse($ligne['faq']);
+        self::assertIsInt($ligne['duree_ms']);
+        self::assertSame($ligne['latency_ms'], $ligne['duree_ms']);
     }
 
     /**

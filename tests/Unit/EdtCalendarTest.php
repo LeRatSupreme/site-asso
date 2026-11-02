@@ -518,6 +518,86 @@ final class EdtCalendarTest extends TestCase
     }
 
     /**
+     * EDT-PUB-13-SUITE : budget INJECTABLE par lecture — l'assistant
+     * (gabarit public, kiosque, outil CLI) passe 2 s (AssistantOutils::
+     * EDT_BUDGET_S) : un injecteur lent (0,3 s/appel, 30 racines) est
+     * avorté à ~budget au lieu d'enchaîner 31 appels ≈ 9,3 s — jamais
+     * > ~2,5 s au mur pour la voie assistant, même à cache froid.
+     */
+    public function test_budget_injectable_borne_la_lecture(): void
+    {
+        $racines = array_map(
+            static fn (int $i): array => ['id' => 30000 + $i, 'name' => "BUT{$i}"],
+            range(1, 30)
+        );
+        $monde = ['tree:iut-info' => ['groups' => $racines]];
+        foreach ($racines as $r) {
+            $monde['sched:iut-info:' . $r['id']] = ['department' => 'iut-info', 'events' => []];
+        }
+
+        $n = 0;
+        $fn = function (string $url) use ($monde, &$n): ?string {
+            $n++;
+            usleep(300000); // 0,3 s par appel — injecteur lent.
+            if (preg_match('#/api/iut-info/groups/(\d+)/schedule#', $url, $m)) {
+                $rep = $monde['sched:iut-info:' . $m[1]] ?? null;
+            } elseif (preg_match('#/api/iut-info/groups$#', $url)) {
+                $rep = $monde['tree:iut-info'];
+            } else {
+                $rep = null;
+            }
+
+            return $rep === null ? null : json_encode($rep, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        };
+
+        $debut = microtime(true);
+        $infos = EdtCalendar::jourInfos('2026-11-03', $fn, $this->tmp, 1.0);
+        $duree = microtime(true) - $debut;
+
+        self::assertTrue($infos['stale'], 'Budget 1 s épuisé → abort → stale servi (repli).');
+        self::assertGreaterThan(3, $n, 'le budget a bien été dépensé (pas un abort immédiat).');
+        self::assertLessThan(31, $n, 'appels bornés par le budget, pas 31.');
+        self::assertLessThan(
+            1.0 + 1.5,
+            $duree,
+            sprintf('Durée %.1f s ≈ budget + un appel en vol (injecteur non capé), pas 31 × 0,3 s.', $duree)
+        );
+    }
+
+    /**
+     * EDT-PUB-13-SUITE : date du cache servi — deux départements périmés
+     * à des dates différentes (GEA plus vieux qu'INFO), un absent, fetch
+     * hors-ligne (régénération impossible) → plagePubliee sert le repli
+     * avec stale=true et fetched_at = PLUS ANCIENNE des données servies
+     * (jamais la plus récente : on ne survend pas la fraîcheur).
+     */
+    public function test_plage_publiee_date_du_cache_servi_la_plus_ancienne(): void
+    {
+        $ecrire = function (string $dept, int $fetchedAt, array $events): void {
+            file_put_contents(
+                $this->tmp . '/' . $dept . '.json',
+                json_encode([
+                    'version'    => 1,
+                    'fetched_at' => $fetchedAt,
+                    'roots'      => [['id' => 1, 'name' => 'BUT']],
+                    'events'     => $events,
+                ], JSON_UNESCAPED_UNICODE)
+            );
+        };
+        $vieux = time() - EdtCalendar::CACHE_TTL_S - 3600;
+        $moinsVieux = time() - EdtCalendar::CACHE_TTL_S - 60;
+        $ecrire('iut-info', $moinsVieux, [self::evInfo('2026-11-03T08:00:00.000Z')]);
+        $ecrire('iut-gea', $vieux, [self::evFermetureGea('2026-10-26T12:00:00.000Z')]);
+
+        $f = $this->makeFetch([]); // hors-ligne : toute régénération échoue.
+        $plage = EdtCalendar::plagePubliee($f['fn'], $this->tmp);
+
+        self::assertTrue($plage['stale'], 'caches périmés non régénérables → repli.');
+        self::assertSame('2026-11-03', $plage['fin'], 'les données périmées restent servies.');
+        self::assertSame($vieux, $plage['fetched_at'], 'date du cache servi = la plus ANCIENNE (GEA), pas la plus récente.');
+    }
+
+    /**
      * FIX 4 : filtre « Fermeture » ANCRÉ — un vrai cours « Fermeture des
      * comptes annuels » (kind=TD) est CONSERVÉ ; la « Fermeture IUT
      * vacances scolaires » réelle (kind=null, libellé commençant par

@@ -378,31 +378,45 @@ final class PublicAssistant
         mixed $historyRaw,
         string $ip
     ): array {
+        // DUREE-16 (mission 02/11) : UNE SEULE horloge par requête, lancée
+        // en TÊTE d'executer() — les verdicts rendus AVANT le LLM (429,
+        // 400, FAQ, sémaphore plein) portent une mesure RÉELLE (int ≥ 0 :
+        // 0 ms est légitime sur machine rapide), au lieu du 0 factice
+        // d'avant. Le gabarit garde SA mesure propre ($debutGabarit), la
+        // voie LLM SA mesure d'appel ($debut) — conclure pose l'alias
+        // duree_ms = latency_ms sur la même valeur.
+        $debutRequete = microtime(true);
+        $msRequete = static fn (): int => (int) round((microtime(true) - $debutRequete) * 1000);
+
         // Garde anti-abus d'abord : le travail coûteux n'est jamais engagé
         // pour une IP déjà à saturation.
         if ($this->limiter->tooManyAttempts($cle, self::RATE_MAX, self::RATE_FENETRE_S)) {
-            return $this->conclure(429, false, null, self::MSG_RATE, $questionRaw, 0, $ip, false, $kiosk);
+            return $this->conclure(429, false, null, self::MSG_RATE, $questionRaw, $msRequete(), $ip, false, $kiosk);
         }
         $this->limiter->hit($cle);
 
         $question = self::validerQuestion($questionRaw);
         if ($question === null) {
-            return $this->conclure(400, false, null, self::MSG_INVALIDE, $questionRaw, 0, $ip, false, $kiosk);
+            return $this->conclure(400, false, null, self::MSG_INVALIDE, $questionRaw, $msRequete(), $ip, false, $kiosk);
         }
 
         // GABARITS publics (EDT-PUB-13 / STOCK-PUB-14, mission 31/10
-        // soir) : réponse instantanée à ZÉRO tour LLM pour les questions
-        // à donnée publique dérivée (cours/vacances IUT via EdtCalendar,
-        // stock cafétéria par produit via le livre de stock UNIQUE) —
-        // AVANT la FAQ : une question longue « Bonjour… il vous reste des
-        // Kinder Bueno… » ne doit pas être détournée par le déclencheur
-        // court « bonjour » (preuve 31/10 15:08 : réponse salutation
-        // servie à la question stock), et AVANT le sémaphore (aucun
-        // appel LLM). Fail-soft : null → la FAQ puis la voie LLM
-        // classiques reprennent, un gabarit ne bloque jamais une
-        // question qu'il ne sait pas traiter.
+        // soir ; GENERIC-PUB-17 pour produits()) : réponse instantanée à
+        // ZÉRO tour LLM pour les questions à donnée publique dérivée
+        // (cours/vacances IUT via EdtCalendar, stock cafétéria par
+        // produit via le livre de stock UNIQUE, sélection produits pour
+        // les questions génériques « à boire et à manger ») — AVANT la
+        // FAQ : une question longue « Bonjour… il vous reste des Kinder
+        // Bueno… » ne doit pas être détournée par le déclencheur court
+        // « bonjour » (preuve 31/10 15:08 : réponse salutation servie à
+        // la question stock), et AVANT le sémaphore (aucun appel LLM).
+        // Fail-soft : null → la FAQ puis la voie LLM classiques
+        // reprennent, un gabarit ne bloque jamais une question qu'il ne
+        // sait pas traiter.
         $debutGabarit = microtime(true);
-        $reponseGabarit = PublicGabarits::edt($question) ?? PublicGabarits::stock($question);
+        $reponseGabarit = PublicGabarits::edt($question)
+            ?? PublicGabarits::stock($question)
+            ?? PublicGabarits::produits($question);
         if ($reponseGabarit !== null) {
             return $this->conclure(200, true, $reponseGabarit, null, $questionRaw, (int) round((microtime(true) - $debutGabarit) * 1000), $ip, false, $kiosk, false, null, true);
         }
@@ -413,17 +427,17 @@ final class PublicAssistant
         // FAQ PARTAGÉE public/kiosque (app/config/assistant_faq.php).
         $reponseFaq = self::chercherFaq($question);
         if ($reponseFaq !== null) {
-            return $this->conclure(200, true, $reponseFaq, null, $questionRaw, 0, $ip, true, $kiosk);
+            return $this->conclure(200, true, $reponseFaq, null, $questionRaw, $msRequete(), $ip, true, $kiosk);
         }
 
         $history = self::validerHistory($historyRaw);
         if ($history === null) {
-            return $this->conclure(400, false, null, self::MSG_INVALIDE, $questionRaw, 0, $ip, false, $kiosk);
+            return $this->conclure(400, false, null, self::MSG_INVALIDE, $questionRaw, $msRequete(), $ip, false, $kiosk);
         }
 
         $slot = $this->acquerirSlot();
         if ($slot === null) {
-            return $this->conclure(503, false, null, self::MSG_OCCUPE, $questionRaw, 0, $ip, false, $kiosk);
+            return $this->conclure(503, false, null, self::MSG_OCCUPE, $questionRaw, $msRequete(), $ip, false, $kiosk);
         }
 
         // LOG-02 (mission 31/10) : trace « start » AVANT l'appel LLM — un

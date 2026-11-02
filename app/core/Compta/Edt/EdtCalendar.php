@@ -61,10 +61,13 @@ namespace App\Core\Compta\Edt;
  *    côté code rendrait les fixtures de tests datées invalides avec le
  *    temps. Un jour J-14 strict est exigé, l'ajouter ICI avec un filtre
  *    strcmp($jour, $from) < 0 dans regenerer().
- *  - Budget global de régénération ~8 s PAR LECTURE de calendrier (cf.
- *    BUDGET_REGEN_S) : les ~15 appels séquentiels partagent une échéance
- *    commune contrôlée avant chaque appel — le pire-cas « 15 appels ×
- *    timeout unitaire 10 s ≈ 150 s » sur UNE requête web est impossible.
+ *  - Budget global de régénération PAR LECTURE (défaut ~8 s, cf.
+ *    BUDGET_REGEN_S ; l'assistant passe 2 s, EDT-PUB-13-SUITE) : les
+ *    ~15 appels séquentiels partagent une échéance commune contrôlée
+ *    avant chaque appel, et le fetch par défaut coupe chaque appel au
+ *    RESTANT du budget (timeout unitaire FETCH_TIMEOUT_S = 2 s) — le
+ *    pire-cas « 15 appels × timeout unitaire » sur UNE requête web est
+ *    impossible.
  *  - Fail-closed silencieux : API down / JSON invalide / réponse 200
  *    valide mais PARTIELLE (sans clé « events » ou arbre sans « groups »)
  *    → échec de régénération → on sert le cache PÉRIMÉ avec le flag
@@ -91,12 +94,20 @@ final class EdtCalendar
      * Budget global (secondes) de régénération pour UNE lecture de
      * calendrier : les ~15 appels séquentiels (3 dept × (1 arbre + ses
      * racines)) partagent cette échéance, contrôlée AVANT chaque appel.
-     * Au-delà → abort → cache stale servi. Le timeout UNITAIRE curl
-     * reste 10 s : un appel démarré juste avant l'échéance peut la
-     * dépasser, mais un seul (les suivants sont avortés) et la mémo de
-     * requête empêche de re-dépenser le budget d'une lecture à l'autre.
+     * Au-delà → abort → cache stale servi. Chaque appel est en outre
+     * coupé au RESTANT du budget par le fetch par défaut (cf.
+     * calendrier()) : le mur d'une lecture froide est borné par le
+     * budget, pas par budget + timeout.
      */
     public const BUDGET_REGEN_S = 8.0;
+
+    /**
+     * Timeout UNITAIRE d'un fetch edt-ulco.fr (connexion + réponse,
+     * EDT-PUB-13-SUITE : preuves à froid 5,0/7,1/5,9 s). Un appel lent
+     * ou pendu est coupé à 2 s → repli sur le cache (périmé servi avec
+     * sa date) ; les appels heureux mesurés font ~300-450 ms.
+     */
+    public const FETCH_TIMEOUT_S = 2.0;
 
     /** Horizon glissant conservé dans le cache (jours après « maintenant »). */
     public const HORIZON_JOURS = 60;
@@ -112,24 +123,32 @@ final class EdtCalendar
 
     /**
      * Injecteur HTTP par défaut : curl maison (conventions du projet),
-     * timeout court, échec silencieux (null). Remplaçable en test.
+     * échec silencieux (null). Remplaçable en test.
      *
-     * @param string $url URL absolue.
+     * Timeout unitaire FETCH_TIMEOUT_S (2 s, connect + total — un appel
+     * pendu ne tient jamais une requête web en otage) ; un appel peut
+     * en recevoir un PLUS COURT (reste du budget de la lecture, cf.
+     * calendrier()) mais jamais plus long.
+     *
+     * @param string   $url      URL absolue.
+     * @param float|null $timeoutS Timeout total (s) — défaut FETCH_TIMEOUT_S.
+     *
      * @return string|null Corps brut, ou null (échec réseau/HTTP ≠ 200).
      */
-    public static function httpGet(string $url): ?string
+    public static function httpGet(string $url, ?float $timeoutS = null): ?string
     {
         if ($url === '' || !function_exists('curl_init')) {
             return null;
         }
+        $total = max(0.25, min($timeoutS ?? self::FETCH_TIMEOUT_S, self::FETCH_TIMEOUT_S));
         $ch = @curl_init($url);
         if ($ch === false) {
             return null;
         }
         curl_setopt_array($ch, [
             CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_CONNECTTIMEOUT => 5,
-            CURLOPT_TIMEOUT        => 10,
+            CURLOPT_CONNECTTIMEOUT => (int) min(2.0, $total),
+            CURLOPT_TIMEOUT        => $total,
             CURLOPT_USERAGENT      => 'AEIC-edt',
             CURLOPT_FOLLOWLOCATION => true,
             CURLOPT_MAXREDIRS      => 2,
@@ -147,11 +166,14 @@ final class EdtCalendar
      * @param string        $date     Jour « AAAA-MM-JJ ».
      * @param callable|null $fetchUrl Injecteur (string $url): ?string — défaut curl.
      * @param string|null   $cacheDir Dossier cache — défaut AEIC_ROOT/cache/edt.
+     * @param float|null    $budgetS  Budget global (s) de cette lecture —
+     *                                défaut BUDGET_REGEN_S (l'assistant public
+     *                                passe 2 s, EDT-PUB-13-SUITE).
      *
      * @return array{date:string, cours:bool, creneaux:int,
      *               par_dept:array<string,int>, stale:bool}
      */
-    public static function jourInfos(string $date, ?callable $fetchUrl = null, ?string $cacheDir = null): array
+    public static function jourInfos(string $date, ?callable $fetchUrl = null, ?string $cacheDir = null, ?float $budgetS = null): array
     {
         $jour = self::dateValide($date);
         if ($jour === null) {
@@ -165,7 +187,7 @@ final class EdtCalendar
                 'stale'    => false,
             ];
         }
-        $cal = self::calendrier($fetchUrl, $cacheDir);
+        $cal = self::calendrier($fetchUrl, $cacheDir, $budgetS);
 
         $parDept = [];
         foreach (self::DEPTS as $dept) {
@@ -200,12 +222,13 @@ final class EdtCalendar
      *                                rabattu sur le lundi de sa semaine).
      * @param callable|null $fetchUrl Injecteur — défaut curl.
      * @param string|null   $cacheDir Dossier cache.
+     * @param float|null    $budgetS  Budget global (s) de cette lecture.
      *
      * @return array{lundi:string, avec_cours:bool, jours_actifs:int,
      *               creneaux_total:int, par_jour:array<string,int>,
      *               label_auto:string, hors_horizon:bool, stale:bool}
      */
-    public static function semaineInfos(string $lundi, ?callable $fetchUrl = null, ?string $cacheDir = null): array
+    public static function semaineInfos(string $lundi, ?callable $fetchUrl = null, ?string $cacheDir = null, ?float $budgetS = null): array
     {
         $jour = self::dateValide($lundi);
         if ($jour === null) {
@@ -223,7 +246,7 @@ final class EdtCalendar
             ];
         }
         $lun = (new \DateTimeImmutable($jour))->modify('monday this week')->format('Y-m-d');
-        $cal = self::calendrier($fetchUrl, $cacheDir);
+        $cal = self::calendrier($fetchUrl, $cacheDir, $budgetS);
 
         $parJour = [];
         for ($i = 0; $i < 5; $i++) {
@@ -272,15 +295,18 @@ final class EdtCalendar
      * vendredi ≤ fin) avant de la déclarer « morte », et ne lister que
      * les semaines mortes évaluables d'une période affichée. Calendrier
      * vide (API down sans cache) → [null, null] : tout est alors hors
-     * horizon, les consommateurs prudents restent neutres.
+     * horizon, les consommateurs prudents restent neutres. Le timestamp
+     * du PLUS ANCIEN cache réellement servi accompagne la plage (champ
+     * additif fetched_at, 0 si aucune donnée) : c'est la « date du cache
+     * servi » affichée par le repli EDT-PUB-13-SUITE.
      *
-     * @return array{debut:?string, fin:?string, stale:bool}
+     * @return array{debut:?string, fin:?string, stale:bool, fetched_at:int}
      */
-    public static function plagePubliee(?callable $fetchUrl = null, ?string $cacheDir = null): array
+    public static function plagePubliee(?callable $fetchUrl = null, ?string $cacheDir = null, ?float $budgetS = null): array
     {
-        $cal = self::calendrier($fetchUrl, $cacheDir);
+        $cal = self::calendrier($fetchUrl, $cacheDir, $budgetS);
 
-        return ['debut' => $cal['debut'], 'fin' => $cal['horizon'], 'stale' => $cal['stale']];
+        return ['debut' => $cal['debut'], 'fin' => $cal['horizon'], 'stale' => $cal['stale'], 'fetched_at' => $cal['fetched_at']];
     }
 
     /**
@@ -290,13 +316,13 @@ final class EdtCalendar
      *
      * @return string|null « AAAA-MM-JJ » ou null.
      */
-    public static function prochainJourCours(string $date, ?callable $fetchUrl = null, ?string $cacheDir = null): ?string
+    public static function prochainJourCours(string $date, ?callable $fetchUrl = null, ?string $cacheDir = null, ?float $budgetS = null): ?string
     {
         $jour = self::dateValide($date);
         if ($jour === null) {
             return null;
         }
-        $cal = self::calendrier($fetchUrl, $cacheDir);
+        $cal = self::calendrier($fetchUrl, $cacheDir, $budgetS);
 
         $dates = [];
         foreach (self::DEPTS as $dept) {
@@ -329,28 +355,53 @@ final class EdtCalendar
      * Charge le calendrier des 3 départements (cache → lazy fetch),
      * normalise chaque évènement : jour local (Europe/Paris) et filtrage
      * des évènements « Fermeture » qui ne sont pas des cours. Les ~15
-     * appels réseau éventuels partagent le budget BUDGET_REGEN_S.
+     * appels réseau éventuels partagent le budget $budgetS (défaut
+     * BUDGET_REGEN_S) ; sans injecteur fourni, chaque appel est en outre
+     * coupé au RESTANT du budget (jamais au-delà de FETCH_TIMEOUT_S) —
+     * le mur d'une lecture froide est borné par le budget seul.
      * « debut »/« horizon » bornent la plage PUBLIÉE en comptant TOUT
      * évènement connu (fermetures comprises) — cf. plagePubliee().
+     * « fetched_at » = timestamp du PLUS ANCIEN cache réellement servi
+     * (0 si aucune donnée) — date honnête du repli, jamais la plus
+     * récente : on ne survend pas la fraîcheur.
      *
      * @return array{events:array<string,list<array{_jour:string}>>,
-     *               debut:?string, horizon:?string, stale:bool}
+     *               debut:?string, horizon:?string, stale:bool, fetched_at:int}
      */
-    private static function calendrier(?callable $fetchUrl, ?string $cacheDir): array
+    private static function calendrier(?callable $fetchUrl, ?string $cacheDir, ?float $budgetS = null): array
     {
-        $fetch = $fetchUrl ?? [self::class, 'httpGet'];
-        $dir = $cacheDir ?? (AEIC_ROOT . '/cache/edt');
         // Échéance commune aux régénérations des 3 départements d'UNE
         // lecture : contrôle avant chaque appel, abort → stale servi.
-        $echeance = microtime(true) + self::BUDGET_REGEN_S;
+        $echeance = microtime(true) + ($budgetS ?? self::BUDGET_REGEN_S);
+        $dir = $cacheDir ?? (AEIC_ROOT . '/cache/edt');
+        $fetch = $fetchUrl;
+        if ($fetch === null) {
+            // Défaut deadline-aware (EDT-PUB-13-SUITE) : refuser de
+            // DÉMARRER un appel après l'échéance et couper un appel
+            // démarré avant au RESTANT — le mur reste ≤ budget + ε,
+            // même avec un serveur qui pend jusqu'au timeout unitaire.
+            $fetch = static function (string $url) use ($echeance): ?string {
+                $restant = $echeance - microtime(true);
+
+                return $restant > 0 ? self::httpGet($url, $restant) : null;
+            };
+        }
 
         $events = [];
         $stale = false;
         $horizon = null;
         $debut = null;
+        $fetchedAt = 0;
         foreach (self::DEPTS as $dept) {
             $payload = self::chargerDept($dept, $fetch, $dir, $echeance);
             $stale = $stale || $payload['stale'];
+            // Date du cache servi : PLUS ANCIENNE des données réellement
+            // servies (min des fetched_at non nuls) — honnêteté maximale.
+            if ($payload['fetched_at'] > 0) {
+                $fetchedAt = $fetchedAt === 0
+                    ? $payload['fetched_at']
+                    : min($fetchedAt, $payload['fetched_at']);
+            }
             $events[$dept] = [];
             foreach ($payload['events'] as $e) {
                 $jour = self::jourLocal($e['start'] ?? null);
@@ -373,7 +424,7 @@ final class EdtCalendar
             }
         }
 
-        return ['events' => $events, 'debut' => $debut, 'horizon' => $horizon, 'stale' => $stale];
+        return ['events' => $events, 'debut' => $debut, 'horizon' => $horizon, 'stale' => $stale, 'fetched_at' => $fetchedAt];
     }
 
     /**
