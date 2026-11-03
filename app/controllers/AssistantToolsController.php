@@ -208,7 +208,10 @@ final class AssistantToolsController extends Controller
      * Data::analyseReappro (point d'assemblage unique partagé avec la
      * page Réappro) sur ses réglages par défaut : analyse des 14 derniers
      * jours (jours calendaires, week-end inclus) pour couvrir 7 jours.
-     * Tri conservé : quantité à commander décroissante.
+     * Tri conservé : quantité à commander décroissante. Le facteur
+     * calendrier universitaire appliqué (mission E2) est exposé tel quel
+     * (champ additif « calendrier ») : a_commander/nb_alertes/etat en
+     * dépendent, le consommateur doit pouvoir l'interpréter.
      */
     private function produitsACommander(): void
     {
@@ -250,6 +253,7 @@ final class AssistantToolsController extends Controller
             'genere_le'       => $fin,
             'periode_analyse' => ['debut' => $debut, 'fin' => $fin, 'jours' => $calDays],
             'horizon_jours'   => $horizon,
+            'calendrier'      => $analyse['calendrier'],
             'nb_produits'     => count($produits),
             'nb_alertes'      => (int) $analyse['alerts'],
             'produits'        => $produits,

@@ -404,6 +404,12 @@ final class AssistantToolsTest extends IntegrationTestCase
         // dernier comptage), stock théorique 2 → besoin 7, a_commander 5,
         // autonomie 2 j (< 7) → état a_commander (alerte).
         // « Chips » : 7 vendus, stock 30 → a_commander 0, état ok.
+        // Calendrier EDT VIDÉ en tête de test : facteur NEUTRE 1.0
+        // déterministe, quel que soit le cache laissé par un run filtré
+        // précédent (les tests edt_iut écrivent des fixtures — sans ce
+        // vidage, un résidu publiait des semaines partielles/mortes et le
+        // facteur réel moduloit a_commander/etat/nb_alertes, ticket QA-01).
+        $this->viderCacheEdt();
         $j3 = $this->jourParis(3);
         $this->seedVente('s1', 'T1', $j3 . ' 12:00:00', 'Coca cola', 'Boissons', 14, 14.00);
         $this->seedVente('s2', 'T2', $this->jourParis(4) . ' 12:00:00', 'Chips', 'Snacks', 7, 7.00);
@@ -422,6 +428,12 @@ final class AssistantToolsTest extends IntegrationTestCase
             'Fenêtre par défaut de la page Réappro : 14 derniers jours.'
         );
         self::assertSame(7, (int) ($c['horizon_jours'] ?? -1));
+        // Ticket QA-01 : le facteur calendrier universitaire appliqué est
+        // EXPOSÉ (champ additif « calendrier », contrat : champs ajoutés
+        // jamais retirés) — cache vide → hors horizon publié → neutre 1.0.
+        self::assertSame(1.0, (float) ($c['calendrier']['facteur'] ?? -1.0), 'Cache EDT vide : facteur neutre 1.0.');
+        self::assertArrayHasKey('explication', $c['calendrier'], 'Le champ explication est TOUJOURS présent (stable), null si rien à dire.');
+        self::assertNull($c['calendrier']['explication'], 'Aucune semaine morte/partielle : rien à expliquer.');
         self::assertSame(1, (int) ($c['nb_alertes'] ?? -1), 'Seul « Coca cola » est en alerte.');
 
         $produits = $c['produits'] ?? [];
@@ -437,6 +449,51 @@ final class AssistantToolsTest extends IntegrationTestCase
         $chips = $produits[1];
         self::assertSame(0, $chips['a_commander'] ?? null);
         self::assertSame('ok', $chips['etat'] ?? '');
+    }
+
+    /** Semaine 100 % morte sur l'horizon de couverture (facteur 0) : les
+     * suggestions sont ANNULÉES et l'alerte disparaît (docblock
+     * Data::analyseReappro : commander pendant une semaine morte est du
+     * bruit). Simulation déterministe : un cours il y a 7 jours et un cours
+     * dans 14 jours publient l'intégralité de l'horizon [demain ; demain+7]
+     * sans AUCUN cours dedans, quel que soit le jour d'exécution. */
+    public function test_produits_a_commander_semaine_morte_annule_suggestions_et_alertes(): void
+    {
+        $this->viderCacheEdt();
+        // jourParis(n) = aujourd'hui MOINS n jours (le helper ne produit que
+        // du passé) : un cours il y a 7 jours (borne passée de la plage
+        // publiée) et un dans 14 jours (borne future, calcul direct)
+        // publient tout l'horizon sans AUCUN cours dedans.
+        $dans14Jours = (new \DateTimeImmutable('today', new \DateTimeZone('Europe/Paris')))
+            ->modify('+14 days')->format('Y-m-d');
+        $this->ecrireCacheEdt('iut-info', [$this->jourParis(7), $dans14Jours]);
+
+        $this->seedVente('s1', 'T1', $this->jourParis(3) . ' 12:00:00', 'Coca cola', 'Boissons', 14, 14.00);
+        $this->seedVente('s2', 'T2', $this->jourParis(4) . ' 12:00:00', 'Chips', 'Snacks', 7, 7.00);
+        $this->seedComptage('c1', 'Coca cola', $this->jourParis(1) . ' 10:00:00', 2);
+        $this->seedComptage('c2', 'Chips', $this->jourParis(1) . ' 10:30:00', 30);
+
+        $r = $this->request('GET', '/internal/assistant/produits_a_commander');
+        $c = $this->corps($r);
+
+        self::assertSame(200, (int) ($r['code'] ?? 0));
+        self::assertSame(0.0, (float) ($c['calendrier']['facteur'] ?? -1.0), 'Horizon 100 % sans cours : facteur 0.');
+        self::assertStringContainsString(
+            'sans cours',
+            (string) ($c['calendrier']['explication'] ?? ''),
+            'Le facteur 0 est expliqué en langue humaine.'
+        );
+        self::assertSame(0, (int) ($c['nb_alertes'] ?? -1), 'Facteur 0 : plus aucune alerte réappro.');
+
+        $produits = $c['produits'] ?? [];
+        self::assertCount(2, $produits);
+        foreach ($produits as $p) {
+            self::assertSame(0, $p['a_commander'] ?? null, 'Semaine morte : aucune suggestion de commande.');
+            self::assertSame('ok', $p['etat'] ?? '', 'Semaine morte : plus d’état a_commander.');
+        }
+        // Les FAITS restent à l'échelle pleine (docblock : l'autonomie est
+        // inchangée par le facteur — c'est un fait observé, pas une suggestion).
+        self::assertSame(2, $produits[0]['autonomie_jours'] ?? null, 'Tri par autonomie quand tout est à 0.');
     }
 
     // -----------------------------------------------------------------

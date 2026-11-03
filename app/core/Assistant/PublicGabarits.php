@@ -176,6 +176,13 @@ final class PublicGabarits
         'anomalie', 'anomalies', 'anomalie', 'incoherence', 'incoherences',
         'incohérence', 'incohérences', 'catalogue', 'catalog', 'carte',
         'produit', 'produits', 'article', 'articles',
+        // (mission 03/11, 2e vague) : le CLI ajoute le reste du vocabulaire
+        // de veille qualité (régression « il y a des anomalies… ») — le
+        // portage public reste SUR-ENSEMBLE du CLI (problème/défaut/
+        // suspect/fiche/catégorie ne sont jamais des produits non plus).
+        'probleme', 'problemes', 'problème', 'problèmes',
+        'defaut', 'defauts', 'défaut', 'défauts', 'suspect', 'suspects',
+        'fiche', 'fiches', 'categorie', 'categories', 'catégorie', 'catégories',
         'edt', 'cours', 'vacances', 'reprise',
     ];
 

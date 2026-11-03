@@ -834,6 +834,19 @@ MOTS_NON_PRODUITS = frozenset(
         "kiosque", "stand", "doublon", "doublons", "fusion", "fusions",
         "solde", "soldes", "credit", "credits", "crédit", "crédits",
         "stock", "reste",
+        # Régression anomalies catalogue (01/11, selfreview RAPPORT
+        # 2026-11-01_04h §5-1) : « il y a des anomalies dans le catalogue »
+        # était avalé par le motif stock « il y a des X » (fast_path_stock
+        # passe AVANT les gabarits M2) → « Produit « anomalies dans le
+        # catalogue » introuvable ». Vocabulaire de veille qualité du
+        # catalogue (_MOTS_ANOMALIE × _MOTS_CATALOGUE) : jamais un nom de
+        # produit — le fast-path décline, le gabarit anomalies_catalogue
+        # répond (même ajout côté portage public PublicGabarits.php).
+        "anomalie", "anomalies", "incoherence", "incoherences",
+        "incohérence", "incohérences", "probleme", "problemes",
+        "problème", "problèmes", "defaut", "defauts", "défaut", "défauts",
+        "suspect", "suspects", "catalogue", "catalog", "fiche", "fiches",
+        "categorie", "categories", "catégorie", "catégories",
     }
 )
 

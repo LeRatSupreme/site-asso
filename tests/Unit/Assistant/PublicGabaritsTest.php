@@ -517,6 +517,96 @@ final class PublicGabaritsTest extends TestCase
     }
 
     // -----------------------------------------------------------------
+    //  Invariant MOTS_NON_PRODUITS — portage public ⊇ CLI (review 2e vague)
+    // -----------------------------------------------------------------
+
+    /**
+     * INVARIANT (review 2e vague, réserve MAJEURE n°1) : la liste PHP
+     * MOTS_NON_PRODUITS est un SUR-ENSEMBLE de celle du pont CLI
+     * scripts/assistant.py. Le docblock du portage (« portage exact du
+     * CLI + additions publiques ») était tenu dans le diff de la 2e
+     * vague mais AUCUN test ne le prouvait : la prochaine extension du
+     * vocabulaire CLI sans miroir PHP dériverait en silence (un mot
+     * admin non filtré côté public = question avalée à tort par le
+     * motif stock « il y a des X », régression du même type que les
+     * « anomalies du catalogue » du 01/11).
+     *
+     * Le vocabulaire CLI est extrait par PARSING du FICHIER SOURCE (le
+     * test lit scripts/assistant.py, isole le bloc
+     * `MOTS_NON_PRODUITS = frozenset( … )` par équilibre des
+     * parenthèses — aucun littéral du bloc n'en contient —, retire les
+     * commentaires `#` puis capture les chaînes à QUOTE APPARIÉE : «
+     * aujourd'hui » reste UN mot, son apostrophe interne n'est pas un
+     * délimiteur). La valeur PHP vient de la constante RÉELLE par
+     * réflexion (convention de la classe : API privée → réflexion,
+     * jamais une copie du listing dans le test).
+     */
+    public function test_mots_non_produits_public_sur_ensemble_du_cli_assistant_py(): void
+    {
+        $source = (string) file_get_contents(AEIC_ROOT . '/scripts/assistant.py');
+        self::assertNotSame('', $source, 'scripts/assistant.py doit être lisible depuis la suite.');
+
+        // Bloc `MOTS_NON_PRODUITS = frozenset( { … } )` : de la
+        // parenthèse ouvrante à la fermante équilibrée (octets — le
+        // préfixe matché est ASCII, substr est cohérent avec les
+        // offsets PCRE byte).
+        self::assertSame(
+            1,
+            preg_match('/MOTS_NON_PRODUITS\s*=\s*frozenset\s*\(/', $source, $m, PREG_OFFSET_CAPTURE),
+            'définition MOTS_NON_PRODUITS introuvable dans scripts/assistant.py.'
+        );
+        $depart = $m[0][1] + strlen($m[0][0]);
+        $profondeur = 1;
+        $i = $depart;
+        while ($profondeur > 0 && $i < strlen($source)) {
+            $car = $source[$i];
+            if ($car === '(') {
+                $profondeur++;
+            } elseif ($car === ')') {
+                $profondeur--;
+            }
+            $i++;
+        }
+        self::assertSame(0, $profondeur, 'bloc frozenset refermé : parenthèse fermante trouvée.');
+        $bloc = substr($source, $depart, $i - 1 - $depart);
+
+        // Commentaires Python retirés AVANT l'extraction des chaînes :
+        // un futur commentaire contenant des quotes ne doit pas
+        // fabriquer de faux mots (les commentaires actuels n'emploient
+        // que des guillemets « », aucun n'est une chaîne).
+        $bloc = (string) preg_replace('/(^[\s]*|\s)#[^\n]*/m', '', $bloc);
+
+        // Chaînes à quote APPARIÉE (backreference) : « aujourd'hui »
+        // reste entière. Une classe ["'] non appariée le casserait en
+        // « aujourd » + « hui » et produirait des artefacts « ", " ».
+        preg_match_all('/(["\'])(.*?)\1/u', $bloc, $captures);
+        $cli = array_values(array_unique(array_filter($captures[2])));
+
+        // Garde anti-parse-vide : un échec silencieux du parsing
+        // (fichier déplacé, regex cassée) ne doit JAMAIS faire passer
+        // l'invariant à vide — le vocabulaire CLI réel est ~120 mots.
+        self::assertGreaterThanOrEqual(80, count($cli), 'parsing substantiel attendu (≥ 80 mots), pas un résidu.');
+        foreach (["aujourd'hui", 'benefice', 'categorie', 'probleme', 'suspect', 'fiche', 'stock', 'reste'] as $sentinelle) {
+            self::assertContains($sentinelle, $cli, "sentinelle CLI absente du parse : {$sentinelle} (parsing cassé ?)");
+        }
+
+        // Valeur PHP réelle (constante privée → réflexion).
+        $php = (new \ReflectionClassConstant(PublicGabarits::class, 'MOTS_NON_PRODUITS'))->getValue();
+        self::assertIsArray($php);
+        self::assertGreaterThan(0, count($php), 'constante PHP non vide.');
+
+        // L'INVARIANT : chaque mot CLI ∈ PHP. Le portage public peut
+        // avoir des ADDITIONS (événements, adhésion, FAQ…) mais JAMAIS
+        // de retrait — tout ajout côté CLI devra être répercuté.
+        $manquants = array_values(array_diff($cli, $php));
+        self::assertSame(
+            [],
+            $manquants,
+            'MOTS_NON_PRODUITS public ⊄ CLI — mots à répercuter côté PublicGabarits : ' . implode(', ', $manquants)
+        );
+    }
+
+    // -----------------------------------------------------------------
     //  Mise en forme publique du stock (formaterStock, privé → réflexion)
     // -----------------------------------------------------------------
 
