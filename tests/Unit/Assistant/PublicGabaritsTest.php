@@ -457,6 +457,41 @@ final class PublicGabaritsTest extends TestCase
         self::assertStringContainsString('Comptage ancien (44 j), fiabilité limitée.', $r2);
     }
 
+    public function test_formater_produits_famille_multicles_explicite_et_fraicheur_conservatrice(): void
+    {
+        // Mission 03/11 — honnêteté familles : « Bueno (126 unités, 2
+        // variétés) » ne contredit plus la clé exacte servie par la voie
+        // stock (« Bueno 17 u ») ; la famille porte SA fraîcheur
+        // conservatrice (clé la plus anciennement comptée), affichée dès
+        // qu'elle dépasse la garde 30 j. Champs absents = ancien format.
+        $m = new \ReflectionMethod(PublicGabarits::class, 'formaterProduits');
+        $m->setAccessible(true);
+
+        $r = $m->invoke(null, [
+            'familles' => [
+                ['nom' => 'Bueno', 'stock' => 126, 'cles' => 2, 'fraicheur_jours' => 44],
+                ['nom' => 'Redbull', 'stock' => 18, 'cles' => 1, 'fraicheur_jours' => 2],
+            ],
+            'dernier_comptage' => '2026-10-31 18:00:00',
+            'fraicheur_jours'  => 3,
+            'avertissement'    => '',
+        ]);
+
+        self::assertStringContainsString('Bueno (126 unités, 2 variétés, comptage ancien (44 j))', $r);
+        self::assertStringContainsString('Redbull (18)', $r);
+        self::assertStringNotContainsString('Redbull (18 unités', $r, 'mono-clé : pas de détail unités/variétés.');
+        self::assertStringContainsString('Dernier comptage : 2026-10-31 18:00:00.', $r);
+
+        // Ancien format (champs absents) : mise en forme d'avant, exacte.
+        $r2 = $m->invoke(null, [
+            'familles' => [['nom' => 'Bueno', 'stock' => 126]],
+            'dernier_comptage' => '',
+            'fraicheur_jours'  => null,
+            'avertissement'    => '',
+        ]);
+        self::assertStringContainsString('Bueno (126)', $r2);
+    }
+
     /**
      * produitPlausible (privé → réflexion) : nettoyage du nom extrait
      * (espaces repliés, ponctuation terminale, suffixe « en stock ») et

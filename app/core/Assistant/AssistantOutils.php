@@ -340,7 +340,15 @@ final class AssistantOutils
      * exclus (FAMILLES_EXCLUES). Fraîcheur : même garde 30 j que
      * stock_produit (avertissement quand le comptage dépasse le seuil).
      *
-     * @return array{familles:list<array{nom:string, stock:int}>,
+     * Honnêteté familles (mission 03/11, réclamée par 3 selfreview
+     * d'affilée) : « Bueno (126) » résumait une famille de 2 clés
+     * comptées à des dates différentes alors que la question précise
+     * « des Bueno ? » sert la clé exacte (comptage du 13/10) — chaque
+     * famille embarque désormais son nombre de clés et SA fraîcheur
+     * CONSERVATRICE (clé la plus anciennement comptée de la famille),
+     * indépendante de la date globale du livre.
+     *
+     * @return array{familles:list<array{nom:string, stock:int, cles:int, fraicheur_jours:?int}>,
      *               dernier_comptage:?string, fraicheur_jours:?int,
      *               avertissement:string}
      */
@@ -349,7 +357,7 @@ final class AssistantOutils
         $livre = AnalyticsForecastData::stockBook();
 
         $familles = [];
-        foreach ($livre->lines() as $ligne) {
+        foreach ($livre->linesWithDates() as $ligne) {
             $nom = trim((string) preg_replace('/\s+/u', ' ', (string) $ligne['key']));
             if ($nom === '') {
                 continue;
@@ -363,6 +371,14 @@ final class AssistantOutils
             }
             $stock = max(0, (int) $ligne['stock']);
             $familles[$famille]['stock'] = ($familles[$famille]['stock'] ?? 0) + $stock;
+            $familles[$famille]['cles']  = ($familles[$famille]['cles'] ?? 0) + 1;
+            // Fraîcheur conservatrice : date de comptage la plus ANCIENNE
+            // des clés de la famille (null = aucune clé comptée).
+            $at = $ligne['at'] ?? null;
+            if (is_string($at) && $at !== ''
+                && (!isset($familles[$famille]['at']) || $at < $familles[$famille]['at'])) {
+                $familles[$famille]['at'] = $at;
+            }
             // Nom affiché : premier mot du membre le mieux disposé (casse d'origine).
             if ($stock > ($familles[$famille]['rep'] ?? -1)) {
                 $familles[$famille]['rep'] = $stock;
@@ -378,7 +394,12 @@ final class AssistantOutils
             [$b['stock'], $a['nom']] <=> [$a['stock'], $b['nom']]);
 
         $selection = array_map(
-            static fn (array $f): array => ['nom' => $f['nom'], 'stock' => (int) $f['stock']],
+            static fn (array $f): array => [
+                'nom'             => $f['nom'],
+                'stock'           => (int) $f['stock'],
+                'cles'            => max(1, (int) ($f['cles'] ?? 1)),
+                'fraicheur_jours' => self::fraicheurJours(isset($f['at']) ? (string) $f['at'] : null),
+            ],
             array_slice($disponibles, 0, max(0, $limite))
         );
 

@@ -132,6 +132,34 @@ final class StockBookTest extends TestCase
         self::assertSame([['key' => 'Eau 50cl', 'stock' => 12]], $book->lines());
     }
 
+    public function test_lines_with_dates_fraicheur_par_cle(): void
+    {
+        // Mission 03/11 : fraîcheur PAR CLÉ — une famille agrégeant des clés
+        // comptées à des dates différentes ne doit pas hériter de la date la
+        // plus récente du livre. lines() reste inchangé (contrat clé+stock).
+        $book = new StockBook(
+            ['Bueno 17 u' => 17, 'Bueno white' => 109],
+            [
+                'Bueno 17 u'  => ['at' => '2026-10-13 10:00:00', 'qty' => 17, 'gap' => 0],
+                'Bueno white' => ['at' => '2026-10-31 18:00:00', 'qty' => 109, 'gap' => 0],
+            ],
+            []
+        );
+
+        $parCle = [];
+        foreach ($book->linesWithDates() as $ligne) {
+            $parCle[$ligne['key']] = $ligne['at'];
+        }
+        self::assertSame('2026-10-13 10:00:00', $parCle['Bueno 17 u'], 'chaque clé garde SA date de comptage.');
+        self::assertSame('2026-10-31 18:00:00', $parCle['Bueno white']);
+
+        self::assertEqualsCanonicalizing(
+            [['key' => 'Bueno 17 u', 'stock' => 17], ['key' => 'Bueno white', 'stock' => 109]],
+            $book->lines(),
+            'lines() : contrat clé + stock inchangé (l\'ordre du livre n\'est pas le contrat).'
+        );
+    }
+
     /**
      * Passe MOTS de resolveLoose (STOCK-PUB-14) : le libellé cite la clé
      * avec des mots décoratifs — « un coca » rejoint la clé « Coca »

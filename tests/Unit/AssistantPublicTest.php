@@ -501,6 +501,41 @@ final class AssistantPublicTest extends TestCase
         }
     }
 
+    public function test_faq_radicaux_tronques_mots_coupees_servis_en_fastpath(): void
+    {
+        // Mission 03/11 : le match par sous-chaîne pardonne les fautes en
+        // SUFFIXE mais pas les MOTS TRONQUÉS — « evenemen » (preuve 03/11
+        // 02h : 11,8 s en LLM) et « oraires » sans h muet (preuve 02/11
+        // 19h : 24,3 s) dérivaient vers le LLM faute de radicaux tronqués.
+        $attenduEvenements = self::reponseFaqPour('evenement');
+        $attenduCafeteria  = self::reponseFaqPour('cafet');
+        $s = $this->service();
+
+        foreach ([
+            ['c kand le prochain evenemen de lasso ?', $attenduEvenements], // question réelle 03/11 02h
+            ['evennemen prochain svp', $attenduEvenements],                  // variante double n tronquée
+            ['les oraires de la cafeteria ?', $attenduCafeteria],            // h muet (preuve 02/11 19h)
+            ['oraire douverture cafet', $attenduCafeteria],                  // double troncature
+        ] as [$question, $attendu]) {
+            $r = $s->traiter($question, null, '8.8.4.4');
+            self::assertSame(200, $r['http'], 'doit répondre en FAQ : ' . $question);
+            self::assertTrue($r['ok']);
+            self::assertSame($attendu, $r['reply'], 'fastpath attendu : ' . $question);
+        }
+    }
+
+    public function test_faq_radicaux_tronques_ne_detournent_pas_les_autres_entrees(): void
+    {
+        // Contrepartie des radicaux courts : aucune autre entrée hijackée.
+        $s = $this->service();
+
+        $r = $s->traiter('Vous faites un bar quand ?', null, '8.8.4.4');
+        self::assertSame(self::reponseFaqPour('bar'), $r['reply']);
+
+        $r = $s->traiter("Qui êtes-vous l'asso ?", null, '8.8.4.4');
+        self::assertSame(self::reponseFaqPour('qui etes vous'), $r['reply']);
+    }
+
     public function test_hors_faq_va_au_chemin_llm_503_faq_false(): void
     {
         $path = $this->tmp . '/assistant_public.jsonl';

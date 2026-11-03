@@ -345,6 +345,26 @@ final class StockBook
     }
 
     /**
+     * Mêmes lignes que lines() AVEC la date du comptage de chaque clé
+     * (fraîcheur PAR CLÉ — mission 03/11, honnêteté de la sélection
+     * publique produits() : une famille agrégeant des clés comptées à
+     * des dates différentes ne doit pas hériter de la date la plus
+     * récente du livre). lines() reste inchangé : son contrat (clé +
+     * stock) est épinglé par les tests et consommé par la valorisation.
+     *
+     * @return list<array{key:string,stock:int,at:?string}>
+     */
+    public function linesWithDates(): array
+    {
+        $lines = [];
+        foreach ($this->byNorm as $e) {
+            $lines[] = ['key' => $e['orig'], 'stock' => $e['stock'], 'at' => $e['at']];
+        }
+
+        return $lines;
+    }
+
+    /**
      * Valeur EUROS du stock restant (méthode PURE) : Σ max(0, stock) ×
      * coût unitaire par clé EXACTE d'inventaire. Un produit sans coût
      * connu (absent de la carte ou NULL) est IGNORÉ — aucune valeur

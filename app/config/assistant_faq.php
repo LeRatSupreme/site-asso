@@ -85,6 +85,12 @@ return [
             'evenements',
             'evennement',   // faute courante double n (KB-06 : preuves 30/10 00:03
             'evennements',  // et 31/10 04:03 passées au LLM avec scorie EN/FR)
+            'evenem',       // radical tronqué (mission 03/11) : le match par
+                            // sous-chaîne pardonne les fautes en SUFFIXE mais
+                            // PAS les mots tronqués — « c kand le prochain
+                            // evenemen de lasso ? » (preuve 03/11 02h) dérivait
+                            // en LLM 11,8 s faute de ce radical.
+            'evenn',        // idem, variante double n : « evennemen »…
             'soiree',
             'soirees',
             'soire',        // racine : « soiré » (faute), soirée…
@@ -146,6 +152,9 @@ return [
             // Intention temporelle — formes LONGUES sûres seulement.
             'horaire',
             'horaires',
+            'oraire',       // h muet (mission 03/11) : « les oraires… » (preuve
+                            // 02/11 19h : 24,3 s en LLM) — le h initial muet
+                            // omis est la troncature la plus courante du mot.
             'heures ouverture',
             'heures d ouverture',
             'a quelle heure',

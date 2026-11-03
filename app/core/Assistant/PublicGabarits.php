@@ -91,6 +91,9 @@ final class PublicGabarits
      *  « étudiant »), reste sur le fast-path horaires (EDT-PUB-13-SUITE). */
     private const MOTS_HORAIRES = [
         'horaire', 'horaires', 'heure', 'heures', 'heur',
+        'orair', 'oraire', 'oraires',   // h muet tronqué (mission 03/11 :
+        // « ske son les oraires douverture… » 24,3 s en LLM — le radical
+        // tronqué doit profiter de la MÊME priorité horaires),
         'ouvre', 'ouvres', 'ouvert', 'ouverte', 'ouverts', 'ouvertes',
         'ouvrez', 'ouvrira', 'souvre', 'ferme', 'fermes', 'fermee',
         'fermees', 'fermeture', 'ouverture', 'pauses', 'creneau',
@@ -161,10 +164,15 @@ final class PublicGabarits
         //    + vocabulaire métier hors-domaine public : anomalies catalogue,
         //    bénéfice… restent des questions ADMIN, servies par le CLI) —
         'evenement', 'evenements', 'événement', 'événements',
+        'evenem', 'evenemen', 'evennemen', 'evenn',   // radicaux tronqués
+        // (mission 03/11) : sans eux, « il y a un evenemen vendredi ? »
+        // était avalé par le motif stock (« produit introuvable »)
+        // AVANT d'atteindre la FAQ événements.
         'soiree', 'soirees', 'soirée', 'soirées', 'sortie', 'sorties',
         'afterwork', 'afterworks', 'bbq', 'bowling', 'adhesion', 'adhésion',
         'cotisation', 'cotisations', 'inscription', 'inscriptions', 'compte',
         'jeu', 'jeux', 'contact', 'mail', 'horaire', 'horaires',
+        'orair', 'oraire', 'oraires',   // h muet tronqué (mission 03/11)
         'anomalie', 'anomalies', 'anomalie', 'incoherence', 'incoherences',
         'incohérence', 'incohérences', 'catalogue', 'catalog', 'carte',
         'produit', 'produits', 'article', 'articles',
@@ -604,6 +612,14 @@ final class PublicGabarits
      * (arbitrage GENERIC-PUB-17 : prix de vente non exposés ailleurs
      * publiquement → rien).
      *
+     * Honnêteté familles (mission 03/11) : une famille multi-clés est
+     * EXPLICITE (« Bueno (126 unités, 2 variétés) » = Bueno + Bueno
+     * white) pour ne plus contredire la clé exacte servie par la voie
+     * spécifique (« Stock de Bueno : 17 unité(s)… »), et porte SA
+     * garde de fraîcheur (clé la plus ancienne de la famille) — les
+     * champs « cles »/« fraicheur_jours » absents (ancien format)
+     * reproduisent la mise en forme d'avant, exacte au caractère.
+     *
      * @param array<string, mixed> $selection Réponse AssistantOutils::stockSelection().
      */
     private static function formaterProduits(array $selection): string
@@ -612,7 +628,14 @@ final class PublicGabarits
         foreach ((array) ($selection['familles'] ?? []) as $famille) {
             $nom = trim((string) ($famille['nom'] ?? ''));
             if ($nom !== '') {
-                $noms[] = $nom . ' (' . (int) ($famille['stock'] ?? 0) . ')';
+                $stock = (int) ($famille['stock'] ?? 0);
+                $cles = max(1, (int) ($famille['cles'] ?? 1));
+                $fragments = $cles > 1 ? [$stock . ' unités', $cles . ' variétés'] : [$stock];
+                $fraicheur = $famille['fraicheur_jours'] ?? null;
+                if (is_int($fraicheur) && $fraicheur > AssistantOutils::FRAICHEUR_SEUIL_JOURS) {
+                    $fragments[] = 'comptage ancien (' . $fraicheur . ' j)';
+                }
+                $noms[] = $nom . ' (' . implode(', ', $fragments) . ')';
             }
         }
 
