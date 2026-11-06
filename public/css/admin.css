@@ -1195,3 +1195,224 @@ button:where(.admin-group, .admin-subgroup):focus-visible {
         width: auto;
     }
 }
+
+/* ---- Réorganisation de la sidebar admin (mode édition) ------------------
+   Wrappers .admin-nav-section / .admin-nav-subgroup (posés par le layout
+   admin.php pour le glisser-déposer) : ils deviennent les items flex de
+   la sidebar à la place des anciennes paires <button> + <nav>. Rythme
+   inchangé : même gap vertical (0.15rem) que .admin-sidebar, les
+   espacements des titres restant portés par les boutons
+   .admin-group/.admin-subgroup eux-mêmes. */
+.admin-nav-section,
+.admin-nav-subgroup {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    min-width: 0;
+}
+
+/* Déclencheur « Réorganiser » (rendu PHP pour les rôles autorisés
+   seulement) : discret, au-dessus du pied de sidebar (le pied garde
+   margin-top:auto, il reste collé en bas). */
+.admin-reorder {
+    margin-top: 0.75rem;
+}
+
+.admin-reorder-toggle {
+    display: block;
+    width: 100%;
+    min-height: 44px;
+    padding: 0.35rem 0.8rem;
+    background: none;
+    border: 1px dashed var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--admin-link);
+    font-size: 1rem;
+    text-align: left;
+    cursor: pointer;
+}
+
+.admin-reorder-toggle:hover,
+.admin-reorder-toggle:focus-visible {
+    color: var(--foreground);
+    border-color: var(--primary);
+}
+
+/* Barre d'outils du mode édition. [hidden] réaffiché explicitement :
+   display:flex écraserait l'attribut hidden sinon. */
+.admin-reorder-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem;
+    min-width: 0;
+}
+
+.admin-reorder-bar[hidden] { display: none; }
+
+.admin-reorder-btn {
+    min-height: 44px;
+    padding: 0.35rem 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--foreground);
+    font-size: 1rem;
+    cursor: pointer;
+}
+
+.admin-reorder-btn:hover:not(:disabled),
+.admin-reorder-btn:focus-visible {
+    border-color: var(--primary);
+}
+
+.admin-reorder-btn:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+/* « Enregistrer » = action principale de la barre. */
+.admin-reorder-save {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: var(--primary-foreground);
+    font-weight: 700;
+}
+
+/* Retour inline du POST : succès = texte discret, échec = rouge charte. */
+.admin-reorder-status {
+    flex: 1 1 100%;
+    min-width: 0;
+    overflow-wrap: break-word;
+    font-size: 0.9rem;
+    color: var(--muted);
+}
+
+.admin-reorder-status.is-error {
+    color: var(--accent-danger);
+    font-weight: 700;
+}
+
+/* Mode édition : navigation coupée, unités préhendables au pointeur.
+   touch-action:none sur les unités coupe le scroll tactile pendant
+   l'édition (il reprend hors édition) ; user-select:none évite la
+   sélection de texte à la saisie et pendant le drag. */
+#admin-sidebar.is-reordering {
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+#admin-sidebar.is-reordering a.admin-link {
+    cursor: grab;
+}
+
+#admin-sidebar.is-reordering .admin-nav-section,
+#admin-sidebar.is-reordering .admin-nav-subgroup,
+#admin-sidebar.is-reordering .admin-link-row {
+    cursor: grab;
+    touch-action: none;
+}
+
+/* Pendant le drag : curseur grabbing partout, y compris hors sidebar
+   (le pointeur survole d'autres éléments que l'unité saisie) — posé
+   sur <html> par le JS pour la durée du drag seulement. */
+html.aeic-sidebar-drag,
+html.aeic-sidebar-drag * {
+    cursor: grabbing !important;
+}
+
+/* Unité saisie : reste en place, estompée (silhouette d'origine). */
+#admin-sidebar.is-reordering .dragging {
+    opacity: 0.45;
+}
+
+/* Silhouette suivant le pointeur : clone posé dans la sidebar par le
+   JS (garde les styles scopés), hors flux et ignoré par le pointeur
+   (elementFromPoint la traverse, elle ne capte ni hover ni clic). */
+.drag-ghost {
+    position: fixed;
+    z-index: 80;
+    margin: 0;
+    pointer-events: none;
+    background: var(--admin-sidebar-deep);
+    border-radius: var(--radius-sm);
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+    opacity: 0.92;
+    cursor: grabbing;
+}
+
+/* Poignée ⋮⋮ : affordance de saisie sur chaque ligne en mode
+   édition (décorative — la saisie marche sur toute la ligne). */
+.sidebar-grip {
+    flex: 0 0 auto;
+    color: var(--muted);
+    font-size: 0.9rem;
+    line-height: 1;
+    opacity: 0.75;
+    cursor: grab;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+/* Indicateurs d'insertion : lignes fines par box-shadow (aucun décalage
+   de mise en page, n'entre pas dans la zone de débordement). */
+.admin-nav-section.drag-over-above,
+.admin-nav-subgroup.drag-over-above,
+.admin-link-row.drag-over-above {
+    box-shadow: 0 -2px 0 0 var(--primary);
+}
+
+.admin-nav-section.drag-over-below,
+.admin-nav-subgroup.drag-over-below,
+.admin-link-row.drag-over-below {
+    box-shadow: 0 2px 0 0 var(--primary);
+}
+
+/* Lignes flex créées par le JS en mode édition : boutons ▲▼ + titre ou
+   lien. Le libellé garde la place restante (flex 1, min-width 0) et
+   passe à la ligne si besoin — jamais de débordement horizontal. */
+.admin-title-row,
+.admin-link-row {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    min-width: 0;
+}
+
+.admin-title-row > button,
+.admin-link-row > a {
+    flex: 1 1 0;
+    min-width: 0;
+    overflow-wrap: break-word;
+}
+
+/* Fallback mobile : boutons ▲▼ — cible tactile 44px, police 1rem (16px). */
+.sidebar-move {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    flex: 0 0 auto;
+}
+
+.sidebar-move-btn {
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--foreground);
+    font-size: 1rem;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.sidebar-move-btn:hover:not(:disabled),
+.sidebar-move-btn:focus-visible {
+    border-color: var(--primary);
+}
+
+.sidebar-move-btn:disabled {
+    opacity: 0.35;
+    cursor: default;
+}

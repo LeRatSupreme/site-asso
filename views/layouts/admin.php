@@ -259,6 +259,14 @@ if ($reglages !== []) {
     $sections['Réglages'] = $reglages;
 }
 
+/* Ordre personnalisé de la sidebar : l'admin peut réorganiser sections,
+   sous-groupes et liens (glisser-déposer + ▲▼, POST /admin/settings/
+   sidebar-order, clé de réglage admin_sidebar_order). Appliqué ICI, avant
+   le fil d'Ariane et l'état actif, pour qu'ils suivent l'ordre réorganisé.
+   Contrat : App\Core\SidebarOrder::apply(array): array — idempotent, rend
+   l'arbre tel quel (ordre par défaut) si rien n'est stocké. */
+$sections = \App\Core\SidebarOrder::apply($sections);
+
 /* -------------------------------------------------------------------------
  * Fil d'Ariane : calculé automatiquement à partir de l'arbre de menu
  * ci-dessus (section > [sous-groupe >] entrée correspondant au chemin
@@ -427,23 +435,42 @@ if ($currentUrlPath === '/admin' || $crumbEntry === null) {
             ?>
             <?php foreach ($sections as $group => $links): ?>
                 <?php $groupSlug = $navSlug($group); ?>
-                <button type="button" class="admin-group" data-nav-key="<?= e($group) ?>" aria-expanded="true" aria-controls="nav-<?= e($groupSlug) ?>"><?= e($group) ?></button>
-                <nav id="nav-<?= e($groupSlug) ?>" aria-label="<?= e($group) ?>">
-                    <?php foreach ($links as $label => $path): ?>
-                        <?php if (is_array($path)): ?>
-                            <?php $subId = 'nav-' . $groupSlug . '-' . $navSlug($label); ?>
-                            <button type="button" class="admin-subgroup" data-nav-key="<?= e($group . '/' . $label) ?>" aria-expanded="true" aria-controls="<?= e($subId) ?>"><?= e($label) ?></button>
-                            <div id="<?= e($subId) ?>">
-                                <?php foreach ($path as $subLabel => $subPath): ?>
-                                    <a class="admin-link<?= $isActive($subLabel, $subPath) ? ' is-active' : '' ?>" href="<?= e(url($subPath)) ?>"><?= e($subLabel) ?></a>
-                                <?php endforeach; ?>
-                            </div>
-                        <?php else: ?>
-                            <a class="admin-link<?= $isActive($label, $path) ? ' is-active' : '' ?>" href="<?= e(url($path)) ?>"><?= e($label) ?></a>
-                        <?php endif; ?>
-                    <?php endforeach; ?>
-                </nav>
+                <div class="admin-nav-section" data-sidebar-section="<?= e($group) ?>">
+                    <button type="button" class="admin-group" data-nav-key="<?= e($group) ?>" aria-expanded="true" aria-controls="nav-<?= e($groupSlug) ?>"><?= e($group) ?></button>
+                    <nav id="nav-<?= e($groupSlug) ?>" aria-label="<?= e($group) ?>">
+                        <?php foreach ($links as $label => $path): ?>
+                            <?php if (is_array($path)): ?>
+                                <?php $subId = 'nav-' . $groupSlug . '-' . $navSlug($label); ?>
+                                <div class="admin-nav-subgroup" data-sidebar-subgroup="<?= e($label) ?>">
+                                    <button type="button" class="admin-subgroup" data-nav-key="<?= e($group . '/' . $label) ?>" aria-expanded="true" aria-controls="<?= e($subId) ?>"><?= e($label) ?></button>
+                                    <div id="<?= e($subId) ?>">
+                                        <?php foreach ($path as $subLabel => $subPath): ?>
+                                            <a class="admin-link<?= $isActive($subLabel, $subPath) ? ' is-active' : '' ?>" data-sidebar-link="<?= e($subLabel) ?>" href="<?= e(url($subPath)) ?>"><?= e($subLabel) ?></a>
+                                        <?php endforeach; ?>
+                                    </div>
+                                </div>
+                            <?php else: ?>
+                                <a class="admin-link<?= $isActive($label, $path) ? ' is-active' : '' ?>" data-sidebar-link="<?= e($label) ?>" href="<?= e(url($path)) ?>"><?= e($label) ?></a>
+                            <?php endif; ?>
+                        <?php endforeach; ?>
+                    </nav>
+                </div>
             <?php endforeach; ?>
+
+            <?php if ($isAdminRole && $systemPageAllowed('settings')): ?>
+            <?php /* Barre de réorganisation : le déclencheur est discret et
+               permanent pour les rôles autorisés ; les actions n'apparaissent
+               qu'en mode édition (script admin-sidebar-order.js). */ ?>
+            <div class="admin-reorder" data-sidebar-reorder>
+                <button type="button" class="admin-reorder-toggle" id="admin-reorder-toggle">Réorganiser</button>
+                <div class="admin-reorder-bar" id="admin-reorder-bar" hidden>
+                    <button type="button" class="admin-reorder-btn admin-reorder-save" id="admin-reorder-save">Enregistrer</button>
+                    <button type="button" class="admin-reorder-btn admin-reorder-reset" id="admin-reorder-reset">Réinitialiser</button>
+                    <button type="button" class="admin-reorder-btn admin-reorder-cancel" id="admin-reorder-cancel">Annuler</button>
+                    <span class="admin-reorder-status" id="admin-reorder-status" role="status" aria-live="polite"></span>
+                </div>
+            </div>
+            <?php endif; ?>
 
             <div class="admin-sidebar-foot">
                 <form method="post" action="<?= e(url('/set-lang')) ?>" class="lang-switch lang-switch-admin" aria-label="Language">
@@ -622,6 +649,13 @@ if ($currentUrlPath === '/admin' || $crumbEntry === null) {
             }
         })();
     </script>
+    <?php /* Réorganisation de la sidebar : config exposée (et script chargé)
+       uniquement pour les rôles autorisés — le script sort immédiatement
+       si le bouton déclencheur est absent du DOM. */ ?>
+    <?php if ($isAdminRole && $systemPageAllowed('settings')): ?>
+    <script>window.AEIC_SIDEBAR = { csrf: <?= json_encode(csrf_token()) ?>, endpoint: <?= json_encode(url('/admin/settings/sidebar-order')) ?> };</script>
+    <script src="<?= e(rootAssetVersioned('/assets/js/admin-sidebar-order.js')) ?>"></script>
+    <?php endif; ?>
     <script src="<?= e(rootAssetVersioned('/assets/js/confirm.js')) ?>"></script>
     <script src="<?= e(rootAssetVersioned('/assets/js/kiosk-reveal.js')) ?>"></script>
 </body>
