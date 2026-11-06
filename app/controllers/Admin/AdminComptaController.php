@@ -987,7 +987,7 @@ final class AdminComptaController extends AdminBaseController
             'aliases'    => ProductAlias::allLabels(),
             'unmapped'   => Sale::unmappedDescriptions(),
             'categories' => self::aliasCategories(),
-            'known_keys' => self::knownProductKeys(),
+            'known_keys' => ProductAlias::knownProductKeys(),
         ]);
     }
 
@@ -1084,33 +1084,6 @@ final class AdminComptaController extends AdminBaseController
             . ').'
         );
         redirect(url('/admin/compta/aliases'));
-    }
-
-    /**
-     * Clés connues pour le datalist de fusion : noms des fiches carte
-     * (products.name), product_key des alias et produits vendus
-     * (SumUp). Trié, dédupliqué, sans chaîne vide.
-     *
-     * @return list<string>
-     */
-    private static function knownProductKeys(): array
-    {
-        $all = array_unique(array_merge(
-            array_map('strval', array_column(Product::allForAdmin(), 'name')),
-            array_map('strval', array_column(ProductAlias::all(), 'product_key')),
-            Sale::distinctProducts()
-        ), SORT_STRING);
-
-        $out = [];
-        foreach ($all as $k) {
-            $key = trim($k);
-            if ($key !== '') {
-                $out[] = $key;
-            }
-        }
-        sort($out, SORT_STRING);
-
-        return $out;
     }
 
     /**
@@ -1441,9 +1414,22 @@ final class AdminComptaController extends AdminBaseController
     }
 
     /**
-     * Enregistrement en grille des catégories (bouton unique du tableau
-     * « Alias existants ») : met à jour la catégorie de chaque alias
-     * existant, sans toucher au produit canonique ni créer d'alias.
+     * Enregistrement en grille du tableau « Alias existants » (bouton
+     * unique) : met à jour la catégorie de chaque alias existant
+     * (bulk_raw[] / bulk_cat[], inchangé) SANS toucher au produit
+     * canonique ni créer d'alias, PLUS le renommage du « Libellé
+     * d'origine » d'une ligne (alias_label[<id alias>] = nouveau
+     * libellé ; lignes absentes ou identiques = non renommées).
+     *
+     * Renommage sécurisé par ligne (ProductAlias::rename) :
+     *  - même forme normalisée que l'ancien libellé (casse/accents) ou
+     *    libellé neuf → simple renommage, cible produit conservée ;
+     *  - forme normalisée d'un autre alias de MÊME produit → fusion
+     *    d'orthographe : l'alias existant fait foi (sa cible, son
+     *    libellé), la ligne renommée disparaît, trace alias.fusion ;
+     *  - libellé d'un produit DIFFÉRENT → ligne REFUSÉE : flash
+     *    d'erreur explicite, AUCUNE écriture pour elle — le reste du
+     *    save (catégories, autres renommages) s'applique normalement.
      */
     public function aliasesBulk(): void
     {
@@ -1499,7 +1485,66 @@ final class AdminComptaController extends AdminBaseController
                 'sales_updated' => $categorized,
             ]);
             $this->setFlash('success', sprintf('%d catégorie(s) mise(s) à jour — %d vente(s) synchronisée(s).', $updated, $categorized));
-        } else {
+        }
+
+        // Libellés d'origine modifiés : les catégories ci-dessus sont
+        // appliquées AVANT (sur le libellé courant), le renommage ne
+        // rejoue donc jamais la catégorie d'une ligne refusée.
+        $labels = $_POST['alias_label'] ?? [];
+        if (!is_array($labels)) {
+            $labels = [];
+        }
+
+        $knownKeys = null;
+        $renamed   = 0;
+        $fused     = 0;
+        foreach ($labels as $aliasId => $label) {
+            $aliasId = trim((string) $aliasId);
+            if ($aliasId === '') {
+                continue;
+            }
+
+            $knownKeys ??= ProductAlias::knownProductKeys();
+            $r = ProductAlias::rename($aliasId, (string) $label, Auth::id(), $knownKeys);
+
+            if ($r['status'] === 'renamed' || $r['status'] === 'fused') {
+                $this->audit('compta.alias.rename', 'product_alias', (string) $r['id'], [
+                    'status' => $r['status'],
+                    'old'    => $r['old'],
+                    'new'    => $r['new'],
+                    'target' => $r['product_key'],
+                ]);
+                if ($r['status'] === 'renamed') {
+                    $renamed++;
+                } else {
+                    $fused++;
+                }
+                continue;
+            }
+
+            if ($r['status'] === 'refused') {
+                $this->setFlash(
+                    'error',
+                    'Renommage refusé : « ' . $r['old'] . ' » → « ' . $r['new'] . ' » — ' . $r['message']
+                );
+            }
+            // 'unchanged' (libellé identique) et 'missing' (ligne déjà
+            // supprimée ailleurs) : rien à signaler, comme la boucle
+            // catégories ignore les libellés inconnus.
+        }
+
+        $renameParts = [];
+        if ($renamed > 0) {
+            $renameParts[] = sprintf('%d libellé(s) renommé(s)', $renamed);
+        }
+        if ($fused > 0) {
+            $renameParts[] = sprintf("%d fusion(s) d'orthographe effectuée(s)", $fused);
+        }
+        if ($renameParts !== []) {
+            $this->setFlash('success', ucfirst(implode(' et ', $renameParts)) . '.');
+        }
+
+        if ($updated === 0 && $renamed === 0 && $fused === 0) {
             $this->setFlash('info', 'Aucun changement à enregistrer.');
         }
 

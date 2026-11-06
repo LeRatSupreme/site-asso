@@ -240,6 +240,193 @@ final class ProductAlias extends Model
     }
 
     /**
+     * Renomme le LIBELLÉ d'une ligne d'alias existante (tableau « Alias
+     * existants » de la page Mapping des libellés) SANS jamais déplacer
+     * sa cible produit :
+     *
+     *  a. libellé neuf ou de même forme NORMALISÉE que l'ancien (casse,
+     *     accents, ponctuation…) → simple renommage de la ligne, cible /
+     *     catégorie / kind conservés ;
+     *  b. libellé de la forme normalisée d'une AUTRE ligne existante de
+     *     MÊME produit → FUSION par l'upsert de save() : la ligne
+     *     existante fait foi (SA cible est conservée, jamais l'inverse,
+     *     et son orthographe reste la ligne de référence), la ligne
+     *     renommée disparaît, trace « alias.fusion » ;
+     *  c. libellé déjà rattaché à un produit DIFFÉRENT — alias existant
+     *     d'autre cible, ou clé canonique d'un autre produit (fiche
+     *     carte, cible d'alias, produit vendu) — → REFUS : AUCUNE
+     *     écriture pour la ligne, le motif est retourné pour l'UI (fini
+     *     l'écrasement silencieux — SB3).
+     *
+     * Les collisions se résolvent par les mécanismes partagés existants
+     * (findByRaw / findByNormalizedRaw / StockPublic::normalizeKey) —
+     * jamais de comparaison strtolower ad hoc.
+     *
+     * @param string            $id        Id de la ligne à renommer.
+     * @param string            $newRaw    Nouveau libellé.
+     * @param string|null       $userId    Auteur (audit de la fusion), null en CLI.
+     * @param list<string>|null $knownKeys Clés produits connues (assemblage
+     *                                     knownProductKeys() ; réassemblé si null).
+     *
+     * @return array{status:'unchanged'|'renamed'|'fused'|'refused'|'missing', message:string, old:string, new:string, product_key:string, id:string}
+     */
+    public static function rename(string $id, string $newRaw, ?string $userId = null, ?array $knownKeys = null): array
+    {
+        $new = trim($newRaw);
+
+        $row = self::find($id);
+        if ($row === null) {
+            return [
+                'status'      => 'missing',
+                'message'     => 'Ligne d\'alias introuvable (déjà supprimée ?).',
+                'old'         => '',
+                'new'         => $new,
+                'product_key' => '',
+                'id'          => $id,
+            ];
+        }
+
+        $old    = trim((string) $row['raw_description']);
+        $target = trim((string) $row['product_key']);
+        $mk     = static fn (string $status, string $message): array => [
+            'status'      => $status,
+            'message'     => $message,
+            'old'         => $old,
+            'new'         => $new,
+            'product_key' => $target,
+            'id'          => $id,
+        ];
+
+        if ($new === $old) {
+            return $mk('unchanged', 'Libellé inchangé.');
+        }
+        if ($new === '') {
+            return $mk('refused', 'le libellé ne peut pas être vide.');
+        }
+        if (mb_strlen($new) > 255) {
+            return $mk('refused', 'le libellé est limité à 255 caractères.');
+        }
+
+        $normNew    = StockPublic::normalizeKey($new);
+        $normTarget = StockPublic::normalizeKey($target);
+
+        // b/c1 — collision avec une AUTRE ligne : résolution EXACTE puis
+        // normalisée, mêmes mécanismes que resolve()/save().
+        $exactHit = false;
+        $other    = self::findByRaw($new);
+        if ($other !== null && (string) $other['id'] === $id) {
+            $other = null;
+        }
+        if ($other !== null) {
+            $exactHit = true;
+        } else {
+            $other = self::findByNormalizedRaw($new);
+            if ($other !== null && (string) $other['id'] === $id) {
+                $other = null; // même forme normalisée que NOTRE ligne : cas a
+            }
+        }
+
+        if ($other !== null) {
+            $otherRaw    = trim((string) $other['raw_description']);
+            $otherTarget = trim((string) $other['product_key']);
+
+            // c1 — produits DISTINCTS : refus, jamais d'écrasement de la
+            // cible de l'alias existant (l'upsert de save() le ferait
+            // silencieusement — SB3).
+            if (StockPublic::normalizeKey($otherTarget) !== $normTarget) {
+                return $mk(
+                    'refused',
+                    '« ' . $new . ' » est déjà le libellé du produit « ' . $otherTarget
+                    . ' » (cette ligne vise « ' . $target . ' »).'
+                );
+            }
+
+            // b — FUSION : la ligne existante fait foi (sa cible, sa
+            // catégorie comblée par la nôtre si vide — même règle que
+            // consolidateFor), trace « alias.fusion », notre ligne disparaît.
+            $category = trim((string) ($other['category'] ?? '')) !== ''
+                ? (string) $other['category']
+                : (trim((string) ($row['category'] ?? '')) !== '' ? (string) $row['category'] : null);
+
+            $pdo = self::pdo();
+            $pdo->beginTransaction();
+            try {
+                self::deleteRow($id);
+                self::save([
+                    'raw_description' => $new,
+                    'product_key'     => $otherTarget,
+                    'category'        => $category,
+                ], $userId);
+                // Chemin EXACT : save() n'a rien tracé (le libellé existait
+                // déjà tel quel, pas de doublon normalisé pour lui) — la trace
+                // de la ligne absorbée est posée ici, mêmes conventions.
+                if ($exactHit) {
+                    self::tracerFusion($other, $old, $otherTarget, $otherTarget, $userId);
+                }
+                $pdo->commit();
+            } catch (\Throwable $e) {
+                $pdo->rollBack();
+                throw $e;
+            }
+
+            return [
+                'status'      => 'fused',
+                'message'     => '« ' . $old . ' » fusionné dans le libellé existant « ' . $otherRaw
+                    . ' » (produit « ' . $otherTarget . ' » conservé).',
+                'old'         => $old,
+                'new'         => $new,
+                'product_key' => $otherTarget,
+                'id'          => (string) $other['id'],
+            ];
+        }
+
+        // c2 — le libellé ne doit pas être non plus une CLÉ CANONIQUE
+        // d'un autre produit : l'alias détournerait ce nom vers sa cible.
+        $conflict = self::knownKeyConflict($normNew, $normTarget, $knownKeys ?? self::knownProductKeys());
+        if ($conflict !== null) {
+            return $mk(
+                'refused',
+                '« ' . $new . ' » est le nom d\'un autre produit (« ' . $conflict . ' »), pas un simple libellé.'
+            );
+        }
+
+        // a — simple renommage : seule l'orthographe change, la ligne
+        // garde sa cible, sa catégorie et son kind.
+        self::pdo()
+            ->prepare('UPDATE product_aliases SET raw_description = ? WHERE id = ?')
+            ->execute([$new, $id]);
+
+        return $mk('renamed', 'Libellé « ' . $old . ' » renommé en « ' . $new . ' » (produit « ' . $target . ' » conservé).');
+    }
+
+    /**
+     * Première clé produit connue de même forme NORMALISÉE que le
+     * libellé testé, quand elle ne désigne PAS le produit de la ligne
+     * renommée (garde c2 de rename()) : le libellé deviendrait une clé
+     * canonique détournée vers un autre produit.
+     *
+     * @param list<string> $knownKeys
+     */
+    private static function knownKeyConflict(string $normNew, string $normTarget, array $knownKeys): ?string
+    {
+        if ($normNew === '') {
+            return null;
+        }
+        if ($normNew === $normTarget) {
+            return null; // orthographe canonique de NOTRE produit : autorisé
+        }
+
+        foreach ($knownKeys as $key) {
+            $key = trim((string) $key);
+            if ($key !== '' && StockPublic::normalizeKey($key) === $normNew) {
+                return $key;
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Occurrences réelles (ventes) de libellés bruts : lignes de vente
      * dont la clé résolue (COALESCE(product_key, description), même
      * convention que Sale::lastSoldByProduct) s'écrit comme le libellé
@@ -622,6 +809,36 @@ final class ProductAlias extends Model
         }
 
         return $deleted;
+    }
+
+    /**
+     * Clés produits CONNUES (point d'assemblage unique, réutilisé par le
+     * datalist « Fusionner deux produits » et la garde anti-collision du
+     * renommage — rename()/knownKeyConflict) : noms des fiches carte
+     * (products.name), cibles des alias (product_aliases.product_key) et
+     * produits réellement vendus (COALESCE(product_key, description) de
+     * sales). Trié, dédupliqué, sans chaîne vide.
+     *
+     * @return list<string>
+     */
+    public static function knownProductKeys(): array
+    {
+        $all = array_unique(array_merge(
+            array_map('strval', array_column(Product::allForAdmin(), 'name')),
+            array_map('strval', array_column(self::all(), 'product_key')),
+            Sale::distinctProducts()
+        ), SORT_STRING);
+
+        $out = [];
+        foreach ($all as $k) {
+            $key = trim((string) $k);
+            if ($key !== '') {
+                $out[] = $key;
+            }
+        }
+        sort($out, SORT_STRING);
+
+        return $out;
     }
 
     /**
