@@ -51,7 +51,7 @@ declare(strict_types=1);
         <div id="assistant-chips" class="assistant-chips" aria-label="Questions préparées (réponse rapide)">
             <?php foreach ($chipsActives as $chip): ?>
                 <?php if (is_array($chip) && (string) ($chip['question'] ?? '') !== ''): ?>
-                    <button type="button" class="assistant-chip" data-question="<?= e((string) $chip['question']) ?>">⚡ <?= e((string) $chip['question']) ?></button>
+                    <button type="button" class="assistant-chip" data-question="<?= e((string) $chip['question']) ?>"><?= e((string) $chip['question']) ?></button>
                 <?php endif; ?>
             <?php endforeach; ?>
         </div>
