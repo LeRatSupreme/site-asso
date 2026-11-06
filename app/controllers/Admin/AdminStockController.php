@@ -12,6 +12,7 @@ use App\Core\Compta\ProductLifecycle;
 use App\Core\Compta\Kiosk;
 use App\Core\Compta\PurchaseSaver;
 use App\Core\Compta\ReceiptStorage;
+use App\Core\Compta\Reappro\CountPacks;
 use App\Core\Compta\StockPublic;
 use App\Core\Compta\T1\T1AutoFusion;
 use App\Core\Compta\T1\T1AutoRetrain;
@@ -898,12 +899,21 @@ final class AdminStockController extends AdminBaseController
             $counts = [];
         }
 
+        // Packs comptés en plus des unités (« 2 cartons + 3 unités ») :
+        // conversion serveur en UN point (CountPacks, via le PackResolver
+        // partagé — jamais en JS) ; inventory_counts reste en unités.
+        $packsPost = $_POST['count_packs'] ?? [];
+        if (!is_array($packsPost)) {
+            $packsPost = [];
+        }
+
         $done = 0;
         $gaps = 0;
 
         foreach ($counts as $key => $value) {
             $productKey = trim((string) $key);
-            if ($productKey === '' || trim((string) $value) === '') {
+            $packsRaw = isset($packsPost[$key]) ? trim((string) $packsPost[$key]) : '';
+            if ($productKey === '' || (trim((string) $value) === '' && $packsRaw === '')) {
                 continue;
             }
 
@@ -912,12 +922,20 @@ final class AdminStockController extends AdminBaseController
                 continue;
             }
 
-            // L'écart doit être calculé AVANT le record : chaque comptage
-            // devient la nouvelle référence du stock théorique.
+            // Saisie « 2 packs de 24 + 3 unités » : fusion en unités, la
+            // note trace la saisie d'origine (« 2×24+3 »). Sans pack défini
+            // le champ packs est ignoré silencieusement (comportement
+            // inchangé pour les produits à l'unité).
+            $packs = CountPacks::merge($productKey, (string) $value, $packsRaw);
+            $counted = $packs['counted'];
+
+            // L'écart doit être calculé AVANT le record (sur la valeur
+            // convertie) : chaque comptage devient la nouvelle référence
+            // du stock théorique.
             $theoretical = InventoryCount::theoreticalStock($productKey);
             $gap = $counted - ($theoretical ?? 0);
 
-            InventoryCount::record($productKey, $counted, null, $user['id'] ?? null);
+            InventoryCount::record($productKey, $counted, $packs['note'], $user['id'] ?? null);
 
             $done++;
             if ($gap !== 0) {
@@ -1024,13 +1042,21 @@ final class AdminStockController extends AdminBaseController
             $counts = [];
         }
 
+        // Même contrat packs que la page Inventaire complète (F1) :
+        // conversion serveur unique (CountPacks + PackResolver).
+        $packsPost = $_POST['count_packs'] ?? [];
+        if (!is_array($packsPost)) {
+            $packsPost = [];
+        }
+
         $hidden = array_flip(ProductDiscontinued::keys());
         $done = 0;
         $gaps = 0;
 
         foreach ($counts as $key => $value) {
             $productKey = trim((string) $key);
-            if ($productKey === '' || isset($hidden[$productKey]) || trim((string) $value) === '') {
+            $packsRaw = isset($packsPost[$key]) ? trim((string) $packsPost[$key]) : '';
+            if ($productKey === '' || isset($hidden[$productKey]) || (trim((string) $value) === '' && $packsRaw === '')) {
                 continue;
             }
 
@@ -1039,12 +1065,18 @@ final class AdminStockController extends AdminBaseController
                 continue;
             }
 
-            // L'écart est calculé côté serveur AVANT le record : chaque
-            // comptage devient la nouvelle référence du stock théorique.
+            // Saisie « 2 packs de 24 + 3 unités » : fusion en unités, la
+            // note trace la saisie d'origine (« 2×24+3 »).
+            $packs = CountPacks::merge($productKey, (string) $value, $packsRaw);
+            $counted = $packs['counted'];
+
+            // L'écart est calculé côté serveur AVANT le record (sur la
+            // valeur convertie) : chaque comptage devient la nouvelle
+            // référence du stock théorique.
             $theoretical = InventoryCount::theoreticalStock($productKey);
             $gap = $counted - ($theoretical ?? 0);
 
-            InventoryCount::record($productKey, $counted, null, $user['id'] ?? null);
+            InventoryCount::record($productKey, $counted, $packs['note'], $user['id'] ?? null);
 
             $done++;
             if ($gap !== 0) {

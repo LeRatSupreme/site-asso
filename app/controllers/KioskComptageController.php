@@ -11,6 +11,7 @@ use App\Core\Compta\InvoiceScan;
 use App\Core\Compta\KioskPages;
 use App\Core\Compta\ProductAutoSync;
 use App\Core\Compta\ReceiptStorage;
+use App\Core\Compta\Reappro\CountPacks;
 use App\Core\Compta\ScanCatalogMatcher;
 use App\Core\Compta\StockPublic;
 use App\Core\Compta\SumUpCsvParser;
@@ -1205,6 +1206,13 @@ final class KioskComptageController extends Controller
             $counts = [];
         }
 
+        // Même contrat packs que les pages admin (F1/F2) : l'auto-save
+        // kiosque envoie tout le FormData, le serveur convertit (D6).
+        $packsPost = $_POST['count_packs'] ?? [];
+        if (!is_array($packsPost)) {
+            $packsPost = [];
+        }
+
         $pausedKeys = array_flip(ProductDiscontinued::keys());
         $who = $this->whoFromPost();
         if ($who === '') {
@@ -1216,7 +1224,8 @@ final class KioskComptageController extends Controller
 
         foreach ($counts as $key => $value) {
             $productKey = trim((string) $key);
-            if ($productKey === '' || trim((string) $value) === '' || isset($pausedKeys[$productKey])) {
+            $packsRaw = isset($packsPost[$key]) ? trim((string) $packsPost[$key]) : '';
+            if ($productKey === '' || (trim((string) $value) === '' && $packsRaw === '') || isset($pausedKeys[$productKey])) {
                 continue;
             }
 
@@ -1225,7 +1234,12 @@ final class KioskComptageController extends Controller
                 continue;
             }
 
-            InventoryCount::record($productKey, $counted, null, $who);
+            // Saisie « 2 packs de 24 + 3 unités » : fusion en unités, la
+            // note trace la saisie d'origine (« 2×24+3 »).
+            $packs = CountPacks::merge($productKey, (string) $value, $packsRaw);
+            $counted = $packs['counted'];
+
+            InventoryCount::record($productKey, $counted, $packs['note'], $who);
             $done++;
         }
 
