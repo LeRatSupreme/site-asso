@@ -250,6 +250,7 @@ function aeic_register_routes(Router $router): void
     $router->get('/admin/pages/new', [AdminPageController::class, 'form']);
     $router->get('/admin/pages/{slug}', [AdminPageController::class, 'form']);
     $router->post('/admin/pages/save', [AdminPageController::class, 'save']);
+    $router->post('/admin/pages/preview', [AdminPageController::class, 'preview']);
     $router->post('/admin/pages/{slug}/delete', [AdminPageController::class, 'delete']);
 
     $router->get('/admin/sondages', [AdminPollController::class, 'index']);

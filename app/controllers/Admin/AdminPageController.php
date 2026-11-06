@@ -40,6 +40,43 @@ final class AdminPageController extends AdminBaseController
         ]);
     }
 
+    /**
+     * Aperçu live de la page en cours d'édition (POST /admin/pages/preview).
+     *
+     * Rend EXACTEMENT le même gabarit que la page publique /p/{slug}
+     * (vue pages/page + layout public) à partir des champs du formulaire
+     * d'édition (title, slug, content…), SANS AUCUNE persistance : ni
+     * INSERT ni UPDATE, la table pages n'est jamais écrite. Le contenu
+     * transite par HtmlSanitizer::clean dans la vue, exactement comme le
+     * rendu public — un <script> saisi y est donc neutralisé aussi.
+     *
+     * Garde et CSRF identiques aux autres POST admin : guardModule(CONTENT)
+     * côté contrôleur, jeton vérifié par le routeur (Csrf::checkRequest :
+     * champ _csrf OU en-tête X-CSRF-Token). L'aperçu est affiché dans une
+     * iframe same-origin côté admin : les en-têtes globaux
+     * X-Frame-Options: SAMEORIGIN et CSP frame-ancestors 'self'
+     * l'autorisent déjà, aucune dérogation n'est posée ici.
+     */
+    public function preview(): void
+    {
+        $this->guardModule(Permissions::MODULE_CONTENT);
+
+        // Même forme de données que PageController::show() : la vue
+        // générique n'utilise que title/content, avec repli du titre sur
+        // le slug si le titre est vide (comportement du rendu public).
+        $title = trim((string) ($_POST['title'] ?? ''));
+        $slug  = trim((string) ($_POST['slug'] ?? ''));
+
+        $this->render('pages/page', [
+            'title'       => $title !== '' ? $title : $slug,
+            'description' => trim((string) ($_POST['meta_description'] ?? '')),
+            'page'        => [
+                'title'   => $title,
+                'content' => (string) ($_POST['content'] ?? ''),
+            ],
+        ]);
+    }
+
     public function save(): void
     {
         $this->guardModule(Permissions::MODULE_CONTENT);
