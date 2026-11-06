@@ -143,8 +143,12 @@ if ($moduleAllowed(Permissions::MODULE_COMPTA)) {
 
 $stockMouvements = [];
 if ($moduleAllowed(Permissions::MODULE_COMPTA)) {
+    // « Achats » a déménagé dans la section Comptabilité sous le
+    // libellé « Saisir une dépense » (fusion saisie dépense ×
+    // achats) — plus d'entrée achats côté Stock. Les ordres
+    // personnalisés sauvegardés l'ignorent silencieusement
+    // (matching par libellé, SidebarOrder).
     $stockMouvements = [
-        'Achats' => '/admin/compta/achats',
         'Pertes' => '/admin/compta/pertes',
     ];
 }
@@ -168,9 +172,14 @@ if ($stock !== []) {
 $compta = [];
 if ($moduleAllowed(Permissions::MODULE_COMPTA)) {
     $compta += [
-        'Opérations'           => '/admin/compta/depenses',
+        'Opérations'            => '/admin/compta/depenses',
         'Opérations événements' => '/admin/compta/evenements',
     ];
+    // Page unifiée « Saisir une dépense » (ex-page Achats, URL
+    // inchangée) : même garde serveur que la page (guardCompta —
+    // ADMIN/TRESORERIE). Placée juste AVANT le livre : saisir,
+    // puis consulter.
+    $compta['Saisir une dépense'] = '/admin/compta/achats';
 }
 if ($isAdminRole && $systemPageAllowed('ledger')) {
     $compta['Livre comptable'] = '/admin/ledger';

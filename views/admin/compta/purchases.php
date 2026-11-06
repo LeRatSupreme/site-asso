@@ -35,7 +35,7 @@ foreach ($allKeys as $k) {
 
 <nav class="compta-tabs" data-compta-tabs aria-label="Sections Achats & stock">
     <button type="button" class="compta-tab is-active" data-tab="total">Total des achats</button>
-    <button type="button" class="compta-tab" data-tab="saisie">Saisir des achats</button>
+    <button type="button" class="compta-tab" data-tab="saisie">Saisir</button>
     <button type="button" class="compta-tab" data-tab="tva">TVA payée</button>
     <button type="button" class="compta-tab" data-tab="journal">Journal</button>
 </nav>
@@ -91,7 +91,7 @@ foreach ($allKeys as $k) {
     </div>
 </div>
 
-<!-- ==================== Onglet : Saisir des achats ==================== -->
+<!-- ==================== Onglet : Saisir ==================== -->
 <?php
 // Liste de picking : produits vendus + clés réelles existantes (les
 // mêmes que les suggestions anti-doublons), triées naturellement.
@@ -99,6 +99,23 @@ $pickerList = array_values(array_unique(array_merge($products, array_values($nor
 usort($pickerList, 'strnatcasecmp');
 ?>
 <div class="compta-tabpane" data-pane="saisie" hidden>
+    <!-- ── Volets exclusifs « Facture » / « Frais divers » ──
+         Fusion « Saisir une dépense » × « Achats » : une facture = UN
+         destinataire. Volet A → /achats/save-bulk (purchases, stock,
+         coûts) ; volet B (vue partielle _expense_form.php) →
+         /depenses/save (expenses). Deux <form> DISTINCTS dont un seul
+         est visible : structurellement impossible de soumettre les
+         deux — l'invariant anti-doublon (un ticket = une écriture)
+         est garanti par la structure, pas par une confirmation. -->
+    <nav class="compta-tabs" data-volet-tabs aria-label="Type de saisie">
+        <button type="button" class="compta-tab is-active" data-volet-btn="facture">Facture (lignes d'achats)</button>
+        <button type="button" class="compta-tab" data-volet-btn="frais">Frais divers (sans produits)</button>
+    </nav>
+    <p class="muted" style="margin:-0.4rem 0 1rem;">
+        Une facture n'est comptée qu'<strong>une seule fois</strong> : avec des produits (stock &amp; coûts) dans « Facture »,
+        en charge immédiate dans « Frais divers » — jamais les deux.
+    </p>
+    <div data-volet-pane="facture">
     <section class="card surface glass">
         <h2 class="card-title">Enregistrer des achats</h2>
         <p class="muted">Une course entière (Metro…) en une fois, même à 20 produits. Le plus rapide : <strong>colle la commande du fournisseur</strong> ci-dessous. Sinon clique les produits connus ou tape au clavier — un seul « Enregistrer » à la fin.</p>
@@ -975,6 +992,59 @@ usort($pickerList, 'strnatcasecmp');
         })();
         </script>
     </section>
+    </div><!-- /volet « Facture » -->
+
+    <!-- ── Volet B « Frais divers » : le formulaire de dépense
+         factorisé (ex-onglet « Saisir une dépense » du livre et de la
+         page Dépenses). POST /admin/compta/depenses/save → expenses
+         UNIQUEMENT. compta-saisie.js est déjà chargé par le volet A
+         ci-dessus (requis par les scripts du scan de la partielle). -->
+    <div data-volet-pane="frais" hidden>
+        <section class="card surface glass">
+            <h2 class="card-title">Ajouter une dépense (frais divers)</h2>
+            <p class="muted">Une charge <strong>sans produits</strong> : matériel, événements, frais bancaires, divers. Les factures fournisseurs avec des lignes de produits (Metro…) se saisissent dans le volet « Facture ».</p>
+            <?php
+            // Retour d'enregistrement : la page unifiée, onglet Saisir,
+            // volet B rouvert (le JS ci-dessus lit ?volet=frais).
+            $expenseReturnTo = '/admin/compta/achats?tab=saisie&volet=frais';
+            require AEIC_VIEWS . '/admin/compta/_expense_form.php';
+            ?>
+        </section>
+    </div><!-- /volet « Frais divers » -->
+
+    <script>
+    // Bascule explicite entre les deux volets : un seul visible à la
+    // fois. ?volet=frais dans l'URL ouvre directement le volet B
+    // (renvoi depuis la page Dépenses, retour d'enregistrement).
+    (function () {
+        var paneRoot = document.querySelector('.compta-tabpane[data-pane="saisie"]');
+        var bar = paneRoot ? paneRoot.querySelector('[data-volet-tabs]') : null;
+        if (!bar) return;
+        var btns = bar.querySelectorAll('[data-volet-btn]');
+        var panes = paneRoot.querySelectorAll('[data-volet-pane]');
+
+        function activate(name) {
+            var found = false;
+            Array.prototype.forEach.call(btns, function (b) {
+                var on = b.getAttribute('data-volet-btn') === name;
+                b.classList.toggle('is-active', on);
+                b.setAttribute('aria-pressed', on ? 'true' : 'false');
+                if (on) found = true;
+            });
+            if (!found) { activate(btns[0].getAttribute('data-volet-btn')); return; }
+            Array.prototype.forEach.call(panes, function (p) {
+                p.hidden = p.getAttribute('data-volet-pane') !== name;
+            });
+        }
+
+        Array.prototype.forEach.call(btns, function (b) {
+            b.addEventListener('click', function () { activate(b.getAttribute('data-volet-btn')); });
+        });
+
+        var initial = new URLSearchParams(window.location.search).get('volet');
+        if (initial) activate(initial);
+    })();
+    </script>
 </div>
 
 <!-- ==================== Onglet : TVA payée ==================== -->

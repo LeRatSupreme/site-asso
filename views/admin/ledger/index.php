@@ -3,46 +3,43 @@
 declare(strict_types=1);
 
 /**
- * Livre comptable — deux menus (admin ET kiosque) :
- *  1. « Saisir une dépense » : saisie express (30 s) — nom, référence du
- *     ticket, montant TTC/HT, TVA et photo du ticket ; la trace apparaît
- *     aussitôt dans les dernières dépenses et dans le livre. En admin,
- *     POST /admin/compta/depenses/save (CSRF + return_to) ; en kiosque,
- *     POST /kiosque/admin/ledger/depense/{token} (jeton = auth, pas de
- *     CSRF, identité obligatoire injectée par le layout kiosk).
- *     LES DEUX branches câblent le scan automatique du ticket (analyse
- *     serveur + préremplissage + détail produits + création d'achats) :
- *     endpoints miroirs /admin/compta/depenses/scan (admin) et
- *     /kiosque/admin/ledger/scan/{token} (kiosque).
- *  2. « Livre comptable » : Date | Objet | Débit | Crédit, avec lignes
+ * Livre comptable — deux usages (admin ET kiosque) :
+ *  1. LIVRE EN LECTURE/ANALYSE STRICTE (fusion « Saisir une dépense » ×
+ *     « Achats ») : Date | Objet | Débit | Crédit, avec lignes
  *     « ticket » (achats groupés par jour + fournisseur, référencés par
- *     leur n° de facture) et les ventes en une ligne de clôture en fin de
- *     livre. L'« équilibrage » est un SOLDE DE TRÉSORERIE (encaissements
- *     − décaissements de la période), PAS le bénéfice : les achats
- *     incluent du stock pas encore vendu, les ventes du stock acheté
- *     avant. Le bénéfice net (coût des produits vendus déduit) est
- *     affiché sur sa propre ligne.
+ *     leur n° de facture) et les ventes en une ligne de clôture en fin
+ *     de livre. L'« équilibrage » est un SOLDE DE TRÉSORERIE
+ *     (encaissements − décaissements de la période), PAS le bénéfice :
+ *     les achats incluent du stock pas encore vendu, les ventes du
+ *     stock acheté avant. Le bénéfice net (coût des produits vendus
+ *     déduit) est affiché sur sa propre ligne. AUCUNE écriture n'est
+ *     possible depuis cette page : la saisie vit dans « Saisir une
+ *     dépense » (/admin/compta/achats, sidebar Comptabilité) et la
+ *     correction d'une écriture dans Opérations (liens « Gérer dans
+ *     Opérations ») — plus jamais deux chemins d'écriture pour un
+ *     même ticket.
+ *  2. KIOSQUE UNIQUEMENT : saisie express DÉPENSE SEULE (30 s — nom,
+ *     référence du ticket, montant TTC/HT, TVA et photo du ticket ;
+ *     POST /kiosque/admin/ledger/depense/{token}, jeton = auth, pas de
+ *     CSRF, identité obligatoire injectée par le layout kiosk). Le
+ *     scan automatique du ticket PRÉREMPLIT LA DÉPENSE
+ *     (/kiosque/admin/ledger/scan/{token}) : jamais d'achats créés
+ *     depuis un jeton kiosque (endpoint supprimé côté backend).
  * Adapté téléphone : le tableau tient en largeur (police compacte).
  *
  * @var array<string,mixed> $user
  * @var array{rows:list<array<string,mixed>>, total_debit:float, total_credit:float, balance:float, sales_profit:float} $entries
- *      Lignes purchase portent en plus « ids » (ids des lignes d'achats
- *      du groupe) et les lignes expense « id » (id de la dépense) —
- *      clés additionnelles utilisées par les boutons Supprimer (admin
- *      uniquement), ignorées partout ailleurs.
  * @var list<array<string,mixed>> $recentItems Vignette « Derniers tickets
- *      & dépenses » : dépenses et groupes d'achats fusionnés en une liste
- *      chronologique (du plus récent au plus ancien, à date égale la
- *      saisie la plus récente d'abord) — chaque élément porte « type » :
- *      'purchase' (groupe d'achats) ou 'expense' (dépense).
+ *      & dépenses » (LECTURE SEULE) : dépenses et groupes d'achats
+ *      fusionnés en une liste chronologique (du plus récent au plus
+ *      ancien, à date égale la saisie la plus récente d'abord) — chaque
+ *      élément porte « type » : 'purchase' (groupe d'achats) ou
+ *      'expense' (dépense).
  * @var string $from
  * @var string $to
  * @var string $preset
  * @var bool   $kiosk
  * @var string $token
- * @var list<string> $purchaseProductKeys Clés produits connues (datalist
- *      des achats créés depuis le scan — injectée par le contrôleur,
- *      admin ET kiosque ; `?? []` par robustesse).
  */
 $presets = [
     '1d'   => '1 jour',
@@ -56,6 +53,11 @@ $balancePos = (float) $entries['balance'] >= 0;
 $salesProfit = round((float) ($entries['sales_profit'] ?? 0.0), 2);
 $salesProfitPos = $salesProfit >= 0;
 $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format('d/m/Y');
+// Destinations « Gérer dans Opérations » : correction/suppression d'une
+// écriture (journal des achats pour un groupe d'achats, journal des
+// dépenses pour une dépense) — le livre lui-même reste en lecture.
+$manageAchatsUrl = url('/admin/compta/achats') . '?tab=journal';
+$manageDepensesUrl = url('/admin/compta/depenses') . '?tab=journal';
 ?>
 <style>
     .lg-form {
@@ -102,25 +104,15 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
     .ledger-ticket .tk { padding-left: 1.6rem; }
     .ledger-table tfoot td { border-top: 2px solid rgba(255, 255, 255, 0.18); font-weight: 900; }
     /* Colonne Actions du livre (ADMIN uniquement — absente en kiosque) :
-       formulaires de suppression compacts (achat groupé + case stock,
-       dépense). */
+       lecture stricte, seul un renvoi « Gérer dans Opérations » y vit. */
     .ledger-table .lg-row-actions { white-space: nowrap; }
-    .ledger-table .lg-row-actions form {
-        display: flex; flex-wrap: wrap; gap: 0.3rem; align-items: center;
-    }
-    .lg-keep-stock {
-        display: inline-flex; gap: 0.3rem; align-items: center;
-        font-size: 0.72rem; font-weight: 600; cursor: pointer;
-        color: var(--muted, #8892a6); white-space: nowrap;
-    }
-    .lg-keep-stock input { margin: 0; accent-color: var(--primary, currentColor); }
     .ledger-balance td { background: <?= $balancePos ? 'rgba(74, 222, 128, 0.08)' : 'rgba(248, 113, 113, 0.08)' ?>; font-weight: 900; font-size: 1rem; }
     .ledger-balance .is-pos { color: #4ade80; }
     .ledger-balance .is-neg { color: #f87171; }
     /* Ligne « bénéfice net » : même code couleur, un cran moins forte que
        le solde de trésorerie pour bien les distinguer. */
     .ledger-balance.lg-profit td { background: none; font-weight: 800; font-size: 0.78rem; }
-    /* Saisie express */
+    /* Saisie express (KIOSQUE uniquement — dépense seule) */
     .lg-quick .field-row { display: flex; flex-wrap: wrap; gap: 0.9rem; }
     .lg-quick .field { flex: 1 1 180px; display: grid; gap: 0.35rem; }
     .lg-quick .chip-row { display: flex; gap: 0.35rem; }
@@ -169,8 +161,7 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
     .lg-recent-table .num { text-align: right; white-space: nowrap; }
     .ledger-thumb { height: 44px; border-radius: 6px; display: block; border: 1px solid rgba(255,255,255,0.12); }
     /* Sous-lignes du tableau « Derniers tickets & dépenses » : reçus
-       distincts d'un même groupe (chaque facture liste SES tickets) et
-       formulaires d'édition inline (admin uniquement — rien en kiosque). */
+       distincts d'un même groupe (chaque facture liste SES tickets). */
     .lg-more-receipts {
         display: inline-block; margin-left: 0.35rem;
         font-size: 0.72rem; font-weight: 800; color: var(--muted, #8892a6);
@@ -181,35 +172,10 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
     }
     .lg-subrow a { color: var(--primary, #48bdd3); }
     .lg-actions { white-space: nowrap; }
-    .lg-edit summary {
-        display: inline-block; cursor: pointer; list-style: none;
-        padding: 0.22rem 0.6rem; border-radius: 999px;
-        border: 1px solid var(--border, rgba(255,255,255,0.12));
-        background: rgba(255,255,255,0.04);
-        font-size: 0.74rem; font-weight: 800; color: var(--foreground, inherit);
-    }
-    .lg-edit summary::-webkit-details-marker { display: none; }
-    .lg-edit details[open] summary, .lg-edit[open] summary { margin-bottom: 0.45rem; }
-    .lg-inline-form {
-        display: flex; flex-wrap: wrap; gap: 0.45rem; align-items: flex-end;
-        padding: 0.6rem 0.7rem;
-        border: 1px dashed rgba(255,255,255,0.2); border-radius: 10px;
-        background: rgba(255,255,255,0.03);
-    }
-    .lg-inline-form label {
-        display: grid; gap: 0.2rem;
-        font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em;
-        color: var(--muted, #8892a6);
-    }
-    .lg-inline-form input, .lg-inline-form select, .lg-inline-form textarea {
-        padding: 0.35rem 0.5rem; border: 1px solid var(--border, rgba(255,255,255,0.15));
-        border-radius: 8px; background: rgba(255,255,255,0.05); color: var(--foreground, inherit);
-        font-size: 0.82rem; min-width: 0; width: auto;
-    }
-    .lg-inline-form textarea { width: 100%; resize: vertical; }
-    /* Scan automatique du ticket (admin) : pavés « Informations extraites »
-       et « Détail des produits » — style sobre, réutilise .muted, .btn,
-       .form-actions et le style des inputs de .lg-quick. */
+    /* Scan automatique du ticket (kiosque, préremplissage DÉPENSE
+       SEULE) : pavés « Informations extraites » et « Détail des
+       produits » — style sobre, réutilise .muted, .btn, .form-actions
+       et le style des inputs de .lg-quick. */
     .lg-scan-info, .lg-scan-lines {
         margin: 0.9rem 0 0.2rem; padding: 0.8rem 0.9rem;
         border: 1px dashed rgba(255, 255, 255, 0.2); border-radius: 10px;
@@ -222,21 +188,6 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
     .lg-scan-skip { color: var(--muted, #8892a6); font-size: 0.78rem; }
     .lg-scan-warnings { margin: 0.45rem 0 0; padding-left: 1.1rem; }
     .lg-scan-row { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; margin: 0.3rem 0; }
-    /* Ligne d'en-têtes du pavé « Détail des produits » : mêmes flex que
-       les .lg-scan-row (mêmes largeurs) — libellés discrets au-dessus des
-       champs (Produit · Qté · Montant · TVA · PU), lisible sur téléphone. */
-    .lg-scan-head {
-        display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: flex-end;
-        margin: 0.45rem 0 0.1rem;
-    }
-    .lg-scan-head span {
-        font-size: 0.68rem; color: var(--muted, #8892a6);
-        text-transform: uppercase; letter-spacing: 0.05em;
-    }
-    .lg-scan-head .lg-scan-key { flex: 3 1 150px; }
-    .lg-scan-head .lg-scan-qty { flex: 0 0 74px; }
-    .lg-scan-head .lg-scan-total { flex: 1 1 90px; }
-    .lg-scan-head .lg-scan-vat { min-width: 3rem; text-align: right; }
     .lg-scan-row input {
         padding: 0.4rem 0.55rem; border: 1px solid var(--border, rgba(255,255,255,0.15));
         border-radius: 8px; background: rgba(255, 255, 255, 0.05); color: var(--foreground, inherit);
@@ -245,32 +196,6 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
     .lg-scan-row .lg-scan-key { flex: 3 1 150px; }
     .lg-scan-row .lg-scan-qty { flex: 0 0 74px; }
     .lg-scan-row .lg-scan-total { flex: 1 1 90px; }
-    .lg-scan-row .lg-scan-vat, .lg-scan-row .lg-scan-unit {
-        font-size: 0.74rem; color: var(--muted, #8892a6); white-space: nowrap;
-    }
-    .lg-scan-row .lg-scan-vat { min-width: 3rem; text-align: right; }
-    /* Le display:inline-flex ci-dessous écraserait l'attribut hidden sinon. */
-    .lg-scan-row .lg-scan-vat[hidden], .lg-scan-row .lg-scan-unit[hidden] { display: none; }
-    .lg-scan-row .lg-scan-nostock {
-        display: inline-flex; align-items: center; gap: 0.25rem;
-        font-size: 0.74rem; color: var(--muted, #8892a6);
-        cursor: pointer; white-space: nowrap;
-    }
-    .lg-scan-row .lg-scan-nostock input { width: 0.95rem; height: 0.95rem; padding: 0; }
-    /* Achats à créer depuis le scan (stock + coût de revient) : section
-       sous le détail des produits — case de confirmation + résumé live. */
-    .lg-scan-purchase {
-        margin: 0.7rem 0 0.2rem; padding: 0.8rem 0.9rem;
-        border: 1px dashed rgba(255, 255, 255, 0.2); border-radius: 10px;
-        background: rgba(255, 255, 255, 0.03);
-    }
-    .lg-scan-purchase[hidden] { display: none; }
-    .lg-purchase-toggle {
-        display: flex; align-items: center; gap: 0.5rem;
-        font-size: 0.88rem; cursor: pointer;
-    }
-    .lg-purchase-toggle input { width: 1.05rem; height: 1.05rem; }
-    .lg-purchase-toggle input:disabled { cursor: not-allowed; }
     @media (max-width: 520px) {
         .ledger-table { font-size: 0.8rem; min-width: 380px; }
         .ledger-table th, .ledger-table td { padding: 0.42rem 0.4rem; }
@@ -282,455 +207,237 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
         <p class="eyebrow">Système</p>
         <h1 class="page-title">Livre comptable</h1>
         <p class="muted"><?= $kiosk
-            ? 'Prêt à recopier dans le livret papier : chaque ligne est datée, les tickets sont détaillés, l\'équilibrage est calculé.'
-            : 'Saisis une dépense en 30 secondes avec la photo du ticket, ou consulte le livre prêt à recopier dans le livret papier.' ?></p>
+            ? 'Note une dépense sur le vif (photo du ticket, 30 s), puis consulte le livre prêt à recopier dans le livret papier.'
+            : 'Lecture et analyse : chaque ligne est datée, les tickets sont détaillés, l\'équilibrage est calculé.' ?></p>
     </div>
 </div>
 
-<nav class="compta-tabs" data-ledger-tabs aria-label="Menus du livre comptable">
-    <button type="button" class="compta-tab is-active" data-tab="saisie">Saisir une dépense</button>
-    <button type="button" class="compta-tab" data-tab="livre">Livre comptable</button>
-</nav>
+<?php if (!$kiosk): ?>
+<!-- Livre en lecture stricte : renvoi vers l'unique point de saisie
+     (fusion « Saisir une dépense » × « Achats ») — jamais d'écriture
+     depuis le livre (anti-doublon structurel). -->
+<p class="muted" style="margin:-0.4rem 0 1.2rem;">
+    Ce livre est en <strong>lecture seule</strong> : la saisie (factures avec produits et frais divers) vit dans
+    <a href="<?= e(url('/admin/compta/achats')) ?>?tab=saisie">« Saisir une dépense »</a> (menu Comptabilité),
+    la correction d'une écriture dans Opérations via les liens « Gérer dans Opérations ».
+</p>
+<?php endif; ?>
 
-<!-- ==================== Menu 1 : saisie express ==================== -->
-<div class="compta-tabpane is-active" data-pane="saisie">
-    <section class="card surface glass lg-quick">
-        <h2 class="card-title">Dépense en 30 secondes</h2>
-        <p class="muted">Nom, référence du ticket, montant, TVA, photo — la trace est aussitôt dans le livre, prête à être traitée.</p>
-        <?php if ($kiosk): ?>
-        <!-- Kiosque : POST vers le contrôleur kiosque — pas de CSRF (le jeton
-             admin EST l'authentification), identité (prénom, nom, rôle)
-             ajoutée automatiquement à chaque formulaire par le layout kiosk.
-             Ordre des champs pensé téléphone : Date, Nom, Prix, TVA,
-             Référence, Photo.
-             data-scan-url / data-purchase-products : mêmes attributs que la
-             branche admin — le JS du bas câble le scan automatique du
-             ticket dans LES DEUX branches (endpoints miroirs, auth par
-             jeton dans l'URL côté kiosque). -->
-        <form method="post" action="<?= e(url('/kiosque/admin/ledger/depense/' . rawurlencode($token))) ?>" enctype="multipart/form-data" data-scan-url="<?= e(url('/kiosque/admin/ledger/scan/' . rawurlencode($token))) ?>" data-purchase-products="<?= e(json_encode($purchaseProductKeys ?? [], JSON_UNESCAPED_UNICODE)) ?>">
-            <input type="hidden" name="category" value="DIVERS">
+<?php if ($kiosk): ?>
+<!-- ==================== Saisie express (KIOSQUE, dépense seule) ====================
+     POST vers le contrôleur kiosque — pas de CSRF (le jeton admin EST
+     l'authentification), identité (prénom, nom, rôle) ajoutée
+     automatiquement à chaque formulaire par le layout kiosk. Ordre des
+     champs pensé téléphone : Date, Nom, Prix, TVA, Référence, Photo.
+     data-scan-url : le scan automatique du ticket PRÉREMPLIT LA DÉPENSE
+     (jamais d'achats : l'endpoint kiosque d'achats en lot a été
+     supprimé — un ticket kiosque = une dépense, rien d'autre). -->
+<section class="card surface glass lg-quick">
+    <h2 class="card-title">Dépense en 30 secondes</h2>
+    <p class="muted">Nom, référence du ticket, montant, TVA, photo — la trace est aussitôt dans le livre, prête à être traitée.</p>
+    <form method="post" action="<?= e(url('/kiosque/admin/ledger/depense/' . rawurlencode($token))) ?>" enctype="multipart/form-data" data-scan-url="<?= e(url('/kiosque/admin/ledger/scan/' . rawurlencode($token))) ?>">
+        <input type="hidden" name="category" value="DIVERS">
 
-            <div class="field-row">
-                <div class="field">
-                    <label for="lg-spent-at">Date</label>
-                    <input type="date" id="lg-spent-at" name="spent_at" value="<?= e(date('Y-m-d')) ?>" required>
-                </div>
-            </div>
-
-            <div class="field-row">
-                <div class="field" style="flex: 3 1 260px;">
-                    <label for="lg-label">Nom</label>
-                    <input type="text" id="lg-label" name="label" placeholder="ex: Verrou x4 — Leroy Merlin" required>
-                </div>
-            </div>
-
-            <div class="field-row">
-                <div class="field">
-                    <label for="lg-amount">Prix (€)</label>
-                    <input type="text" id="lg-amount" name="amount" inputmode="decimal" placeholder="ex: 36,60" required>
-                </div>
-                <div class="field">
-                    <label>Le montant saisi est…</label>
-                    <div class="chip-row" role="radiogroup" aria-label="Base du montant">
-                        <label class="chip"><input type="radio" name="amount_basis" value="ttc" checked><span>TTC</span></label>
-                        <label class="chip"><input type="radio" name="amount_basis" value="ht"><span>HT</span></label>
-                    </div>
-                </div>
-                <div class="field">
-                    <label for="lg-vat">TVA</label>
-                    <select id="lg-vat" name="vat_rate">
-                        <option value="">Aucune (0 %)</option>
-                        <option value="20">20 %</option>
-                        <option value="10">10 %</option>
-                        <option value="5.5">5,5 %</option>
-                        <option value="2.1">2,1 %</option>
-                    </select>
-                </div>
-            </div>
-
-            <div class="field-row">
-                <div class="field">
-                    <label for="lg-invoice">Référence du ticket</label>
-                    <input type="text" id="lg-invoice" name="invoice_number" placeholder="ex: 159-10007284" autocomplete="off">
-                </div>
-            </div>
-
+        <div class="field-row">
             <div class="field">
-                <label for="lg-receipt">Photo du ticket <span class="muted">(optionnelle — sauvegardée avec la dépense)</span></label>
-                <!-- Capture photo : deux boutons pilotent le même input file
-                     invisible (caméra vs galerie/PDF), aperçu vignette ou
-                     chip PDF retirable — cf. JS en bas de page. -->
-                <div class="lg-shot-actions">
-                    <button type="button" id="lg-shot-btn" class="btn btn-primary btn-sm">Prendre une photo</button>
-                    <button type="button" id="lg-file-btn" class="btn btn-ghost btn-sm">Choisir un fichier</button>
-                </div>
-                <input type="file" id="lg-receipt" name="receipt" accept="image/*,.pdf" style="display:none;">
-                <div id="lg-shot-preview" hidden>
-                    <img id="lg-shot-img" alt="Aperçu du ticket" hidden>
-                    <span id="lg-shot-chip" class="lg-shot-chip" hidden></span>
-                    <button type="button" id="lg-shot-clear" class="btn btn-ghost btn-sm">✕ Retirer</button>
-                </div>
-                <!-- Scan automatique : occupation (texte simple, pas de
-                     spinner) puis message discret en cas d'échec réseau —
-                     la photo reste utilisable dans tous les cas. -->
-                <p class="muted" id="lg-scan-status" hidden style="margin:0.45rem 0 0; font-size:0.82rem;"></p>
+                <label for="lg-spent-at">Date</label>
+                <input type="date" id="lg-spent-at" name="spent_at" value="<?= e(date('Y-m-d')) ?>" required>
             </div>
-
-            <!-- ── Scan automatique du ticket : pavés remplis par le JS
-                 en bas de page (mêmes ids que la branche admin — une seule
-                 branche est rendue). « Informations extraites » récapitule
-                 l'analyse (préremplissage non destructif déjà fait à
-                 réception) ; « Détail des produits » est éditable et part
-                 dans le champ `notes` à l'enregistrement. -->
-            <div id="lg-scan-info" class="lg-scan-info" hidden>
-                <p class="lg-scan-title">Informations extraites</p>
-                <div class="lg-scan-info-list" id="lg-scan-info-list"></div>
-                <ul class="lg-scan-warnings field-help" id="lg-scan-info-warnings" hidden></ul>
-                <p class="muted" id="lg-scan-vatmix" hidden style="margin:0.45rem 0 0; font-size:0.8rem;"></p>
-                <div class="form-actions">
-                    <button type="button" id="lg-scan-apply" class="btn btn-primary btn-sm">Utiliser ces infos</button>
-                    <button type="button" id="lg-scan-ignore" class="btn btn-ghost btn-sm">Ignorer</button>
-                </div>
-            </div>
-            <div id="lg-scan-lines" class="lg-scan-lines" hidden>
-                <p class="lg-scan-title">Détail des produits</p>
-                <!-- En-têtes des colonnes (lisible sur téléphone) : mêmes
-                     largeurs flex que les .lg-scan-row ci-dessous. -->
-                <div class="lg-scan-head" aria-hidden="true">
-                    <span class="lg-scan-key">Produit</span>
-                    <span class="lg-scan-qty">Qté</span>
-                    <span class="lg-scan-total">Montant (€)</span>
-                    <span class="lg-scan-vat">TVA</span>
-                    <span class="lg-scan-unit">PU</span>
-                </div>
-                <div id="lg-scan-rows"></div>
-                <div class="form-actions">
-                    <button type="button" id="lg-scan-row-add" class="btn btn-ghost btn-sm">+ Ligne</button>
-                </div>
-                <p class="muted" id="lg-scan-total" style="margin:0.3rem 0 0; font-size:0.8rem;"></p>
-            </div>
-
-            <!-- ── Achats à créer depuis les lignes du scan (stock + coût
-                 de revient) : JAMAIS sans la case cochée ni sans
-                 confirmation explicite — cf. JS en bas. Case désactivée
-                 tant qu'aucun ticket n'a été scanné (ou aucune ligne
-                 exploitable) ; le datalist des produits connus est
-                 rempli par le JS depuis data-purchase-products (liste
-                 injectée par le contrôleur). data-save-bulk-url pointe
-                 vers l'endpoint kiosque (auth par jeton). -->
-            <div id="lg-purchase-box" class="lg-scan-purchase" data-save-bulk-url="<?= e(url('/kiosque/admin/ledger/purchases/' . rawurlencode($token))) ?>">
-                <p class="lg-scan-title">Achats à créer (stock + coût de revient)</p>
-                <label class="lg-purchase-toggle">
-                    <input type="checkbox" id="lg-create-purchases">
-                    <span>Créer aussi ces achats <span class="muted">(stock + coût de revient — confirmation demandée)</span></span>
-                </label>
-                <p class="muted" id="lg-purchase-warn" hidden style="margin:0.35rem 0 0; font-size:0.8rem;"></p>
-                <p class="muted" id="lg-purchase-summary" hidden style="margin:0.35rem 0 0; font-size:0.82rem;"></p>
-                <p id="lg-purchase-status" hidden style="margin:0.35rem 0 0; font-size:0.82rem;"></p>
-            </div>
-            <datalist id="lg-purchase-products"></datalist>
-
-            <div class="form-actions">
-                <button type="submit" class="btn btn-primary">Enregistrer la dépense</button>
-            </div>
-        </form>
-        <?php else: ?>
-        <!-- data-scan-url : endpoint d'analyse du ticket (même contrat que
-             /kiosque/admin/ledger/scan/{token}) — le JS du bas câble le
-             scan automatique à l'image choisie dans #lg-receipt, en admin
-             comme en kiosque (branches miroirs). -->
-        <form method="post" action="<?= e(url('/admin/compta/depenses/save')) ?>" enctype="multipart/form-data" data-scan-url="<?= e(url('/admin/compta/depenses/scan')) ?>" data-purchase-products="<?= e(json_encode($purchaseProductKeys ?? [], JSON_UNESCAPED_UNICODE)) ?>">
-            <?= csrf_field() ?>
-            <input type="hidden" name="return_to" value="/admin/ledger">
-            <input type="hidden" name="category" value="DIVERS">
-
-            <div class="field-row">
-                <div class="field">
-                    <label for="lg-spent-at">Date</label>
-                    <input type="date" id="lg-spent-at" name="spent_at" value="<?= e(date('Y-m-d')) ?>" required>
-                </div>
-                <div class="field">
-                    <label for="lg-invoice">Référence du ticket</label>
-                    <input type="text" id="lg-invoice" name="invoice_number" placeholder="ex: 159-10007284" autocomplete="off">
-                </div>
-            </div>
-
-            <div class="field-row">
-                <div class="field" style="flex: 3 1 260px;">
-                    <label for="lg-label">Nom</label>
-                    <input type="text" id="lg-label" name="label" placeholder="ex: Verrou x4 — Leroy Merlin" required>
-                </div>
-            </div>
-
-            <div class="field-row">
-                <div class="field">
-                    <label for="lg-amount">Prix (€)</label>
-                    <input type="text" id="lg-amount" name="amount" inputmode="decimal" placeholder="ex: 36,60" required>
-                </div>
-                <div class="field">
-                    <label>Le montant saisi est…</label>
-                    <div class="chip-row" role="radiogroup" aria-label="Base du montant">
-                        <label class="chip"><input type="radio" name="amount_basis" value="ttc" checked><span>TTC</span></label>
-                        <label class="chip"><input type="radio" name="amount_basis" value="ht"><span>HT</span></label>
-                    </div>
-                </div>
-                <div class="field">
-                    <label for="lg-vat">TVA</label>
-                    <select id="lg-vat" name="vat_rate">
-                        <option value="">Aucune (0 %)</option>
-                        <option value="20">20 %</option>
-                        <option value="10">10 %</option>
-                        <option value="5.5">5,5 %</option>
-                        <option value="2.1">2,1 %</option>
-                    </select>
-                </div>
-            </div>
-
-            <div class="field">
-                <label for="lg-receipt">Photo du ticket <span class="muted">(optionnel — sauvegardée avec la référence)</span></label>
-                <!-- Capture photo : deux boutons pilotent le même input file
-                     invisible (caméra vs galerie/PDF), aperçu vignette ou
-                     chip PDF retirable — cf. JS en bas de page. -->
-                <div class="lg-shot-actions">
-                    <button type="button" id="lg-shot-btn" class="btn btn-primary btn-sm">Prendre une photo</button>
-                    <button type="button" id="lg-file-btn" class="btn btn-ghost btn-sm">Choisir un fichier</button>
-                </div>
-                <input type="file" id="lg-receipt" name="receipt" accept="image/*,.pdf" style="display:none;">
-                <div id="lg-shot-preview" hidden>
-                    <img id="lg-shot-img" alt="Aperçu du ticket" hidden>
-                    <span id="lg-shot-chip" class="lg-shot-chip" hidden></span>
-                    <button type="button" id="lg-shot-clear" class="btn btn-ghost btn-sm">✕ Retirer</button>
-                </div>
-                <!-- Scan automatique : occupation (texte simple, pas de
-                     spinner) puis message discret en cas d'échec réseau —
-                     la photo reste utilisable dans tous les cas. -->
-                <p class="muted" id="lg-scan-status" hidden style="margin:0.45rem 0 0; font-size:0.82rem;"></p>
-            </div>
-
-            <!-- ── Scan automatique du ticket : pavés remplis par le JS
-                 en bas de page. « Informations extraites » récapitule
-                 l'analyse (préremplissage non destructif déjà fait à
-                 réception) ; « Détail des produits » est éditable et
-                 part dans le champ `notes` à l'enregistrement. -->
-            <div id="lg-scan-info" class="lg-scan-info" hidden>
-                <p class="lg-scan-title">Informations extraites</p>
-                <div class="lg-scan-info-list" id="lg-scan-info-list"></div>
-                <ul class="lg-scan-warnings field-help" id="lg-scan-info-warnings" hidden></ul>
-                <p class="muted" id="lg-scan-vatmix" hidden style="margin:0.45rem 0 0; font-size:0.8rem;"></p>
-                <div class="form-actions">
-                    <button type="button" id="lg-scan-apply" class="btn btn-primary btn-sm">Utiliser ces infos</button>
-                    <button type="button" id="lg-scan-ignore" class="btn btn-ghost btn-sm">Ignorer</button>
-                </div>
-            </div>
-            <div id="lg-scan-lines" class="lg-scan-lines" hidden>
-                <p class="lg-scan-title">Détail des produits</p>
-                <!-- En-têtes des colonnes (lisible sur téléphone) : mêmes
-                     largeurs flex que les .lg-scan-row ci-dessous. -->
-                <div class="lg-scan-head" aria-hidden="true">
-                    <span class="lg-scan-key">Produit</span>
-                    <span class="lg-scan-qty">Qté</span>
-                    <span class="lg-scan-total">Montant (€)</span>
-                    <span class="lg-scan-vat">TVA</span>
-                    <span class="lg-scan-unit">PU</span>
-                </div>
-                <div id="lg-scan-rows"></div>
-                <div class="form-actions">
-                    <button type="button" id="lg-scan-row-add" class="btn btn-ghost btn-sm">+ Ligne</button>
-                </div>
-                <p class="muted" id="lg-scan-total" style="margin:0.3rem 0 0; font-size:0.8rem;"></p>
-            </div>
-
-            <!-- ── Achats à créer depuis les lignes du scan (stock + coût
-                 de revient) : JAMAIS sans la case cochée ni sans
-                 confirmation explicite — cf. JS en bas. Case désactivée
-                 tant qu'aucun ticket n'a été scanné (ou aucune ligne
-                 exploitable) ; le datalist des produits connus est
-                 rempli par le JS depuis data-purchase-products (liste
-                 injectée par le contrôleur). -->
-            <div id="lg-purchase-box" class="lg-scan-purchase" data-save-bulk-url="<?= e(url('/admin/compta/achats/save-bulk')) ?>">
-                <p class="lg-scan-title">Achats à créer (stock + coût de revient)</p>
-                <label class="lg-purchase-toggle">
-                    <input type="checkbox" id="lg-create-purchases">
-                    <span>Créer aussi ces achats <span class="muted">(stock + coût de revient — confirmation demandée)</span></span>
-                </label>
-                <p class="muted" id="lg-purchase-warn" hidden style="margin:0.35rem 0 0; font-size:0.8rem;"></p>
-                <p class="muted" id="lg-purchase-summary" hidden style="margin:0.35rem 0 0; font-size:0.82rem;"></p>
-                <p id="lg-purchase-status" hidden style="margin:0.35rem 0 0; font-size:0.82rem;"></p>
-            </div>
-            <datalist id="lg-purchase-products"></datalist>
-
-            <div class="form-actions">
-                <button type="submit" class="btn btn-primary">Enregistrer la dépense</button>
-            </div>
-        </form>
-        <?php endif; ?>
-    </section>
-
-    <section class="card surface glass">
-        <h2 class="card-title">Derniers tickets &amp; dépenses</h2>
-        <?php if ($recentItems === []): ?>
-            <p class="muted">Aucune dépense ni achat enregistré pour le moment.</p>
-        <?php else: ?>
-        <div class="lg-table-wrap">
-            <table class="lg-recent-table">
-                <thead>
-                    <tr>
-                        <th>Date</th><th>Nom</th><th>Référence</th><th class="num">Montant</th><th>Photo</th>
-                        <?php if (!$kiosk): ?><th>Actions</th><?php endif; ?>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php
-                    // Libellés courts des catégories (formulaires d'édition
-                    // des dépenses, admin uniquement).
-                    $lgCategories = [
-                        'MATIERE'   => 'Matière',
-                        'MATERIEL'  => 'Matériel',
-                        'EVENEMENT' => 'Événements',
-                        'FRAIS'     => 'Frais',
-                        'DIVERS'    => 'Divers',
-                    ];
-                    ?>
-                    <?php foreach ($recentItems as $x): ?>
-                    <?php if (($x['type'] ?? '') === 'purchase'): ?>
-                        <?php
-                        // Reçus distincts du groupe (une facture METRO par
-                        // groupe depuis la fusion par n° de facture — chaque
-                        // groupe liste SES justificatifs).
-                        $lgReceipts = array_values(array_filter(
-                            array_map('strval', (array) ($x['receipts'] ?? [])),
-                            static fn (string $p): bool => trim($p) !== ''
-                        ));
-                        $lgInvoice = trim((string) ($x['invoice_number'] ?? ''));
-                        ?>
-                        <tr>
-                            <td><?= e($fmtDate((string) $x['date'])) ?></td>
-                            <td>Achat — <?= e((string) $x['supplier']) ?> <span class="muted">(<?= (int) $x['lines'] ?> ligne(s), stock &amp; coûts)</span></td>
-                            <td><?= e($lgInvoice !== '' ? $lgInvoice : (string) $x['supplier']) ?></td>
-                            <td class="num"><?= e(formatPrice((float) $x['total_ttc'])) ?></td>
-                            <td>
-                                <?php if ($lgReceipts !== []): ?>
-                                    <a href="<?= e(asset($lgReceipts[0])) ?>" target="_blank" rel="noopener" title="Voir la photo du ticket">
-                                        <img class="ledger-thumb" src="<?= e(asset($lgReceipts[0])) ?>" alt="Ticket <?= e((string) $x['supplier']) ?>">
-                                    </a>
-                                    <?php if (count($lgReceipts) > 1): ?><span class="lg-more-receipts">+<?= count($lgReceipts) - 1 ?></span><?php endif; ?>
-                                <?php else: ?>
-                                    <span class="muted">—</span>
-                                <?php endif; ?>
-                            </td>
-                            <?php if (!$kiosk): ?>
-                            <td class="lg-actions">
-                                <!-- Les groupes du livre n'exposent pas les ids
-                                     des lignes : la suppression/édition groupée
-                                     vit dans Opérations · Achats (onglet Journal). -->
-                                <a class="btn btn-ghost btn-sm" href="<?= e(url('/admin/compta/achats')) ?>?tab=journal">Gérer dans Opérations</a>
-                            </td>
-                            <?php endif; ?>
-                        </tr>
-                        <?php if (count($lgReceipts) > 1): ?>
-                        <tr class="lg-subrow">
-                            <td></td>
-                            <td colspan="<?= $kiosk ? 4 : 5 ?>">
-                                └ Tickets :
-                                <?php foreach ($lgReceipts as $lgI => $lgRcpt): ?>
-                                    <a href="<?= e(asset($lgRcpt)) ?>" target="_blank" rel="noopener">Ticket <?= $lgI + 1 ?></a><?= $lgI < count($lgReceipts) - 1 ? ' ·' : '' ?>
-                                <?php endforeach; ?>
-                            </td>
-                        </tr>
-                        <?php endif; ?>
-                    <?php else: ?>
-                        <?php
-                        $lgExpId = (string) ($x['id'] ?? '');
-                        $lgExpVat = (float) ($x['vat'] ?? 0);
-                        $lgExpCat = (string) ($x['category'] ?? 'DIVERS');
-                        $lgExpLabel = (string) $x['label'];
-                        ?>
-                        <tr>
-                            <td><?= e($fmtDate((string) $x['spent_at'])) ?></td>
-                            <td><?= e($lgExpLabel) ?></td>
-                            <td><?= e(trim((string) ($x['invoice_number'] ?? '')) !== '' ? (string) $x['invoice_number'] : '—') ?></td>
-                            <td class="num"><?= e(formatPrice((float) $x['amount_ttc'])) ?></td>
-                            <td>
-                                <?php if (!empty($x['receipt_path'])): ?>
-                                    <a href="<?= e(asset((string) $x['receipt_path'])) ?>" target="_blank" rel="noopener" title="Voir la photo du ticket">
-                                        <img class="ledger-thumb" src="<?= e(asset((string) $x['receipt_path'])) ?>" alt="Ticket <?= e($lgExpLabel) ?>">
-                                    </a>
-                                <?php else: ?>
-                                    <span class="muted">—</span>
-                                <?php endif; ?>
-                            </td>
-                            <?php if (!$kiosk): ?>
-                            <td class="lg-actions">
-                                <?php if ($lgExpId !== ''): ?>
-                                <form method="post" action="<?= e(url('/admin/compta/depenses/' . rawurlencode($lgExpId) . '/delete')) ?>" data-confirm="Supprimer cette dépense ?" data-preserve-scroll>
-                                    <?= csrf_field() ?>
-                                    <button type="submit" class="btn btn-danger btn-sm" aria-label="Supprimer la dépense">Supprimer</button>
-                                </form>
-                                <?php endif; ?>
-                            </td>
-                            <?php endif; ?>
-                        </tr>
-                        <?php if (!$kiosk && $lgExpId !== ''): ?>
-                        <tr class="lg-subrow lg-edit">
-                            <td></td>
-                            <td colspan="5">
-                                <details>
-                                    <summary>Modifier</summary>
-                                    <!-- Édition inline (POST /admin/compta/depenses/{id}/update) :
-                                         montant prérempli en TTC (amount_basis caché) ;
-                                         sans nouveau fichier, le justificatif existant
-                                         est conservé. -->
-                                    <form class="lg-inline-form" method="post" action="<?= e(url('/admin/compta/depenses/' . rawurlencode($lgExpId) . '/update')) ?>" enctype="multipart/form-data">
-                                        <?= csrf_field() ?>
-                                        <input type="hidden" name="return_to" value="/admin/ledger">
-                                        <input type="hidden" name="amount_basis" value="ttc">
-                                        <label>Date <input type="date" name="spent_at" value="<?= e((string) $x['spent_at']) ?>" required></label>
-                                        <label style="flex: 2 1 200px;">Nom <input type="text" name="label" value="<?= e($lgExpLabel) ?>" required style="width: 100%;"></label>
-                                        <label>Catégorie
-                                            <select name="category">
-                                                <?php foreach (\App\Models\Expense::CATEGORIES as $lgCat): ?>
-                                                    <option value="<?= e($lgCat) ?>" <?= $lgCat === $lgExpCat ? 'selected' : '' ?>><?= e($lgCategories[$lgCat] ?? $lgCat) ?></option>
-                                                <?php endforeach; ?>
-                                            </select>
-                                        </label>
-                                        <label>Montant TTC (€) <input type="number" name="amount" step="0.01" min="0.01" value="<?= e(number_format((float) $x['amount_ttc'], 2, '.', '')) ?>" required></label>
-                                        <label>TVA (€) <input type="number" name="vat_amount" step="0.01" min="0" value="<?= $lgExpVat > 0 ? e(number_format($lgExpVat, 2, '.', '')) : '' ?>"></label>
-                                        <label>Taux
-                                            <select name="vat_rate">
-                                                <option value="">—</option>
-                                                <?php foreach (['20', '10', '5.5', '2.1', '0'] as $lgRate): ?>
-                                                    <option value="<?= e($lgRate) ?>"><?= e($lgRate) ?> %</option>
-                                                <?php endforeach; ?>
-                                            </select>
-                                        </label>
-                                        <label>Réf. ticket <input type="text" name="invoice_number" value="<?= e((string) ($x['invoice_number'] ?? '')) ?>"></label>
-                                        <label style="flex: 1 1 100%;">Notes <textarea name="notes" rows="2"><?= e((string) ($x['notes'] ?? '')) ?></textarea></label>
-                                        <label style="flex: 1 1 100%;">Preuve (remplace l'existante · PDF/JPG/PNG/WEBP · 5 Mo max) <input type="file" name="receipt" accept=".pdf,.jpg,.jpeg,.png,.webp"></label>
-                                        <button type="submit" class="btn btn-primary btn-sm">Enregistrer</button>
-                                    </form>
-                                 </details>
-                             </td>
-                         </tr>
-                         <?php endif; ?>
-                    <?php endif; ?>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
         </div>
-        <?php if (!$kiosk): ?>
-        <p class="muted" style="font-size:0.78rem; margin-top:0.6rem;">
-            Le détail complet (avec catégorie, HT/TVA et suppression) vit dans
-            <a href="<?= e(url('/admin/compta/depenses')) ?>">Opérations · Dépenses</a>.
-        </p>
-        <?php endif; ?>
-        <?php endif; ?>
-    </section>
-</div>
 
-<!-- ==================== Menu 2 : livre comptable ==================== -->
-<!-- Défaut côté serveur : onglet « Saisir une dépense » actif à
-     l'ouverture (admin ET kiosque) ; #livre dans l'URL ouvre le livre. -->
-<div class="compta-tabpane" data-pane="livre" hidden>
+        <div class="field-row">
+            <div class="field" style="flex: 3 1 260px;">
+                <label for="lg-label">Nom</label>
+                <input type="text" id="lg-label" name="label" placeholder="ex: Verrou x4 — Leroy Merlin" required>
+            </div>
+        </div>
+
+        <div class="field-row">
+            <div class="field">
+                <label for="lg-amount">Prix (€)</label>
+                <input type="text" id="lg-amount" name="amount" inputmode="decimal" placeholder="ex: 36,60" required>
+            </div>
+            <div class="field">
+                <label>Le montant saisi est…</label>
+                <div class="chip-row" role="radiogroup" aria-label="Base du montant">
+                    <label class="chip"><input type="radio" name="amount_basis" value="ttc" checked><span>TTC</span></label>
+                    <label class="chip"><input type="radio" name="amount_basis" value="ht"><span>HT</span></label>
+                </div>
+            </div>
+            <div class="field">
+                <label for="lg-vat">TVA</label>
+                <select id="lg-vat" name="vat_rate">
+                    <option value="">Aucune (0 %)</option>
+                    <option value="20">20 %</option>
+                    <option value="10">10 %</option>
+                    <option value="5.5">5,5 %</option>
+                    <option value="2.1">2,1 %</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="field-row">
+            <div class="field">
+                <label for="lg-invoice">Référence du ticket</label>
+                <input type="text" id="lg-invoice" name="invoice_number" placeholder="ex: 159-10007284" autocomplete="off">
+            </div>
+        </div>
+
+        <div class="field">
+            <label for="lg-receipt">Photo du ticket <span class="muted">(optionnelle — sauvegardée avec la dépense)</span></label>
+            <!-- Capture photo : deux boutons pilotent le même input file
+                 invisible (caméra vs galerie/PDF), aperçu vignette ou
+                 chip PDF retirable — cf. JS en bas de page. -->
+            <div class="lg-shot-actions">
+                <button type="button" id="lg-shot-btn" class="btn btn-primary btn-sm">Prendre une photo</button>
+                <button type="button" id="lg-file-btn" class="btn btn-ghost btn-sm">Choisir un fichier</button>
+            </div>
+            <input type="file" id="lg-receipt" name="receipt" accept="image/*,.pdf" style="display:none;">
+            <div id="lg-shot-preview" hidden>
+                <img id="lg-shot-img" alt="Aperçu du ticket" hidden>
+                <span id="lg-shot-chip" class="lg-shot-chip" hidden></span>
+                <button type="button" id="lg-shot-clear" class="btn btn-ghost btn-sm">✕ Retirer</button>
+            </div>
+            <!-- Scan automatique : occupation (texte simple, pas de
+                 spinner) puis message discret en cas d'échec réseau —
+                 la photo reste utilisable dans tous les cas. -->
+            <p class="muted" id="lg-scan-status" hidden style="margin:0.45rem 0 0; font-size:0.82rem;"></p>
+        </div>
+
+        <!-- ── Scan automatique du ticket : pavés remplis par le JS en
+             bas de page. « Informations extraites » récapitule
+             l'analyse (préremplissage non destructif déjà fait à
+             réception) ; « Détail des produits » est éditable et part
+             dans le champ `notes` à l'enregistrement (aucun achat n'est
+             créé : dépense seule). -->
+        <div id="lg-scan-info" class="lg-scan-info" hidden>
+            <p class="lg-scan-title">Informations extraites</p>
+            <div class="lg-scan-info-list" id="lg-scan-info-list"></div>
+            <ul class="lg-scan-warnings field-help" id="lg-scan-info-warnings" hidden></ul>
+            <p class="muted" id="lg-scan-vatmix" hidden style="margin:0.45rem 0 0; font-size:0.8rem;"></p>
+            <div class="form-actions">
+                <button type="button" id="lg-scan-apply" class="btn btn-primary btn-sm">Utiliser ces infos</button>
+                <button type="button" id="lg-scan-ignore" class="btn btn-ghost btn-sm">Ignorer</button>
+            </div>
+        </div>
+        <div id="lg-scan-lines" class="lg-scan-lines" hidden>
+            <p class="lg-scan-title">Détail des produits</p>
+            <div id="lg-scan-rows"></div>
+            <div class="form-actions">
+                <button type="button" id="lg-scan-row-add" class="btn btn-ghost btn-sm">+ Ligne</button>
+            </div>
+            <p class="muted" id="lg-scan-total" style="margin:0.3rem 0 0; font-size:0.8rem;"></p>
+        </div>
+
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">Enregistrer la dépense</button>
+        </div>
+    </form>
+</section>
+<?php endif; ?>
+
+<!-- ==================== Vignette : derniers tickets & dépenses (LECTURE) ==================== -->
+<section class="card surface glass">
+    <h2 class="card-title">Derniers tickets &amp; dépenses</h2>
+    <?php if ($recentItems === []): ?>
+        <p class="muted">Aucune dépense ni achat enregistré pour le moment.</p>
+    <?php else: ?>
+    <div class="lg-table-wrap">
+        <table class="lg-recent-table">
+            <thead>
+                <tr>
+                    <th>Date</th><th>Nom</th><th>Référence</th><th class="num">Montant</th><th>Photo</th>
+                    <?php if (!$kiosk): ?><th>Actions</th><?php endif; ?>
+                </tr>
+            </thead>
+            <tbody>
+                <?php foreach ($recentItems as $x): ?>
+                <?php if (($x['type'] ?? '') === 'purchase'): ?>
+                    <?php
+                    // Reçus distincts du groupe (une facture METRO par
+                    // groupe depuis la fusion par n° de facture — chaque
+                    // groupe liste SES justificatifs).
+                    $lgReceipts = array_values(array_filter(
+                        array_map('strval', (array) ($x['receipts'] ?? [])),
+                        static fn (string $p): bool => trim($p) !== ''
+                    ));
+                    $lgInvoice = trim((string) ($x['invoice_number'] ?? ''));
+                    ?>
+                    <tr>
+                        <td><?= e($fmtDate((string) $x['date'])) ?></td>
+                        <td>Achat — <?= e((string) $x['supplier']) ?> <span class="muted">(<?= (int) $x['lines'] ?> ligne(s), stock &amp; coûts)</span></td>
+                        <td><?= e($lgInvoice !== '' ? $lgInvoice : (string) $x['supplier']) ?></td>
+                        <td class="num"><?= e(formatPrice((float) $x['total_ttc'])) ?></td>
+                        <td>
+                            <?php if ($lgReceipts !== []): ?>
+                                <a href="<?= e(asset($lgReceipts[0])) ?>" target="_blank" rel="noopener" title="Voir la photo du ticket">
+                                    <img class="ledger-thumb" src="<?= e(asset($lgReceipts[0])) ?>" alt="Ticket <?= e((string) $x['supplier']) ?>">
+                                </a>
+                                <?php if (count($lgReceipts) > 1): ?><span class="lg-more-receipts">+<?= count($lgReceipts) - 1 ?></span><?php endif; ?>
+                            <?php else: ?>
+                                <span class="muted">—</span>
+                            <?php endif; ?>
+                        </td>
+                        <?php if (!$kiosk): ?>
+                        <td class="lg-actions">
+                            <!-- Lecture seule : la suppression/édition groupée
+                                 vit dans Opérations · Achats (onglet Journal). -->
+                            <a class="btn btn-ghost btn-sm" href="<?= e($manageAchatsUrl) ?>">Gérer dans Opérations</a>
+                        </td>
+                        <?php endif; ?>
+                    </tr>
+                    <?php if (count($lgReceipts) > 1): ?>
+                    <tr class="lg-subrow">
+                        <td></td>
+                        <td colspan="<?= $kiosk ? 4 : 5 ?>">
+                            └ Tickets :
+                            <?php foreach ($lgReceipts as $lgI => $lgRcpt): ?>
+                                <a href="<?= e(asset($lgRcpt)) ?>" target="_blank" rel="noopener">Ticket <?= $lgI + 1 ?></a><?= $lgI < count($lgReceipts) - 1 ? ' ·' : '' ?>
+                            <?php endforeach; ?>
+                        </td>
+                    </tr>
+                    <?php endif; ?>
+                <?php else: ?>
+                    <?php $lgExpLabel = (string) $x['label']; ?>
+                    <tr>
+                        <td><?= e($fmtDate((string) $x['spent_at'])) ?></td>
+                        <td><?= e($lgExpLabel) ?></td>
+                        <td><?= e(trim((string) ($x['invoice_number'] ?? '')) !== '' ? (string) $x['invoice_number'] : '—') ?></td>
+                        <td class="num"><?= e(formatPrice((float) $x['amount_ttc'])) ?></td>
+                        <td>
+                            <?php if (!empty($x['receipt_path'])): ?>
+                                <a href="<?= e(asset((string) $x['receipt_path'])) ?>" target="_blank" rel="noopener" title="Voir la photo du ticket">
+                                    <img class="ledger-thumb" src="<?= e(asset((string) $x['receipt_path'])) ?>" alt="Ticket <?= e($lgExpLabel) ?>">
+                                </a>
+                            <?php else: ?>
+                                <span class="muted">—</span>
+                            <?php endif; ?>
+                        </td>
+                        <?php if (!$kiosk): ?>
+                        <td class="lg-actions">
+                            <!-- Lecture seule : l'édition/suppression d'une
+                                 dépense vit dans Opérations · Dépenses
+                                 (onglet Journal, édition inline). -->
+                            <a class="btn btn-ghost btn-sm" href="<?= e($manageDepensesUrl) ?>">Gérer dans Opérations</a>
+                        </td>
+                        <?php endif; ?>
+                    </tr>
+                <?php endif; ?>
+                <?php endforeach; ?>
+            </tbody>
+        </table>
+    </div>
+    <?php if (!$kiosk): ?>
+    <p class="muted" style="font-size:0.78rem; margin-top:0.6rem;">
+        Le détail complet (avec catégorie, HT/TVA et suppression) vit dans
+        <a href="<?= e(url('/admin/compta/depenses')) ?>">Opérations · Dépenses</a>.
+    </p>
+    <?php endif; ?>
+    <?php endif; ?>
+</section>
+
+<!-- ==================== Livre comptable (lecture) ==================== -->
+<div id="livre">
     <div class="card surface glass" style="padding: 0.95rem 1.1rem; margin-bottom: 1.2rem;">
         <form id="lg-period-form" method="get" style="display: contents;">
             <div class="lg-seg">
@@ -769,21 +476,13 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
                         <td class="num credit"><?= (float) $r['credit'] > 0 ? '+ ' . e(formatPrice((float) $r['credit'])) : '' ?></td>
                         <?php if (!$kiosk): ?>
                         <td class="lg-row-actions">
-                            <?php if (($r['kind'] ?? '') === 'purchase' && !empty($r['ids'])): ?>
-                            <!-- Suppression GROUPÉE du groupe d'achats (ids joints
-                                 par virgules) : case cochée = stock laissé tel
-                                 quel ; décochée (défaut) = contre-passation. -->
-                            <form method="post" action="<?= e(url('/admin/compta/achats/group/delete')) ?>" data-confirm="Supprimer cet achat (<?= count((array) $r['ids']) ?> ligne(s)) ? Le stock ne sera corrigé que si la case “ne pas corriger le stock” est décochée." data-preserve-scroll>
-                                <?= csrf_field() ?>
-                                <input type="hidden" name="ids" value="<?= e(implode(',', array_map('strval', (array) $r['ids']))) ?>">
-                                <label class="lg-keep-stock"><input type="checkbox" name="keep_stock" value="1"> Ne pas corriger le stock</label>
-                                <button type="submit" class="btn btn-danger btn-sm" aria-label="Supprimer cet achat">Supprimer</button>
-                            </form>
-                            <?php elseif (($r['kind'] ?? '') === 'expense' && !empty($r['id'])): ?>
-                            <form method="post" action="<?= e(url('/admin/compta/depenses/' . rawurlencode((string) $r['id']) . '/delete')) ?>" data-confirm="Supprimer cette dépense ?" data-preserve-scroll>
-                                <?= csrf_field() ?>
-                                <button type="submit" class="btn btn-danger btn-sm" aria-label="Supprimer la dépense">Supprimer</button>
-                            </form>
+                            <?php if (($r['kind'] ?? '') === 'purchase'): ?>
+                            <!-- Lecture stricte : le groupe d'achats se gère
+                                 (suppression groupée, correction du stock)
+                                 dans Opérations · Achats (onglet Journal). -->
+                            <a class="btn btn-ghost btn-sm" href="<?= e($manageAchatsUrl) ?>">Gérer dans Opérations</a>
+                            <?php elseif (($r['kind'] ?? '') === 'expense'): ?>
+                            <a class="btn btn-ghost btn-sm" href="<?= e($manageDepensesUrl) ?>">Gérer dans Opérations</a>
                             <?php endif; ?>
                         </td>
                         <?php endif; ?>
@@ -836,77 +535,15 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
 <p style="text-align:center; font-size:0.78rem; color: var(--muted, #8892a6); margin: 0.9rem 0 1rem;">
     <a class="btn btn-ghost btn-sm" href="<?= e(url('/kiosque/admin/' . rawurlencode($token))) ?>">← Kiosque admin</a>
 </p>
-<?php endif; ?>
 <!-- Helpers purs du scan de ticket (scanUpload, invoiceToRows,
-     applyInvoiceToExpense, serializeExpenseNotes, buildPurchaseBulkPayload)
-     : partagés avec la saisie d'achats, testés automatiquement. Chargé
-     AVANT le script inline, en admin ET en kiosque (le scan du ticket est
-     câblé dans les deux branches ; en kiosque, sans CSRF : le jeton de
-     l'URL EST l'authentification). -->
+     applyInvoiceToExpense, serializeExpenseNotes) : préremplissage de
+     la DÉPENSE SEULE, testés automatiquement. Chargé AVANT le script
+     inline du scan ; en kiosque sans CSRF : le jeton de l'URL EST
+     l'authentification. -->
 <script src="<?= e(rootAssetVersioned('/assets/js/compta-saisie.js')) ?>"></script>
 
 <script>
-// Onglets Saisie / Livre (mémorisés dans le hash de l'URL : #livre ouvre
-// directement le livre, #saisie la saisie). Défaut serveur : saisie active,
-// dans les deux modes (admin et kiosque).
-(function () {
-    var bar = document.querySelector('[data-ledger-tabs]');
-    if (!bar) return;
-    var tabs = bar.querySelectorAll('.compta-tab');
-    var panes = document.querySelectorAll('[data-pane]');
-
-    function activate(name, push) {
-        var found = false;
-        Array.prototype.forEach.call(tabs, function (t) {
-            var on = t.getAttribute('data-tab') === name;
-            t.classList.toggle('is-active', on);
-            if (on) found = true;
-        });
-        if (!found) name = tabs[0].getAttribute('data-tab');
-        Array.prototype.forEach.call(panes, function (p) {
-            var on = p.getAttribute('data-pane') === name;
-            p.classList.toggle('is-active', on);
-            p.hidden = !on;
-        });
-        if (push && window.history && window.history.replaceState) {
-            window.history.replaceState(null, '', '#' + name);
-        }
-    }
-
-    Array.prototype.forEach.call(tabs, function (t) {
-        t.addEventListener('click', function () { activate(t.getAttribute('data-tab'), true); });
-    });
-
-    var initial = (window.location.hash || '').replace('#', '');
-    if (initial) activate(initial, false);
-})();
-
-// Même comportement que sur Analytics : toucher une date bascule
-// immédiatement sur « Personnalisé », et dès que les deux bornes sont
-// remplies la recherche s'applique toute seule (plus de bouton à cliquer).
-// Les préréglages (1 jour, 7 jours…) s'appliquent aussi au clic.
-(function () {
-    var form = document.getElementById('lg-period-form');
-    if (!form) return;
-    var du = form.querySelector('input[name="du"]');
-    var au = form.querySelector('input[name="au"]');
-    var custom = form.querySelector('input[name="period"][value="custom"]');
-    if (!du || !au) return;
-    function onChange() {
-        if (custom) custom.checked = true;
-        if (du.value && au.value) form.submit();
-    }
-    du.addEventListener('change', onChange);
-    au.addEventListener('change', onChange);
-    // Préréglages : application immédiate au clic.
-    Array.prototype.forEach.call(form.querySelectorAll('input[name="period"]'), function (radio) {
-        radio.addEventListener('change', function () {
-            form.submit();
-        });
-    });
-})();
-
-// Capture photo du ticket (saisie express, admin ET kiosque) : deux boutons
+// Capture photo du ticket (saisie express kiosque) : deux boutons
 // pilotent le même input file invisible. Caméra = attribut capture posé à la
 // volée (iOS Safari l'ignore s'il est en dur au chargement) ; fichier =
 // capture retirée et PDF accepté. Aperçu : vignette (object URL révoqué à
@@ -974,20 +611,22 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
 
     clearBtn.addEventListener('click', reset);
 })();
+</script>
 
-// ── Scan automatique du ticket (ADMIN ET KIOSQUE) ──
-// Le formulaire porte data-scan-url dans les deux branches (endpoint
-// miroir en kiosque, auth par jeton dans l'URL). À l'image ou au PDF
-// choisi dans #lg-receipt (change) : analyse serveur immédiate sans
-// bouton, préremplissage NON destructif des champs vides
-// (applyInvoiceToExpense, pur et testé), puis pavé « Informations
-// extraites » (tout le reste, dont ce qui n'a pas pu être appliqué) et
-// pavé « Détail des produits » éditable -> notes. PDF : le serveur
-// rastérise et OCRise comme une photo. Autre fichier non image :
-// justificatif seulement, pas d'analyse.
-// CSRF : présent en admin (champ _csrf du formulaire), ABSENT en kiosque
-// (le jeton de l'URL EST l'authentification) — null transmis aux helpers,
-// ni champ ni en-tête X-CSRF-Token ne partent alors dans les fetch.
+<script>
+// ── Scan automatique du ticket (KIOSQUE, préremplissage DÉPENSE SEULE) ──
+// À l'image ou au PDF choisi dans #lg-receipt (change) : analyse serveur
+// immédiate sans bouton (data-scan-url du formulaire), préremplissage NON
+// destructif des champs vides (applyInvoiceToExpense, pur et testé), puis
+// pavé « Informations extraites » (tout le reste, dont ce qui n'a pas pu
+// être appliqué) et pavé « Détail des produits » éditable -> notes.
+// PDF : le serveur rastérise et OCRise comme une photo. Autre fichier non
+// image : justificatif seulement, pas d'analyse. La photo choisie reste
+// dans l'input #lg-receipt : elle voyage avec le formulaire (le scan ne
+// renvoie plus de justificatif — plus d'achats créés depuis un kiosque).
+// CSRF : ABSENT en kiosque (le jeton de l'URL EST l'authentification) —
+// null transmis aux helpers, ni champ ni en-tête X-CSRF-Token ne partent
+// alors dans les fetch.
 (function () {
     var form = document.querySelector('form[data-scan-url]');
     var input = document.getElementById('lg-receipt');
@@ -1010,25 +649,15 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
     var rowsBox = document.getElementById('lg-scan-rows');
     var rowAddBtn = document.getElementById('lg-scan-row-add');
     var totalEl = document.getElementById('lg-scan-total');
-    // Section « Achats à créer » : case de confirmation, avertissement,
-    // résumé live, message d'erreur, endpoint du POST save-bulk.
-    var purchaseBox = document.getElementById('lg-purchase-box');
-    var createCb = document.getElementById('lg-create-purchases');
-    var purchaseWarn = document.getElementById('lg-purchase-warn');
-    var purchaseSummary = document.getElementById('lg-purchase-summary');
-    var purchaseStatus = document.getElementById('lg-purchase-status');
-    var saveBulkUrl = purchaseBox ? (purchaseBox.getAttribute('data-save-bulk-url') || '') : '';
     if (!spentAtEl || !labelEl || !amountEl || !invoiceEl || !vatEl || !infoBox || !infoList) return;
 
     var basisInputs = form.querySelectorAll('input[name="amount_basis"]');
-    // Champ _csrf : présent en admin seulement — null en kiosque (les
-    // helpers ComptaSaisie tolèrent null : ni champ ni en-tête envoyés).
+    // Pas de champ _csrf en kiosque : null (les helpers ComptaSaisie
+    // tolèrent null : ni champ ni en-tête envoyés).
     var csrfInput = form.querySelector('input[name="_csrf"]');
     var csrfToken = csrfInput ? csrfInput.value : null;
     var scanUrl = form.getAttribute('data-scan-url');
     var lastInvoice = null;
-    // Justificatif du dernier scan (chemin renvoyé par le serveur).
-    var lastReceiptPath = '';
 
     function basis() {
         for (var i = 0; i < basisInputs.length; i++) {
@@ -1096,9 +725,9 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
             });
             fire(vatEl, 'change');
         }
-        // TVA multi-taux : input hidden `vat_amount` (lu par save()) ;
-        // retiré si le dernier scan n'en produit pas (input propre au
-        // scan : le formulaire n'en a pas en dur).
+        // TVA multi-taux : input hidden `vat_amount` (lu par
+        // ledgerDepenseSave) ; retiré si le dernier scan n'en produit
+        // pas (input propre au scan : le formulaire n'en a pas en dur).
         var hidden = form.querySelector('input[name="vat_amount"]');
         if (res.vat_amount !== '') {
             if (!hidden) {
@@ -1208,7 +837,9 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
         infoBox.hidden = false;
     }
 
-    /* ── Pavé « Détail des produits » : liste éditable -> notes ── */
+    /* ── Pavé « Détail des produits » : liste éditable -> notes ──
+       (aucun achat n'est créé : la dépense reste seule, le détail part
+       en notes pour traitement ultérieur côté admin). */
 
     function addLineRow(r) {
         var div = document.createElement('div');
@@ -1219,21 +850,12 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
         key.className = 'lg-scan-key';
         key.placeholder = 'Produit';
         key.setAttribute('aria-label', 'Produit');
-        // Autocomplétion sur les produits connus (datalist rempli au
-        // chargement depuis data-purchase-products) — mêmes noms que
-        // les ventes pour alimenter le bon stock.
-        key.setAttribute('list', 'lg-purchase-products');
         key.setAttribute('autocomplete', 'off');
         key.value = (r && r.key) || '';
         // Produit venu d'un scan : le libellé FACTURE d'origine reste
-        // mémorisé sur la ligne (info-bulle de contrôle + apprentissage
-        // de l'appellation si le nom est corrigé à la main). Lignes
-        // reconnues : libellé brut ; lignes non reconnues : le libellé
-        // OCR initial vaut clé de départ.
-        var rawLabel = (r && (String(r.raw_label || '').trim() || String(r.key || '').trim())) || '';
-        div.dataset.rawLabel = rawLabel;
-        if (rawLabel !== '' && rawLabel !== String((r && r.key) || '').trim()) {
-            key.title = 'Libellé facture : ' + rawLabel;
+        // consultable en info-bulle de contrôle.
+        if (r && r.raw_label && String(r.raw_label).trim() !== String((r && r.key) || '').trim()) {
+            key.title = 'Libellé facture : ' + r.raw_label;
         }
         key.addEventListener('input', updateLinesTotal);
 
@@ -1255,37 +877,6 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
         total.value = (r && r.total) || '';
         total.addEventListener('input', updateLinesTotal);
 
-        // Taux de TVA DE LA LIGNE (lecture seule, ex « 5,5 % ») — tel
-        // que détecté dans la facture ; le brut reste en dataset pour le
-        // payload des achats (vat_rate[]).
-        var rawVat = r && r.vat_rate !== null && r.vat_rate !== undefined ? String(r.vat_rate) : '';
-        var vat = document.createElement('span');
-        vat.className = 'lg-scan-vat';
-        if (rawVat !== '') {
-            vat.textContent = rawVat.replace('.', ',') + ' %';
-        } else {
-            vat.hidden = true;
-        }
-
-        // Coût unitaire dérivé (montant ÷ quantité), rempli par
-        // updateLinesTotal — aide au contrôle avant création.
-        var unit = document.createElement('span');
-        unit.className = 'lg-scan-unit';
-        unit.hidden = true;
-
-        // Case « hors stock » de la ligne : cochée, l'achat restera
-        // comptabilisé mais n'entrera pas en stock. SANS attribut name :
-        // cette case ne doit jamais partir avec la dépense.
-        var nsLabel = document.createElement('label');
-        nsLabel.className = 'lg-scan-nostock';
-        nsLabel.title = 'Cochée : l\u2019achat sera comptabilisé mais n\u2019entrera pas en stock.';
-        var ns = document.createElement('input');
-        ns.type = 'checkbox';
-        ns.className = 'lg-scan-nostock-input';
-        ns.addEventListener('change', updateLinesTotal);
-        nsLabel.appendChild(ns);
-        nsLabel.appendChild(document.createTextNode('hors stock'));
-
         var del = document.createElement('button');
         del.type = 'button';
         del.className = 'btn btn-ghost btn-sm';
@@ -1299,11 +890,7 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
         div.appendChild(key);
         div.appendChild(qty);
         div.appendChild(total);
-        div.appendChild(vat);
-        div.appendChild(unit);
-        div.appendChild(nsLabel);
         div.appendChild(del);
-        div.dataset.vatRate = rawVat;
         rowsBox.appendChild(div);
     }
 
@@ -1322,66 +909,24 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
         return out;
     }
 
-    // Lignes du pavé -> [{key, qty, total, vat_rate, no_stock}] pour les
-    // ACHATS : toutes les lignes non totalement vides (y compris
-    // invalides — buildPurchaseBulkPayload explique chaque rejet),
-    // taux de TVA brut de la facture et case « hors stock » inclus.
-    function readPurchaseRows() {
-        var out = [];
-        Array.prototype.forEach.call(rowsBox.querySelectorAll('.lg-scan-row'), function (div) {
-            var key = div.querySelector('.lg-scan-key').value.trim();
-            var total = div.querySelector('.lg-scan-total').value.trim();
-            if (key === '' && total === '') return; // jamais remplie
-            var ns = div.querySelector('.lg-scan-nostock-input');
-            out.push({
-                key: key,
-                qty: parseInt(div.querySelector('.lg-scan-qty').value, 10),
-                total: total,
-                vat_rate: div.dataset.vatRate ? div.dataset.vatRate : null,
-                no_stock: !!(ns && ns.checked),
-                raw_label: div.dataset.rawLabel || ''
-            });
-        });
-        return out;
-    }
-
-    // Total de contrôle : Σ montants + écart vs montant saisi, coût
-    // unitaire dérivé par ligne (montant ÷ quantité), puis état de la
-    // section « Achats à créer » (case + résumé).
+    // Total de contrôle : Σ montants + écart vs montant saisi.
     function updateLinesTotal() {
+        if (!totalEl) return;
         var sum = 0;
         var count = 0;
         Array.prototype.forEach.call(rowsBox.querySelectorAll('.lg-scan-row'), function (div) {
             var key = div.querySelector('.lg-scan-key').value.trim();
-            var qty = parseInt(div.querySelector('.lg-scan-qty').value, 10);
             var n = H.parseAmount(div.querySelector('.lg-scan-total').value);
-            var unit = div.querySelector('.lg-scan-unit');
-            if (key !== '' && isFinite(qty) && qty >= 1 && isFinite(n) && n > 0) {
-                sum += n;
-                count++;
-                if (unit) {
-                    unit.textContent = '≈ ' + fr2(n / qty) + ' €/u';
-                    unit.hidden = false;
-                }
-            } else if (unit) {
-                unit.textContent = '';
-                unit.hidden = true;
-            }
+            if (key !== '' && isFinite(n) && n > 0) { sum += n; count++; }
         });
-        if (totalEl) {
-            if (count === 0) {
-                totalEl.textContent = '';
-            } else {
-                var text = 'Total lignes : ' + fr2(sum) + ' € (' + count + ' ligne' + (count > 1 ? 's' : '') + ')';
-                var amount = H.parseAmount(amountEl.value);
-                if (isFinite(amount) && amount > 0) {
-                    var diff = sum - amount;
-                    text += ' · montant saisi : ' + fr2(amount) + ' € · écart : ' + (diff >= 0 ? '+' : '\u2212') + fr2(Math.abs(diff)) + ' €';
-                }
-                totalEl.textContent = text;
-            }
+        if (count === 0) { totalEl.textContent = ''; return; }
+        var text = 'Total lignes : ' + fr2(sum) + ' € (' + count + ' ligne' + (count > 1 ? 's' : '') + ')';
+        var amount = H.parseAmount(amountEl.value);
+        if (isFinite(amount) && amount > 0) {
+            var diff = sum - amount;
+            text += ' · montant saisi : ' + fr2(amount) + ' € · écart : ' + (diff >= 0 ? '+' : '\u2212') + fr2(Math.abs(diff)) + ' €';
         }
-        updatePurchaseSummary();
+        totalEl.textContent = text;
     }
 
     function renderRows(invoice) {
@@ -1401,11 +946,8 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
 
     // Réception d'une analyse : préremplissage non destructif immédiat
     // (champs vides seulement), puis affichage des pavés.
-    function handleInvoice(invoice, receiptPath) {
+    function handleInvoice(invoice) {
         lastInvoice = invoice;
-        // Justificatif conservé par le serveur au scan : joint aux
-        // achats créés depuis ce ticket (photo du livre comptable).
-        lastReceiptPath = receiptPath || '';
         var res = H.applyInvoiceToExpense(currentState(), invoice);
         applyResult(res);
         renderInfo(invoice, res);
@@ -1425,7 +967,7 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
         status('Analyse du ticket…');
         H.scanUpload(file, csrfToken, scanUrl).then(function (json) {
             status('');
-            handleInvoice(json && json.invoice ? json.invoice : null, json && json.receipt_path);
+            handleInvoice(json && json.invoice ? json.invoice : null);
         }, function (err) {
             status('Analyse automatique indisponible' + (err && err.message ? ' : ' + err.message : '') + ' — la photo reste utilisable, complète les champs à la main.');
         });
@@ -1446,8 +988,8 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
         });
     }
 
-    // « Ignorer » : referme seulement le pavé — le préremplissage des
-    // champs vides, déjà appliqué, reste en place.
+    // « Ignorer » : referme seulement le pavé — le préremplissage
+    // des champs vides, déjà appliqué, reste en place.
     if (ignoreBtn) {
         ignoreBtn.addEventListener('click', function () {
             infoBox.hidden = true;
@@ -1480,233 +1022,33 @@ $fmtDate = static fn (string $d): string => (new DateTimeImmutable($d))->format(
         }
         existing.value = data;
     });
+})();
+</script>
+<?php endif; ?>
 
-    /* ── Achats à créer depuis le scan (stock + coût de revient) ──
-       La grille éditée ci-dessus est la source : « Créer aussi ces
-       achats » cochée + confirmation explicite = POST save-bulk
-       (contrat as_json=1) AVANT la dépense ; en cas d'échec, le submit
-       est abandonné (dépense non enregistrée, erreur affichée). */
-    var purchaseSubmitBtn = form.querySelector('button[type="submit"]');
-    var purchaseBusy = false;
-
-    // Datalist des produits connus : rempli depuis data-purchase-products
-    // (JSON injecté par le contrôleur ; [] tant que la variable de vue
-    // n'existe pas encore) — robuste à l'absence de la variable.
-    (function fillPurchaseDatalist() {
-        var dl = document.getElementById('lg-purchase-products');
-        if (!dl) return;
-        var keys = [];
-        try { keys = JSON.parse(form.getAttribute('data-purchase-products') || '[]'); } catch (e) { keys = []; }
-        if (!Array.isArray(keys)) keys = [];
-        Array.prototype.forEach.call(keys, function (k) {
-            if (typeof k !== 'string' || k.trim() === '') return;
-            var opt = document.createElement('option');
-            opt.value = k;
-            dl.appendChild(opt);
-        });
-    })();
-
-    // Case active seulement avec un scan affiché et ≥ 1 ligne
-    // exploitable ; résumé live (N lignes, Σ montants).
-    function updatePurchaseSummary() {
-        if (!createCb || !purchaseWarn) return;
-        var scanned = !!(linesBox && !linesBox.hidden && saveBulkUrl !== '');
-        var valid = 0;
-        var sum = 0;
-        Array.prototype.forEach.call(readPurchaseRows(), function (r) {
-            var n = H.parseAmount(r.total);
-            if (r.key !== '' && isFinite(r.qty) && r.qty >= 1 && isFinite(n) && n > 0) {
-                valid++;
-                sum += n;
-            }
-        });
-        var can = scanned && valid > 0;
-        createCb.disabled = !can;
-        if (!can && createCb.checked) createCb.checked = false; // jamais d'achat sans lignes contrôlables
-        if (!scanned) {
-            purchaseWarn.textContent = 'Aucun ticket scanné : photographie d\u2019abord la facture pour remplir les lignes.';
-            purchaseWarn.hidden = false;
-        } else if (valid === 0) {
-            purchaseWarn.textContent = 'Aucune ligne exploitable : complète produit, quantité et montant sur au moins une ligne.';
-            purchaseWarn.hidden = false;
-        } else {
-            purchaseWarn.textContent = '';
-            purchaseWarn.hidden = true;
-        }
-        if (purchaseSummary) {
-            if (valid > 0) {
-                purchaseSummary.textContent = valid + ' achat' + (valid > 1 ? 's' : '') + ' prêt' + (valid > 1 ? 's' : '')
-                    + ' — Σ ' + fr2(sum) + ' € · coût unitaire dérivé = montant ÷ quantité (affiché sur chaque ligne).';
-                purchaseSummary.hidden = false;
-            } else {
-                purchaseSummary.textContent = '';
-                purchaseSummary.hidden = true;
-            }
-        }
+<script>
+// Même comportement que sur Analytics : toucher une date bascule
+// immédiatement sur « Personnalisé », et dès que les deux bornes sont
+// remplies la recherche s'applique toute seule (plus de bouton à cliquer).
+// Les préréglages (1 jour, 7 jours…) s'appliquent aussi au clic.
+(function () {
+    var form = document.getElementById('lg-period-form');
+    if (!form) return;
+    var du = form.querySelector('input[name="du"]');
+    var au = form.querySelector('input[name="au"]');
+    var custom = form.querySelector('input[name="period"][value="custom"]');
+    if (!du || !au) return;
+    function onChange() {
+        if (custom) custom.checked = true;
+        if (du.value && au.value) form.submit();
     }
-
-    function purchaseError(msg) {
-        if (!purchaseStatus) { window.alert(msg); return; }
-        purchaseStatus.textContent = msg;
-        purchaseStatus.style.color = '#f87171';
-        purchaseStatus.hidden = false;
-    }
-
-    function purchaseClearError() {
-        if (!purchaseStatus) return;
-        purchaseStatus.textContent = '';
-        purchaseStatus.style.color = '';
-        purchaseStatus.hidden = true;
-    }
-
-    // Soumission : sans la case cochée, la dépense part normalement
-    // (le listener ci-dessus n'a qu'à injecter `notes`). Cochée : les
-    // achats partent D'ABORD — validation, confirmation, POST save-bulk
-    // — et la dépense n'est envoyée qu'après {ok:true}.
-    form.addEventListener('submit', function (ev) {
-        if (!createCb || !createCb.checked || saveBulkUrl === '') return;
-        ev.preventDefault();
-        if (purchaseBusy) return;
-
-        // (a) Validation client : dépense complète + lignes exploitables.
-        var problems = [];
-        if (spentAtEl.value.trim() === '') problems.push('date de la dépense manquante');
-        if (labelEl.value.trim() === '') problems.push('nom de la dépense manquant');
-        var depAmount = H.parseAmount(amountEl.value);
-        if (!isFinite(depAmount) || depAmount <= 0) problems.push('montant de la dépense invalide');
-
-        // En-tête des achats : la dépense fait foi (date, libellé comme
-        // fournisseur, référence, base HT/TTC, taux global du select).
-        var bulk = H.buildPurchaseBulkPayload({
-            purchased_at: spentAtEl.value.trim(),
-            supplier: labelEl.value,
-            invoice_number: invoiceEl.value,
-            receipt_path: lastReceiptPath,
-            amount_basis: basis(),
-            vat_rate: vatEl.value === '' ? null : vatEl.value,
-            update_cost: true
-        }, readPurchaseRows());
-        Array.prototype.forEach.call(bulk.rejected, function (r) {
-            problems.push('ligne ' + (r.index + 1) + (r.key !== '' ? ' (« ' + r.key + ' »)' : '') + ' : ' + r.reason);
-        });
-        if (bulk.product_key.length === 0) problems.push('aucune ligne d\u2019achat valide');
-        if (problems.length > 0) {
-            purchaseError('Achats non créés — corrige : ' + problems.join(' · ') + '. La dépense n\u2019a pas été enregistrée.');
-            return;
-        }
-
-        // (b) Confirmation OBLIGATOIRE : récapitulatif avec les lignes.
-        // Modale unifiée (window.aeicConfirm, même modale que data-confirm)
-        // avec repli window.confirm si confirm.js n'est pas chargé (kiosque).
-        var sum = 0;
-        Array.prototype.forEach.call(bulk.total_amount, function (a) { sum += parseFloat(a); });
-        var MAX_CONFIRM = 12;
-        var lines = [];
-        Array.prototype.forEach.call(bulk.product_key, function (k, i) {
-            if (lines.length >= MAX_CONFIRM) return;
-            lines.push('- ' + k + ' × ' + bulk.quantity[i] + ' = ' + bulk.total_amount[i].replace('.', ',') + ' €'
-                + (bulk.no_stock_indexes.indexOf(i) !== -1 ? ' (hors stock)' : ''));
-        });
-        if (bulk.product_key.length > MAX_CONFIRM) {
-            lines.push('- … (' + (bulk.product_key.length - MAX_CONFIRM) + ' autre(s) ligne(s))');
-        }
-        var confirmMsg = 'Créer ' + bulk.product_key.length + ' achat(s) pour ' + fr2(sum)
-            + ' € + enregistrer la dépense ? Vérifiez les lignes :\n' + lines.join('\n');
-        var confirmed = window.aeicConfirm
-            ? window.aeicConfirm(confirmMsg, 'Créer les achats')
-            : Promise.resolve(window.confirm(confirmMsg));
-        confirmed.then(function (ok) {
-            if (!ok) return; // refusée : RIEN n'est envoyé (ni achats, ni dépense)
-            sendBulkPurchases(bulk);
+    du.addEventListener('change', onChange);
+    au.addEventListener('change', onChange);
+    // Préréglages : application immédiate au clic.
+    Array.prototype.forEach.call(form.querySelectorAll('input[name="period"]'), function (radio) {
+        radio.addEventListener('change', function () {
+            form.submit();
         });
     });
-
-    // Suite de la soumission « achats + dépense » : tout ce qui suit la
-    // confirmation (anti double-clic, POST save-bulk, dépense ensuite).
-    function sendBulkPurchases(bulk) {
-        // (d) Anti double-clic pendant le POST.
-        purchaseBusy = true;
-        var oldBtnText = purchaseSubmitBtn ? purchaseSubmitBtn.textContent : '';
-        if (purchaseSubmitBtn) {
-            purchaseSubmitBtn.disabled = true;
-            purchaseSubmitBtn.textContent = 'Création des achats…';
-        }
-
-        // (c) POST save-bulk (FormData ; champ _csrf + en-tête X-CSRF-Token
-        // en admin SEULEMENT — en kiosque, ni l'un ni l'autre : le jeton de
-        // l'URL EST l'authentification). En cas d'échec : erreur affichée,
-        // submit ABANDONNÉ — la dépense n'est pas enregistrée, l'utilisateur
-        // corrige et renvoie.
-        var fd = new FormData();
-        fd.append('as_json', '1');
-        if (csrfToken !== null) fd.append('_csrf', csrfToken);
-        fd.append('purchased_at', bulk.purchased_at);
-        fd.append('supplier', bulk.supplier);
-        fd.append('invoice_number', bulk.invoice_number);
-        fd.append('amount_basis', bulk.amount_basis);
-        if (bulk.update_cost !== undefined) fd.append('update_cost', bulk.update_cost);
-        // Taux de TVA sur le fil : PHP ne peut pas recevoir « vat_rate »
-        // (scalaire) ET « vat_rate[] » (tableau) dans le même POST — le
-        // tableau écrase silencieusement le scalaire. Donc :
-        //  - au moins une ligne porte son propre taux -> mode PAR LIGNE :
-        //    vat_rate[] pour TOUTES les lignes, les trous reprennent le
-        //    taux global (en mode tableau le backend force l'en-tête à
-        //    '' : sans ce report, une ligne sans taux perdrait sa TVA) ;
-        //  - sinon (taux global seul) -> vat_rate scalaire, les lignes
-        //    héritent côté serveur (comportement historique de la page
-        //    Achats).
-        var hasLineVat = bulk.vat_rate_lines.some(function (v) { return v !== ''; });
-        if (hasLineVat) {
-            Array.prototype.forEach.call(bulk.vat_rate_lines, function (v) {
-                fd.append('vat_rate[]', v === '' ? (bulk.vat_rate || '') : v);
-            });
-        } else if (Object.prototype.hasOwnProperty.call(bulk, 'vat_rate')) {
-            fd.append('vat_rate', bulk.vat_rate);
-        }
-        Array.prototype.forEach.call(bulk.product_key, function (k) { fd.append('product_key[]', k); });
-        Array.prototype.forEach.call(bulk.quantity, function (q) { fd.append('quantity[]', String(q)); });
-        Array.prototype.forEach.call(bulk.total_amount, function (a) { fd.append('total_amount[]', a); });
-        // Libellés facture d'origine (apprentissage des appellations) :
-        // tableau parallèle, '' = rien à retenir pour la ligne.
-        if (Array.isArray(bulk.raw_label_lines)) {
-            Array.prototype.forEach.call(bulk.raw_label_lines, function (l) { fd.append('raw_label[]', l); });
-        }
-        Array.prototype.forEach.call(bulk.no_stock_indexes, function (i) { fd.append('no_stock[' + i + ']', '1'); });
-
-        function release() {
-            purchaseBusy = false;
-            if (purchaseSubmitBtn) {
-                purchaseSubmitBtn.disabled = false;
-                purchaseSubmitBtn.textContent = oldBtnText;
-            }
-        }
-
-        fetch(saveBulkUrl, {
-            method: 'POST',
-            headers: csrfToken !== null ? { 'X-CSRF-Token': String(csrfToken) } : {},
-            credentials: 'same-origin',
-            body: fd
-        }).then(function (res) {
-            return res.json().catch(function () { return null; }).then(function (json) {
-                if (res.ok && json && json.ok === true) return json;
-                throw new Error(json && json.error
-                    ? String(json.error)
-                    : 'Erreur ' + res.status + ' : la création des achats a échoué.');
-            });
-        }).then(function () {
-            release();
-            purchaseClearError();
-            form.submit(); // achats créés : la dépense part à son tour (redirection + flash)
-        }, function (err) {
-            release();
-            purchaseError('Achats non créés — dépense NON enregistrée : '
-                + (err && err.message ? err.message : 'erreur réseau.')
-                + ' Vérifie la page Achats avant de renvoyer pour ne pas créer deux fois.');
-        });
-    }
-
-    // État initial de la section (case désactivée + avertissement tant
-    // qu'aucun scan n'a produit de lignes exploitables).
-    updatePurchaseSummary();
 })();
 </script>

@@ -22,10 +22,11 @@
      l'état du formulaire de DÉPENSE (préremplissage non destructif) ;
    - serializeExpenseNotes / expenseNotesFromInvoice : détail des
      produits détectés -> champ `notes` (« Détail tickets : … ») ;
-   - buildPurchaseBulkPayload : grille du scan du livre comptable ->
-     charge utile du POST /admin/compta/achats/save-bulk (contrat
-     as_json=1) — achats (stock + coût de revient) créés depuis le
-     ticket, avec rejet motivé des lignes invalides ;
+   - (Le helper buildPurchaseBulkPayload — scan du livre comptable ->
+     POST save-bulk — a été supprimé avec la fusion « Saisir une
+     dépense » × « Achats » : le livre est en lecture stricte et le
+     kiosque n'écrit jamais dans purchases. Les achats en lot se
+     saisissent uniquement sur la page unifiée /admin/compta/achats.)
     - downscaleImageSpec / downscaleImage : compression locale d'une
       photo avant l'upload (canvas ; au-delà de 3000 px de côté long
       OU de 4 Mo, JPEG 0,9 puis replis qualité/échelle ; échec ->
@@ -530,7 +531,8 @@
     /* ------------------------------------------------------------
        Ticket scanné -> formulaire de DÉPENSE (fonctions pures,
        testées par tests/js/compta-saisie.test.js). Utilisées par la
-       saisie express du livre comptable et par la page Dépenses.
+       saisie express du livre kiosque (dépense seule) et par le volet
+       « Frais divers » de la page unifiée « Saisir une dépense ».
        ------------------------------------------------------------ */
 
     /**
@@ -709,111 +711,14 @@
     }
 
     /* ------------------------------------------------------------
-        Livre comptable : scan -> ACHATS (stock + coût de revient).
-        POST /admin/compta/achats/save-bulk, contrat as_json=1.
+        (Fusion « Saisir une dépense » × « Achats » : l'ancien bloc
+        « Livre comptable : scan -> achats » — buildPurchaseBulkPayload,
+        POST save-bulk as_json=1 — a été retiré. Le livre est en
+        lecture stricte et le kiosque n'écrit jamais dans purchases :
+        plus aucun consommateur de ce payload n'existe. Les achats en
+        lot vivent uniquement sur la page unifiée /admin/compta/achats,
+        dont le formulaire poste directement save-bulk.)
         ------------------------------------------------------------ */
-
-    /** Booléen de case à cocher tolérant (true, 1, '1'). */
-    function isTruthyFlag(v) {
-        return v === true || v === 1 || v === '1';
-    }
-
-    /**
-     * Construit la charge utile d'une création d'achats en lot à partir
-     * de l'en-tête de la facture scannée et des lignes du pavé « Détail
-     * des produits » (livre comptable). L'objet renvoyé est PLAT, prêt
-     * à être recopié dans un FormData — NE PAS y poster la propriété
-     * `rejected`, réservée à l'affichage des lignes refusées.
-     *
-     * @param {Object} header En-tête commun à toutes les lignes :
-     *   {purchased_at, supplier, invoice_number, receipt_path,
-     *    amount_basis ('ht'|'ttc'), vat_rate (taux global ou null),
-     *    update_cost (bool)}.
-     * @param {Object[]} rows Lignes de la grille :
-     *   [{key, qty, total, vat_rate (null|5.5|'5,5'|…), no_stock (bool),
-     *     raw_label (string, optionnel — libellé FACTURE d'origine de la
-     *     ligne scannée, '' si saisie manuelle)}].
-     *
-     * @returns {Object}
-     *   - purchased_at / supplier / invoice_number : chaînes trimées ;
-     *   - receipt_path : justificatif conservé au scan (chaîne trimée,
-     *     '' si la saisie n'en a pas — ignoré côté serveur) ;
-     *   - amount_basis : 'ht' | 'ttc' (défaut 'ht') ;
-     *   - vat_rate : taux GLOBAL canonisé (« 5.5 ») — CLÉ ABSENTE si
-     *     null (TVA mixte : seules les lignes portent un taux) ;
-     *   - update_cost : '1' — CLÉ ABSENTE si false (le contrôleur teste
-     *     la présence du champ, pas sa valeur) ;
-     *   - product_key / quantity / total_amount / vat_rate_lines /
-     *     raw_label_lines : tableaux PARALLÈLES des lignes valides
-     *     (total à 2 décimales en chaîne, quantity entier ;
-     *     vat_rate_lines est posté sous le nom `vat_rate[]` — '' = la
-     *     ligne hérite du taux d'en-tête ; raw_label_lines est posté
-     *     sous le nom `raw_label[]` — '' = pas d'appellation à
-     *     retenir, le serveur ignore les libellés vides ou identiques
-     *     à la clé) ;
-     *   - no_stock_indexes : indexes (0-based) des lignes « hors stock »,
-     *     à poster sous `no_stock[N]=1` (format indexé lu par
-     *     AdminStockController::savePurchasesBulk, aligné sur
-     *     product_key[N]) ;
-     *   - rejected : [{index, key, reason}] des lignes rejetées —
-     *     produit manquant (key vide), quantité invalide (qty < 1 ou
-     *     non entière), montant invalide (<= 0 ou illisible).
-     */
-    function buildPurchaseBulkPayload(header, rows) {
-        var h = header && typeof header === 'object' ? header : {};
-        var list = Array.isArray(rows) ? rows : [];
-
-        var payload = {
-            purchased_at: cleanStr(h.purchased_at),
-            supplier: cleanStr(h.supplier),
-            invoice_number: cleanStr(h.invoice_number),
-            receipt_path: cleanStr(h.receipt_path),
-            amount_basis: h.amount_basis === 'ttc' ? 'ttc' : 'ht',
-            product_key: [],
-            quantity: [],
-            total_amount: [],
-            vat_rate_lines: [],
-            raw_label_lines: [],
-            no_stock_indexes: []
-        };
-        var globalVat = normVatRate(h.vat_rate);
-        if (globalVat !== null) payload.vat_rate = globalVat;
-        if (isTruthyFlag(h.update_cost)) payload.update_cost = '1';
-
-        var rejected = [];
-        for (var i = 0; i < list.length; i++) {
-            var r = list[i] || {};
-            var key = cleanStr(r.key !== undefined ? r.key : r.label);
-            var qty = parseInt(r.qty, 10);
-            var total = typeof r.total === 'number' ? r.total : parseAmount(r.total);
-
-            // Lignes invalides : rejetées avec raison, hors des tableaux —
-            // les motifs reprennent les libellés du contrôleur PHP.
-            if (key === '') {
-                rejected.push({ index: i, key: '', reason: 'produit manquant' });
-                continue;
-            }
-            if (!isFinite(qty) || qty < 1) {
-                rejected.push({ index: i, key: key, reason: 'quantité invalide' });
-                continue;
-            }
-            if (!isFinite(total) || total <= 0) {
-                rejected.push({ index: i, key: key, reason: 'montant invalide' });
-                continue;
-            }
-
-            payload.product_key.push(key);
-            payload.quantity.push(qty);
-            payload.total_amount.push(total.toFixed(2));
-            payload.vat_rate_lines.push(normVatRate(r.vat_rate) || '');
-            payload.raw_label_lines.push(cleanStr(r.raw_label));
-            if (isTruthyFlag(r.no_stock)) {
-                payload.no_stock_indexes.push(payload.product_key.length - 1);
-            }
-        }
-        payload.rejected = rejected;
-        return payload;
-    }
 
     var ComptaSaisie = {
         normKey: normKey,
@@ -828,7 +733,6 @@
         applyInvoiceToExpense: applyInvoiceToExpense,
         serializeExpenseNotes: serializeExpenseNotes,
         expenseNotesFromInvoice: expenseNotesFromInvoice,
-        buildPurchaseBulkPayload: buildPurchaseBulkPayload,
         downscaleImageSpec: downscaleImageSpec,
         downscaleImage: downscaleImage,
         scanUpload: scanUpload,
