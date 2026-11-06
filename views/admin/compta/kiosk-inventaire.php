@@ -11,6 +11,7 @@ declare(strict_types=1);
  * @var string $token
  * @var list<array{key:string,cat:string,paused:bool}> $active
  * @var list<array{key:string,cat:string,paused:bool}> $paused
+ * @var array<string,int> $packs Taille de pack par clé produit (option — exposée par le contrôleur ; absente/vide : saisie en unités seule, D4).
  */
 ?>
 <style>
@@ -87,6 +88,18 @@ declare(strict_types=1);
         color: var(--foreground, inherit);
         font-size: 1.3rem; font-weight: 800;
     }
+    /* Produit livré en packs : badge discret + second champ « ×N » (packs
+       entiers, ajoutés aux unités isolées — conversion côté serveur). */
+    .kpack {
+        align-self: flex-start;
+        font-size: 0.72rem; font-weight: 800;
+        color: var(--primary, #48bdd3);
+        background: rgba(72, 189, 211, 0.14);
+        border: 1px solid rgba(72, 189, 211, 0.35);
+        border-radius: 999px; padding: 0.12rem 0.5rem;
+    }
+    .kinputs { display: flex; gap: 0.4rem; }
+    .kinputs .kinput { flex: 1; min-width: 0; }
     .krow.is-paused { opacity: 0.4; }
     .krow.is-paused .kname { margin-bottom: 0; font-weight: 600; }
     .krow.is-paused .kpaused { font-size: 0.8rem; color: var(--muted, #8892a6); }
@@ -133,11 +146,25 @@ declare(strict_types=1);
         </h2>
         <ul class="klist">
             <?php foreach ($items as $r): ?>
+            <?php $packSize = (int) (($packs ?? [])[$r['key']] ?? 0); ?>
             <li class="krow" data-name="<?= e(mb_strtolower($r['key'])) ?>" data-key="<?= e($r['key']) ?>" data-cat="<?= e($cat) ?>" title="<?= e($r['key']) ?>">
                 <p class="kname"><?= e($r['key']) ?></p>
-                <input type="number" class="kinput" name="count[<?= e($r['key']) ?>]"
-                       min="0" step="1" inputmode="numeric" placeholder="0"
-                       aria-label="Quantité comptée de <?= e($r['key']) ?>">
+                <?php if ($packSize > 1): ?>
+                    <span class="kpack">pack de <?= $packSize ?></span>
+                    <div class="kinputs">
+                        <input type="number" class="kinput" name="count[<?= e($r['key']) ?>]"
+                               min="0" step="1" inputmode="numeric" placeholder="0"
+                               aria-label="Unités isolées comptées de <?= e($r['key']) ?>">
+                        <input type="number" class="kinput" name="count_packs[<?= e($r['key']) ?>]"
+                               min="0" step="1" inputmode="numeric" placeholder="×<?= $packSize ?>"
+                               title="Packs comptés (1 pack = <?= $packSize ?> unités) — les packs s'ajoutent aux unités isolées"
+                               aria-label="Packs de <?= $packSize ?> comptés pour <?= e($r['key']) ?>">
+                    </div>
+                <?php else: ?>
+                    <input type="number" class="kinput" name="count[<?= e($r['key']) ?>]"
+                           min="0" step="1" inputmode="numeric" placeholder="0"
+                           aria-label="Quantité comptée de <?= e($r['key']) ?>">
+                <?php endif; ?>
                 <button type="button" class="kpause" data-key="<?= e($r['key']) ?>" data-state="pause"
                         title="Mettre en pause (sort du comptage)" aria-label="Mettre <?= e($r['key']) ?> en pause">⏸</button>
             </li>
@@ -178,6 +205,10 @@ declare(strict_types=1);
     </nav>
 </p>
 
+<?php /* Tailles de pack par clé : alimente le badge et le second champ du
+         constructeur JS makeActiveLi (reprise d'un produit en pause). */ ?>
+<script type="application/json" id="kPacks"><?= json_encode($packs ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP) ?></script>
+
 <script>
 (function () {
     var rows = document.querySelectorAll('#kList ~ * .krow, .ksec .krow');
@@ -189,10 +220,27 @@ declare(strict_types=1);
     var saveTimer = null;
     var dirty = false;
 
+    /* Tailles de pack par clé produit (rendu serveur) : produit avec pack
+       → second champ « ×N » (packs entiers ajoutés aux unités isolées). */
+    var PACKS = {};
+    (function () {
+        var el = document.getElementById('kPacks');
+        if (!el) return;
+        try { PACKS = JSON.parse(el.textContent || '{}') || {}; } catch (e) { PACKS = {}; }
+    })();
+
+    function packSizeOf(key) {
+        var n = parseInt(PACKS[key], 10);
+        return isNaN(n) ? 0 : n;
+    }
+
     function countFilled() {
         var n = 0;
-        Array.prototype.forEach.call(document.querySelectorAll('.kinput'), function (i) {
-            if (i.value !== '') n++;
+        Array.prototype.forEach.call(document.querySelectorAll('.krow'), function (row) {
+            var inputs = row.querySelectorAll('.kinput');
+            for (var i = 0; i < inputs.length; i++) {
+                if (inputs[i].value !== '') { n++; return; }
+            }
         });
         return n;
     }
@@ -201,8 +249,12 @@ declare(strict_types=1);
         var n = countFilled();
         if (progTxt) progTxt.innerHTML = '<strong>' + n + '</strong> produit(s) compté(s)';
         Array.prototype.forEach.call(document.querySelectorAll('.krow'), function (row) {
-            var input = row.querySelector('.kinput');
-            if (input) row.classList.toggle('is-counted', input.value !== '');
+            var inputs = row.querySelectorAll('.kinput');
+            var any = false;
+            for (var i = 0; i < inputs.length; i++) {
+                if (inputs[i].value !== '') { any = true; break; }
+            }
+            row.classList.toggle('is-counted', any);
         });
     }
 
@@ -316,7 +368,32 @@ declare(strict_types=1);
         input.setAttribute('aria-label', 'Quantité comptée de ' + key);
         input.addEventListener('input', function () { refresh(); markDirty(); });
         li.appendChild(p);
-        li.appendChild(input);
+        var size = packSizeOf(key);
+        if (size > 1) {
+            var badge = document.createElement('span');
+            badge.className = 'kpack';
+            badge.textContent = 'pack de ' + size;
+            li.appendChild(badge);
+            input.setAttribute('aria-label', 'Unités isolées comptées de ' + key);
+            var packInput = document.createElement('input');
+            packInput.type = 'number';
+            packInput.className = 'kinput';
+            packInput.name = 'count_packs[' + key + ']';
+            packInput.min = '0';
+            packInput.step = '1';
+            packInput.setAttribute('inputmode', 'numeric');
+            packInput.placeholder = '×' + size;
+            packInput.title = 'Packs comptés (1 pack = ' + size + ' unités) — les packs s’ajoutent aux unités isolées';
+            packInput.setAttribute('aria-label', 'Packs de ' + size + ' comptés pour ' + key);
+            packInput.addEventListener('input', function () { refresh(); markDirty(); });
+            var wrap = document.createElement('div');
+            wrap.className = 'kinputs';
+            wrap.appendChild(input);
+            wrap.appendChild(packInput);
+            li.appendChild(wrap);
+        } else {
+            li.appendChild(input);
+        }
         li.appendChild(pauseBtn(key, 'pause'));
         return li;
     }

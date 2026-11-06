@@ -268,10 +268,13 @@ declare(strict_types=1);
                 </tr>
             </thead>
             <tbody>
-                <?php foreach ($rows as $r): if (!empty($r['paused'])) { continue; } $disId = 'dis-' . substr(md5((string) $r['key']), 0, 10); ?>
+                <?php foreach ($rows as $r): if (!empty($r['paused'])) { continue; } $disId = 'dis-' . substr(md5((string) $r['key']), 0, 10); $packSize = (int) ($keyStats[$r['key']]['packs'] ?? 0); ?>
                     <tr>
                         <td>
                             <strong><?= e($r['key']) ?></strong>
+                            <?php if ($packSize > 1): ?>
+                                <span class="badge badge-info" title="Produit livré en packs de <?= $packSize ?> : le second champ de saisie compte des packs entiers, en plus des unités isolées">pack de <?= $packSize ?></span>
+                            <?php endif; ?>
                             <button type="button" class="btn btn-ghost btn-sm merge-row-btn"
                                     data-key="<?= e($r['key']) ?>"
                                     title="Fusionner ce produit avec un autre (doublon) : pré-remplit la clé source">Fusionner</button>
@@ -295,6 +298,12 @@ declare(strict_types=1);
                             <input type="number" name="count[<?= e($r['key']) ?>]"
                                    min="0" step="1" placeholder="—" style="width:90px" inputmode="numeric"
                                    aria-label="Quantité physiquement comptée pour <?= e($r['key']) ?>">
+                            <?php if ($packSize > 1): ?>
+                                <input type="number" name="count_packs[<?= e($r['key']) ?>]"
+                                       min="0" step="1" placeholder="×<?= $packSize ?>" style="width:90px" inputmode="numeric"
+                                       title="Packs comptés (1 pack = <?= $packSize ?> unités) — ex. 2 packs + 3 unités isolées = <?= 2 * $packSize + 3 ?> unités enregistrées"
+                                       aria-label="Nombre de packs de <?= $packSize ?> comptés pour <?= e($r['key']) ?>">
+                            <?php endif; ?>
                         </td>
                         <td>
                             <?php if ($r['gap'] === null): ?>
@@ -320,7 +329,8 @@ declare(strict_types=1);
         </table>
         </div>
         <p class="muted">Seules les lignes renseignées sont comptées. Chaque comptage devient le nouveau point de départ du stock théorique.
-        Les produits « En pause » (plus en vente pour l'instant) n'apparaissent pas dans cette grille : ils sont listés en bas de page, rétablissement en un clic.</p>
+        Les produits « En pause » (plus en vente pour l'instant) n'apparaissent pas dans cette grille : ils sont listés en bas de page, rétablissement en un clic.
+        Produits avec un badge « pack de N » : le champ « ×N » compte des packs entiers, ajoutés aux unités isolées (2 packs + 3 unités = 51 si N = 24).</p>
         <div class="form-actions">
             <button type="submit" class="btn btn-primary">Enregistrer le comptage</button>
             <button type="button" class="btn btn-ghost" onclick="if (confirm('Effacer les quantités saisies ?')) this.form.reset();">Annuler</button>

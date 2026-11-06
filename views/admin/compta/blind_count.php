@@ -15,6 +15,7 @@ declare(strict_types=1);
  * (bouton « plus en vente ») sans imbriquer de formulaires.
  *
  * @var list<array{key:string}> $rows
+ * @var array<string,int> $packs Taille de pack par clé produit (option — exposée par le contrôleur ; absente/vide : aucun badge ni champ pack, D4).
  */
 ?>
 <div class="compta-head">
@@ -30,6 +31,7 @@ declare(strict_types=1);
     <p class="card-meta">
         Comptage « à l'aveugle » : les quantités théoriques ne sont volontairement pas affichées,
         pour un comptage honnête. Laisse vide les produits non comptés.
+        Produits avec un badge « pack de N » : le champ « ×N » compte des packs entiers, ajoutés aux unités isolées.
         Le bouton met un produit <strong>« en pause »</strong> (« plus en vente pour l'instant »,
         ex. Redbull Summer hors été) : rien n'est supprimé, le produit sort de cette liste
         — rétablissement en un clic depuis la page Inventaire (groupe Système).
@@ -45,9 +47,22 @@ declare(strict_types=1);
         <tbody>
         <?php foreach ($rows as $r): ?>
             <?php if (!empty($r['paused'])): continue; endif; ?>
+            <?php $packSize = (int) (($packs ?? [])[$r['key']] ?? 0); ?>
             <tr>
-                <td><code><?= e($r['key']) ?></code></td>
-                <td><input type="number" name="count[<?= e($r['key']) ?>]" min="0" step="1" placeholder="—" inputmode="numeric" style="width:90px" form="blind-count-form" aria-label="Quantité comptée de <?= e($r['key']) ?>"></td>
+                <td>
+                    <code><?= e($r['key']) ?></code>
+                    <?php if ($packSize > 1): ?>
+                        <span class="badge badge-info" title="Produit livré en packs de <?= $packSize ?> : le second champ compte des packs entiers, en plus des unités isolées">pack de <?= $packSize ?></span>
+                    <?php endif; ?>
+                </td>
+                <td style="white-space:nowrap;">
+                    <input type="number" name="count[<?= e($r['key']) ?>]" min="0" step="1" placeholder="—" inputmode="numeric" style="width:90px" form="blind-count-form" aria-label="Quantité comptée de <?= e($r['key']) ?>">
+                    <?php if ($packSize > 1): ?>
+                        <input type="number" name="count_packs[<?= e($r['key']) ?>]" min="0" step="1" placeholder="×<?= $packSize ?>" inputmode="numeric" style="width:90px" form="blind-count-form"
+                               title="Packs comptés (1 pack = <?= $packSize ?> unités) — ex. 2 packs + 3 unités isolées = <?= 2 * $packSize + 3 ?> unités enregistrées"
+                               aria-label="Nombre de packs de <?= $packSize ?> comptés pour <?= e($r['key']) ?>">
+                    <?php endif; ?>
+                </td>
                 <td>
                     <form method="post" action="<?= e(url('/admin/compta/inventaire/comptage/' . rawurlencode($r['key']) . '/discontinue')) ?>"
                           data-confirm="Marquer « <?= e($r['key']) ?> » plus en vente pour l'instant ? Rien n'est supprimé : il passe en pause, sort de cette liste et restera rétablissable en un clic (page Inventaire)."
