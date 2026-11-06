@@ -1,12 +1,27 @@
 /**
- * AEIC — Réorganisation de la sidebar admin (glisser-déposer + ▲▼).
+ * AEIC — Réorganisation de la sidebar admin (drag permanent + auto-save).
  *
- * Permet à un admin/fondateur de réordonner sections, sous-groupes et
- * liens de la sidebar, par glisser-déposer Pointer Events (souris,
- * tactile, stylet — uniforme) ou boutons ▲▼, puis de
- * sauvegarder l'ordre : POST /admin/settings/sidebar-order en JSON,
- * CSRF via l'en-tête X-CSRF-Token (cf. Csrf::checkRequest, qui accepte
- * ce header ; $_POST est vide avec un corps JSON).
+ * Plus de mode « Réorganiser » : aucun bouton, aucune barre — le
+ * glisser-déposer est TOUJOURS disponible. Maintien du clic (Pointer
+ * Events : souris, tactile, stylet — uniforme) sur une unité puis
+ * déplacement ≥ 5 px = drag ; en deçà du seuil = clic normal
+ * (navigation des liens, repli des panneaux), strictement intact.
+ *
+ * À chaque dépôt qui réordonne RÉELLEMENT, l'ordre complet est envoyé
+ * en auto-save : POST /admin/settings/sidebar-order en JSON, CSRF via
+ * l'en-tête X-CSRF-Token (cf. Csrf::checkRequest, qui accepte ce
+ * header ; $_POST est vide avec un corps JSON). Retour discret par
+ * mini-toast (« Ordre enregistré » / erreur), sans rechargement.
+ *
+ * INVARIANT STRUCTUREL (exigence explicite) : une unité ne sort JAMAIS
+ * de son conteneur — un lien reste dans son conteneur (nav de sa
+ * section ou div de son sous-groupe), un sous-groupe dans la nav de sa
+ * section, une section dans la sidebar. Une cible d'un autre type ou
+ * d'un autre conteneur n'est jamais marquée ni acceptée ; un dépôt
+ * invalide ramène l'élément à sa position d'origine (la silhouette
+ * « snap-back » regagne sa place puis disparaît). L'ordre change,
+ * JAMAIS la structure : la visibilité ne dépend que des gardes PHP du
+ * layout.
  *
  * Contrat DOM (posé par views/layouts/admin.php) :
  *   #admin-sidebar
@@ -15,246 +30,96 @@
  *     │    │    ├─ a.admin-link[data-sidebar-link] (liens directs)
  *     │    │    └─ .admin-nav-subgroup[data-sidebar-subgroup]
  *     │    │         └─ button.admin-subgroup + div > a.admin-link…
- *     ├─ .admin-reorder (#admin-reorder-toggle / #admin-reorder-bar)
- *     └─ .admin-sidebar-foot (HORS périmètre)
+ *     └─ .admin-sidebar-foot (HORS périmètre : liens sans
+ *        data-sidebar-link, jamais des unités)
  *   window.AEIC_SIDEBAR = { csrf, endpoint }
  *
- * En mode édition la navigation est neutralisée (preventDefault sur les
- * liens du menu) : impossible de quitter la page par erreur et de perdre
- * l'ordre en cours. L'ordre change, JAMAIS la structure : un lien reste
- * dans son conteneur, un sous-groupe dans sa section — la visibilité ne
- * dépend que des gardes PHP du layout.
+ * Curseur : pointer par défaut (ce sont des liens qui naviguent) ; le
+ * feedback grab/grabbing n'apparaît qu'une fois le drag réellement
+ * démarré (appui maintenu ≥ seuil), via une classe posée sur <html>
+ * pour la durée du drag seulement — jamais au simple survol.
  *
- * Le drag passe par les Pointer Events (pointerdown → seuil de 5 px →
+ * Le drag passe par les Pointer Events (pointerdown → seuil →
  * pointermove/pointerup/pointercancel), pas le HTML5 drag & drop :
- * celui-ci est capricieux sur des boutons/rows imbriqués (dragstart
- * perdu selon la cible) et inégal desktop/tactile. Cf. section dédiée.
+ * celui-ci est capricieux sur des boutons/rows imbriqués et inégal
+ * desktop/tactile. touch-action reste inchangé : le scroll tactile de
+ * la sidebar continue de fonctionner, le navigateur prend la main et
+ * émet pointercancel → restitution propre, rien ne bouge.
  */
 (function () {
     'use strict';
 
     var sidebar = document.getElementById('admin-sidebar');
-    var toggleBtn = document.getElementById('admin-reorder-toggle');
-    var bar = document.getElementById('admin-reorder-bar');
-    if (!sidebar || !toggleBtn || !bar || !window.AEIC_SIDEBAR || !window.AEIC_SIDEBAR.endpoint) {
-        return; // rôle non autorisé ou layout sans contrat : rien à faire
+    if (!sidebar || !window.AEIC_SIDEBAR || !window.AEIC_SIDEBAR.endpoint) {
+        return; // rôle non autorisé (config absente) ou layout sans contrat
     }
 
-    var saveBtn = document.getElementById('admin-reorder-save');
-    var resetBtn = document.getElementById('admin-reorder-reset');
-    var cancelBtn = document.getElementById('admin-reorder-cancel');
-    var statusEl = document.getElementById('admin-reorder-status');
+    var DRAG_THRESHOLD = 5;  // px de déplacement avant qu'un appui devienne un drag
+    var SNAP_BACK_MS = 180;  // retour à l'origine d'un dépôt invalide
+    var SAVE_DEBOUNCE_MS = 350;
+    var TOAST_MS = 1600;
+    var TOAST_ERROR_MS = 3200;
 
-    var editing = false;
-    var rows = [];        // lignes flex créées en mode édition (à défaire en sortie)
-    var moveBoxes = [];   // boutons ▲▼ : { box, unit, up, down }
-    var grips = [];       // poignées ⋮⋮ posées sur les lignes en mode édition
-    var dragging = null;  // unité en cours de glisser
-    var indicator = null; // dernier élément marqué pour l'insertion
-
-    var ROW_CLASS = {
-        section: 'admin-nav-section',
-        subgroup: 'admin-nav-subgroup',
-        link: 'admin-link-row'
+    /* Sélecteur d'une unité déplaçable, par type. Le type d'une unité
+       détermine ses cibles valides : même type ET même conteneur — c'est
+       l'invariant structurel, garanti par dropCandidate(). */
+    var UNIT_SELECTOR = {
+        section: '.admin-nav-section',
+        subgroup: '.admin-nav-subgroup',
+        link: 'a[data-sidebar-link]'
     };
 
-    /* Type d'une unité déplaçable (null = pas une unité). */
-    function typeOf(unit) {
-        if (!unit || !unit.classList) return null;
-        if (unit.classList.contains('admin-nav-section')) return 'section';
-        if (unit.classList.contains('admin-nav-subgroup')) return 'subgroup';
-        if (unit.classList.contains('admin-link-row')) return 'link';
-        return null;
-    }
-
-    /* Déplacement ▲▼ : échange avec le voisin DOM immédiat, mais
-       uniquement s'il est de MÊME TYPE (même règle que dropCandidate) —
-       un lien plat s'arrête au premier sous-groupe voisin, et
-       inversement, comme le glisser-déposer l'impose déjà et comme le
-       serveur sérialise (liens plats avant sous-groupes). */
-    function moveUnit(unit, dir) {
-        var type = typeOf(unit);
-        var neighbor = dir < 0 ? unit.previousElementSibling : unit.nextElementSibling;
-        if (!type || !neighbor || typeOf(neighbor) !== type) return;
-        unit.parentNode.insertBefore(unit, dir < 0 ? neighbor : neighbor.nextSibling);
-        refreshMoveButtons();
-    }
-
-    /* Enveloppe un élément dans une ligne flex (pour poser les boutons
-       ▲▼ à côté du titre ou du lien sans toucher à leur style). */
-    function wrapInRow(el, className) {
-        var row = document.createElement('div');
-        row.className = className;
-        el.parentNode.insertBefore(row, el);
-        row.appendChild(el);
-        rows.push(row);
-        return row;
-    }
-
-    /* Poignée ⋮⋮ : affordance de saisie posée sur chaque ligne en mode
-       édition. Décorative (aria-hidden) — la saisie reste possible sur
-       toute la ligne, la poignée ne fait que le signaler. */
-    function addGrip(row) {
-        var grip = document.createElement('span');
-        grip.className = 'sidebar-grip';
-        grip.textContent = '⋮⋮';
-        grip.setAttribute('aria-hidden', 'true');
-        row.insertBefore(grip, row.firstChild);
-        grips.push(grip);
-    }
-
-    function addMoveButtons() {
-        Array.prototype.forEach.call(rows, function (row) {
-            var isTitle = row.classList.contains('admin-title-row');
-            var unit = isTitle ? row.parentNode : row;
-            var kind = isTitle
-                ? (unit.classList.contains('admin-nav-section') ? 'la section' : 'le sous-groupe')
-                : 'le lien';
-            var link = unit.querySelector('a[data-sidebar-link]');
-            var name = unit.getAttribute('data-sidebar-section')
-                || unit.getAttribute('data-sidebar-subgroup')
-                || (link ? link.getAttribute('data-sidebar-link') : '');
-
-            var box = document.createElement('div');
-            box.className = 'sidebar-move';
-
-            var up = document.createElement('button');
-            up.type = 'button';
-            up.className = 'sidebar-move-btn';
-            up.textContent = '▲';
-            up.setAttribute('aria-label', 'Monter ' + kind + ' ' + name);
-
-            var down = document.createElement('button');
-            down.type = 'button';
-            down.className = 'sidebar-move-btn';
-            down.textContent = '▼';
-            down.setAttribute('aria-label', 'Descendre ' + kind + ' ' + name);
-
-            /* Pas de drag depuis les boutons : le handler pointerdown
-               ignore .sidebar-move (cf. plus bas). */
-            up.addEventListener('click', function () { moveUnit(unit, -1); });
-            down.addEventListener('click', function () { moveUnit(unit, 1); });
-
-            box.appendChild(up);
-            box.appendChild(down);
-            row.insertBefore(box, row.firstChild);
-            addGrip(row); // poignée en tête de ligne : [⋮⋮][▲▼][libellé]
-            moveBoxes.push({ box: box, unit: unit, up: up, down: down });
-        });
-    }
-
-    function refreshMoveButtons() {
-        Array.prototype.forEach.call(moveBoxes, function (m) {
-            /* ▲▼ désactivés aux frontières : bord du conteneur OU voisin
-               immédiat d'un autre type (lien plat ↔ sous-groupe) — même
-               règle que moveUnit et dropCandidate. */
-            var type = typeOf(m.unit);
-            var prev = m.unit.previousElementSibling;
-            var next = m.unit.nextElementSibling;
-            m.up.disabled = !type || !prev || typeOf(prev) !== type;
-            m.down.disabled = !type || !next || typeOf(next) !== type;
-        });
-    }
-
-    function enterEdit() {
-        if (editing) return;
-        editing = true;
-        rows = [];
-        moveBoxes = [];
-        grips = [];
-        sidebar.classList.add('is-reordering');
-
-        /* Lignes flex : titres de sections/sous-groupes et liens du MENU
-           uniquement (jamais les liens du pied de sidebar : sans
-           data-sidebar-link, ils ne sont pas sélectionnés). */
-        Array.prototype.forEach.call(
-            sidebar.querySelectorAll('button.admin-group, button.admin-subgroup'),
-            function (btn) { wrapInRow(btn, 'admin-title-row'); }
-        );
-        Array.prototype.forEach.call(
-            sidebar.querySelectorAll('a[data-sidebar-link]'),
-            function (a) {
-                /* Le drag part de la LIGNE, pas du lien natif :
-                   pointerdown résout l'unité par closest(). */
-                wrapInRow(a, 'admin-link-row');
-            }
-        );
-
-        /* Plus d'attribut draggable : les unités déplaçables (sections,
-           sous-groupes, lignes de liens) sont résolues au pointerdown
-           par closest(), et l'affordance (curseur, touch-action) vient
-           du seul état .is-reordering en CSS. */
-
-        addMoveButtons();
-        refreshMoveButtons();
-
-        toggleBtn.hidden = true;
-        bar.hidden = false;
-        setStatus('Glisse les éléments, ou utilise ▲▼.', false);
-        window.addEventListener('beforeunload', unloadGuard);
-    }
-
-    /* Restaure le DOM hors édition (boutons et poignées retirés, lignes
-       déballées). Utilisé avant l'annulation. */
-    function exitEdit() {
-        if (!editing) return;
-        editing = false;
-        window.removeEventListener('beforeunload', unloadGuard);
-
-        Array.prototype.forEach.call(moveBoxes, function (m) {
-            if (m.box.parentNode) m.box.parentNode.removeChild(m.box);
-        });
-        Array.prototype.forEach.call(grips, function (g) {
-            if (g.parentNode) g.parentNode.removeChild(g);
-        });
-        Array.prototype.forEach.call(rows.slice(), function (row) {
-            while (row.firstChild) {
-                row.parentNode.insertBefore(row.firstChild, row);
-            }
-            if (row.parentNode) row.parentNode.removeChild(row);
-        });
-        sidebar.classList.remove('is-reordering');
-        endDrag(); // libère aussi silhouette/listeners si un drag traînait
-        rows = [];
-        moveBoxes = [];
-        grips = [];
-        bar.hidden = true;
-        toggleBtn.hidden = false;
-        setStatus('', false);
-    }
-
-    /* Avertissement avant de quitter la page en cours d'édition. */
-    function unloadGuard(e) {
-        e.preventDefault();
-        e.returnValue = '';
-    }
-
-    /* ---- Glisser-déposer Pointer Events (délégué sur la sidebar) -------
-       Remplace le drag & drop HTML5 (dragstart/dragover/drop/dragend),
-       capricieux sur des boutons/rows imbriqués. Mécanique uniforme
-       souris/tactile/stylet : pointerdown → seuil de 5 px (en dessous =
-       clic normal, laissé intact) → drag : l'unité saisie reste en
-       place estompée (.dragging), une silhouette (clone) suit le
-       pointeur, la position d'insertion candidate est marquée comme
-       auparavant (drag-over-above/below). */
-
-    var DRAG_THRESHOLD = 5;     // px de déplacement avant de démarrer le drag
-
     var pending = null;         // saisie sous le seuil : { unit, pointerId, startX, startY }
+    var dragging = null;        // unité en cours de glisser
     var ghost = null;           // silhouette suivant le pointeur (clone de l'unité)
     var grabX = 0;              // décalage pointeur → coin haut-gauche de l'unité saisie
     var grabY = 0;
+    var originLeft = 0;         // position d'origine : destination du snap-back
+    var originTop = 0;
     var activePointerId = null; // pointer capturé ; tout autre pointerdown est ignoré
     var clickGuard = false;     // avale le click émis juste après un vrai drag
+    var indicator = null;       // dernier élément marqué pour l'insertion
+
+    var saveTimer = null;       // debounce de l'auto-save
+    var saving = false;         // POST en cours
+    var dirty = false;          // un drop est arrivé pendant un POST : re-sauver après
+    var lastSaved = null;       // payload (JSON) déjà confirmé par le serveur
+
+    var toast = null;
+    var toastTimer = null;
+
+    /* Type d'une unité déplaçable (null = pas une unité). tagName mis en
+       majuscules par robustesse (HTML: 'A', certains DOM de test: 'a'). */
+    function typeOf(unit) {
+        if (!unit || !unit.classList || !unit.tagName) return null;
+        if (unit.classList.contains('admin-nav-section')) return 'section';
+        if (unit.classList.contains('admin-nav-subgroup')) return 'subgroup';
+        if (String(unit.tagName).toUpperCase() === 'A' && unit.hasAttribute('data-sidebar-link')) return 'link';
+        return null;
+    }
+
+    /* Résolution de l'unité saisie depuis la cible du pointerdown :
+       d'abord le lien (sinon on attraperait sa section/sous-groupe),
+       puis le sous-groupe, puis la section. Les liens du pied de
+       sidebar n'ont pas data-sidebar-link : jamais des unités. */
+    function unitFromTarget(target) {
+        if (!target || !target.closest) return null;
+        var link = target.closest(UNIT_SELECTOR.link);
+        if (link) return link;
+        var sub = target.closest(UNIT_SELECTOR.subgroup);
+        if (sub) return sub;
+        var sec = target.closest(UNIT_SELECTOR.section);
+        if (sec) return sec;
+        return null;
+    }
+
+    /* ---- Glisser-déposer Pointer Events (toujours actif) ----------------- */
 
     sidebar.addEventListener('pointerdown', function (e) {
-        clickGuard = false; // nouveau presser : le click résiduel d'un drag précédent est périmé
-        if (!editing || activePointerId !== null) return; // drag en cours : pointer secondaire ignoré
+        clickGuard = false; // nouveau presser : le garde de click d'un drag précédent est périmé
+        if (activePointerId !== null) return; // drag en cours : pointer secondaire ignoré
         if (e.button !== 0 || e.isPrimary === false) return; // bouton principal / doigt principal
-        var target = e.target;
-        if (!target || !target.closest) return;
-        if (target.closest('.sidebar-move')) return; // ▲▼ : des boutons, jamais un drag
-        var unit = target.closest('.admin-nav-section, .admin-nav-subgroup, .admin-link-row');
+        var unit = unitFromTarget(e.target);
         if (!unit || !typeOf(unit)) return;
 
         pending = { unit: unit, pointerId: e.pointerId, startX: e.clientX, startY: e.clientY };
@@ -267,8 +132,8 @@
     function onPointerMove(e) {
         if (e.pointerId !== activePointerId || !pending) return;
         if (!dragging) {
-            /* Seuil : en dessous c'est un clic normal (neutralisé sur les
-               liens, repli de panneau sur les titres), pas un drag. */
+            /* Seuil : en dessous c'est un clic normal (navigation des
+               liens, repli des panneaux), pas un drag. */
             if (Math.hypot(e.clientX - pending.startX, e.clientY - pending.startY) < DRAG_THRESHOLD) return;
             beginDrag();
         }
@@ -281,8 +146,11 @@
        fenêtre), silhouette ancrée là où l'unité a été saisie. */
     function beginDrag() {
         dragging = pending.unit;
+        removeGhost(); // snap-back éventuel d'un drag précédent : nettoyé
         dragging.classList.add('dragging');
         var rect = dragging.getBoundingClientRect();
+        originLeft = rect.left;
+        originTop = rect.top;
         grabX = pending.startX - rect.left;
         grabY = pending.startY - rect.top;
         ghost = buildGhost(rect);
@@ -315,13 +183,16 @@
         ghost.style.top = (y - grabY) + 'px';
     }
 
-    /* Cible valide = même type ET même conteneur que l'unité glissée
-       (la silhouette ne compte pas : pointer-events:none). */
+    /* Cible valide = même type ET même conteneur (parentNode) que
+       l'unité glissée — INVARIANT STRUCTUREL : un lien ne quitte jamais
+       son conteneur, un sous-groupe jamais sa section, une section
+       jamais la sidebar. La silhouette ne compte pas : pointer-events:
+       none, elementFromPoint la traverse. */
     function dropCandidate(x, y) {
         if (!dragging) return null;
         var type = typeOf(dragging);
         var hit = document.elementFromPoint(x, y);
-        var candidate = hit && hit.closest ? hit.closest('.' + ROW_CLASS[type]) : null;
+        var candidate = hit && hit.closest ? hit.closest(UNIT_SELECTOR[type]) : null;
         if (!candidate || candidate === dragging) return null;
         if (candidate.parentNode !== dragging.parentNode) return null;
         return candidate;
@@ -330,7 +201,7 @@
     function updateDropIndicator(x, y) {
         clearIndicator();
         var candidate = dropCandidate(x, y);
-        if (!candidate) return; // cible invalide : pas de marqueur
+        if (!candidate) return; // cible invalide : pas de marqueur (déjà snap-back assuré)
         var rect = candidate.getBoundingClientRect();
         var before = (y - rect.top) < rect.height / 2;
         candidate.classList.add(before ? 'drag-over-above' : 'drag-over-below');
@@ -340,37 +211,61 @@
     function onPointerUp(e) {
         if (e.pointerId !== activePointerId) return;
         var didDrag = !!dragging;
+        var moved = false;
         if (dragging) {
             var candidate = dropCandidate(e.clientX, e.clientY);
             if (candidate) {
                 var rect = candidate.getBoundingClientRect();
                 var before = (e.clientY - rect.top) < rect.height / 2;
-                dragging.parentNode.insertBefore(dragging, before ? candidate : candidate.nextSibling);
-                refreshMoveButtons();
+                var next = before ? candidate : candidate.nextSibling;
+                if (next === ghost) next = candidate; // jamais derrière la silhouette
+                /* Insertion seulement si elle change réellement la
+                   position (drop sur sa propre place = non-événement). */
+                if (next !== dragging && dragging.nextSibling !== next) {
+                    dragging.parentNode.insertBefore(dragging, next);
+                    moved = true;
+                }
             }
         }
-        endDrag();
+        endDrag(!moved); // pas de déplacement effectif → snap-back à l'origine
         if (didDrag) suppressNextClick();
+        if (moved) scheduleSave();
     }
 
-    /* Interruption (pointercancel : appel entrant, geste récupéré par le
-       navigateur…) : restitution propre, l'ordre ne bouge pas. */
+    /* Interruption (pointercancel : scroll tactile pris en main par le
+       navigateur, appel entrant, Alt+Tab…) : restitution immédiate,
+       l'ordre ne bouge pas. */
     function onPointerCancel(e) {
         if (e.pointerId !== activePointerId) return;
-        endDrag();
+        endDrag(false);
     }
 
-    function endDrag() {
+    function endDrag(snapBack) {
         if (dragging) dragging.classList.remove('dragging');
         dragging = null;
         pending = null;
         activePointerId = null;
         clearIndicator();
-        removeGhost();
         document.documentElement.classList.remove('aeic-sidebar-drag');
         window.removeEventListener('pointermove', onPointerMove);
         window.removeEventListener('pointerup', onPointerUp);
         window.removeEventListener('pointercancel', onPointerCancel);
+        if (snapBack && ghost) snapBackGhost();
+        else removeGhost();
+    }
+
+    /* Dépôt invalide : la silhouette regagne la position d'origine de
+       l'unité puis disparaît (transition CSS, retrait par le JS à la
+       fin — aucun reflow de la liste, l'unité réelle n'a pas bougé). */
+    function snapBackGhost() {
+        var g = ghost;
+        ghost = null;
+        g.classList.add('drag-ghost-snapback');
+        g.style.left = originLeft + 'px';
+        g.style.top = originTop + 'px';
+        setTimeout(function () {
+            if (g.parentNode) g.parentNode.removeChild(g);
+        }, SNAP_BACK_MS);
     }
 
     function removeGhost() {
@@ -399,18 +294,7 @@
         }
     }
 
-    /* Mode édition : neutralise la navigation des liens du menu (capture :
-       coupe aussi le repli du drawer mobile déclenché par les <a>). */
-    sidebar.addEventListener('click', function (e) {
-        if (!editing) return;
-        var a = e.target && e.target.closest ? e.target.closest('a[data-sidebar-link]') : null;
-        if (a) {
-            e.preventDefault();
-            e.stopPropagation();
-        }
-    }, true);
-
-    /* ---- Sauvegarde ------------------------------------------------------ */
+    /* ---- Auto-save ------------------------------------------------------- */
 
     /* Construit {sections, items, subgroups} depuis le DOM réordonné.
        Clés = libellés EXACTS des data-attributs : ce sont eux que le
@@ -421,7 +305,7 @@
         var subgroups = {};
 
         Array.prototype.forEach.call(sidebar.querySelectorAll('.admin-nav-section'), function (sec) {
-            if (sec.closest('.drag-ghost')) return; // silhouette de drag : jamais dans le payload
+            if (sec.closest('.drag-ghost')) return; // silhouette (drag ou snap-back) : jamais dans le payload
             var title = sec.getAttribute('data-sidebar-section') || '';
             sections.push(title);
 
@@ -464,11 +348,10 @@
             },
             body: JSON.stringify(payload)
         }).catch(function (err) {
-            /* Échec réseau (hors-ligne, coupure…) : le navigateur rejette
-               avec un message brut anglais (« Failed to fetch ») — message
-               français propre, détail brut en second entre parenthèses. */
+            /* Échec réseau (hors-ligne, coupure…) : message français
+               propre, détail brut en second entre parenthèses. */
             var raw = err && err.message ? err.message : '';
-            throw new Error('Réseau indisponible — réessaie' + (raw ? ' (' + raw + ')' : ''));
+            throw new Error('réseau indisponible' + (raw ? ' (' + raw + ')' : ''));
         }).then(function (r) {
             return r.json().catch(function () { return {}; }).then(function (data) {
                 if (!r.ok || data.ok !== true) {
@@ -480,61 +363,66 @@
         });
     }
 
-    function setStatus(message, isError) {
-        if (!statusEl) return;
-        statusEl.textContent = message;
-        statusEl.classList.toggle('is-error', !!isError);
+    /* Débounce léger : des drops rapprochés ne produisent qu'un envoi,
+       avec l'ordre final. Un drop pendant un POST en cours est retenu
+       (dirty) et re-sauvegardé à la complétion — aucune perte. */
+    function scheduleSave() {
+        if (saveTimer) return;
+        saveTimer = setTimeout(function () {
+            saveTimer = null;
+            saveNow();
+        }, SAVE_DEBOUNCE_MS);
     }
 
-    function setBusy(busy) {
-        if (saveBtn) saveBtn.disabled = busy;
-        if (resetBtn) resetBtn.disabled = busy;
-    }
-
-    /* Réussite → rechargement : la page est rendue avec l'ordre appliqué
-       côté serveur (SidebarOrder::apply au layout). */
-    function onSaved(message) {
-        editing = false; // pas d'avertissement au rechargement
-        window.removeEventListener('beforeunload', unloadGuard);
-        setStatus(message, false);
-        setTimeout(function () { location.reload(); }, 400);
-    }
-
-    toggleBtn.addEventListener('click', enterEdit);
-
-    if (cancelBtn) {
-        cancelBtn.addEventListener('click', function () {
-            /* Annuler = abandon de l'ordre non enregistré : retour à
-               l'ordre serveur par rechargement (les manipulations locales
-               ne sont jamais persistées sans « Enregistrer »). */
-            exitEdit();
-            location.reload();
+    function saveNow() {
+        var snapshot = JSON.stringify(buildOrder());
+        if (snapshot === lastSaved) return; // rien n'a réellement changé
+        if (saving) { dirty = true; return; }
+        saving = true;
+        post(JSON.parse(snapshot)).then(function () {
+            lastSaved = snapshot;
+            showToast('Ordre enregistré', false);
+        }).catch(function (err) {
+            showToast('Ordre non enregistré (' + (err && err.message ? err.message : 'réessaie') + ')', true);
+        }).then(function () {
+            saving = false;
+            if (dirty) {
+                dirty = false;
+                saveNow();
+            }
         });
     }
 
-    if (saveBtn) {
-        saveBtn.addEventListener('click', function () {
-            setBusy(true);
-            setStatus('Enregistrement…', false);
-            post(buildOrder()).then(function () {
-                onSaved('✔ Enregistré');
-            }).catch(function (err) {
-                setBusy(false);
-                setStatus("Échec de l'enregistrement (" + (err && err.message ? err.message : 'réessaie') + ').', true);
-            });
-        });
+    /* ---- Toast discret (auto-save) --------------------------------------- */
+
+    function showToast(message, isError) {
+        var host = document.body || document.documentElement;
+        if (!toast) {
+            toast = document.createElement('div');
+            toast.className = 'aeic-sidebar-toast';
+            toast.setAttribute('role', 'status');
+            toast.setAttribute('aria-live', 'polite');
+            host.appendChild(toast);
+        }
+        toast.textContent = message;
+        toast.classList.toggle('is-error', !!isError);
+        toast.classList.add('is-visible');
+        if (toastTimer) clearTimeout(toastTimer);
+        toastTimer = setTimeout(function () {
+            if (toast) toast.classList.remove('is-visible');
+        }, isError ? TOAST_ERROR_MS : TOAST_MS);
     }
 
-    if (resetBtn) {
-        resetBtn.addEventListener('click', function () {
-            setBusy(true);
-            setStatus('Réinitialisation…', false);
-            post({ reset: true }).then(function () {
-                onSaved('Réinitialisé');
-            }).catch(function (err) {
-                setBusy(false);
-                setStatus('Échec de la réinitialisation (' + (err && err.message ? err.message : 'réessaie') + ').', true);
-            });
-        });
-    }
+    /* Ordre de départ = celui rendu par le serveur : le premier POST ne
+       part que si un drag le change réellement. */
+    lastSaved = JSON.stringify(buildOrder());
+
+    /* Auto-save en attente ou en cours (ou dernier envoi échoué) : le
+       rechargement perdrait l'ordre local — on avertit. */
+    window.addEventListener('beforeunload', function (e) {
+        if (saveTimer || saving || dirty || JSON.stringify(buildOrder()) !== lastSaved) {
+            e.preventDefault();
+            e.returnValue = '';
+        }
+    });
 })();

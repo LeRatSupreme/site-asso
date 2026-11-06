@@ -259,9 +259,10 @@ if ($reglages !== []) {
     $sections['Réglages'] = $reglages;
 }
 
-/* Ordre personnalisé de la sidebar : l'admin peut réorganiser sections,
-   sous-groupes et liens (glisser-déposer + ▲▼, POST /admin/settings/
-   sidebar-order, clé de réglage admin_sidebar_order). Appliqué ICI, avant
+/* Ordre personnalisé de la sidebar : l'admin réorganise sections,
+   sous-groupes et liens par glisser-déposer PERMANENT (maintien du
+   clic, auto-save POST /admin/settings/sidebar-order, clé de réglage
+   admin_sidebar_order). Appliqué ICI, avant
    le fil d'Ariane et l'état actif, pour qu'ils suivent l'ordre réorganisé.
    Contrat : App\Core\SidebarOrder::apply(array): array — idempotent, rend
    l'arbre tel quel (ordre par défaut) si rien n'est stocké. */
@@ -457,21 +458,6 @@ if ($currentUrlPath === '/admin' || $crumbEntry === null) {
                 </div>
             <?php endforeach; ?>
 
-            <?php if ($isAdminRole && $systemPageAllowed('settings')): ?>
-            <?php /* Barre de réorganisation : le déclencheur est discret et
-               permanent pour les rôles autorisés ; les actions n'apparaissent
-               qu'en mode édition (script admin-sidebar-order.js). */ ?>
-            <div class="admin-reorder" data-sidebar-reorder>
-                <button type="button" class="admin-reorder-toggle" id="admin-reorder-toggle">Réorganiser</button>
-                <div class="admin-reorder-bar" id="admin-reorder-bar" hidden>
-                    <button type="button" class="admin-reorder-btn admin-reorder-save" id="admin-reorder-save">Enregistrer</button>
-                    <button type="button" class="admin-reorder-btn admin-reorder-reset" id="admin-reorder-reset">Réinitialiser</button>
-                    <button type="button" class="admin-reorder-btn admin-reorder-cancel" id="admin-reorder-cancel">Annuler</button>
-                    <span class="admin-reorder-status" id="admin-reorder-status" role="status" aria-live="polite"></span>
-                </div>
-            </div>
-            <?php endif; ?>
-
             <div class="admin-sidebar-foot">
                 <form method="post" action="<?= e(url('/set-lang')) ?>" class="lang-switch lang-switch-admin" aria-label="Language">
                     <?= csrf_field() ?>
@@ -649,9 +635,10 @@ if ($currentUrlPath === '/admin' || $crumbEntry === null) {
             }
         })();
     </script>
-    <?php /* Réorganisation de la sidebar : config exposée (et script chargé)
-       uniquement pour les rôles autorisés — le script sort immédiatement
-       si le bouton déclencheur est absent du DOM. */ ?>
+    <?php /* Réorganisation de la sidebar : drag TOUJOURS actif (maintien du
+       clic ≥ 5 px, admin-sidebar-order.js) avec auto-save à chaque
+       réordonnancement — aucune UI dédiée. Config exposée (et script
+       chargé) uniquement pour les rôles autorisés. */ ?>
     <?php if ($isAdminRole && $systemPageAllowed('settings')): ?>
     <script>window.AEIC_SIDEBAR = { csrf: <?= json_encode(csrf_token()) ?>, endpoint: <?= json_encode(url('/admin/settings/sidebar-order')) ?> };</script>
     <script src="<?= e(rootAssetVersioned('/assets/js/admin-sidebar-order.js')) ?>"></script>
