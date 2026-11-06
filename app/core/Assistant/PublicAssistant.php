@@ -49,16 +49,25 @@ use App\Models\Setting;
  *  - fail-closed : tout échec réseau/parse → 503 générique, détail en
  *    Logger::error uniquement, jamais dans la réponse ;
  *  - FAQ fast-path (app/config/assistant_faq.php) : question dont un
- *    déclencheur apparaît (après normalisation casse/accents/ponctuation,
- *    déclencheur le plus long gagnant) → réponse pré-rédigée http 200
- *    instantanée, SANS sémaphore ni appel LLM (l'historique n'est pas
- *    nécessaire : il n'est validé que sur le chemin LLM) ;
+ *    déclencheur apparaît (après normalisation casse/accents/ponctuation)
+ *    → réponse pré-rédigée http 200 instantanée, SANS sémaphore ni appel
+ *    LLM (l'historique n'est pas nécessaire : il n'est validé que sur le
+ *    chemin LLM). Matcher FAQ-SCORE-20 (06/11) : score AGRÉGÉ par
+ *    intention, la classe conversationnelle (salutation/politesse/merci)
+ *    ne gagne QUE si aucune intention métier n'a matché ; une intention
+ *    NON SERVIE (paiement, prix, réappro… — registre AssistantIntentions)
+ *    fait REPLIER la question sur la voie LLM locale, jamais sur le
+ *    voisin lexical (bug « cafét* », selfreview 06/11 09h) ;
  *  - journal d'observation logs/assistant_public.jsonl : une ligne par
  *    requête {ts, ip_hash, origin, question, reply, latency_ms, status,
  *    faq, mode, tronque} — le champ additif faq (true/false) distingue
  *    réponses pré-rédigées et générations LLM, le champ additif mode
  *    (« fastpath » | « llm », LOG-02 31/10) rend le KPI « part fastpath »
- *    greppable, tronque signale une génération coupée par la limite de
+ *    greppable, le champ additif intention (FAST-07 révisé, 06/11 : nom
+ *    de l'intention ayant capturé la question — clé « intention » de
+ *    l'entrée FAQ, nom du gabarit, ou intention non servie détectée sur
+ *    la voie LLM) rend le taux de DÉROUTAGE mesurable en KPI sans
+ *    relecture humaine des questions, tronque signale une génération coupée par la limite de
  *    tokens, suspect_injection (INJECT-08 31/10 soir — champ additif
  *    présent UNIQUEMENT si suspectInjection() matche) marque les
  *    tentatives d'injection détectées (sans blocage), le champ additif
@@ -400,44 +409,59 @@ final class PublicAssistant
             return $this->conclure(400, false, null, self::MSG_INVALIDE, $questionRaw, $msRequete(), $ip, false, $kiosk);
         }
 
-        // GABARITS publics (EDT-PUB-13 / STOCK-PUB-14, mission 31/10
-        // soir ; GENERIC-PUB-17 pour produits()) : réponse instantanée à
-        // ZÉRO tour LLM pour les questions à donnée publique dérivée
-        // (cours/vacances IUT via EdtCalendar, stock cafétéria par
-        // produit via le livre de stock UNIQUE, sélection produits pour
-        // les questions génériques « à boire et à manger ») — AVANT la
-        // FAQ : une question longue « Bonjour… il vous reste des Kinder
-        // Bueno… » ne doit pas être détournée par le déclencheur court
-        // « bonjour » (preuve 31/10 15:08 : réponse salutation servie à
-        // la question stock), et AVANT le sémaphore (aucun appel LLM).
-        // Fail-soft : null → la FAQ puis la voie LLM classiques
-        // reprennent, un gabarit ne bloque jamais une question qu'il ne
-        // sait pas traiter.
-        $debutGabarit = microtime(true);
-        $reponseGabarit = PublicGabarits::edt($question)
-            ?? PublicGabarits::stock($question)
-            ?? PublicGabarits::produits($question);
-        if ($reponseGabarit !== null) {
-            return $this->conclure(200, true, $reponseGabarit, null, $questionRaw, (int) round((microtime(true) - $debutGabarit) * 1000), $ip, false, $kiosk, false, null, true);
-        }
+        // FAST-07 révisé (selfreview 06/11 09h, 3e rapport d'affilée) :
+        // REPLI du fast-path sur intention NON SERVIE. Le bug « cafét* »
+        // fourre-tout (« payer par carte à la cafétéria ? » servie par les
+        // HORAIRES en 86 ms, réponse assurée hors sujet) a cette racine :
+        // le fast-path répondait lexicalement à des intentions qu'il ne
+        // servait pas. Règle : une intention non servie (paiement, prix,
+        // réappro, allergènes — registre AssistantIntentions) court-circuite
+        // gabarits ET FAQ → la voie LLM LOCALE (directive 29/10 : 100 %
+        // local) répond à leur place, ou le 503 honnête si elle est down —
+        // un « je ne sais pas » vaut mieux qu'une horloge hors sujet.
+        // L'intention détectée part dans la trace (champ « intention ») :
+        // le taux de déroutage devient un KPI.
+        $intentionNonServie = AssistantIntentions::intentionNonServie($question);
+        $intentionTrace = $intentionNonServie ?? '';
 
-        // FAQ fast-path : réponse pré-rédigée instantanée. AVANT le
-        // sémaphore et la validation de l'historique (inutile ici, la
-        // réponse ne dépend que de la question courante) — zéro appel LLM.
-        // FAQ PARTAGÉE public/kiosque (app/config/assistant_faq.php).
-        $reponseFaq = self::chercherFaq($question);
-        if ($reponseFaq !== null) {
-            return $this->conclure(200, true, $reponseFaq, null, $questionRaw, $msRequete(), $ip, true, $kiosk);
+        if ($intentionNonServie === null) {
+            // GABARITS publics (EDT-PUB-13 / STOCK-PUB-14, mission 31/10
+            // soir ; GENERIC-PUB-17 pour produits()) : réponse instantanée à
+            // ZÉRO tour LLM pour les questions à donnée publique dérivée
+            // (cours/vacances IUT via EdtCalendar, stock cafétéria par
+            // produit via le livre de stock UNIQUE, sélection produits pour
+            // les questions génériques « à boire et à manger ») — AVANT la
+            // FAQ : une question longue « Bonjour… il vous reste des Kinder
+            // Bueno… » ne doit pas être détournée par le déclencheur court
+            // « bonjour » (preuve 31/10 15:08 : réponse salutation servie à
+            // la question stock), et AVANT le sémaphore (aucun appel LLM).
+            // Fail-soft : null → la FAQ puis la voie LLM classiques
+            // reprennent, un gabarit ne bloque jamais une question qu'il ne
+            // sait pas traiter.
+            $debutGabarit = microtime(true);
+            $gabarit = self::chercherGabarit($question);
+            if ($gabarit !== null) {
+                return $this->conclure(200, true, $gabarit['reponse'], null, $questionRaw, (int) round((microtime(true) - $debutGabarit) * 1000), $ip, false, $kiosk, false, null, true, $gabarit['intention']);
+            }
+
+            // FAQ fast-path : réponse pré-rédigée instantanée. AVANT le
+            // sémaphore et la validation de l'historique (inutile ici, la
+            // réponse ne dépend que de la question courante) — zéro appel LLM.
+            // FAQ PARTAGÉE public/kiosque (app/config/assistant_faq.php).
+            $reponseFaq = self::chercherFaq($question);
+            if ($reponseFaq !== null) {
+                return $this->conclure(200, true, $reponseFaq['reponse'], null, $questionRaw, $msRequete(), $ip, true, $kiosk, false, null, false, $reponseFaq['intention']);
+            }
         }
 
         $history = self::validerHistory($historyRaw);
         if ($history === null) {
-            return $this->conclure(400, false, null, self::MSG_INVALIDE, $questionRaw, $msRequete(), $ip, false, $kiosk);
+            return $this->conclure(400, false, null, self::MSG_INVALIDE, $questionRaw, $msRequete(), $ip, false, $kiosk, false, null, false, $intentionTrace);
         }
 
         $slot = $this->acquerirSlot();
         if ($slot === null) {
-            return $this->conclure(503, false, null, self::MSG_OCCUPE, $questionRaw, $msRequete(), $ip, false, $kiosk);
+            return $this->conclure(503, false, null, self::MSG_OCCUPE, $questionRaw, $msRequete(), $ip, false, $kiosk, false, null, false, $intentionTrace);
         }
 
         // LOG-02 (mission 31/10) : trace « start » AVANT l'appel LLM — un
@@ -455,6 +479,9 @@ final class PublicAssistant
                 ? mb_substr(trim($questionRaw), 0, self::JOURNAL_QUESTION_MAX)
                 : '',
             'mode'     => 'llm',
+            // FAST-07 révisé (06/11) : intention non servie détectée (cause
+            // du repli LLM), '' sinon — même champ que la ligne de fin.
+            'intention' => $intentionTrace,
         ];
         if (is_string($questionRaw) && self::suspectInjection($questionRaw)) {
             $entreeStart['suspect_injection'] = true;
@@ -479,7 +506,7 @@ final class PublicAssistant
                 'http'  => $reponse['http'],
             ]);
 
-            return $this->conclure(503, false, null, self::MSG_INDISPONIBLE, $questionRaw, $latencyMs, $ip, false, $kiosk, false, $idQuestion);
+            return $this->conclure(503, false, null, self::MSG_INDISPONIBLE, $questionRaw, $latencyMs, $ip, false, $kiosk, false, $idQuestion, false, $intentionTrace);
         }
 
         $reply = self::extractReply($reponse['body']);
@@ -488,10 +515,10 @@ final class PublicAssistant
                 'http' => $reponse['http'],
             ]);
 
-            return $this->conclure(503, false, null, self::MSG_INDISPONIBLE, $questionRaw, $latencyMs, $ip, false, $kiosk, false, $idQuestion);
+            return $this->conclure(503, false, null, self::MSG_INDISPONIBLE, $questionRaw, $latencyMs, $ip, false, $kiosk, false, $idQuestion, false, $intentionTrace);
         }
 
-        return $this->conclure(200, true, $reply, null, $questionRaw, $latencyMs, $ip, false, $kiosk, self::reponseTronquee($reponse['body']), $idQuestion);
+        return $this->conclure(200, true, $reply, null, $questionRaw, $latencyMs, $ip, false, $kiosk, self::reponseTronquee($reponse["body"]), $idQuestion, false, $intentionTrace);
     }
 
     // -----------------------------------------------------------------
@@ -572,6 +599,38 @@ final class PublicAssistant
     // -----------------------------------------------------------------
     //  FAQ fast-path (app/config/assistant_faq.php) — zéro appel LLM
     // -----------------------------------------------------------------
+
+    /** Intentions CONVERSATIONNELLES de la FAQ (clé « intention » du
+     *  fichier) : politesse/smalltalk, remerciement, salutation — le
+     *  matcher (chercherFaq) ne les laisse gagner QUE si aucune
+     *  intention métier n'a matché (dérive « Bonjour… » → accueil hors
+     *  sujet, preuve paire contrastée selfreview 05/11 13h). */
+    private const INTENTIONS_CONVERSATIONNELLES = ['politesse', 'merci', 'salutation'];
+
+    /**
+     * Premier gabarit public qui matche (fail-soft), avec le NOM de son
+     * intention pour la trace — même ordre que la chaîne ?? historique :
+     * edt → stock → produits (évaluation PARESSEUSE : un seul gabarit par
+     * question, les suivants ne sont pas appelés).
+     *
+     * @return array{reponse:string, intention:string}|null
+     */
+    private static function chercherGabarit(string $question): ?array
+    {
+        $voies = [
+            'edt'      => PublicGabarits::edt(...),
+            'stock'    => PublicGabarits::stock(...),
+            'produits' => PublicGabarits::produits(...),
+        ];
+        foreach ($voies as $intention => $detecter) {
+            $reponse = $detecter($question);
+            if ($reponse !== null) {
+                return ['reponse' => $reponse, 'intention' => $intention];
+            }
+        }
+
+        return null;
+    }
 
     /**
      * Normalisation partagée question/déclencheurs : minuscules,
@@ -661,15 +720,32 @@ final class PublicAssistant
     }
 
     /**
-     * Cherche une réponse FAQ pour la question : entrée gagnante = celle
-     * dont le déclencheur LE PLUS LONG est sous-chaîne de la question
-     * normalisée ; à égalité de longueur, la première entrée du fichier
-     * gagne (ordre conservé par le parcours). Aucun match → null (chemin
-     * LLM classique).
+     * Cherche la réponse FAQ pour la question.
+     *
+     * FAQ-SCORE-20 (selfreview 04/11 → 06/11, livré 06/11) + FAST-07
+     * révisé (06/11 09h) — le matcher ne compare PLUS les déclencheurs
+     * « toutes entrées confondues » ; il agrège PAR INTENTION :
+     *   1. une intention NON SERVIE exprimée (AssistantIntentions) →
+     *      null immédiat : repli voie LLM, JAMAIS le voisin lexical
+     *      (« cafét* » servait paiement/prix/réappro en horaires) ;
+     *   2. score d'une entrée = SOMME des longueurs de ses déclencheurs
+     *      matchés NON RECOUVRANTS (les variantes d'un même mot —
+     *      « activites »/« activite », « cafeteria »/« cafet »/« cafe » —
+     *      ne comptent QU'une fois, la plus longue) : plusieurs signaux
+     *      DISTINCTS d'une intention battent un déclencheur isolé d'une
+     *      autre (« …adhérer… participer… » va à l'adhésion, pas au
+     *      programme événements) ; à égalité de score, la PREMIÈRE
+     *      entrée du fichier gagne (ordre conservé) ;
+     *   3. la classe CONVERSATIONNELLE (INTENTIONS_CONVERSATIONNELLES)
+     *      ne gagne QUE si aucune intention métier n'a matché (la dérive
+     *      « Bonjour… » détournait toute question polie vers l'accueil,
+     *      paire contrastée 05/11 13h).
+     *
+     * @return array{reponse:string, intention:string}|null null → voie LLM.
      */
-    private static function chercherFaq(string $question): ?string
+    private static function chercherFaq(string $question): ?array
     {
-        /** @var list<array{declencheurs: list<string>, reponse: string}> $faq */
+        /** @var list<array{intention?:string, declencheurs: list<string>, reponse: string}> $faq */
         $faq = require AEIC_ROOT . '/app/config/assistant_faq.php';
 
         $normalisee = self::normaliserTexte($question);
@@ -677,9 +753,25 @@ final class PublicAssistant
             return null;
         }
 
-        $meilleure  = null;
-        $longueurMax = 0;
+        // Règle 1 — repli : le fast-path n'a pas le droit de répondre à
+        // une intention non servie, même si un déclencheur lexical matche
+        // (double garde avec executer(), l'invariant vit avec le matcher).
+        if (AssistantIntentions::intentionNonServie($question) !== null) {
+            return null;
+        }
+
+        $meilleureMetier        = null;
+        $scoreMetier           = 0;
+        $meilleureConversation = null;
+        $scoreConversation     = 0;
         foreach ($faq as $entree) {
+            $intention = (string) ($entree['intention'] ?? 'faq');
+
+            // Déclencheurs matchés, triés du plus long au plus court : la
+            // prise gloutonne ne recouvre PAS les signaux (une variante
+            // d'un mot déjà compté — « activite » dans « activites » — ne
+            // double pas le score).
+            $matches = [];
             foreach ($entree['declencheurs'] as $declencheur) {
                 // Déclencheurs stockés déjà normalisés ; re-normaliser est
                 // idempotent et pardonnant à l'édition du fichier.
@@ -687,15 +779,42 @@ final class PublicAssistant
                 if ($declencheur === '') {
                     continue;
                 }
-                if (mb_strlen($declencheur) > $longueurMax
-                    && mb_strpos($normalisee, $declencheur) !== false) {
-                    $meilleure  = (string) $entree['reponse'];
-                    $longueurMax = mb_strlen($declencheur);
+                $pos = mb_strpos($normalisee, $declencheur);
+                if ($pos !== false) {
+                    $matches[] = [$pos, $pos + mb_strlen($declencheur), mb_strlen($declencheur)];
                 }
+            }
+            if ($matches === []) {
+                continue;
+            }
+            usort($matches, static fn (array $a, array $b): int => $b[2] <=> $a[2] ?: $a[0] <=> $b[0]);
+
+            $score = 0;
+            $spans = [];
+            foreach ($matches as [$debut, $fin, $longueur]) {
+                foreach ($spans as [$d, $f]) {
+                    if ($debut < $f && $d < $fin) {
+                        continue 2; // recouvrement : signal déjà compté
+                    }
+                }
+                $spans[] = [$debut, $fin];
+                $score  += $longueur;
+            }
+
+            $gagnante = ['reponse' => (string) $entree['reponse'], 'intention' => $intention];
+            if (in_array($intention, self::INTENTIONS_CONVERSATIONNELLES, true)) {
+                if ($score > $scoreConversation) {
+                    $meilleureConversation = $gagnante;
+                    $scoreConversation     = $score;
+                }
+            } elseif ($score > $scoreMetier) {
+                $meilleureMetier = $gagnante;
+                $scoreMetier    = $score;
             }
         }
 
-        return $meilleure;
+        // Règle 3 — la conversation ne gagne que sans intention métier.
+        return $meilleureMetier ?? $meilleureConversation;
     }
 
     // -----------------------------------------------------------------
@@ -926,6 +1045,14 @@ final class PublicAssistant
      *                                  l'entrée finale porte le même id et
      *                                  phase=fin ; null pour les verdicts
      *                                  rendus AVANT l'appel LLM (FAQ, 429…).
+     * @param string      $intention    FAST-07 révisé (06/11) : nom de
+     *                                  l'intention ayant CAPTURÉ la question
+     *                                  (clé « intention » de l'entrée FAQ ou
+     *                                  nom du gabarit) ou intention NON
+     *                                  servie détectée (voie LLM après
+     *                                  repli) ; '' si inconnue. Champ additif
+     *                                  « intention » du journal : le taux de
+     *                                  déroutage devient mesurable en KPI.
      *
      * @return array{http:int, ok:bool, reply:?string, error:?string}
      */
@@ -941,7 +1068,8 @@ final class PublicAssistant
         ?string $kiosk = null,
         bool $tronque = false,
         ?string $idQuestion = null,
-        bool $gabarit = false
+        bool $gabarit = false,
+        string $intention = ''
     ): array {
         $donnees = [
             'ts'         => self::horodatageJournal(),
@@ -973,6 +1101,13 @@ final class PublicAssistant
             // logs/assistant.jsonl) — la latence publique devient
             // traçable a posteriori par UN seul script KPI.
             'duree_ms'   => $latencyMs,
+            // FAST-07 révisé (mission 06/11) : nom de l'intention ayant
+            // capturé la question (FAQ/gabarit) ou intention non servie
+            // détectée (voie LLM après repli) — « faq » booléen et « mode »
+            // ne disaient PAS quel fastpath répondait : le taux de
+            // déroutage devient mesurable en KPI sans relecture humaine
+            // des questions (champ additif, '' si inconnue).
+            'intention'  => $intention,
         ];
         // INJECT-08 (mission 31/10 soir) : marquage léger des questions
         // d'injection de prompt (champ additif UNIQUEMENT si suspect —

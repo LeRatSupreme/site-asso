@@ -1828,6 +1828,17 @@ def poser_question(
         session.erreur = str(e)
     except OSError as e:
         session.erreur = f"Erreur réseau : {type(e).__name__}"
+    except KeyboardInterrupt:
+        # Fix KeyboardInterrupt (selfreview 04/11 → 06/11, 7 starts
+        # orphelines cumulées) : Ctrl+C / timeout -s INT pendant un tour
+        # LLM tuait le script ENTRE l'entrée « start » (journaliser_debut)
+        # et la ligne de fin (journaliser, appelé par main/mode_demo) —
+        # l'exception franchissait poser_question AVANT tout nettoyage.
+        # On referme la session honnêtement : l'appelant journalise
+        # (même id, phase=fin, ok=false) — plus de start orpheline.
+        session.ok = False
+        session.erreur = "interrompu (Ctrl+C)"
+        return session
 
     # Invariant : une session ok=true ne sort JAMAIS avec une erreur
     # concomitante (une exception levée après une réponse validée en cours

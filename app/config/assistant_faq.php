@@ -12,23 +12,36 @@ declare(strict_types=1);
  * prompt app/config/assistant_public.php).
  *
  * Format : liste ORDONNÉE d'entrées
- *   ['declencheurs' => [...phrases...], 'reponse' => '...'].
+ *   ['intention' => '...', 'declencheurs' => [...phrases...], 'reponse' => '...'].
+ *
+ * La clé « intention » (FAQ-SCORE-20, 06/11) nomme l'intention SERVIE
+ * par l'entrée — elle alimente le champ « intention » de la trace
+ * publique (taux de déroutage mesurable en KPI) et la classe
+ * conversationnelle du matcher.
  *
  * Règles de rédaction à conserver si édition :
  *  - déclencheurs écrits DÉJÀ NORMALISÉS : minuscules sans accents, sans
  *    ponctuation, un seul espace entre les mots (la question est
  *    normalisée pareil avant comparaison par sous-chaîne) ;
- *  - l'entrée gagnante est celle dont le déclencheur LE PLUS LONG est
- *    sous-chaîne de la question (« salut, c'est quoi l'AEIC ? » tombe sur
- *    l'entrée AEIC, pas sur la salutation) ; à égalité de longueur, la
- *    PREMIÈRE entrée du fichier gagne — c'est pourquoi les salutations
- *    (déclencheurs les plus génériques) sont volontairement en DERNIER ;
+ *  - le matcher (PublicAssistant::chercherFaq) agrège PAR INTENTION :
+ *    score d'une entrée = SOMME des longueurs de ses déclencheurs
+ *    matchés ; à égalité de score, la PREMIÈRE entrée du fichier gagne —
+ *    c'est pourquoi les entrées conversationnelles (politesse, merci,
+ *    salutations — déclencheurs les plus génériques) sont volontairement
+ *    en DERNIER : elles ne gagnent QUE si aucune intention métier n'a
+ *    matché (« Bonjour, où sont les jeux ? » → jeux, pas l'accueil) ;
+ *  - une intention NON SERVIE (paiement, prix, réappro, allergènes —
+ *    registre AssistantIntentions) fait REPLIER la question sur la voie
+ *    LLM locale : n'ajoutez JAMAIS ici un déclencheur lexical pour
+ *    « capter » une question de prix/paiement sans la donnée pour y
+ *    répondre (bug « cafét* » fourre-tout, selfreview 06/11 09h) ;
  *  - réponses TRÈS COURTES (1 à 2 phrases), sans émoji ni symbole
  *    décoratif, orientant vers la bonne page du site.
  */
 
 return [
     [
+        'intention' => 'identite',
         'declencheurs' => [
             'aeic',
             'bde',
@@ -44,6 +57,7 @@ return [
         'reponse' => "L'AEIC, c'est l'association des étudiants en informatique de l'IUT de Calais : le BDE info du BUT Informatique de l'ULCO. Présentation complète sur la page /presentation du site.",
     ],
     [
+        'intention' => 'adresse',
         'declencheurs' => [
             'adresse',
             'ou vous trouver',
@@ -61,6 +75,12 @@ return [
         // (FAST-07 : 9,8 s de génération pour une réponse immuable →
         // fast-path). Déclencheurs élargis aux fautes courantes : « aderer »
         // (sans h — preuve 08h09), « adesion », racine « cotis » (cotisation).
+        // FAST-07 suite (selfreview 06/11 02h) : « participer » et « benevol »
+        // sont mappés ICI — l'intention « comment participer aux activités »
+        // est SERVIE par l'adhésion (« comment s'inscrire »), pas par le
+        // programme événements (preuve 06/11 02h : « activites » volait la
+        // question ; le score agrégé par intention la rend à l'adhésion).
+        'intention' => 'adhesion',
         'declencheurs' => [
             'adhesion',
             'adesion',      // faute courante sans h
@@ -68,6 +88,8 @@ return [
             'aderer',       // faute courante sans h (preuve journal 31/10 08h09)
             'inscri',       // racine : s'inscrire, je m'inscris, inscription…
             'cotis',        // racine : cotisation, cotiser
+            'participer',   // intention « participer aux activités » → ADHÉSION
+            'benevol',      // racine : bénévolat, bénévole (même parcours)
             'membre',
             'devenir membre',
             'comment rejoindre',
@@ -80,6 +102,7 @@ return [
         'reponse' => "L'adhésion est gratuite. Vous pouvez vous inscrire en ligne depuis la page /register.",
     ],
     [
+        'intention' => 'evenements',
         'declencheurs' => [
             'evenement',
             'evenements',
@@ -138,6 +161,11 @@ return [
         // « déjeuner »). « cafe » est sous-chaîne de « cafet » et
         // « cafeteria » : il attrape aussi les fautes « cafeterai »,
         // « la cafet »…
+        // NB (06/11, repli fast-path) : cette entrée ne peut PLUS capturer
+        // les questions d'intention non servie (paiement, prix, réappro —
+        // registre AssistantIntentions) : elles replient sur la voie LLM
+        // locale, jamais sur ces horaires.
+        'intention' => 'cafeteria',
         'declencheurs' => [
             // Racines cafétéria.
             'cafeteria',
@@ -178,6 +206,7 @@ return [
         // « jeu/jeux/jouer/classement » renvoie la liste ; les expressions
         // « un jeu », « votre jeu », « jeu gratuit » sont matchées par sous-chaîne,
         // donc pas besoin de les décliner (« un jeu de tetris », etc.).
+        'intention' => 'jeux',
         'declencheurs' => [
             'un jeu',
             'votre jeu',
@@ -189,6 +218,7 @@ return [
         'reponse' => "Le site propose des jeux en ligne gratuits : Wordle (FR/EN), Memory, Snake, Tetris et une énigme quotidienne avec classement. C'est sur la page /jeux.",
     ],
     [
+        'intention' => 'contact',
         'declencheurs' => [
             'contact',
             'contacter',
@@ -212,6 +242,7 @@ return [
         // « technologie »/« developpe »/« construit » — « qui a créé
         // l'AEIC ? » (l'association) ne matche PAS et reste sur l'entrée
         // identité AEIC ('aeic').
+        'intention' => 'site',
         'declencheurs' => [
             'qui a cree ce site',
             'qui a cree le site',
@@ -227,10 +258,13 @@ return [
         'reponse' => "Le site de l'AEIC a été développé par Adrien Remond, étudiant en informatique, dans le cadre d'un projet associatif bénévole. Les crédits complets sont sur la page /legal du site.",
     ],
     // Politesse / smalltalk — placées juste AVANT les salutations (les
-    // génériques restent en dernier) : « comment ca va » (13) est plus long
-    // que « bonjour » (7), et à égalité (« ca va » vs « salut », 5) la
-    // première entrée du fichier gagne.
+    // génériques restent en dernier). Avec le score agrégé par intention
+    // + classe conversationnelle (FAQ-SCORE-20), politesse, merci et
+    // salutation ne gagnent QUE si aucune intention métier n'a matché —
+    // « Bonjour, pourriez-vous me dire quels sont les jeux ? » va aux
+    // JEUX (paire contrastée 05/11 13h, épinglée en test).
     [
+        'intention' => 'politesse',
         'declencheurs' => [
             'comment ca va',
             'comment sa va',
@@ -240,12 +274,14 @@ return [
         'reponse' => "Ça va bien, merci ! Et toi ? Si tu as une question sur l'AEIC, ses événements, sa cafétéria ou ses jeux, je suis là.",
     ],
     [
+        'intention' => 'merci',
         'declencheurs' => [
             'merci',
         ],
         'reponse' => "De rien, avec plaisir ! Les infos de l'asso sont aussi sur les pages /presentation, /events et /jeux du site.",
     ],
     [
+        'intention' => 'salutation',
         'declencheurs' => [
             'bonjour',
             'salut',
