@@ -373,9 +373,15 @@ CREATE TABLE IF NOT EXISTS import_batches (
 
 -- Traçabilité du liquide : mouvements manuels (les ventes LIQUIDE sont
 -- calculées en direct depuis `sales`, jamais dupliquées ici).
+--   FOND       : fond de caisse initial / remise en caisse (+)
+--   DEPOT      : dépôt à la banque (−)
+--   AJUSTEMENT : écart constaté au comptage, appliqué pour réaligner
+--                le théorique sur le compté (signé)
+--   PRISE      : transfert signé caisse <-> « chez soi » (négatif =
+--                pris chez soi, positif = ramené)
 CREATE TABLE IF NOT EXISTS cash_movements (
     id         VARCHAR(255) NOT NULL PRIMARY KEY,
-    type       ENUM('FOND','DEPOT','AJUSTEMENT') NOT NULL,
+    type       ENUM('FOND','DEPOT','AJUSTEMENT','PRISE') NOT NULL,
     amount     DECIMAL(10,2) NOT NULL,
     label      VARCHAR(255) NOT NULL DEFAULT '',
     created_by VARCHAR(255) NULL,
@@ -394,6 +400,22 @@ CREATE TABLE IF NOT EXISTS cash_counts (
     created_by         VARCHAR(255) NULL,
     created_at         DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     KEY idx_cash_counts_created (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Détail par coupures d'un mouvement de caisse (centimes entiers,
+-- liste verrouillée aux 12 coupures légales : pas de 100/200/500 €).
+-- Détail optionnel (un mouvement sans coupures reste légal) ;
+-- invariant service : ABS(amount) = SUM(unit_cents * qty) / 100
+-- exactement (amount signé, coupures en quantités positives).
+CREATE TABLE IF NOT EXISTS cash_movement_breakdown (
+    movement_id VARCHAR(255) NOT NULL,
+    unit_cents  SMALLINT UNSIGNED NOT NULL,
+    qty         INT UNSIGNED NOT NULL,
+    PRIMARY KEY (movement_id, unit_cents),
+    KEY idx_cmb_unit (unit_cents),
+    CONSTRAINT fk_cmb_movement FOREIGN KEY (movement_id) REFERENCES cash_movements (id),
+    CONSTRAINT chk_cmb_unit CHECK (unit_cents IN (1,2,5,10,20,50,100,200,500,1000,2000,5000)),
+    CONSTRAINT chk_cmb_qty CHECK (qty >= 1)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Ajustements de vente (immuabilité financière)
