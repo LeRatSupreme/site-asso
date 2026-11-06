@@ -9,9 +9,12 @@ use App\Models\ProductCost;
 
 /**
  * Création d'achats EN LOT (une ligne par produit, une course entière en
- * un seul appel) — cœur métier partagé par la page Achats admin
- * (AdminStockController::savePurchasesBulk) et le livre comptable
- * kiosque (KioskComptageController::ledgerPurchasesSave).
+ * un seul appel) — cœur métier du point d'entrée unifié « Saisir une
+ * dépense » (volet facture à lignes) servi par la page admin
+ * (AdminStockController::savePurchasesBulk). L'ancien miroir kiosque
+ * (KioskComptageController::ledgerPurchasesSave) a été supprimé avec la
+ * fusion « Saisir une dépense » × « Achats » : un ticket ne doit plus
+ * jamais pouvoir être écrit à la fois en dépense ET en achats.
  *
  * Concentre tout ce qui est MÉTIER : validation ligne par ligne (mêmes
  * messages d'erreur FR que la page Achats), création de l'achat (stock

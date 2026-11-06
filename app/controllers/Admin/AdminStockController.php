@@ -88,10 +88,11 @@ final class AdminStockController extends AdminBaseController
      * les lignes invalides sont signalées dans le flash.
      *
      * Deux réponses possibles :
-     *  - standard (page Achats) : redirection PRG + flash ;
-     *  - JSON (champ « as_json » = « 1 », ex. préremplissage depuis le
-     *    livre comptable après un scan de facture) : même traitement,
-     *    même message, mais réponse {ok, inserted|error} sans redirection.
+     *  - standard (formulaire de la page, volet « Facture à lignes ») :
+     *    redirection PRG + flash ;
+     *  - JSON (champ « as_json » = « 1 », appels fetch type scan de
+     *    facture) : même traitement, même message, mais réponse
+     *    {ok, inserted|error} sans redirection.
      *
      * Taux de TVA : soit un taux unique d'en-tête (« vat_rate », page
      * Achats), soit un taux PAR LIGNE via le tableau « vat_rate[] »

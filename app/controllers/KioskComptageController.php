@@ -9,7 +9,6 @@ use App\Core\Compta\Edt\CalendarContext;
 use App\Core\Compta\InvoiceScan;
 use App\Core\Compta\KioskPages;
 use App\Core\Compta\ProductAutoSync;
-use App\Core\Compta\PurchaseSaver;
 use App\Core\Compta\ReceiptStorage;
 use App\Core\Compta\ScanCatalogMatcher;
 use App\Core\Compta\StockPublic;
@@ -224,9 +223,6 @@ final class KioskComptageController extends Controller
             // chronologique (dépenses + groupes d'achats), identique à la
             // version admin du livre.
             'recentItems' => \App\Controllers\Admin\AdminLedgerController::recentItems(20),
-            // Suggestions produit (datalist) pour les achats créés depuis
-            // le scan — même fusion que la version admin du livre.
-            'purchaseProductKeys' => \App\Controllers\Admin\AdminLedgerController::purchaseProductKeys(),
         ]);
     }
 
@@ -353,11 +349,16 @@ final class KioskComptageController extends Controller
      * factorisé dans InvoiceScan::run) — texte collé (200 000 caractères
      * max) OU upload jpg/jpeg/png/webp/pdf ≤ 10 Mo (extension ET MIME
      * réels vérifiés), texte extrait par OCR puis interprété par
-     * InvoiceParser. Réponse 200 {ok,source,text,invoice} ; erreurs 400 /
-     * 413 / 500 sous forme {ok:false,error}. Pas de CSRF : le jeton
-     * admin EST l'authentification. Lecture seule (rien n'est enregistré).
-     * Audit « kiosque.expense.scan » via AuditLog (sans user : pas de
-     * session en kiosque, trace marquée « via: kiosque »).
+     * InvoiceParser. Préremplissage DÉPENSE SEULE (fusion « Saisir une
+     * dépense » × « Achats » : le kiosque n'écrit jamais dans
+     * purchases) : la réponse ne renvoie PAS de « receipt_path » — le
+     * justificatif voyage avec le formulaire de dépense (champ
+     * « receipt »), il n'y a plus d'achats créés depuis un scan kiosque
+     * à qui le joindre. Réponse 200 {ok,source,text,invoice} ; erreurs
+     * 400 / 413 / 500 sous forme {ok:false,error}. Pas de CSRF : le
+     * jeton admin EST l'authentification. Lecture seule (rien n'est
+     * enregistré). Audit « kiosque.expense.scan » via AuditLog (sans
+     * user : pas de session en kiosque, trace marquée « via: kiosque »).
      */
     public function ledgerScan(string $token): void
     {
@@ -385,19 +386,6 @@ final class KioskComptageController extends Controller
         // jamais bloquant), comme les scans admin.
         ScanLabel::recordAll($invoice['lines']);
 
-        // Justificatif conservé quand le scan vient d'un fichier : le
-        // chemin est renvoyé au frontend, qui le joindra aux achats
-        // créés depuis cette facture (photo du livre comptable).
-        // Optionnel : un scan sans justificatif stocké reste valable.
-        $receiptPath = null;
-        if (($res['source'] ?? '') === 'file' && is_array($_FILES['file'] ?? null)) {
-            try {
-                $receiptPath = ReceiptStorage::storeFrom($_FILES['file']);
-            } catch (\Throwable) {
-                $receiptPath = null;
-            }
-        }
-
         // Même base de journal que les scans admin (source, taille,
         // sha256, lignes extraites, fournisseur, facture) + marque kiosque.
         $audit = $res['audit'];
@@ -412,107 +400,7 @@ final class KioskComptageController extends Controller
             'source'       => $res['source'],
             'text'         => $res['text'],
             'invoice'      => $invoice,
-            'receipt_path' => $receiptPath,
         ]);
-    }
-
-    /**
-     * Création d'ACHATS en lot depuis le livre comptable KIOSQUE (JSON,
-     * contrat as_json=1 implicite) : lit les MÊMES champs que
-     * /admin/compta/achats/save-bulk (purchased_at, supplier,
-     * invoice_number, amount_basis, update_cost, product_key[],
-     * quantity[], total_amount[], vat_rate scalaire OU tableau par ligne,
-     * no_stock[N]) et délègue au service partagé PurchaseSaver::save —
-     * mêmes validations, mêmes messages, mêmes effets (achats + lots de
-     * coût + synchro carte + cache public). Réponse {"ok":true,
-     * "inserted":N,"message":"…"} (200) ou {"ok":false,"error":"…"}
-     * (400). Pas de CSRF : le jeton admin EST l'authentification. Audit
-     * « kiosque.purchase.create_bulk » via AuditLog (sans user : pas de
-     * session en kiosque ; identité de la pastille absente du POST fetch,
-     * trace marquée « via: kiosque »).
-     */
-    public function ledgerPurchasesSave(string $token): void
-    {
-        if (!KioskPages::tokenAllows($token, 'ledger')) {
-            $this->deny();
-
-            return;
-        }
-
-        $purchasedAt = trim((string) ($_POST['purchased_at'] ?? ''));
-        if ($purchasedAt === '') {
-            $purchasedAt = date('Y-m-d');
-        }
-        $supplier = trim((string) ($_POST['supplier'] ?? ''));
-        $invoiceNumber = trim((string) ($_POST['invoice_number'] ?? ''));
-        $basis = (string) ($_POST['amount_basis'] ?? 'ht') === 'ttc' ? 'ttc' : 'ht';
-        $updateCost = isset($_POST['update_cost']);
-
-        // Taux de TVA : scalaire (en-tête unique) OU tableau vat_rate[]
-        // par ligne (facture à TVA mixte) — mêmes règles que la page Achats.
-        $vatInput = $_POST['vat_rate'] ?? '';
-        $vatRaw = is_array($vatInput) ? '' : trim((string) $vatInput);
-        $vatPerLine = is_array($vatInput);
-
-        $keys = is_array($_POST['product_key'] ?? null) ? $_POST['product_key'] : [];
-        $quantities = is_array($_POST['quantity'] ?? null) ? $_POST['quantity'] : [];
-        $amounts = is_array($_POST['total_amount'] ?? null) ? $_POST['total_amount'] : [];
-        $noStockFlags = is_array($_POST['no_stock'] ?? null) ? $_POST['no_stock'] : [];
-        $rawLabels = is_array($_POST['raw_label'] ?? null) ? $_POST['raw_label'] : [];
-
-        $count = max(count($keys), count($quantities), count($amounts));
-        $lines = [];
-        for ($i = 0; $i < $count; $i++) {
-            $lines[] = [
-                'key'       => trim((string) ($keys[$i] ?? '')),
-                'qty'       => (string) ($quantities[$i] ?? ''),
-                'total_raw' => trim((string) ($amounts[$i] ?? '')),
-                'vat_raw'   => $vatPerLine ? (string) ($vatInput[$i] ?? '') : '',
-                'no_stock'  => (($noStockFlags[$i] ?? null) === '1' || ($noStockFlags[$i] ?? null) === 1),
-                'raw_label' => trim((string) ($rawLabels[$i] ?? '')),
-            ];
-        }
-
-        // Identité de la pastille profil si présente (le POST fetch du JS
-        // ne l'embarque pas : le layout kiosk n'injecte que dans les
-        // <form>) — optionnelle ici, obligatoire pour la dépense.
-        $who = $this->whoFromPost();
-
-        $res = PurchaseSaver::save([
-            'purchased_at'   => $purchasedAt,
-            'supplier'       => $supplier,
-            'invoice_number' => $invoiceNumber,
-            'amount_basis'   => $basis,
-            'update_cost'    => $updateCost,
-            'vat_raw'        => $vatRaw,
-            'vat_per_line'   => $vatPerLine,
-            'created_by'     => $who !== '' ? 'kiosque — ' . $who : 'kiosque',
-            // Justificatif conservé au scan (contrôlé par PurchaseSaver).
-            'receipt_path'   => trim((string) ($_POST['receipt_path'] ?? '')),
-        ], $lines);
-
-        if ($res['inserted'] === 0) {
-            $this->json(['ok' => false, 'error' => $res['message']], 400);
-        }
-
-        AuditLog::log('kiosque.purchase.create_bulk', null, 'purchase', null, [
-            'inserted'       => $res['inserted'],
-            'products'       => $res['products'],
-            'ignored'        => count($res['errors']),
-            'vat_rate'       => $vatRaw === '' ? null : parseFrenchFloat($vatRaw),
-            'vat_per_line'   => $vatPerLine,
-            'amount_basis'   => $basis,
-            'update_cost'    => $updateCost,
-            'no_stock'       => $res['no_stock'],
-            'aliases_learned' => $res['aliases'] ?? 0,
-            'supplier'       => $supplier,
-            'invoice_number' => $invoiceNumber !== '' ? $invoiceNumber : null,
-            'purchased_at'   => $purchasedAt,
-            'via'            => 'kiosque',
-            'who'            => $who !== '' ? $who : null,
-        ]);
-
-        $this->json(['ok' => true, 'inserted' => $res['inserted'], 'message' => $res['message']]);
     }
 
     /**

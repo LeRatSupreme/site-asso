@@ -438,12 +438,13 @@ function aeic_register_routes(Router $router): void
     $router->post('/kiosque/admin/ledger/depense/{token}', [KioskComptageController::class, 'ledgerDepenseSave']);
     // Scan d'un ticket depuis le livre comptable kiosque (JSON) : même
     // contrat que les scans admin (OCR image/PDF ou texte collé), sans
-    // CSRF — le jeton admin EST l'authentification.
+    // CSRF — le jeton admin EST l'authentification. Préremplissage
+    // DÉPENSE SEULE : l'endpoint d'achats en lot kiosque
+    // (/kiosque/admin/ledger/purchases) a été supprimé avec la fusion
+    // « Saisir une dépense » × « Achats » — un POST vers cette ancienne
+    // URL reçoit 404, aucune écriture purchases n'est possible depuis
+    // un jeton kiosque (un ticket = une écriture).
     $router->post('/kiosque/admin/ledger/scan/{token}', [KioskComptageController::class, 'ledgerScan']);
-    // Création d'achats en lot depuis le livre comptable kiosque (JSON,
-    // contrat as_json=1 — mêmes champs que /admin/compta/achats/save-bulk),
-    // sans CSRF : le jeton admin EST l'authentification.
-    $router->post('/kiosque/admin/ledger/purchases/{token}', [KioskComptageController::class, 'ledgerPurchasesSave']);
     // Dépôt à la banque depuis le kiosque admin : formulaire téléphone
     // (GET) + enregistrement (POST, identité obligatoire, sans CSRF : le
     // jeton admin EST l'authentification) — mêmes écritures que la page
