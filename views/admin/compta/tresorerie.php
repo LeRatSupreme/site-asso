@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 /**
- * Trésorerie — « Où est l'argent ? » : trois blocs + un total, pour le
+ * Trésorerie — « Où est l'argent ? » : quatre blocs + un total, pour le
  * trésorier (traçabilité de l'argent de l'association).
  *
  * Chaque bloc est STRICTEMENT la valeur de sa source unique (contrôleur
@@ -13,7 +13,10 @@ declare(strict_types=1);
  *   banque : Σ dépôts − frais bancaires de dépôt   (dépôts effectués) ;
  *   stock  : AnalyticsForecastData::
  *            stockValueAtLastCost(stockBook())     (stock valorisé au
- *            dernier coût connu — produits sans coût connus exclus).
+ *            dernier coût connu — produits sans coût connus exclus) ;
+ *   chez soi : CashMovement::homeTotal()           (liquide pris « chez
+ *            soi », transferts PRISE signés — une prise ne fait pas
+ *            disparaître l'actif : caisse −X, chez soi +X).
  *
  * @var array<string,mixed> $user
  * @var float $caisse       Solde théorique de la caisse (CashLedger::balance).
@@ -21,7 +24,8 @@ declare(strict_types=1);
  * @var float $banqueDepots Total des dépôts effectués (montants déposés).
  * @var float $banqueFrais  Total des frais bancaires prélevés sur les dépôts.
  * @var float $stock        Valeur du stock restant au dernier coût connu.
- * @var float $total        Somme d'affichage : caisse + banque + stock.
+ * @var float $chezSoi      Liquide pris « chez soi » (prises − retours).
+ * @var float $total        Somme d'affichage : caisse + banque + stock + chez soi.
  */
 ?>
 <style>
@@ -40,7 +44,7 @@ declare(strict_types=1);
     <div>
         <p class="eyebrow">Comptabilité</p>
         <h1 class="page-title">Où est l'argent&nbsp;?</h1>
-        <p class="muted">Tout ce que possède l'association, réparti en trois endroits — photo arrêtée à l'instant.</p>
+        <p class="muted">Tout ce que possède l'association, réparti en quatre endroits — photo arrêtée à l'instant.</p>
     </div>
 </div>
 
@@ -62,12 +66,18 @@ declare(strict_types=1);
         <p class="kpi-value"><?= e(formatPrice($stock)) ?></p>
         <p class="kpi-sub">stock au dernier coût connu — marchandises encore en rayon&nbsp;; produits sans coût connu exclus de la valorisation</p>
     </div>
+
+    <div class="card surface glass kpi" data-bloc="chez-soi">
+        <p class="kpi-label">Pris chez soi</p>
+        <p class="kpi-value <?= $chezSoi < 0 ? 'is-negative' : '' ?>"><?= e(formatPrice($chezSoi)) ?></p>
+        <p class="kpi-sub">liquide sorti du tiroir et gardé par un membre (prises − retours), toujours à l'association — saisi par coupures depuis le kiosque ou la page Caisses</p>
+    </div>
 </div>
 
 <div class="card surface glass kpi treso-total" data-bloc="total">
     <p class="kpi-label">Total</p>
     <p class="kpi-value"><?= e(formatPrice($total)) ?></p>
-    <p class="kpi-sub">caisse + banque + stock valorisés, au même endroit</p>
+    <p class="kpi-sub">caisse + banque + stock valorisés + pris chez soi, au même endroit</p>
 </div>
 
 <details class="card surface glass" style="padding: 0.85rem 1.1rem; margin-top: 1.5rem;">
@@ -76,5 +86,6 @@ declare(strict_types=1);
         <li><strong>Caisse</strong>&nbsp;: solde théorique du livre de caisse (ventes en liquide + fond de caisse − dépôts ± ajustements de comptage).</li>
         <li><strong>Banque</strong>&nbsp;: chaque dépôt saisi sort de la caisse et crédit la banque, moins les frais bancaires prélevés par dépôt (comptabilisés automatiquement en dépense « FRAIS »).</li>
         <li><strong>Stock valorisé</strong>&nbsp;: chaque produit restant × son dernier coût d'achat connu. Les produits sans coût connu sont exclus (aucune valeur inventée)&nbsp;; les ventes par carte (SumUp) ne sont ni en caisse ni en banque ici.</li>
+        <li><strong>Pris chez soi</strong>&nbsp;: liquide sorti du tiroir par un membre (mouvements « PRISE », détaillé par coupures). Ce n'est ni recette ni dépense&nbsp;: l'argent reste à l'association, il est réintégré au total (un retour le ramène en caisse).</li>
     </ul>
 </details>

@@ -154,6 +154,11 @@ declare(strict_types=1);
         <span class="kx-tile-label">Dépôt banque</span>
         <span class="kx-chevron" aria-hidden="true">›</span>
     </a>
+    <a class="kx-card2" href="<?= e(url('/kiosque/admin/caisse/prise/' . rawurlencode($token))) ?>">
+        <span class="kx-emoji" aria-hidden="true">🏠</span>
+        <span class="kx-tile-label">Prise chez soi</span>
+        <span class="kx-chevron" aria-hidden="true">›</span>
+    </a>
     <a class="kx-card2" href="<?= e(url('/kiosque/comptage/inventaire/' . rawurlencode($token))) ?>">
         <span class="kx-emoji" aria-hidden="true">📦</span>
         <span class="kx-tile-label">Comptage inventaire</span>

@@ -35,6 +35,11 @@ declare(strict_types=1);
  *      ancien, à date égale la saisie la plus récente d'abord) — chaque
  *      élément porte « type » : 'purchase' (groupe d'achats) ou
  *      'expense' (dépense).
+ * @var array{movements:list<array<string,mixed>>,pris:float,depose:float,chez_soi:float}|null $cashTrace
+ *      Section « Traçabilité du liquide » (LECTURE SEULE, assemblée par
+ *      AdminLedgerController::cashTraceability) : mouvements de caisse
+ *      FOND/DEPOT/PRISE/AJUSTEMENT de la période avec sous-lignes
+ *      coupures. CONTRAT STRICT : aucun total du livre n'en dépend.
  * @var string $from
  * @var string $to
  * @var string $preset
@@ -159,6 +164,10 @@ $manageDepensesUrl = url('/admin/compta/depenses') . '?tab=journal';
     }
     .lg-recent-table th { font-size: 0.72rem; text-transform: uppercase; color: var(--muted, #8892a6); }
     .lg-recent-table .num { text-align: right; white-space: nowrap; }
+    /* Section « Traçabilité du liquide » : mêmes matériaux que la
+       vignette ci-dessus, montants signés colorés (sortie/entrée). */
+    .lg-cash-table td.num.is-neg { color: #f87171; font-weight: 800; }
+    .lg-cash-table td.num.is-pos { color: #4ade80; font-weight: 800; }
     .ledger-thumb { height: 44px; border-radius: 6px; display: block; border: 1px solid rgba(255,255,255,0.12); }
     /* Sous-lignes du tableau « Derniers tickets & dépenses » : reçus
        distincts d'un même groupe (chaque facture liste SES tickets). */
@@ -529,6 +538,53 @@ $manageDepensesUrl = url('/admin/compta/depenses') . '?tab=journal';
             et les ventes du stock acheté avant. Le bénéfice net, lui, déduit le coût réel des produits vendus.
         </p>
     </div>
+
+    <!-- ==================== Traçabilité du liquide (LECTURE SEULE) ====================
+         Mouvements de caisse de la période (fond, dépôts banque, prises
+         « chez soi », ajustements) avec sous-lignes « coupures ».
+         CONTRAT STRICT : un transfert de liquide n'est ni recette ni
+         dépense de l'asso — aucun total du livre ci-dessus n'en dépend
+         (le solde recopié au livret papier reste exact). Données déjà
+         assemblées par AdminLedgerController::cashTraceability. -->
+    <?php if (!empty($cashTrace)): ?>
+    <section class="card surface glass" id="lg-cash" style="margin-top: 1.2rem;">
+        <h2 class="card-title">Traçabilité du liquide</h2>
+        <p class="card-meta">
+            Pris « chez soi » sur la période : <strong><?= e(formatPrice((float) $cashTrace['pris'])) ?></strong>
+            · déposés en banque : <strong><?= e(formatPrice((float) $cashTrace['depose'])) ?></strong>
+            · dort actuellement chez soi : <strong><?= e(formatPrice((float) $cashTrace['chez_soi'])) ?></strong>
+            — simples transferts du tiroir : aucun total du livre ci-dessus n'en dépend.
+        </p>
+        <?php if (($cashTrace['movements'] ?? []) === []): ?>
+            <p class="muted">Aucun mouvement de caisse (fond, dépôt, prise) sur la période.</p>
+        <?php else: ?>
+        <div class="lg-table-wrap">
+            <table class="lg-recent-table lg-cash-table">
+                <thead>
+                    <tr><th>Date</th><th>Mouvement</th><th class="num">Effet sur la caisse</th><th>Par</th></tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($cashTrace['movements'] as $cm): ?>
+                    <?php $cmAmount = (float) $cm['amount']; ?>
+                    <tr>
+                        <td><?= e(formatDateTime((string) $cm['created_at'])) ?></td>
+                        <td><?= e((string) $cm['type_label']) ?><?php if (($cm['label'] ?? '') !== ''): ?> <span class="muted">— <?= e((string) $cm['label']) ?></span><?php endif; ?></td>
+                        <td class="num <?= $cmAmount < 0 ? 'is-neg' : 'is-pos' ?>"><?= ($cmAmount > 0 ? '+ ' : '− ') . e(formatPrice(abs($cmAmount))) ?></td>
+                        <td><?= e((string) ($cm['created_by'] ?? '—')) ?></td>
+                    </tr>
+                    <?php if (($cm['coupures'] ?? '') !== ''): ?>
+                    <tr class="lg-subrow">
+                        <td></td>
+                        <td colspan="3">└ Coupures : <?= e((string) $cm['coupures']) ?></td>
+                    </tr>
+                    <?php endif; ?>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+        <?php endif; ?>
+    </section>
+    <?php endif; ?>
 </div>
 
 <?php if ($kiosk): ?>

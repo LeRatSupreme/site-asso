@@ -10,6 +10,9 @@ use App\Core\Compta\CashLedger;
  * écritures serveur (caisseDepotSave) : mouvement DEPOT (sortie de
  * liquide) + dépense automatique de frais bancaires. L'identité
  * (pastille profil du layout kiosk) est exigée à l'enregistrement.
+ * Détail par coupures OPTIONNEL (pavé partagé _cash_coupures.php) :
+ * s'il est saisi, il doit retomber exactement sur le montant — même
+ * contrôle bloquant que le serveur (CashBreakdown::matchesAmount).
  *
  * @var string $token
  */
@@ -45,13 +48,24 @@ use App\Core\Compta\CashLedger;
             <label for="depot-amount">Montant déposé (€)</label>
             <input type="text" id="depot-amount" name="amount" inputmode="decimal" placeholder="ex: 100" required>
         </div>
+        <div class="field">
+            <label>Détail par coupures <span class="muted">(optionnel — pour la traçabilité du liquide)</span></label>
+            <?php
+            $ccId = 'kd';
+            $ccMode = 'check';
+            $ccAmountInput = 'depot-amount';
+            $ccSubmitBtn = 'kd-submit';
+            $ccBig = false;
+            require AEIC_VIEWS . '/admin/compta/_cash_coupures.php';
+            ?>
+        </div>
         <?php datetime_selects_field('date', 'depot-date'); ?>
         <div class="field">
             <label for="depot-label">Note <span class="muted">(n° de bordereau, banque…)</span></label>
             <input type="text" id="depot-label" name="label" placeholder="ex: bordereau 4512 — La Banque Postale">
         </div>
         <div class="form-actions">
-            <button type="submit" class="btn btn-primary">Enregistrer le dépôt</button>
+            <button type="submit" class="btn btn-primary" id="kd-submit">Enregistrer le dépôt</button>
         </div>
     </form>
 </section>

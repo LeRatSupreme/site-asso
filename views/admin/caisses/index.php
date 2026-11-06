@@ -14,6 +14,7 @@ use App\Models\CashMovement;
  * @var float $cardFee    Frais SumUp estimés sur les ventes carte.
  * @var float $cardNet    Net estimé des ventes carte après frais.
  * @var string $feeRate   Taux de commission formaté (ex. « 1,75 »).
+ * @var float $homeTotal  Liquide « pris chez soi » (prises − retours).
  * @var list<array<string,mixed>> $movements Mouvements manuels récents.
  * @var list<array<string,mixed>> $counts    Comptages récents.
  * @var list<array<string,mixed>> $ecarts    Comptages avec écart (30 j).
@@ -22,15 +23,35 @@ use App\Models\CashMovement;
 $typeLabels = [
     CashMovement::TYPE_FOND       => 'Fond',
     CashMovement::TYPE_DEPOT      => 'Dépôt banque',
+    CashMovement::TYPE_PRISE      => 'Prise chez soi',
     CashMovement::TYPE_AJUSTEMENT => 'Ajustement',
 ];
 ?>
+<style>
+    /* Bascule de sens de la carte « Prise chez soi » : deux options
+       radios stylées en segments (aucun impact hors de cette carte). */
+    .prise-sens { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem; }
+    .prise-sens-opt { display: block; cursor: pointer; }
+    .prise-sens-opt input { position: absolute; opacity: 0; pointer-events: none; }
+    .prise-sens-opt span {
+        display: flex; align-items: center; justify-content: center;
+        min-height: 44px; padding: 0.5rem 0.6rem;
+        border: 2px solid var(--border, rgba(255,255,255,0.15));
+        border-radius: 12px; background: rgba(255, 255, 255, 0.04);
+        font-size: 0.95rem; font-weight: 800; text-align: center;
+    }
+    .prise-sens-opt:has(input:checked) span {
+        border-color: var(--primary, #48bdd3); background: rgba(72, 189, 211, 0.12);
+    }
+    .prise-sens-opt input:focus-visible + span { outline: 2px solid var(--primary, #48bdd3); outline-offset: 2px; }
+</style>
 
 <div class="stat-cards grid grid-2">
     <div class="stat-card surface glass">
         <span class="stat-value"><?= e(formatPrice($balance)) ?></span>
         <span class="stat-label">Caisse théorique</span>
         <span class="card-meta">dont <?= e(formatPrice($salesTotal)) ?> de ventes en liquide</span>
+        <span class="card-meta">dont <?= e(formatPrice($homeTotal)) ?> pris « chez soi » (déduits du tiroir, ramenés déduits — visibles dans le livre)</span>
         <span class="card-meta">+ <?= e(formatPrice($cardTotal)) ?> de ventes par carte (hors caisse)</span>
         <span class="card-meta">frais SumUp estimés ≈ −<?= e(formatPrice($cardFee)) ?> (<?= e($feeRate) ?> %) · net ≈ <?= e(formatPrice($cardNet)) ?></span>
     </div>
@@ -60,7 +81,7 @@ $typeLabels = [
     <?php endif; ?>
 </section>
 
-<div class="grid grid-3">
+<div class="grid grid-2">
     <section class="card surface glass">
         <h2 class="card-title">Comptage physique</h2>
         <p class="card-meta">Comptez le liquide présent : l'écart est historisé et la caisse est réalignée sur le compté.</p>
@@ -92,12 +113,55 @@ $typeLabels = [
                 <label for="depot-amount">Montant déposé (€)</label>
                 <input type="text" id="depot-amount" name="amount" inputmode="decimal" placeholder="ex: 100" required>
             </div>
+            <div class="field">
+                <label>Détail par coupures <span class="muted">(optionnel — pour la traçabilité du liquide)</span></label>
+                <?php
+                $ccId = 'ad';
+                $ccMode = 'check';
+                $ccAmountInput = 'depot-amount';
+                $ccSubmitBtn = 'admin-depot-submit';
+                $ccBig = false;
+                require AEIC_VIEWS . '/admin/compta/_cash_coupures.php';
+                ?>
+            </div>
             <?php datetime_selects_field('date', 'depot-date'); ?>
             <div class="field">
                 <label for="depot-label">Note <span class="muted">(n° de bordereau, banque…)</span></label>
                 <input type="text" id="depot-label" name="label" placeholder="ex: bordereau 4512 — La Banque Postale">
             </div>
-            <button type="submit" class="btn btn-outline btn-sm">Enregistrer le dépôt</button>
+            <button type="submit" class="btn btn-outline btn-sm" id="admin-depot-submit">Enregistrer le dépôt</button>
+        </form>
+    </section>
+
+    <section class="card surface glass">
+        <h2 class="card-title">Prise chez soi</h2>
+        <p class="card-meta">Transfert caisse ↔ chez soi, détaillé par coupures : le montant est déduit du détail (jamais saisi à la main). « Ramené » remet l'argent en caisse.</p>
+        <form method="post" action="<?= e(url('/admin/caisses/prise')) ?>">
+            <?= csrf_field() ?>
+            <div class="field">
+                <label>Sens</label>
+                <div class="prise-sens" role="radiogroup" aria-label="Sens de la prise">
+                    <label class="prise-sens-opt"><input type="radio" name="sens" value="prise" checked><span>🏠 Pris chez soi</span></label>
+                    <label class="prise-sens-opt"><input type="radio" name="sens" value="retour"><span>↩️ Ramené</span></label>
+                </div>
+            </div>
+            <div class="field">
+                <label>Coupures <span class="muted">(obligatoires)</span></label>
+                <?php
+                $ccId = 'ap';
+                $ccMode = 'amount';
+                $ccAmountInput = null;
+                $ccSubmitBtn = 'admin-prise-submit';
+                $ccBig = false;
+                require AEIC_VIEWS . '/admin/compta/_cash_coupures.php';
+                ?>
+            </div>
+            <?php datetime_selects_field('date', 'prise-date'); ?>
+            <div class="field">
+                <label for="prise-label">Note <span class="muted">(optionnel)</span></label>
+                <input type="text" id="prise-label" name="label" placeholder="ex: prise fin de soirée">
+            </div>
+            <button type="submit" class="btn btn-primary btn-sm" id="admin-prise-submit" disabled>Enregistrer la prise</button>
         </form>
     </section>
 
@@ -130,10 +194,18 @@ $typeLabels = [
                 <thead><tr><th>Date</th><th>Type</th><th>Montant</th><th>Note</th><th>Par</th></tr></thead>
                 <tbody>
                 <?php foreach ($movements as $m): ?>
-                    <?php $amount = (float) $m['amount']; ?>
+                    <?php
+                    $amount = (float) $m['amount'];
+                    // PRISE = transfert signé : le libellé suit le sens
+                    // (négatif = argent pris, positif = ramené).
+                    $typeLabel = (string) ($typeLabels[$m['type']] ?? $m['type']);
+                    if ($m['type'] === CashMovement::TYPE_PRISE) {
+                        $typeLabel = $amount < 0 ? 'Prise chez soi' : 'Retour de chez soi';
+                    }
+                    ?>
                     <tr>
                         <td><?= e(formatDateTime((string) $m['created_at'])) ?></td>
-                        <td><?= e($typeLabels[$m['type']] ?? (string) $m['type']) ?></td>
+                        <td><?= e($typeLabel) ?></td>
                         <td class="<?= $amount < 0 ? 'is-negative' : 'is-positive' ?>"><?= $amount > 0 ? '+' : '' ?><?= e(formatPrice($amount)) ?></td>
                         <td><?= e((string) ($m['label'] ?? '')) ?></td>
                         <td><?= e((string) ($m['created_by'] ?? '')) ?></td>
