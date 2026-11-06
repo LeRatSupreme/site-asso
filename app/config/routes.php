@@ -311,6 +311,11 @@ function aeic_register_routes(Router $router): void
     $router->get('/admin/wiki', [AdminController::class, 'wiki']);
     $router->post('/admin/settings/save', [AdminSettingController::class, 'save']);
     $router->post('/admin/settings/test-email', [AdminSettingController::class, 'testEmail']);
+    // Ordre persistant de la sidebar admin (drag & drop) : corps JSON
+    // {order:{sections,items,subgroups}} ou {reset:true} — réponse JSON
+    // (contrat partagé avec le layout et le JS de la sidebar,
+    // App\Core\SidebarOrder = point d'assemblage unique de l'ordre).
+    $router->post('/admin/settings/sidebar-order', [AdminSettingController::class, 'sidebarOrder']);
 
     // Notifications SMS — messages programmés Free Mobile (groupe Système).
     $router->get('/admin/notifications', [AdminNotificationController::class, 'index']);

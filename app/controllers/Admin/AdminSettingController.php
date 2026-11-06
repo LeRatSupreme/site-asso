@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace App\Controllers\Admin;
 
+use App\Core\Auth;
 use App\Core\Mailer;
+use App\Core\Permissions;
+use App\Core\SidebarOrder;
 use App\Core\Validator;
 use App\Models\Setting;
 
@@ -146,6 +149,54 @@ final class AdminSettingController extends AdminBaseController
         $this->audit('settings.update', 'settings', null);
         $this->setFlash('success', 'Paramètres enregistrés.');
         redirect(url('/admin/settings'));
+    }
+
+    /**
+     * AJAX : enregistre l'ordre de la sidebar admin (drag & drop).
+     *
+     * Corps JSON : {"order": {"sections": [...], "items": {...},
+     * "subgroups": {...}}} ou {"reset": true} (retour à l'ordre par
+     * défaut : stocke '{}'). Réponse {ok:true} ; erreurs 400/403 en JSON
+     * (jamais de HTML pour ce endpoint).
+     *
+     * Garde : même accès que les autres actions settings ci-dessus
+     * (guardSystemOrPage('settings')) — répliquée ici en réponse JSON,
+     * car la garde standard redirige ou rend du HTML. CSRF : vérifié en
+     * amont par le routeur pour tout POST /admin/* (Csrf::checkRequest,
+     * header X-CSRF-Token ou champ _csrf).
+     */
+    public function sidebarOrder(): void
+    {
+        if (!Auth::check()
+            || !in_array(Auth::role(), Permissions::adminRoles(), true)
+            || (!Permissions::isSystemAdmin() && !Permissions::userHasExtraPage('settings'))) {
+            $this->json(['ok' => false, 'error' => 'Accès refusé.'], 403);
+        }
+
+        $corps = json_decode((string) file_get_contents('php://input'), true);
+        if (!is_array($corps)) {
+            $this->json(['ok' => false, 'error' => 'Corps JSON invalide.'], 400);
+        }
+
+        if (($corps['reset'] ?? null) === true) {
+            SidebarOrder::save([]);
+            $this->audit('settings.sidebar_order', 'settings', null, ['reset' => true]);
+            $this->json(['ok' => true]);
+        }
+
+        if (!array_key_exists('order', $corps) || !is_array($corps['order'])) {
+            $this->json(['ok' => false, 'error' => 'Payload « order » manquant ou invalide.'], 400);
+        }
+
+        $ordre = SidebarOrder::sanitize($corps['order']);
+        try {
+            SidebarOrder::save($ordre);
+        } catch (\InvalidArgumentException $e) {
+            $this->json(['ok' => false, 'error' => $e->getMessage()], 400);
+        }
+
+        $this->audit('settings.sidebar_order', 'settings', null, ['reset' => $ordre === []]);
+        $this->json(['ok' => true]);
     }
 
     /**
