@@ -987,6 +987,11 @@ final class AdminStockController extends AdminBaseController
      * restent affichés en fin de liste, grisés et sans saisie : un produit
      * « disparu » serait pris pour un oubli. Le rétablissement reste dans
      * la page Inventaire (groupe Système).
+     *
+     * Tailles de pack (badge « pack de N » + champ « ×N ») : même point
+     * d'assemblage que la page Inventaire complète (F1) — la colonne
+     * « packs » de ProductKeyMerge::keyStats(). La conversion packs →
+     * unités reste centralisée à l'enregistrement (CountPacks::merge).
      */
     public function blindCount(): void
     {
@@ -1018,10 +1023,25 @@ final class AdminStockController extends AdminBaseController
         usort($paused, $byName);
         $rows = array_merge($active, $paused);
 
+        // Tailles de pack (badge « pack de N » + champ « ×N ») : même point
+        // d'assemblage que la page Inventaire complète (F1), la colonne
+        // « packs » de ProductKeyMerge::keyStats() (correspondance exacte
+        // avec les clés produits, comme la grille de comptage F1). Taille
+        // > 1 uniquement : une taille de 1 ne change rien à la saisie (le
+        // save l'ignore de toute façon, CountPacks::merge).
+        $packs = [];
+        foreach (ProductKeyMerge::keyStats() as $key => $stat) {
+            $size = (int) ($stat['packs'] ?? 0);
+            if ($size > 1) {
+                $packs[$key] = $size;
+            }
+        }
+
         $this->renderAdmin('admin/compta/blind_count', [
             'title' => 'Comptage inventaire',
             'user'  => $user,
             'rows'  => $rows,
+            'packs' => $packs,
         ]);
     }
 
