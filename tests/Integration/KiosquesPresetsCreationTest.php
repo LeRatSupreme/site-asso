@@ -9,17 +9,22 @@ use App\Core\Compta\KioskPages;
 use App\Models\Model;
 
 /**
- * Presets de création « en 1 clic » par rôle (page admin Kiosques) :
+ * Page « Créer un kiosque » (admin Kiosques) APRÈS le retrait des
+ * presets de rôle (commit 76310b9) :
  *
- *  - la page rend les 3 cartes presets (Trésorier, Président, Resp.
- *    cafet) AU-DESSUS du formulaire de création existant, AVEC le
- *    formulaire identifié (cible du pré-remplissage JS) — et toujours
- *    AUCUN jeton dans le HTML initial ;
- *  - la création « en 1 clic » (ce que soumet le formulaire pré-rempli)
- *    passe par le POST ORDINAIRE /admin/kiosques/create : flash de
- *    succès, ligne en base avec exactement les tuiles/options du preset,
- *    options EFFECTIVES du jeton conformes (Président → bénéfice seul),
- *    audit « kiosques.create » systématique SANS la valeur du jeton.
+ *  - la page ne rend PLUS les cartes presets (Trésorier, Président,
+ *    Resp. cafet) : ni boutons « Pré-remplir », ni données de preset
+ *    servies au JS — le formulaire de création ORDINAIRE reste le seul
+ *    chemin, intact (identifié, POST /admin/kiosques/create, tuiles et
+ *    options du catalogue cochables), et toujours AUCUN jeton dans le
+ *    HTML initial ;
+ *  - le contrôleur conserve les jeux de tuiles/options par rôle
+ *    (AdminKiosquesController::presets()) : soumis au POST ORDINAIRE
+ *    /admin/kiosques/create, ils produisent toujours des kiosques
+ *    exacts — flash de succès, ligne en base avec exactement les
+ *    tuiles/options du preset, options EFFECTIVES du jeton conformes
+ *    (Président → bénéfice seul), audit « kiosques.create »
+ *    systématique SANS la valeur du jeton.
  *
  * Base `aeic_test` requise (les tests sont sautés sinon).
  */
@@ -73,11 +78,13 @@ final class KiosquesPresetsCreationTest extends IntegrationTestCase
     }
 
     /**
-     * La page rend les 3 presets avec leurs libellés humains, le
-     * formulaire de création identifié (cible du pré-remplissage) et les
-     * données de preset servies au JS — sans jamais exposer de jeton.
+     * La page ne rend PLUS les presets de rôle (retirés en 76310b9) :
+     * aucune carte, aucun bouton « Pré-remplir », aucune donnée servie
+     * au JS — le formulaire de création ORDINAIRE reste intact (cible,
+     * action, tuiles/options cochables, bouton de soumission) et
+     * toujours AUCUN jeton dans le HTML initial.
      */
-    public function test_la_page_rend_les_trois_presets(): void
+    public function test_la_page_ne_rend_plus_les_presets(): void
     {
         // Un kiosque existant : son jeton ne doit JAMAIS transiter dans le
         // HTML non plus (comportement existant, vérifié au passage).
@@ -89,21 +96,24 @@ final class KiosquesPresetsCreationTest extends IntegrationTestCase
         $body = (string) ($page['body'] ?? '');
         self::assertSame(200, (int) ($page['code'] ?? 0), 'La page admin Kiosques doit répondre.');
 
-        // Les 3 cartes presets, identifiées par leur clé.
+        // Plus aucune carte preset, identifiée ou non.
         foreach (['tresorier', 'president', 'cafet'] as $key) {
-            self::assertStringContainsString('data-kq-preset="' . $key . '"', $body, 'La carte preset « ' . $key . ' » doit être rendue.');
+            self::assertStringNotContainsString('data-kq-preset="' . $key . '"', $body, 'La carte preset « ' . $key . ' » ne doit plus être rendue.');
         }
-        self::assertStringContainsString('Pré-remplir', $body, 'Les cartes presets proposent le pré-remplissage.');
-        self::assertStringContainsString('Pour le président', $body, 'Le preset Président porte sa ligne de description du rôle.');
-        self::assertStringContainsString('Pour le responsable cafétéria', $body, 'Le preset Resp. cafet porte sa ligne de description du rôle.');
+        self::assertStringNotContainsString('kq-preset', $body, 'Ni le bloc .kq-presets ni une carte .kq-preset résiduelle ne doivent rester (CSS ou HTML).');
+        self::assertStringNotContainsString('Pré-remplir', $body, 'Les boutons de pré-remplissage ont disparu avec les presets.');
+        self::assertStringNotContainsString('var PRESETS =', $body, 'Les données de presets ne sont plus servies au script de la page.');
+        self::assertStringNotContainsString('Pour le président', $body, 'Les descriptions de rôle des presets ne sont plus rendues.');
+        self::assertStringNotContainsString('Pour le responsable cafétéria', $body, 'Les descriptions de rôle des presets ne sont plus rendues.');
+        self::assertStringNotContainsString('ex. Trésorier', $body, 'Le champ nom n\'invite plus à nommer le kiosque d\'après un rôle de preset.');
 
-        // Le formulaire de création (cible du pré-remplissage JS) existe
-        // et reste un POST vers l'action ORDINAIRE /admin/kiosques/create.
-        self::assertStringContainsString('id="kq-create-form"', $body, 'Le formulaire de création est identifié pour le pré-remplissage.');
-        self::assertStringContainsString(url('/admin/kiosques/create'), $body, 'Le formulaire pré-rempli soumet bien vers le POST existant.');
-
-        // Données de preset servies au JS (même page, aucun jeton dedans).
-        self::assertStringContainsString('var PRESETS =', $body, 'Les données de presets sont servies au script de pré-remplissage.');
+        // Le formulaire de création ORDINAIRE reste le seul chemin, intact.
+        self::assertStringContainsString('id="kq-create-form"', $body, 'Le formulaire de création reste identifié.');
+        self::assertStringContainsString(url('/admin/kiosques/create'), $body, 'Le formulaire soumet bien vers le POST existant.');
+        self::assertStringContainsString('id="kq-new-name"', $body, 'Le champ nom du formulaire de création est présent.');
+        self::assertStringContainsString('name="pages[]"', $body, 'Les tuiles du catalogue restent cochables à la création.');
+        self::assertStringContainsString('name="options[]"', $body, 'Les options du catalogue restent cochables à la création.');
+        self::assertStringContainsString('Créer le kiosque', $body, 'Le bouton de soumission du formulaire reste présent.');
 
         // Sécurité inchangée : aucun jeton dans le HTML initial.
         $stmt = $this->pdo->query('SELECT token FROM kiosques');
@@ -113,11 +123,13 @@ final class KiosquesPresetsCreationTest extends IntegrationTestCase
     }
 
     /**
-     * Création « Président » en 1 clic : le formulaire pré-rempli soumet
-     * le POST existant → kiosque avec EXACTEMENT les tuiles et options
-     * du preset, options effectives du jeton conformes, audit tracé.
+     * Jeu « Président » (pages+options toujours définis par le
+     * contrôleur, mais plus pré-remplis par la page) : le POST
+     * ORDINAIRE accepte toujours ce payload → kiosque avec EXACTEMENT
+     * les tuiles et options du preset, options effectives du jeton
+     * conformes, audit tracé.
      */
-    public function test_creation_president_en_un_clic(): void
+    public function test_creation_du_jeu_president_via_le_post_ordinaire(): void
     {
         $preset = null;
         foreach (AdminKiosquesController::presets() as $p) {
@@ -130,8 +142,8 @@ final class KiosquesPresetsCreationTest extends IntegrationTestCase
 
         $csrf = $this->csrfFromAdminPage();
 
-        // Ce que soumet le formulaire après un clic sur la carte Président
-        // (nom + tuiles + options du preset) : le POST ORDINAIRE.
+        // Payload du jeu Président (nom + tuiles + options définis par le
+        // contrôleur), soumis au POST ORDINAIRE — le seul chemin d'écriture.
         $r = $this->request('POST', '/admin/kiosques/create', [
             '_csrf'   => $csrf,
             'name'    => $preset['label'],
@@ -170,8 +182,10 @@ final class KiosquesPresetsCreationTest extends IntegrationTestCase
     }
 
     /**
-     * Les 3 presets produisent chacun un kiosque valide via le POST
-     * ordinaire (au moins une tuile, options exactes du preset).
+     * Les 3 jeux de preset produisent chacun un kiosque valide via le
+     * POST ordinaire (au moins une tuile, options exactes du preset) —
+     * la page ne les pré-remplit plus, le contrôleur les définit
+     * toujours et le POST ordinaire les accepte toujours.
      */
     public function test_les_trois_presets_produisent_des_kiosques_valides(): void
     {
