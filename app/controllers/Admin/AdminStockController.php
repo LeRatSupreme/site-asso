@@ -101,9 +101,8 @@ final class AdminStockController extends AdminBaseController
      * retombe sur le taux d'en-tête ('' = montant « déjà TTC »).
      *
      * Le métier (validation + création + lot de coût + synchro carte +
-     * cache public) vit dans PurchaseSaver::save — partagé avec le livre
-     * comptable kiosque ; ce contrôleur garde la garde, la lecture du
-     * POST, l'audit, le flash et la redirection.
+     * cache public) vit dans PurchaseSaver::save ; ce contrôleur garde
+     * la garde, la lecture du POST, l'audit, le flash et la redirection.
      */
     public function savePurchasesBulk(): void
     {

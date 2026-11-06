@@ -313,9 +313,7 @@ Le **résultat net** = **bénéfice** − **dépenses** :
 | **Divers** | Tout ce qui ne rentre nulle part ailleurs |
 
 #### Saisir une dépense
-1. Choisis la **date**, la **catégorie** et saisis un **libellé**
-2. Renseigne le montant **TTC** (obligatoire) ; **HT** et **TVA** sont optionnels
-3. **Enregistrer**
+La saisie se fait depuis la page unifiée **Admin → Comptabilité → Saisir une dépense** (`/admin/compta/achats`), volet **« Frais divers »** : date, catégorie, libellé, montant **TTC** (HT et TVA optionnels), puis **Enregistrer** — voir la **§17 « Modules récents »** pour le détail des deux volets.
 
 La table d'écritures liste tout, avec **suppression** possible en un clic.
 
