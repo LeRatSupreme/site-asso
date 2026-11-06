@@ -50,15 +50,20 @@ declare(strict_types=1);
             <?= csrf_field() ?>
         </form>
         <p class="admin-actions">
-            <button type="submit" class="btn btn-primary btn-sm" form="alias-bulk-form">Enregistrer les catégories</button>
-            <span class="muted">Modifie plusieurs catégories puis enregistre tout d'un coup — les ventes correspondantes sont mises à jour.</span>
+            <button type="submit" class="btn btn-primary btn-sm" form="alias-bulk-form">Enregistrer</button>
+            <span class="muted">Modifie directement les libellés d'origine et les catégories puis enregistre tout d'un coup — les ventes correspondantes sont mises à jour. Ramener un libellé à l'orthographe d'une autre ligne du même produit fusionne les deux lignes (la ligne renommée disparaît, c'est normal) ; un libellé déjà pris par un autre produit est refusé avec un message explicite, le reste de l'enregistrement s'applique.</span>
         </p>
-        <table class="table">
+        <table class="table" id="alias-bulk-table">
             <thead><tr><th>Libellé d'origine</th><th>Produit canonique</th><th>Catégorie</th><th></th></tr></thead>
             <tbody>
                 <?php foreach ($aliases as $a): ?>
                     <tr>
-                        <td><code><?= e((string) $a['raw_description']) ?></code></td>
+                        <td>
+                            <input type="text" name="alias_label[<?= e((string) $a['id']) ?>]"
+                                   value="<?= e((string) $a['raw_description']) ?>" maxlength="255" required
+                                   class="alias-label-input" form="alias-bulk-form"
+                                   aria-label="Libellé d'origine « <?= e((string) $a['raw_description']) ?> » (modifier pour renommer)">
+                        </td>
                         <td><strong><?= e((string) $a['product_key']) ?></strong></td>
                         <td>
                             <input type="hidden" name="bulk_raw[]" value="<?= e((string) $a['raw_description']) ?>" form="alias-bulk-form">
@@ -78,7 +83,7 @@ declare(strict_types=1);
             </tbody>
         </table>
         <p class="admin-actions">
-            <button type="submit" class="btn btn-primary btn-sm" form="alias-bulk-form">Enregistrer les catégories</button>
+            <button type="submit" class="btn btn-primary btn-sm" form="alias-bulk-form">Enregistrer</button>
         </p>
     </div>
 </div>
@@ -130,6 +135,32 @@ declare(strict_types=1);
 
 <style>
     .merge-products-card { margin-top: 18px; }
+
+    /* Cellule « Libellé d'origine » devenue éditable (renommage en masse
+       de la grille) : garde l'identité « code » du libellé affiché, largeur
+       bornée pour ne pas déformer le tableau (défilement .table-wrap). */
+    .alias-label-input {
+        width: 170px;
+        max-width: 100%;
+        padding: 0.35rem 0.5rem;
+        border: 1px solid var(--border, rgba(255, 255, 255, 0.12));
+        border-radius: var(--radius-sm, 6px);
+        background: rgba(255, 255, 255, 0.04);
+        color: var(--foreground, inherit);
+        font-family: ui-monospace, 'SF Mono', Consolas, monospace;
+        font-size: 0.85rem;
+    }
+    .alias-label-input:focus {
+        outline: none;
+        border-color: var(--primary, #48bdd3);
+        box-shadow: 0 0 0 3px rgba(72, 189, 211, 0.18);
+    }
+    @media (max-width: 700px) {
+        /* Leçon mobile : champs ≥16px sinon zoom auto iOS Safari
+           (libellé ET catégorie de la grille d'alias). */
+        #alias-bulk-table input[type="text"] { font-size: 16px; }
+    }
+
     .merge-products-fields { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; }
     .merge-products-fields .field { flex: 1 1 220px; }
     .merge-products-fields input[type="text"] { width: 100%; }
