@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Unit;
 
+use App\Core\Compta\CashBreakdown;
 use App\Core\Compta\CashLedger;
 use App\Models\CashCount;
 use App\Models\CashMovement;
@@ -18,7 +19,10 @@ use PHPUnit\Framework\TestCase;
  *
  * Valide : solde théorique (ventes LIQUIDE + mouvements), dépôt banque,
  * comptage avec écart (ajustement automatique + historisation), comptage
- * exact sans ajustement, fenêtre 30 jours des écarts.
+ * exact sans ajustement, fenêtre 30 jours des écarts — et prise « chez
+ * soi » (mouvement PRISE signé + détail par coupures en centimes
+ * entiers, solde « chez soi » CashMovement::homeTotal, retour annulant
+ * la prise, dépôts avec coupures cohérentes/incohérentes).
  *
  * Saute automatiquement si la base aeic_test est indisponible.
  */
@@ -61,11 +65,36 @@ final class CashLedgerTest extends TestCase
             return false;
         }
 
-        $this->reset($pdo, ['sales', 'import_batches', 'product_aliases', 'cash_movements', 'cash_counts']);
+        $this->applyCashPriseMigration($pdo);
+        $this->reset($pdo, ['sales', 'import_batches', 'product_aliases', 'cash_movements', 'cash_counts', 'cash_movement_breakdown']);
         $this->applyImportDedupMigration($pdo);
         Model::setTestPdo($pdo);
 
         return true;
+    }
+
+    /**
+     * Applique (best effort) la migration « prise chez soi »
+     * (database/migrations/2026_cash_prise.sql) : ENUM + PRISE et table
+     * cash_movement_breakdown. Les commentaires « -- » sont retirés AVANT
+     * le découpage en statements (sinon le premier statement du fichier
+     * commence par un commentaire et serait sauté). Idempotente : le
+     * MODIFY vers un ENUM identique est un no-op, le CREATE TABLE est
+     * IF NOT EXISTS.
+     */
+    private function applyCashPriseMigration(PDO $pdo): void
+    {
+        $sql = (string) file_get_contents(dirname(__DIR__, 2) . '/database/migrations/2026_cash_prise.sql');
+        $sql = (string) preg_replace('/^--.*$/m', '', $sql);
+        foreach (array_filter(array_map('trim', explode(';', $sql))) as $stmt) {
+            if ($stmt !== '') {
+                try {
+                    $pdo->exec($stmt);
+                } catch (\Throwable) {
+                    // Déjà appliqué : non bloquant.
+                }
+            }
+        }
     }
 
     protected function tearDown(): void
@@ -200,5 +229,143 @@ final class CashLedgerTest extends TestCase
 
         self::assertCount(1, CashCount::recentEcarts(30));
         self::assertSame('comptage récent', CashCount::recentEcarts(30)[0]['label']);
+    }
+
+    /** 3×20€ + 5×2€ + 12×50c = 7600 centimes = 76,00 € (détail type). */
+    private function breakdown76(): CashBreakdown
+    {
+        return CashBreakdown::fromPost(['qty_2000' => '3', 'qty_200' => '5', 'qty_50' => '12']);
+    }
+
+    /** Lignes de coupures d'un mouvement, unités croissantes. */
+    private function breakdownRows(PDO $pdo, string $movementId): array
+    {
+        $stmt = $pdo->prepare(
+            'SELECT unit_cents, qty FROM cash_movement_breakdown WHERE movement_id = ? ORDER BY unit_cents ASC'
+        );
+        $stmt->execute([$movementId]);
+
+        /** @var list<array<string,mixed>> $rows */
+        $rows = $stmt->fetchAll();
+        $map = [];
+        foreach ($rows as $row) {
+            $map[(int) $row['unit_cents']] = (int) $row['qty'];
+        }
+
+        return $map;
+    }
+
+    public function test_prise_chez_soi_cree_mouvement_signe_et_coupures(): void
+    {
+        if (!$this->requireDatabase()) {
+            return;
+        }
+
+        $liquide = $this->seedSales();
+        CashLedger::recordFund(50.0, 'fond initial', 'test@aeic.fr');
+        $avant = 50.0 + $liquide; // 62.50
+
+        $id = CashLedger::recordTake($this->breakdown76(), 'Prise chez soi', 'Jean Dupont (trésorier)', null);
+
+        $m = CashMovement::find($id);
+        self::assertNotNull($m, 'Le mouvement PRISE doit exister.');
+        self::assertSame(CashMovement::TYPE_PRISE, $m['type']);
+        self::assertSame(-76.0, (float) $m['amount'], 'Une prise est NÉGATIVE (sortie du tiroir), même convention que DEPOT.');
+        self::assertSame('Jean Dupont (trésorier)', $m['created_by'], 'La prise est SIGNÉE par qui a pris l\'argent.');
+
+        // Le détail par coupures reflète EXACTEMENT le montant (Σ unit×qty).
+        self::assertSame([50 => 12, 200 => 5, 2000 => 3], $this->breakdownRows($this->connect(), $id));
+
+        // Solde de caisse diminué du total ; solde « chez soi » = −Σ(PRISE).
+        self::assertSame($avant - 76.0, CashLedger::balance());
+        self::assertSame(76.0, CashMovement::homeTotal());
+    }
+
+    public function test_retour_de_chez_soi_annule_la_prise(): void
+    {
+        if (!$this->requireDatabase()) {
+            return;
+        }
+
+        $this->seedSales();
+        CashLedger::recordFund(50.0, 'fond initial', 'test@aeic.fr');
+        $avant = CashLedger::balance(); // 62.50
+
+        CashLedger::recordTake($this->breakdown76(), 'Prise chez soi', 'test@aeic.fr');
+        $idRetour = CashLedger::recordTake($this->breakdown76(), 'Ramené de chez soi', 'test@aeic.fr', null, true);
+
+        $retour = CashMovement::find($idRetour);
+        self::assertSame(76.0, (float) $retour['amount'], 'Un retour est POSITIF (ramené en caisse).');
+        self::assertSame($avant, CashLedger::balance(), 'Le retour recrédite la caisse du montant exact.');
+        self::assertSame(0.0, CashMovement::homeTotal(), 'Chez soi = −Σ(PRISE) : prise + retour = 0.');
+    }
+
+    public function test_prise_sans_coupures_est_refusee(): void
+    {
+        if (!$this->requireDatabase()) {
+            return;
+        }
+
+        $this->expectException(\InvalidArgumentException::class);
+        CashLedger::recordTake(CashBreakdown::fromPost([]), 'Prise chez soi', 'test@aeic.fr');
+    }
+
+    public function test_depot_avec_coupures_coherentes_attache_le_detail(): void
+    {
+        if (!$this->requireDatabase()) {
+            return;
+        }
+
+        $id = CashLedger::recordDeposit(76.0, 'bordereau', 'test@aeic.fr', null, $this->breakdown76());
+
+        self::assertSame(-76.0, (float) CashMovement::find($id)['amount']);
+        self::assertSame([50 => 12, 200 => 5, 2000 => 3], $this->breakdownRows($this->connect(), $id), 'Le détail est attaché aussi aux dépôts banque.');
+    }
+
+    public function test_depot_avec_coupures_incoherentes_refuse_avant_toute_ecriture(): void
+    {
+        if (!$this->requireDatabase()) {
+            return;
+        }
+
+        $avants = (int) $this->connect()->query('SELECT COUNT(*) FROM cash_movements')->fetchColumn();
+
+        try {
+            // Détail de 81,00 € (3×20€ + 5×2€ + 1×5€ + 12×50c) pour un
+            // dépôt saisi de 76,00 € : refusé.
+            CashLedger::recordDeposit(76.0, 'bordereau', 'test@aeic.fr', null, CashBreakdown::fromPost(['qty_2000' => '3', 'qty_200' => '5', 'qty_500' => '1', 'qty_50' => '12']));
+            self::fail('Un détail incohérent avec le montant doit être refusé.');
+        } catch (\InvalidArgumentException) {
+            // Attendu : aucun mouvement ni coupure créés (contrôle AVANT écriture).
+            self::assertSame($avants, (int) $this->connect()->query('SELECT COUNT(*) FROM cash_movements')->fetchColumn());
+            self::assertSame(0, (int) $this->connect()->query('SELECT COUNT(*) FROM cash_movement_breakdown')->fetchColumn());
+        }
+    }
+
+    public function test_mouvements_between_et_totaux_pris_deposes(): void
+    {
+        if (!$this->requireDatabase()) {
+            return;
+        }
+
+        $this->seedSales();
+        CashLedger::recordTake($this->breakdown76(), 'Prise chez soi', 'test@aeic.fr');
+        CashLedger::recordDeposit(20.0, 'bordereau 1', 'test@aeic.fr');
+
+        $today = date('Y-m-d');
+        $movements = CashMovement::between($today, $today);
+        self::assertCount(2, $movements, 'Les mouvements de la journée sont listés.');
+        $types = array_column($movements, 'type');
+        sort($types);
+        self::assertSame([CashMovement::TYPE_DEPOT, CashMovement::TYPE_PRISE], $types, 'PRISE et DEPOT de la journée, quel que soit l\'ordre intra-seconde (tie-break d\'ids aléatoires).');
+
+        ['pris' => $pris, 'depose' => $depose] = CashMovement::takesAndDepositsBetween($today, $today);
+        self::assertSame(76.0, $pris, 'Pris : montants POSITIFS (Σ|PRISE|).');
+        self::assertSame(20.0, $depose, 'Déposé : montants POSITIFS (Σ|DEPOT|).');
+
+        // Hors période : rien.
+        ['pris' => $prisVide, 'depose' => $deposeVide] = CashMovement::takesAndDepositsBetween('2020-01-01', '2020-01-31');
+        self::assertSame(0.0, $prisVide);
+        self::assertSame(0.0, $deposeVide);
     }
 }

@@ -5,7 +5,10 @@ declare(strict_types=1);
 namespace App\Controllers\Admin;
 
 use App\Core\Auth;
+use App\Core\Compta\CashBreakdown;
 use App\Core\Compta\ComptaCalc;
+use App\Models\CashMovement;
+use App\Models\CashMovementBreakdown;
 use App\Models\Expense;
 use App\Models\Purchase;
 use App\Models\Sale;
@@ -59,7 +62,96 @@ final class AdminLedgerController extends AdminBaseController
             // jour n'apparaissait jamais en haut, la vignette semblait
             // figée alors que le livre, lui, montrait tout.
             'recentItems' => self::recentItems(20),
+            // Section « Traçabilité du liquide » : AFFICHAGE SEUL des
+            // mouvements de caisse (FOND/DEPOT/PRISE/AJUSTEMENT + sous-
+            // lignes coupures) — N'IMPACTE AUCUN total du livre (une prise
+            // n'est ni recette ni dépense de l'asso, cf. cashTraceability()).
+            'cashTrace' => self::cashTraceability($from, $to),
         ]);
+    }
+
+    /**
+     * Assemblage de la section « Traçabilité du liquide » du livre
+     * comptable (LECTURE SEULE, requêtes Q1–Q3 de
+     * database/queries/traceabilite_liquide.sql) : liste chronologique
+     * des mouvements de caisse de la période — FOND / DEPOT / PRISE /
+     * AJUSTEMENT — avec pour chacun date, libellé du type, montant
+     * SIGNÉ, auteur et sous-ligne « coupures » formatée
+     * (« 3×20€ · 5×2€ · 12×50c », même mécanique que la sous-ligne
+     * « ticket » des dépenses).
+     *
+     * CONTRAT STRICT : cette section ne touche AUCUN total du livre
+     * (total_debit / total_credit / balance de buildEntries() restent
+     * strictement inchangés — une prise « chez soi » n'est ni recette
+     * ni dépense de l'asso, l'inclure fausserait le solde recopié au
+     * livret papier). La sous-ligne coupures reflète EXACTEMENT le
+     * montant du mouvement (même ligne de calcul : Σ unit×qty).
+     *
+     * Statique publique : partagée avec la version kiosque du livre
+     * (même vue admin/ledger/index.php).
+     *
+     * @return array{
+     *     movements: list<array{id:string,type:string,type_label:string,label:string,amount:float,created_by:?string,created_at:string,coupures:string}>,
+     *     pris: float,
+     *     depose: float,
+     *     chez_soi: float
+     * }
+     */
+    public static function cashTraceability(string $from, string $to): array
+    {
+        $labels = [
+            CashMovement::TYPE_FOND       => 'Fond de caisse',
+            CashMovement::TYPE_DEPOT      => 'Dépôt banque',
+            CashMovement::TYPE_AJUSTEMENT => 'Ajustement (comptage)',
+        ];
+
+        // Q2 d'abord : sous-lignes coupures par mouvement (jointure PHP,
+        // grosses coupures d'abord). Chaque détail est réhydraté en
+        // CashBreakdown puis formaté par la MÊME méthode unique que la
+        // saisie — jamais de second formatage parallèle.
+        $coupures = CashMovementBreakdown::forPeriod($from, $to);
+
+        $movements = [];
+        foreach (CashMovement::between($from, $to) as $m) {
+            $type = (string) $m['type'];
+            $amount = (float) $m['amount'];
+            if ($type === CashMovement::TYPE_PRISE) {
+                // Transfert signé caisse <-> chez soi : le libellé suit le
+                // sens (négatif = argent pris, positif = ramené).
+                $typeLabel = $amount < 0 ? 'Prise chez soi' : 'Retour de chez soi';
+            } else {
+                $typeLabel = $labels[$type] ?? $type;
+            }
+
+            $detail = '';
+            if (isset($coupures[(string) $m['id']])) {
+                $detail = CashBreakdown::fromArray(
+                    array_column($coupures[(string) $m['id']], 'qty', 'unit_cents')
+                )->format();
+            }
+
+            $movements[] = [
+                'id'          => (string) $m['id'],
+                'type'        => $type,
+                'type_label'  => $typeLabel,
+                'label'       => (string) ($m['label'] ?? ''),
+                'amount'      => $amount,
+                'created_by'  => $m['created_by'] !== null ? (string) $m['created_by'] : null,
+                'created_at'  => (string) $m['created_at'],
+                'coupures'    => $detail,
+            ];
+        }
+
+        // Q3 : en-tête — prises/dépôts de la période (positifs) + solde
+        // « chez soi » toutes périodes (point d'assemblage unique).
+        ['pris' => $pris, 'depose' => $depose] = CashMovement::takesAndDepositsBetween($from, $to);
+
+        return [
+            'movements' => $movements,
+            'pris'      => $pris,
+            'depose'    => $depose,
+            'chez_soi'  => CashMovement::homeTotal(),
+        ];
     }
 
     /**

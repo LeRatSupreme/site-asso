@@ -6,6 +6,7 @@ namespace App\Controllers\Admin;
 
 use App\Core\Auth;
 use App\Core\Compta\CardFees;
+use App\Core\Compta\CashBreakdown;
 use App\Core\Compta\CashLedger;
 use App\Models\AuditLog;
 use App\Models\CashCount;
@@ -32,6 +33,11 @@ final class AdminCashController extends AdminBaseController
             'balance'     => CashLedger::balance(),
             'salesTotal'  => CashLedger::salesTotal(),
             'cardTotal'   => CashLedger::cardSalesTotal(),
+            // Solde « pris chez soi » (point d'assemblage unique) : les
+            // prises sortent du tiroir sans quitter le patrimoine — la
+            // carte « Prise chez soi » et le total de trésorerie le
+            // compensent (caisse −X, chez soi +X).
+            'homeTotal'   => CashMovement::homeTotal(),
             'cardFee'     => CardFees::estimatedTotal(),
             'cardNet'     => CardFees::estimatedNet(),
             'feeRate'     => CardFees::formattedRate(),
@@ -69,13 +75,27 @@ final class AdminCashController extends AdminBaseController
         $by = (string) Auth::user()['email'];
         $fee = CashLedger::DEPOSIT_FEE;
 
+        // Détail par coupures OPTIONNEL (rétro-compatibilité des dépôts
+        // sans détail) : s'il est saisi, il doit retomber EXACTEMENT sur
+        // le montant — vérifié par le service avant toute écriture.
+        $breakdown = CashBreakdown::fromPost($_POST);
+        if (!$breakdown->isEmpty() && !$breakdown->matchesAmount($amount)) {
+            $this->setFlash('error', sprintf(
+                'Le détail des coupures (%s = %s) ne correspond pas au montant saisi (%s).',
+                $breakdown->format(),
+                formatPrice($breakdown->amount()),
+                formatPrice($amount)
+            ));
+            redirect(url('/admin/caisses'));
+        }
+
         // Dépôt + frais bancaires : les deux écritures sont créées
         // atomiquement. Sans date saisie (valeur null = « maintenant »),
         // la dépense de frais est datée du jour.
         $pdo = CashCount::connection();
         $pdo->beginTransaction();
         try {
-            $id = CashLedger::recordDeposit($amount, $label, $by, $date['value']);
+            $id = CashLedger::recordDeposit($amount, $label, $by, $date['value'], $breakdown);
             $feeExpenseId = Expense::create([
                 'spent_at'   => $date['value'] !== null ? substr((string) $date['value'], 0, 10) : date('Y-m-d'),
                 'category'   => 'FRAIS',
@@ -104,6 +124,58 @@ final class AdminCashController extends AdminBaseController
             formatPrice($amount),
             formatPrice($fee),
             formatPrice(max(0.0, round($amount - $fee, 2)))
+        ));
+        redirect(url('/admin/caisses'));
+    }
+
+    /**
+     * Prise « chez soi » (transfert signé caisse <-> chez soi, détaillé
+     * par coupures) : MÊME écriture que le kiosque
+     * (KioskComptageController::caissePriseSave) via le service unique
+     * CashLedger::recordTake — le contrôleur ne fait que valider,
+     * enregistrer et flasher, aucune logique métier dupliquée. Le sens
+     * « retour » (sens=retour) ramène l'argent de chez soi en caisse.
+     */
+    public function take(): void
+    {
+        $this->guardSystemOrPage('cash');
+
+        $breakdown = CashBreakdown::fromPost($_POST);
+        if ($breakdown->isEmpty()) {
+            $this->setFlash('error', 'Saisis au moins une coupure (le montant est déduit du détail).');
+            redirect(url('/admin/caisses'));
+        }
+
+        $date = datetime_selects_value();
+        if (!$date['ok']) {
+            $this->setFlash('error', 'Date invalide.');
+            redirect(url('/admin/caisses'));
+        }
+
+        $isReturn = ($_POST['sens'] ?? '') === 'retour';
+        $label = trim((string) ($_POST['label'] ?? ''));
+        if ($label === '') {
+            $label = $isReturn ? 'Ramené de chez soi' : 'Prise chez soi';
+        }
+
+        $by = (string) Auth::user()['email'];
+        $total = $breakdown->amount();
+        $id = CashLedger::recordTake($breakdown, $label, $by, $date['value'], $isReturn);
+
+        AuditLog::log('cash.prise', Auth::id(), 'cash', $id, [
+            'sens'      => $isReturn ? 'retour' : 'prise',
+            'total'     => $total,
+            'breakdown' => $breakdown->format(),
+            'label'     => $label,
+        ]);
+
+        $this->setFlash('success', sprintf(
+            $isReturn
+                ? 'Retour de %s enregistré — solde en caisse : %s · pris chez soi : %s.'
+                : 'Prise de %s enregistrée — solde en caisse : %s · pris chez soi : %s.',
+            formatPrice($total),
+            formatPrice(CashLedger::balance()),
+            formatPrice(CashMovement::homeTotal())
         ));
         redirect(url('/admin/caisses'));
     }

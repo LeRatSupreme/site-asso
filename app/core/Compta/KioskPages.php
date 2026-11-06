@@ -51,10 +51,10 @@ final class KioskPages
      *
      * @var list<string>
      */
-    public const LEGACY_ADMIN_PAGES = ['jour', 'ledger', 'analytics', 'reco', 'periode', 'depot', 'caisse', 'inventaire', 'liste', 'reappro', 'president'];
+    public const LEGACY_ADMIN_PAGES = ['jour', 'ledger', 'analytics', 'reco', 'periode', 'depot', 'prise', 'caisse', 'inventaire', 'liste', 'reappro', 'president'];
 
     /**
-     * Catalogue des 14 tuiles kiosque, dans l'ordre d'affichage. Les
+     * Catalogue des 15 tuiles kiosque, dans l'ordre d'affichage. Les
      * variantes « lite » (« liste-lite », « reappro-lite ») partagent
      * l'URL de leur page mère : seule la variante de rendu (coûts
      * visibles ou masqués) change. La tuile « president » (ajoutée en
@@ -72,6 +72,7 @@ final class KioskPages
         ['id' => 'reco', 'emoji' => '💡', 'label' => 'Idées du moment', 'desc' => 'Recommandations commerciales du moteur.', 'path' => '/kiosque/admin/reco/'],
         ['id' => 'periode', 'emoji' => '📅', 'label' => 'Période analysée', 'desc' => 'Semaine, 14/30 jours ou mois : CA, bénéfice, top produits.', 'path' => '/kiosque/admin/periode/'],
         ['id' => 'depot', 'emoji' => '🏦', 'label' => 'Dépôt banque', 'desc' => 'Sortie de liquide vers la banque (+ frais bancaires automatiques).', 'path' => '/kiosque/admin/caisse/depot/'],
+        ['id' => 'prise', 'emoji' => '🏠', 'label' => 'Prise chez soi', 'desc' => 'Argent pris chez soi (ou ramené), détaillé par coupures : traçabilité du liquide.', 'path' => '/kiosque/admin/caisse/prise/'],
         ['id' => 'caisse', 'emoji' => '💵', 'label' => 'Comptage caisse', 'desc' => 'Liquide présent dans la caisse, comptage à l\'aveugle.', 'path' => '/kiosque/comptage/caisse/'],
         ['id' => 'inventaire', 'emoji' => '📦', 'label' => 'Comptage inventaire', 'desc' => 'Produits en stock, comptage à l\'aveugle.', 'path' => '/kiosque/comptage/inventaire/'],
         ['id' => 'liste', 'emoji' => '🛒', 'label' => 'Liste de courses — avec coûts', 'desc' => 'Ce qu\'il faut racheter, coûts visibles : pour trésorier/président.', 'path' => '/kiosque/liste/'],

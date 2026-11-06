@@ -117,10 +117,14 @@ final class AdminComptaController extends AdminBaseController
      *   stock  : AnalyticsForecastData::stockValueAtLastCost(stockBook())
      *            — point d'assemblage UNIQUE du stock valorisé, partagé
      *            avec la tuile Président (produits sans coût connu exclus
-     *            par la méthode elle-même).
-     * Le total n'est qu'une somme d'AFFICHAGE des trois blocs ci-dessus,
+     *            par la méthode elle-même) ;
+     *   chez soi : CashMovement::homeTotal() — liquide pris « chez soi »
+     *            (transferts PRISE signés), réintégré au total (une prise
+     *            ne fait pas disparaître l'actif : caisse −X, chez soi +X).
+     * Le total n'est qu'une somme d'AFFICHAGE des quatre blocs ci-dessus,
      * pas une nouvelle source. Contrat de la vue (tresorerie.php) :
-     * title, user, caisse, banque, banqueDepots, banqueFrais, stock, total.
+     * title, user, caisse, banque, banqueDepots, banqueFrais, stock,
+     * chezSoi, total.
      */
     public function tresorerie(): void
     {
@@ -131,6 +135,12 @@ final class AdminComptaController extends AdminBaseController
         $frais = Expense::depositFeesTotal();
         $banque = round($depots - $frais, 2);
         $stock = AnalyticsForecastData::stockValueAtLastCost(AnalyticsForecastData::stockBook());
+        // Liquide « pris chez soi » : il a quitté le tiroir (la caisse le
+        // déduit via le mouvement PRISE) sans quitter le patrimoine — le
+        // total le réintègre (une prise de X € laisse le total constant :
+        // caisse −X, chez soi +X). Point d'assemblage unique :
+        // CashMovement::homeTotal().
+        $chezSoi = CashMovement::homeTotal();
 
         $this->renderAdmin('admin/compta/tresorerie', [
             'title'        => "Où est l'argent ?",
@@ -140,7 +150,8 @@ final class AdminComptaController extends AdminBaseController
             'banqueDepots' => $depots,
             'banqueFrais'  => $frais,
             'stock'        => $stock,
-            'total'        => round($caisse + $banque + $stock, 2),
+            'chezSoi'      => $chezSoi,
+            'total'        => round($caisse + $banque + $stock + $chezSoi, 2),
         ]);
     }
 

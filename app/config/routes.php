@@ -292,6 +292,7 @@ function aeic_register_routes(Router $router): void
     // Caisses — traçabilité du liquide (groupe Système, cf. guardSystem).
     $router->get('/admin/caisses', [AdminCashController::class, 'index']);
     $router->post('/admin/caisses/depot', [AdminCashController::class, 'deposit']);
+    $router->post('/admin/caisses/prise', [AdminCashController::class, 'take']);
     $router->post('/admin/caisses/comptage', [AdminCashController::class, 'count']);
     $router->post('/admin/caisses/fond', [AdminCashController::class, 'fund']);
 
@@ -451,6 +452,13 @@ function aeic_register_routes(Router $router): void
     // Caisses (mouvement DEPOT + dépense automatique de frais bancaires).
     $router->get('/kiosque/admin/caisse/depot/{token}', [KioskComptageController::class, 'caisseDepot']);
     $router->post('/kiosque/admin/caisse/depot/{token}', [KioskComptageController::class, 'caisseDepotSave']);
+    // Prise « chez soi » depuis le kiosque admin : formulaire téléphone
+    // (GET) + enregistrement (POST, identité obligatoire, sans CSRF : le
+    // jeton admin EST l'authentification) — même écriture que la page
+    // Caisses via le service unique CashLedger::recordTake (mouvement
+    // PRISE signé + détail par coupures, détaillé en centimes entiers).
+    $router->get('/kiosque/admin/caisse/prise/{token}', [KioskComptageController::class, 'caissePrise']);
+    $router->post('/kiosque/admin/caisse/prise/{token}', [KioskComptageController::class, 'caissePriseSave']);
     // Assistant conversationnel des pages KIOSQUE : POST JSON au
     // llama-server local (même moteur que /assistant/ask — PublicAssistant
     // ::traiterKiosk). Le JETON du kiosque EST l'authentification : exempté

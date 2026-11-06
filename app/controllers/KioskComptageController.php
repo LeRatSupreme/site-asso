@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Controllers;
 
+use App\Core\Compta\CashBreakdown;
 use App\Core\Compta\CashLedger;
 use App\Core\Compta\Edt\CalendarContext;
 use App\Core\Compta\InvoiceScan;
@@ -19,6 +20,7 @@ use App\Models\Analytics;
 use App\Models\AnalyticsForecastData;
 use App\Models\AuditLog;
 use App\Models\CashCount;
+use App\Models\CashMovement;
 use App\Models\Expense;
 use App\Models\InventoryCount;
 use App\Models\Kiosque;
@@ -223,6 +225,10 @@ final class KioskComptageController extends Controller
             // chronologique (dépenses + groupes d'achats), identique à la
             // version admin du livre.
             'recentItems' => \App\Controllers\Admin\AdminLedgerController::recentItems(20),
+            // Section « Traçabilité du liquide » (même assemblage que la
+            // version admin : mouvements de caisse + sous-lignes
+            // coupures, SANS toucher aux totaux du livre).
+            'cashTrace'   => \App\Controllers\Admin\AdminLedgerController::cashTraceability($from, $to),
         ]);
     }
 
@@ -974,6 +980,20 @@ final class KioskComptageController extends Controller
         $label = trim((string) ($_POST['label'] ?? ''));
         $fee = CashLedger::DEPOSIT_FEE;
 
+        // Détail par coupures OPTIONNEL (rétro-compatibilité des dépôts
+        // sans détail) : s'il est saisi, il doit retomber EXACTEMENT sur
+        // le montant — vérifié par le service avant toute écriture.
+        $breakdown = CashBreakdown::fromPost($_POST);
+        if (!$breakdown->isEmpty() && !$breakdown->matchesAmount($amount)) {
+            $this->setFlash('error', sprintf(
+                'Le détail des coupures (%s = %s) ne correspond pas au montant saisi (%s).',
+                $breakdown->format(),
+                formatPrice($breakdown->amount()),
+                formatPrice($amount)
+            ));
+            redirect($back);
+        }
+
         // Dépôt + frais bancaires : les deux écritures sont créées
         // atomiquement, comme côté admin (AdminCashController::deposit).
         // Sans date saisie (valeur null = « maintenant »), la dépense de
@@ -981,7 +1001,7 @@ final class KioskComptageController extends Controller
         $pdo = CashCount::connection();
         $pdo->beginTransaction();
         try {
-            $id = CashLedger::recordDeposit($amount, $label, $who, $date['value']);
+            $id = CashLedger::recordDeposit($amount, $label, $who, $date['value'], $breakdown);
             $feeExpenseId = Expense::create([
                 'spent_at'   => $date['value'] !== null ? substr((string) $date['value'], 0, 10) : date('Y-m-d'),
                 'category'   => 'FRAIS',
@@ -1012,6 +1032,102 @@ final class KioskComptageController extends Controller
             formatPrice($amount),
             formatPrice($fee),
             formatPrice(max(0.0, round($amount - $fee, 2)))
+        ));
+        redirect($back);
+    }
+
+    /**
+     * Prise « chez soi » (kiosque ADMIN) : version téléphone de la carte
+     * « Prise chez soi » de la page Caisses — l'argent sort du tiroir et
+     * dort chez le membre, DÉTAILLÉ PAR COUPURES (la traçabilité du
+     * liquide). Le formulaire (vue admin/compta/kiosk-caisse-prise) poste
+     * qty_1 … qty_5000 ; le sens « retour » (sens=retour) ramène l'argent
+     * de chez soi en caisse.
+     */
+    public function caissePrise(string $token): void
+    {
+        if (!KioskPages::tokenAllows($token, 'prise')) {
+            $this->deny();
+
+            return;
+        }
+
+        $this->renderKiosk('admin/compta/kiosk-caisse-prise', [
+            'title' => 'Prise chez soi',
+            'token' => $token,
+        ]);
+    }
+
+    /**
+     * Enregistre une prise « chez soi » saisie en kiosque admin : MÊME
+     * écriture que la page Caisses (AdminCashController::take) via le
+     * service unique CashLedger::recordTake — mouvement PRISE signé
+     * (négatif = pris, positif = ramené) + lignes de coupures, créés
+     * atomiquement. Le montant n'est pas saisi : il est DÉDUIT des
+     * coupures (Σ unit×qty en centimes entiers). JAMAIS de mélange avec
+     * les ventes (les ventes LIQUIDE alimentent le solde en direct, la
+     * prise n'est qu'un transfert signé caisse <-> chez soi).
+     * Identité obligatoire (pastille profil du layout kiosk) ; pas de
+     * CSRF : le jeton admin EST l'authentification, comme les autres
+     * POST kiosque.
+     */
+    public function caissePriseSave(string $token): void
+    {
+        if (!KioskPages::tokenAllows($token, 'prise')) {
+            $this->deny();
+
+            return;
+        }
+
+        $back = url('/kiosque/admin/caisse/prise/' . $token);
+
+        $who = $this->whoFromPost();
+        if ($who === '') {
+            $this->setFlash('error', 'Indique qui tu es (prénom, nom et rôle) via la pastille en haut à droite avant d\'enregistrer.');
+            redirect($back);
+        }
+
+        $breakdown = CashBreakdown::fromPost($_POST);
+        if ($breakdown->isEmpty()) {
+            $this->setFlash('error', 'Saisis au moins une coupure (le montant est déduit du détail).');
+            redirect($back);
+        }
+
+        $date = datetime_selects_value();
+        if (!$date['ok']) {
+            $this->setFlash('error', 'Date invalide.');
+            redirect($back);
+        }
+
+        $isReturn = ($_POST['sens'] ?? '') === 'retour';
+        $label = trim((string) ($_POST['label'] ?? ''));
+        if ($label === '') {
+            $label = $isReturn ? 'Ramené de chez soi' : 'Prise chez soi';
+        }
+
+        $total = $breakdown->amount();
+        $id = CashLedger::recordTake($breakdown, $label, $who, $date['value'], $isReturn);
+
+        AuditLog::log('cash.prise', null, 'cash', $id, [
+            'sens'       => $isReturn ? 'retour' : 'prise',
+            'total'      => $total,
+            'breakdown'  => $breakdown->format(),
+            'label'      => $label,
+            'via'        => 'kiosque',
+            'who'        => $who,
+        ]);
+
+        // Confirmation = les trois chiffres qui comptent : ce qui vient
+        // d'être pris/ramené, ce qui reste dans le tiroir, ce qui dort
+        // chez soi (le solde chez soi est le point d'assemblage unique
+        // CashMovement::homeTotal()).
+        $this->setFlash('success', sprintf(
+            $isReturn
+                ? 'Retour de %s enregistré — solde en caisse : %s · pris chez soi : %s.'
+                : 'Prise de %s enregistrée — solde en caisse : %s · pris chez soi : %s.',
+            formatPrice($total),
+            formatPrice(CashLedger::balance()),
+            formatPrice(CashMovement::homeTotal())
         ));
         redirect($back);
     }
