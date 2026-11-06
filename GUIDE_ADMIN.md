@@ -709,11 +709,19 @@ Sur la page des inscriptions :
 
 Des modules ajoutés au fil des besoins du bureau, longtemps non documentés.
 
-### 📖 Livre comptable & saisie express de dépense
-**Admin → Système → Livre comptable** (ou `/admin/ledger`).
+### 🧾 Saisir une dépense (achats & frais divers)
+**Admin → Comptabilité → Saisir une dépense** (ou `/admin/compta/achats`), dans le menu Comptabilité juste avant **Livre comptable**.
+- **Un seul point d'entrée** pour tout ce qui sort de la caisse, avec **deux volets exclusifs** :
+  - **Facture à lignes** (volet A) : une course fournisseur (Metro…) saisie ligne par ligne — produits, quantités, TVA, fournisseur ; alimente le **stock théorique** et les **coûts de revient**.
+  - **Frais divers** (volet B) : une dépense simple — **catégorie**, montants **HT/TTC**, **TVA**, **justificatif** (photo du ticket).
+- **Un ticket = une seule écriture** : soit des achats, soit une dépense — **jamais les deux**. L'ancienne case « Créer aussi ces achats » du livre comptable a été supprimée : elle créait des doublons (la dépense enregistrée **et** les mêmes montants en achats).
+- Le **scan de ticket** est intégré aux deux volets (voir « Scan de factures » plus bas).
+- **Garde-fou anti-doublons** (ligne de commande sur le VPS) : `php scripts/compta_doublons_audit.php` liste les paires suspectes dépense × achats (même n° de facture le même jour, ou fournisseur cité avec le même montant) — code 0 si la base est saine, 1 sinon.
+
+### 📖 Livre comptable (lecture & analyse)
+**Admin → Système → Livre comptable** (ou `/admin/ledger`) — **lecture seule** : plus de saisie ni d'édition ici. La saisie passe par **Saisir une dépense**, les corrections par **Opérations**.
 - Retranscription prête à recopier dans le livret papier : Date | Objet | Débit | Crédit. Les achats du même jour chez le même fournisseur (ou même n° de facture) sont fusionnés ; les ventes sont résumées en une ligne de clôture.
 - Le pied de page affiche le **solde de trésorerie** (encaissements − décaissements), qui n'est **pas** le bénéfice — ce dernier est calculé à part.
-- **Saisie express d'une dépense** (30 s : nom, référence, montant) avec **scan du ticket** intégré.
 
 ### 💵 Caisses & comptages de caisse
 **Admin → Système → Caisses** (ou `/admin/caisses`) ; saisie rapide via **Comptage → Comptage caisse**.
@@ -725,7 +733,7 @@ Des modules ajoutés au fil des besoins du bureau, longtemps non documentés.
 **Admin → Système → Kiosques** (ou `/admin/kiosques`).
 - Des liens à ouvrir sur un téléphone, **sans connexion** : le jeton secret dans l'URL sert d'authentification.
 - Liens **membres** : hub tout-en-un — comptage de caisse, comptage d'inventaire, liste de courses partagée, ventes du jour (sans données sensibles).
-- Liens **admins** (jeton séparé) : livre comptable avec saisie express, rapports de période, analytics.
+- Liens **admins** (jeton séparé) : livre comptable (lecture), saisie express **dépense seule** (30 s + scan du ticket), rapports de période, analytics.
 - **Régénérer un jeton révoque tous les liens** qui l'utilisent ; copie en un clic depuis la page.
 
 ### 💬 Rapports SMS
@@ -735,7 +743,7 @@ Des modules ajoutés au fil des besoins du bureau, longtemps non documentés.
 - Journée sans vente : aucun SMS envoyé.
 
 ### 🧾 Scan de factures (OCR)
-Dans les formulaires **Achats** (Opérations), **Dépenses** et le livre comptable.
+Dans la page **Saisir une dépense** (volets facture à lignes et frais divers) et sur les liens kiosque.
 - Photographie la facture (ou dépose un PDF, 10 Mo max), ou colle directement le texte : les lignes reconnues pré-remplissent la grille de saisie.
 - Les libellés reconnus sont rattachés aux produits du catalogue ; les inconnus partent dans la file « à classer » de la page **Ajouter une appellation**.
 - Le justificatif est conservé et peut être joint aux achats créés depuis la facture.
@@ -745,7 +753,7 @@ Dans les formulaires **Achats** (Opérations), **Dépenses** et le livre comptab
 - Les autres membres du bureau peuvent recevoir des **pages attribuées individuellement** depuis la page **Utilisateurs** (« Pages + » : inventaire, coûts, caisses…), en plus de leur rôle.
 
 ### 🛒 Saisie d'achats en lot / collage multi-lignes
-Dans le formulaire **Achats** (Admin → Comptabilité → Opérations).
+Dans la page **Saisir une dépense**, volet **Facture à lignes** (Admin → Comptabilité).
 - Grille **multi-lignes** : toute une commande fournisseur en un seul enregistrement (jusqu'à 60 lignes).
 - Colle « Nom ; Qté ; Montant » copié depuis une facture : la grille se remplit toute seule.
 - Au clavier : **Entrée** enchaîne les lignes, **Ctrl+Entrée** enregistre ; case **hors stock** et **TVA par ligne** disponibles.
