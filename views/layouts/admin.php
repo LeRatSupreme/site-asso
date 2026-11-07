@@ -91,8 +91,7 @@ if ($moduleAllowed(Permissions::MODULE_COMPTA)) {
         'Idées appliquées'         => '/admin/reco/historique',
         'Bilan annuel'             => '/admin/compta/annuel',
         'Journal des ventes'       => '/admin/compta/ventes',
-        'Bénéfice par produit'     => '/admin/compta/produits',
-        'Bénéfice par catégorie'   => '/admin/compta/categories',
+        'Bénéfice'                 => '/admin/compta/benefice',
         'Importer un rapport SumUp' => '/admin/compta/import',
     ];
 }
