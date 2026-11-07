@@ -14,7 +14,10 @@ declare(strict_types=1);
  *    verdict « non concluant » ;
  *  - « Ignorées » : motif d'ignorance et bouton « Rétablir » (remise à
  *    l'état proposable — l'idée repart dans « Idées en attente »).
- * Suivent « Idées en attente » (décidables) et « Seuils du moteur ».
+ * Suivent « Idées en attente » (décidables — REGROUPÉES PAR NATURE : une
+ * section <details> repliable par nature avec compteur, la plus chargée
+ * d'abord ; les boutons de décision par ligne sont inchangés) et « Seuils
+ * du moteur ».
  *
  * JAMAIS de code de règle (R1…) : libellés humains via RecoLibelles.
  * Aucun calcul métier en vue : les effets viennent du contrôleur/cœur.
@@ -77,6 +80,41 @@ $badgeConclusion = static function (array $l): string {
 
     return '<span class="reco-badge is-muted">mesure en cours</span>';
 };
+
+// ---- « Idées en attente » : regroupement par NATURE (demande utilisateur)
+//
+// Les idées en attente sont regroupées par nature = libellé humain de la
+// règle via RecoLibelles::regle($regle). Ce mapping est DÉTERMINISTE
+// (R1..R11 → libellé fixe, code inconnu/vide → « Suggestion ») : la nature
+// est donc groupable côté vue, sans toucher au contrôleur. Chaque nature
+// devient une section <details> repliable avec compteur — fini la liste
+// à plat de 50 lignes.
+//
+// Ordre des sections (choix documenté) : nature la plus chargée d'abord
+// (la plus grosse masse de décisions saute aux yeux), puis ordre
+// alphabétique en cas d'égalité pour rester stable d'une visite à
+// l'autre. L'ordre des lignes dans chaque section est conservé tel que
+// fourni par le contrôleur (plus récente d'abord, cf.
+// Recommendation::proposees()).
+$proposeesParNature = [];
+foreach ($proposees as $p) {
+    $proposeesParNature[RecoLibelles::regle((string) ($p['regle'] ?? ''))][] = $p;
+}
+$nbParNature = array_map('count', $proposeesParNature);
+uksort(
+    $proposeesParNature,
+    static fn (string $a, string $b): int => $nbParNature[$b] <=> $nbParNature[$a] ?: strcmp($a, $b)
+);
+
+// Ouverture par défaut : la première section (la plus chargée) est ouverte
+// pour inviter à la décision, sauf au-delà de ces seuils où TOUT est replié
+// d'office — beaucoup de natures ou une nature très chargée = beaucoup
+// d'idées, l'écran ne doit pas déborder de lignes au chargement.
+// <details> natif suffit : robuste, accessible au clavier, zéro JS, donc
+// pas de persistance localStorage (état = un simple clic, leçon 16
+// écartée volontairement ici au profit du repliement par défaut).
+$seuilNaturesOuverture = 4; // nb max de natures pour ouvrir la 1re d'office
+$seuilLignesOuverture  = 10; // nb max de lignes de la 1re section pour l'ouvrir
 ?>
 <div class="reco-hist">
 
@@ -261,50 +299,62 @@ $badgeConclusion = static function (array $l): string {
     <div class="card surface glass chart-card">
         <div class="chart-head">
             <h2 class="chart-title">Idées en attente</h2>
-            <span class="chart-sub">proposées, pas encore décidées</span>
+            <span class="chart-sub">proposées, pas encore décidées — regroupées par nature, dépliez pour décider</span>
         </div>
         <?php if ($proposees === []): ?>
             <p class="muted fc-empty">Aucune idée en attente — les nouvelles apparaissent sur le dashboard <a href="<?= e(url('/admin/analytics')) ?>">Analytics</a>.</p>
         <?php else: ?>
-            <div class="table-wrap">
-                <table class="data-table">
-                    <thead>
-                        <tr><th>Idée</th><th>Nature</th><th>Proposée le</th><th>Décision</th></tr>
-                    </thead>
-                    <tbody>
-                        <?php foreach ($proposees as $p): ?>
-                            <tr>
-                                <td><?= e((string) ($p['titre'] ?? '')) ?></td>
-                                <td><span class="reco-badge is-rule"><?= e(RecoLibelles::regle((string) ($p['regle'] ?? ''))) ?></span></td>
-                                <td><?= e((string) ($p['created_at'] ?? '') !== '' ? formatDate(substr((string) $p['created_at'], 0, 10), 'd/m/Y') : '—') ?></td>
-                                <td>
-                                    <div class="reco-actions">
-                                        <form method="post" action="<?= e(url('/admin/reco/decision')) ?>" class="reco-form">
-                                            <?= csrf_field() ?>
-                                            <input type="hidden" name="id" value="<?= e((string) ($p['id'] ?? '')) ?>">
-                                            <input type="hidden" name="retour" value="/admin/reco/historique">
-                                            <button type="submit" name="decision" value="appliquer" class="btn btn-primary btn-sm">Je le fais</button>
-                                        </form>
-                                        <form method="post" action="<?= e(url('/admin/reco/decision')) ?>" class="reco-form">
-                                            <?= csrf_field() ?>
-                                            <input type="hidden" name="id" value="<?= e((string) ($p['id'] ?? '')) ?>">
-                                            <input type="hidden" name="retour" value="/admin/reco/historique">
-                                            <button type="submit" name="decision" value="plus_tard" class="btn btn-ghost btn-sm">Plus tard</button>
-                                        </form>
-                                        <form method="post" action="<?= e(url('/admin/reco/decision')) ?>" class="reco-form">
-                                            <?= csrf_field() ?>
-                                            <input type="hidden" name="id" value="<?= e((string) ($p['id'] ?? '')) ?>">
-                                            <input type="hidden" name="retour" value="/admin/reco/historique">
-                                            <input type="hidden" name="motif" value="non_pertinent">
-                                            <button type="submit" name="decision" value="ignorer" class="btn btn-ghost btn-sm">Pas pour moi</button>
-                                        </form>
-                                    </div>
-                                </td>
-                            </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
-            </div>
+            <?php $nbNaturesAttente = count($proposeesParNature); ?>
+            <p class="muted"><?= count($proposees) ?> idée<?= count($proposees) > 1 ? 's' : '' ?> en attente, en <?= $nbNaturesAttente ?> nature<?= $nbNaturesAttente > 1 ? 's' : '' ?> — ouvrez une nature pour décider ligne par ligne.</p>
+            <?php $rangNature = 0; ?>
+            <?php foreach ($proposeesParNature as $natureAttente => $ideesNature): ?>
+                <details class="reco-attente"<?= $rangNature === 0 && $nbNaturesAttente <= $seuilNaturesOuverture && count($ideesNature) <= $seuilLignesOuverture ? ' open' : '' ?>>
+                    <summary class="reco-attente-titre">
+                        <span class="reco-attente-nom"><?= e($natureAttente) ?></span>
+                        <span class="reco-attente-compte">(<?= count($ideesNature) ?>)</span>
+                    </summary>
+                    <div class="table-wrap">
+                        <table class="data-table">
+                            <thead>
+                                <tr><th>Idée</th><th>Nature</th><th>Proposée le</th><th>Décision</th></tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($ideesNature as $p): ?>
+                                    <tr>
+                                        <td><?= e((string) ($p['titre'] ?? '')) ?></td>
+                                        <td><span class="reco-badge is-rule"><?= e(RecoLibelles::regle((string) ($p['regle'] ?? ''))) ?></span></td>
+                                        <td><?= e((string) ($p['created_at'] ?? '') !== '' ? formatDate(substr((string) $p['created_at'], 0, 10), 'd/m/Y') : '—') ?></td>
+                                        <td>
+                                            <div class="reco-actions">
+                                                <form method="post" action="<?= e(url('/admin/reco/decision')) ?>" class="reco-form">
+                                                    <?= csrf_field() ?>
+                                                    <input type="hidden" name="id" value="<?= e((string) ($p['id'] ?? '')) ?>">
+                                                    <input type="hidden" name="retour" value="/admin/reco/historique">
+                                                    <button type="submit" name="decision" value="appliquer" class="btn btn-primary btn-sm">Je le fais</button>
+                                                </form>
+                                                <form method="post" action="<?= e(url('/admin/reco/decision')) ?>" class="reco-form">
+                                                    <?= csrf_field() ?>
+                                                    <input type="hidden" name="id" value="<?= e((string) ($p['id'] ?? '')) ?>">
+                                                    <input type="hidden" name="retour" value="/admin/reco/historique">
+                                                    <button type="submit" name="decision" value="plus_tard" class="btn btn-ghost btn-sm">Plus tard</button>
+                                                </form>
+                                                <form method="post" action="<?= e(url('/admin/reco/decision')) ?>" class="reco-form">
+                                                    <?= csrf_field() ?>
+                                                    <input type="hidden" name="id" value="<?= e((string) ($p['id'] ?? '')) ?>">
+                                                    <input type="hidden" name="retour" value="/admin/reco/historique">
+                                                    <input type="hidden" name="motif" value="non_pertinent">
+                                                    <button type="submit" name="decision" value="ignorer" class="btn btn-ghost btn-sm">Pas pour moi</button>
+                                                </form>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                </details>
+                <?php $rangNature++; ?>
+            <?php endforeach; ?>
         <?php endif; ?>
     </div>
 
@@ -330,4 +380,40 @@ $badgeConclusion = static function (array $l): string {
             </div>
         </form>
     </div>
+
+    <style>
+    /* « Idées en attente » : sections repliables par nature — styles locaux
+       à cette vue uniquement (classes préfixées reco-attente*, aucun impact
+       ailleurs). <details> natif : robuste, accessible au clavier, zéro JS. */
+    .reco-attente { border: 1px solid var(--border); border-radius: var(--radius, 8px); padding: 0 .65rem; }
+    .reco-attente + .reco-attente { margin-top: .55rem; }
+    .reco-attente > summary {
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: .45rem;
+        min-width: 0;
+        min-height: 44px; /* cible tactile confortable au doigt */
+        font-weight: 700;
+        list-style: none;
+    }
+    .reco-attente > summary::-webkit-details-marker { display: none; }
+    .reco-attente > summary::before {
+        content: '▸';
+        color: var(--muted);
+        transition: transform .12s ease;
+    }
+    .reco-attente[open] > summary::before { transform: rotate(90deg); }
+    .reco-attente[open] > summary { border-bottom: 1px solid var(--border); }
+    .reco-attente-nom { min-width: 0; overflow-wrap: anywhere; }
+    .reco-attente-compte { color: var(--muted); font-weight: 600; }
+    .reco-attente .table-wrap { margin: .5rem 0 .55rem; }
+    /* Mobile : rien ne déforme (retour à la ligne des longues idées), et les
+       3 boutons de décision restent utilisables au doigt (≥ 44 px). */
+    @media (max-width: 700px) {
+        .reco-attente .data-table { min-width: 0; }
+        .reco-attente td { overflow-wrap: anywhere; }
+        .reco-attente .btn { min-height: 44px; }
+    }
+    </style>
 </div>
