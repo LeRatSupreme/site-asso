@@ -10,7 +10,7 @@ declare(strict_types=1);
  * il est toujours à jour, aucune saisie manuelle ici.
  *
  * @var list<array<string,mixed>>                    $rows
- * @var array<string,array{label:string,days:int}>   $periods
+ * @var array<string,array{label:string,ouvres:int,calendaires:int}> $periods Horizons « Couvrir pour » (ComptaCalc::couvertureHorizons).
  * @var string                                       $currentPeriod
  * @var int                                          $targetDays
  * @var int                                          $alerts
@@ -21,7 +21,6 @@ declare(strict_types=1);
  * @var int                                          $refOpenDays
  * @var string                                       $du
  * @var string                                       $au
- * @var int                                          $refCalDays
  * @var bool                                         $kiosk     Mode kiosque : accès par lien secret, sans connexion.
  * @var bool                                         $showMoney Faux = AUCUN chiffre financier rendu (jeton kiosque « membres ») ; vrai pour tout rôle compta et le jeton « admin ».
  * @var array{ventes:string,couverture:string,source:string} $basis Encart « Base de calcul » (identique à la liste de courses).
@@ -39,8 +38,10 @@ function reorder_date_fr(?string $day): string {
 
 function reorder_autonomy_class(?int $autonomy, bool $hasStock): string {
     if (!$hasStock || $autonomy === null) { return 'auto-none'; }
-    if ($autonomy < 3) { return 'auto-danger'; }
-    if ($autonomy < 7) { return 'auto-warn'; }
+    // Autonomie en jours OUVRÉS : <2 j ≈ moins de 3 j calendaires (rouge),
+    // <5 j = moins d'une semaine d'ouverture (orange).
+    if ($autonomy < 2) { return 'auto-danger'; }
+    if ($autonomy < 5) { return 'auto-warn'; }
     return 'auto-ok';
 }
 
@@ -135,7 +136,7 @@ $colspan = $showMoney ? 13 : 12;
     <div class="card surface glass kpi">
         <p class="kpi-label">Alertes stock</p>
         <p class="kpi-value <?= $alerts > 0 ? 'is-negative' : 'is-positive' ?>"><?= (int) $alerts ?></p>
-        <p class="kpi-sub">autonomie &lt; 7 jours (7j/7, week-end inclus)</p>
+        <p class="kpi-sub">autonomie &lt; 5 jours ouvrés (lun→ven)</p>
     </div>
 </div>
 
@@ -182,15 +183,15 @@ $colspan = $showMoney ? 13 : 12;
 
     <button type="submit" class="btn btn-primary btn-sm">Appliquer</button>
 
-    <span class="reappro-meta" title="Période analysée : bornes et nombre de jours calendaires (week-end inclus)">
+    <span class="reappro-meta" title="Période analysée : bornes calendaires et nombre de jours ouvrés (lundi→vendredi — fermé le week-end)">
         <?= e(reorder_date_fr($refFrom)) ?> → <?= e(reorder_date_fr($refTo)) ?>
-        · <?= (int) $refCalDays ?> j analysés (week-end inclus)
+        · <?= (int) $refOpenDays ?> j ouvrés analysés
     </span>
 </form>
 
 <?php if ($alerts > 0): ?>
     <div class="alert alert-warning">
-        <strong><?= $alerts ?></strong> produit<?= $alerts > 1 ? 's ont' : ' a' ?> un stock faible (autonomie &lt; 7 jours) — à racheter en priorité.
+        <strong><?= $alerts ?></strong> produit<?= $alerts > 1 ? 's ont' : ' a' ?> un stock faible (autonomie &lt; 5 jours ouvrés) — à racheter en priorité.
     </div>
 <?php endif; ?>
 <?php if ($uncounted > 0): ?>
@@ -275,10 +276,10 @@ $colspan = $showMoney ? 13 : 12;
                 <th>Catégorie</th>
                 <th class="th-num" title="Quantité totale vendue sur la période analysée">Vendus<br>(période)</th>
                 <th class="th-num" title="Stock théorique de l'inventaire : dernier comptage + achats − ventes − pertes">Stock restant</th>
-                <th class="th-num" title="Conso moyenne par jour (7 j/7, week-end inclus)">Conso / jour<br><small>(7j/7)</small></th>
-                <th class="th-num" title="Conso / jour × 7 (semaine calendaire)">Conso /<br>semaine</th>
-                <th class="th-num" title="Conso / jour × 30,44 (mois calendaire moyen)">Conso /<br>mois</th>
-                <th class="th-num" title="Jours avant rupture, week-end inclus (stock ÷ conso / jour)">Autonomie</th>
+                <th class="th-num" title="Conso moyenne par jour ouvré (lundi→vendredi ; fermé le week-end)">Conso / jour<br><small>(j ouvrés)</small></th>
+                <th class="th-num" title="Conso / jour ouvré × 5 (semaine d'ouverture)">Conso /<br>semaine</th>
+                <th class="th-num" title="Conso / jour ouvré × 21,74 (mois ouvré moyen)">Conso /<br>mois</th>
+                <th class="th-num" title="Jours ouvrés avant rupture (lun→ven ; stock ÷ conso / jour ouvré)">Autonomie</th>
                 <th class="th-num" title="Besoin estimé pour couvrir l'horizon choisi">Besoin<br>(<?= e($periods[$currentPeriod]['label']) ?>)</th>
                 <th class="th-num" title="Besoin − stock restant (minimum 0)">À commander</th>
                 <th class="th-num" title="Quantité par pack d'achat (12, 24, 32…) : « À commander » est arrondi au multiple supérieur du pack. Vide = commande à l'unité.">Pack</th>
@@ -322,7 +323,7 @@ $colspan = $showMoney ? 13 : 12;
                             <span class="badge badge-muted" aria-label="Jamais compté en inventaire : fais un comptage pour affiner" title="Jamais compté en inventaire : fais un comptage pour affiner">À compter</span>
                         <?php endif; ?>
                     </td>
-                    <td class="num muted" data-label="Conso / jour (7j/7)"><?= reorder_qty((float) $r['avg_day']) ?></td>
+                    <td class="num muted" data-label="Conso / jour (j ouvrés)"><?= reorder_qty((float) $r['avg_day']) ?></td>
                     <td class="num muted" data-label="Conso / semaine"><?= reorder_qty((float) $r['avg_week']) ?></td>
                     <td class="num muted" data-label="Conso / mois"><?= reorder_qty((float) $r['avg_month']) ?></td>
                     <td class="num" data-label="Autonomie">
@@ -334,8 +335,8 @@ $colspan = $showMoney ? 13 : 12;
                             <span class="auto-pill auto-none" aria-label="Aucune vente sur la période" title="Aucune vente sur la période">∞</span>
                         <?php else: ?>
                             <span class="auto-pill <?= reorder_autonomy_class($autonomy, true) ?>"
-                                  aria-label="<?= $autonomy ?> jour(s) avant rupture (week-end inclus)"
-                                  title="<?= $autonomy ?> jour(s) avant rupture (week-end inclus)">
+                                  aria-label="<?= $autonomy ?> jour(s) ouvré(s) avant rupture"
+                                  title="<?= $autonomy ?> jour(s) ouvré(s) avant rupture">
                                 <?= $autonomy ?> j
                             </span>
                         <?php endif; ?>
@@ -439,9 +440,10 @@ $colspan = $showMoney ? 13 : 12;
 
 <p class="card-meta">
     Cette page analyse la consommation <strong>observée</strong> sur la période ; la <strong>liste de courses</strong> et la carte <strong>Réappro Analytics</strong> utilisent la prévision du moteur (7 jours ouverts, calibration CA) — même <strong>stock restant</strong> partout, demande adaptée à chaque usage.
-    Moyennes calculées sur les <strong>jours calendaires</strong> de la période analysée : le <strong>week-end est inclus</strong> (7 j/7), comme les ventes qu'il génère.
-    Conso / jour = vendus ÷ jours analysés · Conso / semaine = conso / jour × 7 · Conso / mois = conso / jour × 30,44.
-    L'<strong>autonomie</strong> est le nombre de jours avant rupture, week-end compris.
+    Moyennes calculées sur les <strong>jours ouvrés</strong> (lundi→vendredi) de la période analysée : la cafétéria est <strong>fermée le week-end</strong> (aucune vente un samedi ou un dimanche).
+    Conso / jour = vendus ÷ jours ouvrés analysés · Conso / semaine = conso / jour × 5 · Conso / mois = conso / jour × 21,74.
+    L'<strong>autonomie</strong> est le nombre de jours ouvrés avant rupture.
+    « Couvrir pour 1 semaine » = couvrir <strong>5 jours ouvrés</strong>.
     « À commander » = besoin sur l'horizon de couverture − <strong>stock restant</strong> (minimum 0 ; un stock négatif majore la commande),
     <strong>arrondi au multiple du pack</strong> quand une taille de pack est définie dans la colonne « Pack » (besoin 2 + pack 12 → commander 12 ; vide = à l'unité).
     Stock restant = dernier comptage + achats − ventes − pertes (mis à jour par <strong>Inventaire</strong>, <strong>Achats</strong> et <strong>Pertes</strong>).

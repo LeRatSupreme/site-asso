@@ -484,9 +484,10 @@ final class KioskComptageController extends Controller
     /**
      * Récap de période unifié (admin) : une seule page pour la semaine en
      * cours, les 14 / 30 derniers jours et le mois en cours — menu
-     * « Période analysée » avec bornes affichées et nombre de jours
-     * analysés (week-end inclus). Détail jour par jour sur toute durée ;
-     * comparaison mois précédent quand la période est le mois en cours.
+     * « Période analysée » avec bornes calendaires affichées et nombre de
+     * jours OUVRÉS analysés (lun→ven, week-end exclu — fermé sam/dim).
+     * Détail jour par jour sur toute durée ; comparaison mois précédent
+     * quand la période est le mois en cours.
      */
     public function periode(string $token): void
     {
@@ -530,8 +531,9 @@ final class KioskComptageController extends Controller
         $stats['prev_ca'] = $prevCa;
         $stats['prev_label'] = $prevLabel;
 
-        // Jours CALENDaires couverts (week-end inclus), comme sur le réappro.
-        $calDays = (int) $from->diff($to)->format('%a') + 1;
+        // Jours OUVRÉS (lun→ven) couverts, comme sur le réappro —
+        // transformation période→jours au point unique ComptaCalc.
+        $openDays = \App\Core\Compta\ComptaCalc::openDaysBetween($from->format('Y-m-d'), $to->format('Y-m-d'));
 
         // Options du kiosque : bénéfice/marge et liquide/carte masqués
         // quand décochés (rendu serveur uniquement — rien n'est envoyé).
@@ -542,7 +544,7 @@ final class KioskComptageController extends Controller
             'token'      => $token,
             'p'          => $p,
             'stats'      => $stats,
-            'calDays'    => $calDays,
+            'openDays'   => $openDays,
             'rangeLabel' => 'du ' . $from->format('d/m') . ' au ' . $to->format('d/m'),
             'showBenefice' => $opts['benefice'],
             'showPaiements' => $opts['paiements'],

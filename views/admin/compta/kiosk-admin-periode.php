@@ -5,13 +5,13 @@ declare(strict_types=1);
 /**
  * Kiosque ADMIN — récap de période unifié : menu « Période analysée »
  * (semaine en cours, 14 / 30 derniers jours ou mois en cours) avec bornes
- * affichées et nombre de jours analysés (week-end inclus), comme sur le
+ * affichées et nombre de jours OUVRÉS analysés (lun→ven), comme sur le
  * réappro. CA, bénéfice, paiements, détail jour par jour, comparaison mois
  * précédent (mois), top produits.
  *
  * @var string $token
  * @var string $p 'semaine'|'14j'|'30j'|'mois'
- * @var int $calDays
+ * @var int $openDays
  * @var string $rangeLabel
  * @var array<string,mixed> $stats — marge déjà calculée (« margin », en %)
  */
@@ -158,9 +158,9 @@ $to = (string) $stats['to'];
             </select>
             <button type="submit" class="btn btn-primary btn-sm">Appliquer</button>
         </form>
-        <span class="kp-meta" title="Période analysée : bornes et nombre de jours calendaires (week-end inclus)">
+        <span class="kp-meta" title="Période analysée : bornes calendaires et nombre de jours ouvrés (lundi→vendredi — fermé le week-end)">
             <?= e($fmtFull($from)) ?> → <?= e($fmtFull($to)) ?>
-            · <?= (int) $calDays ?> j analysés (week-end inclus)
+            · <?= (int) $openDays ?> j ouvrés analysés
         </span>
     </div>
 

@@ -2076,20 +2076,18 @@ final class AdminComptaController extends AdminBaseController
         $produits = is_array($demande['forecast']['produits'] ?? null) ? $demande['forecast']['produits'] : [];
 
         // Couverture (« Couvrir pour »), défaut 1 semaine. La prévision du
-        // moteur couvre 7 jours ouverts : le facteur la met à l'échelle de
-        // la couverture choisie (1w = ×1 → besoin == suggestion Réappro).
-        $covers = [
-            '1w' => ['label' => '1 semaine',  'days' => 7],
-            '2w' => ['label' => '2 semaines', 'days' => 14],
-            '1m' => ['label' => '1 mois',     'days' => 30],
-            '2m' => ['label' => '2 mois',     'days' => 61],
-            '3m' => ['label' => '3 mois',     'days' => 91],
-        ];
+        // moteur couvre 7 jours calendaires = 5 jours OUVRÉS de demande
+        // (fermé le week-end) : le facteur met la suggestion à l'échelle
+        // de la couverture choisie (1w = ×1 → besoin == suggestion Réappro).
+        // Horizons partagés avec la page Réappro : ComptaCalc::
+        // couvertureHorizons() = point d'assemblage unique.
+        $covers = ComptaCalc::couvertureHorizons();
         $coverKey = (string) ($_GET['c'] ?? '1w');
         if (!isset($covers[$coverKey])) {
             $coverKey = '1w';
         }
-        $facteur = $covers[$coverKey]['days'] / 7.0;
+        // 5 = jours ouvrés couverts par l'horizon moteur (7 calendaires).
+        $facteur = $covers[$coverKey]['ouvres'] / (float) ComptaCalc::JOURS_OUVRES_SEMAINE;
 
         // Exclusions partagées avec le Réappro : artefacts SumUp (« Divers »
         // à montant libre), produits « plus en vente » et « stock infini ».
@@ -2317,28 +2315,27 @@ final class AdminComptaController extends AdminBaseController
                 break;
         }
 
-        // Jours CALENDaires de la période (week-end inclus) : les moyennes
-        // de consommation et l'autonomie sont exprimées en 7 j/7.
-        $calDays = ($fromDay !== null && $toDay !== null)
-            ? ComptaCalc::calendarDaysBetween($fromDay, $toDay)
+        // Jours OUVRÉS (lun→ven) de la période : les moyennes de
+        // consommation et l'autonomie sont exprimées en jours d'ouverture
+        // (la cafétéria est fermée le week-end — 0 vente sam/dim sur tout
+        // l'historique). Transformation période→jours au point unique
+        // ComptaCalc::openDaysBetween().
+        $refOpenDays = ($fromDay !== null && $toDay !== null)
+            ? ComptaCalc::openDaysBetween($fromDay, $toDay)
             : 0;
 
         // ── Horizon de COUVERTURE (pour quoi commander) ─────────────────
-        // Horizons en jours calendaires : le week-end est couvert aussi.
-        $periods = [
-            '1w' => ['label' => '1 semaine',  'days' => 7],    // 7 j calendaires
-            '2w' => ['label' => '2 semaines', 'days' => 14],
-            '1m' => ['label' => '1 mois',     'days' => 30],   // ≈ 1 mois calendaire
-            '2m' => ['label' => '2 mois',     'days' => 61],
-            '3m' => ['label' => '3 mois',     'days' => 91],
-        ];
+        // Horizons en jours OUVRÉS (lun→ven), partagés avec la liste de
+        // courses : ComptaCalc::couvertureHorizons() = point unique
+        // (« 1 semaine » = 5 jours ouvrés de couverture).
+        $periods = ComptaCalc::couvertureHorizons();
         $periodKey = $_GET['period'] ?? '1w';
         if (!isset($periods[$periodKey])) {
             $periodKey = '1w';
         }
-        $targetDays = $periods[$periodKey]['days'];
+        $targetDays = $periods[$periodKey]['ouvres'];
 
-        $data = $this->reorderData($targetDays, $fromDay, $toDay, $calDays);
+        $data = $this->reorderData($targetDays, $fromDay, $toDay, $refOpenDays);
 
         // Encart « Base de calcul » (identique à la liste de courses) :
         // période réellement analysée + horizon de couverture choisis.
@@ -2377,7 +2374,7 @@ final class AdminComptaController extends AdminBaseController
                 'currentRef'    => $ref,
                 'refFrom'       => $fromDay,
                 'refTo'         => $toDay,
-                'refCalDays'    => $calDays,
+                'refOpenDays'   => $refOpenDays,
                 'du'            => $duOk ? $du : '',
                 'au'            => $auOk ? $au : '',
                 'kiosk'         => true,
@@ -2403,7 +2400,7 @@ final class AdminComptaController extends AdminBaseController
             'currentRef'    => $ref,
             'refFrom'       => $fromDay,
             'refTo'         => $toDay,
-            'refCalDays'    => $calDays,
+            'refOpenDays'   => $refOpenDays,
             'du'            => $duOk ? $du : '',
             'au'            => $auOk ? $au : '',
             'kiosk'         => false,
@@ -2486,9 +2483,9 @@ final class AdminComptaController extends AdminBaseController
      * d'assemblage unique Dashboard\Data::analyseReappro() (même code,
      * partagé avec le bloc « À faire » du dashboard et l'accueil /admin).
      */
-    private function reorderData(int $targetDays, ?string $fromDay, ?string $toDay, int $calDays): array
+    private function reorderData(int $targetDays, ?string $fromDay, ?string $toDay, int $openDays): array
     {
-        return Data::analyseReappro($targetDays, $fromDay, $toDay, $calDays);
+        return Data::analyseReappro($targetDays, $fromDay, $toDay, $openDays);
     }
 
     // -----------------------------------------------------------------

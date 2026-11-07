@@ -91,13 +91,14 @@ final class Data
 
         // Alerte stock faible : analyse des 30 derniers jours.
         // (L'horizon de couverture n'influence pas les alertes, seul
-        // compte le rythme de consommation journalier.)
+        // compte le rythme de consommation journalier.) Horizon et
+        // moyennes en jours OUVRÉS (lun→ven), comme sur la page Réappro.
         $refFrom = date('Y-m-d', strtotime('-29 days'));
         $reorder = self::analyseReappro(
-            5,
+            ComptaCalc::JOURS_OUVRES_SEMAINE,
             $refFrom,
             date('Y-m-d'),
-            ComptaCalc::calendarDaysBetween($refFrom, date('Y-m-d'))
+            ComptaCalc::openDaysBetween($refFrom, date('Y-m-d'))
         );
         $reorderAlerts = $reorder['alerts'];
 
@@ -387,11 +388,13 @@ final class Data
      * AdminComptaController::reorderData(), déplacé sans changement).
      *
      * Chaque produit vendu dans la période d'analyse est listé avec sa
-     * consommation moyenne (rapportée aux jours CALENDaires de la période,
-     * week-end inclus — rythme 7 j/7) par jour / semaine / mois, et la
-     * quantité à commander pour couvrir l'horizon cible (lui aussi en
-     * jours calendaires). L'autonomie est donc le nombre de jours avant
-     * rupture WEEK-END COMPRIS. Le stock est le THÉORIQUE de l'inventaire
+     * consommation moyenne (rapportée aux jours OUVRÉS lun→ven de la
+     * période — la cafétéria est fermée le week-end : 0 vente sam/dim
+     * sur tout l'historique, vérifié le 07/11/2026) par jour / semaine /
+     * mois d'ouverture, et la quantité à commander pour couvrir
+     * l'horizon cible (lui aussi en jours ouvrés : « couvrir 1 semaine »
+     * = 5 jours ouvrés, cf. ComptaCalc::couvertureHorizons). L'autonomie
+     * est donc le nombre de jours OUVRÉS avant rupture. Le stock est le THÉORIQUE de l'inventaire
      * (dernier comptage + achats − ventes − pertes) : jamais une saisie
      * manuelle qui se périme. Un achat ou une perte établit une base 0 :
      * le théorique existe même sans comptage préalable ; seuls les
@@ -414,7 +417,11 @@ final class Data
      * bruit — la semaine de reprise re-déclenchera l'alerte sur son
      * propre horizon.
      *
-     * @param int                $targetDays Horizon de couverture, en jours calendaires.
+     * @param int                $targetDays Horizon de couverture, en jours OUVRÉS (lun→ven).
+     * @param ?string             $fromDay   Début de la période d'analyse (« YYYY-MM-DD »).
+     * @param ?string             $toDay     Fin de la période d'analyse (« YYYY-MM-DD »).
+     * @param int                 $openDays  Jours OUVRÉS (lun→ven) de la période d'analyse
+     *                                        (ComptaCalc::openDaysBetween) — diviseur des moyennes.
      * @param array<string,mixed>|null $calendrier Facteur calendrier PRÉCALCULÉ
      *                                        ({facteur:float, explication:?string}, sortie
      *                                        CalendarContext::facteurReappro) — null = calculé
@@ -423,14 +430,17 @@ final class Data
      *
      * @return array{rows:list<array<string,mixed>>, alerts:int, calendrier:array{facteur:float, explication:?string}}
      */
-    public static function analyseReappro(int $targetDays, ?string $fromDay, ?string $toDay, int $calDays, ?array $calendrier = null): array
+    public static function analyseReappro(int $targetDays, ?string $fromDay, ?string $toDay, int $openDays, ?array $calendrier = null): array
     {
         // Facteur calendrier universitaire de l'horizon de couverture
         // (injectable pour tests/trace ; panne EDT → 1.0 silencieux) :
         // module UNIQUEMENT les quantités suggérées — cf. docblock.
+        // L'horizon converti en jours CALENDAIRES : CalendarContext
+        // raisonne sur des semaines calendaires (horizonCalendaire =
+        // point de conversion unique).
         if ($calendrier === null) {
             $now = new \DateTimeImmutable('now', new \DateTimeZone('Europe/Paris'));
-            $calendrier = CalendarContext::facteurReappro($now, max(1, $targetDays));
+            $calendrier = CalendarContext::facteurReappro($now, ComptaCalc::horizonCalendaire($targetDays));
         }
         $fCal = min(1.0, max(0.0, (float) ($calendrier['facteur'] ?? 1.0)));
 
@@ -438,7 +448,7 @@ final class Data
         // sa catégorie vient du CSV, et son stock est le théorique issu de
         // l'inventaire (même source que la page Inventaire).
         $consumption = Sale::consumptionBetween($fromDay, $toDay);
-        $calDays = max(1, $calDays);
+        $openDays = max(1, $openDays);
 
         // Produits marqués « plus en vente » (saisonniers/discontinués) :
         // exclus du réappro pour ne pas encombrer l'analyse des commandes.
@@ -480,20 +490,20 @@ final class Data
             }
 
             $qty      = (int) ($data['qty'] ?? 0);
-            // Rythme 7 j/7 : les ventes du week-end sont incluses dans la
-            // quantité ET dans le nombre de jours — week-end couvert.
-            $avgDay   = $qty / $calDays;
-            $avgWeek  = $avgDay * 7.0;
-            $avgMonth = $avgDay * 30.44;
+            // Rythme en jours OUVRÉS (lun→ven) : le week-end n'existe ni
+            // dans les ventes (fermé) ni dans le compteur de jours.
+            $avgDay   = $qty / $openDays;
+            $avgWeek  = $avgDay * ComptaCalc::JOURS_OUVRES_SEMAINE;
+            $avgMonth = $avgDay * ComptaCalc::JOURS_OUVRES_MOIS;
 
             $lookupKey = strtolower(trim($key));
             $hasStock = array_key_exists($lookupKey, $theoreticalLower);
             $stock    = $hasStock ? $theoreticalLower[$lookupKey] : null;
             $countedAt = $lastCountsLower[$lookupKey]['at'] ?? null;
 
-            // Autonomie : jours CALENDaires avant rupture, week-end inclus
-            // (arrondie à la baisse ; un stock négatif signifie rupture
-            // déjà atteinte).
+            // Autonomie : jours OUVRÉS avant rupture (lun→ven ; arrondie
+            // à la baisse ; un stock négatif signifie rupture déjà
+            // atteinte).
             $autonomy = ($stock !== null && $avgDay > 0)
                 ? max(0, (int) floor($stock / $avgDay))
                 : null;
@@ -539,7 +549,7 @@ final class Data
                 // aucune alerte (cf. docblock — le bruit de vacances n'a
                 // pas à réclamer une commande).
                 $state = 'ok';
-            } elseif ($stock <= 0 || ($autonomy !== null && $autonomy < 7)) {
+            } elseif ($stock <= 0 || ($autonomy !== null && $autonomy < ComptaCalc::JOURS_OUVRES_SEMAINE)) {
                 $state = 'reorder';
             } else {
                 $state = 'ok';

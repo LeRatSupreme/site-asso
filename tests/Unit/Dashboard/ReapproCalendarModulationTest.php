@@ -52,7 +52,8 @@ final class ReapproCalendarModulationTest extends TestCase
         db_test_bridge_enable();
 
         // 30 ventes de « cola » sur la période d'analyse (3/j × 10 jours
-        // espacés) : rythme 30/20 j = 1,5/j → besoin 7 j = ceil(10,5) = 11.
+        // espacés) : 05/10→24/10 = 15 jours OUVRÉS (lun→ven) → rythme
+        // 30/15 j ouvrés = 2/j → besoin 7 j ouvrés = ceil(14) = 14.
         for ($i = 0; $i < 10; $i++) {
             $jour = sprintf('2026-10-%02d', 5 + 2 * $i);
             for ($j = 1; $j <= 3; $j++) {
@@ -100,12 +101,12 @@ final class ReapproCalendarModulationTest extends TestCase
     /** Facteur 1.0 (semaine de cours / politique prudente) : comportement historique exact. */
     public function test_facteur_1_comportement_historique(): void
     {
-        $a = Data::analyseReappro(7, '2026-10-05', '2026-10-24', 20, ['facteur' => 1.0, 'explication' => null]);
+        $a = Data::analyseReappro(7, '2026-10-05', '2026-10-24', 15, ['facteur' => 1.0, 'explication' => null]);
         $l = $this->ligneCola($a);
 
-        self::assertSame(1.5, $l['avg_day'], 'Rythme observé : 30 ventes / 20 jours calendaires.');
-        self::assertSame(11, $l['need'], 'Besoin brut : ceil(1,5/j × 7 j) = 11.');
-        self::assertSame(9, $l['to_order'], 'Besoin 11 − stock théorique 2 = 9.');
+        self::assertSame(2.0, (float) $l['avg_day'], 'Rythme observé : 30 ventes / 15 jours ouvrés (lun→ven).');
+        self::assertSame(14, $l['need'], 'Besoin brut : ceil(2/j × 7 j ouvrés) = 14.');
+        self::assertSame(12, $l['to_order'], 'Besoin 14 − stock théorique 2 = 12.');
         self::assertSame('reorder', $l['state']);
         self::assertTrue($l['is_alert']);
         self::assertGreaterThan(0, $a['alerts']);
@@ -115,8 +116,8 @@ final class ReapproCalendarModulationTest extends TestCase
     /** Semaine 100 % morte (facteur 0) : aucune commande, aucune alerte, faits observés intacts. */
     public function test_facteur_0_annule_suggestions_et_alertes(): void
     {
-        $ref = Data::analyseReappro(7, '2026-10-05', '2026-10-24', 20, ['facteur' => 1.0, 'explication' => null]);
-        $mort = Data::analyseReappro(7, '2026-10-05', '2026-10-24', 20, [
+        $ref = Data::analyseReappro(7, '2026-10-05', '2026-10-24', 15, ['facteur' => 1.0, 'explication' => null]);
+        $mort = Data::analyseReappro(7, '2026-10-05', '2026-10-24', 15, [
             'facteur'     => 0.0,
             'explication' => 'Semaine sans cours du 26/10 au 30/10 : suggestions annulées',
         ]);
@@ -143,19 +144,19 @@ final class ReapproCalendarModulationTest extends TestCase
     /** Semaine partielle (facteur 0,6) : besoin au prorata, moyenne et coûts intacts, alerte conservée. */
     public function test_facteur_partiel_prorata_du_besoin(): void
     {
-        $a = Data::analyseReappro(7, '2026-10-05', '2026-10-24', 20, [
+        $a = Data::analyseReappro(7, '2026-10-05', '2026-10-24', 15, [
             'facteur'     => 0.6,
             'explication' => 'Semaine partielle du 02/11 au 06/11 (3 jours de cours sur 5) : suggestions réduites ×0,6',
         ]);
         $l = $this->ligneCola($a);
 
-        // Besoin = ceil(1,5/j × 7 j × 0,6) = ceil(6,3) = 7 → commande 7 − 2 = 5.
-        self::assertSame(7, $l['need'], 'Besoin au prorata des jours de cours.');
-        self::assertSame(5, $l['to_order']);
+        // Besoin = ceil(2/j × 7 j ouvrés × 0,6) = ceil(8,4) = 9 → commande 9 − 2 = 7.
+        self::assertSame(9, $l['need'], 'Besoin au prorata des jours de cours.');
+        self::assertSame(7, $l['to_order']);
         self::assertSame('reorder', $l['state'], 'Alerte conservée : le stock reste bas, la commande est juste plus petite.');
         self::assertTrue($l['is_alert']);
-        self::assertSame(1.5, $l['avg_day'], 'Moyenne observée à l\'échelle pleine.');
-        self::assertEqualsWithDelta(5.0, (float) $l['order_cost'], 0.001, 'order_cost = qté × coût unitaire inchangé (suivant la quantité, pas une modulation du coût).');
+        self::assertSame(2.0, (float) $l['avg_day'], 'Moyenne observée à l\'échelle pleine.');
+        self::assertEqualsWithDelta(7.0, (float) $l['order_cost'], 0.001, 'order_cost = qté × coût unitaire inchangé (suivant la quantité, pas une modulation du coût).');
     }
 
     /** Sans injection : le facteur est calculé (ici, en APP_TESTING, neutre 1.0) et exposé. */
@@ -164,7 +165,7 @@ final class ReapproCalendarModulationTest extends TestCase
         if (!(\defined('APP_TESTING') && \constant('APP_TESTING'))) {
             self::markTestSkipped('APP_TESTING non actif.');
         }
-        $a = Data::analyseReappro(7, '2026-10-05', '2026-10-24', 20);
+        $a = Data::analyseReappro(7, '2026-10-05', '2026-10-24', 15);
 
         self::assertSame(1.0, $a['calendrier']['facteur'], 'Calendrier vide hors-ligne en test → prudent, aucune modulation.');
         self::assertArrayHasKey('calendrier', $a);

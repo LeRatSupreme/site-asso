@@ -6,13 +6,21 @@ use App\Core\Compta\CashBreakdown;
 
 /**
  * Pavé « coupures » PARTAGÉ (prise « chez soi » ET dépôt banque, kiosque
- * ET admin) : grille des 12 coupures légales (catalogue VERROUILLÉ de
- * CashBreakdown::UNITS — unique source, jamais de liste dupliquée en
- * vue), grosses coupures d'abord comme dans CashBreakdown::format().
+ * ET admin) : UNE LIGNE = UNE coupure, les lignes empilées en flex
+ * column avec gaps explicites — jamais de grille à colonnes collées ni
+ * de position absolute : aucun chevauchement possible, même à 320 px
+ * (correctif mobile du 22/10/2026 : steppers + et − supprimés, ils
+ * chevauchaient les champs voisins sur téléphone).
  *
- * Chaque cellule : libellé (20€, 50c…) + stepper − / saisie / + (zones
- * tactiles ≥ 44 px, police ≥ 16 px — leçon iOS : en dessous, Safari
- * zoome au focus). Total en direct, calculé en CENTIMES ENTIERS côté JS
+ * Chaque ligne : « [libellé 20 €] [champ nombre ×] [total ligne €] » —
+ * chaque élément dans SA propre zone (tailles bornées, min-width), un
+ * SEUL champ par ligne. Saisie DIRECTE dans le champ nombre
+ * (inputmode numeric, police ≥ 16 px — leçon iOS : en dessous, Safari
+ * zoome au focus). Catalogue VERROUILLÉ de CashBreakdown::UNITS
+ * (unique source, jamais de liste dupliquée en vue), grosses coupures
+ * d'abord comme dans CashBreakdown::format().
+ *
+ * Total général en direct, calculé en CENTIMES ENTIERS côté JS
  * (Σ unit×qty) et détail formaté « 3×20€ · 5×2€ · 12×50c » (même
  * convention que le serveur). Un évènement « cashcoupures » (bubbles)
  * porte {cents, filled, ok} à chaque recalcul pour les récaps des vues.
@@ -49,43 +57,55 @@ $ccLabel = static fn (int $cents): string => $cents >= 100 ? ((string) (int) ($c
 ?>
 <style>
     .cc-wrap { margin: 0.2rem 0 1rem; }
-    .cc-grid {
-        display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 0.5rem;
-    }
-    .cc-cell {
-        display: grid; gap: 0.35rem; justify-items: stretch;
-        padding: 0.5rem 0.4rem 0.55rem;
+    /* Une coupure = UNE ligne, empilées verticalement (flex column, gap
+       explicite) : jamais de grille à colonnes collées, jamais
+       d'absolute — aucun chevauchement possible sur téléphone. */
+    .cc-list { display: flex; flex-direction: column; gap: 0.45rem; }
+    .cc-line {
+        display: flex; flex-wrap: wrap; align-items: center;
+        gap: 0.35rem 0.6rem;
+        padding: 0.5rem 0.6rem;
         border: 1px solid var(--border, rgba(255,255,255,0.12));
         border-radius: 12px; background: rgba(255, 255, 255, 0.03);
     }
-    .cc-cell.is-filled { border-color: var(--primary, #48bdd3); background: rgba(72, 189, 211, 0.09); }
-    .cc-label {
-        text-align: center; font-size: 0.95rem; font-weight: 900;
-        letter-spacing: 0.02em; line-height: 1;
+    .cc-line.is-filled { border-color: var(--primary, #48bdd3); background: rgba(72, 189, 211, 0.09); }
+    /* Zone 1 — libellé de la coupure : largeur minimale fixe, jamais
+       compressible sous son contenu. */
+    .cc-line-label {
+        flex: 0 0 auto; min-width: 2.75rem;
+        font-size: 1.05rem; font-weight: 900; line-height: 1;
+        letter-spacing: 0.02em; font-variant-numeric: tabular-nums;
     }
-    .cc-step { display: flex; gap: 0.3rem; align-items: stretch; }
-    .cc-btn {
-        flex: 1 1 0; min-width: 38px; min-height: 44px;
-        border: 1px solid var(--border, rgba(255,255,255,0.18));
-        border-radius: 10px; background: rgba(255, 255, 255, 0.05);
-        color: var(--foreground, inherit);
-        font-size: 1.3rem; font-weight: 900; line-height: 1;
-        cursor: pointer; -webkit-tap-highlight-color: transparent;
+    /* Zone 2 — le SEUL champ de la ligne : nombre × (le « × » reste
+       solidaire du champ dans la même zone). */
+    .cc-line-field {
+        display: flex; align-items: center; gap: 0.4rem;
+        flex: 0 0 auto; margin-left: auto;
     }
-    .cc-btn:hover { border-color: var(--primary, #48bdd3); }
     .cc-qty {
-        flex: 1.25 1 0; width: 100%; min-width: 0; min-height: 44px;
-        padding: 0.15rem 0.2rem; text-align: center;
+        width: 5.25rem; min-width: 4.5rem; max-width: 100%; min-height: 48px;
+        padding: 0.2rem 0.45rem; text-align: center;
         border: 1px solid var(--border, rgba(255,255,255,0.15));
         border-radius: 10px; background: rgba(255, 255, 255, 0.04);
         color: var(--foreground, inherit);
-        font-size: 1.05rem; font-weight: 800; /* ≥ 16 px : pas de zoom iOS */
+        font-size: 1.1rem; /* ≥ 16 px : pas de zoom iOS au focus */
+        font-size: max(16px, 1.1rem);
+        font-weight: 800;
         font-variant-numeric: tabular-nums;
     }
+    .cc-qty:focus { border-color: var(--primary, #48bdd3); outline: none; }
     .cc-qty::-webkit-outer-spin-button,
     .cc-qty::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
     .cc-qty { -moz-appearance: textfield; appearance: textfield; }
+    .cc-times { flex: 0 0 auto; color: var(--muted, #8892a6); font-weight: 700; line-height: 1; }
+    /* Zone 3 — total de la ligne (unit × qty), calé à droite, compressible
+       mais jamais sous 0 : il passe à la ligne plutôt que de chevaucher. */
+    .cc-line-total {
+        flex: 1 1 3.5rem; min-width: 0; text-align: right;
+        font-size: 1rem; font-weight: 800; font-variant-numeric: tabular-nums;
+        color: var(--muted, #8892a6);
+    }
+    .cc-line.is-filled .cc-line-total { color: var(--foreground, inherit); }
     .cc-total { margin: 0.8rem 0 0; font-size: 0.95rem; font-weight: 700; }
     .cc-total strong { font-variant-numeric: tabular-nums; }
     .cc-detail { margin: 0.3rem 0 0; font-size: 0.85rem; color: var(--muted, #8892a6); }
@@ -102,18 +122,18 @@ $ccLabel = static fn (int $cents): string => $cents >= 100 ? ((string) (int) ($c
      data-cc data-cc-mode="<?= $ccMode === 'check' ? 'check' : 'amount' ?>"
      <?= $ccAmountInput !== null ? 'data-cc-amount="' . e($ccAmountInput) . '"' : '' ?>
      <?= $ccSubmitBtn !== null ? 'data-cc-submit="' . e($ccSubmitBtn) . '"' : '' ?>>
-    <div class="cc-grid" role="group" aria-label="Détail par coupures">
+    <div class="cc-list" role="group" aria-label="Détail par coupures">
         <?php foreach ($ccUnits as $ccUnit): ?>
         <?php $ccLab = $ccLabel((int) $ccUnit); ?>
-        <div class="cc-cell" data-unit="<?= (int) $ccUnit ?>" data-label="<?= e($ccLab) ?>">
-            <span class="cc-label" aria-hidden="true"><?= e($ccLab) ?></span>
-            <div class="cc-step">
-                <button type="button" class="cc-btn cc-minus" aria-label="Retirer une coupure de <?= e($ccLab) ?>">−</button>
+        <div class="cc-line" data-unit="<?= (int) $ccUnit ?>" data-label="<?= e($ccLab) ?>">
+            <span class="cc-line-label"><?= e($ccLab) ?></span>
+            <span class="cc-line-field">
                 <input type="number" class="cc-qty" name="qty_<?= (int) $ccUnit ?>" min="0" step="1" max="9999"
                        inputmode="numeric" placeholder="0" autocomplete="off"
                        aria-label="Nombre de coupures de <?= e($ccLab) ?>">
-                <button type="button" class="cc-btn cc-plus" aria-label="Ajouter une coupure de <?= e($ccLab) ?>">+</button>
-            </div>
+                <span class="cc-times" aria-hidden="true">×</span>
+            </span>
+            <span class="cc-line-total">0,00&nbsp;€</span>
         </div>
         <?php endforeach; ?>
     </div>
@@ -123,10 +143,12 @@ $ccLabel = static fn (int $cents): string => $cents >= 100 ? ((string) (int) ($c
 </div>
 
 <script>
-/* Grille de coupures : total en direct (centimes entiers côté JS, jamais
-   de float intermédiaire) + verrouillage du bouton d'envoi selon le mode.
-   Initialisation idempotente (data-cc-ready) : le pavé peut être rendu
-   plusieurs fois par page sans double branchement. */
+/* Grille de coupures : totaux de ligne + total général en direct
+   (centimes entiers côté JS, jamais de float intermédiaire) +
+   verrouillage du bouton d'envoi selon le mode. Plus de boutons − / + :
+   la saisie se fait directement dans le champ nombre. Initialisation
+   idempotente (data-cc-ready) : le pavé peut être rendu plusieurs fois
+   par page sans double branchement. */
 (function () {
     'use strict';
 
@@ -166,7 +188,7 @@ $ccLabel = static fn (int $cents): string => $cents >= 100 ? ((string) (int) ($c
         if (amountId) amountInput = document.getElementById(amountId);
         if (submitId) submitBtn = document.getElementById(submitId);
 
-        var cells = grid.querySelectorAll('.cc-cell');
+        var cells = grid.querySelectorAll('.cc-line');
         var totalEl = grid.querySelector('.cc-total strong');
         var detailEl = grid.querySelector('.cc-detail');
         var warnEl = grid.querySelector('.cc-warn');
@@ -175,15 +197,18 @@ $ccLabel = static fn (int $cents): string => $cents >= 100 ? ((string) (int) ($c
             var cents = 0;
             var filled = 0;
             var parts = [];
-            /* Les cellules sont en ordre décroissant dans le DOM : le
+            /* Les lignes sont en ordre décroissant dans le DOM : le
                détail reconstruit suit l'ordre du format() serveur. */
             Array.prototype.forEach.call(cells, function (cell) {
                 var input = cell.querySelector('.cc-qty');
+                var unit = parseInt(cell.getAttribute('data-unit'), 10);
                 var q = qtyValue(input);
                 cell.classList.toggle('is-filled', q > 0);
+                var lineTotal = cell.querySelector('.cc-line-total');
+                if (lineTotal) lineTotal.textContent = fmt(unit * q);
                 if (q > 0) {
                     filled++;
-                    cents += parseInt(cell.getAttribute('data-unit'), 10) * q;
+                    cents += unit * q;
                     parts.push(q + '×' + cell.getAttribute('data-label'));
                 }
             });
@@ -227,14 +252,6 @@ $ccLabel = static fn (int $cents): string => $cents >= 100 ? ((string) (int) ($c
 
         Array.prototype.forEach.call(cells, function (cell) {
             var input = cell.querySelector('.cc-qty');
-            var minus = cell.querySelector('.cc-minus');
-            var plus = cell.querySelector('.cc-plus');
-            function setQty(v) {
-                input.value = String(Math.max(0, Math.min(9999, v)));
-                recalc();
-            }
-            minus.addEventListener('click', function () { setQty(qtyValue(input) - 1); });
-            plus.addEventListener('click', function () { setQty(qtyValue(input) + 1); });
             input.addEventListener('input', recalc);
             input.addEventListener('blur', function () {
                 if (qtyValue(input) === 0) input.value = '';

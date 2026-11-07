@@ -384,8 +384,9 @@ final class ComptaCalc
 
     /**
      * Nombre de jours CALENDaires entre deux dates, bornes incluses
-     * (week-end compris). Sert au réappro : la consommation est ramenée
-     * à un rythme 7 j/7 pour que l'autonomie compte le week-end.
+     * (week-end compris). Ne sert PLUS aux moyennes réappro (jours
+     * ouvrés depuis le 07/11/2026 — cf. openDaysBetween) : reste pour
+     * les longueurs de fenêtre précédente et l'objectif de CA.
      *
      * @param string $fromDay « YYYY-MM-DD » (inclus).
      * @param string $toDay   « YYYY-MM-DD » (inclus).
@@ -414,7 +415,9 @@ final class ComptaCalc
     /**
      * Nombre de jours d'ouverture (lundi→vendredi) entre deux dates, bornes
      * incluses. Sert à rapporter une consommation à des journées réelles
-     * d'activité de la cafétéria.
+     * d'activité de la cafétéria : FERMÉE le week-end (0 vente sam/dim
+     * sur tout l'historique — vérifié le 07/11/2026), les compteurs de
+     * jours analysés et les moyennes réappro ne comptent que ces jours.
      *
      * @param string $fromDay « YYYY-MM-DD » (inclus).
      * @param string $toDay   « YYYY-MM-DD » (inclus).
@@ -446,6 +449,46 @@ final class ComptaCalc
         }
 
         return $count;
+    }
+
+    /** Jours ouvrés d'une semaine d'ouverture (lun→ven) — échelle des moyennes réappro. */
+    public const JOURS_OUVRES_SEMAINE = 5;
+
+    /** Jours ouvrés d'un mois moyen (30,44 calendaires × 5/7 ≈ 21,74). */
+    public const JOURS_OUVRES_MOIS = 21.74;
+
+    /**
+     * Horizons de couverture « Couvrir pour » (page Réappro ET liste de
+     * courses) : point d'assemblage UNIQUE des jours de couverture.
+     *
+     * « 1 semaine » = 5 jours OUVRÉS de couverture : la cafétéria est
+     * fermée le week-end (0 vente sam/dim sur tout l'historique), une
+     * semaine de couverture est une semaine d'ouverture. `ouvres` sert
+     * aux besoins/moyennes (Data::analyseReappro, facteur liste),
+     * `calendaires` est l'équivalent calendaire (facteur EDT, infobulles).
+     *
+     * @return array<string, array{label:string, ouvres:int, calendaires:int}>
+     */
+    public static function couvertureHorizons(): array
+    {
+        return [
+            '1w' => ['label' => '1 semaine',  'ouvres' => 5,  'calendaires' => 7],
+            '2w' => ['label' => '2 semaines', 'ouvres' => 10, 'calendaires' => 14],
+            '1m' => ['label' => '1 mois',     'ouvres' => 21, 'calendaires' => 30],
+            '2m' => ['label' => '2 mois',     'ouvres' => 43, 'calendaires' => 61],
+            '3m' => ['label' => '3 mois',     'ouvres' => 65, 'calendaires' => 91],
+        ];
+    }
+
+    /**
+     * Équivalent CALENDAIRE d'un horizon en jours ouvrés (borne haute
+     * d'un horizon de couverture : × 7/5 arrondi au-dessus). Sert au
+     * facteur calendrier universitaire (CalendarContext::facteurReappro,
+     * qui raisonne en jours calendaires) sans multiplier les conversions.
+     */
+    public static function horizonCalendaire(int $joursOuvres): int
+    {
+        return (int) ceil(max(1, $joursOuvres) * 7 / 5);
     }
 
     /**

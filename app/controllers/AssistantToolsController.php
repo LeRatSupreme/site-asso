@@ -207,7 +207,8 @@ final class AssistantToolsController extends Controller
      * Outil 3 — liste de réapprovisionnement : résultat EXACT de
      * Data::analyseReappro (point d'assemblage unique partagé avec la
      * page Réappro) sur ses réglages par défaut : analyse des 14 derniers
-     * jours (jours calendaires, week-end inclus) pour couvrir 7 jours.
+     * jours calendaires (10 jours ouvrés lun→ven — fermé le week-end)
+     * pour couvrir 5 jours ouvrés (1 semaine d'ouverture).
      * Tri conservé : quantité à commander décroissante. Le facteur
      * calendrier universitaire appliqué (mission E2) est exposé tel quel
      * (champ additif « calendrier ») : a_commander/nb_alertes/etat en
@@ -218,17 +219,18 @@ final class AssistantToolsController extends Controller
         $this->ouvrir();
 
         // Fenêtre par défaut de la page Réappro (ref=14d, horizon 1w) :
-        // aujourd'hui en fuseau Paris explicite (leçon #1).
+        // aujourd'hui en fuseau Paris explicite (leçon #1). Jours de la
+        // fenêtre et horizon en JOURS OUVRÉS (lun→ven), comme la page.
         $paris     = new \DateTimeZone('Europe/Paris');
         $aujourdhui = new \DateTimeImmutable('today', $paris);
         $debut = $aujourdhui->modify('-13 days')->format('Y-m-d');
         $fin   = $aujourdhui->format('Y-m-d');
 
-        $calDays = ComptaCalc::calendarDaysBetween($debut, $fin);
-        $horizon = 7;
+        $openDays = ComptaCalc::openDaysBetween($debut, $fin);
+        $horizon = ComptaCalc::JOURS_OUVRES_SEMAINE; // « couvrir 1 semaine » = 5 j ouvrés
 
         try {
-            $analyse = Data::analyseReappro($horizon, $debut, $fin, $calDays);
+            $analyse = Data::analyseReappro($horizon, $debut, $fin, $openDays);
         } catch (\Throwable $e) {
             $this->echecInterne(self::TOOL_REAPPRO, $e);
         }
@@ -251,7 +253,7 @@ final class AssistantToolsController extends Controller
         $this->json([
             'outil'           => self::TOOL_REAPPRO,
             'genere_le'       => $fin,
-            'periode_analyse' => ['debut' => $debut, 'fin' => $fin, 'jours' => $calDays],
+            'periode_analyse' => ['debut' => $debut, 'fin' => $fin, 'jours' => $openDays],
             'horizon_jours'   => $horizon,
             'calendrier'      => $analyse['calendrier'],
             'nb_produits'     => count($produits),

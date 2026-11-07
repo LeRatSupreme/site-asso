@@ -400,9 +400,10 @@ final class AssistantToolsTest extends IntegrationTestCase
 
     public function test_produits_a_commander_reprend_la_fenetre_par_defaut_du_reappro(): void
     {
-        // « Coca cola » : 14 vendus sur la fenêtre de 14 jours (avant le
-        // dernier comptage), stock théorique 2 → besoin 7, a_commander 5,
-        // autonomie 2 j (< 7) → état a_commander (alerte).
+        // « Coca cola » : 14 vendus sur la fenêtre de 14 jours (10 jours
+        // OUVRÉS lun→ven), avant le dernier comptage, stock théorique 2 →
+        // rythme 1,4/j ouvré, besoin 5 j ouvrés = 7, a_commander 5,
+        // autonomie 1 j ouvré (< 5) → état a_commander (alerte).
         // « Chips » : 7 vendus, stock 30 → a_commander 0, état ok.
         // Calendrier EDT VIDÉ en tête de test : facteur NEUTRE 1.0
         // déterministe, quel que soit le cache laissé par un run filtré
@@ -423,11 +424,11 @@ final class AssistantToolsTest extends IntegrationTestCase
         self::assertSame('produits_a_commander', $c['outil'] ?? '');
         self::assertSame($this->jourParis(0), $c['genere_le'] ?? '');
         self::assertSame(
-            ['debut' => $this->jourParis(13), 'fin' => $this->jourParis(0), 'jours' => 14],
+            ['debut' => $this->jourParis(13), 'fin' => $this->jourParis(0), 'jours' => 10],
             $c['periode_analyse'] ?? null,
-            'Fenêtre par défaut de la page Réappro : 14 derniers jours.'
+            'Fenêtre par défaut de la page Réappro : 14 derniers jours = 10 jours ouvrés (lun→ven).'
         );
-        self::assertSame(7, (int) ($c['horizon_jours'] ?? -1));
+        self::assertSame(5, (int) ($c['horizon_jours'] ?? -1), '« Couvrir 1 semaine » = 5 jours ouvrés.');
         // Ticket QA-01 : le facteur calendrier universitaire appliqué est
         // EXPOSÉ (champ additif « calendrier », contrat : champs ajoutés
         // jamais retirés) — cache vide → hors horizon publié → neutre 1.0.
@@ -442,7 +443,7 @@ final class AssistantToolsTest extends IntegrationTestCase
 
         $coca = $produits[0];
         self::assertSame(2, $coca['stock'] ?? null);
-        self::assertSame(2, $coca['autonomie_jours'] ?? null);
+        self::assertSame(1, $coca['autonomie_jours'] ?? null, 'Autonomie en jours ouvrés : floor(2 ÷ 1,4/j) = 1.');
         self::assertSame(5, $coca['a_commander'] ?? null);
         self::assertSame('a_commander', $coca['etat'] ?? '');
 
@@ -493,7 +494,7 @@ final class AssistantToolsTest extends IntegrationTestCase
         }
         // Les FAITS restent à l'échelle pleine (docblock : l'autonomie est
         // inchangée par le facteur — c'est un fait observé, pas une suggestion).
-        self::assertSame(2, $produits[0]['autonomie_jours'] ?? null, 'Tri par autonomie quand tout est à 0.');
+        self::assertSame(1, $produits[0]['autonomie_jours'] ?? null, 'Tri par autonomie quand tout est à 0.');
     }
 
     // -----------------------------------------------------------------
