@@ -607,8 +607,9 @@ final class ComptaConsistencyTest extends IntegrationTestCase
     }
 
     /**
-     * Lot 4B : les pages Catégories et Produits ne calculent plus rien en
-     * vue — totaux, marges et parts sont des clés du payload contrôleur.
+     * Lot 4B : les blocs Catégories et Produits de la page unifiée
+     * « Bénéfice » ne calculent plus rien en vue — totaux, marges et parts
+     * sont des clés du payload contrôleur (beneficeData()).
      */
     public function test_categories_et_produits_affichent_les_calculs_du_controleur(): void
     {
@@ -623,12 +624,12 @@ final class ComptaConsistencyTest extends IntegrationTestCase
 
         $rc = $this->request(
             'GET',
-            '/admin/compta/categories?period=custom&from=2026-07-01&to=2026-07-31',
+            '/admin/compta/benefice?vue=categories&period=custom&from=2026-07-01&to=2026-07-31',
             [],
             [],
             $this->rootId
         );
-        self::assertSame(200, (int) ($rc['code'] ?? 0), 'La page Catégories doit répondre.');
+        self::assertSame(200, (int) ($rc['code'] ?? 0), 'La page Bénéfice (onglet catégories) doit répondre.');
         $bodyC = (string) ($rc['body'] ?? '');
         self::assertStringContainsString('200,00 €', $bodyC, 'Le CA total (somme contrôleur) est erroné.');
         self::assertStringContainsString('75,0 %', $bodyC, 'La marge globale (clé totaux du payload) est absente ou erronée.');
@@ -636,12 +637,12 @@ final class ComptaConsistencyTest extends IntegrationTestCase
 
         $rp = $this->request(
             'GET',
-            '/admin/compta/produits?period=custom&from=2026-07-01&to=2026-07-31',
+            '/admin/compta/benefice?vue=produits&period=custom&from=2026-07-01&to=2026-07-31',
             [],
             [],
             $this->rootId
         );
-        self::assertSame(200, (int) ($rp['code'] ?? 0), 'La page Produits doit répondre.');
+        self::assertSame(200, (int) ($rp['code'] ?? 0), 'La page Bénéfice (onglet produits) doit répondre.');
         $bodyP = (string) ($rp['body'] ?? '');
         self::assertStringContainsString('50,0 %', $bodyP, 'La marge produit (clé margin du payload) est absente ou erronée.');
     }

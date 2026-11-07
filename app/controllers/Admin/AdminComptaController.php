@@ -504,48 +504,64 @@ final class AdminComptaController extends AdminBaseController
     }
 
     // -----------------------------------------------------------------
-    //  Produits (bénéfice)
+    //  Bénéfice (page unifiée produits + catégories)
     // -----------------------------------------------------------------
 
-    public function products(): void
+    /**
+     * Page unifiée « Bénéfice » : fusion des anciennes pages « Bénéfice
+     * par produit » (/admin/compta/produits) et « Bénéfice par catégorie »
+     * (/admin/compta/categories) — quasi jumelles, désormais deux onglets
+     * d'une même page basculés par ?vue=produits|categories (liste blanche,
+     * défaut produits).
+     *
+     * Les DEUX jeux de données sont préparés par le même point d'assemblage
+     * (beneficeData()) : marges, totaux et parts sont calculés une seule
+     * fois côté contrôleur (lot 4B — la vue ne calcule rien).
+     */
+    public function benefice(): void
     {
         $user = $this->guardCompta();
 
+        $vue = ($_GET['vue'] ?? 'produits') === 'categories' ? 'categories' : 'produits';
+
         $period = ComptaCalc::resolvePeriod($_GET['period'] ?? null, $_GET['from'] ?? null, $_GET['to'] ?? null);
-        $rows = Sale::byProductBetween($period['from'], $period['to']);
 
-        // Marge par produit (lot 4B : calcul sorti de la vue), en % —
-        // 0.0 si le CA du produit est nul (même règle qu'auparavant).
-        foreach ($rows as &$r) {
-            $ca = (float) $r['ca'];
-            $r['margin'] = $ca > 0 ? round((float) $r['profit'] / $ca * 100, 1) : 0.0;
-        }
-        unset($r);
-
-        $this->renderAdmin('admin/compta/products', [
-            'title'         => 'Bénéfice par produit',
+        $this->renderAdmin('admin/compta/benefice', self::beneficeData($period) + [
+            'title'         => 'Bénéfice',
             'user'          => $user,
-            'rows'          => $rows,
+            'vue'           => $vue,
             'period'        => $period,
             'periodOptions' => ComptaCalc::PERIOD_OPTIONS,
         ]);
     }
 
-    // -----------------------------------------------------------------
-    //  Catégories
-    // -----------------------------------------------------------------
-
-    public function categories(): void
+    /**
+     * Point d'assemblage unique des deux jeux « bénéfice » : lignes par
+     * produit (marge %) et lignes par catégorie (marge %, part du CA,
+     * totaux de période). Aucune des deux pages historiques ne recalculait
+     * un chiffre de l'autre : les deux assemblages sont regroupés ici sans
+     * duplication (chaque requête SQL n'est exécutée qu'une fois).
+     *
+     * @param array{preset:string,from:?string,to:?string} $period
+     *
+     * @return array{rowsProduits:list<array<string,mixed>>,rowsCategories:list<array<string,mixed>>,totaux:array{qty:int,ca:float,profit:float,margin:float}}
+     */
+    private static function beneficeData(array $period): array
     {
-        $user = $this->guardCompta();
+        // Produits : marge par ligne (lot 4B : calcul sorti de la vue), en
+        // % — 0.0 si le CA du produit est nul (même règle qu'auparavant).
+        $rowsProduits = Sale::byProductBetween($period['from'], $period['to']);
+        foreach ($rowsProduits as &$r) {
+            $ca = (float) $r['ca'];
+            $r['margin'] = $ca > 0 ? round((float) $r['profit'] / $ca * 100, 1) : 0.0;
+        }
+        unset($r);
 
-        $period = ComptaCalc::resolvePeriod($_GET['period'] ?? null, $_GET['from'] ?? null, $_GET['to'] ?? null);
-        $rows = Sale::byCategoryBetween($period['from'], $period['to']);
-
-        // Totaux, marge par catégorie et part du CA (lot 4B : calculs
-        // sortis de la vue — la vue ne lit que des clés prêtes).
+        // Catégories : marge par ligne + totaux de période + part du CA
+        // (lot 4B : la vue ne lit que des clés prêtes).
+        $rowsCategories = Sale::byCategoryBetween($period['from'], $period['to']);
         $totaux = ['qty' => 0, 'ca' => 0.0, 'profit' => 0.0, 'margin' => 0.0];
-        foreach ($rows as &$r) {
+        foreach ($rowsCategories as &$r) {
             $ca = (float) $r['ca'];
             $profit = (float) $r['profit'];
             $r['margin'] = $ca > 0 ? round($profit / $ca * 100, 1) : 0.0;
@@ -555,19 +571,56 @@ final class AdminComptaController extends AdminBaseController
         }
         unset($r);
         $totaux['margin'] = $totaux['ca'] > 0 ? round($totaux['profit'] / $totaux['ca'] * 100, 1) : 0.0;
-        foreach ($rows as &$r) {
+        foreach ($rowsCategories as &$r) {
             $r['share'] = $totaux['ca'] > 0 ? round((float) $r['ca'] / $totaux['ca'] * 100, 1) : 0.0;
         }
         unset($r);
 
-        $this->renderAdmin('admin/compta/categories', [
-            'title'         => 'Bénéfice par catégorie',
-            'user'          => $user,
-            'rows'          => $rows,
-            'totaux'        => $totaux,
-            'period'        => $period,
-            'periodOptions' => ComptaCalc::PERIOD_OPTIONS,
-        ]);
+        return [
+            'rowsProduits'   => $rowsProduits,
+            'rowsCategories' => $rowsCategories,
+            'totaux'         => $totaux,
+        ];
+    }
+
+    /**
+     * Ancienne page « Bénéfice par produit » : redirection permanente
+     * (301) vers la page unifiée, onglet produits — bookmarks et liens
+     * externes (recherche admin `?q=`) survivent, la période est conservée.
+     */
+    public function products(): void
+    {
+        $this->guardCompta();
+        self::redirectToBenefice('produits');
+    }
+
+    /**
+     * Ancienne page « Bénéfice par catégorie » : redirection permanente
+     * (301) vers la page unifiée, onglet catégories.
+     */
+    public function categories(): void
+    {
+        $this->guardCompta();
+        self::redirectToBenefice('categories');
+    }
+
+    /**
+     * Redirige (301) vers la page unifiée « Bénéfice » sur l'onglet
+     * demandé, en conservant les paramètres GET utiles (période et
+     * recherche produit).
+     */
+    private static function redirectToBenefice(string $vue): void
+    {
+        $params = ['vue' => $vue];
+        foreach (['period', 'from', 'to', 'q'] as $k) {
+            $v = trim((string) ($_GET[$k] ?? ''));
+            if ($v !== '') {
+                $params[$k] = $v;
+            }
+        }
+
+        http_response_code(301);
+        redirect(url('/admin/compta/benefice?' . http_build_query($params)));
     }
 
     // -----------------------------------------------------------------

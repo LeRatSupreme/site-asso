@@ -357,6 +357,10 @@ function aeic_register_routes(Router $router): void
     $router->get('/admin/compta/import', [AdminComptaController::class, 'importForm']);
     $router->post('/admin/compta/import', [AdminComptaController::class, 'import']);
     $router->get('/admin/compta/ventes', [AdminComptaController::class, 'sales']);
+    // Page unifiée « Bénéfice » (fusion produits + catégories, onglet
+    // ?vue=produits|categories) ; les deux anciennes URLs redirigent en
+    // 301 vers elle (voir AdminComptaController::redirectToBenefice).
+    $router->get('/admin/compta/benefice', [AdminComptaController::class, 'benefice']);
     $router->get('/admin/compta/produits', [AdminComptaController::class, 'products']);
     $router->get('/admin/compta/categories', [AdminComptaController::class, 'categories']);
     $router->get('/admin/compta/couts', [AdminComptaController::class, 'costs']);

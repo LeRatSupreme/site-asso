@@ -20,7 +20,8 @@ use App\Core\Router;
  *   - pas de fatal / parse error / warning / notice PHP dans la sortie ;
  *   - pas de stack trace exposée ;
  *   - code HTTP 200 (ou 302 pour les redirections légitimes : login déjà
- *     authentifié, logout, set-lang…).
+ *     authentifié, logout, set-lang… ; 301 pour les URLs retirées vers
+ *     leur remplaçante, voir REDIRECTIONS_PERMANENTES).
  *
  * Les routes paramétrées ({slug}, {id}…) sont appelées avec des valeurs
  * inexistantes : le contrôleur doit répondre proprement (200, 302 «
@@ -63,6 +64,20 @@ final class AdminPagesSmokeTest extends IntegrationTestCase
      */
     private const GET_POST_SEULES_PARAMETREES = [
         '/kiosque/assistant/ask/{token}',
+    ];
+
+    /**
+     * Routes GET retirées au profit d'une page unique : elles répondent
+     * volontairement 301 (redirection permanente) vers leur remplaçante —
+     * comportement documenté du contrôleur, pas un bug. Ex. les anciennes
+     * pages « Bénéfice par produit/catégorie » fusionnées en
+     * /admin/compta/benefice (AdminComptaController::redirectToBenefice).
+     *
+     * @var list<string>
+     */
+    private const REDIRECTIONS_PERMANENTES = [
+        '/admin/compta/produits',
+        '/admin/compta/categories',
     ];
 
     protected function setUp(): void
@@ -197,6 +212,8 @@ final class AdminPagesSmokeTest extends IntegrationTestCase
                 }
             } elseif (in_array($path, self::GET_POST_SEULES, true)) {
                 $autorisés[] = 405;
+            } elseif (in_array($path, self::REDIRECTIONS_PERMANENTES, true)) {
+                $autorisés[] = 301;
             }
             if (!in_array($code, $autorisés, true)) {
                 $failures[] = sprintf(
