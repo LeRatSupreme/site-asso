@@ -12,14 +12,23 @@ declare(strict_types=1);
  * BTE 33CL »…) : il ne reste qu'à saisir le nom court — à
  * l'enregistrement, la fiche longue est fusionnée automatiquement
  * dans le produit court. Les appellations enregistrées sont listées
- * EN BAS de cette page ; « Mapping des libellés » reste réservé aux
- * alias produits courts.
+ * EN BAS de cette page, leur NOM COURT y est modifiable sur place
+ * (repointage via /admin/compta/aliases/apply : ventes, coûts et
+ * stocks de l'ancienne cible suivent, sans perte) ; « Mapping des
+ * libellés » reste réservé aux alias produits courts.
  *
  * @var list<string> $categories
  * @var list<string> $products
  * @var list<array{label:string, occurrences:int, hint:string, suggested:string, category:string}> $pendingRows
  * @var list<array<string,mixed>> $appellations
  */
+?><?php
+// Datalist « noms courts » du tableau Appellations enregistrées :
+// connus du contrôleur (known_keys = ProductAlias::knownProductKeys())
+// s'il les fournit, sinon repli sur les produits déjà vendus
+// ($products — même assemblage que la grille « Nouvelles
+// appellations » du haut de la page).
+$knownKeys = $known_keys ?? $products ?? [];
 ?>
 <div class="compta-head">
     <div>
@@ -95,14 +104,25 @@ declare(strict_types=1);
 
         <?php if (($appellations ?? []) !== []): ?>
             <h2 class="card-title" style="margin-top:1.5rem">Appellations enregistrées <span class="muted" style="font-size:0.8rem">(<?= count($appellations) ?>)</span></h2>
+            <form id="appellation-repoint-form" method="post" action="<?= e(url('/admin/compta/aliases/apply')) ?>">
+                <?= csrf_field() ?>
+            </form>
+            <p class="muted">Le <strong>nom court</strong> est modifiable ligne par ligne : à l'enregistrement, l'appellation est repointée vers le nouveau produit et les ventes correspondantes suivent — les coûts et stocks de l'ancien nom sont fusionnés sans perte (même mécanisme que « Auto-détecter les doublons »).</p>
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary btn-sm" form="appellation-repoint-form">Enregistrer les noms courts</button>
+                <span class="muted">Un seul bouton pour tout le tableau ; la confirmation s'affiche ensuite sur « Mapping des libellés ».</span>
+            </div>
             <div class="table-wrap">
-                <table class="table">
+                <table class="table" id="appellation-table">
                     <thead><tr><th>Libellé d'origine</th><th>Nom court</th><th>Catégorie</th><th></th></tr></thead>
                     <tbody>
-                        <?php foreach ($appellations as $a): ?>
+                        <?php foreach ($appellations as $i => $a): ?>
                             <tr>
                                 <td><code><?= e((string) $a['raw_description']) ?></code></td>
-                                <td><strong><?= e((string) $a['product_key']) ?></strong></td>
+                                <td>
+                                    <input type="hidden" name="raw[<?= (int) $i ?>]" value="<?= e((string) $a['raw_description']) ?>" form="appellation-repoint-form">
+                                    <input type="text" name="canonical[<?= (int) $i ?>]" value="<?= e((string) $a['product_key']) ?>" list="appellation-keys" maxlength="255" required autocomplete="off" class="alias-key-input" form="appellation-repoint-form" aria-label="Nom court de « <?= e((string) $a['raw_description']) ?> » (modifier pour repointer l'appellation)">
+                                </td>
                                 <td><?= e((string) ($a['category'] ?? '')) ?></td>
                                 <td>
                                     <form method="post" action="<?= e(url('/admin/compta/aliases/' . rawurlencode((string) $a['id']) . '/delete')) ?>" data-confirm="Supprimer cette appellation ?">
@@ -116,7 +136,10 @@ declare(strict_types=1);
                     </tbody>
                 </table>
             </div>
-            <p class="muted">Ces libellés longs restent actifs pour les imports CSV et les scans ; ils n'apparaissent plus dans « Mapping des libellés » (réservé aux produits). Ressaisis un libellé ci-dessus pour le replacer ici.</p>
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary btn-sm" form="appellation-repoint-form">Enregistrer les noms courts</button>
+            </div>
+            <p class="muted">Ces libellés longs restent actifs pour les imports CSV et les scans ; ils n'apparaissent plus dans « Mapping des libellés » (réservé aux produits). Ressaisis un libellé ci-dessus pour le replacer ici, ou modifie son nom court dans le tableau pour le repointer sur un autre produit.</p>
         <?php endif; ?>
 
         <p class="muted">Les libellés scannés et les fiches au nom long arrivent ici ; saisis le nom court — à l'enregistrement, la fiche longue est fusionnée automatiquement dans le produit court.</p>
@@ -129,6 +152,11 @@ declare(strict_types=1);
         <datalist id="alias-categories">
             <?php foreach ($categories as $cat): ?>
                 <option value="<?= e((string) $cat) ?>"></option>
+            <?php endforeach; ?>
+        </datalist>
+        <datalist id="appellation-keys">
+            <?php foreach ($knownKeys as $k): ?>
+                <option value="<?= e((string) $k) ?>"></option>
             <?php endforeach; ?>
         </datalist>
     </section>
@@ -193,6 +221,31 @@ declare(strict_types=1);
         border-radius: 4px;
         padding: 0.05rem 0.35rem;
         font-size: 0.85em;
+    }
+    /* Cellule « Nom court » devenue éditable dans le tableau
+       Appellations enregistrées : même famille que .alias-label-input
+       de la page Mapping (monospace, largeur bornée) — repointage en
+       masse vers /admin/compta/aliases/apply. */
+    .alias-key-input {
+        width: 170px;
+        max-width: 100%;
+        padding: 0.35rem 0.5rem;
+        border: 1px solid var(--border, rgba(255, 255, 255, 0.12));
+        border-radius: var(--radius-sm, 6px);
+        background: rgba(255, 255, 255, 0.04);
+        color: var(--foreground, inherit);
+        font-family: ui-monospace, 'SF Mono', Consolas, monospace;
+        font-size: 0.85rem;
+    }
+    .alias-key-input:focus,
+    .alias-key-input.is-changed {
+        outline: none;
+        border-color: var(--primary, #48bdd3);
+        box-shadow: 0 0 0 3px rgba(72, 189, 211, 0.18);
+    }
+    @media (max-width: 700px) {
+        /* Leçon mobile : champs ≥16px sinon zoom auto iOS Safari. */
+        #appellation-table input[type="text"] { font-size: 16px; }
     }
 </style>
 
@@ -266,5 +319,55 @@ declare(strict_types=1);
     });
 
     update();
+})();
+
+/* Tableau « Appellations enregistrées » : surligne en direct les noms
+   courts modifiés et demande une confirmation explicite avant le
+   repointage (l'ancienne clé produit est absorbée : ventes, coûts et
+   stocks transférés — même garde-fou que la page Auto-détection). */
+(function () {
+    'use strict';
+
+    var form = document.getElementById('appellation-repoint-form');
+    if (!form) return;
+
+    var inputs = Array.prototype.slice.call(form.querySelectorAll('input[name^="canonical"]'))
+        .filter(function (input) { return input.type === 'text'; });
+
+    function planned() {
+        return inputs
+            .filter(function (input) {
+                return input.value.trim() !== (input.getAttribute('data-initial') || '').trim();
+            })
+            .map(function (input) {
+                var tr = input.closest('tr');
+                return {
+                    from: input.getAttribute('data-initial') || '',
+                    to: input.value.trim(),
+                    raw: tr ? (tr.querySelector('code') ? tr.querySelector('code').textContent : '') : ''
+                };
+            });
+    }
+
+    inputs.forEach(function (input) {
+        input.setAttribute('data-initial', input.value);
+        input.addEventListener('input', function () {
+            input.classList.toggle('is-changed',
+                input.value.trim() !== (input.getAttribute('data-initial') || '').trim());
+        });
+    });
+
+    form.addEventListener('submit', function (e) {
+        var changes = planned();
+        if (changes.length === 0) return;
+        var lines = changes.map(function (c) {
+            return '  • « ' + c.from + ' » → « ' + c.to + ' » (libellé : ' + c.raw + ')';
+        }).join('\n');
+        var msg = changes.length + ' nom(s) court(s) modifié(s) :\n' + lines
+            + '\n\nLes ventes de ces libellés suivront le nouveau produit, et les coûts/stocks de l\'ancien nom seront fusionnés sans perte.\nConfirmer ?';
+        if (!window.confirm(msg)) {
+            e.preventDefault();
+        }
+    });
 })();
 </script>
