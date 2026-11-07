@@ -62,6 +62,92 @@ final class T1AutoFusionTest extends TestCase
         self::assertSame('zeta', $paires[0]['source']);
     }
 
+    // ── Niveau 1 : la graphie la plus PROPRE gagne (règle 07/11) ────────
+
+    /**
+     * RÉGRESSIONS ÉPINGLÉES : les 5 fusions auto de casse du
+     * 03/11/2026 11:39 avaient fait gagner les graphies sales
+     * (portant les ventes repointées par la synchro) sur les graphies
+     * propres. État reconstitué AVANT ce lot : ventes déjà sur les clés
+     * bas-de-casse, mais descriptions réelles au POS portant la graphie
+     * propre. La graphie gagnante doit désormais être la plus propre,
+     * même majoritairement moins vendue.
+     */
+    public function test_casse_graphie_propre_gagne_les_5_fusions_du_0311(): void
+    {
+        $keyStats = [
+            // Famille Redbull : « Redbull » collé, 146 descriptions réelles.
+            'Redbull'      => ['sales' => 0],
+            'red bull'     => ['sales' => 147],
+            // Famille Redbull Red.
+            'Redbull Red'  => ['sales' => 0],
+            'redbull red'  => ['sales' => 12],
+            // Famille Redbull Ice : 322 descriptions « Red bull ice »...
+            'Red bull ice' => ['sales' => 0],
+            'Redbull Ice'  => ['sales' => 375],
+            // Famille Eau : 459 descriptions « eau » bas-de-casse !
+            'Eau'          => ['sales' => 459],
+            'eau'          => ['sales' => 0],
+            // Famille Café allongé (accents conservés).
+            'Café allongé'  => ['sales' => 0],
+            'cafe allonge'  => ['sales' => 21],
+        ];
+        $occurrences = [ // descriptions EXACTES réellement tapées au POS
+            'Redbull'      => 146,
+            'Red bull'     => 1,
+            'Redbull Red'  => 12,
+            'Red bull ice' => 322,
+            'Redbull Ice'  => 53,
+            'eau'          => 459,
+            'Eau'          => 6,
+            'Café allongé' => 21,
+        ];
+
+        $cibles = [];
+        foreach (T1AutoFusion::doublonsCasse($keyStats, $occurrences) as $p) {
+            $cibles[$p['source']] = $p['target'];
+        }
+
+        self::assertSame('Redbull', $cibles['red bull'], '« Redbull » collé et Title Case gagne (le 03/11 avait choisi « red bull »).');
+        self::assertSame('Redbull Red', $cibles['redbull red'], 'Le 03/11 avait choisi « redbull red ».');
+        self::assertSame('Redbull Ice', $cibles['Red bull ice'], 'Title Case complet > cas partiel, même à 322 occurrences contre 53.');
+        self::assertSame('Eau', $cibles['eau'], '459 ventes « eau » ne battent PAS « Eau » : la propreté prime sur le volume.');
+        self::assertSame('Café allongé', $cibles['cafe allonge'], 'Accents conservés : le 03/11 avait choisi « cafe allonge ».');
+    }
+
+    public function test_casse_proprete_puis_forme_dominante_du_pos(): void
+    {
+        // À propreté ÉGALE (deux Title Case), la forme réellement
+        // dominante au POS l'emporte : « Redbull » collé (146 ventes
+        // réelles) vs « Red Bull » espacé (1) — demande utilisateur
+        // explicite du 07/11.
+        $paires = T1AutoFusion::doublonsCasse(
+            ['Red Bull' => ['sales' => 0], 'Redbull' => ['sales' => 0]],
+            ['Red Bull' => 1, 'Redbull' => 146]
+        );
+        self::assertCount(1, $paires);
+        self::assertSame('Redbull', $paires[0]['target']);
+        self::assertSame('Red Bull', $paires[0]['source']);
+
+        // Sans signal d'occurrences (base indisponible) : retombée sur
+        // les ventes par clé (keyStats), puis l'alphabétique.
+        $paires = T1AutoFusion::doublonsCasse(['PEPSI' => ['sales' => 0], 'Pepsi' => ['sales' => 5]]);
+        self::assertSame('Pepsi', $paires[0]['target'], 'À propreté égale sans occurrences : la clé des ventes.');
+    }
+
+    public function test_proprete_scores(): void
+    {
+        self::assertSame(3, T1AutoFusion::proprete('Redbull'), 'Title Case d\'un mot.');
+        self::assertSame(3, T1AutoFusion::proprete('Eau'));
+        self::assertSame(3, T1AutoFusion::proprete('Redbull Ice'), 'Title Case de chaque mot.');
+        self::assertSame(3, T1AutoFusion::proprete('Café allongé'), 'Majuscule initiale du premier mot + accents conservés (1 + 2).');
+        self::assertSame(1, T1AutoFusion::proprete('Red bull ice'), 'Majuscule partielle : un seul mot capitalisé.');
+        self::assertSame(0, T1AutoFusion::proprete('red bull'), 'Tout bas-de-casse, sans accent.');
+        self::assertSame(0, T1AutoFusion::proprete('cafe allonge'));
+        self::assertSame(2, T1AutoFusion::proprete('café'), 'Accents sans majuscule.');
+        self::assertSame(3, T1AutoFusion::proprete('EAU'), 'Tout majuscules : majuscule initiale par mot (forme brute conservée).');
+    }
+
     // ── Niveau 2 : prédicats sémantiques (décision utilisateur 27/10) ────
 
     public function test_variante_prefixe_base_vs_variante(): void

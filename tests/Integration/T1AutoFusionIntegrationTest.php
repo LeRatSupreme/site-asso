@@ -107,7 +107,8 @@ final class T1AutoFusionIntegrationTest extends IntegrationTestCase
      * référence vit sous « Pepsi » (saisi en admin) et les ventes SumUp
      * sous « pepsi » — les GROUP BY ci de keyStats ne peuvent fusionner
      * les casses qu'entre TABLES, c'est ce qui rend la paire vivante.
-     * L'orientation conserve la clé des VENTES (« pepsi »).
+     * La graphie la plus PROPRE est conservée (« Pepsi », règle 07/11),
+     * le libellé bas-de-casse du POS reste résolvable en alias.
      */
     private function seedCasse(string $stockCasse, string $ventesCasse, int $stock): void
     {
@@ -140,31 +141,38 @@ final class T1AutoFusionIntegrationTest extends IntegrationTestCase
     public function test_niveau_1_fusionne_au_chargement_avec_deux_audits(): void
     {
         // Doublon de casse réel : stock sous « Pepsi », ventes SumUp sous
-        // « pepsi » — la clé des ventes est conservée par la fusion.
+        // « pepsi » — la graphie la plus propre (« Pepsi ») est conservée
+        // (règle 07/11 : le volume de ventes ne fait pas gagner une
+        // graphie sale), le libellé POS garde son alias de résolution.
         $this->seedCasse('Pepsi', 'pepsi', 5);
 
         $r = $this->request('GET', '/admin/compta/inventaire', [], [], $this->rootId);
         self::assertSame(200, (int) ($r['code'] ?? 0), 'La page Inventaire doit répondre.');
 
-        // Fusion réelle : le stock suit la clé des ventes (« pepsi », 5,
-        // une seule ligne — jamais doublée), toutes les ventes dessus.
-        self::assertSame('2', (string) $this->pdo->query("SELECT COUNT(*) FROM sales WHERE product_key = 'pepsi'")->fetchColumn());
-        self::assertSame('5', (string) $this->pdo->query("SELECT stock FROM product_stocks WHERE product_key = 'pepsi'")->fetchColumn());
-        self::assertSame('0', (string) $this->pdo->query("SELECT COUNT(*) FROM product_stocks WHERE product_key = 'Pepsi' COLLATE utf8mb4_bin")->fetchColumn(), 'La casse admin a été absorbée.');
+        // Fusion réelle : les ventes suivent la graphie propre (« Pepsi »,
+        // une seule ligne de stock — jamais doublée), zéro orphelin.
+        self::assertSame('2', (string) $this->pdo->query("SELECT COUNT(*) FROM sales WHERE product_key = 'Pepsi'")->fetchColumn());
+        self::assertSame('0', (string) $this->pdo->query("SELECT COUNT(*) FROM sales WHERE product_key = 'pepsi' COLLATE utf8mb4_bin")->fetchColumn());
+        self::assertSame('5', (string) $this->pdo->query("SELECT stock FROM product_stocks WHERE product_key = 'Pepsi'")->fetchColumn());
+        self::assertSame('0', (string) $this->pdo->query("SELECT COUNT(*) FROM product_stocks WHERE product_key = 'pepsi' COLLATE utf8mb4_bin")->fetchColumn());
+
+        // Le libellé POS bas-de-casse reste résolvable : alias pointeur
+        // créé par la fusion (ensurePointer), futur import SumUp OK.
+        self::assertSame('1', (string) $this->pdo->query("SELECT COUNT(*) FROM product_aliases WHERE product_key = 'Pepsi' AND raw_description = 'pepsi'")->fetchColumn());
 
         // DEUX audits : inventory.merge (origine auto, niveau 1, motif
         // casse, ARCHIVE pré-fusion) puis t1.pair_feedback (positive).
         $merges = $this->auditRows('inventory.merge');
         self::assertCount(1, $merges, 'La fusion auto niveau 1 doit être auditée inventory.merge.');
         $details = json_decode((string) $merges[0]['details'], true);
-        self::assertSame('Pepsi', $details['source'], 'La clé sans vente (stock admin) est absorbée.');
-        self::assertSame('pepsi', $details['target'], 'La clé des ventes SumUp est conservée.');
+        self::assertSame('pepsi', $details['source'], 'La graphie sale (clé bas-de-casse des ventes) est absorbée.');
+        self::assertSame('Pepsi', $details['target'], 'La graphie la plus propre est conservée.');
         self::assertSame('auto', $details['origine']);
         self::assertSame(1, $details['niveau']);
         self::assertSame('casse', $details['motif']);
         self::assertArrayHasKey('archive', $details, 'Toute fusion (auto comprise) archive un snapshot pré-fusion.');
-        self::assertSame(5, $details['archive']['source']['stock'], 'Le snapshot source conserve le stock AVANT fusion.');
-        self::assertNull($details['archive']['target']['stock'], 'La clé des ventes n\'a pas de ligne de stock propre (snapshot honnête).');
+        self::assertNull($details['archive']['source']['stock'], 'La clé des ventes n\'a pas de ligne de stock propre (snapshot honnête).');
+        self::assertSame(5, $details['archive']['target']['stock'], 'Le snapshot cible conserve le stock AVANT fusion.');
 
         $feedbacks = $this->auditRows(T1Suggestions::ACTION_FEEDBACK);
         self::assertCount(1, $feedbacks, 'La fusion auto écrit aussi une paire positive pour la boucle P3.');

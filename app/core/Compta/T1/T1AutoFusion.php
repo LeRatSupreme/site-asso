@@ -23,7 +23,9 @@ use App\Core\Compta\StockPublic;
  *
  * Niveaux :
  *  - 1 — auto immédiat : doublons de CASSE PURE (normalizeKey(a) ===
- *    normalizeKey(b), clés vivantes) — fusion sans délai (motif casse) ;
+ *    normalizeKey(b), clés vivantes) — fusion sans délai (motif casse),
+ *    vers la graphie la PLUS PROPRE du groupe (règle 07/11 : propreté
+ *    puis forme dominante au POS — jamais la graphie la plus vendue) ;
  *  - 2 — auto avec quarantaine 48 h : score ≥ SEUIL_AUTO ET (préfixe
  *    normalisé ≥ MIN_PREFIXE OU suffixe AliasSuggester) ET aucun chiffre
  *    (garde conditionnement : « Sucette 1 » / « Sucette 1 sucette »),
@@ -244,18 +246,95 @@ final class T1AutoFusion
     }
 
     /**
+     * Propreté d'une graphie (score HAUT = graphie propre) : règle
+     * utilisateur du 07/11/2026, consécutif aux fusions auto de casse
+     * dégradées du 03/11 11:39 (Redbull → red bull, Café allongé →
+     * cafe allonge…) — la graphie gagnante d'une fusion de casse doit
+     * être la PLUS PROPRE, le volume de ventes ne peut PAS faire
+     * gagner une graphie sale (459 ventes « eau » ne battent pas
+     * « Eau »).
+     *
+     *  +3 : chaque mot commence par une majuscule (Title Case) ;
+     *  +1 : au moins un mot commence par une majuscule (cas partiel) ;
+     *  +2 : accents conservés (« Café allongé » > « cafe allonge » —
+     *       l'accent est de l'information, sa perte est une dégradation).
+     *
+     * Pure et déterministe : aucun accès base.
+     */
+    public static function proprete(string $graphie): int
+    {
+        $graphie = trim($graphie);
+        $score = 0;
+
+        $mots = preg_split('/\s+/u', $graphie) ?: [];
+        $mots = array_values(array_filter($mots, static fn (string $m): bool => $m !== ''));
+        $majuscules = 0;
+        foreach ($mots as $mot) {
+            if (preg_match('/^\p{Lu}/u', $mot) === 1) {
+                $majuscules++;
+            }
+        }
+        if ($mots !== [] && $majuscules === count($mots)) {
+            $score += 3;
+        } elseif ($majuscules > 0) {
+            $score += 1;
+        }
+
+        if (preg_match('/[à-öø-ÿÀ-ÖØ-Þ]/u', $graphie) === 1) {
+            $score += 2;
+        }
+
+        return $score;
+    }
+
+    /**
+     * Ordre de préférence des graphies d'un même groupe de casse :
+     * propreté décroissante, puis occurrences ventes décroissantes
+     * (forme dominante au POS), puis ventes par clé décroissantes,
+     * puis ordre lexicographique (déterminisme total).
+     *
+     * @param array{0:string,1:int,2:int,3:int} $x [clé, ventes clé, propreté, occurrences]
+     * @param array{0:string,1:int,2:int,3:int} $y
+     */
+    private static function compareGraphies(array $x, array $y): int
+    {
+        if ($x[2] !== $y[2]) {
+            return $y[2] <=> $x[2];
+        }
+        if ($x[3] !== $y[3]) {
+            return $y[3] <=> $x[3];
+        }
+        if ($x[1] !== $y[1]) {
+            return $y[1] <=> $x[1];
+        }
+
+        return strcmp($x[0], $y[0]);
+    }
+
+    /**
      * Paires de niveau 1 (casse pure) depuis les clés vivantes : groupes
      * de clés de même forme normalisée (jamais depuis les candidats — les
      * doublons de casse vivent dans la base, pas dans le livrable).
-     * Orientation : ventes SumUp, sinon alphabétique. Une fusion étant
-     * faite vers le représentant du groupe, les paires d'un même groupe
-     * restent valides appliquées séquentiellement.
      *
-     * @param array<string,array<string,mixed>> $keyStats Stats par clé vivante (ProductKeyMerge::keyStats()).
+     * Représentant du groupe (clé conservée) — règle du 07/11 après les
+     * fusions dégradées du 03/11 : la graphie la PLUS PROPRE
+     * (proprete() : majuscule initiale par mot, accents conservés) ; à
+     * propreté ÉGALE, la forme réellement dominante au POS (occurrences
+     * de la description exacte dans les ventes — « Redbull » collé,
+     * 146 ventes réelles, l'emporte sur « Red Bull » espacé, 1) ; puis
+     * la clé des ventes (keyStats) ; puis l'ordre alphabétique
+     * (déterministe). Le volume de ventes ne PEUT PAS faire gagner une
+     * graphie sale : 459 ventes « eau » ne battent pas « Eau ».
+     *
+     * Une fusion étant faite vers le représentant du groupe, les paires
+     * d'un même groupe restent valides appliquées séquentiellement.
+     *
+     * @param array<string,array<string,mixed>> $keyStats          Stats par clé vivante (ProductKeyMerge::keyStats()).
+     * @param array<string,int>                 $occurrencesVentes Occurrences de la description EXACTE dans les ventes (Sale::descriptionCounts), départage des graphies de propreté égale.
      *
      * @return list<array{source:string,target:string,id:string}>
      */
-    public static function doublonsCasse(array $keyStats): array
+    public static function doublonsCasse(array $keyStats, array $occurrencesVentes = []): array
     {
         $parForme = [];
         foreach ($keyStats as $cle => $stat) {
@@ -267,7 +346,12 @@ final class T1AutoFusion
             if ($forme === '') {
                 continue;
             }
-            $parForme[$forme][] = [$cle, is_array($stat) ? (int) ($stat['sales'] ?? 0) : 0];
+            $parForme[$forme][] = [
+                $cle,
+                is_array($stat) ? (int) ($stat['sales'] ?? 0) : 0,
+                self::proprete($cle),
+                (int) ($occurrencesVentes[$cle] ?? 0),
+            ];
         }
         ksort($parForme, SORT_STRING);
 
@@ -276,24 +360,18 @@ final class T1AutoFusion
             if (count($membres) < 2) {
                 continue;
             }
-            usort($membres, static fn (array $x, array $y): int => strcmp($x[0], $y[0]));
-            // Représentant = la clé des ventes si la forme en possède une,
-            // sinon la première alphabétique (déterministe).
-            $rep = $membres[0];
-            foreach ($membres as [$cle, $ventes]) {
-                if ($ventes > 0 && $rep[1] === 0) {
-                    $rep = [$cle, $ventes];
-                }
-            }
+            // Représentant = la graphie la plus propre, puis dominante
+            // au POS, puis la plus vendue, puis la première alphabétique.
+            usort($membres, static fn (array $x, array $y): int => self::compareGraphies($x, $y));
+            $rep = $membres[0][0];
             foreach ($membres as [$cle]) {
-                if ($cle === $rep[0]) {
+                if ($cle === $rep) {
                     continue;
                 }
-                $oriente = self::oriente($cle, $rep[0], 0, $rep[1]);
                 $paires[] = [
-                    'source' => $oriente['source'],
-                    'target' => $oriente['target'],
-                    'id'     => T1Suggestions::pairEntityId($cle, $rep[0]),
+                    'source' => $cle,
+                    'target' => $rep,
+                    'id'     => T1Suggestions::pairEntityId($cle, $rep),
                 ];
             }
         }
@@ -547,8 +625,17 @@ final class T1AutoFusion
                     // Budget de fusions réelles du passage.
                     $budget = self::MAX_FUSIONS_PAR_PASSAGE;
 
-                    // 2. Niveau 1 — casse pure, immédiat.
-                    foreach (self::doublonsCasse($keyStats) as $paire) {
+                    // 2. Niveau 1 — casse pure, immédiat. Occurrences
+                    //    réelles des graphies au POS (descriptions exactes
+                    //    des ventes) : départage des graphies de propreté
+                    //    ÉGALE par la forme dominante (règle 07/11).
+                    $occurrences = [];
+                    try {
+                        $occurrences = \App\Models\Sale::descriptionCounts(array_keys($keyStats));
+                    } catch (\Throwable $e) {
+                        \App\Core\Logger::warning('t1.auto: occurrences ventes indisponibles', ['msg' => $e->getMessage()]);
+                    }
+                    foreach (self::doublonsCasse($keyStats, $occurrences) as $paire) {
                         if ($budget <= 0) {
                             $r['plafond'] = true;
                             break;

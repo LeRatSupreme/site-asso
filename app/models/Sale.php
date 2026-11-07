@@ -2292,6 +2292,49 @@ final class Sale extends Model
     }
 
     /**
+     * Occurrences réelles d'un libellé dans les ventes (description
+     * EXACTE, comparaison stricte — la graphie saisie au POS fait foi).
+     *
+     * Sert au choix de la graphie gagnante des fusions de casse
+     * (T1AutoFusion) : à propreté ÉGALE (deux Title Case concurrents,
+     * ex. « Red Bull » espacé vs « Redbull » collé), la forme
+     * réellement dominante au POS l'emporte.
+     *
+     * Tolérant sans base : {} (le choix de graphie retombe alors sur
+     * les compteurs de clés de keyStats).
+     *
+     * @param list<string> $labels Libellés à compter (rognés, non vides, dédupliqués).
+     *
+     * @return array<string,int> libellé exact → nombre de lignes de ventes.
+     */
+    public static function descriptionCounts(array $labels): array
+    {
+        $labels = array_values(array_unique(array_map('trim', $labels)));
+        $labels = array_values(array_filter($labels, static fn (string $l): bool => $l !== ''));
+        if ($labels === []) {
+            return [];
+        }
+
+        $counts = [];
+        try {
+            foreach (array_chunk($labels, 500) as $chunk) {
+                $placeholders = implode(',', array_fill(0, count($chunk), '?'));
+                $stmt = self::pdo()->prepare(
+                    'SELECT description, COUNT(*) FROM sales WHERE description IN (' . $placeholders . ') GROUP BY description'
+                );
+                $stmt->execute($chunk);
+                foreach ($stmt->fetchAll(\PDO::FETCH_NUM) as $row) {
+                    $counts[(string) $row[0]] = (int) $row[1];
+                }
+            }
+        } catch (\Throwable) {
+            return [];
+        }
+
+        return $counts;
+    }
+
+    /**
      * Date du dernier import de ventes (null si aucun).
      */
     public static function lastImportAt(): ?string
