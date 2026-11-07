@@ -107,33 +107,35 @@ ON DUPLICATE KEY UPDATE role = VALUES(role), pole = VALUES(pole);
 
 -- -------------------------------------------------------------------
 --  Pages CMS (contenu simple — à enrichir depuis l''admin plus tard)
+--  position : ordre d''affichage (alphabétique du titre au départ,
+--  réordonnable en drag & drop depuis l''admin — voir 2026_pages_position.sql).
 -- -------------------------------------------------------------------
-INSERT INTO pages (id, slug, title, content, meta_title, meta_description, is_published) VALUES
+INSERT INTO pages (id, slug, title, content, meta_title, meta_description, is_published, position) VALUES
     ('page_presentation',
      'presentation',
      'L''association AEIC',
      '<h2>Notre mission</h2><p>L''AEIC fédère les étudiants en informatique du campus de Calais autour d''événements, de projets et de moments de partage.</p>',
-     'L''association — AEIC', 'Qui sommes-nous : mission, valeurs et chiffres clés de l''AEIC.', 1),
+     'L''association — AEIC', 'Qui sommes-nous : mission, valeurs et chiffres clés de l''AEIC.', 1, 2),
     ('page_team',
      'team',
      'L''équipe AEIC',
      '<p>Le bureau de l''AEIC, composé d''étudiants bénévoles.</p>',
-     'L''équipe — AEIC', 'Le bureau de l''AEIC.', 1),
+     'L''équipe — AEIC', 'Le bureau de l''AEIC.', 1, 3),
     ('page_legal',
      'legal',
      'Mentions légales',
      '<h2>Éditeur</h2><p>AEIC — Association Étudiante Informatique de Calais.</p><h2>Responsable de publication</h2><p>Le bureau de l''AEIC.</p><h2>Hébergement</h2><p>Serveur dédié (VPS).</p>',
-     'Mentions légales — AEIC', 'Mentions légales de l''AEIC.', 1),
+     'Mentions légales — AEIC', 'Mentions légales de l''AEIC.', 1, 4),
     ('page_privacy',
      'privacy',
      'Politique de confidentialité',
      '<h2>Données collectées</h2><p>Nom, prénom, adresse e-mail, inscriptions et commandes.</p><h2>Vos droits</h2><p>Droit d''accès, de rectification, d''effacement et d''opposition (RGPD).</p><h2>Contact</h2><p>calais.aeic@gmail.com</p>',
-     'Politique de confidentialité — AEIC', 'Protection des données (RGPD).', 1),
+     'Politique de confidentialité — AEIC', 'Protection des données (RGPD).', 1, 5),
     ('page_cgu',
      'cgu',
      'Conditions d''utilisation',
      '<h2>Objet</h2><p>Les présentes conditions régissent l''utilisation du site de l''AEIC et de l''espace membre.</p><h2>Inscription</h2><p>L''inscription est réservée aux étudiants. Les informations fournies doivent être exactes.</p><h2>Responsabilité</h2><p>L''AEIC s''efforce de maintenir le site accessible mais ne saurait être tenue responsable des interruptions de service.</p>',
-     'Conditions d''utilisation — AEIC', 'Conditions Générales d''Utilisation du site AEIC.', 1)
+     'Conditions d''utilisation — AEIC', 'Conditions Générales d''Utilisation du site AEIC.', 1, 1)
 ON DUPLICATE KEY UPDATE title = VALUES(title);
 
 -- -------------------------------------------------------------------
