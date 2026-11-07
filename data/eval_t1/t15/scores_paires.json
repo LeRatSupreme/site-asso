@@ -1,0 +1,3297 @@
+{
+ "durs": [
+  {
+   "a": "Soiree bowling (2 parties / 1 personne)",
+   "b": "Soiree bowling ( 2 personnes )",
+   "score": 0.9377,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": true
+  },
+  {
+   "a": "Sucette 1",
+   "b": "Sucette 1 sucette",
+   "score": 0.9321,
+   "prefixe": {
+    "3": true,
+    "4": true,
+    "5": true
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": true
+  },
+  {
+   "a": "Minute Maid Orange",
+   "b": "Minute Maid Pomme",
+   "score": 0.8931,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Minute Maid",
+   "b": "Minute Maid Pomme",
+   "score": 0.8854,
+   "prefixe": {
+    "3": true,
+    "4": true,
+    "5": true
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Fanta",
+   "b": "Fanta Exotique",
+   "score": 0.8617,
+   "prefixe": {
+    "3": true,
+    "4": true,
+    "5": true
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull",
+   "b": "redbull red",
+   "score": 0.8586,
+   "prefixe": {
+    "3": true,
+    "4": true,
+    "5": true
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Oasis Ice Tea",
+   "b": "Oasis ice tea the mangue passion",
+   "score": 0.8511,
+   "prefixe": {
+    "3": true,
+    "4": true,
+    "5": true
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "sucette",
+   "b": "sucette 3 sucettes",
+   "score": 0.8497,
+   "prefixe": {
+    "3": true,
+    "4": true,
+    "5": true
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": true
+  },
+  {
+   "a": "Sucette 1",
+   "b": "Sucette 3",
+   "score": 0.8471,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": true
+  },
+  {
+   "a": "Bowling ( 2 parties )",
+   "b": "bowling 2personnes",
+   "score": 0.837,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": true
+  },
+  {
+   "a": "Minute Maid",
+   "b": "Minute Maid Nect Pomme",
+   "score": 0.8294,
+   "prefixe": {
+    "3": true,
+    "4": true,
+    "5": true
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Minute Maid Nect Pomme",
+   "b": "Minute Maid Orange",
+   "score": 0.8201,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Pepsi",
+   "b": "Pepsi sans sucre",
+   "score": 0.8168,
+   "prefixe": {
+    "3": true,
+    "4": true,
+    "5": true
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Fanta Exotique",
+   "b": "Fanta Orange",
+   "score": 0.8161,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Sucette 3",
+   "b": "sucette 3 sucettes",
+   "score": 0.8107,
+   "prefixe": {
+    "3": true,
+    "4": true,
+    "5": true
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": true
+  },
+  {
+   "a": "Sucette 1 sucette",
+   "b": "Sucette 3",
+   "score": 0.806,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": true
+  },
+  {
+   "a": "Oasis",
+   "b": "Oasis pomme poire",
+   "score": 0.8051,
+   "prefixe": {
+    "3": true,
+    "4": true,
+    "5": true
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Fanta",
+   "b": "Fanta Citron",
+   "score": 0.8007,
+   "prefixe": {
+    "3": true,
+    "4": true,
+    "5": true
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Bonbon",
+   "b": "Bonbon Haribo",
+   "score": 0.7953,
+   "prefixe": {
+    "3": true,
+    "4": true,
+    "5": true
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Chips BBQ",
+   "b": "Chips Nature",
+   "score": 0.7863,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "bowling",
+   "b": "bowling 2personnes",
+   "score": 0.7841,
+   "prefixe": {
+    "3": true,
+    "4": true,
+    "5": true
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": true
+  },
+  {
+   "a": "Coca Cherry",
+   "b": "Coca Cola",
+   "score": 0.7744,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "sucette",
+   "b": "Sucette 1",
+   "score": 0.7715,
+   "prefixe": {
+    "3": true,
+    "4": true,
+    "5": true
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": true
+  },
+  {
+   "a": "Pepsi",
+   "b": "Pepsi Zero",
+   "score": 0.7679,
+   "prefixe": {
+    "3": true,
+    "4": true,
+    "5": true
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Coca Cola",
+   "b": "Coca sans sucre",
+   "score": 0.756,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull Blue",
+   "b": "Redbull Seablue",
+   "score": 0.753,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Oasis",
+   "b": "Oasis Thémangue Passion",
+   "score": 0.7485,
+   "prefixe": {
+    "3": true,
+    "4": true,
+    "5": true
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "sucette",
+   "b": "Sucette 3",
+   "score": 0.7426,
+   "prefixe": {
+    "3": true,
+    "4": true,
+    "5": true
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": true
+  },
+  {
+   "a": "Redbull",
+   "b": "Redbull Pomme",
+   "score": 0.7401,
+   "prefixe": {
+    "3": true,
+    "4": true,
+    "5": true
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull",
+   "b": "Redbull Winter",
+   "score": 0.74,
+   "prefixe": {
+    "3": true,
+    "4": true,
+    "5": true
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Fanta Citron",
+   "b": "Fanta Orange",
+   "score": 0.7385,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull Ice",
+   "b": "Redbull Winter",
+   "score": 0.7382,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull",
+   "b": "Redbull_Bleue",
+   "score": 0.7378,
+   "prefixe": {
+    "3": true,
+    "4": true,
+    "5": true
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Oasis pomme poire",
+   "b": "Oasis Tropical",
+   "score": 0.7358,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull",
+   "b": "Redbull Summer",
+   "score": 0.7283,
+   "prefixe": {
+    "3": true,
+    "4": true,
+    "5": true
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Fanta",
+   "b": "Fanta Cassis",
+   "score": 0.7236,
+   "prefixe": {
+    "3": true,
+    "4": true,
+    "5": true
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Coca Cola",
+   "b": "Coca Zero",
+   "score": 0.7144,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull",
+   "b": "Redbull Ice",
+   "score": 0.714,
+   "prefixe": {
+    "3": true,
+    "4": true,
+    "5": true
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Fanta Cassis",
+   "b": "Fanta Citron",
+   "score": 0.7135,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "gaufre",
+   "b": "Gaufre choco",
+   "score": 0.7128,
+   "prefixe": {
+    "3": true,
+    "4": true,
+    "5": true
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull",
+   "b": "Redbull Bleu",
+   "score": 0.7118,
+   "prefixe": {
+    "3": true,
+    "4": true,
+    "5": true
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Gauffre",
+   "b": "Gauffre choco",
+   "score": 0.7108,
+   "prefixe": {
+    "3": true,
+    "4": true,
+    "5": true
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Oasis Thémangue Passion",
+   "b": "Oasis Tropical",
+   "score": 0.7075,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Oasis pomme poire",
+   "b": "Oasis Thémangue Passion",
+   "score": 0.7059,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Fanta Citron",
+   "b": "Fanta Exotique",
+   "score": 0.7047,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Monster Noire",
+   "b": "Monster Verte",
+   "score": 0.7047,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Minute Maid",
+   "b": "Minute Maid MultiVitamine",
+   "score": 0.7022,
+   "prefixe": {
+    "3": true,
+    "4": true,
+    "5": true
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Sucette 1",
+   "b": "sucette 3 sucettes",
+   "score": 0.6986,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": true
+  },
+  {
+   "a": "Fanta Cassis",
+   "b": "Fanta Orange",
+   "score": 0.6966,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Monster Bleue",
+   "b": "Monster Verte",
+   "score": 0.6964,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Fanta",
+   "b": "Fanta Mangue Dragon",
+   "score": 0.694,
+   "prefixe": {
+    "3": true,
+    "4": true,
+    "5": true
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Monster Rose",
+   "b": "Monster Verte",
+   "score": 0.6924,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "redbull red",
+   "b": "Redbull Winter",
+   "score": 0.6899,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Minute Maid",
+   "b": "Minute Maid Multi Vitamines",
+   "score": 0.6797,
+   "prefixe": {
+    "3": true,
+    "4": true,
+    "5": true
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull Summer",
+   "b": "Redbull Winter",
+   "score": 0.6743,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull",
+   "b": "Redbull zero",
+   "score": 0.6721,
+   "prefixe": {
+    "3": true,
+    "4": true,
+    "5": true
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Monster Blanche",
+   "b": "Monster Verte",
+   "score": 0.6686,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Oasis",
+   "b": "Oasis Ice Tea",
+   "score": 0.6612,
+   "prefixe": {
+    "3": true,
+    "4": true,
+    "5": true
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull_Bleue",
+   "b": "Redbull Blue",
+   "score": 0.6575,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Fanta Exotique",
+   "b": "Fanta Mangue Dragon",
+   "score": 0.6566,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Monster Blanche",
+   "b": "Monster Noire",
+   "score": 0.655,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Fanta Cassis",
+   "b": "Fanta Exotique",
+   "score": 0.6533,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull",
+   "b": "Redbull Abricot",
+   "score": 0.6529,
+   "prefixe": {
+    "3": true,
+    "4": true,
+    "5": true
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Fanta Mangue Dragon",
+   "b": "Fanta Orange",
+   "score": 0.6524,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Monster Rose",
+   "b": "Monster verte (energy)",
+   "score": 0.6501,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull Pomme",
+   "b": "redbull red",
+   "score": 0.6501,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Monster Blanche",
+   "b": "Monster Rose",
+   "score": 0.6491,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Monster Bleu",
+   "b": "Monster Verte",
+   "score": 0.6476,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Minute Maid Multi Vitamines",
+   "b": "Minute Maid Orange",
+   "score": 0.6459,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Monster Noire",
+   "b": "Monster Rose",
+   "score": 0.6439,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull",
+   "b": "Redbull Blue",
+   "score": 0.642,
+   "prefixe": {
+    "3": true,
+    "4": true,
+    "5": true
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Minute Maid MultiVitamine",
+   "b": "Minute Maid Nect Pomme",
+   "score": 0.6397,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Minute Maid MultiVitamine",
+   "b": "Minute Maid Orange",
+   "score": 0.6367,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "redbull red",
+   "b": "Redbull zero",
+   "score": 0.6307,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Coca Cherry",
+   "b": "Coca sans sucre",
+   "score": 0.6301,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Minute Maid MultiVitamine",
+   "b": "Minute Maid Pomme",
+   "score": 0.6286,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "redbull red",
+   "b": "Redbull Summer",
+   "score": 0.6283,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Minute Maid Multi Vitamines",
+   "b": "Minute Maid Pomme",
+   "score": 0.6269,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Minute Maid Multi Vitamines",
+   "b": "Minute Maid Nect Pomme",
+   "score": 0.626,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Coca Cherry",
+   "b": "Coca Zero",
+   "score": 0.6175,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull_Bleue",
+   "b": "Redbull Pomme",
+   "score": 0.6107,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Monster Bleue",
+   "b": "Monster Noire",
+   "score": 0.609,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Oasis Pomme Cassis Framboise",
+   "b": "Oasis pomme poire",
+   "score": 0.6088,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Monster Rose (punch)",
+   "b": "Monster verte (energy)",
+   "score": 0.6056,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull Pomme",
+   "b": "Redbull Summer",
+   "score": 0.6055,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Fanta Citron",
+   "b": "Fanta Mangue Dragon",
+   "score": 0.6038,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull Ice",
+   "b": "Redbull Pomme",
+   "score": 0.6032,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Crunch",
+   "b": "crunch Snak Barres",
+   "score": 0.6029,
+   "prefixe": {
+    "3": true,
+    "4": true,
+    "5": true
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Monster Noire",
+   "b": "Monster verte (energy)",
+   "score": 0.6025,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Oasis ice tea the mangue passion",
+   "b": "Oasis pomme poire",
+   "score": 0.6018,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull_Bleue",
+   "b": "Redbull Summer",
+   "score": 0.5934,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull Peach",
+   "b": "Redbull Pomme",
+   "score": 0.5926,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Monster Blanche",
+   "b": "Monster Bleue",
+   "score": 0.5863,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull Abricot",
+   "b": "Redbull_Bleue",
+   "score": 0.5859,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull Winter",
+   "b": "Redbull zero",
+   "score": 0.5853,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "RedBull Blanche",
+   "b": "Redbull Pomme",
+   "score": 0.5839,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Monster Rose (punch)",
+   "b": "Monster Verte",
+   "score": 0.581,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Oasis Ice Tea",
+   "b": "Oasis pomme poire",
+   "score": 0.5806,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Oasis Ice Tea",
+   "b": "Oasis Thémangue Passion",
+   "score": 0.5793,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull Ice",
+   "b": "Redbull Summer",
+   "score": 0.5779,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull Ice",
+   "b": "redbull red",
+   "score": 0.5777,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull Abricot",
+   "b": "Redbull Bleu",
+   "score": 0.5757,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull",
+   "b": "Redbull Peach",
+   "score": 0.5756,
+   "prefixe": {
+    "3": true,
+    "4": true,
+    "5": true
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Oasis Ice Tea",
+   "b": "Oasis Tropical",
+   "score": 0.5751,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "RedBull Blanche",
+   "b": "Redbull Blue",
+   "score": 0.5749,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Oasis",
+   "b": "Oasis ice tea the mangue passion",
+   "score": 0.571,
+   "prefixe": {
+    "3": true,
+    "4": true,
+    "5": true
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull Abricot",
+   "b": "Redbull Ice",
+   "score": 0.5691,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull Bleu",
+   "b": "redbull red",
+   "score": 0.568,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Monster Blanche",
+   "b": "Monster Bleu",
+   "score": 0.564,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Monster Bleue",
+   "b": "Monster Rose",
+   "score": 0.5624,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "RedBull Blanche",
+   "b": "Redbull Bleu",
+   "score": 0.5607,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull_Bleue",
+   "b": "redbull red",
+   "score": 0.5589,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull_Bleue",
+   "b": "Redbull Seablue",
+   "score": 0.5548,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull Bleu",
+   "b": "Redbull Seablue",
+   "score": 0.5536,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull",
+   "b": "Redbull Seablue",
+   "score": 0.5533,
+   "prefixe": {
+    "3": true,
+    "4": true,
+    "5": true
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Fanta Cassis",
+   "b": "Fanta Mangue Dragon",
+   "score": 0.552,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Monster Blanche",
+   "b": "Monster verte (energy)",
+   "score": 0.55,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull Bleu",
+   "b": "Redbull Pomme",
+   "score": 0.5483,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull Peach",
+   "b": "Redbull Summer",
+   "score": 0.5469,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull Bleu",
+   "b": "Redbull Ice",
+   "score": 0.5444,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "RedBull Blanche",
+   "b": "redbull red",
+   "score": 0.5436,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull Abricot",
+   "b": "Redbull Blue",
+   "score": 0.5436,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull_Bleue",
+   "b": "Redbull Peach",
+   "score": 0.5434,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull Pomme",
+   "b": "Redbull Winter",
+   "score": 0.5425,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull",
+   "b": "Redbull Myrtille",
+   "score": 0.5421,
+   "prefixe": {
+    "3": true,
+    "4": true,
+    "5": true
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Oasis Pomme Cassis Framboise",
+   "b": "Oasis Tropical",
+   "score": 0.5392,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Oasis ice tea the mangue passion",
+   "b": "Oasis Tropical",
+   "score": 0.5375,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull Blue",
+   "b": "Redbull Summer",
+   "score": 0.536,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull Blue",
+   "b": "redbull red",
+   "score": 0.5324,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Monster Bleu",
+   "b": "Monster Noire",
+   "score": 0.5307,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Oasis",
+   "b": "Oasis Pomme Cassis Framboise",
+   "score": 0.5306,
+   "prefixe": {
+    "3": true,
+    "4": true,
+    "5": true
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull Abricot",
+   "b": "Redbull Summer",
+   "score": 0.5294,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull Abricot",
+   "b": "Redbull Pomme",
+   "score": 0.5273,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull_Bleue",
+   "b": "Redbull Ice",
+   "score": 0.5256,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Monster Bleue",
+   "b": "Monster verte (energy)",
+   "score": 0.5238,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "RedBull Blanche",
+   "b": "Redbull Ice",
+   "score": 0.5238,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "RedBull Blanche",
+   "b": "Redbull Seablue",
+   "score": 0.5237,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull Bleu",
+   "b": "Redbull Summer",
+   "score": 0.5232,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "RedBull Blanche",
+   "b": "Redbull Summer",
+   "score": 0.5216,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull Ice",
+   "b": "Redbull Seablue",
+   "score": 0.521,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull_Bleue",
+   "b": "Redbull Winter",
+   "score": 0.5193,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Gauffre",
+   "b": "Gauffre + boissons (hors boissons energisante)",
+   "score": 0.5188,
+   "prefixe": {
+    "3": true,
+    "4": true,
+    "5": true
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Monster Blanche",
+   "b": "Monster Rose (punch)",
+   "score": 0.5162,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull Bleu",
+   "b": "Redbull Winter",
+   "score": 0.515,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Oasis Pomme Cassis Framboise",
+   "b": "Oasis Thémangue Passion",
+   "score": 0.5139,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull Ice",
+   "b": "Redbull zero",
+   "score": 0.5129,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "RedBull Blanche",
+   "b": "Redbull_Bleue",
+   "score": 0.5119,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "gaufre",
+   "b": "Gaufre + boissons (hors boissons energisante)",
+   "score": 0.5106,
+   "prefixe": {
+    "3": true,
+    "4": true,
+    "5": true
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull Blue",
+   "b": "Redbull Ice",
+   "score": 0.5089,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull Abricot",
+   "b": "redbull red",
+   "score": 0.5086,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull Abricot",
+   "b": "Redbull Seablue",
+   "score": 0.5058,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Monster Noire",
+   "b": "Monster Rose (punch)",
+   "score": 0.5047,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull Abricot",
+   "b": "Redbull Winter",
+   "score": 0.5044,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Monster Bleu",
+   "b": "Monster verte (energy)",
+   "score": 0.4997,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Monster Bleu",
+   "b": "Monster Rose",
+   "score": 0.4991,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull Blue",
+   "b": "Redbull Winter",
+   "score": 0.4967,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull Summer",
+   "b": "Redbull zero",
+   "score": 0.4961,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull_Bleue",
+   "b": "Redbull zero",
+   "score": 0.4949,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull Peach",
+   "b": "redbull red",
+   "score": 0.4927,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull Seablue",
+   "b": "Redbull Summer",
+   "score": 0.4855,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull Abricot",
+   "b": "Redbull Peach",
+   "score": 0.4812,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull Peach",
+   "b": "Redbull Winter",
+   "score": 0.4812,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull Blue",
+   "b": "Redbull Pomme",
+   "score": 0.4802,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull Bleu",
+   "b": "Redbull Myrtille",
+   "score": 0.4795,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull Blue",
+   "b": "Redbull Peach",
+   "score": 0.4761,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "RedBull Blanche",
+   "b": "Redbull Peach",
+   "score": 0.4721,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull Seablue",
+   "b": "Redbull Winter",
+   "score": 0.4685,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull Pomme",
+   "b": "Redbull zero",
+   "score": 0.4655,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Oasis ice tea the mangue passion",
+   "b": "Oasis Pomme Cassis Framboise",
+   "score": 0.4519,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull Peach",
+   "b": "Redbull zero",
+   "score": 0.4517,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull Myrtille",
+   "b": "Redbull Pomme",
+   "score": 0.4473,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "RedBull Blanche",
+   "b": "Redbull Winter",
+   "score": 0.4419,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Bueno",
+   "b": "Bueno white",
+   "score": 0.439,
+   "prefixe": {
+    "3": true,
+    "4": true,
+    "5": true
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Oasis Ice Tea",
+   "b": "Oasis Pomme Cassis Framboise",
+   "score": 0.4369,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull Ice",
+   "b": "Redbull Peach",
+   "score": 0.4344,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull Myrtille",
+   "b": "Redbull Winter",
+   "score": 0.4309,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Monster Bleue",
+   "b": "Monster Rose (punch)",
+   "score": 0.4307,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull Myrtille",
+   "b": "redbull red",
+   "score": 0.4281,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Gauffre + boissons (hors boissons energisante)",
+   "b": "Gauffre choco",
+   "score": 0.428,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull Bleu",
+   "b": "Redbull zero",
+   "score": 0.4271,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull Abricot",
+   "b": "Redbull zero",
+   "score": 0.4254,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull Abricot",
+   "b": "RedBull Blanche",
+   "score": 0.4245,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull Pomme",
+   "b": "Redbull Seablue",
+   "score": 0.4239,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Gaufre + boissons (hors boissons energisante)",
+   "b": "Gaufre choco",
+   "score": 0.4238,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull Blue",
+   "b": "Redbull zero",
+   "score": 0.4237,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "RedBull Blanche",
+   "b": "Redbull zero",
+   "score": 0.4107,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "redbull red",
+   "b": "Redbull Seablue",
+   "score": 0.406,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "RedBull Blanche",
+   "b": "Redbull Myrtille",
+   "score": 0.3986,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull Myrtille",
+   "b": "Redbull Summer",
+   "score": 0.3944,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull_Bleue",
+   "b": "Redbull Myrtille",
+   "score": 0.3788,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull Bleu",
+   "b": "Redbull Peach",
+   "score": 0.3759,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull Myrtille",
+   "b": "Redbull zero",
+   "score": 0.3756,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull Blue",
+   "b": "Redbull Myrtille",
+   "score": 0.3739,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull Seablue",
+   "b": "Redbull zero",
+   "score": 0.3632,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull Peach",
+   "b": "Redbull Seablue",
+   "score": 0.361,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Monster Bleu",
+   "b": "Monster Rose (punch)",
+   "score": 0.3592,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull Myrtille",
+   "b": "Redbull Seablue",
+   "score": 0.3567,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull Abricot",
+   "b": "Redbull Myrtille",
+   "score": 0.3136,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull Myrtille",
+   "b": "Redbull Peach",
+   "score": 0.2508,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "famille": true,
+   "chiffre": false
+  }
+ ],
+ "positifs": [
+  {
+   "a": "Gauffre + boissons (hors boissons energisante)",
+   "b": "Gaufre + boissons (hors boissons energisante)",
+   "score": 0.9737,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "split": "train",
+   "famille": false,
+   "chiffre": false
+  },
+  {
+   "a": "Gauffre choco",
+   "b": "Gaufre choco",
+   "score": 0.9316,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "split": "test",
+   "famille": false,
+   "chiffre": false
+  },
+  {
+   "a": "Crunch snaks barres",
+   "b": "crunch Snak Barres",
+   "score": 0.926,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "split": "train",
+   "famille": false,
+   "chiffre": false
+  },
+  {
+   "a": "Coca",
+   "b": "Coca Cola",
+   "score": 0.9228,
+   "prefixe": {
+    "3": true,
+    "4": true,
+    "5": false
+   },
+   "suffixe": false,
+   "split": "test",
+   "famille": false,
+   "chiffre": false
+  },
+  {
+   "a": "Monster rose (punch)",
+   "b": "Monster Rose",
+   "score": 0.9066,
+   "prefixe": {
+    "3": true,
+    "4": true,
+    "5": true
+   },
+   "suffixe": false,
+   "split": "train",
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Fanta",
+   "b": "Fanta Orange",
+   "score": 0.8936,
+   "prefixe": {
+    "3": true,
+    "4": true,
+    "5": true
+   },
+   "suffixe": false,
+   "split": "train",
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "chips",
+   "b": "Chips Nature",
+   "score": 0.8889,
+   "prefixe": {
+    "3": true,
+    "4": true,
+    "5": true
+   },
+   "suffixe": false,
+   "split": "train",
+   "famille": false,
+   "chiffre": false
+  },
+  {
+   "a": "Gauffre",
+   "b": "gaufre",
+   "score": 0.8841,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "split": "train",
+   "famille": false,
+   "chiffre": false
+  },
+  {
+   "a": "Sucette 1 sucette",
+   "b": "sucette",
+   "score": 0.8755,
+   "prefixe": {
+    "3": true,
+    "4": true,
+    "5": true
+   },
+   "suffixe": false,
+   "split": "train",
+   "famille": true,
+   "chiffre": true
+  },
+  {
+   "a": "Monster Vleu",
+   "b": "Monster Bleu",
+   "score": 0.8731,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "split": "train",
+   "famille": false,
+   "chiffre": false
+  },
+  {
+   "a": "Oasis",
+   "b": "Oasis Tropical",
+   "score": 0.8626,
+   "prefixe": {
+    "3": true,
+    "4": true,
+    "5": true
+   },
+   "suffixe": false,
+   "split": "train",
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "monster",
+   "b": "monster noire",
+   "score": 0.8516,
+   "prefixe": {
+    "3": true,
+    "4": true,
+    "5": true
+   },
+   "suffixe": false,
+   "split": "train",
+   "famille": false,
+   "chiffre": false
+  },
+  {
+   "a": "RED BULL SEA BLUE BOITE 25CL",
+   "b": "Redbull Seablue",
+   "score": 0.8501,
+   "prefixe": {
+    "3": true,
+    "4": true,
+    "5": true
+   },
+   "suffixe": false,
+   "split": "train",
+   "famille": false,
+   "chiffre": true
+  },
+  {
+   "a": "schweppes",
+   "b": "schweppes agrumes",
+   "score": 0.8433,
+   "prefixe": {
+    "3": true,
+    "4": true,
+    "5": true
+   },
+   "suffixe": false,
+   "split": "train",
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Pepsi sans sucre",
+   "b": "Pepsi Zero",
+   "score": 0.8395,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "split": "train",
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Bowling ( 2 parties )",
+   "b": "bowling",
+   "score": 0.836,
+   "prefixe": {
+    "3": true,
+    "4": true,
+    "5": true
+   },
+   "suffixe": false,
+   "split": "test",
+   "famille": true,
+   "chiffre": true
+  },
+  {
+   "a": "RED BULL ICE BOITE 25CL",
+   "b": "Redbull Ice",
+   "score": 0.8338,
+   "prefixe": {
+    "3": true,
+    "4": true,
+    "5": true
+   },
+   "suffixe": false,
+   "split": "train",
+   "famille": false,
+   "chiffre": true
+  },
+  {
+   "a": "minutemaid",
+   "b": "Minute Maid Orange",
+   "score": 0.8322,
+   "prefixe": {
+    "3": true,
+    "4": true,
+    "5": true
+   },
+   "suffixe": false,
+   "split": "train",
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Monster Bleue",
+   "b": "Monster Bleu",
+   "score": 0.8232,
+   "prefixe": {
+    "3": true,
+    "4": true,
+    "5": true
+   },
+   "suffixe": true,
+   "split": "train",
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Minute Maid Multi Vitamines",
+   "b": "Minute Maid MultiVitamine",
+   "score": 0.8187,
+   "prefixe": {
+    "3": true,
+    "4": true,
+    "5": true
+   },
+   "suffixe": false,
+   "split": "train",
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "RED BULL PEACH BTE 25CL",
+   "b": "Redbull Peach",
+   "score": 0.8172,
+   "prefixe": {
+    "3": true,
+    "4": true,
+    "5": true
+   },
+   "suffixe": false,
+   "split": "train",
+   "famille": false,
+   "chiffre": true
+  },
+  {
+   "a": "Pulco Citronnade",
+   "b": "Pulco",
+   "score": 0.8159,
+   "prefixe": {
+    "3": true,
+    "4": true,
+    "5": true
+   },
+   "suffixe": false,
+   "split": "test",
+   "famille": false,
+   "chiffre": false
+  },
+  {
+   "a": "OASIS TROPICAL SLIM BTE 33CL",
+   "b": "Oasis Tropical",
+   "score": 0.8074,
+   "prefixe": {
+    "3": true,
+    "4": true,
+    "5": true
+   },
+   "suffixe": false,
+   "split": "train",
+   "famille": false,
+   "chiffre": true
+  },
+  {
+   "a": "TROPICO L'ORIG BTE CL SLIM",
+   "b": "Tropico",
+   "score": 0.7969,
+   "prefixe": {
+    "3": true,
+    "4": true,
+    "5": true
+   },
+   "suffixe": false,
+   "split": "train",
+   "famille": false,
+   "chiffre": false
+  },
+  {
+   "a": "Coca sans sucre",
+   "b": "Coca Zero",
+   "score": 0.795,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "split": "test",
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Lion_Peanut",
+   "b": "Lion",
+   "score": 0.7892,
+   "prefixe": {
+    "3": true,
+    "4": true,
+    "5": false
+   },
+   "suffixe": false,
+   "split": "train",
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Soiree bowling ( 2 personnes )",
+   "b": "bowling 2personnes",
+   "score": 0.7878,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "split": "test",
+   "famille": false,
+   "chiffre": true
+  },
+  {
+   "a": "Pepper",
+   "b": "Dr Pepper",
+   "score": 0.7852,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "split": "test",
+   "famille": false,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull_Blanche",
+   "b": "Redbull",
+   "score": 0.7827,
+   "prefixe": {
+    "3": true,
+    "4": true,
+    "5": true
+   },
+   "suffixe": false,
+   "split": "test",
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Monster verte (energy)",
+   "b": "Monster Verte",
+   "score": 0.781,
+   "prefixe": {
+    "3": true,
+    "4": true,
+    "5": true
+   },
+   "suffixe": false,
+   "split": "test",
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "CACOLAC BOITE 25CL X6",
+   "b": "Cacolac",
+   "score": 0.7771,
+   "prefixe": {
+    "3": true,
+    "4": true,
+    "5": true
+   },
+   "suffixe": false,
+   "split": "train",
+   "famille": false,
+   "chiffre": true
+  },
+  {
+   "a": "RED BULL RED EDITION 25CL",
+   "b": "redbull red",
+   "score": 0.7389,
+   "prefixe": {
+    "3": true,
+    "4": true,
+    "5": true
+   },
+   "suffixe": false,
+   "split": "train",
+   "famille": false,
+   "chiffre": true
+  },
+  {
+   "a": "Soiree bowling (2 parties / 1 personne)",
+   "b": "bowling",
+   "score": 0.734,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "split": "test",
+   "famille": false,
+   "chiffre": true
+  },
+  {
+   "a": "COCACOLA CHERRY SLIM 33CL",
+   "b": "Coca Cherry",
+   "score": 0.7256,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "split": "train",
+   "famille": false,
+   "chiffre": true
+  },
+  {
+   "a": "PERRIER BOITE SLIM 33CL",
+   "b": "Perrier",
+   "score": 0.7158,
+   "prefixe": {
+    "3": true,
+    "4": true,
+    "5": true
+   },
+   "suffixe": false,
+   "split": "train",
+   "famille": false,
+   "chiffre": true
+  },
+  {
+   "a": "MinuteMaid_Pomme",
+   "b": "Minute Maid Nect Pomme",
+   "score": 0.6764,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "split": "test",
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Bonbon Haribo",
+   "b": "haribo",
+   "score": 0.6758,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "split": "train",
+   "famille": false,
+   "chiffre": false
+  },
+  {
+   "a": "MMS",
+   "b": "M&Ms",
+   "score": 0.6618,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "split": "train",
+   "famille": false,
+   "chiffre": false
+  },
+  {
+   "a": "Lipton",
+   "b": "Lipton Ice Tea",
+   "score": 0.6488,
+   "prefixe": {
+    "3": true,
+    "4": true,
+    "5": true
+   },
+   "suffixe": false,
+   "split": "test",
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull Myrtille",
+   "b": "Redbull Ice",
+   "score": 0.6314,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "split": "train",
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "Redbull_Bleue",
+   "b": "Redbull Bleu",
+   "score": 0.6272,
+   "prefixe": {
+    "3": true,
+    "4": true,
+    "5": true
+   },
+   "suffixe": true,
+   "split": "test",
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "OASIS POM CASS FRAM SLIM 33CL",
+   "b": "Oasis Pomme Cassis Framboise",
+   "score": 0.6162,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "split": "test",
+   "famille": false,
+   "chiffre": true
+  },
+  {
+   "a": "Redbull blue",
+   "b": "Redbull Bleu",
+   "score": 0.6095,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "split": "test",
+   "famille": true,
+   "chiffre": false
+  },
+  {
+   "a": "RED BULL BLUE BOITE 25CL",
+   "b": "Redbull Bleu",
+   "score": 0.5648,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "split": "test",
+   "famille": false,
+   "chiffre": true
+  },
+  {
+   "a": "PULCO CITRONNADE SLIM 33CL",
+   "b": "Pulco",
+   "score": 0.5578,
+   "prefixe": {
+    "3": true,
+    "4": true,
+    "5": true
+   },
+   "suffixe": false,
+   "split": "test",
+   "famille": false,
+   "chiffre": true
+  },
+  {
+   "a": "Cristaline",
+   "b": "Eau",
+   "score": 0.5488,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "split": "train",
+   "famille": false,
+   "chiffre": false
+  },
+  {
+   "a": "CRISTALI 5OCL PET",
+   "b": "Eau",
+   "score": 0.5416,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "split": "train",
+   "famille": false,
+   "chiffre": true
+  },
+  {
+   "a": "MONSTER ULTRA ZERO",
+   "b": "Monster Blanche",
+   "score": 0.4948,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "split": "test",
+   "famille": false,
+   "chiffre": false
+  },
+  {
+   "a": "COCA COLA BOITE FAT 33CL",
+   "b": "Coca Cola",
+   "score": 0.4894,
+   "prefixe": {
+    "3": true,
+    "4": true,
+    "5": true
+   },
+   "suffixe": false,
+   "split": "test",
+   "famille": false,
+   "chiffre": true
+  },
+  {
+   "a": "MONSTER ULTRA ZERO BTE 50CL",
+   "b": "Monster Blanche",
+   "score": 0.3989,
+   "prefixe": {
+    "3": false,
+    "4": false,
+    "5": false
+   },
+   "suffixe": false,
+   "split": "test",
+   "famille": false,
+   "chiffre": true
+  }
+ ],
+ "seuil_naif": 0.9677,
+ "seuil_retenu": 0.8936,
+ "p90_positifs": 0.8936,
+ "p95_positifs": 0.926
+}

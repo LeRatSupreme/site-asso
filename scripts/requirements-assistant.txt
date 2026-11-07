@@ -1,0 +1,11 @@
+# T4 — Pont orchestrateur assistant AEIC (scripts/assistant.py) — Python 3.12
+# venv : python3 -m venv ~/AEIC/.venv-assistant
+#       ~/AEIC/.venv-assistant/bin/pip install -r scripts/requirements-assistant.txt
+# Runbook complet : entête de scripts/assistant.py
+#
+# AUCUNE dépendance tierce : le pont n'utilise que la bibliothèque standard
+# (http.client, ssl, json, zoneinfo…) — choix assumé (surface d'appro
+# nulle : HTTP vers llama-server en local + HTTPS boucle locale vers les
+# endpoints AEIC avec vérification du certificat via server_hostname).
+# Le fichier est conservé pour l'isolation reproductible du venv dédié
+# et pour tout ajout futur épinglé le cas échéant.

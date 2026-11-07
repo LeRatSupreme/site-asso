@@ -1,0 +1,949 @@
+<?php
+
+declare(strict_types=1);
+
+/**
+ * Fonctions utilitaires globales de l'application AEIC.
+ *
+ * Ces fonctions sont chargées via l'autoloader Composer (clé "files").
+ * Elles sont volontairement simples et sans dépendance.
+ */
+
+/**
+ * Signal de redirection levé par redirect() en mode APP_TESTING à la place
+ * de exit(), afin que le harness d'intégration puisse capturer l'en-tête
+ * `Location` (voir tests/Integration/runner.php).
+ */
+final class RedirectSignal extends \RuntimeException
+{
+}
+
+/**
+ * Échappe une valeur pour un affichage HTML sûr (anti-XSS).
+ */
+function e(mixed $value): string
+{
+    return htmlspecialchars((string) $value, ENT_QUOTES | ENT_HTML5 | ENT_SUBSTITUTE, 'UTF-8');
+}
+
+/** Convertit un datetime stocké (UTC, ex. « Y-m-d H:i:s ») en heure de Paris.
+ *  Valeur vide/invalide → retournée telle quelle. */
+function utcToParis(string $value): string
+{
+    $value = trim($value);
+    if ($value === '') {
+        return $value;
+    }
+
+    try {
+        $dt = new \DateTimeImmutable($value, new \DateTimeZone('UTC'));
+
+        return $dt->setTimezone(new \DateTimeZone('Europe/Paris'))->format('Y-m-d H:i:s');
+    } catch (\Throwable) {
+        return $value;
+    }
+}
+
+/** Interprète une saisie murale de l'utilisateur (heure de Paris) et la
+ *  convertit en UTC pour stockage. Valeur vide/invalide → null. */
+function parisToUtc(string $value): ?string
+{
+    $value = trim($value);
+    if ($value === '') {
+        return null;
+    }
+
+    try {
+        $dt = new \DateTimeImmutable($value, new \DateTimeZone('Europe/Paris'));
+
+        return $dt->setTimezone(new \DateTimeZone('UTC'))->format('Y-m-d H:i:s');
+    } catch (\Throwable) {
+        return null;
+    }
+}
+
+/**
+ * Formate une date selon un motif ICU/strftime-compatible simple.
+ *
+ * Accepte une chaîne parsable (Y-m-d H:i:s, etc.) ou un objet DateTimeInterface.
+ * Les chaînes sont considérées stockées en UTC et converties en heure de
+ * Europe/Paris avant formatage (tz nommée : gère UTC+2 été / UTC+1 hiver).
+ */
+function formatDate(string|DateTimeInterface|null $date, string $fmt = 'd/m/Y'): string
+{
+    if ($date === null || $date === '') {
+        return '';
+    }
+
+    if (!$date instanceof DateTimeInterface) {
+        $paris = utcToParis($date);
+        if ($paris === '') {
+            return '';
+        }
+        try {
+            $date = new DateTimeImmutable($paris);
+        } catch (Throwable) {
+            return '';
+        }
+    }
+
+    return $date->format($fmt);
+}
+
+/**
+ * Formate une date + heure au format français (d/m/Y H:i).
+ */
+function formatDateTime(string|DateTimeInterface|null $date): string
+{
+    return formatDate($date, 'd/m/Y H:i');
+}
+
+/**
+ * Formate un nombre en prix euros français (2 décimales par défaut,
+ * virgule, suffixe " €").
+ *
+ * @param float|int|string|null $n
+ */
+function formatPrice(float|int|string|null $n, int $decimals = 2): string
+{
+    $decimals = max(0, min(4, $decimals));
+
+    if ($n === null || $n === '') {
+        return number_format(0, $decimals, ',', ' ') . ' €';
+    }
+
+    $value = (float) $n;
+
+    return number_format($value, $decimals, ',', ' ') . ' €';
+}
+
+/**
+ * Formate un taux de TVA « à la française » : 20 → « 20 % »,
+ * 5.5 → « 5,5 % », 2.1 → « 2,1 % » (virgule, sans décimale inutile).
+ *
+ * @param float|int|string|null $n
+ */
+function formatFrenchPercent(float|int|string|null $n): string
+{
+    $value = (float) ($n ?? 0);
+    $formatted = rtrim(rtrim(number_format($value, 1, ',', ' '), '0'), ',');
+    if ($formatted === '' || $formatted === '-') {
+        $formatted = '0';
+    }
+
+    return $formatted . ' %';
+}
+
+/**
+ * Parse un nombre "à la française" (virgule décimale) en float.
+ *
+ * Gère "1,75", "1.75", "1 234,5", "0,99".
+ */
+function parseFrenchFloat(string $s): float
+{
+    $s = trim($s);
+    if ($s === '') {
+        return 0.0;
+    }
+
+    // Supprime les espaces fins et insécables utilisés comme séparateurs de milliers.
+    $s = str_replace(["\u{00a0}", "\u{202f}", ' '], '', $s);
+    // Remplace la virgule décimale par un point.
+    $s = str_replace(',', '.', $s);
+
+    // S'il reste plusieurs points, on ne garde que le dernier comme séparateur décimal.
+    $parts = explode('.', $s);
+    if (count($parts) > 2) {
+        $integerPart = implode('', array_slice($parts, 0, -1));
+        $s = $integerPart . '.' . end($parts);
+    }
+
+    return (float) $s;
+}
+
+/**
+ * Redirige vers une URL et termine le script.
+ *
+ * En mode test (APP_TESTING), on dépile la pile d'exécution en levant une
+ * exception dédiée plutôt qu'en appelant exit() : cela permet au harness
+ * d'intégration (tests/Integration/runner.php) d'interrompre le contrôleur
+ * comme le ferait un exit() en production.
+ *
+ * L'URL est aussi exposée via $GLOBALS['AEIC_TEST_LOCATION'] : le SAPI CLI
+ * n'enregistre PAS les header() (headers_list() renvoie [] sous Linux), le
+ * runner doit donc recapturer le `Location` depuis cette variable globale.
+ */
+function redirect(string $url): void
+{
+    if (!headers_sent()) {
+        header('Location: ' . $url);
+    }
+
+    if (defined('APP_TESTING') && APP_TESTING) {
+        $GLOBALS['AEIC_TEST_LOCATION'] = $url;
+        throw new RedirectSignal();
+    }
+
+    exit;
+}
+
+/**
+ * Construit l'URL d'un asset (préfixe APP_URL + /assets).
+ */
+function asset(string $path): string
+{
+    $path = '/' . ltrim($path, '/');
+
+    return APP_URL . '/assets' . $path;
+}
+
+/**
+ * Construit l'URL d'un asset en ajoutant un paramètre de cache-bust
+ * (?v=filemtime) pour forcer le rechargement navigateur à chaque modification.
+ */
+function assetVersioned(string $path): string
+{
+    $url = asset($path);
+    $file = AEIC_PUBLIC . '/assets' . '/' . ltrim($path, '/');
+    if (is_file($file)) {
+        $url .= '?v=' . filemtime($file);
+    }
+
+    return $url;
+}
+
+/**
+ * Idem pour les assets servis depuis / (hors /assets), avec cache-bust.
+ */
+function rootAssetVersioned(string $path): string
+{
+    $path = '/' . ltrim($path, '/');
+    $file = AEIC_PUBLIC . $path;
+    $url = APP_URL . $path;
+    if (is_file($file)) {
+        $url .= '?v=' . filemtime($file);
+    }
+
+    return $url;
+}
+
+/**
+ * Construit une URL absolue à partir d'un chemin relatif.
+ */
+function url(string $path = ''): string
+{
+    if ($path === '') {
+        return APP_URL;
+    }
+
+    return APP_URL . '/' . ltrim($path, '/');
+}
+
+/**
+ * Génère (et stocke en session) le token CSRF courant.
+ * Le même token est renvoyé jusqu'à expiration de la session.
+ */
+function csrf_token(): string
+{
+    if (session_status() !== PHP_SESSION_ACTIVE) {
+        @session_start();
+    }
+
+    if (empty($_SESSION['_csrf_token'])) {
+        $_SESSION['_csrf_token'] = bin2hex(random_bytes(32));
+    }
+
+    return $_SESSION['_csrf_token'];
+}
+
+/**
+ * Rend un champ caché contenant le token CSRF, à insérer dans tout formulaire POST.
+ */
+function csrf_field(): string
+{
+    return '<input type="hidden" name="_csrf" value="' . e(csrf_token()) . '">';
+}
+
+/**
+ * Récupère une ancienne valeur de formulaire (depuis $_SESSION['_old'] ou $_POST).
+ */
+function old(string $key, mixed $default = ''): mixed
+{
+    if (isset($_SESSION['_old'][$key])) {
+        $value = $_SESSION['_old'][$key];
+        unset($_SESSION['_old'][$key]);
+
+        return $value;
+    }
+
+    return $_POST[$key] ?? $default;
+}
+
+/**
+ * Vérifie qu'une chaîne est une URL absolue (http/https).
+ */
+function is_absolute_url(string $url): bool
+{
+    return preg_match('#^https?://#i', $url) === 1;
+}
+
+/**
+ * Renvoie l'initiale d'un prénom (utilisé pour les avatars sans photo).
+ */
+function initial(?string $name): string
+{
+    $name = trim((string) $name);
+
+    return $name === '' ? '?' : mb_strtoupper(mb_substr($name, 0, 1));
+}
+
+/**
+ * Résout (sans base de données) la priorité du lien de paiement SumUp :
+ * lien spécifique à l'événement > lien par défaut > null.
+ *
+ * Fonction pure isolée afin d'être testée unitairement sans base.
+ */
+function sumup_resolve_link(?string $eventLink, ?string $defaultLink): ?string
+{
+    $eventLink = trim((string) $eventLink);
+    if ($eventLink !== '') {
+        return $eventLink;
+    }
+
+    $defaultLink = trim((string) $defaultLink);
+
+    return $defaultLink !== '' ? $defaultLink : null;
+}
+
+/**
+ * Renvoie le lien de paiement SumUp applicable (lien événement sinon défaut).
+ *
+ * Priorité : lien spécifique à l'événement > setting « sumup_default_link » > null.
+ */
+function sumup_link(?string $eventLink = null): ?string
+{
+    return sumup_resolve_link($eventLink, \App\Models\Setting::get('sumup_default_link', ''));
+}
+
+/**
+ * Indique si les paiements par lien SumUp sont activés (setting « sumup_enabled »).
+ */
+function sumup_enabled(): bool
+{
+    return \App\Models\Setting::getBool('sumup_enabled', false);
+}
+
+/**
+ * Vérifie qu'une IP appartient à un réseau CIDR (ou à une IP exacte si le
+ * masque est absent). Gère IPv4 (masque préfixe ou notation pointée) et
+ * IPv6 en best effort (masque préfixe).
+ */
+function cidr_match(string $ip, string $cidr): bool
+{
+    $cidr = trim($cidr);
+    if (str_contains($cidr, '/')) {
+        [$subnet, $mask] = explode('/', $cidr, 2);
+    } else {
+        $subnet = $cidr;
+        $mask = null;
+    }
+
+    $ipBin = @inet_pton(trim($ip));
+    $subnetBin = @inet_pton(trim($subnet));
+    if ($ipBin === false || $subnetBin === false || strlen($ipBin) !== strlen($subnetBin)) {
+        return false;
+    }
+
+    if ($mask === null) {
+        return $ipBin === $subnetBin;
+    }
+
+    // Masque IPv4 en notation pointée (ex: 255.255.0.0).
+    if (!str_contains($cidr, ':') && !ctype_digit($mask)) {
+        $maskBin = @inet_pton(trim($mask));
+        if ($maskBin === false || strlen($maskBin) !== 4) {
+            return false;
+        }
+
+        return ($ipBin & $maskBin) === ($subnetBin & $maskBin);
+    }
+
+    $bits = (int) $mask;
+    if ($bits < 0 || $bits > strlen($ipBin) * 8) {
+        return false;
+    }
+
+    $fullBytes = intdiv($bits, 8);
+    if ($fullBytes > 0 && substr($ipBin, 0, $fullBytes) !== substr($subnetBin, 0, $fullBytes)) {
+        return false;
+    }
+
+    $remBits = $bits % 8;
+    if ($remBits > 0) {
+        $maskByte = (0xFF << (8 - $remBits)) & 0xFF;
+
+        return ((ord($ipBin[$fullBytes]) ^ ord($subnetBin[$fullBytes])) & $maskByte) === 0;
+    }
+
+    return true;
+}
+
+/**
+ * Renvoie l'adresse IP du client.
+ *
+ * L'en-tête X-Forwarded-For étant forgeable, il n'est pris en compte que si
+ * REMOTE_ADDR appartient aux proxies de confiance (TRUSTED_PROXIES, liste
+ * d'IP/CIDR séparés par des virgules). Dans ce cas on parcourt la chaîne de
+ * droite à gauche et on retient la première IP hors proxies de confiance.
+ */
+function client_ip(): string
+{
+    $remote = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
+
+    $trusted = array_values(array_filter(array_map('trim', explode(',', (string) getenv('TRUSTED_PROXIES')))));
+    if ($trusted === []) {
+        return $remote;
+    }
+
+    $isTrusted = static function (string $ip) use ($trusted): bool {
+        foreach ($trusted as $cidr) {
+            if (cidr_match($ip, $cidr)) {
+                return true;
+            }
+        }
+
+        return false;
+    };
+
+    if (!$isTrusted($remote)) {
+        return $remote;
+    }
+
+    $forwarded = $_SERVER['HTTP_X_FORWARDED_FOR'] ?? '';
+    if ($forwarded !== '') {
+        $parts = array_map('trim', explode(',', $forwarded));
+        for ($i = count($parts) - 1; $i >= 0; $i--) {
+            if ($parts[$i] !== '' && !$isTrusted($parts[$i])) {
+                return $parts[$i];
+            }
+        }
+    }
+
+    return $remote;
+}
+
+/**
+ * Renvoie le user-agent du client (tronqué).
+ */
+function user_agent(): string
+{
+    $ua = (string) ($_SERVER['HTTP_USER_AGENT'] ?? '');
+
+    return mb_substr($ua, 0, 255);
+}
+
+/**
+ * Indique si l'utilisateur courant est à jour de cotisation (saison en cours).
+ */
+function is_member(): bool
+{
+    if (!\App\Core\Auth::check()) {
+        return false;
+    }
+
+    return \App\Models\Membership::isMember((string) \App\Core\Auth::id());
+}
+
+// ---------------------------------------------------------------------
+//  Fonctionnalité 12 — Système de traduction multilingue (9 langues).
+// ---------------------------------------------------------------------
+
+/**
+ * Langues officiellement supportées par le site.
+ *
+ * @return list<string>
+ */
+function available_langs(): array
+{
+    return ['fr', 'en', 'de', 'es', 'zh', 'ja', 'pl', 'ru', 'ms'];
+}
+
+/**
+ * Drapeau (emoji) associé à un code de langue.
+ */
+function lang_flag(string $lang): string
+{
+    $flags = [
+        'fr' => '🇫🇷',
+        'en' => '🇬🇧',
+        'de' => '🇩🇪',
+        'es' => '🇪🇸',
+        'zh' => '🇨🇳',
+        'ja' => '🇯🇵',
+        'pl' => '🇵🇱',
+        'ru' => '🇷🇺',
+        'ms' => '🇲🇾',
+    ];
+
+    return $flags[$lang] ?? '🌐';
+}
+
+/**
+ * Code de locale BCP-47 associé à une langue (balises <html lang>, og:locale).
+ */
+function lang_locale(string $lang): string
+{
+    $locales = [
+        'fr' => 'fr_FR',
+        'en' => 'en_US',
+        'de' => 'de_DE',
+        'es' => 'es_ES',
+        'zh' => 'zh_CN',
+        'ja' => 'ja_JP',
+        'pl' => 'pl_PL',
+        'ru' => 'ru_RU',
+        'ms' => 'ms_MY',
+    ];
+
+    return $locales[$lang] ?? 'fr_FR';
+}
+
+/**
+ * Langue courante (préférence stockée en cookie `aeic_lang`), par défaut "fr".
+ */
+function current_lang(): string
+{
+    $lang = strtolower((string) ($_COOKIE['aeic_lang'] ?? 'fr'));
+    if (in_array($lang, available_langs(), true)) {
+        return $lang;
+    }
+
+    return 'fr';
+}
+
+/**
+ * Traduit une clé depuis le catalogue app/translations/messages.php.
+ *
+ * Renvoie, dans l'ordre : la traduction dans la langue courante, sinon la
+ * traduction française (référence), sinon le fallback fourni, sinon la clé.
+ *
+ * Les éventuels marqueurs `{n}`, `{a}`... de la chaîne peuvent être remplacés
+ * via tt() (ou manuellement par strtr()).
+ */
+function t(string $key, ?string $fallback = null): string
+{
+    static $messages = null;
+    if ($messages === null) {
+        $messages = require AEIC_ROOT . '/app/translations/messages.php';
+    }
+
+    $row = $messages[$key] ?? null;
+    if (is_array($row)) {
+        $lang = current_lang();
+        if (isset($row[$lang]) && $row[$lang] !== '') {
+            return (string) $row[$lang];
+        }
+        if (isset($row['fr'])) {
+            return (string) $row['fr'];
+        }
+    }
+
+    return $fallback ?? $key;
+}
+
+/**
+ * Variante de t() qui remplace des marqueurs {clé} par des valeurs.
+ *
+ * Exemple : tt('poll.voters', ['{n}' => 42]).
+ *
+ * @param array<string,scalar> $vars
+ */
+function tt(string $key, array $vars, ?string $fallback = null): string
+{
+    $text = t($key, $fallback);
+    if ($vars === []) {
+        return $text;
+    }
+
+    $replacements = [];
+    foreach ($vars as $k => $v) {
+        $replacements[(string) $k] = (string) $v;
+    }
+
+    return strtr($text, $replacements);
+}
+
+/**
+ * Traduit un contenu dynamique stocké en français en base (titre, extrait,
+ * lieu d'événement, setting...).
+ *
+ * Contrairement à t() qui travaille par clé symbolique, tc() prend en entrée
+ * le texte français EXACT et le résout via l'overlay app/translations/content.php.
+ *
+ * Comportement :
+ *  - langue courante == fr : renvoie le texte tel quel ;
+ *  - traduction connue pour la langue courante : la renvoie ;
+ *  - sinon : renvoie le texte français (fallback safe, ne casse rien).
+ */
+function tc(string $frenchText): string
+{
+    if ($frenchText === '') {
+        return '';
+    }
+
+    static $content = null;
+    if ($content === null) {
+        $content = require AEIC_ROOT . '/app/translations/content.php';
+    }
+
+    $lang = current_lang();
+    if ($lang === 'fr') {
+        return $frenchText;
+    }
+
+    $key = trim($frenchText);
+    if (isset($content[$key][$lang]) && $content[$key][$lang] !== '') {
+        return (string) $content[$key][$lang];
+    }
+
+    return $frenchText;
+}
+
+/**
+ * Associe un emoji à un produit en fonction de mots-clés présents dans son nom.
+ *
+ * Permet d'afficher un menu cafétéria plus vivant sans stocker les emojis en base.
+ */
+function product_emoji(string $name): string
+{
+    $haystack = mb_strtolower($name);
+
+    $map = [
+        'coca'    => '🥤',
+        'cola'    => '🥤',
+        'pepsi'   => '🥤',
+        'eau'     => '💧',
+        'cristaline' => '💧',
+        'oasis'   => '🧃',
+        'fanta'   => '🧃',
+        'minute'  => '🧃',
+        'lipton'  => '🍵',
+        'orangina'=> '🥤',
+        'perrier' => '💧',
+        'schweppes'=> '🥤',
+        'pepper'  => '🥤',
+        'dr pepper'=> '🥤',
+        'pulco'   => '🧃',
+        'fuze'    => '🧃',
+        'ice'     => '🧊',
+        'thé'     => '🍵',
+        'the'     => '🍵',
+        'ice tea' => '🍵',
+        'café'    => '☕',
+        'coffee'  => '☕',
+        'expresso'=> '☕',
+        'latte'   => '☕',
+        'capuccino'=> '☕',
+        'cappuccino'=> '☕',
+        'chai'    => '🍵',
+        'monster' => '⚡',
+        'red bull' => '⚡',
+        'redbull' => '⚡',
+        'energy'  => '⚡',
+        'jus'     => '🧃',
+        'orange'  => '🧃',
+        'smoothie'=> '🥤',
+        'bière'   => '🍺',
+        'biere'   => '🍺',
+        'beer'    => '🍺',
+        'vin'     => '🍷',
+        'wine'    => '🍷',
+        'lait'    => '🥛',
+        'milk'    => '🥛',
+        'chocolat'=> '🍫',
+        'choco'   => '🍫',
+        'bueno'   => '🍫',
+        'kitkat'  => '🍫',
+        'twix'    => '🍫',
+        'mars'    => '🍫',
+        'snickers'=> '🍫',
+        'bn'      => '🍪',
+        'cookie'  => '🍪',
+        'cookies' => '🍪',
+        'oreo'    => '🍪',
+        'bonbon'  => '🍬',
+        'sucette' => '🍬',
+        'dragée'  => '🍬',
+        'dragee'  => '🍬',
+        'haribo'  => '🍬',
+        'chips'   => '🍟',
+        'chipos'  => '🍟',
+        'tuc'     => '🍟',
+        'pringle' => '🍟',
+        'cracker' => '🍟',
+        'sandwich'=> '🥪',
+        'panini'  => '🥪',
+        'bagel'   => '🥯',
+        'pizza'   => '🍕',
+        'quiche'  => '🥧',
+        'tarte'   => '🥧',
+        'croissant'=> '🥐',
+        'pain'    => '🍞',
+        'viennoiserie'=> '🥐',
+        'muffin'  => '🧁',
+        'cupcake' => '🧁',
+        'cake'    => '🍰',
+        'donut'   => '🍩',
+        'beignet' => '🍩',
+        'glace'   => '🍦',
+        'ice cream'=> '🍦',
+        'yaourt'  => '🥣',
+        'fruit'   => '🍎',
+        'pomme'   => '🍎',
+        'banane'  => '🍌',
+        'orange fruit'=> '🍊',
+        'clémentine'=> '🍊',
+        'clementine'=> '🍊',
+        'friand'  => '🥨',
+        'nouille' => '🍜',
+        'ramen'   => '🍜',
+        'soupe'   => '🍲',
+        'salade'  => '🥗',
+        'tacos'   => '🌮',
+        'kebab'   => '🌯',
+        'burrito' => '🌯',
+        'burger'  => '🍔',
+        'hot dog' => '🌭',
+        'frites'  => '🍟',
+        'pates'   => '🍝',
+        'pâtes'   => '🍝',
+        'pasta'   => '🍝',
+        'riz'     => '🍚',
+        'rice'    => '🍚',
+        'œuf'     => '🍳',
+        'oeuf'    => '🍳',
+        'egg'     => '🍳',
+        'waffle'  => '🧇',
+        'gaufre'  => '🧇',
+        'bubble tea'=> '🧋',
+        'boba'    => '🧋',
+        'matcha'  => '🍵',
+        'gas'     => '⛽',
+        'essence' => '⛽',
+        'loterie' => '🎟️',
+        'ticket'  => '🎟️',
+        'goodies' => '🎁',
+        't-shirt' => '👕',
+        'tshirt'  => '👕',
+        'stylo'   => '🖊️',
+        'cahier'  => '📓',
+    ];
+
+    foreach ($map as $needle => $emoji) {
+        if ($needle !== '' && str_contains($haystack, $needle)) {
+            return $emoji;
+        }
+    }
+
+    return '🍽️';
+}
+
+/**
+ * Traduit une catégorie d'événement (stockée en français en base).
+ * Si la catégorie n'a pas de traduction connue, retourne la valeur brute.
+ */
+function t_category(string $category): string
+{
+    $cat = strtolower(trim($category));
+    if ($cat === '') {
+        return '';
+    }
+
+    // Mapping vers les clés de traduction.
+    $map = [
+        'soirée'         => 'cat.soiree',
+        'soiree'         => 'cat.soiree',
+        'afterwork'      => 'cat.afterwork',
+        'barbecue'       => 'cat.barbecue',
+        'tournoi / lan'  => 'cat.tournoi',
+        'tournoi'        => 'cat.tournoi',
+        'conférence'     => 'cat.conference',
+        'conference'     => 'cat.conference',
+        'sortie'         => 'cat.sortie',
+        'atelier'        => 'cat.atelier',
+        'nuit de l\'info'=> 'cat.nuitinfo',
+        'hackathon'      => 'cat.hackathon',
+        'rentrée'        => 'cat.rentree',
+        'rentree'        => 'cat.rentree',
+        'sport'          => 'cat.sport',
+        'culture'        => 'cat.culture',
+        'musique'        => 'cat.musique',
+        'voyage'         => 'cat.voyage',
+        'gastronomie'    => 'cat.gastronomie',
+        'autre'          => 'cat.autre',
+    ];
+
+    // Recherche par correspondance partielle.
+    foreach ($map as $needle => $key) {
+        if ($cat === $needle || str_contains($cat, $needle)) {
+            return t($key);
+        }
+    }
+
+    return $category;
+}
+
+/**
+ * Saisie de date/heure en listes déroulantes françaises (JJ / Mois / AAAA /
+ * hh h mm) — remplace le champ datetime-local natif. Tout laisser vide
+ * signifie « maintenant » (côté serveur).
+ *
+ * @param string $prefix Préfixe des champs postés (ex. « date » génère date_d…date_i).
+ * @param string $id     Identifiant HTML du bloc (utilisé par le label).
+ * @param string|null $value Valeur pré-remplie stockée en base (UTC,
+ *                           ex. « Y-m-d H:i:s » ou « Y-m-d\TH:i »).
+ *                           Elle est convertie en heure de Paris avant
+ *                           sélection. null, '', « 0000-00-00 00:00:00 »
+ *                           ou toute chaîne non parsable ⇒ listes vides
+ *                           (aucune sélection).
+ * @param string $label Libellé affiché devant les listes.
+ * @param string|null $hint Précision affichée entre parenthèses après le
+ *                          libellé ; null = pas de précision.
+ */
+function datetime_selects_field(
+    string $prefix = 'date',
+    string $id = 'date',
+    ?string $value = null,
+    string $label = 'Date',
+    ?string $hint = 'optionnel, par défaut maintenant',
+): void {
+    $months = [
+        1 => 'janvier', 'février', 'mars', 'avril', 'mai', 'juin',
+        'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre',
+    ];
+
+    $selD = null; // '01'…'31'
+    $selM = null; // 1…12
+    $selY = null; // '2026'
+    $selH = null; // '00'…'23'
+    $selI = null; // '00'…'59'
+    if ($value !== null && trim($value) !== '') {
+        // La valeur vient de la base en UTC : affichage en heure de Paris.
+        // Parsing de chaîne (pas strtotime+date) pour rester insensible à la
+        // timezone PHP par défaut.
+        $paris = utcToParis((string) $value);
+        if (preg_match('/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/', $paris, $m) === 1) {
+            $selY = $m[1];
+            $selM = (int) $m[2];
+            $selD = $m[3];
+            $selH = $m[4];
+            $selI = $m[5];
+        }
+    }
+
+    $year = (int) date('Y');
+    // Une date pré-remplie dans le futur doit rester sélectionnable.
+    if ($selY !== null && (int) $selY > $year) {
+        $year = (int) $selY;
+    }
+    $years = range($year, 2020);
+
+    $days = [];
+    for ($d = 1; $d <= 31; $d++) {
+        $days[] = sprintf('%02d', $d);
+    }
+    $hours = [];
+    for ($h = 0; $h <= 23; $h++) {
+        $hours[] = sprintf('%02d', $h);
+    }
+    $mins = [];
+    for ($m = 0; $m <= 59; $m++) {
+        $mins[] = sprintf('%02d', $m);
+    }
+
+    ?><div class="field">
+        <label for="<?= e($id) ?>"><?= e($label) ?><?php if ($hint !== null): ?> <span class="muted">(<?= e($hint) ?>)</span><?php endif; ?></label>
+        <div id="<?= e($id) ?>" class="datetime-selects" style="display:flex;gap:.45rem;align-items:center;flex-wrap:wrap">
+            <select name="<?= e($prefix) ?>_d" aria-label="Jour" style="width:auto">
+                <option value="">JJ</option>
+                <?php foreach ($days as $d): ?><option value="<?= $d ?>"<?= $d === $selD ? ' selected' : '' ?>><?= $d ?></option><?php endforeach; ?>
+            </select>
+            <select name="<?= e($prefix) ?>_m" aria-label="Mois" style="width:auto">
+                <option value="">Mois</option>
+                <?php foreach ($months as $num => $name): ?><option value="<?= $num ?>"<?= $num === $selM ? ' selected' : '' ?>><?= $name ?></option><?php endforeach; ?>
+            </select>
+            <select name="<?= e($prefix) ?>_y" aria-label="Année" style="width:auto">
+                <option value="">AAAA</option>
+                <?php foreach ($years as $y): ?><option value="<?= $y ?>"<?= (string) $y === $selY ? ' selected' : '' ?>><?= $y ?></option><?php endforeach; ?>
+            </select>
+            <span class="muted">à</span>
+            <select name="<?= e($prefix) ?>_h" aria-label="Heure" style="width:auto">
+                <option value="">hh</option>
+                <?php foreach ($hours as $h): ?><option value="<?= $h ?>"<?= $h === $selH ? ' selected' : '' ?>><?= $h ?></option><?php endforeach; ?>
+            </select>
+            <span class="muted">h</span>
+            <select name="<?= e($prefix) ?>_i" aria-label="Minutes" style="width:auto">
+                <option value="">mm</option>
+                <?php foreach ($mins as $m): ?><option value="<?= $m ?>"<?= $m === $selI ? ' selected' : '' ?>><?= $m ?></option><?php endforeach; ?>
+            </select>
+        </div>
+    </div><?php
+}
+
+/**
+ * Valeur postée par datetime_selects_field().
+ *
+ * La saisie murale de l'utilisateur est interprétée en heure de Paris
+ * (tz nommée, UTC+2 été / UTC+1 hiver) et convertie en UTC pour stockage.
+ *
+ * @param string $prefix Préfixe des champs (ex. « date » lit date_d…date_i).
+ * @param string $until  Borne haute de la date acceptée, exprimée en relatif
+ *                       strtotime (ex. « +1 day » par défaut, « +5 years »
+ *                       pour autoriser les dates futures) ; comparée à
+ *                       l'epoch UTC de la saisie convertie.
+ * @return array{ok:bool, value:?string} value null = tout vide (« maintenant »,
+ *         le SQL appliquera NOW()) ; ok false = saisie partielle, hors bornes
+ *         (avant 2020 ou après $until) ou invalide. Sinon value = datetime
+ *         UTC « Y-m-d H:i:s » prêt pour la base.
+ */
+function datetime_selects_value(string $prefix = 'date', string $until = '+1 day'): array
+{
+    $d = trim((string) ($_POST[$prefix . '_d'] ?? ''));
+    $m = trim((string) ($_POST[$prefix . '_m'] ?? ''));
+    $y = trim((string) ($_POST[$prefix . '_y'] ?? ''));
+    $h = trim((string) ($_POST[$prefix . '_h'] ?? ''));
+    $i = trim((string) ($_POST[$prefix . '_i'] ?? ''));
+
+    if ($d === '' && $m === '' && $y === '' && $h === '' && $i === '') {
+        return ['ok' => true, 'value' => null];
+    }
+
+    // Sans jour ni mois, la saisie est ambiguë : on les exige.
+    if ($d === '' || $m === '') {
+        return ['ok' => false, 'value' => null];
+    }
+
+    $year = $y !== '' ? (int) $y : (int) date('Y');
+    $hour = $h !== '' ? (int) $h : 0;
+    $min = $i !== '' ? (int) $i : 0;
+    $day = (int) $d;
+    $month = (int) $m;
+
+    if (!checkdate($month, $day, $year) || $hour > 23 || $min > 59) {
+        return ['ok' => false, 'value' => null];
+    }
+
+    // Heure murale Paris → UTC pour stockage.
+    $wall = sprintf('%04d-%02d-%02d %02d:%02d:00', $year, $month, $day, $hour, $min);
+    $utc = parisToUtc($wall);
+    if ($utc === null) {
+        return ['ok' => false, 'value' => null];
+    }
+
+    $ts = strtotime($utc);
+    if ($ts === false || $ts < strtotime('2020-01-01 00:00:00') || $ts > strtotime($until)) {
+        return ['ok' => false, 'value' => null];
+    }
+
+    return ['ok' => true, 'value' => $utc];
+}

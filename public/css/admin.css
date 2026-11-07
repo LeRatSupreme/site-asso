@@ -1,0 +1,1307 @@
+/* ==========================================================================
+   Espace administration AEIC — thème sombre navy/teal/violet
+   Réutilise les variables définies dans base.css (:root).
+   Ne redéfinit aucune couleur en dur déjà couverte par une variable.
+   ========================================================================== */
+
+/* ---- Variables spécifiques à l'admin (dérivées de la charte) ----------- */
+.admin-body {
+    --admin-bg: #0a1b33;
+    --admin-sidebar: #0b1a30;
+    --admin-sidebar-deep: #091628;
+    --admin-link: hsl(204 25% 65%);
+    --admin-active-bg: rgba(72, 189, 211, 0.12);
+    --admin-active-bar: var(--primary);
+
+    background: var(--admin-bg);
+    color: var(--foreground);
+    margin: 0;
+}
+
+/* ---- Shell : sidebar + contenu ----------------------------------------- */
+
+.admin-shell {
+    display: grid;
+    grid-template-columns: 260px 1fr;
+    min-height: 100vh;
+    position: relative;
+    z-index: 1;
+}
+
+/* ---- Sidebar ----------------------------------------------------------- */
+
+.admin-sidebar {
+    background: var(--admin-sidebar);
+    color: var(--admin-link);
+    display: flex;
+    flex-direction: column;
+    padding: 1.25rem 0.75rem;
+    gap: 0.15rem;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+    border-right: 1px solid var(--border);
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+.admin-sidebar::-webkit-scrollbar {
+    display: none;
+}
+
+.admin-sidebar .brand {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    color: #fff;
+    font-weight: 700;
+    text-decoration: none;
+    padding: 0.5rem 0.5rem 1.1rem;
+}
+
+.admin-sidebar .brand:hover { color: #fff; }
+
+.admin-sidebar .brand-logo {
+    width: 36px;
+    height: 36px;
+    flex: 0 0 auto;
+    border-radius: 10px;
+    font-size: 0.9rem;
+}
+
+.admin-sidebar .brand-name {
+    font-size: 0.95rem;
+    line-height: 1.15;
+}
+
+.admin-group {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: hsl(204 20% 45%);
+    margin: 1.1rem 0.5rem 0.35rem;
+    font-weight: 800;
+}
+
+/* Intertitre de sous-groupe (ex. « Ventes » dans Comptabilité) :
+   typographie strictement identique à .admin-group (uniformisation
+   demandée) ; la hiérarchie est marquée par le retrait (padding-left).
+   Pas de règle « menu réduit » dédiée : comme .admin-group, il vit dans
+   la sidebar entièrement masquée en mode réduit (opacity/visibility). */
+.admin-subgroup {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: hsl(204 20% 45%);
+    margin: 0.7rem 0.5rem 0.2rem;
+    padding-left: 0.3rem;
+    font-weight: 800;
+}
+
+/* Groupes/sous-groupes repliables : les titres sont devenus des <button>
+   (état mémorisé dans localStorage, clé « aeic_admin_sidebar_groups », voir
+   le layout admin). Le reset d'apparence passe par :where() (spécificité
+   nulle) pour ne pas écraser font-size/graisse/couleur des classes
+   ci-dessus ; seuls ces boutons sont visés, pas les autres boutons de
+   l'admin. Sans incidence en mode « menu réduit » : la sidebar y est
+   masquée en bloc (body.sidebar-collapsed, règles plus bas), l'état des
+   groupes n'y est simplement pas visible. */
+button:where(.admin-group, .admin-subgroup) {
+    background: none;
+    border: 0;
+    padding: 0;
+    width: 100%;
+    text-align: left;
+    cursor: pointer;
+    color: inherit;
+    font: inherit;
+    display: flex;
+    align-items: baseline;
+    gap: 0.4rem;
+}
+
+button:where(.admin-group, .admin-subgroup):hover {
+    color: hsl(204 20% 62%);
+}
+
+button:where(.admin-group, .admin-subgroup):focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+
+/* Chevron indicateur : pointe à droite du titre, pivote quand replié
+   (seule transition de l'ensemble : pas d'animation de pliage des liens). */
+.admin-group::after,
+.admin-subgroup::after {
+    content: '▾';
+    margin-left: auto;
+    font-size: 0.9em;
+    transform-origin: 50% 45%;
+    transition: transform 0.15s ease;
+}
+
+.admin-group[aria-expanded='false']::after,
+.admin-subgroup[aria-expanded='false']::after {
+    transform: rotate(-90deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .admin-group::after,
+    .admin-subgroup::after {
+        transition: none;
+    }
+}
+
+.admin-link {
+    position: relative;
+    display: block;
+    color: var(--admin-link);
+    text-decoration: none;
+    padding: 0.55rem 0.8rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.9rem;
+    font-weight: 600;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.admin-link:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--foreground);
+}
+
+.admin-link.is-active {
+    background: var(--admin-active-bg);
+    color: var(--primary);
+    box-shadow: inset 3px 0 0 var(--admin-active-bar);
+    font-weight: 700;
+}
+
+.admin-sidebar-foot {
+    margin-top: auto;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+}
+
+/* ---- Main / topbar ----------------------------------------------------- */
+
+.admin-main {
+    padding: 1.5rem 2rem 3rem;
+    min-width: 0;
+    background: var(--admin-bg);
+}
+
+.admin-topbar {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+    padding-bottom: 1.25rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.admin-title {
+    font-size: clamp(1.4rem, 3vw, 1.9rem);
+    margin: 0;
+    color: #fff;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: -0.03em;
+    line-height: 1;
+}
+
+.admin-toggle {
+    display: none;
+    width: 42px;
+    height: 42px;
+    border: 1px solid var(--border-strong);
+    background: var(--card);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    position: relative;
+}
+
+.admin-toggle::before,
+.admin-toggle::after {
+    content: '';
+    position: absolute;
+    left: 11px;
+    right: 11px;
+    height: 2px;
+    background: var(--foreground);
+}
+
+.admin-toggle::before { top: 14px; box-shadow: 0 6px 0 var(--foreground); }
+.admin-toggle::after { bottom: 14px; }
+
+/* ---- Contenu & cartes -------------------------------------------------- */
+
+.admin-content { display: flex; flex-direction: column; gap: 1.5rem; }
+
+/* Les cartes du contenu utilisent déjà .card .surface .glass de base.css.
+   On ne fait qu'ajouter un léger hover admin pour les surfaces interactives. */
+.admin-content .card.surface {
+    transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+.admin-content .card.surface:hover {
+    border-color: rgba(72, 189, 211, 0.28);
+}
+
+/* ---- Stat-cards (dashboard) -------------------------------------------- */
+
+.stat-cards { gap: 1rem; }
+.stat-card {
+    padding: 1.35rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+.stat-value {
+    font-size: 1.85rem;
+    font-weight: 900;
+    color: #fff;
+    letter-spacing: -0.03em;
+}
+.stat-label {
+    color: var(--muted);
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    font-weight: 700;
+}
+
+/* ---- Tableaux ---------------------------------------------------------- */
+
+.table-wrap { overflow-x: auto; border-radius: var(--radius); }
+
+.table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.92rem;
+}
+
+.table th,
+.table td {
+    text-align: left;
+    padding: 0.75rem 0.85rem;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+}
+
+.table thead th {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    font-weight: 800;
+    background: var(--admin-sidebar-deep);
+}
+
+.table tbody tr { transition: background 0.12s ease; }
+.table tbody tr:nth-child(even) { background: rgba(255, 255, 255, 0.018); }
+.table tbody tr:hover { background: rgba(72, 189, 211, 0.07); }
+.table tbody tr:last-child td { border-bottom: none; }
+
+.row-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+.row-self { background: rgba(97, 80, 170, 0.12); }
+.row-self:hover { background: rgba(97, 80, 170, 0.18); }
+
+/* ---- Formulaires admin ------------------------------------------------- */
+
+.inline-form {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.inline-form input,
+.inline-form select { flex: 1 1 160px; min-width: 120px; }
+
+/* Champs de formulaire hors .field (selects inline, recherches admin) */
+.admin-main select,
+.admin-main input[type="text"],
+.admin-main input[type="search"],
+.admin-main input[type="number"] {
+    width: 100%;
+    padding: 0.55rem 0.75rem;
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--foreground);
+    font-size: 0.9rem;
+    font-family: inherit;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+/* On laisse .field (base.css) garder la priorité sur les champs labellisés */
+.field input[type="text"],
+.field input[type="search"],
+.field input[type="number"],
+.field select {
+    padding: 0.7rem 0.9rem;
+}
+.admin-main select:focus,
+.admin-main input[type="text"]:focus,
+.admin-main input[type="search"]:focus,
+.admin-main input[type="number"]:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(72, 189, 211, 0.18);
+}
+.admin-main select option {
+    background: var(--card);
+    color: var(--foreground);
+}
+
+.checkbox-inline { display: inline-flex; gap: 0.35rem; align-items: center; font-size: 0.9rem; }
+
+.admin-actions {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.admin-section-head { display: flex; flex-direction: column; gap: 0.25rem; }
+.admin-section-head a { color: var(--primary); text-decoration: none; }
+
+/* ---- Badges admin (compléments sémantiques) ---------------------------- */
+/* base.css fournit déjà .badge .badge-success .badge-warning .badge-danger
+   .badge-muted .badge-secondary en version sombre translucide. On ajoute
+   seulement .badge-info (teal) non présent dans la base. */
+.badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.22rem 0.65rem;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.03em;
+    border: 1px solid transparent;
+}
+.badge-info {
+    background: rgba(72, 189, 211, 0.16);
+    color: var(--primary);
+    border-color: rgba(72, 189, 211, 0.4);
+}
+
+/* ---- Listes en lignes -------------------------------------------------- */
+
+.list-rows {
+    list-style: none;
+    margin: 0 0 1rem;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+.list-rows li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.55rem 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.9rem;
+}
+.list-rows li:last-child { border-bottom: none; }
+
+.audit-list code {
+    background: rgba(72, 189, 211, 0.12);
+    color: var(--primary);
+    padding: 0.12rem 0.45rem;
+    border-radius: 0.3rem;
+    font-size: 0.8rem;
+    font-family: ui-monospace, 'SF Mono', Consolas, monospace;
+}
+.audit-list li { flex-wrap: wrap; gap: 0.45rem; }
+
+/* ---- Médias ------------------------------------------------------------ */
+
+.media-upload-card { margin-bottom: 1.5rem; }
+.media-upload-form { display: flex; flex-direction: column; gap: 1rem; }
+
+.dropzone {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    padding: 2rem 1.5rem;
+    border: 2px dashed var(--border);
+    border-radius: var(--radius-sm);
+    background: rgba(255, 255, 255, 0.02);
+    cursor: pointer;
+    text-align: center;
+    transition: border-color 0.15s, background 0.15s, transform 0.1s;
+}
+.dropzone:hover { border-color: var(--primary); background: rgba(72, 189, 211, 0.06); }
+.dropzone.is-drag { border-color: var(--primary); background: rgba(72, 189, 211, 0.12); transform: scale(1.01); }
+.dropzone-title { font-weight: 700; color: var(--foreground); font-size: 0.98rem; }
+.dropzone-sub { font-size: 0.8rem; color: var(--muted); }
+
+.media-upload-fields { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; }
+.media-upload-fields input[type="text"] { flex: 1 1 240px; }
+
+/* Grille de cartes médias */
+.media-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 1rem;
+}
+
+.media-card {
+    margin: 0;
+    padding: 0.65rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--input-bg);
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    transition: border-color 0.18s ease;
+}
+.media-card:hover { border-color: var(--primary); }
+
+.media-thumb { margin: 0; }
+.media-thumb img {
+    width: 100%;
+    aspect-ratio: 16 / 10;
+    object-fit: cover;
+    border-radius: var(--radius-sm);
+    background: var(--admin-sidebar-deep);
+}
+
+.media-card figcaption {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    font-size: 0.75rem;
+    color: var(--muted);
+    word-break: break-all;
+}
+.media-name {
+    font-size: 0.85rem;
+    color: var(--foreground);
+    display: block;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.media-meta { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+.media-url {
+    display: block;
+    background: rgba(0, 0, 0, 0.25);
+    color: var(--muted);
+    padding: 0.3rem 0.45rem;
+    border-radius: 0.35rem;
+    font-size: 0.7rem;
+    font-family: ui-monospace, 'SF Mono', Consolas, monospace;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Actions en boutons icônes compacts */
+.media-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 0.35rem; }
+.media-actions .inline-form { display: inline-flex; margin: 0; }
+.media-icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2rem;
+    padding: 0.25rem 0.65rem;
+    border: 1px solid var(--border);
+    border-radius: 0.45rem;
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--foreground);
+    font-size: 0.9rem;
+    line-height: 1;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+.media-icon-btn:hover {
+    border-color: var(--primary);
+    background: rgba(72, 189, 211, 0.12);
+    color: var(--primary);
+}
+.media-icon-btn.is-danger:hover {
+    border-color: rgba(239, 68, 68, 0.6);
+    background: rgba(239, 68, 68, 0.16);
+    color: #f87171;
+}
+.copy-url.is-done,
+.copy-url.is-done:hover {
+    border-color: rgba(34, 197, 94, 0.45);
+    background: rgba(34, 197, 94, 0.18);
+    color: #22c55e;
+}
+
+/* Modale d'édition média (même squelette que la modale « Pages + ») */
+.media-dialog {
+    /* Centrage explicite : le reset global « * { margin: 0 } » du site
+       écrase le « margin: auto » natif des <dialog> modaux, ce qui les
+       colle en haut à gauche. */
+    position: fixed;
+    inset: 0;
+    margin: auto;
+    height: fit-content;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 0;
+    background: var(--card);
+    color: var(--foreground);
+    width: min(420px, 94vw);
+    max-height: 82vh;
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.45);
+}
+.media-dialog::backdrop { background: rgba(0, 0, 0, 0.55); backdrop-filter: blur(3px); }
+.media-dialog[open] { animation: media-pop 0.14s ease-out; }
+@keyframes media-pop {
+    from { opacity: 0; transform: translateY(6px) scale(0.98); }
+    to { opacity: 1; transform: none; }
+}
+.media-dialog-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.6rem;
+    padding: 0.9rem 1rem 0.7rem;
+    border-bottom: 1px solid var(--border);
+}
+.media-dialog-title { margin: 0; font-size: 0.95rem; font-weight: 700; }
+.media-dialog-sub {
+    margin: 0.15rem 0 0;
+    font-size: 0.76rem;
+    color: var(--muted);
+    word-break: break-all;
+}
+.media-dialog-close {
+    background: transparent; border: none; color: var(--muted);
+    font-size: 1.2rem; cursor: pointer; line-height: 1;
+    padding: 0.15rem 0.45rem; border-radius: 6px;
+}
+.media-dialog-close:hover { color: var(--foreground); background: rgba(255, 255, 255, 0.07); }
+
+/* Bouton « × » de la modale « Pages » (même squelette que .media-dialog-close) */
+.pages-dialog-close {
+    background: transparent; border: none; color: var(--muted);
+    font-size: 1.2rem; cursor: pointer; line-height: 1;
+    padding: 0.15rem 0.45rem; border-radius: 6px;
+}
+.pages-dialog-close:hover { color: var(--foreground); background: rgba(255, 255, 255, 0.07); }
+.media-dialog-body { padding: 0.9rem 1rem 0.2rem; overflow-y: auto; }
+.media-dialog-body .field input[type="text"] { padding: 0.55rem 0.75rem; }
+.media-dialog-foot {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    padding: 0.75rem 1.1rem 1rem;
+    border-top: 1px solid var(--border);
+}
+.media-dialog-foot .btn { white-space: nowrap; }
+.media-dialog-spacer { flex: 1; }
+
+/* Modale « média utilisé » : pourquoi la suppression est bloquée + cascade */
+.media-usage-badge {
+    cursor: pointer;
+    border-style: solid;
+    font-weight: 700;
+}
+.media-usage-badge:hover { filter: brightness(1.2); }
+.media-usage-intro { margin: 0 0 0.5rem; font-size: 0.8rem; color: var(--foreground); }
+.media-usage-list {
+    margin: 0 0 0.6rem;
+    padding: 0.5rem 0.5rem 0.5rem 1.4rem;
+    list-style: disc;
+    background: rgba(0, 0, 0, 0.22);
+    border: 1px solid var(--border);
+    border-radius: 0.5rem;
+    font-size: 0.8rem;
+    color: var(--foreground);
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+}
+.media-usage-note {
+    margin: 0;
+    font-size: 0.74rem;
+    color: var(--muted);
+    line-height: 1.45;
+}
+.media-dialog .btn-danger {
+    background: rgba(239, 68, 68, 0.18);
+    border: 1px solid rgba(239, 68, 68, 0.55);
+    color: #f87171;
+}
+.media-dialog .btn-danger:hover { background: rgba(239, 68, 68, 0.3); }
+
+/* ---- POS --------------------------------------------------------------- */
+
+.pos-grid {
+    display: grid;
+    grid-template-columns: 1fr 340px;
+    gap: 1.5rem;
+    align-items: start;
+}
+
+.pos-cat-title {
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    margin: 1rem 0 0.5rem;
+    color: var(--muted);
+    font-weight: 800;
+}
+
+.pos-products {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 0.6rem;
+}
+
+.pos-product {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    align-items: stretch;
+    text-align: left;
+    cursor: pointer;
+    border: 1px solid var(--border);
+    background: var(--input-bg);
+    color: var(--foreground);
+    border-radius: var(--radius-sm);
+    padding: 0.75rem;
+    transition: transform 0.12s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.pos-product:hover {
+    transform: translateY(-2px);
+    border-color: rgba(72, 189, 211, 0.45);
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.35);
+}
+.pos-product-name { font-weight: 700; font-size: 0.9rem; color: #fff; }
+.pos-product-price { color: var(--primary); font-weight: 800; }
+.pos-product-stock { font-size: 0.72rem; color: var(--muted); }
+
+.pos-cart { position: sticky; top: 1.5rem; }
+.pos-total { font-size: 1.25rem; margin: 0.5rem 0 1rem; color: var(--foreground); }
+.pos-total strong { color: var(--primary); }
+
+/* Boutons quantité panier (POS) */
+.list-rows button {
+    width: 1.7rem;
+    height: 1.7rem;
+    border: 1px solid var(--border-strong);
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--foreground);
+    border-radius: 0.4rem;
+    font-weight: 800;
+    cursor: pointer;
+    transition: background 0.12s ease;
+}
+.list-rows button:hover { background: rgba(72, 189, 211, 0.15); color: var(--primary); }
+
+.btn-block { width: 100%; }
+
+/* ---- Responsive -------------------------------------------------------- */
+
+@media (max-width: 960px) {
+    .admin-shell { grid-template-columns: 1fr; }
+    .admin-sidebar {
+        position: fixed;
+        z-index: 60;
+        left: 0;
+        top: 0;
+        width: min(280px, 62vw);
+        height: 100vh;
+        transform: translateX(-100%);
+        transition: transform 0.25s ease;
+        box-shadow: 0 0 40px rgba(0, 0, 0, 0.5);
+    }
+    .admin-sidebar.is-open { transform: translateX(0); }
+    .admin-toggle { display: block; }
+    .admin-main { padding: 1rem; }
+    .pos-grid { grid-template-columns: 1fr; }
+    .pos-cart { position: static; }
+}
+
+/* ---- Menu réductible (desktop) ------------------------------------------
+   Le hamburger de la topbar replie la sidebar sur desktop : la piste de
+   grille passe de 260px à 0 et le contenu prend toute la largeur. L'état
+   est mémorisé dans localStorage (voir layout admin, clé
+   « aeic_admin_sidebar_collapsed »). Mobile (<961px) : comportement
+   drawer inchangé. */
+@media (min-width: 961px) {
+    .admin-toggle { display: block; }
+
+    .admin-shell {
+        transition: grid-template-columns 0.22s ease;
+    }
+    body.sidebar-collapsed .admin-shell { grid-template-columns: 0px 1fr; }
+
+    .admin-sidebar {
+        transition: opacity 0.16s ease, visibility 0.22s ease;
+    }
+    body.sidebar-collapsed .admin-sidebar {
+        padding-left: 0;
+        padding-right: 0;
+        border-right-color: transparent;
+        overflow: hidden;
+        opacity: 0;
+        visibility: hidden; /* sort aussi les liens du focus clavier */
+    }
+
+    /* Le title du bouton est mis à jour en JS ; outline visible au clavier. */
+    .admin-toggle:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+}
+
+/* ---- Carte vs Liquide (dashboard compta) ------------------------------- */
+
+.split-bar {
+    display: flex;
+    height: 48px;
+    border-radius: 10px;
+    overflow: hidden;
+    margin: 1rem 0 0.8rem;
+}
+.split-bar-card {
+    background: rgba(72,189,211,0.35);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 30px;
+    transition: width 0.3s ease;
+}
+.split-bar-cash {
+    background: rgba(255,255,255,0.12);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    transition: width 0.3s ease;
+}
+.split-label {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: #fff;
+    white-space: nowrap;
+}
+
+.split-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+}
+
+/* ---- Paramètres -------------------------------------------------------- */
+
+.settings-group { margin-bottom: 1.5rem; }
+.settings-group-head { margin-bottom: 0.5rem; }
+.settings-group .card-title { font-size: 1.1rem; }
+
+.settings-help {
+    font-size: 0.85rem;
+    color: var(--muted);
+    background: rgba(72, 189, 211, 0.06);
+    border: 1px solid rgba(72, 189, 211, 0.15);
+    border-radius: 8px;
+    padding: 0.6rem 0.85rem;
+    margin: 0 0 1rem;
+}
+
+.settings-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 1rem;
+}
+@media (max-width: 640px) {
+    .settings-grid { grid-template-columns: 1fr; }
+}
+
+.settings-grid .field label {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--foreground);
+    margin-bottom: 0.35rem;
+}
+.settings-grid .field code { font-size: 0.75rem; color: var(--muted); }
+
+/* Toggle switch */
+.toggle-switch {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    cursor: pointer;
+    user-select: none;
+}
+.toggle-switch input[type="checkbox"] {
+    appearance: none;
+    width: 44px;
+    height: 24px;
+    background: rgba(255,255,255,0.1);
+    border-radius: 999px;
+    position: relative;
+    cursor: pointer;
+    transition: background 0.2s;
+    border: 1px solid var(--border);
+}
+.toggle-switch input[type="checkbox"]:checked {
+    background: rgba(72, 189, 211, 0.4);
+}
+.toggle-switch input[type="checkbox"]::before {
+    content: '';
+    position: absolute;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #fff;
+    top: 2px;
+    left: 2px;
+    transition: transform 0.2s;
+}
+.toggle-switch input[type="checkbox"]:checked::before {
+    transform: translateX(20px);
+    background: var(--primary);
+}
+.toggle-label { font-size: 0.85rem; font-weight: 600; color: var(--muted); }
+.toggle-label.is-on { color: var(--primary); }
+
+.input-password { font-family: ui-monospace, monospace; }
+
+.toggle-pwd { margin-top: 0.3rem; }
+
+.settings-test-email {
+    margin-top: 1rem;
+}
+.settings-test-email hr {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin-bottom: 1rem;
+}
+
+.settings-save-bar {
+    position: sticky;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 1rem 0;
+    background: var(--admin-bg, #0a1b33);
+    text-align: right;
+    z-index: 10;
+}
+
+/* ---- Notifications SMS ------------------------------------------------- */
+
+/* Planification : ligne activation + heure */
+.sms-planif-row {
+    display: flex;
+    align-items: flex-end;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+    margin-bottom: 1.1rem;
+}
+.sms-planif-enabled { flex: 1; min-width: 220px; }
+.sms-planif-time { min-width: 160px; }
+
+/* Jours : puces cliquables */
+.sms-quick-days { display: inline-flex; gap: 0.35rem; margin-left: 0.75rem; }
+.sms-days { display: flex; gap: 0.45rem; flex-wrap: wrap; }
+.sms-day-chip {
+    position: relative;
+    cursor: pointer;
+    padding: 0.45rem 0.95rem;
+    border-radius: 999px;
+    border: 1px solid var(--border, rgba(255,255,255,0.14));
+    background: rgba(255, 255, 255, 0.03);
+    font-size: 0.86rem;
+    font-weight: 600;
+    color: var(--muted, #93a4bd);
+    user-select: none;
+    transition: all 0.15s ease;
+}
+.sms-day-chip input { position: absolute; opacity: 0; pointer-events: none; }
+.sms-day-chip:hover { border-color: rgba(72, 189, 211, 0.45); color: var(--foreground, #e8eef7); }
+.sms-day-chip.is-on {
+    background: rgba(74, 61, 143, 0.55);
+    border-color: rgba(72, 189, 211, 0.55);
+    color: #fff;
+}
+
+/* Éditeur de modèle : textarea + colonne de variables */
+.sms-template-area {
+    width: 100%;
+    min-height: 24rem;
+    resize: vertical;
+    font-family: monospace;
+    font-size: 0.95rem;
+    line-height: 1.75;
+    padding: 0.85rem 1rem;
+}
+.sms-editor {
+    display: grid;
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+    gap: 1.25rem;
+    align-items: start;
+    margin-bottom: 1.1rem;
+}
+.sms-editor-foot {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.75rem;
+    margin-top: 0.45rem;
+}
+.sms-count { font-size: 0.8rem; color: var(--muted, #93a4bd); }
+.sms-count.is-warn { color: #f59e0b; font-weight: 700; }
+.sms-count.is-over { color: #ef4444; font-weight: 700; }
+
+.sms-var-group { margin-bottom: 0.85rem; }
+.sms-var-group-title {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 700;
+    color: var(--muted, #93a4bd);
+    margin: 0 0 0.4rem;
+}
+.sms-var-list { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+.sms-var-chip {
+    cursor: pointer;
+    border: 1px solid var(--border, rgba(255,255,255,0.14));
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 8px;
+    padding: 0.28rem 0.55rem;
+    transition: all 0.15s ease;
+}
+.sms-var-chip:hover {
+    border-color: rgba(72, 189, 211, 0.55);
+    background: rgba(58, 155, 184, 0.12);
+    transform: translateY(-1px);
+}
+.sms-var-chip code { font-size: 0.78rem; color: var(--primary, #48bdd3); }
+
+/* Aperçu live */
+.sms-preview {
+    padding: 0.95rem 1.05rem;
+    border-radius: 14px;
+    white-space: pre-wrap;
+    font-size: 0.92rem;
+    line-height: 1.7;
+    min-height: 16rem;
+    margin: 0;
+}
+
+@media (max-width: 900px) {
+    .sms-editor { grid-template-columns: 1fr; }
+}
+
+/* Cartes « messages programmés » */
+.sms-card {
+    position: relative;
+    border: 1px solid var(--border, rgba(255,255,255,0.12));
+    border-radius: 16px;
+    padding: 1.15rem 1.25rem 0.5rem;
+    margin: 1.1rem 0;
+    background: rgba(255, 255, 255, 0.02);
+}
+.sms-card.is-on {
+    border-color: rgba(72, 189, 211, 0.4);
+    box-shadow: 0 0 0 1px rgba(72, 189, 211, 0.15);
+}
+.sms-card-actions {
+    position: absolute;
+    top: 0.85rem;
+    right: 1rem;
+    display: flex;
+    gap: 0.4rem;
+    align-items: center;
+}
+.sms-card-head {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 1rem;
+    padding-right: 7.5rem;
+}
+.sms-card-title-input {
+    flex: 1;
+    min-width: 180px;
+    font-size: 1.05rem;
+    font-weight: 700;
+    border: none;
+    border-bottom: 1px dashed var(--border, rgba(255,255,255,0.2));
+    background: transparent;
+    padding: 0.25rem 0.1rem;
+    color: inherit;
+}
+.sms-card-title-input:focus { outline: none; border-bottom-color: var(--primary, #48bdd3); }
+
+/* ---- Mobile : lisibilité téléphone ------------------------------------- */
+
+/* Fond sombre derrière la sidebar ouverte (voir layout admin). */
+.admin-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 55;
+    background: rgba(4, 10, 20, 0.55);
+}
+.admin-backdrop[hidden] { display: none; }
+@media (min-width: 961px) {
+    .admin-backdrop { display: none !important; }
+}
+
+@media (max-width: 700px) {
+    /* Topbar collante : titre + bouton menu toujours accessibles. */
+    .admin-topbar {
+        position: sticky;
+        top: 0;
+        z-index: 30;
+        background: var(--admin-bg);
+        padding: 0.65rem 0;
+        margin-bottom: 1rem;
+    }
+    .admin-title { font-size: 1.25rem; }
+
+    /* Tableaux : défilement horizontal lisible au lieu de colonnes écrasées. */
+    .table-wrap {
+        margin: 0 -1rem;
+        padding: 0 1rem;
+        -webkit-overflow-scrolling: touch;
+    }
+    .table-wrap .table { min-width: 520px; }
+    .table th { white-space: nowrap; font-size: 0.78rem; }
+    .table th,
+    .table td { padding: 0.45rem 0.55rem; font-size: 0.88rem; }
+
+    /* Formulaires : champs pleine largeur, boutons avec cible tactile. */
+    .field input[type="text"],
+    .field input[type="search"],
+    .field input[type="date"],
+    .field input[type="number"],
+    .field input[type="email"],
+    .field input[type="password"],
+    .field select,
+    .field textarea {
+        width: 100%;
+    }
+    form button[type="submit"],
+    form input[type="submit"] {
+        min-height: 44px;
+    }
+
+    /* Cartes et KPI plus compacts. */
+    .kpi { padding: 1rem; }
+    .kpi-value { font-size: 1.5rem; }
+    .stat-cards { gap: 0.75rem; }
+    .stat-card { padding: 0.8rem 0.9rem; }
+    .stat-value { font-size: 1.15rem; }
+
+    /* Barre de période : pastilles défilantes au lieu de retours à la ligne. */
+    .period-pills {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        padding-bottom: 0.25rem;
+    }
+    .period-pill { white-space: nowrap; }
+}
+
+/* ==========================================================================
+   Navigation admin (lot 2) — fil d'Ariane + recherche dans la topbar
+   Ajouts sobres : uniquement des variables existantes (aucune couleur neuve).
+   ========================================================================== */
+
+/* Le titre (fil d'Ariane au-dessus du H1) prend l'espace disponible ;
+   la recherche vient se placer à droite, et passe dessous en mobile. */
+.admin-topbar { flex-wrap: wrap; }
+
+.admin-topbar-text {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+/* ---- Fil d'Ariane ------------------------------------------------------- */
+
+.breadcrumb { margin: 0 0 0.4rem; }
+
+.breadcrumb ol {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.3rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.breadcrumb li {
+    display: flex;
+    align-items: baseline;
+    font-size: 0.78rem;
+    color: var(--muted);
+}
+
+/* Séparateur « / » entre les éléments (généré en CSS, absent du HTML). */
+.breadcrumb li + li::before {
+    content: '/';
+    margin-right: 0.3rem;
+    opacity: 0.6;
+}
+
+.breadcrumb a {
+    color: var(--muted);
+    text-decoration: none;
+}
+
+.breadcrumb a:hover,
+.breadcrumb a:focus-visible {
+    color: var(--primary);
+    text-decoration: underline;
+}
+
+.breadcrumb li[aria-current='page'] {
+    color: var(--foreground);
+    font-weight: 600;
+}
+
+/* ---- Recherche globale (topbar) ------------------------------------------ */
+
+.admin-search {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-left: auto;
+}
+
+/* La règle commune .admin-main input[type="search"] fournit couleurs,
+   bordures et focus : on ne fixe ici que la largeur. */
+.admin-search input[type='search'] {
+    width: clamp(150px, 22vw, 260px);
+}
+
+.admin-search-btn { white-space: nowrap; }
+
+@media (max-width: 700px) {
+    /* Recherche sous le titre sur petit écran (topbar collante). */
+    .admin-search {
+        order: 3;
+        flex: 1 1 100%;
+        margin-left: 0;
+    }
+    .admin-search input[type='search'] {
+        flex: 1 1 auto;
+        width: auto;
+    }
+}
+
+/* ---- Réorganisation de la sidebar admin (drag permanent) ----------------
+   Wrappers .admin-nav-section / .admin-nav-subgroup (posés par le layout
+   admin.php) : items flex de la sidebar. Le glisser-déposer est TOUJOURS
+   actif (admin-sidebar-order.js) : aucun mode édition, aucun bouton —
+   maintien du clic ≥ 5 px = drag, en deçà = clic normal de navigation.
+   Curseur pointer par défaut (les liens naviguent) ; le feedback grab/
+   grabbing n'apparaît qu'une fois le drag démarré (classe
+   html.aeic-sidebar-drag posée par le JS, jamais au simple survol). */
+.admin-nav-section,
+.admin-nav-subgroup {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    min-width: 0;
+}
+
+/* Pendant le drag seulement (appui maintenu ≥ seuil) : curseur grabbing
+   partout — le pointeur survole d'autres éléments que l'unité saisie —
+   et pas de sélection de texte. Retiré par le JS à la fin du drag. */
+html.aeic-sidebar-drag,
+html.aeic-sidebar-drag * {
+    cursor: grabbing !important;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+/* Unité saisie : reste en place, estompée (silhouette d'origine). */
+#admin-sidebar .dragging {
+    opacity: 0.45;
+}
+
+/* Silhouette suivant le pointeur : clone de l'unité posé dans la sidebar
+   par le JS (styles scopés), hors flux et ignoré par le pointeur
+   (elementFromPoint la traverse, elle ne capte ni hover ni clic). */
+.drag-ghost {
+    position: fixed;
+    z-index: 80;
+    margin: 0;
+    pointer-events: none;
+    background: var(--admin-sidebar-deep);
+    border-radius: var(--radius-sm);
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+    opacity: 0.92;
+    cursor: grabbing;
+}
+
+/* Dépôt invalide (hors conteneur de l'unité) : la silhouette regagne sa
+   position d'origine puis disparaît (le JS la retire à la fin de
+   l'animation) — snap-back, l'ordre ne change pas. */
+.drag-ghost.drag-ghost-snapback {
+    transition: left 0.18s ease, top 0.18s ease, opacity 0.18s ease;
+    opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .drag-ghost.drag-ghost-snapback {
+        transition: none;
+    }
+}
+
+/* Indicateurs d'insertion : lignes fines par box-shadow (aucun décalage
+   de mise en page). Uniquement des unités du menu — les liens du pied de
+   sidebar (sans data-sidebar-link) ne sont jamais des unités et ne
+   portent jamais ces classes. */
+#admin-sidebar .admin-nav-section.drag-over-above,
+#admin-sidebar .admin-nav-subgroup.drag-over-above,
+#admin-sidebar a.admin-link.drag-over-above {
+    box-shadow: 0 -2px 0 0 var(--primary);
+}
+
+#admin-sidebar .admin-nav-section.drag-over-below,
+#admin-sidebar .admin-nav-subgroup.drag-over-below,
+#admin-sidebar a.admin-link.drag-over-below {
+    box-shadow: 0 2px 0 0 var(--primary);
+}
+
+/* Mini-toast d'auto-save (« Ordre enregistré » / échec) : discret, en bas
+   de l'écran, apparaît et disparaît en fondu (élément posé par le JS,
+   aria-live pour les lecteurs d'écran). */
+.aeic-sidebar-toast {
+    position: fixed;
+    left: 50%;
+    bottom: 1.2rem;
+    transform: translateX(-50%) translateY(6px);
+    z-index: 90;
+    max-width: min(92vw, 26rem);
+    padding: 0.45rem 0.9rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--admin-sidebar-deep);
+    color: var(--foreground);
+    font-size: 0.9rem;
+    font-weight: 600;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s;
+    pointer-events: none;
+}
+
+.aeic-sidebar-toast.is-visible {
+    opacity: 1;
+    visibility: visible;
+    transform: translateX(-50%) translateY(0);
+}
+
+.aeic-sidebar-toast.is-error {
+    border-color: var(--accent-danger);
+    color: var(--accent-danger);
+}

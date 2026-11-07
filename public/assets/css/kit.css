@@ -1,0 +1,229 @@
+/* =====================================================================
+   AEIC — kit.css
+   Kit de design commun (refonte 2026) — dérivé de la page « L'association ».
+   Composants réutilisables : pill, titre, carte étudiant, panneaux,
+   CTA, reveal. Sobriété (lot 6F) : halos, dégradés décoratifs et
+   ombres lumineuses remplacés par des fonds unis / ombres neutres.
+   ===================================================================== */
+
+/* ----------------------------- Hero aurora ----------------------------- */
+/* Ancien dégradé « aurora » (3 radiaux superposés) : remplacé par un
+   voile uni très léger, sans animation (sobriété, lot 6F). */
+.ae-aurora {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: rgba(72, 189, 211, 0.04);
+}
+.ae-dots {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    -webkit-mask-image: radial-gradient(60% 70% at 78% 30%, #000 0%, transparent 100%);
+    mask-image: radial-gradient(60% 70% at 78% 30%, #000 0%, transparent 100%);
+}
+
+/* ----------------------------- Pill ----------------------------- */
+.ae-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55rem;
+    padding: 0.45rem 1rem;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-weight: 800;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--primary);
+    background: rgba(72, 189, 211, 0.08);
+    border: 1px solid rgba(72, 189, 211, 0.3);
+    margin-bottom: 1.4rem;
+}
+.ae-pill-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--primary);
+    flex-shrink: 0;
+}
+
+/* ----------------------------- Titre ----------------------------- */
+/* Ancien texte en dégradé : couleur pleine (sobriété, lot 6F). */
+.ae-title-grad { color: #fff; }
+[data-theme="light"] .ae-title-grad { color: #1e293b; }
+
+/* ----------------------------- Héros (calque) ----------------------------- */
+/* Couche répartie sur toute la hauteur de la page (dans #contenu). */
+#contenu { position: relative; }
+/* Le héros laisse voir la couche globale au lieu de la masquer. */
+.page-hero { background: transparent; }
+
+/* ----------------------------- Hero en grille (texte + carte) ----------------------------- */
+.ae-hero-grid {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    grid-template-columns: 1.15fr 0.85fr;
+    gap: 3.5rem;
+    align-items: center;
+}
+@media (max-width: 980px) {
+    .ae-hero-grid { grid-template-columns: 1fr; gap: 2.75rem; }
+}
+
+/* ----------------------------- Carte interactive (carte étudiant / PASS / badge) ----------------------------- */
+.ae-idcard {
+    position: relative;
+    z-index: 1;
+    justify-self: end;
+    width: min(380px, 100%);
+    border-radius: 24px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.045);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
+    box-shadow: 0 30px 70px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+    transform: rotate(1.6deg);
+    transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.35s ease;
+    will-change: transform;
+}
+.ae-idcard:hover {
+    transform: rotate(0deg) translateY(-6px);
+    box-shadow: 0 40px 90px rgba(0, 0, 0, 0.5);
+}
+.ae-idcard-band {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1.4rem 1.5rem;
+    background: var(--secondary);
+}
+.ae-idcard-logo {
+    display: grid;
+    place-items: center;
+    width: 54px;
+    height: 54px;
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.16);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: #fff;
+    font-weight: 900;
+    font-size: 1rem;
+    letter-spacing: -0.03em;
+    flex-shrink: 0;
+}
+.ae-idcard-id { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
+.ae-idcard-label {
+    font-size: 0.58rem;
+    font-weight: 800;
+    letter-spacing: 0.28em;
+    color: rgba(255, 255, 255, 0.75);
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+.ae-idcard-name { font-size: 1.5rem; font-weight: 900; color: #fff; letter-spacing: -0.03em; line-height: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.ae-idcard-badge {
+    margin-left: auto;
+    padding: 0.35rem 0.7rem;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.18);
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    color: #fff;
+    font-size: 0.75rem;
+    font-weight: 900;
+    flex-shrink: 0;
+}
+.ae-idcard-body { padding: 1.35rem 1.5rem; display: flex; flex-direction: column; gap: 0.9rem; }
+.ae-idcard-row {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    font-size: 0.92rem;
+    font-weight: 600;
+    color: var(--foreground);
+}
+.ae-idcard-ico {
+    display: grid;
+    place-items: center;
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    background: rgba(72, 189, 211, 0.12);
+    border: 1px solid rgba(72, 189, 211, 0.22);
+    font-size: 1rem;
+    flex-shrink: 0;
+}
+.ae-idcard-code {
+    padding: 0.85rem 1.5rem 1.15rem;
+    font-family: ui-monospace, 'SF Mono', Consolas, monospace;
+    font-size: 1.15rem;
+    letter-spacing: 0.35em;
+    color: rgba(255, 255, 255, 0.14);
+    user-select: none;
+    white-space: nowrap;
+    overflow: hidden;
+}
+[data-theme="light"] .ae-idcard { background: rgba(255, 255, 255, 0.75); border-color: rgba(0, 0, 0, 0.08); box-shadow: 0 24px 60px rgba(15, 23, 42, 0.14); }
+[data-theme="light"] .ae-idcard-code { color: rgba(15, 23, 42, 0.16); }
+[data-theme="light"] .ae-idcard-ico { background: rgba(45, 122, 148, 0.08); border-color: rgba(45, 122, 148, 0.2); }
+@media (max-width: 980px) {
+    .ae-idcard { justify-self: center; transform: none; }
+}
+
+/* ----------------------------- Panneau ----------------------------- */
+/* Ancien fond radial + bordure en dégradé : fond uni + bordure sobre
+   (sobriété, lot 6F). */
+.ae-panel {
+    position: relative;
+    border-radius: 24px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border);
+}
+.ae-panel > * { position: relative; z-index: 1; }
+
+/* ----------------------------- CTA ----------------------------- */
+/* Ancien panneau en dégradé : fond uni (sobriété, lot 6F). */
+.ae-cta-panel {
+    position: relative;
+    overflow: hidden;
+    border-radius: 28px;
+    padding: 4rem 2rem;
+    text-align: center;
+    background: var(--secondary);
+    box-shadow: 0 30px 70px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+.ae-cta-dots {
+    position: absolute;
+    inset: 0;
+    background-image: radial-gradient(circle, rgba(255, 255, 255, 0.14) 1px, transparent 1px);
+    background-size: 24px 24px;
+    -webkit-mask-image: radial-gradient(70% 90% at 50% 0%, #000 0%, transparent 100%);
+    mask-image: radial-gradient(70% 90% at 50% 0%, #000 0%, transparent 100%);
+    pointer-events: none;
+}
+.ae-cta-inner {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.75rem;
+}
+.ae-cta-panel .section-title { color: #fff; }
+.ae-cta-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.75rem; }
+.ae-btn-light { background: #fff; color: #1e293b; }
+.ae-btn-light:hover { background: #e8eef5; color: #1e293b; }
+.ae-btn-glass { background: rgba(255, 255, 255, 0.12); border: 1px solid rgba(255, 255, 255, 0.45); color: #fff; }
+.ae-btn-glass:hover { background: rgba(255, 255, 255, 0.2); color: #fff; border-color: #fff; }
+@media (max-width: 640px) {
+    .ae-cta-panel { padding: 3rem 1.5rem; }
+}
+
+/* ----------------------------- Reveal au scroll (visible sans JS) ----------------------------- */
+.ae-reveal-pending { opacity: 0; transform: translateY(20px); }
+.ae-reveal-pending.ae-reveal-in {
+    opacity: 1; transform: translateY(0);
+    transition: opacity 0.6s ease, transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+}
+

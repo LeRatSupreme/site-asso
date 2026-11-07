@@ -1,0 +1,30 @@
+# Base de test locale : MariaDB 10.11, même moteur que la CI GitHub
+# (services:) et que la production VPS (MySQL 8 avait été écarté sur
+# preuve : ONLY_FULL_GROUP_BY cassait des requêtes valides).
+#
+# Port 3307 réservé aux tests pour ne pas entrer en conflit avec les
+# instances MySQL locales (3306) ni les autres conteneurs de mesure.
+# Usage : bash scripts/test-db-up.sh
+services:
+  mysql-test:
+    image: mariadb:10.11
+    environment:
+      MARIADB_ROOT_PASSWORD: aeic_root
+      MARIADB_DATABASE: aeic_test
+      MARIADB_USER: aeic
+      MARIADB_PASSWORD: aeic
+    ports:
+      - "127.0.0.1:3307:3306"
+    volumes:
+      # Le schéma n'est installé qu'au premier démarrage (volume vide) ;
+      # pour le rejouer : docker compose -f docker-compose.test.yml down -v
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
+      - mysql-test-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-uroot", "-paeic_root"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  mysql-test-data:

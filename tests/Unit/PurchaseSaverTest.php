@@ -1,0 +1,243 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Tests\Unit;
+
+use App\Core\Compta\PurchaseSaver;
+use PHPUnit\Framework\TestCase;
+
+/**
+ * Tests purs de PurchaseSaver (création d'achats en lot, service partagé
+ * par la page Achats admin et le livre comptable kiosque) : uniquement
+ * les chemins qui N'ATTEIGNENT PAS la base — grille sans aucune ligne
+ * renseignée (le service ignore les lignes vides sans bruit et rend
+ * « Aucun achat saisi. » AVANT tout effet de bord), avec les deux modes
+ * de TVA. Les effets base (créations réelles, lots de coût, synchro
+ * carte) restent couverts par les tests compta skippés sans DB.
+ */
+final class PurchaseSaverTest extends TestCase
+{
+    /**
+     * Grille intégralement vide (POST page Achats sans saisie) : rien
+     * n'est créé, aucune erreur, message exact — aucun accès DB (le
+     * service rend ce résultat avant toute création/synchro).
+     */
+    public function test_grille_vide_aucun_achat_saisi(): void
+    {
+        $res = PurchaseSaver::save([
+            'purchased_at'   => '2026-10-09',
+            'supplier'       => 'METRO',
+            'invoice_number' => '3007 02 0090',
+            'amount_basis'   => 'ht',
+            'update_cost'    => true,
+            'vat_raw'        => '5.5',
+            'vat_per_line'   => false,
+        ], [
+            ['key' => '', 'qty' => '', 'total_raw' => '', 'vat_raw' => '', 'no_stock' => false],
+            ['key' => '   ', 'qty' => '2', 'total_raw' => '   ', 'vat_raw' => '', 'no_stock' => false],
+        ]);
+
+        self::assertSame(0, $res['inserted']);
+        self::assertSame([], $res['errors']);
+        self::assertSame('Aucun achat saisi.', $res['message']);
+        self::assertSame(0, $res['products']);
+        self::assertSame(0, $res['no_stock']);
+    }
+
+    /**
+     * Aucune ligne du tout (POST dégénéré, ex. kiosque sans tableau) :
+     * même verdict que la grille vide.
+     */
+    public function test_aucune_ligne(): void
+    {
+        $res = PurchaseSaver::save(['vat_raw' => '', 'vat_per_line' => false], []);
+
+        self::assertSame(0, $res['inserted']);
+        self::assertSame([], $res['errors']);
+        self::assertSame('Aucun achat saisi.', $res['message']);
+        self::assertSame(0, $res['products']);
+        self::assertSame(0, $res['no_stock']);
+    }
+
+    /**
+     * Le mode TVA par ligne (vat_per_line) ne change rien sur une grille
+     * vide : les lignes ignorées ne sont jamais validées.
+     */
+    public function test_grille_vide_en_mode_tva_par_ligne(): void
+    {
+        $res = PurchaseSaver::save([
+            'vat_raw'      => '',
+            'vat_per_line' => true,
+        ], [
+            ['key' => '', 'qty' => '3', 'total_raw' => '', 'vat_raw' => '20', 'no_stock' => true],
+        ]);
+
+        self::assertSame(0, $res['inserted']);
+        self::assertSame([], $res['errors']);
+        self::assertSame('Aucun achat saisi.', $res['message']);
+    }
+
+    /**
+     * Ligne ne portant QU'UNE clé sans montant (key renseignée,
+     * total vide) : PAS « totalement vide » — elle part en validation et
+     * échoue (« montant invalide ») sans toucher la base (le refus
+     * précède toute création). Même motif que le contrôleur historique.
+     */
+    public function test_ligne_nom_seul_montant_manquant_rejetee(): void
+    {
+        $res = PurchaseSaver::save(['vat_raw' => '5.5', 'vat_per_line' => false], [
+            ['key' => 'Coca 33cl', 'qty' => '2', 'total_raw' => '', 'vat_raw' => '', 'no_stock' => false],
+        ]);
+
+        self::assertSame(0, $res['inserted']);
+        self::assertSame(['Coca 33cl : montant invalide'], $res['errors']);
+        self::assertSame('Aucun achat enregistré — Coca 33cl : montant invalide', $res['message']);
+    }
+
+    /**
+     * Quantité invalide (0 ou non entière) : rejetée sans DB, motif
+     * exact ; une ligne totalement vide à côté reste silencieuse.
+     */
+    public function test_ligne_quantite_invalide_rejetee(): void
+    {
+        $res = PurchaseSaver::save(['vat_raw' => '', 'vat_per_line' => false], [
+            ['key' => '', 'qty' => '', 'total_raw' => '', 'vat_raw' => '', 'no_stock' => false],
+            ['key' => 'Eau', 'qty' => '0', 'total_raw' => '4,00', 'vat_raw' => '', 'no_stock' => false],
+        ]);
+
+        self::assertSame(0, $res['inserted']);
+        self::assertSame(['Eau : quantité invalide'], $res['errors']);
+        self::assertSame('Aucun achat enregistré — Eau : quantité invalide', $res['message']);
+    }
+
+    /**
+     * Clé absente mais montant saisi : motif « (sans nom) : produit
+     * manquant » (même libellé que le contrôleur historique).
+     */
+    public function test_ligne_sans_nom_rejetee(): void
+    {
+        $res = PurchaseSaver::save(['vat_raw' => '', 'vat_per_line' => false], [
+            ['key' => '', 'qty' => '2', 'total_raw' => '5,00', 'vat_raw' => '', 'no_stock' => false],
+        ]);
+
+        self::assertSame(0, $res['inserted']);
+        self::assertSame(['(sans nom) : produit manquant'], $res['errors']);
+    }
+
+    /**
+     * Appellation à retenir : un libellé facture d'origine (scan)
+     * différent de la clé retenue donne le couple à enregistrer dans
+     * product_aliases (« MONSTER PIPELINE PUNCH 24X0,5L » corrigé en
+     * « Monster rose »). Méthode pure, aucun accès base.
+     */
+    public function test_alias_to_learn_retenu_quand_le_libelle_differe(): void
+    {
+        self::assertSame(
+            ['raw_description' => 'MONSTER PIPELINE PUNCH 24X0,5L', 'product_key' => 'Monster rose'],
+            PurchaseSaver::aliasToLearn('MONSTER PIPELINE PUNCH 24X0,5L', 'Monster rose')
+        );
+        // Espaces bornes ignorés : le libellé est trimé.
+        self::assertSame(
+            ['raw_description' => 'LIBELLE FACTURE', 'product_key' => 'Clef'],
+            PurchaseSaver::aliasToLearn('  LIBELLE FACTURE ', 'Clef')
+        );
+    }
+
+    /**
+     * Rien à apprendre quand le libellé facture n'est qu'une variante
+     * d'écriture de la clé (casse, accents, séparateurs, espaces) :
+     * la même règle de normalisation que ScanCatalogMatcher.
+     */
+    public function test_alias_to_learn_ignore_variantes_decriture_de_la_meme_cle(): void
+    {
+        self::assertSame([], PurchaseSaver::aliasToLearn('Monster  Rose', 'monster rose'));
+        self::assertSame([], PurchaseSaver::aliasToLearn('MONSTER PIPELINE/PUNCH', 'Monster Pipeline Punch'));
+    }
+
+    /**
+     * Rien à apprendre sans libellé facture (saisie manuelle, collage,
+     * picker) ou sans clé : alias vide.
+     */
+    public function test_alias_to_learn_ignore_libelle_ou_cle_vide(): void
+    {
+        self::assertSame([], PurchaseSaver::aliasToLearn('', 'Monster rose'));
+        self::assertSame([], PurchaseSaver::aliasToLearn('   ', 'Monster rose'));
+        self::assertSame([], PurchaseSaver::aliasToLearn('LIBELLE FACTURE', ''));
+    }
+
+    /**
+     * Libellé de scan NON TRAITÉ : la clé de la ligne EST le libellé
+     * OCR brut (aucun nom saisi) — ces clés sont exclues de la création
+     * automatique de fiches (ProductAutoSync::ensureKeys), sinon chaque
+     * scan créerait une fiche au nom long du type « OASIS TROPICAL
+     * SLIM BTE 33CL ». Méthode pure, aucun accès base.
+     */
+    public function test_is_raw_scan_label_libelle_brut_non_traite(): void
+    {
+        // Le libellé OCR est la clé (casse/espaces ignorés) : non traité.
+        self::assertTrue(PurchaseSaver::isRawScanLabel('OASIS TROPICAL SLIM BTE 33CL', 'OASIS TROPICAL SLIM BTE 33CL'));
+        self::assertTrue(PurchaseSaver::isRawScanLabel('EVIEN 50CL', 'evien 50cl'));
+        self::assertTrue(PurchaseSaver::isRawScanLabel('MONSTER PIPELINE/PUNCH', 'Monster Pipeline Punch'));
+    }
+
+    /**
+     * Clés qui continuent de créer une fiche comme avant : saisie
+     * manuelle (sans libellé d'origine) et lignes reconnues/corrigées
+     * (libellé facture différent de la clé retenue — l'appellation
+     * sera apprise au passage).
+     */
+    public function test_is_raw_scan_label_cles_saisies_ou_reconnues(): void
+    {
+        // Saisie manuelle / collage / picker : pas de libellé d'origine.
+        self::assertFalse(PurchaseSaver::isRawScanLabel('', 'Monster rose'));
+        self::assertFalse(PurchaseSaver::isRawScanLabel('   ', 'Monster rose'));
+        // Ligne reconnue ou corrigée : le libellé diffère de la clé.
+        self::assertFalse(PurchaseSaver::isRawScanLabel('RED BULL WHITE BOITE 25CL', 'Red Bull Blanche'));
+        // Sans clé, rien à créer de toute façon.
+        self::assertFalse(PurchaseSaver::isRawScanLabel('EVIEN 50CL', ''));
+    }
+
+    /**
+     * Chemin de justificatif accepté : uniquement un fichier déposé par
+     * ReceiptStorage (uploads/receipts/ + nom hexadécimal + extension
+     * sûre). Tout le reste — chemin arbitraire, traversée ../, URL,
+     * extension exécutable — est rejeté (null). Le POST n'est jamais
+     * une source de confiance pour un chemin de fichier.
+     */
+    public function test_receipt_path_or_null_accepte_chemin_receipt_storage(): void
+    {
+        self::assertSame(
+            'uploads/receipts/b31021e2dd5060d9e29d0454.pdf',
+            PurchaseSaver::receiptPathOrNull('uploads/receipts/b31021e2dd5060d9e29d0454.pdf')
+        );
+        self::assertSame(
+            'uploads/receipts/abcdef0123456789abcdef01.jpg',
+            PurchaseSaver::receiptPathOrNull('  uploads/receipts/abcdef0123456789abcdef01.jpg  ')
+        );
+    }
+
+    /**
+     * Valeurs refusées : vide, chemin hors receipts, traversée, URL,
+     * nom non hexadécimal, extension dangereuse ou absente.
+     */
+    public function test_receipt_path_or_null_rejete_chemins_non_fiables(): void
+    {
+        $rejected = [
+            '',
+            '   ',
+            'uploads/receipts/../../.env',
+            '../config.env',
+            'https://exemple.fr/ticket.pdf',
+            '/etc/passwd',
+            'uploads/tickets/b31021e2dd5060d9e29d0454.pdf',
+            'uploads/receipts/ticket.pdf',
+            'uploads/receipts/b31021e2dd5060d9e29d0454.php',
+            'uploads/receipts/b31021e2dd5060d9e29d0454',
+            null,
+        ];
+        foreach ($rejected as $value) {
+            self::assertNull(PurchaseSaver::receiptPathOrNull($value), var_export($value, true));
+        }
+    }
+}

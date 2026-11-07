@@ -1,0 +1,425 @@
+--- train_v6b.py	2026-10-28 11:01:18.889476200 +0000
++++ train.py	2026-10-28 11:28:26.252002460 +0000
+@@ -1,8 +1,22 @@
+ # -*- coding: utf-8 -*-
+ """
+-Kernel Kaggle v6 — ENTRAINEMENT COMPLET LoRA Qwen3-4B + A/B + export GGUF Q4_K_M
++Kernel Kaggle v7 — ENTRAINEMENT COMPLET LoRA Qwen3-4B + A/B + export GGUF Q4_K_M
+ ================================================================================
+ 
++v7 (fix OOM T4 ; succède à v6b — 2 runs v6 ERROR documentés : torchao corrigé
++au run 2, puis OOM CUDA au 1er batch batch 4 / seq 2048 : sur T4, SDPA
++ne peut pas utiliser flash-attn et retombe sur le backend math qui
++matérialise l'attention (~1 Gio/couche en batch 4 seq 2048), conservée
++pour la rétropropagation) :
++  - PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True posé avant init CUDA ;
++  - gradient checkpointing (use_reentrant=False, compatible peft) activé
++    APRÈS attachement LoRA : activations par couche non conservées ;
++  - micro-batch 2 + accumulation de gradient x2 (batch effectif 4, lr
++    conservé, graine/ordre déterministes inchangés) ;
++  - repli automatique micro-batch 1 + accumulation x4 si OOM au 1er step ;
++  - preuves mémoire : dry-run forward+backward avant/après checkpointing au
++    boot + pic VRAM du 1er step réel (v6b plantait exactement à ce point).
++
+ Mission (T4-P2 « Entraînement complet de l'assistant », GPU T4 débloqué) :
+ prolonger le pipeline PROUVÉ par le kernel v5 smoke (cf.
+ data/eval_t1/t4p2/RAPPORT_PIPELINE.md — rendu ChatML officiel + double sonde,
+@@ -19,7 +33,8 @@
+            sha256 des 3 shards + tokenizer.json = oid LFS HF publics, FATAL si
+            divergence — inutile de créer un dataset modèle (contrainte n°2).
+   Phase 2  entraînement LoRA : epochs 3-6, early stopping sur la loss de
+-           validation (patience 2, minimum 3 epochs), batch 4, seq max 2048
++           validation (patience 2, minimum 3 epochs), micro-batch 2 x
++           accumulation 2 (batch effectif 4, v7), seq max 2048
+            (longueur réelle, aucune conversation du corpus > 1782 tokens),
+            AdamW lr 2e-4, CE sur les SEULS tokens assistant (masquage par la
+            double sonde ADAPTÉE du v5 — code validé repris tel quel),
+@@ -76,6 +91,11 @@
+ import sys
+ import time
+ 
++# v7 (fix OOM T4) : allocateur CUDA en segments extensibles — posé ICI, avant
++# toute initialisation CUDA (torch n'est importé que dans main()) : réduit la
++# fragmentation, condition du plan mémoire v7 (checkpointing + micro-batch 2).
++os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
++
+ # ----------------------------- constantes ------------------------------------
+ SEED = 42
+ CORPUS_DATASET = "adrienremond/aeic-assistant-corpus"     # privé (verdict B)
+@@ -126,8 +146,11 @@
+ EPOCHS_MIN = 3                 # pas d'early stopping avant 3 epochs complets
+ EARLY_STOP_PATIENCE = 2        # epochs consécutifs sans amélioration val
+ VAL_MIN_DELTA = 1e-4
+-BATCH_SIZE = 4                 # contrainte : batch 4-8 (4 = conservateur T4)
++BATCH_SIZE = 2                 # v7 : micro-batch 2 (v6b batch 4 -> OOM T4)
++GRAD_ACCUM_STEPS = 2           # v7 : batch effectif 4 conservé (2 x 2)
+ EVAL_BATCH_SIZE = 8
++DRY_RUN_SEQ = 512              # v7 : dry-run mémoire avant/après checkpointing
++ATTN_IMPL = "sdpa"             # v7 : explicite + backends sondés au boot
+ MAX_LEN = 2048
+ GRAD_CLIP = 1.0
+ 
+@@ -596,7 +619,40 @@
+     return ok
+ 
+ 
++def probe_sdpa_backends(torch, dtype):
++    """Sonde v7 : les backends mem_efficient / flash de SDPA sont-ils
++    disponibles pour CE dtype sur CE GPU ? Sur T4 + bf16 non (sm 7.5) : SDPA
++    retombe sur le backend MATH qui matérialise l'attention (cause de l'OOM
++    run 2 v6b). Purement informatif — le plan mémoire v7 (checkpointing +
++    micro-batch 2) tient MÊME en fallback math ; la sonde n'est jamais fatale."""
++    res = {"efficient_attention": None, "flash": None, "erreur": None,
++           "dtype": str(dtype)}
++    try:
++        import torch.nn.functional as F
++        from torch.nn.attention import SDPBackend, sdpa_kernel
++        bsz, heads, seq, dim = 2, 32, 512, 128
++        q = torch.randn(bsz, heads, seq, dim, device="cuda", dtype=dtype)
++        k = torch.randn(bsz, heads, seq, dim, device="cuda", dtype=dtype)
++        v = torch.randn(bsz, heads, seq, dim, device="cuda", dtype=dtype)
++        mask4d = torch.zeros(bsz, 1, seq, seq, device="cuda", dtype=dtype)
++        for key, backend in (
++                ("efficient_attention", SDPBackend.EFFICIENT_ATTENTION),
++                ("flash", SDPBackend.FLASH_ATTENTION)):
++            try:
++                with sdpa_kernel([backend]):
++                    F.scaled_dot_product_attention(q, k, v, attn_mask=mask4d)
++                res[key] = True
++            except Exception:                              # noqa: BLE001
++                res[key] = False
++        del q, k, v, mask4d
++        torch.cuda.empty_cache()
++    except Exception as exc:                                  # noqa: BLE001
++        res["erreur"] = f"{type(exc).__name__}: {exc}"
++    return res
++
++
+ def main():
++    global BATCH_SIZE, GRAD_ACCUM_STEPS      # v7 : repli OOM au 1er step
+     t_start = time.time()
+     os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+     metrics = {"mission": ("AEIC T4-P2 entraînement COMPLET LoRA Qwen3-4B + "
+@@ -606,6 +662,11 @@
+                              "lora_alpha": LORA_ALPHA,
+                              "lora_targets": list(TARGET_MODULES),
+                              "lr": LR, "batch_size": BATCH_SIZE,
++                             "grad_accum_steps": GRAD_ACCUM_STEPS,
++                             "gradient_checkpointing":
++                                 "use_reentrant=False (v7, fix OOM T4)",
++                             "allocateur_cuda": os.environ.get(
++                                 "PYTORCH_CUDA_ALLOC_CONF", "défaut"),
+                              "max_len": MAX_LEN, "epochs_min": EPOCHS_MIN,
+                              "epochs_max": EPOCHS_MAX,
+                              "early_stop_patience": EARLY_STOP_PATIENCE,
+@@ -674,6 +735,16 @@
+     if feas["free_gb_tmp"] < 25:
+         print("[boot] ATTENTION : /tmp < 25 Go — replis GGUF possibles", flush=True)
+ 
++    sdpa_probe = probe_sdpa_backends(torch, compute_dtype)
++    metrics["boot"]["sdpa_probe_v7"] = sdpa_probe
++    print(f"[boot] sonde SDPA (dtype {compute_dtype}) : mem_efficient="
++          f"{sdpa_probe['efficient_attention']} flash={sdpa_probe['flash']}"
++          + (f" erreur={sdpa_probe['erreur']}" if sdpa_probe["erreur"] else "")
++          + (" -> backend MATH attendu sur T4 : plan mémoire v7 assumé "
++             "(checkpointing + micro-batch 2)"
++             if sdpa_probe["efficient_attention"] is False else ""),
++          flush=True)
++
+     gguf_pkg_ok = pip_install(["gguf"])
+     peft_pip_ok = pip_install(["peft"], no_deps=True)
+     # torchao 0.10.0 préinstallé sur l'image est INCOMPATIBLE avec peft>=0.17
+@@ -801,9 +872,9 @@
+ 
+     # ---------------- phase 2b : modèle + LoRA -------------------------------
+     try:
+-        model = AutoModelForCausalLM.from_pretrained(MODEL_LOCAL_DIR,
+-                                                     local_files_only=True,
+-                                                     dtype=compute_dtype)
++        model = AutoModelForCausalLM.from_pretrained(
++            MODEL_LOCAL_DIR, local_files_only=True, dtype=compute_dtype,
++            attn_implementation=ATTN_IMPL)
+     except TypeError:
+         model = AutoModelForCausalLM.from_pretrained(MODEL_LOCAL_DIR,
+                                                      local_files_only=True)
+@@ -856,7 +927,7 @@
+             try:
+                 model = AutoModelForCausalLM.from_pretrained(
+                     MODEL_LOCAL_DIR, local_files_only=True,
+-                    dtype=compute_dtype)
++                    dtype=compute_dtype, attn_implementation=ATTN_IMPL)
+             except TypeError:
+                 model = AutoModelForCausalLM.from_pretrained(
+                     MODEL_LOCAL_DIR, local_files_only=True)
+@@ -881,6 +952,66 @@
+                        "parametres_total": total_params}
+     write_metrics()
+ 
++    # ------- v7 : gradient checkpointing + preuves mémoire (fix OOM T4) ------
++    def vram_snapshot():
++        torch.cuda.synchronize()
++        return (round(torch.cuda.memory_allocated() / 1024**3, 2),
++                round(torch.cuda.max_memory_allocated() / 1024**3, 2))
++
++    def dry_run_peak(seq_len):
++        """Forward+backward de référence (micro-batch BATCH_SIZE, seq fixée,
++        SANS step d'optimiseur) : pic VRAM du chemin backward, mesuré AVANT
++        puis APRÈS activation du gradient checkpointing — preuve v7 que le
++        pic baisse (v6b : OOM au 1er batch batch 4, sans checkpointing)."""
++        try:
++            torch.cuda.synchronize()
++            torch.cuda.reset_peak_memory_stats()
++            ids = torch.ones((BATCH_SIZE, seq_len), dtype=torch.long,
++                             device="cuda")
++            mask = torch.ones_like(ids)
++            out = model(input_ids=ids, attention_mask=mask, labels=ids.clone())
++            out.loss.backward()
++            torch.cuda.synchronize()
++            peak = round(torch.cuda.max_memory_allocated() / 1024**3, 2)
++            del out, ids, mask
++            return peak
++        except Exception as exc:                              # noqa: BLE001
++            return f"ÉCHEC {type(exc).__name__}"
++        finally:
++            model.zero_grad(set_to_none=True)
++            gc.collect()
++            torch.cuda.empty_cache()
++
++    model.train()   # v7 : mesure en conditions d'entraînement (checkpointing
++                    # actif uniquement en mode training)
++    memoire = {"allocateur": os.environ.get("PYTORCH_CUDA_ALLOC_CONF",
++                                            "défaut"),
++               "attn_implementation_demandee": ATTN_IMPL,
++               "sdpa_probe": sdpa_probe,
++               "dry_run_seq": DRY_RUN_SEQ}
++    alloc_avant, _ = vram_snapshot()
++    memoire["dry_run_avant_ckpt_gb"] = dry_run_peak(DRY_RUN_SEQ)
++    try:
++        model.gradient_checkpointing_enable(
++            gradient_checkpointing_kwargs={"use_reentrant": False})
++        ckpt_kwargs = {"use_reentrant": False}
++    except TypeError:
++        model.gradient_checkpointing_enable()
++        ckpt_kwargs = "signature sans kwargs (use_reentrant défaut)"
++    alloc_apres, _ = vram_snapshot()
++    memoire["checkpointing_kwargs"] = ckpt_kwargs
++    memoire["vram_allouee_avant_apres_activation_gb"] = [alloc_avant,
++                                                         alloc_apres]
++    memoire["dry_run_apres_ckpt_gb"] = dry_run_peak(DRY_RUN_SEQ)
++    metrics["memoire"] = memoire
++    print(f"[vram] allocateur={memoire['allocateur']} | dry-run fwd+bwd "
++          f"(seq {DRY_RUN_SEQ}, micro-batch {BATCH_SIZE}) : pic AVANT "
++          f"checkpointing={memoire['dry_run_avant_ckpt_gb']} Go, pic APRÈS="
++          f"{memoire['dry_run_apres_ckpt_gb']} Go | alloué {alloc_avant}->"
++          f"{alloc_apres} Go | v6b : OOM au 1er batch (batch 4, sans "
++          f"checkpointing)", flush=True)
++    write_metrics()
++
+     # ---------------- phase 2c : entraînement --------------------------------
+     optimizer = torch.optim.AdamW(trainable, lr=LR, weight_decay=0.01)
+     scaler = torch.amp.GradScaler("cuda", enabled=use_scaler)
+@@ -940,11 +1071,23 @@
+     best_val, best_epoch, best_snap = float("inf"), None, None
+     patience, stopped_early, time_cut = 0, False, False
+     skipped_inf = 0
++    oom_fallback_done = False
+     model.train()
+-    print(f"[train] {len(train_ex)} exemples, batch {BATCH_SIZE}, lr {LR}, "
+-          f"epochs {EPOCHS_MIN}-{EPOCHS_MAX}, early stopping val "
++    torch.cuda.reset_peak_memory_stats()   # v7 : pic mesuré à partir d'ici
++    print(f"[train] {len(train_ex)} exemples, micro-batch {BATCH_SIZE} x "
++          f"accumulation {GRAD_ACCUM_STEPS} (batch effectif "
++          f"{BATCH_SIZE * GRAD_ACCUM_STEPS}), lr {LR}, epochs "
++          f"{EPOCHS_MIN}-{EPOCHS_MAX}, early stopping val "
+           f"(patience {EARLY_STOP_PATIENCE}), cutoff {TRAIN_CUTOFF_S}s, "
+-          f"dtype {compute_dtype}, scaler={use_scaler}", flush=True)
++          f"dtype {compute_dtype}, scaler={use_scaler}, checkpointing=actif",
++          flush=True)
++
++    CudaOOM = getattr(torch.cuda, "OutOfMemoryError", RuntimeError)
++
++    def _est_oom(exc):
++        return (isinstance(exc, CudaOOM)
++                or (isinstance(exc, RuntimeError)
++                    and "out of memory" in str(exc).lower()))
+ 
+     epoch = 0
+     while epoch < EPOCHS_MAX:
+@@ -955,48 +1098,107 @@
+             break
+         epoch += 1
+         t_epoch = time.time()
+-        batches = make_batches(train_ex, epoch)
+         ep_loss, ep_tok, ep_steps = 0.0, 0, 0
+-        for b_idx in batches:
+-            if elapsed() > TRAIN_CUTOFF_S:
+-                time_cut = True
+-                print(f"[train] cutoff {TRAIN_CUTOFF_S}s atteint en epoch "
+-                      f"{epoch} après {ep_steps} steps -> fin d'epoch partielle",
+-                      flush=True)
+-                break
+-            input_ids, attn, labels, rows = collate(train_ex, b_idx)
+-            t_step = time.time()
+-            optimizer.zero_grad(set_to_none=True)
+-            out = model(input_ids=input_ids.to("cuda"),
+-                        attention_mask=attn.to("cuda"),
+-                        labels=labels.to("cuda"))
+-            loss = out.loss
+-            if loss is None or not torch.isfinite(loss):
+-                skipped_inf += 1
+-                print(f"[train] loss non finie (step epoch {epoch}) — step "
+-                      f"sauté ({skipped_inf} au total)", flush=True)
+-                if skipped_inf > 60:
+-                    raise SystemExit("FATAL: trop de steps non finis (>60) — "
+-                                     "entraînement divergent")
++        rebuild_steps = True            # v7 : reconstruction après repli OOM
++        while rebuild_steps:
++            rebuild_steps = False
++            micro = make_batches(train_ex, epoch)
++            steps = [micro[i:i + GRAD_ACCUM_STEPS]
++                     for i in range(0, len(micro), GRAD_ACCUM_STEPS)]
++            for si, step_mb in enumerate(steps):
++                if elapsed() > TRAIN_CUTOFF_S:
++                    time_cut = True
++                    print(f"[train] cutoff {TRAIN_CUTOFF_S}s atteint en epoch "
++                          f"{epoch} après {ep_steps} steps -> fin d'epoch "
++                          f"partielle", flush=True)
++                    break
++                try:
++                    t_step = time.time()
++                    optimizer.zero_grad(set_to_none=True)
++                    step_loss, step_tok, seq_w = 0.0, 0, 0
++                    rows_ids, micro_skip = [], False
++                    for b_idx in step_mb:
++                        input_ids, attn, labels, rows = collate(train_ex, b_idx)
++                        out = model(input_ids=input_ids.to("cuda"),
++                                    attention_mask=attn.to("cuda"),
++                                    labels=labels.to("cuda"))
++                        loss = out.loss
++                        if loss is None or not torch.isfinite(loss):
++                            skipped_inf += 1
++                            print(f"[train] loss non finie (epoch {epoch}, "
++                                  f"step {si + 1}) — step sauté "
++                                  f"({skipped_inf} au total)", flush=True)
++                            if skipped_inf > 60:
++                                raise SystemExit(
++                                    "FATAL: trop de steps non finis (>60) — "
++                                    "entraînement divergent")
++                            micro_skip = True
++                            break
++                        scaler.scale(loss / len(step_mb)).backward()
++                        ntok = int((labels != -100).sum())
++                        step_loss += float(loss.detach()) * ntok
++                        step_tok += ntok
++                        seq_w = max(seq_w, int(input_ids.shape[1]))
++                        rows_ids.extend(r["conv_id"] for r in rows)
++                        out = None
++                        loss = None
++                    if micro_skip:
++                        optimizer.zero_grad(set_to_none=True)
++                        continue
++                    scaler.unscale_(optimizer)
++                    torch.nn.utils.clip_grad_norm_(trainable, GRAD_CLIP)
++                    scaler.step(optimizer)
++                    scaler.update()
++                    ep_loss += step_loss
++                    ep_tok += step_tok
++                    ep_steps += 1
++                    rec = {"epoch": epoch, "step": ep_steps,
++                           "batch": rows_ids,
++                           "micro_batches": len(step_mb),
++                           "seq_max": seq_w,
++                           "tokens_assistant": step_tok,
++                           "loss": round(step_loss / max(step_tok, 1), 6),
++                           "seconds": round(time.time() - t_step, 2)}
++                    if not history_steps:
++                        torch.cuda.synchronize()
++                        _pic1 = round(torch.cuda.max_memory_allocated()
++                                      / 1024**3, 2)
++                        rec["vram_peak_gb"] = _pic1
++                        metrics["memoire"]["pic_premier_step_gb"] = _pic1
++                        print(f"[vram] pic VRAM du 1er step RÉEL "
++                              f"(checkpointing actif, micro-batch "
++                              f"{BATCH_SIZE} x {GRAD_ACCUM_STEPS}, seq "
++                              f"{seq_w}) : {_pic1} Go — v6b : OOM au même "
++                              f"point (batch 4, sans checkpointing)",
++                              flush=True)
++                    history_steps.append(rec)
++                    print(f"[e{epoch} s{ep_steps:3d}] loss={rec['loss']:.4f} "
++                          f"seq={rec['seq_max']} tok={step_tok} "
++                          f"{rec['seconds']}s", flush=True)
++                except Exception as oom_exc:                   # noqa: BLE001
++                    # garde-fou v7 : repli UNIQUEMENT au tout 1er step du run
++                    if (not _est_oom(oom_exc) or epoch != 1 or si != 0
++                            or ep_steps or history_steps or oom_fallback_done):
++                        raise
++                    oom_fallback_done = True
++                    print(f"[train] OOM CUDA au 1er step "
++                          f"({type(oom_exc).__name__}) -> repli v7 : "
++                          f"micro-batch 1 + accumulation 4 (batch effectif 4 "
++                          f"conservé, lr inchangé)", flush=True)
++                    del oom_exc
++                    optimizer.zero_grad(set_to_none=True)
++                    gc.collect()
++                    torch.cuda.empty_cache()
++                    BATCH_SIZE = 1
++                    GRAD_ACCUM_STEPS = 4
++                    metrics["protocole"]["batch_size"] = 1
++                    metrics["protocole"]["grad_accum_steps"] = 4
++                    metrics["memoire"]["repli_batch1_apres_oom"] = True
++                    write_metrics()
++                    rebuild_steps = True
++                    break
++            if rebuild_steps:
+                 continue
+-            scaler.scale(loss).backward()
+-            scaler.unscale_(optimizer)
+-            torch.nn.utils.clip_grad_norm_(trainable, GRAD_CLIP)
+-            scaler.step(optimizer)
+-            scaler.update()
+-            ntok = int((labels != -100).sum())
+-            ep_loss += float(loss.detach()) * ntok
+-            ep_tok += ntok
+-            ep_steps += 1
+-            rec = {"epoch": epoch, "step": ep_steps,
+-                   "batch": [r["conv_id"] for r in rows],
+-                   "seq_max": int(input_ids.shape[1]),
+-                   "tokens_assistant": ntok,
+-                   "loss": round(float(loss.detach()), 6),
+-                   "seconds": round(time.time() - t_step, 2)}
+-            history_steps.append(rec)
+-            print(f"[e{epoch} s{ep_steps:3d}] loss={rec['loss']:.4f} "
+-                  f"seq={rec['seq_max']} tok={ntok} {rec['seconds']}s", flush=True)
+         vloss = val_loss()
+         improved = vloss < best_val - VAL_MIN_DELTA
+         rec_ep = {"epoch": epoch, "complete": not time_cut,
+@@ -1035,6 +1237,9 @@
+         "early_stopped": stopped_early, "time_cut": time_cut,
+         "steps_executes": len(history_steps),
+         "steps_skipped_non_finite": skipped_inf,
++        "micro_batch_final": BATCH_SIZE,
++        "grad_accum_final": GRAD_ACCUM_STEPS,
++        "repli_batch1_apres_oom": oom_fallback_done,
+         "loss_premier_step": train_losses[0] if train_losses else None,
+         "loss_dernier_step": train_losses[-1] if train_losses else None,
+         "history_par_epoch": history_epochs,
+@@ -1292,7 +1497,7 @@
+         "gpu_max_memory_gb": round(torch.cuda.max_memory_allocated() / 1e9, 2)}
+     write_metrics()
+ 
+-    print("\n================ RÉSUMÉ FINAL v6 (full run GPU) ====================",
++    print("\n================ RÉSUMÉ FINAL v7 (full run GPU) ====================",
+           flush=True)
+     ep = metrics["entrainement"]
+     print(f"epochs executées     : {ep['epochs_executees']} (meilleure "
+@@ -1300,6 +1505,10 @@
+           f"time_cut={ep['time_cut']})", flush=True)
+     print(f"steps                : {ep['steps_executes']} | loss "
+           f"{ep['loss_premier_step']} -> {ep['loss_dernier_step']}", flush=True)
++    _mem = metrics.get("memoire", {})
++    print(f"mémoire v7           : pic 1er step="
++          f"{_mem.get('pic_premier_step_gb')} Go | repli batch1="
++          f"{_mem.get('repli_batch1_apres_oom', False)}", flush=True)
+     print(f"A/B overall          : base={bo} finetuné={fo} -> {verdict}",
+           flush=True)
+     gf = metrics["gguf"].get("gguf_final", {})

@@ -1,230 +1,483 @@
-# Site associatif
+# AEIC — Site (PHP pur)
 
-Projet en ligne : https://aeic.jrcan.dev/
+![CI](https://github.com/LeRatSupreme/site-asso/actions/workflows/ci.yml/badge.svg?branch=experiments)
 
-Application web complète pour gérer la vie d'une association étudiante : site public, inscriptions aux événements, cafétéria, commandes, médiathèque, contenus éditables et espace d'administration.
+Site de l'**AEIC — Association Étudiante Informatique de Calais**, développé en
+**PHP 8.2+ pur + HTML/CSS vanilla**, sans framework ni Docker.
 
-Le projet est construit avec Next.js 15, React 19, Prisma, MySQL et Auth.js. Il peut tourner en local pour le développement ou en production avec Docker Compose.
 
-## Ce que permet l'application
 
-### Côté public
+Le site est **complet et en production** : espace public (événements, sondages,
+pages, galerie, zone jeux avec Wordle/Énigme/Memory/Snake/Tetris), espace élève
+(compte, commandes cafétéria), et espace admin (comptabilité & imports SumUp,
+stocks & inventaire, réapprovisionnement, budgets, cafétéria, contenus,
+utilisateurs & attributions de pages, wiki).
 
-- Page d'accueil configurable depuis l'administration.
-- Pages de présentation, équipe, mentions légales et confidentialité.
-- Liste des événements publiés.
-- Détail d'un événement avec inscription possible pour les utilisateurs connectés.
-- Interface responsive avec thème clair/sombre.
 
-### Espace élève
+> L'architecture du site est documentée dans le **wiki intégré** de l'espace
+> admin (*Admin → Tableau de bord → Wiki*, `/admin/wiki`).
 
-- Création de compte et connexion.
-- Tableau de bord personnel.
-- Gestion du profil et du mot de passe.
-- Suivi des inscriptions aux événements.
-- Commande de produits à la cafétéria.
-- Historique des commandes.
+---
 
-### Espace administrateur
+## 📁 Structure
 
-- Tableau de bord global.
-- Gestion des utilisateurs, rôles et statuts de compte.
-- Création, publication et modification des événements.
-- Gestion des variantes d'inscription aux événements.
-- Suivi des inscrits.
-- CMS simple pour éditer les pages du site.
-- Médiathèque et upload de fichiers.
-- Gestion des paramètres du site.
-- Gestion de la cafétéria : catégories, produits, stock, disponibilités et commandes.
-- Interface de point de vente pour la cafétéria.
-- Tableau de bord SumUp pour les paiements, si les clés API sont configurées.
+```
+site_final/
 
-## Stack technique
+├── public/                          # Racine web (DocumentRoot Apache)
+│   ├── index.php                    # Front controller
+│   ├── .htaccess                    # Réécriture des URL vers index.php
+│   ├── manifest.json                # Manifest PWA ; + robots.txt, sw.js
+│   ├── css/                         # CSS par module : admin, compta, payments, polls
+│   └── assets/
+│       ├── css/                     # base.css (charte AEIC) + pages.css
+│       ├── img/                     # favicon, icônes, illustration Open Graph
+│       ├── js/                      # JS vanilla (front)
+│       └── uploads/                 # Médias uploadés (hors git)
+├── app/
+│   ├── config/
+│   │   ├── config.php               # .env, constantes, gestion d'erreurs
+│   │   ├── database.php             # db() : PDO (singleton) + session
+│   │   └── routes.php               # Toutes les routes GET/POST du site
+│   ├── core/                        # Router, Controller, Auth, Csrf, Middleware,
+│   │                                # Permissions, Validator, Mailer, Logger…
+│   │   ├── Security/                # Crypto, HtmlSanitizer, Totp/2FA, headers…
+│   │   ├── Compta/                  # Services comptabilité & SumUp (ComptaCalc,
+│   │   │                            # CashLedger, SumUpCsvParser, SumUpSalesSync…)
+│   │   └── Backup/                  # Sauvegarde / export de la base
+│   ├── controllers/                 # 17 contrôleurs publics : Home, Event, Page,
+│   │                                # Poll, Registration, Student, Auth…
+│   │   └── Admin/                   # 27 contrôleurs admin (un par module + base)
+│   ├── models/                      # Model (base PDO) + ~52 modèles : Event, Sale,
+│   │                                # User, Product, ProductAlias, CashCount…
+│   └── translations/                # Libellés FR (messages, contenu éditorial)
+├── views/                           # Pages publiques : home, events, polls, pages,
+│                                    # account, auth, game, galerie, student…
+│   ├── layouts/                     # Habillages : admin, public, student
+│   ├── partials/                    # Cartes event/poll/article, flash, map…
+│   ├── admin/                       # Tableaux de bord & pages par module
+│   ├── emails/                      # Templates de rappels & notifications (html+txt)
+│   └── errors/                      # Pages d'erreur (403, 404…)
+├── database/
+│   ├── schema.sql                   # Toutes les tables
+│   ├── seed.sql                     # Settings, admin, équipe, pages, events
+│   └── migrations/                  # 51 migrations 2026_*.sql (appliquées à la main)
+├── scripts/                         # Cron / CLI : sync_sumup_sales.php (API SumUp),
+│                                    # send_event_reminders.php, backup.sh…
+├── tests/                           # PHPUnit : Unit/ + Integration/
+├── cache/                           # Cache runtime — hors git
+├── config.env.example               # Modèle de configuration
+├── composer.json                    # Autoload PSR-4 + helpers + phpunit
+├── composer.lock
+├── vendor/                          # Dépendances Composer (hors git)
+├── phpunit.xml
+├── GUIDE_ADMIN.md                   # Guide d'utilisation de l'espace admin
+├── .gitignore
+└── README.md
+```
+> `app/`, `views/`, `database/` et `config.env` sont **hors DocumentRoot** :
+> ils ne sont jamais servis directement par le web.
+---
 
-- Next.js 15 avec App Router
-- React 19
-- TypeScript
-- Tailwind CSS
-- Prisma ORM
-- MySQL 8
-- Auth.js / NextAuth v5
-- Radix UI
-- TipTap pour l'édition riche
-- Docker et Docker Compose pour le déploiement
+## 🚀 Déploiement sur le VPS
 
-## Prérequis
+Stack en place : Apache 2.4 + PHP 8.3 (module) + MariaDB 10.11 sur Ubuntu 24.04.
+Le dépôt est cloné sur le VPS dans `/home/ubuntu/AEIC` ; le DocumentRoot Apache
+pointe vers son sous-dossier `public/` (`DocumentRoot /home/ubuntu/AEIC/public`).
+Domaine : `https://asso.aremond.ovh/`.
 
-Pour lancer le projet en local :
+### 1. Déployer une mise à jour (flux git)
 
-- Node.js 18 ou plus récent
-- npm
-- Une base MySQL accessible
-
-Pour lancer le projet avec Docker :
-
-- Docker
-- Docker Compose
-
-## Installation locale
-
-1. Installer les dépendances :
+Le site est déployé **par git** — jamais par copie de fichiers (scp) :
 
 ```bash
-npm install
+# Depuis ta machine : committer puis pousser la branche de travail
+git push origin experiments
+
+# Puis sur le VPS :
+ssh ubuntu@51.254.129.80 "cd ~/AEIC && git pull --ff-only origin experiments"
 ```
 
-2. Créer le fichier d'environnement :
+> Le workflow complet (commit + push après chaque modification, puis pull
+> `--ff-only` sur le VPS) est décrit dans `AGENTS.md`.
+
+### 2. Environnement (`config.env` sur le VPS)
+
+Le fichier `config.env` réel vit **sur le VPS**, hors git
+(`/home/ubuntu/AEIC/config.env`) :
 
 ```bash
-cp .env.example .env
+cd ~/AEIC
+cp config.env.example config.env   # première installation seulement
+nano config.env   # renseigner DB_PASS, APP_URL, APP_ENV=prod, APP_DEBUG=false
+sudo chown ubuntu:www-data config.env
+sudo chmod 640 config.env
 ```
 
-3. Renseigner les variables dans `.env`.
-
-En local, Prisma a besoin d'une variable `DATABASE_URL` pointant vers votre base MySQL, par exemple :
-
-```env
-DATABASE_URL="mysql://asso_user:mot_de_passe@localhost:3306/asso_db"
-NEXTAUTH_SECRET="un_secret_long_et_securise"
-NEXTAUTH_URL="http://localhost:3000"
-```
-
-4. Générer le client Prisma :
+### 3. Première installation : dépendances, base, compte admin
 
 ```bash
-npm run db:generate
+# Dépendances (Composer) — si absent : sudo apt install composer
+composer install --no-dev --optimize-autoloader
+
+# Base : importer le schéma + le seed
+mysql -u aeic -p aeic < database/schema.sql
+mysql -u aeic -p aeic < database/seed.sql
 ```
 
-5. Créer ou mettre à jour les tables :
+Le seed contient un **hash placeholder non valide** (sécurité). Générez le vrai hash
+pour `changeme123`, puis mettez-le en base :
+```bash
+php -r "echo password_hash('changeme123', PASSWORD_BCRYPT), PHP_EOL;"
+# copier la valeur, puis :
+mysql -u aeic -p aeic -e "UPDATE users SET password='<HASH>' WHERE email='admin@aeic.local';"
+```
+**Changez ce mot de passe immédiatement après la première connexion.**
+
+Permissions uploads + rechargement Apache :
+```bash
+sudo mkdir -p /home/ubuntu/AEIC/public/assets/uploads
+sudo chown -R www-data:www-data /home/ubuntu/AEIC/public/assets/uploads
+sudo systemctl reload apache2
+```
+
+Pour le routing : `public/` est le DocumentRoot avec `FallbackResource /index.php`
+(mod_dir) ou un `.htaccess` de réécriture.
+
+---
+
+## 🚀 Mise en production (checklist)
+
+1. **Désactiver le debug** — `config.env` : `APP_ENV=prod`, `APP_DEBUG=false`.
+   Les erreurs ne sont jamais affichées en détail (`logs/php-error.log`).
+2. **HTTPS obligatoire** — certificat TLS actif, accès HTTP redirigé vers HTTPS.
+   L'en-tête `Strict-Transport-Security` (HSTS) est envoyé automatiquement sur
+   toute réponse servie en HTTPS, y compris les pages d'erreur 4xx/5xx.
+3. **En-têtes de sécurité** — `SecurityHeaders` (CSP, HSTS, X-Frame-Options,
+   `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy`) est
+   appliqué sur **toutes** les réponses (page normale, 404/403/500, maintenance).
+4. **Configurer le SMTP** — dans *Admin → Paramètres → Emails / SMTP* :
+   `smtp_host`, `smtp_port`, `smtp_encryption` (`tls`/`ssl`/`none`/vide),
+   `smtp_user`, `smtp_pass`, `mailer_from`. Laisser `smtp_host` vide pour le
+   fallback `mail()`. Utiliser le bouton **« Envoyer un e-mail de test »**
+   pour valider. (Surcharge possible via `config.env` : `SMTP_*`, `MAILER_*`.)
+5. **Permissions** — `config.env` en `0640` (propriétaire `www-data`),
+   `public/assets/uploads/` inscriptible par `www-data`, reste du dépôt en
+   lecture seule.
+6. **Sauvegardes** — planifier `php scripts/backup.php` (dump complet PHP pur)
+   en cron quotidien + sauvegarde externe des fichiers `database/backup/*.sql`.
+   Restauration via `php scripts/restore.php fichier.sql`.
+7. **Compte admin** — générer le hash du mot de passe (voir §5 ci-dessus),
+   changer le mot de passe par défaut après la 1re connexion, **activer le 2FA**
+   (obligatoire pour ADMIN/Trésorerie).
+8. **Monitoring** — `GET /health` (JSON, 200/503) à brancher sur un uptime
+   checker ; surveiller `logs/app.log` et `logs/php-error.log`.
+
+---
+
+## 🧪 Tests
+
 
 ```bash
-npm run db:push
+composer install                 # installe phpunit (require-dev)
+./vendor/bin/phpunit             # lance toute la suite
+./vendor/bin/phpunit --testsuite Unit
 ```
 
-6. Ajouter les données de départ :
+La base de test déclarée dans `phpunit.xml` est `aeic_test` (**jamais la prod**).
+
+Les tests couvrent : helpers (`e`, `formatDate`, `formatPrice`, `parseFrenchFloat`) et
+le routeur (matching, extraction `{slug}`/`{id}`, 404, 405).
+### Tests d'intégration (route + base)
+
+Les tests d'intégration (`tests/Integration/`) exécutent de **vraies requêtes
+HTTP simulées** contre l'application branchée sur `aeic_test`, dans un
+sous-processus PHP dédié. CSRF et 2FA sont neutralisés via le flag`APP_TESTING` (jamais actif en production).
+Pré-requis : créer la base `aeic_test` et y importer le schéma :
 
 ```bash
-npm run db:seed
+mysql -u aeic -p -e "CREATE DATABASE aeic_test CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+mysql -u aeic -p aeic_test < database/schema.sql
 ```
 
-7. Démarrer le serveur de développement :
+Puis :
 
 ```bash
-npm run dev
+./vendor/bin/phpunit --testsuite Integration
+```
+Couverture : connexion, inscription aux événements (unicité), commande cafétéria (total serveur, stock, produit
+indisponible), import comptable SumUp (déduplication), et logique SMTP du Mailer.
+
+---
+
+## 🔐 Sécurité (mesures Phase 1)
+
+- **PDO + requêtes préparées** partout (anti-injection SQL).
+- **`e()`** (htmlspecialchars) pour échapper toute sortie dynamique dans les vues (anti-XSS).
+- **CSRF** : `csrf_token()` / `csrf_field()` + `Csrf::verify()` (à brancher sur les POST des phases suivantes).
+
+- **Sessions** : `use_strict_mode`, `cookie_httponly`, `SameSite=Lax`, régénération d'ID au login.- **Config via `config.env`** hors webroot ; aucun credential en dur.- **Auth** base (login/logout/check/id/role/isAdmin/user) prête pour les phases suivantes.
+---
+
+## 🗺️ État & suite (phases)
+
+
+- **Phase 1 ✅** Fondations (structure, config, PDO, routeur, charte CSS, layout).
+- **Phase 2 ✅** Pages publiques (accueil, événements liste/détail, association, équipe, CMS, sitemap).
+- **Phase 3 ✅** Authentification & RGPD (inscription/connexion/déconnexion, consentements,
+  rôles/middleware, rate limiting login, page CGU, export & suppression/anonymisation des données).
+- **Phase 4 ✅** Espace élève (dashboard, profil, inscriptions aux événements avec variantes,
+  commandes cafétéria avec panier, workflow de statut, stock atomique).
+- **Phase 5 ✅** Espace admin (dashboard, CRUD événements/pages/équipe/médias/paramètres,
+  gestion cafétéria & commandes, gestion utilisateurs & rôles, mode maintenance).
+- **Phase 6 ✅** Socle pro (SEO/OG/JSON-LD/sitemap, perf gzip/cache, a11y,
+  e-mails transactionnels + mot de passe oublié).
+- **Phase 7 ✅** Sécurité avancée (2FA TOTP obligatoire ADMIN/Trésorerie +
+  codes de récupération, en-têtes CSP/HSTS, sauvegarde/restauration, monitoring).
+- Phase 8+ — E2E, standards entreprise...
+
+La documentation de référence vit dans le wiki intégré (admin → Wiki, `/admin/wiki`).
+---
+
+## 🔐 Authentification & RGPD (Phase 3)
+
+- **Inscription** (`/register`) : validation serveur (prénom, nom, e-mail valide,
+  unicité de l'e-mail), **consentement RGPD obligatoire** (journalisé dans `consents`).
+  Aucun mot de passe n'est saisi à l'inscription : un mot de passe initial de
+  **12 caractères** est **généré** puis **envoyé par e-mail** (hash bcrypt en base).
+  La politique générale des mots de passe est de **12 caractères minimum**.
+- **Connexion** (`/login`) : message d'erreur générique (l'e-mail n'est jamais révélé),
+  **limitation des tentatives** (5 essais / 10 min par IP via `RateLimiter`),
+  refus des comptes désactivés, régénération de l'ID de session.- **Déconnexion** (`/logout`) : destruction de session + retour accueil.
+- **Contrôle d'accès** (`App\Core\Middleware`) : `requireGuest`, `requireLogin`, `requireRole`
+  (403 si rôle insuffisant), décision testable via `resolve()`/`isAuthorized()`.
+
+- **Droits RGPD** (`/account/*`, connexion requise) :
+  - portabilité : export JSON de toutes les données (`/account/export`) ;
+  - effacement : anonymisation du compte + désactivation (`/account/delete`),
+    les enregistrements comptables obligatoires sont conservés mais déliés de l'identité.
+
+- **CSRF** : `csrf_field()` dans tous les formulaires POST, vérifié par le routeur.
+
+- **Pages légales** : `/legal`, `/privacy`, `/cgu` (CMS, slug en base).
+---
+
+## 🎓 Espace élève (Phase 4)
+
+Routes protégées par connexion (`/eleve/*`, accès ELEVE/TRESORERIE/ADMIN) :
+- **Tableau de bord** (`/eleve`) : prochains événements, mes inscriptions, dernières commandes.
+
+- **Profil** (`/eleve/profile`) : édition prénom/nom/e-mail + changement de mot de passe
+  (ancien requis).
+
+- **Mes inscriptions** (`/eleve/inscriptions`) : événements inscrits + statut (à venir / passé).
+
+- **Mes commandes** (`/eleve/commandes`) : historique avec détail des lignes et badges de statut.
+
+- **Cafétéria** (`/eleve/cafeteria`) : catalogue par catégorie, **panier en session**
+  (ajout/retrait/vidage), validation de commande.
+**Inscription événement** (`/events/{slug}`) : bouton dynamique selon l'état (connecté/déjà inscrit),
+sélection des **variantes obligatoires**, désinscription possible. Doublon impossible (contrainte unique).
+**Commandes cafétéria** — robustesse (§25.3) :
+- **total recalculé serveur** (jamais confiance au client) ;
+- **décrément de stock atomique** en transaction (`stock >= quantité`, jamais de stock négatif) ;
+- produit indisponible / stock insuffisant → commande rejetée, **rien n'est écrit** ;
+- **workflow de statut** (`PENDING → CONFIRMED → PREPARING → READY → DELIVERED`,
+  `CANCELLED` depuis les états non terminaux) via `OrderWorkflow`.
+---
+
+## 🎮 Zone jeux
+
+Menu des jeux (`/jeux`) : statistiques personnelles, pseudo de joueur (classement),
+et 5 jeux jouables sur mobile comme au clavier.
+
+
+
+- **Wordle** (`/jeux/wordle`) : FR/EN, 3 difficultés (5, 6 ou 7 lettres),
+  mode **quotidien** (même mot pour tous, change à minuit) ou **libre** illimité.
+  Seul le mode quotidien est enregistré (1 partie/jour, série de victoires).
+- **Énigme du jour** (`/jeux/enigme`) : une devinette par jour (table `daily_enigmas`,
+  éditable en admin), vérification AJAX de la réponse.
+- **Memory cafétéria** (`/jeux/memory`) : 7 tailles de grille (4×3 → 10×8, choix
+  mémorisé), record de temps local par taille, produits de la cafétéria en emojis.
+- **Snake** (`/jeux/snake`) : 3 terrains (🧱 Murs / 🌀 Portail / 🚧 Obstacles),
+  3 vitesses, 1 à 3 fruits simultanés, fruits dorés à durée limitée, rendu fluide
+  (interpolation), jouable au clavier, au swipe ou au pad tactile.- **Tetris** (`/jeux/tetris`) : marathon, 7 pièces avec wall kicks, next, hold,
+  fantôme d'atterrissage, niveaux progressifs, records locaux + serveur.
+
+**Scores** (table `game_scores`) :
+- Wordle : une ligne par jour/mode (`daily_fr`, `daily_en`), séries calculées à la
+  volée (`GameScore`) ;
+- Memory / Snake / Tetris : **meilleur score du jour** par jeu et mode via upsert
+  (`GameScore::saveArcadeResult`, endpoint `POST /jeux/score` : auth + CSRF +
+  liste blanche jeu/mode, score borné côté serveur) ;
+- Classement global (`/jeux/leaderboard`) et gestion des joueurs en admin
+  (`/admin/jeux`).
+
+---
+
+## 🛠️ Espace admin (Phase 5)
+Routes protégées par le rôle **ADMIN** (`/admin/*`) — layout dédié, `noindex` :
+
+- **Tableau de bord** (`/admin`) : compteurs (membres, événements, commandes, CA),
+  dernières commandes, **journal d'audit** récent.
+
+- **Événements** (`/admin/events`) : CRUD complet (création/édition/suppression),
+  publication, **liste des inscrits** par événement.
+
+- **Cafétéria** : CRUD **produits** (`/admin/cafeteria`) et **catégories**,
+  **commandes** (`/admin/cafeteria/commandes`) avec changement de statut
+  (workflow — statuts affichés en français : En attente, Confirmée,
+  En préparation, Prête, Livrée, Annulée ; e-mail « commande prête » envoyé
+  au passage à Prête).
+
+- **Pages CMS** (`/admin/pages`) : CRUD pages (contenu HTML, SEO meta, publication).
+
+- **Équipe** (`/admin/team`) : CRUD membres du bureau (ordre, mise en avant, pôle).
+
+- **Médias** (`/admin/media`) : upload d'images (validation MIME réelle, 5 Mo max,
+  renommage aléatoire), suppression.
+
+- **Paramètres** (`/admin/settings`) : édition des settings regroupés, cache invalidé
+  après sauvegarde, **mode maintenance**.
+**Gestion utilisateurs & rôles** (`/admin/users`) — sécurité (§10.2) :
+- promotion / rétrogradation (ADMIN / Trésorerie / Élève) et activation/désactivation ;
+- chaque changement de rôle est **journalisé** (audit log `user.role_change`) ;- **protection du dernier administrateur** : impossible de rétrograder ou désactiver
+  le dernier ADMIN actif (règle pure et testée dans `UserPolicy`) ;
+- on ne peut pas modifier son propre rôle ni se désactiver soi-même.
+**Mode maintenance** (`maintenance_mode`) : bloque l'accès public (page 503),
+l'admin y a toujours accès.
+---
+
+## ✉️ E-mails & SEO (Phase 6)
+**E-mails transactionnels** (`App\Core\Mailer`) : templates HTML + texte, envoi
+via SMTP natif (configuré en admin/`.env`) ou `mail()` de secours.
+
+- **Bienvenue** envoyé à l'inscription ;
+- **Commande prête** envoyée quand l'admin passe une commande à `READY` ;
+- **Réinitialisation de mot de passe** : flux `/forgot-password` → `/reset-password`
+  (token à usage unique, haché SHA-256, expire en 1 h, non divulgation de compte).
+
+**SEO** :
+- méta dynamiques, **Open Graph** + **Twitter Cards**, **JSON-LD**
+  (`Organization` en accueil, `Event` en page événement) ;
+
+- `og:image` configurable (setting) + image par défaut ;
+
+- **sitemap.xml** dynamique (`/sitemap.xml` : pages statiques + zone jeux +
+  événements + sondages + pages CMS, avec `lastmod`/`changefreq`/`priority`) ;
+
+- `robots.txt` (admin/espace membre exclus).
+**Performance** (`.htaccess`) : compression gzip/brotli, cache assets 1 an (`immutable`),
+en-têtes de sécurité de base (`X-Content-Type-Options`, `X-Frame-Options`,
+`Referrer-Policy`, `Permissions-Policy`).
+**Accessibilité** : `lang="fr"`, skip-link, `:focus-visible`, navigation ARIA,
+sémantique HTML, alt sur images, `loading="lazy"`.
+---
+
+## 🛡️ Sécurité avancée & exploitation (Phase 7)
+
+**Authentification à deux facteurs (TOTP, RFC 6238)** — `App\Core\Security\Totp` :
+- **2FA obligatoire** pour les rôles ADMIN et TRÉSORERIE
+  (`TwoFactorPolicy::requires`), forcé via un guard dans `index.php` ;
+- vérification au login (étape `/login/verify`), configuration `/account/2fa/setup`
+  (secret + URI otpauth, confirmation par code) ;
+- **codes de récupération** à usage unique, stockés hachés (SHA-256) ;
+- table `two_factor` (secret + codes + activation).
+
+**En-têtes de sécurité** (`App\Core\Security\SecurityHeaders`) : **CSP**
+(configurable), **HSTS** (HTTPS), `X-Frame-Options`, `X-Content-Type-Options`,
+`Referrer-Policy`, `Permissions-Policy`.
+**Sauvegarde / restauration** (PHP pur, sans `mysqldump`) — `App\Core\Backup\Backup` :
+- `php scripts/backup.php [fichier.sql]` : dump complet (structure + données) ;
+- `php scripts/restore.php fichier.sql` : restauration multi-requêtes.
+
+**Monitoring** : endpoint **`/health`** (JSON, vérifie la base, 200/503),
+`App\Core\Logger` (journal structuré `logs/app.log`).
+
+**Journal d'audit** (`audit_logs`) : chaque action sensible (promotion, statut
+commande, activation/désactivation 2FA…) est tracée (qui, quoi, quand, IP).
+---
+
+## 💳 SumUp (paiement en ligne par lien)
+Le site utilise le **paiement par lien SumUp** (aucune intégration API complexe,
+aucun token/secret à stocker) :
+1. **Paramètres → « SumUp (paiement en ligne) »** :
+   - `sumup_enabled` : active/désactive l'affichage des boutons de paiement ;
+   - `sumup_default_link` : URL de paiement SumUp par défaut (collez ici le lien
+      généré depuis l'app/dashboard SumUp).
+2. **Détail d'un événement** (`/events/{slug}`) : si l'événement possède son
+   propre `sumup_link`, celui-ci est utilisé ; sinon c'est le lien par défaut.
+   Un bouton teal **« Payer en ligne (SumUp) »** ouvre le lien dans un nouvel onglet.
+3. **Cafétéria (espace élève)** : un bouton **« Payer ma commande (SumUp) »**
+   apparaît sous le panier (optionnel — les commandes restent réglées au comptoir).
+4. **Dashboard compta** (`/admin/compta`) : la synthèse mensuelle des
+    encaissements (répartition carte vs espèces, nombre de transactions) y est
+    intégrée, **fondée sur les ventes déjà importées** dans la comptabilité
+    (rapports SumUp). Aucun appel réseau à SumUp.
+
+> L'ancienne caisse POS admin (« Encaisser par SumUp ») a été retirée :
+> l'encaissement se fait sur les caisses SumUp physiques / kiosques.
+
+> Aucun identifiant de compte SumUp n'est stocké : seule une URL publique de
+> paiement est utilisée.
+
+---
+## ✉️ Emails : délivrabilité (SPF / DKIM / DMARC)
+
+Le site envoie des e-mails transactionnels via SMTP (voir
+*Admin → Paramètres → Emails / SMTP*). Pour qu'ils arrivent en boîte de
+réception (et non en spam), configurez ces enregistrements DNS chez le
+**registaire du domaine** `asso.aremond.ovh`.
+
+### SPF (autorise le serveur/fournisseur à envoyer)
+Si vous passez par **Brevo** (recommandé) :
+```
+asso.aremond.ovh.  IN  TXT  "v=spf1 include:spf.brevo.com ~all"
+```
+Si le serveur envoie lui-même (fallback `mail()`) :
+
+```
+asso.aremond.ovh.  IN  TXT  "v=spf1 mx a -all"
+```
+### DKIM (signature, fournie par le fournisseur SMTP)
+DKIM dépend du prestataire SMTP. **Brevo** fournit une clé publique à publier
+sous la forme :
+```
+brevo._domainkey.asso.aremond.ovh.  IN  TXT  "v=DKIM1; p=<clé-fournie-par-brevo>"
 ```
 
-L'application est ensuite disponible sur `http://localhost:3000`.
+Récupérez la clé et le sélecteur dans le dashboard Brevo (ou de votre
+fournisseur SMTP) et publiez-les tels quels.
+### DMARC (politique de réception — progressive)
+Commencez en mode **observatoire** (aucun impact, collecte des rapports) :
 
-## Comptes de test
-
-Après `npm run db:seed`, deux comptes sont créés :
-
-| Rôle | Email | Mot de passe |
-| --- | --- | --- |
-| Administrateur | `admin@asso.fr` | `admin123` |
-| Élève | `eleve@asso.fr` | `eleve123` |
-
-Pensez à changer ces identifiants avant toute mise en production.
-
-## Lancement avec Docker
-
-Le fichier `docker-compose.yml` démarre :
-
-- une base MySQL 8 avec volume persistant ;
-- un service de migration Prisma ;
-- l'application Next.js ;
-- phpMyAdmin ;
-- les labels Traefik prévus pour un déploiement derrière reverse proxy.
-
-Créer le fichier `.env` :
-
-```bash
-cp .env.example .env
+```
+_dmarc.asso.aremond.ovh.  IN  TXT  "v=DMARC1; p=none; rua=mailto:tresorerie@aeic.fr"
+```
+Après quelques semaines de rapports sans anomalie, passez en mode **quarantaine** :
+```
+_dmarc.asso.aremond.ovh.  IN  TXT  "v=DMARC1; p=quarantine; pct=100; rua=mailto:tresorerie@aeic.fr"
 ```
 
-Puis lancer les services :
+> Remplacez `tresorerie@aeic.fr` par l'adresse qui recevra les rapports DMARC.
+> La propagation DNS peut prendre de quelques minutes à 48 h.
+---
 
-```bash
-docker compose up -d
+## 📈 Monitoring
+### Endpoint `/health`
+
+Le site expose `GET /health` (JSON) : renvoie `200 OK` si la base est joignable,`503` sinon (charge/DB indisponible). Réponse type :
+
+```json
+{ "status": "ok", "db": "ok" }
 ```
 
-Voir les logs :
+### Surveillance externe (UptimeRobot & co.)
+Créer un check **HTTPS** sur :
 
-```bash
-docker compose logs -f
+```
+https://asso.aremond.ovh/health
 ```
 
-Les données MySQL sont conservées dans le volume Docker `mysql-data`. Les fichiers uploadés sont conservés dans `public/uploads`.
-
-## Variables d'environnement principales
-
-| Variable | Description |
-| --- | --- |
-| `DATABASE_URL` | URL MySQL utilisée par Prisma en local ou hors Docker. |
-| `MYSQL_ROOT_PASSWORD` | Mot de passe root MySQL utilisé par Docker Compose. |
-| `MYSQL_DATABASE` | Nom de la base créée par Docker Compose. |
-| `MYSQL_USER` | Utilisateur MySQL applicatif. |
-| `MYSQL_PASSWORD` | Mot de passe de l'utilisateur MySQL applicatif. |
-| `NEXTAUTH_SECRET` | Secret utilisé par Auth.js pour signer les sessions. |
-| `NEXTAUTH_URL` | URL publique de l'application. |
-| `SUMUP_API_KEY` | Clé API SumUp, optionnelle. |
-| `SUMUP_MERCHANT_CODE` | Code marchand SumUp, optionnel. |
-| `UPLOAD_DIR` | Dossier d'upload, par défaut `./public/uploads`. |
-| `PORT` | Port d'écoute utilisé en production Docker. |
-
-## Scripts utiles
-
-| Commande | Utilisation |
-| --- | --- |
-| `npm run dev` | Lance le serveur de développement. |
-| `npm run build` | Compile l'application pour la production. |
-| `npm run start` | Lance l'application compilée. |
-| `npm run lint` | Lance le lint Next.js. |
-| `npm run db:generate` | Génère le client Prisma. |
-| `npm run db:push` | Synchronise le schéma Prisma avec la base. |
-| `npm run db:migrate` | Crée une migration Prisma en développement. |
-| `npm run db:seed` | Insère les données de départ. |
-| `npm run db:studio` | Ouvre Prisma Studio. |
-
-## Structure du projet
-
-```text
-app/
-├── (public)/        Pages publiques
-├── (auth)/          Connexion et inscription
-├── (dashboard)/     Espaces élève et administrateur
-├── actions/         Server Actions
-├── api/             Routes API
-├── components/      Composants React partagés
-└── lib/             Auth, Prisma, permissions, config et utilitaires
-
-prisma/
-├── schema.prisma    Modèles de données
-├── seed.ts          Données de départ
-└── migrations/      Migrations Prisma
-
-public/uploads/      Fichiers envoyés depuis l'administration
-```
-
-## Documentation complémentaire
-
-- `DEPLOY.md` détaille le déploiement Docker, les webhooks et les commandes serveur.
-- `DATABASE.md` détaille la configuration MySQL, la persistance et les sauvegardes.
-
-## Notes de sécurité
-
-- Ne jamais versionner le fichier `.env`.
-- Générer un vrai `NEXTAUTH_SECRET` avant la production :
-
-```bash
-openssl rand -base64 32
-```
-
-- Remplacer les comptes de test après le premier déploiement.
-- Vérifier les règles Traefik dans `docker-compose.yml` avant d'exposer l'application publiquement.
-
-## Licence
-
-Tous droits réservés.
-
-Ce projet est privé. Aucune utilisation, copie, modification, distribution, publication ou réutilisation du code n'est autorisée sans accord écrit préalable du propriétaire du projet.
+- Intervalle : 5 min ;- Alertes sur statut `!= 200` ou temps de réponse > seuil ;- Surveiller en parallèle `logs/app.log` et `logs/php-error.log` côté serveur.

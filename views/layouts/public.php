@@ -1,0 +1,554 @@
+<?php
+
+declare(strict_types=1);
+
+/**
+ * Layout public AEIC.
+ *
+ * @var string $content HTML rendu par la vue.
+ * @var string $title
+ * @var string $description
+ */
+
+use App\Core\Auth;
+use App\Core\Permissions;
+use App\Models\Setting;
+
+$siteName     = Setting::get('site_name', 'AEIC');
+$siteDesc     = Setting::get('site_description', 'Association Étudiante Informatique de Calais.');
+$currentYear  = date('Y');
+$currentPath  = $_SERVER['REQUEST_URI'] ?? '/';
+$canonical    = APP_URL . strtok($currentPath, '?');
+$user         = Auth::check() ? Auth::user() : null;
+$lang         = current_lang();
+
+$langs       = available_langs();
+
+// SEO : titres et descriptions par défaut + Open Graph.
+$pageTitle    = $title ?? $siteName;
+$pageDesc     = (isset($description) && trim((string) $description) !== '') ? $description : $siteDesc;
+$ogImage      = !empty($ogImage)
+    ? (is_absolute_url($ogImage) ? $ogImage : APP_URL . '/' . ltrim($ogImage, '/'))
+    : (!empty(Setting::get('og_image'))
+        ? (is_absolute_url(Setting::get('og_image')) ? Setting::get('og_image') : APP_URL . '/' . ltrim(Setting::get('og_image'), '/'))
+        : asset('img/og-default.svg'));
+$twitterHandle = Setting::get('twitter_handle', '');
+
+// Fiche Google Business Profile : lien Maps stable (NAP cohérent avec la fiche).
+$mapsUrl = 'https://www.google.com/maps/search/?api=1&query='
+    . rawurlencode('AEIC - Association des Etudiants Informatique de Calais 19 Rue Louis David 62100 Calais');
+?>
+<!DOCTYPE html>
+<html lang="<?= e($lang) ?>">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#08172d">
+    <title><?= e($pageTitle) ?></title>
+    <meta name="description" content="<?= e($pageDesc) ?>">
+    <meta name="keywords" content="<?= e(Setting::get('seo_keywords', 'AEIC, association étudiante Calais, BUT informatique, BUT informatique Calais, informatique Calais, association Calais, IUT de Calais, IUT Calais, rentrée IUT Calais, ULCO, ULCO IUT, IUT ULCO, ULCO informatique, Université du Littoral Côte d\'Opale, Côte d\'Opale, informatique association, IUT association, BDE info, BDE informatique Calais, vie étudiante Calais, campus Calais, cafétéria IUT Calais, Adrien Remond, Nuit de l\'Info, asso Calais, étudiants informatique Calais')) ?>">
+    <link rel="canonical" href="<?= e($canonical) ?>">
+    <?php if (trim((string) Setting::get('google_site_verification', '')) !== ''): ?>
+        <meta name="google-site-verification" content="<?= e(Setting::get('google_site_verification', '')) ?>">
+    <?php endif; ?>
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="<?= e($ogType ?? 'website') ?>">
+    <meta property="og:title" content="<?= e($pageTitle) ?>">
+    <meta property="og:description" content="<?= e($pageDesc) ?>">
+    <meta property="og:url" content="<?= e($canonical) ?>">
+    <meta property="og:site_name" content="<?= e($siteName) ?>">
+    <meta property="og:image" content="<?= e($ogImage) ?>">
+    <meta property="og:locale" content="<?= e(lang_locale($lang)) ?>">
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="<?= e($pageTitle) ?>">
+    <meta name="twitter:description" content="<?= e($pageDesc) ?>">
+    <meta name="twitter:image" content="<?= e($ogImage) ?>">
+    <?php if ($twitterHandle !== ''): ?>
+        <meta name="twitter:site" content="<?= e($twitterHandle) ?>">
+    <?php endif; ?>
+
+    <?php if (!empty($jsonLd)): ?>
+        <script type="application/ld+json"><?= $jsonLd ?></script>
+    <?php endif; ?>
+
+    <link rel="icon" href="<?= e(asset('img/favicon.svg')) ?>" type="image/svg+xml">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="apple-touch-icon" href="<?= e(asset('img/icon.svg')) ?>">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="AEIC">
+    <link rel="stylesheet" href="<?= e(assetVersioned('css/base.css')) ?>">
+    <link rel="stylesheet" href="<?= e(assetVersioned('css/pages.css')) ?>">
+    <link rel="stylesheet" href="<?= e(assetVersioned('css/kit.css')) ?>">
+    <link rel="stylesheet" href="<?= e(rootAssetVersioned('/css/payments.css')) ?>">
+    <link rel="stylesheet" href="<?= e(assetVersioned('css/assistant.css')) ?>">
+    <?php if (str_starts_with($currentPath ?? '', '/sondages')): ?>
+        <link rel="stylesheet" href="<?= e(rootAssetVersioned('/css/polls.css')) ?>">
+    <?php endif; ?>
+
+    <!-- Thème clair/sombre : appliqué avant le rendu pour éviter tout flash. -->
+    <script>
+        (function () {
+            try {
+                var t = localStorage.getItem('aeic-theme');
+                if (t === 'light' || t === 'dark') {
+                    document.documentElement.setAttribute('data-theme', t);
+                }
+            } catch (e) {}
+        })();
+    </script>
+</head>
+<body>
+    <a class="skip-link" href="#contenu"><?= e(t('nav.skip')) ?></a>
+
+    <header class="site-header">
+        <div class="container nav-bar">
+            <a class="brand" href="<?= e(url('/')) ?>" aria-label="<?= e($siteName) ?> — <?= e(t('nav.home')) ?>">
+                <span class="brand-logo" aria-hidden="true">AE</span>
+                <span class="brand-text">
+                    <span class="brand-sub"><?= e(t('brand.sub')) ?></span>
+                    <span class="brand-name"><?= e($siteName) ?></span>
+                </span>
+            </a>
+
+            <nav class="main-nav" aria-label="<?= e(t('nav.main.aria')) ?>">
+                <a class="nav-link<?= $currentPath === '/' ? ' is-active' : '' ?>" href="<?= e(url('/')) ?>"><?= e(t('nav.home')) ?></a>
+                <a class="nav-link<?= str_starts_with($currentPath, '/events') ? ' is-active' : '' ?>" href="<?= e(url('/events')) ?>"><?= e(t('nav.events')) ?></a>
+                <a class="nav-link<?= $currentPath === '/presentation' ? ' is-active' : '' ?>" href="<?= e(url('/presentation')) ?>"><?= e(t('nav.about')) ?></a>
+                <a class="nav-link<?= $currentPath === '/team' ? ' is-active' : '' ?>" href="<?= e(url('/team')) ?>"><?= e(t('nav.team')) ?></a>
+                <a class="nav-link<?= str_starts_with($currentPath, '/sondages') ? ' is-active' : '' ?>" href="<?= e(url('/sondages')) ?>"><?= e(t('nav.polls')) ?></a>
+                <a class="nav-link<?= str_starts_with($currentPath, '/galerie') ? ' is-active' : '' ?>" href="<?= e(url('/galerie')) ?>"><?= e(t('nav.gallery')) ?></a>
+                <a class="nav-link<?= str_starts_with($currentPath, '/jeux') ? ' is-active' : '' ?>" href="<?= e(url('/jeux')) ?>"><?= e(t('nav.games')) ?></a>
+            </nav>
+
+            <div class="nav-actions">
+                <div class="lang-dropdown" id="lang-dropdown">
+                    <button type="button" class="lang-current" id="lang-current"
+                            aria-haspopup="true" aria-expanded="false" aria-controls="lang-menu"
+                            title="<?= e(t('nav.lang.change')) ?>">
+                        <span class="lang-name"><?= e(strtoupper($lang)) ?></span>
+                        <span class="lang-caret" aria-hidden="true">▾</span>
+                    </button>
+                    <ul class="lang-menu" id="lang-menu" role="menu" hidden>
+                        <?php foreach ($langs as $code): ?>
+                            <li role="none">
+                                <a role="menuitemradio" aria-checked="<?= $code === $lang ? 'true' : 'false' ?>"
+                                   class="lang-menu-item<?= $code === $lang ? ' is-active' : '' ?>"
+                                   href="<?= e(url('/set-lang?lang=' . $code . '&redirect=' . rawurlencode($currentPath))) ?>">
+                                    <span class="lang-name"><?= e(t('lang.' . $code)) ?></span>
+                                </a>
+                            </li>
+                        <?php endforeach; ?>
+                    </ul>
+                </div>
+
+                <button type="button" class="nav-theme-btn" id="theme-toggle"
+                        aria-label="<?= e(t('nav.theme.toggle')) ?>" title="<?= e(t('nav.theme.light.dark')) ?>">
+                    <span class="theme-icon-dark" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg></span>
+                    <span class="theme-icon-light" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></span>
+                </button>
+
+                <?php if ($user !== null): ?>
+                    <div class="nav-bell" id="nav-notif">
+                        <button type="button"
+                                class="nav-bell-btn"
+                                id="notif-toggle"
+                                aria-label="<?= e(t('nav.notifications')) ?>">
+                            <span aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></span>
+                            <span class="nav-bell-badge" id="notif-badge" hidden>0</span>
+                        </button>
+                        <div class="nav-bell-dropdown" id="notif-dropdown" hidden>
+                            <div class="nav-bell-head">
+                                <strong><?= e(t('nav.notifications')) ?></strong>
+                                <button type="button" class="nav-bell-readall" id="notif-readall"><?= e(t('nav.notifications.markall')) ?></button>
+                            </div>
+                            <ul class="nav-bell-list" id="notif-list">
+                                <li class="nav-bell-empty"><?= e(t('nav.notifications.empty')) ?></li>
+                            </ul>
+                        </div>
+                    </div>
+                <?php endif; ?>
+
+                <?php if ($user !== null): ?>
+                    <?php if (Permissions::isAdminRole((string) ($user['role'] ?? ''))): ?>
+                        <a class="btn btn-primary btn-sm" href="<?= e(url('/admin')) ?>"><?= e(t('nav.admin')) ?></a>
+                    <?php endif; ?>
+                    <a class="btn btn-outline btn-sm" href="<?= e(url('/account/privacy')) ?>"><?= e($user['prenom'] ?? t('nav.account')) ?></a>
+                    <a class="btn btn-ghost btn-sm" href="<?= e(url('/logout') . '?t=' . csrf_token()) ?>"><?= e(t('nav.logout')) ?></a>
+                <?php else: ?>
+                    <a class="btn btn-ghost btn-sm" href="<?= e(url('/login')) ?>"><?= e(t('nav.login')) ?></a>
+                    <a class="btn btn-primary btn-sm" href="<?= e(url('/register')) ?>"><?= e(t('nav.register')) ?></a>
+                <?php endif; ?>
+            </div>
+
+            <button class="nav-toggle" type="button" aria-label="<?= e(t('nav.open_menu')) ?>"
+                    aria-expanded="false" aria-controls="mobile-nav" id="nav-toggle-btn">
+                <span></span><span></span><span></span>
+            </button>
+        </div>
+
+        <div class="mobile-nav-overlay" id="mobile-nav-overlay"></div>
+        <nav id="mobile-nav" class="mobile-nav" aria-label="<?= e(t('nav.main.aria')) ?>">
+            <div class="mobile-nav-links">
+                <a href="<?= e(url('/')) ?>"><?= e(t('nav.home')) ?></a>
+                <a href="<?= e(url('/events')) ?>"><?= e(t('nav.events')) ?></a>
+                <a href="<?= e(url('/presentation')) ?>"><?= e(t('nav.about')) ?></a>
+                <a href="<?= e(url('/team')) ?>"><?= e(t('nav.team')) ?></a>
+                <a href="<?= e(url('/sondages')) ?>"><?= e(t('nav.polls')) ?></a>
+                <a href="<?= e(url('/galerie')) ?>"><?= e(t('nav.gallery')) ?></a>
+                <a href="<?= e(url('/jeux')) ?>"><?= e(t('nav.games')) ?></a>
+            </div>
+
+            <div class="mobile-nav-section">
+                <select id="lang-select-mobile" class="mobile-lang-select" onchange="window.location.href=this.value">
+                    <?php foreach ($langs as $code): ?>
+                        <option value="<?= e(url('/set-lang?lang=' . $code . '&redirect=' . rawurlencode($currentPath))) ?>" <?= $code === $lang ? 'selected' : '' ?>>
+                            <?= e(strtoupper($code)) ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+                <button type="button" class="btn btn-ghost btn-sm mobile-theme-btn" id="theme-toggle-mobile">Thème</button>
+            </div>
+
+            <div class="mobile-nav-section mobile-nav-account">
+                <?php if ($user !== null): ?>
+                    <?php if (Permissions::isAdminRole((string) ($user['role'] ?? ''))): ?>
+                        <a class="btn btn-primary btn-sm" href="<?= e(url('/admin')) ?>"><?= e(t('nav.admin')) ?></a>
+                    <?php endif; ?>
+                    <a class="btn btn-outline btn-sm" href="<?= e(url('/account/privacy')) ?>"><?= e(t('nav.data')) ?></a>
+                    <a class="btn btn-ghost btn-sm" href="<?= e(url('/logout') . '?t=' . csrf_token()) ?>"><?= e(t('nav.logout')) ?></a>
+                <?php else: ?>
+                    <a class="btn btn-ghost btn-sm" href="<?= e(url('/login')) ?>"><?= e(t('nav.login')) ?></a>
+                    <a class="btn btn-primary btn-sm" href="<?= e(url('/register')) ?>"><?= e(t('nav.register')) ?></a>
+                <?php endif; ?>
+            </div>
+        </nav>
+    </header>
+
+    <main id="contenu">
+        <?php require AEIC_VIEWS . '/partials/flash_messages.php'; ?>
+        <?= $content ?>
+    </main>
+
+    <footer class="site-footer">
+        <div class="container footer-inner">
+            <div class="footer-top">
+                <div class="footer-brand">
+                    <div class="footer-logo aeic-gradient">AE</div>
+                    <div>
+                        <p class="footer-name"><?= e($siteName) ?></p>
+                        <p class="footer-sub"><?= e(t('footer.association')) ?></p>
+                        <p class="footer-loc">BUT Informatique · IUT de Calais · ULCO — Université du Littoral Côte d'Opale · Côte d'Opale</p>
+                        <p class="footer-loc">
+                            19 Rue Louis David, 62100 Calais ·
+                            <a href="<?= e($mapsUrl) ?>" target="_blank" rel="noopener">Google Maps</a>
+                        </p>
+                    </div>
+                </div>
+
+                <nav class="footer-links" aria-label="<?= e(t('footer.aria')) ?>">
+                    <a href="<?= e(url('/')) ?>"><?= e(t('nav.home')) ?></a>
+                    <a href="<?= e(url('/events')) ?>"><?= e(t('nav.events')) ?></a>
+                    <a href="<?= e(url('/presentation')) ?>"><?= e(t('nav.about')) ?></a>
+                    <a href="<?= e(url('/team')) ?>"><?= e(t('nav.team')) ?></a>
+                    <a href="<?= e(url('/sondages')) ?>"><?= e(t('nav.polls')) ?></a>
+                    <a href="<?= e(url('/galerie')) ?>"><?= e(t('nav.gallery')) ?></a>
+                    <a href="<?= e(url('/jeux')) ?>"><?= e(t('nav.games')) ?></a>
+                    <a href="<?= e(url('/legal')) ?>"><?= e(t('footer.legal')) ?></a>
+                    <a href="<?= e(url('/privacy')) ?>"><?= e(t('footer.privacy')) ?></a>
+                    <a href="<?= e(url('/cgu')) ?>"><?= e(t('footer.cgu')) ?></a>
+                </nav>
+            </div>
+
+                <div class="footer-bottom">
+                    <span class="footer-partners">
+                        <span class="footer-partners-label">Notre IUT</span>
+                        <a href="https://www.facebook.com/IUTinfoCalais/" target="_blank" rel="noopener" class="footer-partner-link">IUT Informatique Calais</a>
+                        <a href="https://www.univ-littoral.fr/" target="_blank" rel="noopener" class="footer-partner-link">ULCO</a>
+                    </span>
+                    <span class="footer-tag"><?= e(t('footer.tag')) ?></span>
+                    <span class="footer-copy">© <?= e($currentYear) ?> <?= e($siteName) ?> · <?= e(t('footer.copy')) ?></span>
+                    <span class="footer-credit">Développé par <strong><a href="https://aremond.ovh/" target="_blank" rel="noopener" class="footer-credit-link">Adrien Remond</a></strong></span>
+                </div>
+        </div>
+    </footer>
+
+    <script>
+        // Menu mobile avec overlay + animation.
+        (function () {
+            var btn = document.getElementById('nav-toggle-btn');
+            var nav = document.getElementById('mobile-nav');
+            var overlay = document.getElementById('mobile-nav-overlay');
+            if (!btn || !nav) return;
+
+            function openMenu() {
+                scrollY = window.scrollY;
+                document.body.style.position = 'fixed';
+                document.body.style.top = '-' + scrollY + 'px';
+                document.body.style.width = '100%';
+                nav.classList.add('is-open');
+                btn.classList.add('is-open');
+                if (overlay) overlay.classList.add('is-open');
+                btn.setAttribute('aria-expanded', 'true');
+            }
+            function closeMenu() {
+                document.body.style.position = '';
+                document.body.style.top = '';
+                document.body.style.width = '';
+                window.scrollTo(0, scrollY);
+                nav.classList.remove('is-open');
+                btn.classList.remove('is-open');
+                if (overlay) overlay.classList.remove('is-open');
+                btn.setAttribute('aria-expanded', 'false');
+            }
+
+            var scrollY = 0;
+
+            btn.addEventListener('click', function () {
+                if (nav.classList.contains('is-open')) { closeMenu(); } else { openMenu(); }
+            });
+            if (overlay) overlay.addEventListener('click', closeMenu);
+            document.addEventListener('keydown', function (e) {
+                if (e.key === 'Escape' && nav.classList.contains('is-open')) { closeMenu(); }
+            });
+            nav.querySelectorAll('a').forEach(function (a) {
+                a.addEventListener('click', closeMenu);
+            });
+        })();
+
+        // Toggle thème clair / sombre (persistance localStorage).
+        (function () {
+            var STORAGE_KEY = 'aeic-theme';
+            var root = document.documentElement;
+
+            function current() {
+                return root.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+            }
+
+            function apply(theme) {
+                root.setAttribute('data-theme', theme);
+                try { localStorage.setItem(STORAGE_KEY, theme); } catch (e) {}
+                document.querySelectorAll('[data-theme-active]').forEach(function (el) {
+                    el.setAttribute('data-theme-active', theme);
+                });
+            }
+
+            apply(current());
+
+            function toggle() { apply(current() === 'light' ? 'dark' : 'light'); }
+
+            var btn = document.getElementById('theme-toggle');
+            if (btn) btn.addEventListener('click', toggle);
+            var btnMobile = document.getElementById('theme-toggle-mobile');
+            if (btnMobile) btnMobile.addEventListener('click', toggle);
+        })();
+    </script>
+
+    <?php /* CSRF exposé à TOUS les visiteurs — y compris anonymes : le widget
+       assistant public (POST /assistant/ask) en a besoin. csrf_token()
+       démarre la session si nécessaire (déjà ouverte via Auth::check()
+       plus haut, avant toute sortie). */ ?>
+    <script>window.AEIC_CSRF = <?= json_encode(csrf_token()) ?>;</script>
+    <script>window.AEIC_I18N = {
+        notifEmpty: <?= json_encode(t('nav.notifications.empty')) ?>,
+        justNow: <?= json_encode($lang === 'fr' ? "à l'instant" : ($lang === 'en' ? 'just now' : ($lang === 'de' ? 'gerade eben' : ($lang === 'es' ? 'justo ahora' : ($lang === 'zh' ? '刚刚' : ($lang === 'ja' ? 'たった今' : 'przed chwilą')))))) ?>,
+        minutesAgo: <?= json_encode($lang === 'fr' ? 'il y a %d min' : ($lang === 'en' ? '%d min ago' : ($lang === 'de' ? 'vor %d Min.' : ($lang === 'es' ? 'hace %d min' : ($lang === 'zh' ? '%d 分钟前' : ($lang === 'ja' ? '%d分前' : '%d min temu')))))) ?>,
+        hoursAgo: <?= json_encode($lang === 'fr' ? 'il y a %d h' : ($lang === 'en' ? '%d h ago' : ($lang === 'de' ? 'vor %d Std.' : ($lang === 'es' ? 'hace %d h' : ($lang === 'zh' ? '%d 小时前' : ($lang === 'ja' ? '%d時間前' : '%d godz. temu')))))) ?>,
+        daysAgo: <?= json_encode($lang === 'fr' ? 'il y a %d j' : ($lang === 'en' ? '%d d ago' : ($lang === 'de' ? 'vor %d Tg.' : ($lang === 'es' ? 'hace %d d' : ($lang === 'zh' ? '%d 天前' : ($lang === 'ja' ? '%d日前' : '%d dni temu')))))) ?>
+    };</script>
+
+    <script>
+        (function () {
+            function esc(s) {
+                var d = document.createElement('div');
+                d.textContent = s == null ? '' : String(s);
+                return d.innerHTML;
+            }
+
+            // Notifications (uniquement si connecté).
+            var notifBox = document.getElementById('nav-notif');
+            if (notifBox && window.AEIC_CSRF) {
+                var badge = document.getElementById('notif-badge');
+                var list = document.getElementById('notif-list');
+                var dropdown = document.getElementById('notif-dropdown');
+                var toggle = document.getElementById('notif-toggle');
+                var readAll = document.getElementById('notif-readall');
+
+                function timeAgo(iso) {
+                    if (!iso) return '';
+                    var then = new Date(iso.replace(' ', 'T') + 'Z');
+                    var diff = Math.round((Date.now() - then.getTime()) / 60000);
+                    var i18n = window.AEIC_I18N || {};
+                    if (diff < 1) return i18n.justNow || '';
+                    if (diff < 60) return (i18n.minutesAgo || '').replace('%d', diff);
+                    if (diff < 1440) return (i18n.hoursAgo || '').replace('%d', Math.floor(diff / 60));
+                    return (i18n.daysAgo || '').replace('%d', Math.floor(diff / 1440));
+                }
+
+                function render(payload) {
+                    var n = payload.count || 0;
+                    if (n > 0) { badge.hidden = false; badge.textContent = n > 99 ? '99+' : n; }
+                    else { badge.hidden = true; }
+
+                    var items = payload.items || [];
+                    if (!items.length) {
+                        list.innerHTML = '<li class="nav-bell-empty">' + ((window.AEIC_I18N || {}).notifEmpty || '') + '</li>';
+                        return;
+                    }
+                    list.innerHTML = '';
+                    items.forEach(function (it) {
+                        var li = document.createElement('li');
+                        li.className = 'nav-bell-item' + (it.is_read ? ' is-read' : '');
+                        var inner = '<div class="nav-bell-item-title">' + esc(it.title) + '</div>';
+                        if (it.body) inner += '<div class="nav-bell-item-body">' + esc(it.body) + '</div>';
+                        inner += '<div class="nav-bell-item-meta">' + timeAgo(it.created_at) + '</div>';
+                        if (it.url) {
+                            var a = document.createElement('a');
+                            a.href = it.url;
+                            a.innerHTML = inner;
+                            li.appendChild(a);
+                        } else {
+                            li.innerHTML = inner;
+                        }
+                        list.appendChild(li);
+                    });
+                }
+
+                function load() {
+                    fetch(<?= json_encode(url('/api/notifications')) ?>, {
+                        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                    })
+                        .then(function (r) { return r.json(); })
+                        .then(render)
+                        .catch(function () {});
+                }
+
+                toggle.addEventListener('click', function (e) {
+                    e.stopPropagation();
+                    dropdown.hidden = !dropdown.hidden;
+                });
+                document.addEventListener('click', function (e) {
+                    if (!notifBox.contains(e.target)) dropdown.hidden = true;
+                });
+                document.addEventListener('keydown', function (e) {
+                    if (e.key === 'Escape') dropdown.hidden = true;
+                });
+
+                readAll.addEventListener('click', function () {
+                    fetch(<?= json_encode(url('/api/notifications/read-all')) ?>, {
+                        method: 'POST',
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'X-CSRF-Token': window.AEIC_CSRF
+                        }
+                    }).then(function () { load(); });
+                });
+
+                load();
+                setInterval(load, 60000);
+            }
+        })();
+    </script>
+    <script src="<?= e(rootAssetVersioned('/assets/js/confirm.js')) ?>"></script>
+    <script src="<?= e(assetVersioned('js/kit.js')) ?>"></script>
+
+    <!-- Bandelette cookies -->
+    <div class="cookie-banner" id="cookie-banner" hidden>
+        <div class="cookie-banner-inner">
+            <span class="cookie-text">
+                Ce site utilise un <strong>cookie de session strictement nécessaire</strong> (connexion). Aucune publicité, aucun tracking.
+                <a href="<?= e(url('/privacy')) ?>">En savoir plus →</a>
+            </span>
+            <button type="button" class="btn btn-primary btn-sm" id="cookie-ok">OK</button>
+        </div>
+    </div>
+    <script>
+    (function(){
+        if (localStorage.getItem('aeic_cookie_ok') === '1') return;
+        var b = document.getElementById('cookie-banner');
+        var btn = document.getElementById('cookie-ok');
+        if (!b || !btn) return;
+        b.hidden = false;
+        btn.addEventListener('click', function(){
+            localStorage.setItem('aeic_cookie_ok', '1');
+            b.classList.add('is-closing');
+            setTimeout(function(){ b.hidden = true; }, 300);
+        });
+    })();
+    </script>
+
+    <!-- Dropdown de langue : ouverture, fermeture au clic extérieur et à Échap. -->
+    <script>
+        (function () {
+            var box = document.getElementById('lang-dropdown');
+            var btn = document.getElementById('lang-current');
+            var menu = document.getElementById('lang-menu');
+            if (!box || !btn || !menu) return;
+
+            function open() {
+                menu.hidden = false;
+                btn.setAttribute('aria-expanded', 'true');
+            }
+            function close() {
+                menu.hidden = true;
+                btn.setAttribute('aria-expanded', 'false');
+            }
+            function toggle() { menu.hidden ? open() : close(); }
+
+            btn.addEventListener('click', function (e) {
+                e.stopPropagation();
+                toggle();
+            });
+            document.addEventListener('click', function (e) {
+                if (!box.contains(e.target)) close();
+            });
+            document.addEventListener('keydown', function (e) {
+                if (e.key === 'Escape') close();
+            });
+        })();
+    </script>
+
+    <!-- Assistant public : widget chat flottant bas-droite (bulle + panneau).
+         Styles dédiés assets/css/assistant.css, logique assets/js/assistant.js
+         (rendu textContent uniquement). Présent uniquement dans CE layout. -->
+    <button type="button" class="assistant-bubble" id="assistant-bubble"
+            aria-label="Ouvrir le chat assistant" aria-expanded="false" aria-controls="assistant-panel"
+            title="Assistant AEIC">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+    </button>
+
+    <div class="assistant-panel" id="assistant-panel" role="dialog" aria-label="Chat assistant AEIC" hidden>
+        <div class="assistant-head">
+            <div class="assistant-head-info">
+                <span class="assistant-head-title">Assistant AEIC</span>
+            </div>
+            <button type="button" class="assistant-icon-btn" id="assistant-clear"
+                    aria-label="Effacer la conversation" title="Effacer la conversation">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            </button>
+            <button type="button" class="assistant-icon-btn" id="assistant-close"
+                    aria-label="Fermer le chat assistant" title="Fermer le chat assistant">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+            </button>
+        </div>
+        <div class="assistant-log" id="assistant-log" role="log" aria-live="polite" aria-label="Messages de la conversation"></div>
+        <form class="assistant-form" id="assistant-form">
+            <textarea class="assistant-input" id="assistant-input" rows="1" maxlength="500"
+                      placeholder="Pose ta question…" aria-label="Ta question" autocomplete="off"></textarea>
+            <button type="submit" class="assistant-send" id="assistant-send" aria-label="Envoyer" title="Envoyer">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m22 2-7 20-4-9-9-4z"/><path d="M22 2 11 13"/></svg>
+            </button>
+        </form>
+        <div class="assistant-foot">
+            <span class="assistant-count" id="assistant-count">0 / 500</span>
+        </div>
+    </div>
+    <script src="<?= e(assetVersioned('js/assistant.js')) ?>" defer></script>
+
+    <!-- PWA : enregistrement du service worker -->
+    <script>if ('serviceWorker' in navigator) { window.addEventListener('load', function () { navigator.serviceWorker.register('/sw.js').catch(function () {}); }); }</script>
+</body>
+</html>

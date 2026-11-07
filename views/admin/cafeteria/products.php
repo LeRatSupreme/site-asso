@@ -1,0 +1,84 @@
+<?php
+
+declare(strict_types=1);
+
+/**
+ * @var list<array<string,mixed>> $products
+ */
+?>
+<div class="admin-actions" style="display:flex;gap:1rem;align-items:center;flex-wrap:wrap;">
+    <a class="btn btn-primary" href="<?= e(url('/admin/cafeteria/new')) ?>">+ Nouveau produit</a>
+    <form method="post" action="<?= e(url('/admin/cafeteria/sync')) ?>" data-preserve-scroll style="display:flex;gap:0.75rem;align-items:center;flex-wrap:wrap;">
+        <?= csrf_field() ?>
+        <button type="submit" class="btn btn-outline">⟳ Synchroniser la carte</button>
+        <span class="muted" style="font-size:0.82rem;max-width:480px;">
+            Crée automatiquement les fiches des nouveaux produits détectés dans les ventes, achats, pertes et comptages (catégorie + stock déduits).
+        </span>
+    </form>
+</div>
+
+<div class="card surface glass table-wrap">
+    <table class="table">
+        <thead><tr>
+            <th>Image</th>
+            <th>Produit</th>
+            <th>Description</th>
+            <th>Catégorie</th>
+            <th>Prix</th>
+            <th title="Stock théorique : dernier comptage + achats − ventes − pertes (suit les ventes en temps réel)">Stock (théorique)</th>
+            <th>Statut</th>
+            <th>Actions</th>
+        </tr></thead>
+        <tbody>
+            <?php foreach ($products as $p):
+                $imgUrl = (string) ($p['image'] ?? '');
+                $imgFull = $imgUrl !== '' ? (is_absolute_url($imgUrl) ? $imgUrl : asset(ltrim($imgUrl, '/'))) : '';
+            ?>
+                <tr>
+                    <td>
+                        <?php if ($imgFull !== ''): ?>
+                            <img src="<?= e($imgFull) ?>" alt="" style="width:44px;height:44px;object-fit:cover;border-radius:8px;">
+                        <?php else: ?>
+                            <span style="font-size:1.4rem;"><?= e(\product_emoji((string) ($p['name'] ?? ''))) ?></span>
+                        <?php endif; ?>
+                    </td>
+                    <td>
+                        <strong><?= e($p['name'] ?? '') ?></strong>
+                    </td>
+                    <td>
+                        <?php $desc = trim((string) ($p['description'] ?? '')); ?>
+                        <?php if ($desc !== ''): ?>
+                            <span class="muted" style="font-size:0.82rem;max-width:200px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="<?= e($desc) ?>"><?= e($desc) ?></span>
+                        <?php else: ?>
+                            <span class="muted">—</span>
+                        <?php endif; ?>
+                    </td>
+                    <td><?= e($p['category_name'] ?? '—') ?></td>
+                    <td><strong><?= e(formatPrice($p['price'] ?? 0)) ?></strong></td>
+                    <?php $theo = $p['theoretical_stock'] ?? null; ?>
+                    <?php if ($theo !== null): ?>
+                        <td><strong><?= e((string) max(0, (int) $theo)) ?></strong></td>
+                    <?php else: ?>
+                        <td class="muted" title="Produit non suivi en inventaire — stock de la fiche (statique)"><?= e((string) ($p['stock'] ?? 0)) ?></td>
+                    <?php endif; ?>
+                    <td>
+                        <?php if (!empty($p['is_available']) && !empty($p['is_active'])): ?>
+                            <span class="badge badge-success">Dispo</span>
+                        <?php elseif (!empty($p['is_active'])): ?>
+                            <span class="badge badge-warning">Indispo</span>
+                        <?php else: ?>
+                            <span class="badge badge-muted">Masqué</span>
+                        <?php endif; ?>
+                    </td>
+                    <td class="row-actions">
+                        <a class="btn btn-outline btn-sm" href="<?= e(url('/admin/cafeteria/' . rawurlencode((string) $p['id']) . '/edit')) ?>">Modifier</a>
+                        <form method="post" action="<?= e(url('/admin/cafeteria/' . rawurlencode((string) $p['id']) . '/delete')) ?>" data-confirm="Supprimer ce produit ?" data-preserve-scroll>
+                            <?= csrf_field() ?>
+                            <button type="submit" class="btn btn-danger btn-sm">Supprimer</button>
+                        </form>
+                    </td>
+                </tr>
+            <?php endforeach; ?>
+        </tbody>
+    </table>
+</div>

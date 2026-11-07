@@ -1,0 +1,140 @@
+{
+  "mission": "AEIC T1-P2 fine-tune (brief P3, kernel v3 OFFLINE CPU)",
+  "offline": {
+    "mode": "100% offline : zero pip, zero reseau, zero telechargement",
+    "env": {
+      "HF_HUB_OFFLINE": "1",
+      "TRANSFORMERS_OFFLINE": "1"
+    },
+    "kernel_metadata": {
+      "enable_gpu": false,
+      "enable_internet": false
+    }
+  },
+  "dataset": {
+    "id": "adrienremond/aeic-t1-p2-pairs",
+    "files": {
+      "train_pairs.csv": 1783,
+      "val_pairs.csv": 178
+    },
+    "columns": [
+      "texte_variante",
+      "cible"
+    ],
+    "note": "dataset prive, decision D3 (libelles produits seuls), revue anonymisation P2-SEC CONFORME"
+  },
+  "config": {
+    "seed": 42,
+    "base_model": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+    "base_model_dataset": {
+      "id": "adrienremond/aeic-t1-ml-base",
+      "mounted_at": "/kaggle/input/aeic-t1-ml-base",
+      "model_safetensors_sha256": "eaa086f0ffee582aeb45b36e34cdd1fe2d6de2bef61f8a559a1bbc9bd955917b",
+      "integrity_verified": true,
+      "source": "repo HF officiel sentence-transformers, poids fp32 (pas l'ONNX int8)"
+    },
+    "versions_reelles": {
+      "sentence_transformers": "5.7.0",
+      "transformers": "5.16.1",
+      "torch": "2.11.0+cpu"
+    },
+    "training_api": "SentenceTransformer.old_fit (boucle torch pure ST 5.x, sans libs optionnelles datasets/accelerate)",
+    "torch_threads": 4,
+    "device": "CPU",
+    "loss": "MultipleNegativesRankingLoss",
+    "anchor": "texte_variante",
+    "positive": "cible",
+    "batch_size": 64,
+    "lr": 2e-05,
+    "min_epochs": 3,
+    "max_epochs": 5,
+    "patience_early_stopping": 2,
+    "early_stopping_metric": "val recall_at_1 (rappel d'identification, classement cosinus des cibles uniques de val)",
+    "warmup_steps_total": 14,
+    "time_budget_seconds": 3300
+  },
+  "val_zero_shot": {
+    "cos_loss": 0.321221,
+    "recall_at_1": 0.786517,
+    "recall_at_5": 0.898876,
+    "mrr": 0.835458
+  },
+  "history": [
+    {
+      "epoch": 1,
+      "epoch_seconds": 135.0,
+      "train_cos_loss": 0.272783,
+      "val": {
+        "cos_loss": 0.267546,
+        "recall_at_1": 0.938202,
+        "recall_at_5": 0.988764,
+        "mrr": 0.962594
+      }
+    },
+    {
+      "epoch": 2,
+      "epoch_seconds": 135.0,
+      "train_cos_loss": 0.256372,
+      "val": {
+        "cos_loss": 0.257723,
+        "recall_at_1": 0.966292,
+        "recall_at_5": 0.994382,
+        "mrr": 0.979731
+      }
+    },
+    {
+      "epoch": 3,
+      "epoch_seconds": 132.0,
+      "train_cos_loss": 0.239472,
+      "val": {
+        "cos_loss": 0.240213,
+        "recall_at_1": 0.983146,
+        "recall_at_5": 0.994382,
+        "mrr": 0.989196
+      }
+    },
+    {
+      "epoch": 4,
+      "epoch_seconds": 130.3,
+      "train_cos_loss": 0.23067,
+      "val": {
+        "cos_loss": 0.231817,
+        "recall_at_1": 0.983146,
+        "recall_at_5": 0.994382,
+        "mrr": 0.989232
+      }
+    },
+    {
+      "epoch": 5,
+      "epoch_seconds": 131.8,
+      "train_cos_loss": 0.221432,
+      "val": {
+        "cos_loss": 0.223519,
+        "recall_at_1": 0.988764,
+        "recall_at_5": 0.994382,
+        "mrr": 0.992376
+      }
+    }
+  ],
+  "best": {
+    "epoch": 5,
+    "cos_loss": 0.223519,
+    "recall_at_1": 0.988764,
+    "recall_at_5": 0.994382,
+    "mrr": 0.992376
+  },
+  "final_epoch": 5,
+  "final_train_cos_loss": 0.221432,
+  "final_val": {
+    "cos_loss": 0.223519,
+    "recall_at_1": 0.988764,
+    "recall_at_5": 0.994382,
+    "mrr": 0.992376
+  },
+  "gain_val_recall_at_1_vs_zero_shot": 0.202247,
+  "stopped_early": false,
+  "time_budget_hit": false,
+  "epochs_run": 5,
+  "model_dir": "/kaggle/working/model",
+  "total_seconds": 823.7
+}

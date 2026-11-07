@@ -1,0 +1,200 @@
+libelle_a,libelle_b,forme_a,forme_b,famille
+Bonbon,"Bonbon Haribo",bonbon,bonbonharibo,bonbon
+"Bowling ( 2 parties )","bowling 2personnes",bowling2parties,bowling2personnes,bowling
+bowling,"bowling 2personnes",bowling,bowling2personnes,bowling
+Bueno,"Bueno white",bueno,buenowhite,bueno
+"Chips BBQ","Chips Nature",chipsbbq,chipsnature,chips
+"Coca Cherry","Coca Cola",cocacherry,cocacola,coca
+"Coca Cherry","Coca Zero",cocacherry,cocazero,coca
+"Coca Cherry","Coca sans sucre",cocacherry,cocasanssucre,coca
+"Coca Cola","Coca Zero",cocacola,cocazero,coca
+"Coca Cola","Coca sans sucre",cocacola,cocasanssucre,coca
+Crunch,"crunch Snak Barres",crunch,crunchsnakbarres,crunch
+Fanta,"Fanta Cassis",fanta,fantacassis,fanta
+Fanta,"Fanta Citron",fanta,fantacitron,fanta
+Fanta,"Fanta Exotique",fanta,fantaexotique,fanta
+Fanta,"Fanta Mangue Dragon",fanta,fantamanguedragon,fanta
+"Fanta Cassis","Fanta Citron",fantacassis,fantacitron,fanta
+"Fanta Cassis","Fanta Exotique",fantacassis,fantaexotique,fanta
+"Fanta Cassis","Fanta Mangue Dragon",fantacassis,fantamanguedragon,fanta
+"Fanta Cassis","Fanta Orange",fantacassis,fantaorange,fanta
+"Fanta Citron","Fanta Exotique",fantacitron,fantaexotique,fanta
+"Fanta Citron","Fanta Mangue Dragon",fantacitron,fantamanguedragon,fanta
+"Fanta Citron","Fanta Orange",fantacitron,fantaorange,fanta
+"Fanta Exotique","Fanta Mangue Dragon",fantaexotique,fantamanguedragon,fanta
+"Fanta Exotique","Fanta Orange",fantaexotique,fantaorange,fanta
+"Fanta Mangue Dragon","Fanta Orange",fantamanguedragon,fantaorange,fanta
+Gauffre,"Gauffre + boissons (hors boissons energisante)",gauffre,gauffre+boissonshorsboissonsenergisante,gauffre
+Gauffre,"Gauffre choco",gauffre,gauffrechoco,gauffre
+"Gauffre + boissons (hors boissons energisante)","Gauffre choco",gauffre+boissonshorsboissonsenergisante,gauffrechoco,gauffre
+"Gaufre + boissons (hors boissons energisante)","Gaufre choco",gaufre+boissonshorsboissonsenergisante,gaufrechoco,gaufre
+gaufre,"Gaufre + boissons (hors boissons energisante)",gaufre,gaufre+boissonshorsboissonsenergisante,gaufre
+gaufre,"Gaufre choco",gaufre,gaufrechoco,gaufre
+"Minute Maid","Minute Maid Multi Vitamines",minutemaid,minutemaidmultivitamines,minute
+"Minute Maid","Minute Maid MultiVitamine",minutemaid,minutemaidmultivitamine,minute
+"Minute Maid","Minute Maid Nect Pomme",minutemaid,minutemaidnectpomme,minute
+"Minute Maid","Minute Maid Pomme",minutemaid,minutemaidpomme,minute
+"Minute Maid Multi Vitamines","Minute Maid Nect Pomme",minutemaidmultivitamines,minutemaidnectpomme,minute
+"Minute Maid Multi Vitamines","Minute Maid Orange",minutemaidmultivitamines,minutemaidorange,minute
+"Minute Maid Multi Vitamines","Minute Maid Pomme",minutemaidmultivitamines,minutemaidpomme,minute
+"Minute Maid MultiVitamine","Minute Maid Nect Pomme",minutemaidmultivitamine,minutemaidnectpomme,minute
+"Minute Maid MultiVitamine","Minute Maid Orange",minutemaidmultivitamine,minutemaidorange,minute
+"Minute Maid MultiVitamine","Minute Maid Pomme",minutemaidmultivitamine,minutemaidpomme,minute
+"Minute Maid Nect Pomme","Minute Maid Orange",minutemaidnectpomme,minutemaidorange,minute
+"Minute Maid Orange","Minute Maid Pomme",minutemaidorange,minutemaidpomme,minute
+"Monster Blanche","Monster Bleu",monsterblanche,monsterbleu,monster
+"Monster Blanche","Monster Bleue",monsterblanche,monsterbleue,monster
+"Monster Blanche","Monster Noire",monsterblanche,monsternoire,monster
+"Monster Blanche","Monster Rose",monsterblanche,monsterrose,monster
+"Monster Blanche","Monster Rose (punch)",monsterblanche,monsterrosepunch,monster
+"Monster Blanche","Monster Verte",monsterblanche,monsterverte,monster
+"Monster Blanche","Monster verte (energy)",monsterblanche,monsterverteenergy,monster
+"Monster Bleu","Monster Noire",monsterbleu,monsternoire,monster
+"Monster Bleu","Monster Rose",monsterbleu,monsterrose,monster
+"Monster Bleu","Monster Rose (punch)",monsterbleu,monsterrosepunch,monster
+"Monster Bleu","Monster Verte",monsterbleu,monsterverte,monster
+"Monster Bleu","Monster verte (energy)",monsterbleu,monsterverteenergy,monster
+"Monster Bleue","Monster Noire",monsterbleue,monsternoire,monster
+"Monster Bleue","Monster Rose",monsterbleue,monsterrose,monster
+"Monster Bleue","Monster Rose (punch)",monsterbleue,monsterrosepunch,monster
+"Monster Bleue","Monster Verte",monsterbleue,monsterverte,monster
+"Monster Bleue","Monster verte (energy)",monsterbleue,monsterverteenergy,monster
+"Monster Noire","Monster Rose",monsternoire,monsterrose,monster
+"Monster Noire","Monster Rose (punch)",monsternoire,monsterrosepunch,monster
+"Monster Noire","Monster Verte",monsternoire,monsterverte,monster
+"Monster Noire","Monster verte (energy)",monsternoire,monsterverteenergy,monster
+"Monster Rose","Monster Verte",monsterrose,monsterverte,monster
+"Monster Rose","Monster verte (energy)",monsterrose,monsterverteenergy,monster
+"Monster Rose (punch)","Monster Verte",monsterrosepunch,monsterverte,monster
+"Monster Rose (punch)","Monster verte (energy)",monsterrosepunch,monsterverteenergy,monster
+Oasis,"Oasis Ice Tea",oasis,oasisicetea,oasis
+Oasis,"Oasis Pomme Cassis Framboise",oasis,oasispommecassisframboise,oasis
+Oasis,"Oasis Thémangue Passion",oasis,oasisthemanguepassion,oasis
+Oasis,"Oasis ice tea the mangue passion",oasis,oasisiceteathemanguepassion,oasis
+Oasis,"Oasis pomme poire",oasis,oasispommepoire,oasis
+"Oasis Ice Tea","Oasis Pomme Cassis Framboise",oasisicetea,oasispommecassisframboise,oasis
+"Oasis Ice Tea","Oasis Thémangue Passion",oasisicetea,oasisthemanguepassion,oasis
+"Oasis Ice Tea","Oasis Tropical",oasisicetea,oasistropical,oasis
+"Oasis Ice Tea","Oasis ice tea the mangue passion",oasisicetea,oasisiceteathemanguepassion,oasis
+"Oasis Ice Tea","Oasis pomme poire",oasisicetea,oasispommepoire,oasis
+"Oasis Pomme Cassis Framboise","Oasis Thémangue Passion",oasispommecassisframboise,oasisthemanguepassion,oasis
+"Oasis Pomme Cassis Framboise","Oasis Tropical",oasispommecassisframboise,oasistropical,oasis
+"Oasis Pomme Cassis Framboise","Oasis pomme poire",oasispommecassisframboise,oasispommepoire,oasis
+"Oasis Thémangue Passion","Oasis Tropical",oasisthemanguepassion,oasistropical,oasis
+"Oasis ice tea the mangue passion","Oasis Pomme Cassis Framboise",oasisiceteathemanguepassion,oasispommecassisframboise,oasis
+"Oasis ice tea the mangue passion","Oasis Tropical",oasisiceteathemanguepassion,oasistropical,oasis
+"Oasis ice tea the mangue passion","Oasis pomme poire",oasisiceteathemanguepassion,oasispommepoire,oasis
+"Oasis pomme poire","Oasis Thémangue Passion",oasispommepoire,oasisthemanguepassion,oasis
+"Oasis pomme poire","Oasis Tropical",oasispommepoire,oasistropical,oasis
+Pepsi,"Pepsi Zero",pepsi,pepsizero,pepsi
+Pepsi,"Pepsi sans sucre",pepsi,pepsisanssucre,pepsi
+"RedBull Blanche","Redbull Bleu",redbullblanche,redbullbleu,redbull
+"RedBull Blanche","Redbull Blue",redbullblanche,redbullblue,redbull
+"RedBull Blanche","Redbull Ice",redbullblanche,redbullice,redbull
+"RedBull Blanche","Redbull Myrtille",redbullblanche,redbullmyrtille,redbull
+"RedBull Blanche","Redbull Peach",redbullblanche,redbullpeach,redbull
+"RedBull Blanche","Redbull Pomme",redbullblanche,redbullpomme,redbull
+"RedBull Blanche","Redbull Seablue",redbullblanche,redbullseablue,redbull
+"RedBull Blanche","Redbull Summer",redbullblanche,redbullsummer,redbull
+"RedBull Blanche","Redbull Winter",redbullblanche,redbullwinter,redbull
+"RedBull Blanche","Redbull zero",redbullblanche,redbullzero,redbull
+"RedBull Blanche",Redbull_Bleue,redbullblanche,redbullbleue,redbull
+"RedBull Blanche","redbull red",redbullblanche,redbullred,redbull
+Redbull,"Redbull Abricot",redbull,redbullabricot,redbull
+Redbull,"Redbull Bleu",redbull,redbullbleu,redbull
+Redbull,"Redbull Blue",redbull,redbullblue,redbull
+Redbull,"Redbull Ice",redbull,redbullice,redbull
+Redbull,"Redbull Myrtille",redbull,redbullmyrtille,redbull
+Redbull,"Redbull Peach",redbull,redbullpeach,redbull
+Redbull,"Redbull Pomme",redbull,redbullpomme,redbull
+Redbull,"Redbull Seablue",redbull,redbullseablue,redbull
+Redbull,"Redbull Summer",redbull,redbullsummer,redbull
+Redbull,"Redbull Winter",redbull,redbullwinter,redbull
+Redbull,"Redbull zero",redbull,redbullzero,redbull
+Redbull,Redbull_Bleue,redbull,redbullbleue,redbull
+Redbull,"redbull red",redbull,redbullred,redbull
+"Redbull Abricot","RedBull Blanche",redbullabricot,redbullblanche,redbull
+"Redbull Abricot","Redbull Bleu",redbullabricot,redbullbleu,redbull
+"Redbull Abricot","Redbull Blue",redbullabricot,redbullblue,redbull
+"Redbull Abricot","Redbull Ice",redbullabricot,redbullice,redbull
+"Redbull Abricot","Redbull Myrtille",redbullabricot,redbullmyrtille,redbull
+"Redbull Abricot","Redbull Peach",redbullabricot,redbullpeach,redbull
+"Redbull Abricot","Redbull Pomme",redbullabricot,redbullpomme,redbull
+"Redbull Abricot","Redbull Seablue",redbullabricot,redbullseablue,redbull
+"Redbull Abricot","Redbull Summer",redbullabricot,redbullsummer,redbull
+"Redbull Abricot","Redbull Winter",redbullabricot,redbullwinter,redbull
+"Redbull Abricot","Redbull zero",redbullabricot,redbullzero,redbull
+"Redbull Abricot",Redbull_Bleue,redbullabricot,redbullbleue,redbull
+"Redbull Abricot","redbull red",redbullabricot,redbullred,redbull
+"Redbull Bleu","Redbull Ice",redbullbleu,redbullice,redbull
+"Redbull Bleu","Redbull Myrtille",redbullbleu,redbullmyrtille,redbull
+"Redbull Bleu","Redbull Peach",redbullbleu,redbullpeach,redbull
+"Redbull Bleu","Redbull Pomme",redbullbleu,redbullpomme,redbull
+"Redbull Bleu","Redbull Seablue",redbullbleu,redbullseablue,redbull
+"Redbull Bleu","Redbull Summer",redbullbleu,redbullsummer,redbull
+"Redbull Bleu","Redbull Winter",redbullbleu,redbullwinter,redbull
+"Redbull Bleu","Redbull zero",redbullbleu,redbullzero,redbull
+"Redbull Bleu","redbull red",redbullbleu,redbullred,redbull
+"Redbull Blue","Redbull Ice",redbullblue,redbullice,redbull
+"Redbull Blue","Redbull Myrtille",redbullblue,redbullmyrtille,redbull
+"Redbull Blue","Redbull Peach",redbullblue,redbullpeach,redbull
+"Redbull Blue","Redbull Pomme",redbullblue,redbullpomme,redbull
+"Redbull Blue","Redbull Seablue",redbullblue,redbullseablue,redbull
+"Redbull Blue","Redbull Summer",redbullblue,redbullsummer,redbull
+"Redbull Blue","Redbull Winter",redbullblue,redbullwinter,redbull
+"Redbull Blue","Redbull zero",redbullblue,redbullzero,redbull
+"Redbull Blue","redbull red",redbullblue,redbullred,redbull
+"Redbull Ice","Redbull Peach",redbullice,redbullpeach,redbull
+"Redbull Ice","Redbull Pomme",redbullice,redbullpomme,redbull
+"Redbull Ice","Redbull Seablue",redbullice,redbullseablue,redbull
+"Redbull Ice","Redbull Summer",redbullice,redbullsummer,redbull
+"Redbull Ice","Redbull Winter",redbullice,redbullwinter,redbull
+"Redbull Ice","Redbull zero",redbullice,redbullzero,redbull
+"Redbull Ice","redbull red",redbullice,redbullred,redbull
+"Redbull Myrtille","Redbull Peach",redbullmyrtille,redbullpeach,redbull
+"Redbull Myrtille","Redbull Pomme",redbullmyrtille,redbullpomme,redbull
+"Redbull Myrtille","Redbull Seablue",redbullmyrtille,redbullseablue,redbull
+"Redbull Myrtille","Redbull Summer",redbullmyrtille,redbullsummer,redbull
+"Redbull Myrtille","Redbull Winter",redbullmyrtille,redbullwinter,redbull
+"Redbull Myrtille","Redbull zero",redbullmyrtille,redbullzero,redbull
+"Redbull Myrtille","redbull red",redbullmyrtille,redbullred,redbull
+"Redbull Peach","Redbull Pomme",redbullpeach,redbullpomme,redbull
+"Redbull Peach","Redbull Seablue",redbullpeach,redbullseablue,redbull
+"Redbull Peach","Redbull Summer",redbullpeach,redbullsummer,redbull
+"Redbull Peach","Redbull Winter",redbullpeach,redbullwinter,redbull
+"Redbull Peach","Redbull zero",redbullpeach,redbullzero,redbull
+"Redbull Peach","redbull red",redbullpeach,redbullred,redbull
+"Redbull Pomme","Redbull Seablue",redbullpomme,redbullseablue,redbull
+"Redbull Pomme","Redbull Summer",redbullpomme,redbullsummer,redbull
+"Redbull Pomme","Redbull Winter",redbullpomme,redbullwinter,redbull
+"Redbull Pomme","Redbull zero",redbullpomme,redbullzero,redbull
+"Redbull Pomme","redbull red",redbullpomme,redbullred,redbull
+"Redbull Seablue","Redbull Summer",redbullseablue,redbullsummer,redbull
+"Redbull Seablue","Redbull Winter",redbullseablue,redbullwinter,redbull
+"Redbull Seablue","Redbull zero",redbullseablue,redbullzero,redbull
+"Redbull Summer","Redbull Winter",redbullsummer,redbullwinter,redbull
+"Redbull Summer","Redbull zero",redbullsummer,redbullzero,redbull
+"Redbull Winter","Redbull zero",redbullwinter,redbullzero,redbull
+Redbull_Bleue,"Redbull Blue",redbullbleue,redbullblue,redbull
+Redbull_Bleue,"Redbull Ice",redbullbleue,redbullice,redbull
+Redbull_Bleue,"Redbull Myrtille",redbullbleue,redbullmyrtille,redbull
+Redbull_Bleue,"Redbull Peach",redbullbleue,redbullpeach,redbull
+Redbull_Bleue,"Redbull Pomme",redbullbleue,redbullpomme,redbull
+Redbull_Bleue,"Redbull Seablue",redbullbleue,redbullseablue,redbull
+Redbull_Bleue,"Redbull Summer",redbullbleue,redbullsummer,redbull
+Redbull_Bleue,"Redbull Winter",redbullbleue,redbullwinter,redbull
+Redbull_Bleue,"Redbull zero",redbullbleue,redbullzero,redbull
+Redbull_Bleue,"redbull red",redbullbleue,redbullred,redbull
+"redbull red","Redbull Seablue",redbullred,redbullseablue,redbull
+"redbull red","Redbull Summer",redbullred,redbullsummer,redbull
+"redbull red","Redbull Winter",redbullred,redbullwinter,redbull
+"redbull red","Redbull zero",redbullred,redbullzero,redbull
+"Soiree bowling (2 parties / 1 personne)","Soiree bowling ( 2 personnes )",soireebowling2parties1personne,soireebowling2personnes,soiree
+"Sucette 1","Sucette 1 sucette",sucette1,sucette1sucette,sucette
+"Sucette 1","Sucette 3",sucette1,sucette3,sucette
+"Sucette 1","sucette 3 sucettes",sucette1,sucette3sucettes,sucette
+"Sucette 1 sucette","Sucette 3",sucette1sucette,sucette3,sucette
+"Sucette 3","sucette 3 sucettes",sucette3,sucette3sucettes,sucette
+sucette,"Sucette 1",sucette,sucette1,sucette
+sucette,"Sucette 3",sucette,sucette3,sucette
+sucette,"sucette 3 sucettes",sucette,sucette3sucettes,sucette

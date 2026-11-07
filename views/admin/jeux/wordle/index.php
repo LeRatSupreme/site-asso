@@ -1,0 +1,240 @@
+<?php
+
+declare(strict_types=1);
+
+/**
+ * Liste des mots Wordle (admin) — recherche, filtres, pagination, CRUD.
+ *
+ * @var string $title
+ * @var list<array<string,mixed>> $words
+ * @var int $total
+ * @var string $search
+ * @var string $langFilter
+ * @var string $diffFilter
+ * @var int $page
+ * @var int $totalPages
+ * @var int $perPage
+ */
+
+/**
+ * Construit une fenêtre de pages autour de la page courante.
+ * Retourne un tableau mélangeant des numéros (int) et des '…' (string).
+ *
+ * @return list<int|string>
+ */
+function wordlePageWindow(int $current, int $total): array
+{
+    if ($total <= 9) {
+        return range(1, $total);
+    }
+
+    $window = [];
+    $window[] = 1; // toujours la première
+
+    $start = max(2, $current - 2);
+    $end = min($total - 1, $current + 2);
+
+    if ($start > 2) {
+        $window[] = '…';
+    }
+    for ($i = $start; $i <= $end; $i++) {
+        $window[] = $i;
+    }
+    if ($end < $total - 1) {
+        $window[] = '…';
+    }
+
+    $window[] = $total; // toujours la dernière
+    return $window;
+}
+?>
+<div class="admin-actions">
+    <a class="btn btn-ghost btn-sm" href="<?= e(url('/admin/jeux')) ?>">← Retour</a>
+</div>
+
+<!-- Barre de filtres horizontale -->
+<form method="get" class="wordle-toolbar">
+    <div class="wordle-search">
+        <input type="text" name="q" value="<?= e($search) ?>" placeholder="Rechercher un mot…" aria-label="Recherche" />
+    </div>
+
+    <select name="lang" aria-label="Langue">
+        <option value="">Toutes langues</option>
+        <option value="fr" <?= $langFilter === 'fr' ? 'selected' : '' ?>>FR</option>
+        <option value="en" <?= $langFilter === 'en' ? 'selected' : '' ?>>EN</option>
+    </select>
+
+    <select name="diff" aria-label="Difficulté">
+        <option value="">Toutes difficultés</option>
+        <option value="facile" <?= $diffFilter === 'facile' ? 'selected' : '' ?>>Facile (5)</option>
+        <option value="moyen" <?= $diffFilter === 'moyen' ? 'selected' : '' ?>>Moyen (6)</option>
+        <option value="difficile" <?= $diffFilter === 'difficile' ? 'selected' : '' ?>>Difficile (7)</option>
+    </select>
+
+    <select name="perPage" aria-label="Par page">
+        <?php foreach ([50, 100, 200, 500] as $n): ?>
+            <option value="<?= $n ?>" <?= $perPage === $n ? 'selected' : '' ?>><?= $n ?>/page</option>
+        <?php endforeach; ?>
+    </select>
+
+    <button type="submit" class="btn btn-primary btn-sm">Filtrer</button>
+    <a class="btn btn-outline btn-sm" href="<?= e(url('/admin/jeux/wordle')) ?>">Réinitialiser</a>
+    <a class="btn btn-primary btn-sm" href="<?= e(url('/admin/jeux/wordle/new')) ?>">+ Nouveau mot</a>
+
+    <span class="wordle-count"><?= number_format($total, 0, ',', ' ') ?> mot(s)<?php if ($search !== '' || $langFilter !== '' || $diffFilter !== ''): ?> · filtré(s)<?php endif; ?></span>
+</form>
+
+<?php if ($words === []): ?>
+    <div class="card surface glass" style="text-align:center;padding:2rem;color:var(--muted);">
+        Aucun mot ne correspond à ces critères.
+    </div>
+<?php else: ?>
+    <div class="card surface glass table-wrap">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Mot</th>
+                    <th>Langue</th>
+                    <th class="num">Long.</th>
+                    <th>Difficulté</th>
+                    <th>Actif</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php foreach ($words as $w): ?>
+                    <tr>
+                        <td><strong style="letter-spacing:0.1em;"><?= e((string) $w['word']) ?></strong></td>
+                        <td><?= $w['language'] === 'en' ? 'EN' : 'FR' ?></td>
+                        <td class="num"><?= (int) $w['length'] ?></td>
+                        <td><?= e(ucfirst((string) $w['difficulty'])) ?></td>
+                        <td><?= ((int) $w['is_active']) === 1
+                                ? '<span class="badge badge-success">Oui</span>'
+                                : '<span class="badge badge-muted">Non</span>' ?></td>
+                        <td class="row-actions">
+                            <a class="btn btn-outline btn-sm" href="<?= e(url('/admin/jeux/wordle/' . (int) $w['id'])) ?>" title="Modifier">Modifier</a>
+                            <form method="post" action="<?= e(url('/admin/jeux/wordle/' . (int) $w['id'] . '/delete')) ?>" class="inline-form"
+                                  data-confirm="Supprimer le mot « <?= e((string) $w['word']) ?> » ?" data-preserve-scroll>
+                                <?= csrf_field() ?>
+                                <button type="submit" class="btn btn-danger btn-sm" title="Supprimer">Supprimer</button>
+                            </form>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+            </tbody>
+        </table>
+    </div>
+
+    <?php if ($totalPages > 1):
+        $window = wordlePageWindow($page, $totalPages);
+        $buildUrl = function ($p) use ($search, $langFilter, $diffFilter, $perPage) {
+            return url('/admin/jeux/wordle?' . http_build_query([
+                'q' => $search, 'lang' => $langFilter, 'diff' => $diffFilter,
+                'perPage' => $perPage, 'page' => $p,
+            ]));
+        };
+    ?>
+        <div class="pagination">
+            <?php if ($page > 1): ?>
+                <a class="btn btn-outline btn-sm" href="<?= e($buildUrl($page - 1)) ?>">← Préc.</a>
+            <?php else: ?>
+                <span class="btn btn-outline btn-sm" aria-disabled="true" style="opacity:0.4;pointer-events:none;">← Préc.</span>
+            <?php endif; ?>
+
+            <?php foreach ($window as $item):
+                if ($item === '…'): ?>
+                    <span class="pagination-ellipsis" aria-hidden="true">…</span>
+                <?php elseif ($item === $page): ?>
+                    <span class="btn btn-primary btn-sm pagination-current" aria-current="page" aria-label="Page <?= $item ?> (page courante)"><?= $item ?></span>
+                <?php else: ?>
+                    <a class="btn btn-outline btn-sm" href="<?= e($buildUrl($item)) ?>"><?= $item ?></a>
+                <?php endif;
+            endforeach; ?>
+
+            <?php if ($page < $totalPages): ?>
+                <a class="btn btn-outline btn-sm" href="<?= e($buildUrl($page + 1)) ?>">Suiv. →</a>
+            <?php else: ?>
+                <span class="btn btn-outline btn-sm" aria-disabled="true" style="opacity:0.4;pointer-events:none;">Suiv. →</span>
+            <?php endif; ?>
+        </div>
+
+        <!-- Saut rapide à une page -->
+        <form method="get" style="display:flex;gap:0.4rem;justify-content:center;align-items:center;margin-top:0.6rem;flex-wrap:wrap;">
+            <?php foreach (['q' => $search, 'lang' => $langFilter, 'diff' => $diffFilter, 'perPage' => $perPage] as $k => $v):
+                if ($v !== ''): ?>
+                    <input type="hidden" name="<?= e($k) ?>" value="<?= e($v) ?>">
+                <?php endif;
+            endforeach; ?>
+            <span style="color:var(--muted);font-size:0.85rem;">Aller à la page</span>
+            <input type="number" name="page" min="1" max="<?= $totalPages ?>" value="<?= $page ?>"
+                   style="width:80px;padding:0.3rem;border-radius:0.3rem;border:1px solid var(--border-strong);background:rgba(255,255,255,0.04);color:var(--foreground);text-align:center;" />
+            <span style="color:var(--muted);font-size:0.85rem;">/ <?= $totalPages ?></span>
+            <button type="submit" class="btn btn-outline btn-sm">OK</button>
+        </form>
+    <?php endif; ?>
+<?php endif; ?>
+
+<style>
+/* Barre de filtres horizontale */
+.wordle-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+    padding: 0.85rem 1rem;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+}
+.wordle-toolbar .wordle-search {
+    flex: 1 1 200px;
+    min-width: 180px;
+}
+.wordle-toolbar .wordle-search input {
+    width: 100%;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--foreground);
+    padding: 0.5rem 0.7rem;
+    font-size: 0.9rem;
+}
+.wordle-toolbar .wordle-search input:focus,
+.wordle-toolbar select:focus {
+    outline: none;
+    border-color: var(--primary);
+}
+.wordle-toolbar select {
+    width: auto;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--foreground);
+    padding: 0.5rem 0.7rem;
+    font-size: 0.9rem;
+}
+.wordle-count {
+    margin-left: auto;
+    font-size: 0.8rem;
+    color: var(--muted);
+    white-space: nowrap;
+}
+
+.pagination {
+    display: flex;
+    gap: 0.3rem;
+    justify-content: center;
+    margin-top: 1rem;
+    flex-wrap: wrap;
+    align-items: center;
+}
+.pagination-ellipsis {
+    color: var(--muted);
+    padding: 0 0.3rem;
+    user-select: none;
+}
+.pagination-current {
+    pointer-events: none;
+}
+</style>

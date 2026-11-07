@@ -1,0 +1,151 @@
+name: CI
+
+on:
+  push:
+    branches: [experiments, main]
+  pull_request:
+
+jobs:
+  # Suite de tests : PHPUnit (Unit + Integration) sur base MariaDB 10.11,
+  # même moteur que la production VPS (MySQL 8 refusait des requêtes
+  # valides en prod via ONLY_FULL_GROUP_BY).
+  tests:
+    name: Tests (PHP 8.3 / MariaDB 10.11)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      mariadb:
+        image: mariadb:10.11
+        env:
+          MARIADB_ROOT_PASSWORD: ci_root
+          MARIADB_DATABASE: aeic_test
+          MARIADB_USER: aeic
+          MARIADB_PASSWORD: ci_password
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping --user=root --password=ci_root"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    # Mêmes noms de variables que phpunit.xml / TestDatabaseTrait / IntegrationTestCase.
+    # APP_ENV, APP_DEBUG, APP_URL et APP_TESTING sont déjà fixés par phpunit.xml.
+    env:
+      DB_HOST: 127.0.0.1
+      DB_NAME: aeic_test
+      DB_USER: aeic
+      DB_PASS: ci_password
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo_mysql, mbstring, gd, intl
+          coverage: none
+
+      # « cache: composer » de setup-php émet un avertissement (input
+      # inattendu) : cache géré ici, explicitement, par actions/cache.
+      - name: Cache Composer
+        uses: actions/cache@v4
+        with:
+          path: ~/.composer/cache/files
+          key: composer-php83-${{ hashFiles('composer.lock') }}
+          restore-keys: composer-php83-
+
+      - name: Installer les dépendances Composer
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      # Le bootstrap ne crée pas le schéma : les tests sautent si la base est vide.
+      # Installation fraîche = database/schema.sql uniquement (les migrations sont
+      # déjà intégrées au schéma canonique, voir database/migrations/README.md).
+      - name: Préparer la base aeic_test
+        run: |
+          mysql -h127.0.0.1 -uroot -pci_root -e "
+            CREATE DATABASE IF NOT EXISTS aeic_test CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+            CREATE USER IF NOT EXISTS 'aeic'@'%' IDENTIFIED BY 'ci_password';
+            GRANT ALL PRIVILEGES ON aeic_test.* TO 'aeic'@'%';
+            FLUSH PRIVILEGES;"
+          mysql -h127.0.0.1 -uroot -pci_root --default-character-set=utf8mb4 aeic_test < database/schema.sql
+
+      # PHPUnit écrit junit.xml ; un petit lecteur PHP émet des annotations
+      # GitHub (::error) lisibles via l'API publique (sans token) pour chaque
+      # test en échec (50 premiers), puis le step échoue avec le vrai statut.
+      - name: Lancer PHPUnit (avec annotations des échecs)
+        run: |
+          status=0
+          vendor/bin/phpunit --no-coverage --log-junit junit.xml || status=$?
+          if [ "$status" -ne 0 ] && [ -f junit.xml ]; then
+            php -r '
+            $f = @simplexml_load_file("junit.xml");
+            if ($f === false) { fwrite(STDERR, "junit.xml illisible\n"); exit(0); }
+            $vus = 0; $echecs = 0;
+            foreach ($f->xpath("//testcase") as $tc) {
+                foreach ($tc->xpath("failure|error") as $err) {
+                    $echecs++;
+                    if ($vus >= 50) { continue; }
+                    $vus++;
+                    $fichier = (string)$tc["file"];
+                    $nom = (string)$tc["class"] . "::" . (string)$tc["name"];
+                    $type = (string)($err["type"] ?? "Echec");
+                    $msg = (string)($err["message"] ?? "");
+                    if (trim($msg) === "") { $msg = substr(preg_replace("/\s+/", " ", (string)$err), 0, 400); }
+                    $msg = str_replace(["\r\n", "\r", "\n", "%"], [" ", " ", " ", "%25"], $msg);
+                    $msg = mb_substr($msg, 0, 500);
+                    $ligne = "::error";
+                    if ($fichier !== "") { $ligne .= " file=" . $fichier; }
+                    echo $ligne . "::[" . $type . "] " . $nom . " : " . $msg . "\n";
+                }
+            }
+            echo "PHPUnit : " . $echecs . " echec(s) au total\n";
+            exit($echecs > 0 ? 1 : 0);
+            ' || true
+          fi
+          exit $status
+
+  # Lint : syntaxe PHP de tous les sources + tests JS (sans dépendance npm).
+  lint:
+    name: Lint PHP + JS
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          coverage: none
+
+      - name: php -l sur tous les fichiers PHP
+        run: |
+          fail=0
+          while IFS= read -r -d '' f; do
+            php -l "$f" >/dev/null || { echo "::error::Syntaxe PHP invalide : $f"; fail=1; }
+          done < <(find app views public tests -name '*.php' -print0)
+          exit $fail
+
+      - name: Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Vérification syntaxe JS (node --check)
+        run: |
+          fail=0
+          for f in public/assets/js/*.js; do
+            node --check "$f" || { echo "::error::Syntaxe JS invalide : $f"; fail=1; }
+          done
+          exit $fail
+
+      - name: Tests JS (assert natif, aucune dépendance)
+        run: |
+          node tests/js/compta-saisie.test.js
+          node tests/js/inventaire-tablette.test.js

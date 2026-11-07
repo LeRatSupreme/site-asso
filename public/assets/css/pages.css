@@ -1,0 +1,617 @@
+/* =====================================================================
+   AEIC — pages.css
+   Styles spécifiques aux pages publiques (Phase 2).
+   Complète base.css sans l'écraser : event card, détail événement,
+   grille équipe, galerie photos, prose CMS.
+   ===================================================================== */
+
+/* ----------------------------- Event card ----------------------------- */
+.event-card {
+    overflow: hidden;
+    padding: 0;
+}
+.event-card-body {
+    padding: 1.25rem 1.25rem 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    flex: 1;
+}
+.event-card-actions {
+    display: flex;
+    gap: 0.5rem;
+    padding: 1rem 1.25rem 1.25rem;
+    margin-top: auto;
+}
+.event-card-media {
+    position: relative;
+    display: block;
+    aspect-ratio: 16 / 9;
+    background: var(--card);
+    overflow: hidden;
+}
+.event-card-media img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.3s ease;
+}
+.event-card:hover .event-card-media img {
+    transform: scale(1.04);
+}
+.event-card-placeholder {
+    width: 100%;
+    height: 100%;
+    display: grid;
+    place-items: center;
+    color: #fff;
+    font-weight: 900;
+    font-size: 2rem;
+    letter-spacing: -0.04em;
+}
+.event-card-badge {
+    position: absolute;
+    top: 0.75rem;
+    left: 0.75rem;
+    z-index: 1;
+}
+.event-card-body .card-title a {
+    color: #fff;
+}
+.event-card-body .card-title a:hover {
+    color: var(--primary);
+}
+
+/* ----------------------------- Détail événement ----------------------------- */
+.event-detail {
+    display: grid;
+    grid-template-columns: 1fr 340px;
+    gap: 2rem;
+    align-items: start;
+}
+@media (max-width: 900px) {
+    .event-detail { grid-template-columns: 1fr; }
+}
+.event-detail-main {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+.event-detail-sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    position: sticky;
+    top: calc(var(--header-h) + 1rem);
+}
+@media (max-width: 900px) {
+    .event-detail-sidebar { position: static; }
+}
+
+.back-link { margin-bottom: 0.75rem; }
+.back-link a { color: var(--muted); font-weight: 700; font-size: 0.9rem; }
+.back-link a:hover { color: var(--primary); }
+
+.event-cover {
+    position: relative;
+    aspect-ratio: 16 / 9;
+    overflow: hidden;
+    padding: 0;
+}
+.event-cover img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+.event-cover-placeholder {
+    width: 100%;
+    height: 100%;
+    display: grid;
+    place-items: center;
+    color: #fff;
+    font-weight: 900;
+    font-size: 3rem;
+}
+.event-cover-badge {
+    position: absolute;
+    top: 1rem;
+    left: 1rem;
+}
+
+/* Sidebar cartes */
+.sidebar-card { gap: 0.75rem; }
+.sidebar-price { display: flex; flex-direction: column; gap: 0.25rem; }
+.sidebar-cta { width: 100%; margin-top: 0.5rem; }
+.sidebar-count { display: flex; flex-direction: column; gap: 0.2rem; margin: 0.25rem 0 0.75rem; }
+
+.participant-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    margin-top: 0.5rem;
+}
+.participant-list li {
+    color: var(--foreground);
+    font-size: 0.9rem;
+    padding-left: 0.75rem;
+    position: relative;
+}
+.participant-list li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0.55em;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--primary);
+}
+
+.variant-block { padding: 0.75rem 0; border-top: 1px solid var(--border); }
+.variant-label {
+    font-weight: 700;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.4rem;
+}
+.variant-choices {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    color: var(--muted);
+    font-size: 0.9rem;
+    padding-left: 0.75rem;
+}
+
+/* ----------------------------- Bouton thème clair/sombre ----------------------------- */
+.nav-theme-btn {
+    width: 40px;
+    height: 40px;
+    display: grid;
+    place-items: center;
+    border-radius: 999px;
+    border: 1px solid var(--border-strong);
+    background: var(--input-bg);
+    color: var(--foreground);
+    font-size: 1rem;
+    line-height: 1;
+}
+.nav-theme-btn:hover { background: rgba(255, 255, 255, 0.08); }
+.nav-theme-btn .theme-icon-light { display: none; }
+[data-theme="light"] .nav-theme-btn .theme-icon-dark { display: none; }
+[data-theme="light"] .nav-theme-btn .theme-icon-light { display: inline; }
+[data-theme="light"] .nav-theme-btn:hover { background: rgba(0, 0, 0, 0.06); }
+
+/* ----------------------------- Galerie photos (page /galerie) ----------------------------- */
+.gallery-grid { margin-top: 1rem; }
+.gallery-item {
+    padding: 0;
+    overflow: hidden;
+    aspect-ratio: 4 / 3;
+    position: relative;
+}
+.gallery-item img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.3s ease;
+}
+.gallery-item:hover img { transform: scale(1.05); }
+.gallery-item figcaption {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.8rem;
+    color: #fff;
+    background: linear-gradient(transparent, rgba(0, 0, 0, 0.7));
+}
+
+/* ----------------------------- Équipe ----------------------------- */
+.team-grid-featured {
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    margin-bottom: 3rem;
+}
+.team-section-others { margin-top: 1rem; }
+
+/* ----------------------------- Prose (contenu CMS) ----------------------------- */
+.prose a { color: var(--primary); text-decoration: underline; text-underline-offset: 2px; }
+.prose a:hover { color: var(--foreground); }
+.prose ul li { list-style: disc; margin-left: 1.25rem; }
+.prose ol li { list-style: decimal; margin-left: 1.25rem; }
+.prose img { border-radius: var(--radius-sm); margin: 1rem 0; }
+.prose hr { border: none; border-top: 1px solid var(--border); margin: 1.5rem 0; }
+.prose h1 a, .prose h2 a, .prose h3 a { color: inherit; text-decoration: none; }
+
+/* ----------------------------- Catégories événements ----------------------------- */
+.events-filter {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+}
+.event-cat-btn {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    padding: 0.45rem 1rem;
+    border-radius: 999px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+.event-cat-btn:hover {
+    border-color: var(--primary);
+    color: var(--foreground);
+}
+.event-cat-btn.is-active {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: #08172d;
+}
+
+.event-card-meta-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-bottom: 0.3rem;
+}
+.event-cat-badge {
+    font-size: 0.7rem;
+    white-space: nowrap;
+}
+
+/* ----------------------------- Sections par catégorie ----------------------------- */
+.event-cat-section {
+    margin-bottom: 2.5rem;
+}
+.event-cat-section:last-child {
+    margin-bottom: 0;
+}
+.event-cat-header {
+    margin-bottom: 1.25rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 2px solid var(--border);
+}
+.event-cat-title {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin: 0;
+    font-size: 1.25rem;
+    font-weight: 800;
+    color: var(--foreground);
+}
+.event-cat-count {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--muted);
+    background: rgba(255,255,255,0.06);
+    padding: 0.15rem 0.6rem;
+    border-radius: 999px;
+}
+.event-cat-past .event-cat-title {
+    font-size: 1.05rem;
+    opacity: 0.8;
+}
+
+/* ----------------------------- Carte (Où nous trouver) ----------------------------- */
+.map-block {
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    gap: 1.5rem;
+    align-items: stretch;
+}
+@media (max-width: 820px) {
+    .map-block { grid-template-columns: 1fr; }
+}
+.map-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    padding: 1.5rem;
+}
+.map-card .card-title { margin: 0; }
+.map-address { color: var(--muted); font-size: 0.98rem; margin: 0; }
+.map-actions { display: flex; flex-direction: column; gap: 0.6rem; margin-top: auto; }
+
+.map-frame {
+    position: relative;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    min-height: 340px;
+    background: #0a1b33;
+}
+.map-frame iframe {
+    width: 100%;
+    height: 100%;
+    min-height: 340px;
+    border: 0;
+    display: block;
+    filter: none;
+}
+.map-expand {
+    position: absolute;
+    top: 0.6rem;
+    left: 0.6rem;
+    z-index: 5;
+    width: 40px;
+    height: 40px;
+    display: grid;
+    place-items: center;
+    background: rgba(8, 23, 45, 0.85);
+    color: #fff;
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    font-size: 1.15rem;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s, transform 0.1s;
+}
+.map-expand:hover {
+    background: var(--primary);
+    color: #08172d;
+}
+.map-expand:active { transform: scale(0.92); }
+
+/* Mode plein écran */
+.map-frame.is-fullscreen {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    border-radius: 0;
+    border: none;
+    min-height: 100vh;
+}
+.map-frame.is-fullscreen iframe { min-height: 100vh; }
+@media (max-width: 600px) {
+    .map-frame, .map-frame iframe { min-height: 280px; }
+}
+
+/* ----------------------------- Page Galerie (/galerie) ----------------------------- */
+.gallery-group { margin-bottom: 3rem; }
+.gallery-group-head {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 0.5rem 1rem;
+    margin-bottom: 1rem;
+}
+.gallery-group-title { font-size: 1.5rem; color: #fff; }
+[data-theme="light"] .gallery-group-title { color: #1a1d24; }
+.gallery-group-date {
+    color: var(--primary);
+    font-weight: 700;
+    font-size: 0.85rem;
+}
+
+.event-ical { margin-top: 0.75rem; display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.event-fb-btn svg { color: #48bdd3; transition: color 0.15s; }
+.event-fb-btn:hover svg { color: #fff; }
+
+/* Lightbox */
+.lightbox {
+    position: fixed;
+    inset: 0;
+    z-index: 300;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+    background: rgba(0, 0, 0, 0.9);
+    -webkit-backdrop-filter: blur(4px);
+    backdrop-filter: blur(4px);
+}
+.lightbox[hidden] { display: none; }
+.lightbox img {
+    max-width: 92vw;
+    max-height: 86vh;
+    border-radius: var(--radius-sm);
+    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.6);
+}
+.lightbox-close {
+    position: absolute;
+    top: 1rem;
+    right: 1.25rem;
+    width: 44px;
+    height: 44px;
+    display: grid;
+    place-items: center;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    background: rgba(255, 255, 255, 0.08);
+    color: #fff;
+    font-size: 1.4rem;
+}
+.lightbox-close:hover { background: rgba(255, 255, 255, 0.18); }
+.lightbox-caption {
+    position: absolute;
+    bottom: 1.25rem;
+    left: 0;
+    right: 0;
+    text-align: center;
+    color: #fff;
+    font-size: 0.9rem;
+    padding: 0 1.5rem;
+}
+
+/* ----------------------------- Notre carte (menu cafétéria) ----------------------------- */
+.menu-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1.75rem;
+}
+.menu-tab {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    padding: 0.5rem 1.1rem;
+    border-radius: 999px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s, background 0.15s, transform 0.1s;
+}
+.menu-tab:hover {
+    border-color: var(--primary);
+    color: var(--foreground);
+}
+.menu-tab:active { transform: scale(0.96); }
+.menu-tab.is-active {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: var(--primary-foreground);
+}
+
+.menu-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 0.9rem;
+}
+.menu-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    gap: 0.4rem;
+    padding: 1.1rem 0.85rem;
+    transition: transform 0.15s ease, border-color 0.15s ease;
+}
+.menu-item:hover {
+    transform: translateY(-3px);
+    border-color: var(--primary);
+}
+.menu-item-emoji {
+    font-size: 1.9rem;
+    line-height: 1;
+}
+.menu-item-img {
+    width: 48px;
+    height: 48px;
+    object-fit: cover;
+    border-radius: 10px;
+}
+.menu-item-cat {
+    color: var(--primary);
+    text-transform: uppercase;
+    letter-spacing: 0.22em;
+    font-size: 0.65rem;
+    font-weight: 800;
+}
+.menu-item-name {
+    font-weight: 700;
+    color: #fff;
+    font-size: 0.95rem;
+}
+[data-theme="light"] .menu-item-name { color: var(--foreground); }
+.menu-item-price {
+    font-weight: 800;
+    color: var(--primary);
+    font-size: 1.05rem;
+}
+.menu-item-stock {
+    font-size: 0.75rem;
+    color: var(--muted);
+}
+.menu-item.is-out {
+    opacity: 0.55;
+    filter: grayscale(0.85);
+}
+.menu-item.is-out:hover {
+    transform: none;
+    border-color: var(--border);
+}
+.menu-item.is-out .badge { margin-top: 0.15rem; }
+
+.menu-empty-results {
+    text-align: center;
+    margin-top: 1rem;
+}
+
+/* ----------------------------- Promos & ventes spéciales ----------------------------- */
+.promo-grid { margin-top: 0.5rem; }
+
+.promo-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 1.5rem;
+    overflow: hidden;
+}
+.promo-badge {
+    align-self: flex-start;
+    background: #ff5a5f;
+    color: #fff;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    padding: 0.25rem 0.7rem;
+    border-radius: 999px;
+    position: relative;
+    z-index: 1;
+}
+.promo-title {
+    margin: 0;
+    font-size: 1.15rem;
+    color: #fff;
+    position: relative;
+    z-index: 1;
+}
+[data-theme="light"] .promo-title { color: var(--foreground); }
+.promo-desc {
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.92rem;
+    position: relative;
+    z-index: 1;
+}
+.promo-prices {
+    margin-top: auto;
+    display: flex;
+    align-items: baseline;
+    gap: 0.75rem;
+    position: relative;
+    z-index: 1;
+}
+.promo-old {
+    color: var(--muted);
+    text-decoration: line-through;
+    font-size: 0.95rem;
+}
+.promo-new {
+    color: var(--primary);
+    font-weight: 900;
+    font-size: 1.5rem;
+}
+
+.promo-empty {
+    text-align: center;
+    padding: 3rem 1.5rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.75rem;
+    max-width: 520px;
+    margin: 0 auto;
+}
+.promo-empty-icon {
+    font-size: 3rem;
+    line-height: 1;
+}
+.promo-empty p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 1.05rem;
+}
+
+

@@ -1,0 +1,31 @@
+{
+  "peft_type": "LORA",
+  "task_type": "CAUSAL_LM",
+  "base_model_name_or_path": "Qwen/Qwen3-1.7B",
+  "r": 16,
+  "lora_alpha": 32,
+  "lora_dropout": 0.0,
+  "target_modules": [
+    "q_proj",
+    "k_proj",
+    "v_proj",
+    "o_proj"
+  ],
+  "bias": "none",
+  "init_lora_weights": true,
+  "inference_mode": true,
+  "use_rslora": false,
+  "use_dora": false,
+  "fan_in_fan_out": false,
+  "modules_to_save": null,
+  "rank_pattern": {},
+  "alpha_pattern": {},
+  "layers_to_transform": null,
+  "layers_pattern": null,
+  "megatron_config": null,
+  "megatron_core": null,
+  "loftq_config": {},
+  "auto_mapping": null,
+  "layer_replication": null,
+  "revision": null
+}

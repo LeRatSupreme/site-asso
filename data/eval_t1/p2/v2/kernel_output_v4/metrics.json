@@ -1,0 +1,162 @@
+{
+  "mission": "AEIC T1-P2 fine-tune (brief P3, kernel v4 OFFLINE CPU, vague 2 P2-ter)",
+  "offline": {
+    "mode": "100% offline : zero pip, zero reseau, zero telechargement",
+    "env": {
+      "HF_HUB_OFFLINE": "1",
+      "TRANSFORMERS_OFFLINE": "1"
+    },
+    "kernel_metadata": {
+      "enable_gpu": false,
+      "enable_internet": false
+    }
+  },
+  "dataset": {
+    "id": "adrienremond/aeic-t1-p2-pairs",
+    "files": {
+      "train_pairs.csv": 4595,
+      "val_pairs.csv": 400
+    },
+    "columns": [
+      "texte_variante",
+      "cible"
+    ],
+    "note": "dataset prive, decision D3 (libelles produits seuls), revue anonymisation P2-SEC CONFORME"
+  },
+  "config": {
+    "seed": 42,
+    "base_model": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+    "base_model_dataset": {
+      "id": "adrienremond/aeic-t1-ml-base",
+      "mounted_at": "/kaggle/input/aeic-t1-ml-base",
+      "model_safetensors_sha256": "eaa086f0ffee582aeb45b36e34cdd1fe2d6de2bef61f8a559a1bbc9bd955917b",
+      "integrity_verified": true,
+      "source": "repo HF officiel sentence-transformers, poids fp32 (pas l'ONNX int8)"
+    },
+    "versions_reelles": {
+      "sentence_transformers": "5.7.0",
+      "transformers": "5.16.1",
+      "torch": "2.11.0+cpu"
+    },
+    "training_api": "SentenceTransformer.old_fit (boucle torch pure ST 5.x, sans libs optionnelles datasets/accelerate)",
+    "torch_threads": 4,
+    "device": "CPU",
+    "loss": "MultipleNegativesRankingLoss",
+    "anchor": "texte_variante",
+    "positive": "cible",
+    "batch_size": 64,
+    "lr": 2e-05,
+    "min_epochs": 3,
+    "max_epochs": 8,
+    "patience_early_stopping": 2,
+    "early_stopping_metric": "val recall_at_1 (rappel d'identification, classement cosinus des cibles uniques de val)",
+    "warmup_steps_total": 57,
+    "time_budget_seconds": 3600
+  },
+  "val_zero_shot": {
+    "cos_loss": 0.37709,
+    "recall_at_1": 0.7,
+    "recall_at_5": 0.855,
+    "mrr": 0.772911
+  },
+  "history": [
+    {
+      "epoch": 1,
+      "epoch_seconds": 353.1,
+      "train_cos_loss": 0.247399,
+      "val": {
+        "cos_loss": 0.280934,
+        "recall_at_1": 0.94,
+        "recall_at_5": 0.995,
+        "mrr": 0.965653
+      }
+    },
+    {
+      "epoch": 2,
+      "epoch_seconds": 349.0,
+      "train_cos_loss": 0.223316,
+      "val": {
+        "cos_loss": 0.254176,
+        "recall_at_1": 0.965,
+        "recall_at_5": 1.0,
+        "mrr": 0.979875
+      }
+    },
+    {
+      "epoch": 3,
+      "epoch_seconds": 350.7,
+      "train_cos_loss": 0.207414,
+      "val": {
+        "cos_loss": 0.236543,
+        "recall_at_1": 0.9725,
+        "recall_at_5": 0.9975,
+        "mrr": 0.983958
+      }
+    },
+    {
+      "epoch": 4,
+      "epoch_seconds": 345.3,
+      "train_cos_loss": 0.194066,
+      "val": {
+        "cos_loss": 0.223592,
+        "recall_at_1": 0.98,
+        "recall_at_5": 0.9975,
+        "mrr": 0.988375
+      }
+    },
+    {
+      "epoch": 5,
+      "epoch_seconds": 355.5,
+      "train_cos_loss": 0.179799,
+      "val": {
+        "cos_loss": 0.209073,
+        "recall_at_1": 0.9825,
+        "recall_at_5": 0.9975,
+        "mrr": 0.988694
+      }
+    },
+    {
+      "epoch": 6,
+      "epoch_seconds": 351.9,
+      "train_cos_loss": 0.174627,
+      "val": {
+        "cos_loss": 0.206492,
+        "recall_at_1": 0.9775,
+        "recall_at_5": 0.9975,
+        "mrr": 0.98669
+      }
+    },
+    {
+      "epoch": 7,
+      "epoch_seconds": 351.9,
+      "train_cos_loss": 0.165169,
+      "val": {
+        "cos_loss": 0.195884,
+        "recall_at_1": 0.9825,
+        "recall_at_5": 0.9975,
+        "mrr": 0.989062
+      }
+    }
+  ],
+  "best": {
+    "epoch": 5,
+    "cos_loss": 0.209073,
+    "recall_at_1": 0.9825,
+    "recall_at_5": 0.9975,
+    "mrr": 0.988694
+  },
+  "final_epoch": 7,
+  "final_train_cos_loss": 0.165169,
+  "final_val": {
+    "cos_loss": 0.195884,
+    "recall_at_1": 0.9825,
+    "recall_at_5": 0.9975,
+    "mrr": 0.989062
+  },
+  "gain_val_recall_at_1_vs_zero_shot": 0.2825,
+  "stopped_early": true,
+  "time_budget_hit": false,
+  "epochs_run": 7,
+  "model_dir": "/kaggle/working/model",
+  "total_seconds": 2809.1
+}

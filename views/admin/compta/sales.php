@@ -1,0 +1,181 @@
+<?php
+
+declare(strict_types=1);
+
+/**
+ * @var list<array<string,mixed>> $rows
+ * @var array{preset:string,from:?string,to:?string} $period
+ * @var array<string,string> $periodOptions
+ * @var list<string> $categories
+ * @var list<string> $products
+ * @var array{period:string,from:string,to:string,category:string,product:string,payment:string} $filters
+ */
+
+// Totaux sur les ventes affichées.
+$totQty = 0;
+$totTtc = 0.0;
+$totProfit = 0.0;
+foreach ($rows as $r) {
+    $totQty    += (int) ($r['quantity'] ?? 0);
+    $totTtc    += (float) ($r['price_ttc'] ?? 0);
+    $totProfit += (float) ($r['profit'] ?? 0);
+}
+?>
+<div class="compta-head">
+    <div>
+        <p class="eyebrow">Comptabilité</p>
+        <h1 class="page-title">Journal des ventes</h1>
+        <p class="muted">Toutes les ventes importées de SumUp, filtrables par période, catégorie, produit et moyen de paiement.</p>
+    </div>
+</div>
+
+<!-- Résumé : 4 cartes séparées -->
+<div class="grid grid-4 stat-cards">
+    <div class="stat-card surface glass">
+        <span class="stat-value"><?= count($rows) ?></span>
+        <span class="stat-label">Ventes</span>
+    </div>
+    <div class="stat-card surface glass">
+        <span class="stat-value"><?= $totQty ?></span>
+        <span class="stat-label">Quantité</span>
+    </div>
+    <div class="stat-card surface glass">
+        <span class="stat-value"><?= e(formatPrice($totTtc)) ?></span>
+        <span class="stat-label">CA (TTC)</span>
+    </div>
+    <div class="stat-card surface glass">
+        <span class="stat-value is-positive"><?= e(formatPrice($totProfit)) ?></span>
+        <span class="stat-label">Bénéfice</span>
+    </div>
+</div>
+
+<?php require AEIC_VIEWS . '/admin/compta/_period_bar.php'; ?>
+
+<!-- Barre de filtres -->
+<form method="get" class="costs-toolbar">
+    <!-- Conserve la période sélectionnée lors d'un Filtrer -->
+    <input type="hidden" name="period" value="<?= e($period['preset']) ?>">
+    <?php if ($period['from'] !== null): ?><input type="hidden" name="from" value="<?= e($period['from']) ?>"><?php endif; ?>
+    <?php if ($period['to'] !== null): ?><input type="hidden" name="to" value="<?= e($period['to']) ?>"><?php endif; ?>
+    <select name="category" aria-label="Catégorie">
+        <option value="">Toutes catégories</option>
+        <?php foreach ($categories as $c): ?>
+            <option value="<?= e($c) ?>" <?= $c === ($filters['category'] ?? '') ? 'selected' : '' ?>><?= e($c) ?></option>
+        <?php endforeach; ?>
+    </select>
+
+    <select name="product" aria-label="Produit">
+        <option value="">Tous produits</option>
+        <?php foreach ($products as $p): ?>
+            <option value="<?= e($p) ?>" <?= $p === ($filters['product'] ?? '') ? 'selected' : '' ?>><?= e($p) ?></option>
+        <?php endforeach; ?>
+    </select>
+
+    <select name="payment" aria-label="Paiement">
+        <option value="">Tous paiements</option>
+        <option value="CARTE" <?= ($filters['payment'] ?? '') === 'CARTE' ? 'selected' : '' ?>>Carte</option>
+        <option value="LIQUIDE" <?= ($filters['payment'] ?? '') === 'LIQUIDE' ? 'selected' : '' ?>>Liquide</option>
+    </select>
+
+    <button type="submit" class="btn btn-primary btn-sm">Filtrer</button>
+    <a class="btn btn-outline btn-sm" href="<?= e(url('/admin/compta/ventes?' . http_build_query(array_merge($filters, ['export' => 'csv'])))) ?>">Exporter CSV</a>
+</form>
+
+<!-- Tableau -->
+<div class="card surface glass">
+    <!-- Boîte à outils tableaux (lot 4B) : filtre rapide, choix des
+         colonnes (par défaut toutes sauf « Coût », ligne par ligne peu
+         utile) et compteur. Le tri se fait par clic sur les en-têtes.
+         La barre vit hors du conteneur scrollable (sinon menu rogné). -->
+    <div class="table-tools">
+        <input type="search" class="tt-filter" data-table-filter="#sales-table"
+               aria-label="Filtrer les lignes du journal" placeholder="Filtrer le journal…">
+        <details class="tt-cols" data-table-cols="#sales-table">
+            <summary>Colonnes</summary>
+        </details>
+        <span class="tt-count muted" data-table-count="#sales-table" aria-live="polite"></span>
+    </div>
+    <div class="table-wrap">
+    <table class="table sales-table" id="sales-table"
+           data-table data-cols-visible="date,produit,categorie,qte,ttc,benefice,paiement">
+        <thead>
+            <tr>
+                <th data-col="date" data-col-fixed>Date</th>
+                <th data-col="produit" data-col-fixed>Produit</th>
+                <th data-col="categorie">Cat.</th>
+                <th class="th-num" data-col="qte">Qté</th>
+                <th class="th-num" data-col="ttc">TTC</th>
+                <th class="th-num" data-col="cout">Coût</th>
+                <th class="th-num" data-col="benefice">Bénéfice</th>
+                <th data-col="paiement">Paiement</th>
+            </tr>
+        </thead>
+        <tbody>
+            <?php foreach ($rows as $r): ?>
+                <?php
+                    $profit = (float) ($r['profit'] ?? 0);
+                    $isCustom = !empty($r['is_custom_amount']);
+                    // sold_at est déjà en heure locale du point de vente
+                    // (Paris) : PAS de conversion UTC→Paris ici, sinon +2 h.
+                    $soldAtRaw = trim((string) ($r['sold_at'] ?? ''));
+                    $soldAt = '';
+                    if ($soldAtRaw !== '') {
+                        try {
+                            $soldAt = (new DateTimeImmutable($soldAtRaw))->format('d/m/Y H:i');
+                        } catch (Throwable) {
+                            $soldAt = $soldAtRaw;
+                        }
+                    }
+                ?>
+                <tr class="<?= $isCustom ? 'row-muted' : '' ?>">
+                    <td class="muted"><?= e($soldAt) ?></td>
+                    <td>
+                        <strong><?= e((string) ($r['description'] ?? '—')) ?></strong>
+                        <?php if (!empty($r['product_key']) && $r['product_key'] !== $r['description']): ?>
+                            <span class="muted">(<?= e((string) $r['product_key']) ?>)</span>
+                        <?php endif; ?>
+                        <?php if ($isCustom): ?>
+                            <span class="badge badge-warning">Perso</span>
+                        <?php endif; ?>
+                    </td>
+                    <td><?= e((string) ($r['category'] ?? '—')) ?></td>
+                    <td class="num"><?= e((string) ($r['quantity'] ?? 1)) ?></td>
+                    <td class="num"><strong><?= e(formatPrice($r['price_ttc'] ?? 0)) ?></strong></td>
+                    <td class="num muted"><?= e(formatPrice($r['cost_price'] ?? 0, 3)) ?></td>
+                    <td class="num <?= $profit >= 0 ? 'is-positive' : 'is-negative' ?>"><?= $isCustom ? '<span class="muted">—</span>' : e(formatPrice($profit)) ?></td>
+                    <td>
+                        <?php if (($r['payment_method'] ?? '') === 'LIQUIDE'): ?>
+                            <span class="badge badge-muted">Liquide</span>
+                        <?php else: ?>
+                            <span class="badge badge-success">Carte</span>
+                        <?php endif; ?>
+                    </td>
+                </tr>
+            <?php endforeach; ?>
+            <?php if ($rows === []): ?>
+                <tr><td colspan="8" class="muted" style="text-align:center;padding:2rem">Aucune vente ne correspond à ces filtres.</td></tr>
+            <?php endif; ?>
+        </tbody>
+        <?php if ($rows !== []): ?>
+            <tfoot>
+                <tr>
+                    <th colspan="3" style="text-align:right">Total (<?= count($rows) ?> ventes) :</th>
+                    <th class="num"><?= $totQty ?></th>
+                    <th class="num"><?= e(formatPrice($totTtc)) ?></th>
+                    <th class="num"></th>
+                    <th class="num is-positive"><?= e(formatPrice($totProfit)) ?></th>
+                    <th></th>
+                </tr>
+            </tfoot>
+        <?php endif; ?>
+    </table>
+    </div>
+</div>
+
+<p class="card-meta">
+    Le journal liste chaque ligne du rapport SumUp importé. Les « Montants personnalisés » (perso) sont inclus dans le CA mais exclus du bénéfice.
+</p>
+
+<!-- Boîte à outils tableaux (lot 4B) : tri, filtre et colonnes. -->
+<script src="<?= e(rootAssetVersioned('/assets/js/table-tools.js')) ?>" defer></script>
+

@@ -1,0 +1,590 @@
+<?php
+
+declare(strict_types=1);
+
+use App\Controllers\AccountController;
+use App\Controllers\Admin\AdminAgentController;
+use App\Controllers\Admin\AdminAnalyticsController;
+use App\Controllers\Admin\AdminAssistantController;
+use App\Controllers\Admin\AdminBudgetController;
+use App\Controllers\Admin\AdminCafeteriaController;
+use App\Controllers\Admin\AdminCashController;
+use App\Controllers\Admin\AdminComptaController;
+use App\Controllers\Admin\AdminComptaEventController;
+use App\Controllers\Admin\AdminController;
+use App\Controllers\Admin\AdminEventController;
+use App\Controllers\Admin\AdminExpenseController;
+use App\Controllers\Admin\AdminGameController;
+use App\Controllers\Admin\AdminKiosquesController;
+use App\Controllers\Admin\AdminLedgerController;
+use App\Controllers\Admin\AdminLossController;
+use App\Controllers\Admin\AdminMembershipController;
+use App\Controllers\Admin\AdminMediaController;
+use App\Controllers\Admin\AdminNotificationController;
+use App\Controllers\Admin\AdminPageController;
+use App\Controllers\Admin\AdminPollController;
+use App\Controllers\Admin\AdminPromotionController;
+use App\Controllers\Admin\AdminRecoController;
+use App\Controllers\Admin\AdminReportingController;
+use App\Controllers\Admin\AdminSettingController;
+use App\Controllers\Admin\AdminStockController;
+use App\Controllers\Admin\AdminTeamController;
+use App\Controllers\Admin\AdminUserController;
+use App\Controllers\AuthController;
+use App\Controllers\AssistantPublicController;
+use App\Controllers\AssistantToolsController;
+use App\Controllers\CaptchaController;
+use App\Controllers\EventController;
+use App\Controllers\GameController;
+use App\Controllers\HealthController;
+use App\Controllers\HomeController;
+use App\Controllers\KioskComptageController;
+use App\Controllers\LocaleController;
+use App\Controllers\NotificationController;
+use App\Controllers\PageController;
+use App\Controllers\PollController;
+use App\Controllers\RegistrationController;
+use App\Controllers\SeoController;
+use App\Controllers\SmsChartController;
+use App\Controllers\StudentController;
+use App\Controllers\TwoFactorController;
+use App\Core\Router;
+
+/**
+ * Enregistre toutes les routes de l'application sur le routeur donné.
+ *
+ * Centralisation partagée entre le front controller (public/index.php) et le
+ * lanceur de tests d'intégration (tests/Integration/runner.php) afin d'éviter
+ * toute divergence entre les deux points d'entrée.
+ */
+function aeic_register_routes(Router $router): void
+{
+    // Pages publiques.
+    $router->get('/', [HomeController::class, 'index']);
+    $router->get('/galerie', [HomeController::class, 'galerie']);
+
+    $router->get('/events', [EventController::class, 'index']);
+    $router->get('/events/{slug}', [EventController::class, 'show']);
+    $router->post('/events/{slug}/register', [RegistrationController::class, 'register']);
+    $router->post('/events/{slug}/unregister', [RegistrationController::class, 'unregister']);
+
+    $router->get('/presentation', [PageController::class, 'presentation']);
+    $router->get('/team', [PageController::class, 'team']);
+    $router->get('/legal', [PageController::class, 'legal']);
+    $router->get('/privacy', [PageController::class, 'privacy']);
+    $router->get('/cgu', [PageController::class, 'cgu']);
+    $router->get('/p/{slug}', [PageController::class, 'show']);
+
+    // Assistant conversationnel PUBLIC (widget chat bas-droite, sans
+    // authentification) : POST JSON direct au llama-server local — un
+    // chemin SÉPARÉ de l'assistant admin (aucun pont Python, aucun
+    // outil, aucune donnée interne ; prompt public dédié dans
+    // app/config/assistant_public.php). CSRF standard du routeur (le
+    // front envoie le jeton de la page) ; rate limit 10/5 min/IP +
+    // sémaphore 2 appels LLM gérés par App\Core\Assistant\PublicAssistant.
+    $router->post('/assistant/ask', [AssistantPublicController::class, 'ask']);
+    $router->get('/assistant/ask', [AssistantPublicController::class, 'askGet']);
+
+    // CAPTCHA auto-hébergé : image anti-bot (défense des formulaires
+    // publics, jamais mise en cache) + page de démonstration du code saisi.
+    $router->get('/captcha/image', [CaptchaController::class, 'image']);
+    $router->get('/captcha-demo', [CaptchaController::class, 'demo']);
+    $router->post('/captcha-demo', [CaptchaController::class, 'demo']);
+
+    // Sondages.
+    $router->get('/sondages', [PollController::class, 'index']);
+    $router->get('/sondages/{slug}', [PollController::class, 'show']);
+    $router->post('/sondages/{slug}/vote', [PollController::class, 'vote']);
+
+    // Zone jeux (Wordle FR/EN, 3 difficultés, 2 modes + énigme quotidienne + classement
+    // + Memory cafétéria, Snake et Tetris).
+    $router->get('/jeux', [GameController::class, 'index']);
+    $router->post('/jeux/set-pseudo', [GameController::class, 'setPseudo']);
+    $router->get('/jeux/wordle', [GameController::class, 'wordle']);
+    $router->get('/jeux/wordle/word', [GameController::class, 'getWord']);
+    $router->post('/jeux/wordle/submit', [GameController::class, 'submitWordle']);
+    $router->get('/jeux/enigme', [GameController::class, 'enigma']);
+    $router->post('/jeux/enigme/check', [GameController::class, 'checkEnigma']);
+    $router->get('/jeux/leaderboard', [GameController::class, 'leaderboard']);
+    $router->get('/jeux/memory', [GameController::class, 'memory']);
+    $router->get('/jeux/snake', [GameController::class, 'snake']);
+    $router->get('/jeux/tetris', [GameController::class, 'tetris']);
+    $router->post('/jeux/score', [GameController::class, 'submitScore']);
+
+    // SEO.
+    $router->get('/sitemap.xml', [SeoController::class, 'sitemap']);
+    // Alias de débogage Search Console : même contenu, URL différente pour
+    // forcer une relecture saine de GSC (robots.txt déclare /sitemaps.xml).
+    $router->get('/sitemaps.xml', [SeoController::class, 'sitemap']);
+    $router->get('/search', [SeoController::class, 'search']);
+
+    // Graphique image du jour pour les SMS (protégé par jeton secret).
+    $router->get('/sms-chart/{token}', [SmsChartController::class, 'show']);
+
+    // Notifications in-app (API, Auth requise).
+    $router->get('/api/notifications', [NotificationController::class, 'index']);
+    $router->post('/api/notifications/read-all', [NotificationController::class, 'readAll']);
+
+    // Monitoring.
+    $router->get('/health', [HealthController::class, 'health']);
+
+    // Outils de l'assistant conversationnel (T4) : JSON LECTURE SEULE
+    // consommé par le pont local (scripts/assistant.py) avec le jeton
+    // serveur ASSISTANT_TOKEN (config.env) en en-tête X-Assistant-Token
+    // — le modèle LLM ne connaît jamais le jeton. Préfixe NON admin :
+    // l'authentification EST le jeton (403 générique sinon, no-store et
+    // rate limit posés par le contrôleur, pattern kiosque). Le nom de
+    // l'outil est validé par liste blanche dans le contrôleur (404 après
+    // vérification du jeton, aucune énumération possible sans lui).
+    $router->get('/internal/assistant/{outil}', [AssistantToolsController::class, 'outil']);
+
+    // Sélecteur de langue (FR/EN, cookie 1 an).
+    $router->post('/set-lang', [LocaleController::class, 'setLang']);
+    $router->get('/set-lang', [LocaleController::class, 'setLang']);
+
+    // Authentification.
+    $router->get('/login', [AuthController::class, 'loginForm']);
+    $router->post('/login', [AuthController::class, 'login']);
+    $router->get('/register', [AuthController::class, 'registerForm']);
+    $router->post('/register', [AuthController::class, 'register']);
+    $router->get('/logout', [AuthController::class, 'logout']);
+    $router->get('/verify-email', [AuthController::class, 'verifyEmail']);
+    $router->get('/resend-verification', [AuthController::class, 'resendVerification']);
+    $router->get('/forgot-password', [AuthController::class, 'forgotForm']);
+    $router->post('/forgot-password', [AuthController::class, 'forgot']);
+    $router->get('/reset-password', [AuthController::class, 'resetForm']);
+    $router->post('/reset-password', [AuthController::class, 'reset']);
+
+    // Authentification à deux facteurs.
+    $router->get('/login/verify', [TwoFactorController::class, 'verifyForm']);
+    $router->post('/login/verify', [TwoFactorController::class, 'verify']);
+    $router->get('/account/2fa/setup', [TwoFactorController::class, 'setupForm']);
+    $router->post('/account/2fa/confirm', [TwoFactorController::class, 'setupConfirm']);
+    $router->post('/account/2fa/regenerate', [TwoFactorController::class, 'setupRegenerate']);
+    $router->post('/account/2fa/disable', [TwoFactorController::class, 'disable']);
+
+    // Espace compte (RGPD).
+    $router->get('/account/privacy', [AccountController::class, 'privacy']);
+    $router->post('/account/password', [AccountController::class, 'changePassword']);
+    $router->get('/account/export', [AccountController::class, 'export']);
+    $router->get('/account/delete', [AccountController::class, 'deleteConfirm']);
+    $router->post('/account/delete', [AccountController::class, 'delete']);
+
+    // Espace élève.
+    $router->get('/eleve', [StudentController::class, 'index']);
+    $router->get('/eleve/profile', [StudentController::class, 'profile']);
+    $router->post('/eleve/profile', [StudentController::class, 'updateProfile']);
+    $router->get('/eleve/inscriptions', [StudentController::class, 'inscriptions']);
+    $router->get('/eleve/commandes', [StudentController::class, 'commandes']);
+    $router->get('/eleve/cafeteria', [StudentController::class, 'cafeteria']);
+    $router->post('/eleve/cafeteria/add', [StudentController::class, 'cartAdd']);
+    $router->post('/eleve/cafeteria/remove', [StudentController::class, 'cartRemove']);
+    $router->post('/eleve/cafeteria/checkout', [StudentController::class, 'checkout']);
+    $router->post('/eleve/cafeteria/clear', [StudentController::class, 'cartClear']);
+
+    // Pages d'erreur.
+    $router->notFound([PageController::class, 'notFound']);
+    $router->methodNotAllowed([PageController::class, 'methodNotAllowed']);
+
+    // Administration (rôle ADMIN requis — vérifié par chaque contrôleur).
+    $router->get('/admin', [AdminController::class, 'index']);
+
+    // Journal d'audit filtrable (même garde que l'ancienne carte du
+    // tableau de bord : Fondateur/ADMIN seulement) + recherche globale
+    // (tout le bureau, groupes de résultats filtrés par rôle).
+    $router->get('/admin/audit', [AdminController::class, 'auditPage']);
+    $router->get('/admin/search', [AdminController::class, 'search']);
+
+    // Design system : page de démonstration des composants (garde de
+    // l'espace admin, accès par URL directe — hors menu, la navigation
+    // est refaite au lot 2).
+    $router->get('/admin/design-system', [AdminController::class, 'designSystem']);
+
+    $router->get('/admin/events', [AdminEventController::class, 'index']);
+    $router->get('/admin/events/new', [AdminEventController::class, 'form']);
+    $router->get('/admin/events/{slug}', [AdminEventController::class, 'form']);
+    $router->post('/admin/events/save', [AdminEventController::class, 'save']);
+    $router->post('/admin/events/{slug}/delete', [AdminEventController::class, 'delete']);
+    $router->get('/admin/events/{slug}/registrations', [AdminEventController::class, 'registrations']);
+    $router->get('/admin/events/{slug}/checkin', [AdminEventController::class, 'checkinForm']);
+    $router->post('/admin/events/{slug}/checkin', [AdminEventController::class, 'checkinScan']);
+    $router->post('/admin/events/{slug}/toggle-checkin', [AdminEventController::class, 'toggleCheckedIn']);
+    $router->post('/admin/events/{slug}/promote', [AdminEventController::class, 'promoteWaitlist']);
+
+    $router->get('/admin/cafeteria', [AdminCafeteriaController::class, 'products']);
+    $router->get('/admin/cafeteria/new', [AdminCafeteriaController::class, 'productForm']);
+    $router->get('/admin/cafeteria/{id}/edit', [AdminCafeteriaController::class, 'productForm']);
+    $router->post('/admin/cafeteria/save', [AdminCafeteriaController::class, 'saveProduct']);
+    $router->post('/admin/cafeteria/{id}/delete', [AdminCafeteriaController::class, 'deleteProduct']);
+    $router->get('/admin/cafeteria/categories', [AdminCafeteriaController::class, 'categories']);
+    $router->post('/admin/cafeteria/categories/save', [AdminCafeteriaController::class, 'saveCategory']);
+    $router->post('/admin/cafeteria/categories/add-mapping', [AdminCafeteriaController::class, 'addMappingCategory']);
+    $router->post('/admin/cafeteria/categories/sync-mapping', [AdminCafeteriaController::class, 'syncMappingCategories']);
+    $router->post('/admin/cafeteria/categories/{id}/delete', [AdminCafeteriaController::class, 'deleteCategory']);
+    $router->post('/admin/cafeteria/sync', [AdminCafeteriaController::class, 'syncProducts']);
+
+    // Commandes élèves (définitions d'origine restaurées, cf. c2f8b6f^).
+    $router->get('/admin/cafeteria/commandes', [AdminCafeteriaController::class, 'orders']);
+    $router->post('/admin/cafeteria/commandes/{id}/status', [AdminCafeteriaController::class, 'changeStatus']);
+
+    $router->get('/admin/users', [AdminUserController::class, 'index']);
+    $router->post('/admin/users/{id}/role', [AdminUserController::class, 'changeRole']);
+    $router->post('/admin/users/{id}/name', [AdminUserController::class, 'rename']);
+    $router->post('/admin/users/{id}/pages', [AdminUserController::class, 'savePages']);
+    $router->post('/admin/users/{id}/toggle-active', [AdminUserController::class, 'toggleActive']);
+    $router->post('/admin/users/{id}/reset-password', [AdminUserController::class, 'resetPassword']);
+    $router->post('/admin/users/{id}/delete', [AdminUserController::class, 'delete']);
+
+    // Adhésions / cotisations (rôle ADMIN requis).
+    $router->get('/admin/memberships', [AdminMembershipController::class, 'index']);
+    $router->post('/admin/memberships/{id}/mark-paid', [AdminMembershipController::class, 'markPaid']);
+    $router->post('/admin/users/{id}/membership', [AdminMembershipController::class, 'createForMember']);
+
+    $router->get('/admin/team', [AdminTeamController::class, 'index']);
+    $router->get('/admin/team/new', [AdminTeamController::class, 'form']);
+    $router->get('/admin/team/{id}', [AdminTeamController::class, 'form']);
+    $router->post('/admin/team/save', [AdminTeamController::class, 'save']);
+    $router->post('/admin/team/{id}/delete', [AdminTeamController::class, 'delete']);
+
+    $router->get('/admin/pages', [AdminPageController::class, 'index']);
+    $router->get('/admin/pages/new', [AdminPageController::class, 'form']);
+    $router->get('/admin/pages/{slug}', [AdminPageController::class, 'form']);
+    $router->post('/admin/pages/save', [AdminPageController::class, 'save']);
+    $router->post('/admin/pages/preview', [AdminPageController::class, 'preview']);
+    // Ordre des pages CMS (drag & drop de la liste admin) : corps JSON
+    // {ids:[…]} ou champ ids[] — réponse JSON minimale {ok:true} (contrat
+    // partagé avec le JS de la liste, tri par Page::ORDER_BY).
+    $router->post('/admin/pages/reorder', [AdminPageController::class, 'reorder']);
+    $router->post('/admin/pages/{slug}/delete', [AdminPageController::class, 'delete']);
+
+    $router->get('/admin/sondages', [AdminPollController::class, 'index']);
+    $router->get('/admin/sondages/new', [AdminPollController::class, 'form']);
+    $router->get('/admin/sondages/{id}', [AdminPollController::class, 'form']);
+    $router->post('/admin/sondages/save', [AdminPollController::class, 'save']);
+    $router->post('/admin/sondages/{id}/delete', [AdminPollController::class, 'delete']);
+
+    $router->get('/admin/promotions', [AdminPromotionController::class, 'index']);
+    $router->get('/admin/promotions/new', [AdminPromotionController::class, 'form']);
+    $router->get('/admin/promotions/{id}', [AdminPromotionController::class, 'form']);
+    $router->post('/admin/promotions/save', [AdminPromotionController::class, 'save']);
+    $router->post('/admin/promotions/{id}/delete', [AdminPromotionController::class, 'delete']);
+
+    $router->get('/admin/media', [AdminMediaController::class, 'index']);
+    $router->post('/admin/media/upload', [AdminMediaController::class, 'upload']);
+    $router->post('/admin/media/{id}/delete', [AdminMediaController::class, 'delete']);
+    $router->post('/admin/media/{id}/delete-cascade', [AdminMediaController::class, 'deleteCascade']);
+    $router->post('/admin/media/{id}/update', [AdminMediaController::class, 'update']);
+
+    // Jeux (Wordle + Énigme + classement/pseudos).
+    $router->get('/admin/jeux', [AdminGameController::class, 'index']);
+    $router->get('/admin/jeux/scores', [AdminGameController::class, 'scores']);
+    $router->post('/admin/jeux/set-pseudo', [AdminGameController::class, 'setPseudo']);
+    $router->post('/admin/jeux/reset-player', [AdminGameController::class, 'resetPlayer']);
+    $router->get('/admin/jeux/wordle', [AdminGameController::class, 'wordleIndex']);
+    $router->get('/admin/jeux/wordle/new', [AdminGameController::class, 'wordleForm']);
+    $router->get('/admin/jeux/wordle/{id}', [AdminGameController::class, 'wordleForm']);
+    $router->post('/admin/jeux/wordle/save', [AdminGameController::class, 'saveWordle']);
+    $router->post('/admin/jeux/wordle/{id}/delete', [AdminGameController::class, 'deleteWordle']);
+    $router->get('/admin/jeux/enigmes', [AdminGameController::class, 'enigmaIndex']);
+    $router->get('/admin/jeux/enigmes/new', [AdminGameController::class, 'enigmaForm']);
+    $router->get('/admin/jeux/enigmes/{id}', [AdminGameController::class, 'enigmaForm']);
+    $router->post('/admin/jeux/enigmes/save', [AdminGameController::class, 'saveEnigma']);
+    $router->post('/admin/jeux/enigmes/{id}/delete', [AdminGameController::class, 'deleteEnigma']);
+
+    $router->get('/admin/settings', [AdminSettingController::class, 'index']);
+
+    // Caisses — traçabilité du liquide (groupe Système, cf. guardSystem).
+    $router->get('/admin/caisses', [AdminCashController::class, 'index']);
+    $router->post('/admin/caisses/depot', [AdminCashController::class, 'deposit']);
+    $router->post('/admin/caisses/prise', [AdminCashController::class, 'take']);
+    $router->post('/admin/caisses/comptage', [AdminCashController::class, 'count']);
+    $router->post('/admin/caisses/fond', [AdminCashController::class, 'fund']);
+
+    // Kiosques — centralisation des liens téléphone (groupe Système).
+    $router->get('/admin/kiosques', [AdminKiosquesController::class, 'index']);
+    $router->post('/admin/kiosques/reveal', [AdminKiosquesController::class, 'reveal']);
+    $router->post('/admin/kiosques/regenerate', [AdminKiosquesController::class, 'regenerate']);
+    // Kiosques personnalisés : création, édition des tuiles, suppression
+    // (l'identifiant du kiosque est dans l'URL ; le jeton, lui, n'apparaît
+    // jamais dans le HTML de la page Kiosques).
+    $router->post('/admin/kiosques/create', [AdminKiosquesController::class, 'create']);
+    $router->post('/admin/kiosques/{id}/save', [AdminKiosquesController::class, 'save']);
+    $router->post('/admin/kiosques/{id}/delete', [AdminKiosquesController::class, 'delete']);
+
+    // Livre comptable (groupe Système) + version kiosque admin.
+    $router->get('/admin/ledger', [AdminLedgerController::class, 'index']);
+    $router->get('/kiosque/admin/ledger/{token}', [KioskComptageController::class, 'ledger']);
+    $router->get('/admin/wiki', [AdminController::class, 'wiki']);
+    $router->post('/admin/settings/save', [AdminSettingController::class, 'save']);
+    $router->post('/admin/settings/test-email', [AdminSettingController::class, 'testEmail']);
+    // Ordre persistant de la sidebar admin (drag & drop) : corps JSON
+    // {order:{sections,items,subgroups}} ou {reset:true} — réponse JSON
+    // (contrat partagé avec le layout et le JS de la sidebar,
+    // App\Core\SidebarOrder = point d'assemblage unique de l'ordre).
+    $router->post('/admin/settings/sidebar-order', [AdminSettingController::class, 'sidebarOrder']);
+
+    // Notifications SMS — messages programmés Free Mobile (groupe Système).
+    $router->get('/admin/notifications', [AdminNotificationController::class, 'index']);
+    $router->post('/admin/notifications/create', [AdminNotificationController::class, 'create']);
+    $router->post('/admin/notifications/{id}/save', [AdminNotificationController::class, 'save']);
+    $router->post('/admin/notifications/{id}/delete', [AdminNotificationController::class, 'delete']);
+    $router->post('/admin/notifications/{id}/test', [AdminNotificationController::class, 'test']);
+    $router->post('/admin/notifications/recipient', [AdminNotificationController::class, 'addRecipient']);
+    $router->post('/admin/notifications/recipient/{index}/delete', [AdminNotificationController::class, 'deleteRecipient']);
+
+    // Assistant conversationnel (T4-G) : page de questions au pont local
+    // scripts/assistant.py — réponse + sources affichées ; le jeton des
+    // outils reste strictement côté serveur (jamais dans la page).
+    $router->get('/admin/assistant', [AdminAssistantController::class, 'index']);
+    $router->post('/admin/assistant/ask', [AdminAssistantController::class, 'ask']);
+
+    // Page « Agent » (V1+ rapidité) : questions types préparées depuis le
+    // journal de l'assistant (agrégat, filtrage anti-doublon, gabarits
+    // pré-réponses + aperçu, activer/réordonner/supprimer) — le fast-path
+    // de AdminAssistantController::ask() rejoue leur routage sans LLM.
+    // Même garde que la page Assistant ; CSRF central (POST non kiosque).
+    $router->get('/admin/agent', [AdminAgentController::class, 'index']);
+    $router->post('/admin/agent/prepare', [AdminAgentController::class, 'prepare']);
+    $router->post('/admin/agent/prepare-all', [AdminAgentController::class, 'prepareAll']);
+    $router->post('/admin/agent/toggle', [AdminAgentController::class, 'toggle']);
+    $router->post('/admin/agent/deplacer', [AdminAgentController::class, 'deplacer']);
+    $router->post('/admin/agent/supprimer', [AdminAgentController::class, 'supprimer']);
+    $router->post('/admin/agent/gabarit', [AdminAgentController::class, 'gabarit']);
+    $router->post('/admin/agent/apercu', [AdminAgentController::class, 'apercu']);
+
+    // Comptabilité & gestion des achats (rôle ADMIN ou TRESORERIE).
+    $router->get('/admin/compta', [AdminComptaController::class, 'dashboard']);
+    $router->get('/admin/compta/import', [AdminComptaController::class, 'importForm']);
+    $router->post('/admin/compta/import', [AdminComptaController::class, 'import']);
+    $router->get('/admin/compta/ventes', [AdminComptaController::class, 'sales']);
+    $router->get('/admin/compta/produits', [AdminComptaController::class, 'products']);
+    $router->get('/admin/compta/categories', [AdminComptaController::class, 'categories']);
+    $router->get('/admin/compta/couts', [AdminComptaController::class, 'costs']);
+    $router->post('/admin/compta/couts/save', [AdminComptaController::class, 'saveCost']);
+    $router->post('/admin/compta/couts/save-bulk', [AdminComptaController::class, 'saveCostsBulk']);
+    $router->post('/admin/compta/couts/merge', [AdminComptaController::class, 'mergeProducts']);
+    $router->post('/admin/compta/couts/{id}/update', [AdminComptaController::class, 'updateCost']);
+    $router->post('/admin/compta/couts/{id}/close', [AdminComptaController::class, 'closeCost']);
+    $router->post('/admin/compta/couts/{id}/delete', [AdminComptaController::class, 'deleteCost']);
+    $router->get('/admin/compta/aliases', [AdminComptaController::class, 'aliases']);
+    // Fusion de deux produits clé : tout l'historique de la source est
+    // rattaché à la cible (ProductKeyMerge, transactionnel) — carte
+    // « Fusionner deux produits » en bas de la page Alias.
+    $router->post('/admin/compta/aliases/merge', [AdminComptaController::class, 'mergeAliasProducts']);
+    // Page dédiée au seul formulaire d'ajout (saisie rapide d'une
+    // appellation libellé facture -> nom court).
+    $router->get('/admin/compta/aliases/new', [AdminComptaController::class, 'aliasNew']);
+    $router->post('/admin/compta/aliases/save', [AdminComptaController::class, 'saveAlias']);
+    // Saisie en série : grille multi-lignes de la page dédiée.
+    $router->post('/admin/compta/aliases/save-bulk', [AdminComptaController::class, 'saveAliasBulk']);
+    $router->post('/admin/compta/aliases/bulk', [AdminComptaController::class, 'aliasesBulk']);
+    $router->post('/admin/compta/aliases/{id}/delete', [AdminComptaController::class, 'deleteAlias']);
+    $router->get('/admin/compta/aliases/auto', [AdminComptaController::class, 'aliasesAuto']);
+    $router->post('/admin/compta/aliases/apply', [AdminComptaController::class, 'aliasesApply']);
+    // Réappro : analyse en lecture seule — le stock affiché est le théorique
+    // issu de l'inventaire (mis à jour via /admin/compta/inventaire).
+    $router->get('/admin/compta/reappro', [AdminComptaController::class, 'reorder']);
+    // Drapeau « stock infini » : produit jamais réapprovisionné (∞, jamais
+    // à commander) — bascule depuis la ligne du tableau Réappro.
+    $router->post('/admin/compta/reappro/infinite', [AdminComptaController::class, 'toggleInfiniteStock']);
+    // Tailles de pack d'achat (12, 24, 32…) : « À commander » arrondi au
+    // multiple supérieur du pack — édition inline dans le tableau.
+    $router->post('/admin/compta/reappro/packs', [AdminComptaController::class, 'savePacks']);
+    // Lien secret « kiosque » : Réappro sans connexion (raccourci téléphone).
+    // Hors préfixe /admin pour contourner la garde routeur ; le contrôleur
+    // valide lui-même le jeton (403 sinon).
+    $router->get('/kiosque/reappro/{token}', [AdminComptaController::class, 'kioskReorder']);
+    $router->post('/admin/compta/reappro/kiosk/regenerate', [AdminComptaController::class, 'regenerateKioskToken']);
+    // Liste de courses : réappro simplifié (à racheter + packs). Même
+    // version kiosque par lien secret que le Réappro (même jeton).
+    $router->get('/admin/compta/liste', [AdminComptaController::class, 'liste']);
+    $router->get('/kiosque/liste/{token}', [AdminComptaController::class, 'kioskListe']);
+    // Cases cochées partagées : état (GET, rafraîchi toutes les 5 s) et
+    // coche/décoche (POST, identité obligatoire). Kiosque et admin.
+    $router->get('/admin/compta/liste/state', [AdminComptaController::class, 'listeState']);
+    $router->post('/admin/compta/liste/check', [AdminComptaController::class, 'listeCheck']);
+    $router->get('/kiosque/liste/state/{token}', [AdminComptaController::class, 'kioskListeState']);
+    $router->post('/kiosque/liste/check/{token}', [AdminComptaController::class, 'kioskListeCheck']);
+    // Kiosque « Comptage » : hub + comptage caisse + comptage inventaire,
+    // par lien secret (même jeton). Les POST enregistrent réellement
+    // (traces « kiosque ») — l'authentification est le jeton lui-même.
+    $router->get('/kiosque/comptage/{token}', [KioskComptageController::class, 'hub']);
+    $router->get('/kiosque/comptage/caisse/{token}', [KioskComptageController::class, 'caisse']);
+    $router->post('/kiosque/comptage/caisse/{token}', [KioskComptageController::class, 'caisseSave']);
+    $router->get('/kiosque/comptage/inventaire/{token}', [KioskComptageController::class, 'inventaire']);
+    $router->post('/kiosque/comptage/inventaire/save/{token}', [KioskComptageController::class, 'inventaireSave']);
+    // Pause / reprise d'un produit depuis le kiosque (JSON, sans rechargement).
+    $router->post('/kiosque/comptage/inventaire/pause/{token}', [KioskComptageController::class, 'inventairePause']);
+    // Récap du jour (lecture seule, JETON ADMIN) : page + données JSON.
+    $router->get('/kiosque/comptage/jour/{token}', [KioskComptageController::class, 'jour']);
+    $router->get('/kiosque/comptage/jour/data/{token}', [KioskComptageController::class, 'jourData']);
+    // Récap du jour version membres (CA + produits vendus, sans bénéfice).
+    $router->get('/kiosque/comptage/jour-membre/{token}', [KioskComptageController::class, 'jourMembre']);
+    $router->get('/kiosque/comptage/jour-membre/data/{token}', [KioskComptageController::class, 'jourMembreData']);
+    // Partie ADMIN du kiosque (JETON ADMIN dédié, détachée des membres) :
+    // hub de tuiles + récap de période unifié (7/14/30 jours, mois).
+    // /semaine et /mois restent servis (redirections) pour les vieux liens.
+    $router->get('/kiosque/admin/{token}', [KioskComptageController::class, 'adminHub']);
+    // Hub d'un kiosque personnalisé : tuiles choisies par l'admin, accès
+    // par son propre jeton secret (le jeton EST l'authentification).
+    $router->get('/kiosque/hub/{token}', [KioskComptageController::class, 'customHub']);
+    $router->get('/kiosque/admin/periode/{token}', [KioskComptageController::class, 'periode']);
+    $router->get('/kiosque/admin/semaine/{token}', [KioskComptageController::class, 'semaine']);
+    $router->get('/kiosque/admin/mois/{token}', [KioskComptageController::class, 'mois']);
+    // Vue Président : une page, 3 chiffres (ventes + bénéfice du mois,
+    // stock restant) — tuile « president » + option « benefice » exigées.
+    $router->get('/kiosque/admin/president/{token}', [KioskComptageController::class, 'president']);
+    // Dashboard Analytics en kiosque ADMIN : mêmes graphiques que sur PC,
+    // accès par jeton admin sans connexion.
+    $router->get('/kiosque/admin/analytics/{token}', [AdminAnalyticsController::class, 'kiosk']);
+    // Saisie express d'une dépense depuis le livre comptable kiosque (POST,
+    // identité obligatoire, photo optionnelle, sans CSRF : le jeton admin
+    // EST l'authentification — mêmes mécaniques que les autres POST kiosque).
+    $router->post('/kiosque/admin/ledger/depense/{token}', [KioskComptageController::class, 'ledgerDepenseSave']);
+    // Scan d'un ticket depuis le livre comptable kiosque (JSON) : même
+    // contrat que les scans admin (OCR image/PDF ou texte collé), sans
+    // CSRF — le jeton admin EST l'authentification. Préremplissage
+    // DÉPENSE SEULE : l'endpoint d'achats en lot kiosque
+    // (/kiosque/admin/ledger/purchases) a été supprimé avec la fusion
+    // « Saisir une dépense » × « Achats » — un POST vers cette ancienne
+    // URL reçoit 404, aucune écriture purchases n'est possible depuis
+    // un jeton kiosque (un ticket = une écriture).
+    $router->post('/kiosque/admin/ledger/scan/{token}', [KioskComptageController::class, 'ledgerScan']);
+    // Dépôt à la banque depuis le kiosque admin : formulaire téléphone
+    // (GET) + enregistrement (POST, identité obligatoire, sans CSRF : le
+    // jeton admin EST l'authentification) — mêmes écritures que la page
+    // Caisses (mouvement DEPOT + dépense automatique de frais bancaires).
+    $router->get('/kiosque/admin/caisse/depot/{token}', [KioskComptageController::class, 'caisseDepot']);
+    $router->post('/kiosque/admin/caisse/depot/{token}', [KioskComptageController::class, 'caisseDepotSave']);
+    // Prise « chez soi » depuis le kiosque admin : formulaire téléphone
+    // (GET) + enregistrement (POST, identité obligatoire, sans CSRF : le
+    // jeton admin EST l'authentification) — même écriture que la page
+    // Caisses via le service unique CashLedger::recordTake (mouvement
+    // PRISE signé + détail par coupures, détaillé en centimes entiers).
+    $router->get('/kiosque/admin/caisse/prise/{token}', [KioskComptageController::class, 'caissePrise']);
+    $router->post('/kiosque/admin/caisse/prise/{token}', [KioskComptageController::class, 'caissePriseSave']);
+    // Assistant conversationnel des pages KIOSQUE : POST JSON au
+    // llama-server local (même moteur que /assistant/ask — PublicAssistant
+    // ::traiterKiosk). Le JETON du kiosque EST l'authentification : exempté
+    // du CSRF de session par le routeur (préfixe /kiosque/), comme tous
+    // les autres POST kiosque. Jeton inconnu → 404 générique (aucune
+    // énumération) ; rate limit DÉDIÉ par IP+jeton (indépendant du site
+    // public) ; journal dédié logs/assistant_kiosk.jsonl. Le modèle ne
+    // voit AUCUNE donnée interne, même pour un kiosque trésorier/président
+    // (prompt app/config/assistant_kiosk.php + FAQ partagée).
+    $router->post('/kiosque/assistant/ask/{token}', [AssistantPublicController::class, 'askKiosk']);
+    $router->get('/kiosque/assistant/ask/{token}', [AssistantPublicController::class, 'askKioskGet']);
+
+    // Suivi avancé : dépenses, budgets, achats, inventaire, pertes, événements, rapport annuel.
+    $router->get('/admin/compta/depenses', [AdminExpenseController::class, 'index']);
+    $router->post('/admin/compta/depenses/save', [AdminExpenseController::class, 'save']);
+    // Scan d'un ticket de caisse (OCR image/PDF ou texte collé) : renvoie
+    // les données extraites en JSON pour préremplir la dépense (même
+    // contrat que le scan d'achat, clé kind = 'metro' | 'ticket').
+    // Déclarée AVANT /depenses/{id}/delete : le routeur matche par ordre.
+    $router->post('/admin/compta/depenses/scan', [AdminExpenseController::class, 'scanTicket']);
+    // Édition d'une dépense existante (justificatif remplacé si un
+    // nouveau fichier est envoyé, conservé sinon).
+    $router->post('/admin/compta/depenses/{id}/update', [AdminExpenseController::class, 'update']);
+    $router->post('/admin/compta/depenses/{id}/delete', [AdminExpenseController::class, 'delete']);
+    $router->get('/admin/compta/budgets', [AdminBudgetController::class, 'index']);
+    $router->post('/admin/compta/budgets/save', [AdminBudgetController::class, 'save']);
+    // Trésorerie « Où est l'argent ? » : caisse + banque + stock valorisé
+    // (lecture seule, garde compta, chiffres = sources uniques).
+    $router->get('/admin/compta/tresorerie', [AdminComptaController::class, 'tresorerie']);
+    $router->get('/admin/compta/achats', [AdminStockController::class, 'purchases']);
+    $router->post('/admin/compta/achats/save-bulk', [AdminStockController::class, 'savePurchasesBulk']);
+    // Scan d'une facture fournisseur METRO (OCR image/PDF ou texte collé) :
+    // renvoie les données extraites en JSON pour préremplir la grille d'achat.
+    $router->post('/admin/compta/achats/scan', [AdminStockController::class, 'scanInvoice']);
+    // Suppression / édition d'un GROUPE d'achats (toutes les lignes d'une
+    // même facture — champ « ids » séparés par des virgules). Déclarées
+    // AVANT /achats/{id}/delete : le routeur matche par ordre et le
+    // segment {id} avalerait sinon le segment littéral « group ».
+    $router->post('/admin/compta/achats/group/delete', [AdminStockController::class, 'deletePurchaseGroup']);
+    $router->post('/admin/compta/achats/group/update', [AdminStockController::class, 'updatePurchaseGroup']);
+    $router->post('/admin/compta/achats/{id}/delete', [AdminStockController::class, 'deletePurchase']);
+    $router->get('/admin/compta/inventaire', [AdminStockController::class, 'inventory']);
+    $router->post('/admin/compta/inventaire/save', [AdminStockController::class, 'saveCount']);
+    // Fusion de clés produits (doublons) depuis la page Inventaire.
+    $router->post('/admin/compta/inventaire/merge', [AdminStockController::class, 'mergeKeys']);
+    // Fusion en masse des doublons probables affichés (« Tout fusionner ») :
+    // mêmes garde-fous que /merge (guardSystemOrPage('inventory') + CSRF).
+    $router->post('/admin/compta/inventaire/merge-all', [AdminStockController::class, 'mergeKeysAll']);
+    // Décision humaine sur une suggestion de rapprochement (T1 lot C,
+    // spec §6) : Fusionner / Ignorer en un clic. Déclarée AVANT les
+    // routes à segment {key} — le routeur matche par ordre.
+    // Mêmes garde-fous que /merge (guardSystemOrPage('inventory') + CSRF).
+    $router->post('/admin/compta/inventaire/t1/decide', [AdminStockController::class, 't1Decide']);
+    // T1.5 — autonomie graduée : veto sur une fusion automatique en
+    // quarantaine, application manuelle des fusions mûres, restauration
+    // d'une clé depuis l'archive de fusion. Mêmes garde-fous.
+    $router->post('/admin/compta/inventaire/t1/auto/veto', [AdminStockController::class, 't1AutoVeto']);
+    $router->post('/admin/compta/inventaire/t1/auto/appliquer', [AdminStockController::class, 't1AutoAppliquer']);
+    $router->post('/admin/compta/inventaire/t1/auto/restaurer', [AdminStockController::class, 't1AutoRestaurer']);
+    // Remettre en vente un produit marqué « plus en vente » (groupe Système).
+    $router->post('/admin/compta/inventaire/{key}/resume', [AdminStockController::class, 'resume']);
+    $router->post('/admin/compta/inventaire/{key}/discontinue', [AdminStockController::class, 'discontinue']);
+
+    // Comptage inventaire « à l'aveugle » : saisie seule, tout le bureau
+    // hors élèves (l'écart n'est révélé qu'à l'enregistrement).
+    $router->get('/admin/compta/inventaire/comptage', [AdminStockController::class, 'blindCount']);
+    $router->post('/admin/compta/inventaire/comptage/save', [AdminStockController::class, 'saveBlindCount']);
+    // Marquer un produit « plus en vente » depuis la page Comptage.
+    $router->post('/admin/compta/inventaire/comptage/{key}/discontinue', [AdminStockController::class, 'discontinue']);
+
+    // Inventaire tablette SumUp : relevé manuel des quantités affichées
+    // sur la tablette de vente, écarts vs stock théorique du site,
+    // correction (pertes + alignement de stock, irrévocable).
+    // URL SŒUR mais SÉPARÉE de /inventaire/* : tout est littéral
+    // « inventaire-tablette » — sous /inventaire/, les POST /{id}/...
+    // entreraient en collision avec les {key} existants (le routeur
+    // matche par ordre, cf. commentaires achats/depenses ci-dessus).
+    $router->get('/admin/compta/inventaire-tablette', [AdminStockController::class, 'tabletInventory']);
+    // Littéraux AVANT le paramètre {id} : /save n'est pas un id.
+    $router->post('/admin/compta/inventaire-tablette/save', [AdminStockController::class, 'saveTabletInventory']);
+    $router->get('/admin/compta/inventaire-tablette/{id}', [AdminStockController::class, 'tabletInventoryDetail']);
+    $router->post('/admin/compta/inventaire-tablette/{id}/correct', [AdminStockController::class, 'correctTabletInventory']);
+    $router->post('/admin/compta/inventaire-tablette/{id}/delete', [AdminStockController::class, 'deleteTabletInventory']);
+
+    // Comptage de caisse : saisie seule, tout le bureau hors élèves
+    // (historique et écarts réservés à Système → Caisses, Fondateur).
+    $router->get('/admin/compta/caisse', [AdminComptaController::class, 'caisse']);
+    $router->post('/admin/compta/caisse/comptage', [AdminComptaController::class, 'caisseCount']);
+    $router->get('/admin/compta/pertes', [AdminLossController::class, 'index']);
+    $router->post('/admin/compta/pertes/save', [AdminLossController::class, 'save']);
+    $router->post('/admin/compta/pertes/{id}/delete', [AdminLossController::class, 'delete']);
+    $router->get('/admin/compta/evenements', [AdminComptaEventController::class, 'index']);
+    $router->post('/admin/compta/evenements/save', [AdminComptaEventController::class, 'save']);
+    $router->get('/admin/compta/evenements/{id}', [AdminComptaEventController::class, 'detail']);
+    $router->post('/admin/compta/evenements/{id}/delete', [AdminComptaEventController::class, 'delete']);
+    $router->post('/admin/compta/evenements/{id}/couts/save', [AdminComptaEventController::class, 'saveCost']);
+    $router->post('/admin/compta/evenements/{id}/couts/{cid}/delete', [AdminComptaEventController::class, 'deleteCost']);
+    $router->post('/admin/compta/evenements/couts/save', [AdminComptaEventController::class, 'saveCostQuick']);
+    $router->get('/admin/compta/annuel', [AdminReportingController::class, 'annual']);
+
+    // Alias hérité de l'ancienne page « Dashboard SumUp », fusionnée dans le
+    // dashboard compta (conserve les anciens liens/bookmarks fonctionnels).
+    $router->get('/admin/sumup', [AdminComptaController::class, 'dashboard']);
+
+    // Dashboard analytics (graphiques Chart.js).
+    $router->get('/admin/analytics', [AdminAnalyticsController::class, 'index']);
+    // Objectif hebdomadaire du dashboard (setting analytics_weekly_goal) :
+    // CSRF vérifié centralement par le routeur pour tout POST hors /kiosque/.
+    $router->post('/admin/analytics/objectif', [AdminAnalyticsController::class, 'saveGoal']);
+
+    // =====================================================================
+    //  Recommandations commerciales (moteur Reco) : carte « Idées du
+    //  moment » dans Analytics + kiosque admin, historique avec effet
+    //  mesuré. Le site PROPOSE, un humain DÉCIDE — aucune écriture
+    //  automatique de prix/stock. Routes littérales déclarées avant tout
+    //  {token} générique ; les POST /kiosque/* sont sans CSRF (le jeton
+    //  admin EST l'authentification, cf. Router::dispatch).
+    // =====================================================================
+    $router->get('/admin/reco/historique', [AdminRecoController::class, 'historique']);
+    $router->post('/admin/reco/decision', [AdminRecoController::class, 'decision']);
+    $router->post('/admin/reco/retablir', [AdminRecoController::class, 'retablir']);
+    $router->post('/admin/reco/parametres', [AdminRecoController::class, 'saveParametres']);
+    $router->get('/kiosque/admin/reco/{token}', [AdminRecoController::class, 'kiosk']);
+    $router->post('/kiosque/admin/reco/decision/{token}', [AdminRecoController::class, 'kioskDecision']);
+}

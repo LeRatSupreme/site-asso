@@ -1,0 +1,110 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Models;
+
+/**
+ * Produits marqués « plus en vente pour l'instant » (table `product_discontinued`).
+ *
+ * Pause de vente TEMPORAIRE pour produits saisonniers (ex. Redbull Summer
+ * hors été) : exclus du comptage à l'aveugle, de la page Inventaire et du
+ * réapprovisionnement afin de ne plus encombrer les saisies. Aucune
+ * suppression : ventes, stocks, comptages et coûts restent intacts, et
+ * resume() rétablit le produit à l'identique en un clic.
+ */
+final class ProductDiscontinued extends Model
+{
+    protected static string $table = 'product_discontinued';
+
+    /**
+     * Connexion PDO partagée (transactions et requêtes du cycle de vie
+     * automatique à cheval sur `product_discontinued` et
+     * `product_zero_since` — voir ProductLifecycle::sweep).
+     */
+    public static function connection(): \PDO
+    {
+        return self::pdo();
+    }
+
+    /**
+     * Toutes les clés produits marquées « plus en vente ».
+     *
+     * @return list<string>
+     */
+    public static function keys(): array
+    {
+        try {
+            $rows = self::pdo()
+                ->query('SELECT product_key FROM product_discontinued')
+                ->fetchAll();
+        } catch (\Throwable) {
+            // Table pas encore migrée / base indisponible : aucun produit masqué.
+            return [];
+        }
+
+        $out = [];
+        foreach ($rows as $r) {
+            $out[] = (string) $r['product_key'];
+        }
+
+        return $out;
+    }
+
+    /**
+     * Clés produits mises en pause AUTOMATIQUEMENT (updated_by = « auto »,
+     * voir ProductLifecycle::sweep) : stock à 0 depuis au moins 7 jours.
+     * Contrairement aux pauses manuelles (saisonnières, posées par un
+     * membre du bureau), celles-ci sont levées dès que du stock réapparaît.
+     *
+     * @return list<string>
+     */
+    public static function autoPausedKeys(): array
+    {
+        try {
+            $stmt = self::pdo()->prepare(
+                'SELECT product_key FROM product_discontinued WHERE updated_by = ?'
+            );
+            $stmt->execute(['auto']);
+        } catch (\Throwable) {
+            return [];
+        }
+
+        $out = [];
+        foreach ($stmt->fetchAll() as $r) {
+            $out[] = (string) $r['product_key'];
+        }
+
+        return $out;
+    }
+
+    /**
+     * Le produit est-il marqué « plus en vente » ?
+     */
+    public static function isDiscontinued(string $key): bool
+    {
+        return in_array($key, self::keys(), true);
+    }
+
+    /**
+     * Marque un produit « plus en vente » (upsert sur product_key).
+     */
+    public static function mark(string $key, ?string $userId): void
+    {
+        self::pdo()->prepare(
+            'INSERT INTO product_discontinued (product_key, updated_by, updated_at)
+             VALUES (?, ?, NOW())
+             ON DUPLICATE KEY UPDATE updated_by = VALUES(updated_by), updated_at = NOW()'
+        )->execute([$key, $userId]);
+    }
+
+    /**
+     * Remet un produit en vente (retire le drapeau).
+     */
+    public static function resume(string $key): void
+    {
+        self::pdo()->prepare(
+            'DELETE FROM product_discontinued WHERE product_key = ?'
+        )->execute([$key]);
+    }
+}

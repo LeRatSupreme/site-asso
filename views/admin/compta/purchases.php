@@ -1,0 +1,1371 @@
+<?php
+
+declare(strict_types=1);
+
+/**
+ * @var array<string,mixed>       $user
+ * @var list<array<string,mixed>> $rows
+ * @var list<string>              $products
+ * @var array{preset:string,from:?string,to:?string} $period
+ * @var array<string,string>      $periodOptions
+ * @var array{lines:int, qty:int, ht:float, ttc:float, vat:float} $stats
+ * @var list<array{rate:?float, lines:int, ht:float, ttc:float, vat:float}> $vatRows
+ * @var list<string>              $allKeys
+ */
+
+// Prévention de doublons : la liste des clés existantes est normalisée
+// côté PHP (même règle que StockPublic::normalizeKey) et injectée en JS
+// via l'attribut data-dup-keys du tableau de saisie — le JS compare la
+// saisie normalisée à cette carte et avertit sans bloquer.
+$normKeys = [];
+foreach ($allKeys as $k) {
+    $n = \App\Core\Compta\StockPublic::normalizeKey((string) $k);
+    if ($n !== '' && !isset($normKeys[$n])) {
+        $normKeys[$n] = (string) $k;
+    }
+}
+?>
+<?php
+// En-tête et onglets de niveau 1 fournis par la page fusionnée
+// « Opérations » (operations.php) qui inclut cette vue.
+?>
+<div class="admin-actions">
+    <?php require AEIC_VIEWS . '/admin/compta/_period_bar.php'; ?>
+</div>
+
+<nav class="compta-tabs" data-compta-tabs aria-label="Sections Achats & stock">
+    <button type="button" class="compta-tab is-active" data-tab="total">Total des achats</button>
+    <button type="button" class="compta-tab" data-tab="saisie">Saisir</button>
+    <button type="button" class="compta-tab" data-tab="tva">TVA payée</button>
+    <button type="button" class="compta-tab" data-tab="journal">Journal</button>
+</nav>
+
+<!-- ==================== Onglet : Total des achats ==================== -->
+<div class="compta-tabpane is-active" data-pane="total">
+    <div class="compta-kpis">
+        <div class="card surface glass kpi">
+            <p class="kpi-label">Total des achats</p>
+            <p class="kpi-value"><?= e(formatPrice($stats['ttc'])) ?></p>
+            <p class="kpi-sub"><?= (int) $stats['lines'] ?> ligne<?= (int) $stats['lines'] > 1 ? 's' : '' ?> · sur la période</p>
+        </div>
+        <div class="card surface glass kpi">
+            <p class="kpi-label">Quantité reçue</p>
+            <p class="kpi-value"><?= (int) $stats['qty'] ?></p>
+            <p class="kpi-sub">unités entrées en stock</p>
+        </div>
+        <div class="card surface glass kpi">
+            <p class="kpi-label">Total HT</p>
+            <p class="kpi-value"><?= e(formatPrice($stats['ht'])) ?></p>
+            <p class="kpi-sub">hors TVA</p>
+        </div>
+        <div class="card surface glass kpi">
+            <p class="kpi-label">Dont TVA</p>
+            <p class="kpi-value"><?= e(formatPrice($stats['vat'])) ?></p>
+            <p class="kpi-sub"><button type="button" class="linklike" data-goto-tab="tva">Voir la TVA payée →</button></p>
+        </div>
+        <div class="card surface glass kpi">
+            <p class="kpi-label">Voir aussi</p>
+            <p class="kpi-sub">
+                <?php if (\App\Core\Permissions::isSystemAdmin()): ?>
+                    <a href="<?= e(url('/admin/compta/inventaire')) ?>">Faire un inventaire →</a><br>
+                <?php endif; ?>
+                <a href="<?= e(url('/admin/compta/reappro')) ?>">Calculer le réappro →</a>
+            </p>
+        </div>
+    </div>
+
+    <div class="compta-grid">
+        <section class="card surface glass">
+            <h2 class="card-title">Comment ça marche</h2>
+            <p>Le <a href="<?= e(url('/admin/compta/reappro')) ?>">réappro</a> calcule ce qu'il <strong>FAUT</strong> commander ; cette page trace ce qui a <strong>ÉTÉ</strong> commandé.</p>
+            <p>Par défaut, chaque achat crée un <strong>nouveau lot de coût</strong> à ce prix<?php if (\App\Core\Permissions::isSystemAdmin()): ?> dans <a href="<?= e(url('/admin/compta/couts')) ?>">Coûts de revient</a><?php endif; ?> — décoche la case pour des prix inhabituels.</p>
+            <p>Les achats alimentent le <strong>stock théorique</strong> visible<?php if (\App\Core\Permissions::isSystemAdmin()): ?> dans <a href="<?= e(url('/admin/compta/inventaire')) ?>">l'inventaire</a><?php endif; ?> : dernier comptage + achats − ventes.</p>
+            <p>Une ligne peut aussi être <strong>« hors stock »</strong> (conso bureau, fournitures, essais, invités…) : coche la case — l'achat reste comptabilisé mais n'alimente ni le stock théorique ni le stock de référence.</p>
+        </section>
+        <section class="card surface glass">
+            <h2 class="card-title">HT ou TTC ?</h2>
+            <p><strong>Montants HT</strong> : les prix fournisseurs (Metro…) sont souvent HT — la TVA choisie est <em>ajoutée</em> pour obtenir le TTC.</p>
+            <p><strong>Montants TTC</strong> : ticket de caisse — la TVA choisie est déjà <em>incluse</em> : le HT et la TVA sont déduits automatiquement (TTC ÷ (1 + taux)).</p>
+            <p>Le taux par défaut est <strong>5,5 %</strong> (alimentation) ; choisis 20 % pour la plupart des autres achats.</p>
+        </section>
+    </div>
+</div>
+
+<!-- ==================== Onglet : Saisir ==================== -->
+<?php
+// Liste de picking : produits vendus + clés réelles existantes (les
+// mêmes que les suggestions anti-doublons), triées naturellement.
+$pickerList = array_values(array_unique(array_merge($products, array_values($normKeys))));
+usort($pickerList, 'strnatcasecmp');
+?>
+<div class="compta-tabpane" data-pane="saisie" hidden>
+    <!-- ── Volets exclusifs « Facture » / « Frais divers » ──
+         Fusion « Saisir une dépense » × « Achats » : une facture = UN
+         destinataire. Volet A → /achats/save-bulk (purchases, stock,
+         coûts) ; volet B (vue partielle _expense_form.php) →
+         /depenses/save (expenses). Deux <form> DISTINCTS dont un seul
+         est visible : structurellement impossible de soumettre les
+         deux — l'invariant anti-doublon (un ticket = une écriture)
+         est garanti par la structure, pas par une confirmation. -->
+    <nav class="compta-tabs" data-volet-tabs aria-label="Type de saisie">
+        <button type="button" class="compta-tab is-active" data-volet-btn="facture">Facture (lignes d'achats)</button>
+        <button type="button" class="compta-tab" data-volet-btn="frais">Frais divers (sans produits)</button>
+    </nav>
+    <p class="muted" style="margin:-0.4rem 0 1rem;">
+        Une facture n'est comptée qu'<strong>une seule fois</strong> : avec des produits (stock &amp; coûts) dans « Facture »,
+        en charge immédiate dans « Frais divers » — jamais les deux.
+    </p>
+    <div data-volet-pane="facture">
+    <section class="card surface glass">
+        <h2 class="card-title">Enregistrer des achats</h2>
+        <p class="muted">Une course entière (Metro…) en une fois, même à 20 produits. Le plus rapide : <strong>colle la commande du fournisseur</strong> ci-dessous. Sinon clique les produits connus ou tape au clavier — un seul « Enregistrer » à la fin.</p>
+
+        <form method="post" action="<?= e(url('/admin/compta/achats/save-bulk')) ?>" data-purchase-form>
+            <?= csrf_field() ?>
+            <!-- Justificatif conservé au scan (rempli par le JS) : la
+                 photo accompagne les achats dans le livre comptable. -->
+            <input type="hidden" name="receipt_path" id="purchase-receipt-path" value="">
+
+            <div class="field-row">
+                <div class="field">
+                    <label for="purchased_at">Date</label>
+                    <input type="date" id="purchased_at" name="purchased_at" value="<?= e(date('Y-m-d')) ?>" required>
+                </div>
+                <div class="field">
+                    <label for="vat_rate">Taux de TVA <span class="muted">(par défaut)</span></label>
+                    <select id="vat_rate" name="vat_rate">
+                        <option value="20">TVA 20 %</option>
+                        <option value="10">TVA 10 %</option>
+                        <option value="5.5" selected>TVA 5,5 %</option>
+                        <option value="2.1">TVA 2,1 %</option>
+                        <option value="0">Sans TVA (0 %)</option>
+                    </select>
+                    <p class="field-help">Facture à TVA mixte (ex. Metro : boissons 5,5 % + droguerie 20 %) ? Garde le taux dominant ici et change le taux <strong>de chaque ligne concernée</strong> dans la grille (sélecteur « TVA »).</p>
+                </div>
+                <div class="field">
+                    <label>Les montants saisis sont…</label>
+                    <div class="chip-row" role="radiogroup" aria-label="Base des montants">
+                        <label class="chip"><input type="radio" name="amount_basis" value="ht" checked><span>HT (TVA à ajouter)</span></label>
+                        <label class="chip"><input type="radio" name="amount_basis" value="ttc"><span>TTC (TVA incluse)</span></label>
+                    </div>
+                    <p class="field-help">Prix Metro/fournisseur → HT. Ticket de caisse → TTC : le HT et la TVA sont déduits automatiquement.</p>
+                </div>
+                <div class="field">
+                    <label for="supplier">Fournisseur <span class="muted">(optionnel, appliqué à toutes les lignes)</span></label>
+                    <input type="text" id="supplier" name="supplier" placeholder="ex: Metro">
+                </div>
+                <div class="field">
+                    <label for="invoice_number">N° de facture <span class="muted">(optionnel, appliqué à toutes les lignes)</span></label>
+                    <input type="text" id="invoice_number" name="invoice_number" placeholder="ex: 3007 02 0090">
+                    <p class="field-help">Sert de référence dans le livre comptable (à la place du n° interne).</p>
+                </div>
+            </div>
+
+            <div class="field">
+                <label style="display:flex;align-items:center;gap:8px;font-weight:400;cursor:pointer;">
+                    <input type="checkbox" name="update_cost" value="1" checked>
+                    Mettre à jour le coût de revient <span class="muted">(un lot par produit, en TTC)</span>
+                </label>
+                <p class="field-help">Décoche si ces prix sont inhabituels (promo, erreur, test…) pour ne pas fausser le calcul du bénéfice.</p>
+            </div>
+
+            <!-- ── 1) Coller la commande : le plus rapide pour ~20 lignes ── -->
+            <div class="pa-paste">
+                <p class="pa-paste-title">📋 Coller la commande entière <span class="muted">— copie l'e-mail fournisseur ou Excel, une ligne par produit</span></p>
+                <textarea id="purchase-paste" rows="5" placeholder="Coca 33cl ; 24 ; 18,60&#10;Fanta Orange 33cl ; 24 ; 15,20&#10;Bonbons ; 10,45" spellcheck="false"></textarea>
+                <p class="field-help">Format <code>Nom ; Qté ; Montant</code> (tabulations acceptées ; Qté et Montant optionnels).</p>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-primary btn-sm" id="purchase-paste-apply">Importer les lignes →</button>
+                    <button type="button" class="btn btn-ghost btn-sm" id="purchase-paste-clear">Vider</button>
+                    <span class="muted pa-paste-status" id="purchase-paste-status"></span>
+                </div>
+            </div>
+
+            <!-- ── 1bis) Scanner une facture : OCR serveur puis analyse ──
+                 Le bouton déplie le panneau ; « Extraire » envoie le fichier
+                 (ou PDF) à l'endpoint de scan, « Analyser » lui renvoie le
+                 texte (corrigé à la main) et préremplit le formulaire.
+                 data-scan-url : même construction d'URL que le formulaire. -->
+            <div class="pa-paste" data-purchase-scan data-scan-url="<?= e(url('/admin/compta/achats/scan')) ?>">
+                <button type="button" class="btn btn-ghost btn-sm" id="purchase-scan-toggle"
+                        aria-expanded="false" aria-controls="purchase-scan-panel">📷 Scanner une facture</button>
+                <div id="purchase-scan-panel" hidden>
+                    <div class="field">
+                        <label for="purchase-scan-file">Fichier facture <span class="muted">(JPG, PNG, WebP ou PDF — 10 Mo max)</span></label>
+                        <input type="file" id="purchase-scan-file"
+                               accept="image/jpeg,image/png,image/webp,application/pdf,.jpg,.jpeg,.png,.webp,.pdf">
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-primary btn-sm" id="purchase-scan-extract">Extraire le texte</button>
+                    </div>
+                    <textarea id="purchase-scan-text" rows="8" spellcheck="false"
+                              placeholder="Le texte extrait de la facture apparaîtra ici — corrigez les erreurs de reconnaissance avant d'analyser."></textarea>
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-primary btn-sm" id="purchase-scan-analyze">Analyser le texte et préremplir</button>
+                        <span class="muted pa-paste-status" id="purchase-scan-status"></span>
+                    </div>
+                    <ul class="field-help" id="purchase-scan-warnings" hidden></ul>
+                </div>
+                <p class="field-help">Photo ou PDF de facture METRO → le texte est extrait puis analysé. Vérifiez toujours les lignes avant d'enregistrer.</p>
+            </div>
+
+            <!-- ── 2) Ajouter un produit connu : recherche + clic ── -->
+            <div class="combobox pa-picker">
+                <input type="text" id="pa-search" class="combobox-input" placeholder="🔍 Ou ajoute un produit connu… (tape, puis Entrée ou clic)"
+                       autocomplete="off" aria-label="Rechercher un produit connu à ajouter">
+                <ul class="combobox-list" id="pa-results" hidden></ul>
+            </div>
+
+            <!-- ── 3) La commande : lignes compactes ── -->
+            <div class="pa-grid" id="purchases-grid"
+                 data-dup-keys="<?= e(json_encode($normKeys)) ?>"
+                 data-picker-keys="<?= e(json_encode($pickerList, JSON_UNESCAPED_UNICODE)) ?>">
+                <div class="pa-head" aria-hidden="true">
+                    <span>#</span>
+                    <span>Produit</span>
+                    <span>Qté</span>
+                    <span>Montant total (€)</span>
+                    <span>≈ / unité · TVA · stock</span>
+                    <span></span>
+                </div>
+                <div id="purchases-lines"></div>
+            </div>
+            <datalist id="purchase-products">
+                <?php foreach ($products as $p): ?>
+                    <option value="<?= e($p) ?>"></option>
+                <?php endforeach; ?>
+            </datalist>
+
+            <!-- Récap collant : compte, totaux et actions toujours visibles -->
+            <div class="pa-recap" id="pa-recap">
+                <div class="pa-recap-info">
+                    <strong id="pa-count">0 ligne</strong>
+                    <span class="pa-recap-total"><span id="purchases-total">0,000 €</span> <span class="muted" id="purchases-total-basis"></span></span>
+                    <span class="muted" id="purchases-total-other"></span>
+                </div>
+                <div class="pa-recap-actions">
+                    <button type="button" class="btn btn-ghost btn-sm" id="purchase-line-add">+ Ligne</button>
+                    <button type="button" class="btn btn-ghost btn-sm" id="purchase-line-add5">+ 5</button>
+                    <button type="button" class="btn btn-ghost btn-sm" onclick="if (confirm('Effacer la saisie en cours ?')) this.form.reset();">Annuler</button>
+                    <button type="submit" class="btn btn-primary" id="pa-submit">Enregistrer les achats</button>
+                </div>
+            </div>
+
+            <p class="field-help">
+                Au clavier : <strong>Produit → Entrée → Qté → Entrée → Montant → Entrée</strong> enchaîne les lignes (une ligne vide s'ajoute toute seule) ; <strong>Ctrl+Entrée</strong> enregistre.
+                Choisis des noms existants (mêmes noms que dans les ventes) pour alimenter le bon stock théorique ; les lignes vides sont ignorées.
+                Coche « hors stock » pour une ligne qui ne doit pas alimenter le stock (conso bureau, fournitures, essais…) : l'achat reste comptabilisé.
+                Facture à TVA mixte : le sélecteur <strong>« TVA »</strong> de chaque ligne remplace le taux par défaut (les indices /u et les totaux suivent).
+            </p>
+        </form>
+        <!-- Helpers purs (normalisation, collage, HT/TTC, doublons) :
+             logique partagée et testée automatiquement
+             (tests/js/compta-saisie.test.js via tests/Unit/PurchaseGridJsTest.php). -->
+        <script src="<?= e(rootAssetVersioned('/assets/js/compta-saisie.js')) ?>"></script>
+        <script>
+        (function () {
+            var H = window.ComptaSaisie;
+            var grid = document.getElementById('purchases-grid');
+            var tbody = document.getElementById('purchases-lines');
+            var addBtn = document.getElementById('purchase-line-add');
+            var add5Btn = document.getElementById('purchase-line-add5');
+            var countEl = document.getElementById('pa-count');
+            var totalEl = document.getElementById('purchases-total');
+            var totalBasisEl = document.getElementById('purchases-total-basis');
+            var totalOtherEl = document.getElementById('purchases-total-other');
+            var rateEl = document.getElementById('vat_rate');
+            var basisInputs = document.querySelectorAll('input[name="amount_basis"]');
+            var form = document.querySelector('[data-purchase-form]');
+            if (!H || !tbody || !addBtn || !grid || !form) return;
+
+            var MAX_LINES = 60;
+            var START_LINES = 5; // une commande complète tient d'un coup
+
+            // Carte des clés existantes, normalisées côté PHP
+            // (data-dup-keys) : clé normalisée -> clé réelle à préférer.
+            var normKeys = {};
+            try { normKeys = JSON.parse(grid.getAttribute('data-dup-keys') || '{}'); } catch (e) { normKeys = {}; }
+            var pickerKeys = [];
+            try { pickerKeys = JSON.parse(grid.getAttribute('data-picker-keys') || '[]'); } catch (e) { pickerKeys = []; }
+
+            // Helpers purs partagés (fichier compta-saisie.js) : le DOM
+            // reste ici, la logique est testée automatiquement.
+            var normKey = H.normKey;
+            var parseAmount = H.parseAmount;
+            var fmt3 = H.fmt3;
+            var parsePasteLine = H.parsePasteLine;
+
+            function esc(s) {
+                return String(s).replace(/[&<>"]/g, function (c) {
+                    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+                });
+            }
+
+            function rows() {
+                return Array.prototype.slice.call(tbody.querySelectorAll('.pa-row'));
+            }
+
+            function basis() {
+                for (var i = 0; i < basisInputs.length; i++) {
+                    if (basisInputs[i].checked) return basisInputs[i].value;
+                }
+                return 'ht';
+            }
+
+            function rate() {
+                var r = parseFloat(rateEl.value);
+                return isFinite(r) ? r : 0;
+            }
+
+            // Taux effectif d'une ligne : son sélecteur « TVA » s'il
+            // dévie du défaut, sinon le taux d'en-tête (factures à TVA
+            // mixte : quelques lignes à 20 % dans une facture à 5,5 %).
+            function rowRate(tr) {
+                var sel = tr.querySelector('.line-vat');
+                var r = sel && sel.value !== '' ? parseFloat(sel.value) : NaN;
+                if (isFinite(r)) return r;
+                return rate();
+            }
+
+            // Pose le taux d'une ligne (scan : taux lu sur la facture).
+            // Valeur absente/inconnue du sélecteur : retour au défaut.
+            function setLineVat(tr, vat) {
+                var sel = tr.querySelector('.line-vat');
+                if (!sel) return;
+                var v = vat === null || vat === undefined ? '' : String(vat);
+                sel.value = v;
+                if (v !== '' && sel.value !== v) sel.value = '';
+                var wrap = tr.querySelector('.pa-vat');
+                if (wrap) wrap.classList.toggle('is-custom', sel.value !== '');
+            }
+
+            function updateRow(tr) {
+                var a = parseAmount(tr.querySelector('[name="total_amount[]"]').value);
+                var q = parseInt(tr.querySelector('[name="quantity[]"]').value, 10);
+                var hint = tr.querySelector('.line-unit');
+                var text = H.unitHint(a, q, rowRate(tr), basis());
+                if (text === '') {
+                    hint.hidden = true;
+                    hint.textContent = '';
+                    return;
+                }
+                hint.textContent = text;
+                hint.hidden = false;
+            }
+
+            function updateTotals() {
+                var sum = 0, filled = 0, ht = 0, ttc = 0;
+                Array.prototype.forEach.call(rows(), function (tr) {
+                    var a = parseAmount(tr.querySelector('[name="total_amount[]"]').value);
+                    if (tr.querySelector('[name="product_key[]"]').value.trim() !== '' || (isFinite(a) && a > 0)) filled++;
+                    if (isFinite(a) && a > 0) {
+                        sum += a;
+                        // Décomposition ligne par ligne : chaque ligne
+                        // utilise SON taux (TVA mixte exacte au centime).
+                        var s = H.splitVat(a, rowRate(tr), basis());
+                        ht += s.ht;
+                        ttc += s.ttc;
+                    }
+                });
+                var isTtc = basis() === 'ttc';
+                countEl.textContent = filled + ' ligne' + (filled > 1 ? 's' : '');
+                totalEl.textContent = fmt3(sum);
+                totalBasisEl.textContent = isTtc ? 'TTC' : 'HT';
+                totalOtherEl.textContent = sum <= 0 ? '' : (isTtc
+                    ? 'dont ' + fmt3(ht) + ' HT · ' + fmt3(ttc - ht) + ' TVA'
+                    : 'soit ' + fmt3(ttc) + ' TTC');
+            }
+
+            function refreshIdx() {
+                Array.prototype.forEach.call(rows(), function (tr, i) {
+                    tr.querySelector('.pa-idx').textContent = i + 1;
+                });
+            }
+
+            // Doublons : suggestion d'une clé existante qui ressemble, et
+            // détection de deux lignes identiques dans la même commande.
+            function checkDup(tr) {
+                var input = tr.querySelector('[name="product_key[]"]');
+                var warn = tr.querySelector('.pa-warn');
+                if (!input || !warn) return;
+                var value = input.value.trim();
+                var msg = '';
+
+                var existing = normKeys[normKey(value)];
+                if (existing && existing !== value) {
+                    msg = '« ' + value + ' » ressemble à « ' + existing + ' » — préfère ce nom existant (autocomplétion).';
+                }
+
+                if (value !== '') {
+                    var all = rows();
+                    var names = all.map(function (row) {
+                        return row.querySelector('[name="product_key[]"]').value;
+                    });
+                    var firstAt = H.findDuplicateLine(names, all.indexOf(tr));
+                    if (firstAt !== -1) {
+                        msg = '« ' + value + ' » est déjà en ligne ' + firstAt + ' — fusionne les quantités sur une seule ligne.';
+                    }
+                }
+
+                warn.textContent = msg;
+                warn.hidden = msg === '';
+            }
+
+            function refreshDups() {
+                Array.prototype.forEach.call(rows(), checkDup);
+            }
+
+            function recalcAll() {
+                Array.prototype.forEach.call(rows(), updateRow);
+                updateTotals();
+            }
+
+            // Navigation clavier : Entrée = champ suivant sur la ligne,
+            // puis ligne suivante (une nouvelle ligne est créée si on est
+            // sur la dernière).
+            function focusField(tr, name) {
+                var el = tr.querySelector('[name="' + name + '"]');
+                if (el) el.focus();
+            }
+
+            function nextRow(tr) {
+                var all = rows();
+                var i = all.indexOf(tr);
+                if (i === -1) return null;
+                if (i + 1 < all.length) return all[i + 1];
+                if (all.length < MAX_LINES) return addLine(false);
+                return null;
+            }
+
+            function setQty(tr, q) {
+                var input = tr.querySelector('[name="quantity[]"]');
+                input.value = String(Math.max(1, q));
+                updateRow(tr);
+            }
+
+            function wireRow(tr) {
+                var keyInput = tr.querySelector('[name="product_key[]"]');
+                var qtyInput = tr.querySelector('[name="quantity[]"]');
+                var amountInput = tr.querySelector('[name="total_amount[]"]');
+
+                keyInput.addEventListener('blur', function () { checkDup(tr); });
+                keyInput.addEventListener('change', function () { checkDup(tr); });
+                keyInput.addEventListener('input', function () {
+                    updateTotals();
+                    // Le vrai produit est choisi : la marque « libellé
+                    // non reconnu » (contour orange) disparaît.
+                    refreshScanMark(tr);
+                });
+                keyInput.addEventListener('keydown', function (ev) {
+                    if (ev.key === 'Enter') { ev.preventDefault(); focusField(tr, 'quantity[]'); }
+                });
+
+                // Sélection auto au focus : la valeur « 1 » s'écrase direct.
+                qtyInput.addEventListener('focus', function () { qtyInput.select(); });
+                qtyInput.addEventListener('input', function () { updateRow(tr); });
+                qtyInput.addEventListener('keydown', function (ev) {
+                    if (ev.key === 'Enter') { ev.preventDefault(); focusField(tr, 'total_amount[]'); }
+                });
+
+                Array.prototype.forEach.call(tr.querySelectorAll('.pa-step'), function (btn) {
+                    btn.addEventListener('click', function () {
+                        var q = parseInt(qtyInput.value, 10) || 1;
+                        setQty(tr, q + (btn.getAttribute('data-step') === '1' ? 1 : -1));
+                    });
+                });
+
+                amountInput.addEventListener('focus', function () { amountInput.select(); });
+                amountInput.addEventListener('input', function () {
+                    updateRow(tr); updateTotals();
+                    // Dernière ligne remplie → une nouvelle ligne apparaît :
+                    // on enchaîne les produits sans jamais cliquer.
+                    if (amountInput.value !== '' && rows()[rows().length - 1] === tr && rows().length < MAX_LINES) {
+                        addLine(false);
+                        refreshIdx();
+                    }
+                });
+                amountInput.addEventListener('keydown', function (ev) {
+                    if (ev.key === 'Enter') {
+                        ev.preventDefault();
+                        var next = nextRow(tr);
+                        if (next) focusField(next, 'product_key[]');
+                    }
+                });
+
+                // Taux de TVA de la ligne (facture mixte) : recalcule
+                // l'indice /u et les totaux, marque la déviation.
+                var vatSelect = tr.querySelector('.line-vat');
+                if (vatSelect) {
+                    vatSelect.addEventListener('change', function () {
+                        var wrap = tr.querySelector('.pa-vat');
+                        if (wrap) wrap.classList.toggle('is-custom', vatSelect.value !== '');
+                        updateRow(tr); updateTotals();
+                    });
+                }
+
+                tr.querySelector('.pa-remove').addEventListener('click', function () {
+                    var all = rows();
+                    if (all.length <= 1) {
+                        // Dernière ligne : on la vide au lieu de la retirer.
+                        tr.querySelectorAll('input[type="text"], input[type="number"]').forEach(function (el) { el.value = el.name === 'quantity[]' ? '1' : ''; });
+                        tr.querySelector('.line-no-stock').checked = false;
+                        setLineVat(tr, null);
+                        clearRawLabel(tr);
+                        updateRow(tr); updateTotals(); refreshDups();
+                        return;
+                    }
+                    tr.remove(); updateTotals(); refreshIdx(); refreshDups();
+                });
+                updateRow(tr);
+            }
+
+            function addLine(focus) {
+                var tr = document.createElement('div');
+                tr.className = 'pa-row';
+                tr.innerHTML =
+                    '<span class="pa-idx">0</span>' +
+                    '<div class="pa-prod"><input type="hidden" name="raw_label[]" value=""><input type="text" name="product_key[]" list="purchase-products" placeholder="ex: Coca 33cl" autocomplete="off"><div class="pa-warn" hidden></div></div>' +
+                    '<div class="pa-qty">' +
+                        '<button type="button" class="pa-step" data-step="-1" aria-label="Moins un">−</button>' +
+                        '<input type="number" name="quantity[]" value="1" min="1" step="1" inputmode="numeric">' +
+                        '<button type="button" class="pa-step" data-step="1" aria-label="Plus un">+</button>' +
+                    '</div>' +
+                    '<div class="pa-amount"><input type="text" name="total_amount[]" placeholder="ex: 18,60" inputmode="decimal"></div>' +
+                    '<div class="pa-meta">' +
+                        '<span class="muted line-unit" hidden></span>' +
+                        '<label class="pa-vat" title="Taux de TVA de CETTE ligne — facture à TVA mixte (ex. Metro : boissons 5,5 % + droguerie 20 %). « défaut » = le taux d\'en-tête.">TVA <select name="vat_rate[]" class="line-vat">' +
+                            '<option value="">défaut</option>' +
+                            '<option value="5.5">5,5 %</option>' +
+                            '<option value="20">20 %</option>' +
+                            '<option value="10">10 %</option>' +
+                            '<option value="2.1">2,1 %</option>' +
+                            '<option value="0">0 %</option>' +
+                        '</select></label>' +
+                        '<label class="pa-nostock" title="Cochée : n\'alimente pas le stock théorique (conso bureau, essais…)"><input type="checkbox" class="line-no-stock" name="no_stock[]" value="1"> hors stock</label>' +
+                    '</div>' +
+                    '<button type="button" class="pa-remove" aria-label="Retirer la ligne" title="Retirer la ligne">×</button>';
+                tbody.appendChild(tr);
+                wireRow(tr);
+                refreshIdx();
+                if (focus) tr.querySelector('[name="product_key[]"]').focus();
+
+                return tr;
+            }
+
+            function addLines(n) {
+                for (var i = 0; i < n && rows().length < MAX_LINES; i++) addLine(false);
+                updateTotals();
+            }
+
+            function firstEmptyRow() {
+                var all = rows();
+                for (var i = 0; i < all.length; i++) {
+                    if (all[i].querySelector('[name="product_key[]"]').value.trim() === '') return all[i];
+                }
+                return null;
+            }
+
+            // Efface la trace de libellé facture d'une ligne (retirée
+            // ou vidée) : plus de clé, plus rien à apprendre.
+            function clearRawLabel(tr) {
+                var hidden = tr.querySelector('[name="raw_label[]"]');
+                if (hidden) hidden.value = '';
+                refreshScanMark(tr);
+            }
+
+            // Marque visuelle « libellé scan non reconnu » : la clé de la
+            // ligne EST le libellé OCR brut (produit non reconnu dans le
+            // catalogue) — contour orange jusqu'au choix du vrai produit
+            // (sans ça, l'enregistrement créerait une fiche au nom long).
+            // Le libellé reste en champ caché : corriger la clé retiendra
+            // l'appellation automatiquement. Libellé ≠ clé (ligne
+            // reconnue/corrigée) : simple info-bulle de contrôle.
+            function refreshScanMark(tr) {
+                var hidden = tr.querySelector('[name="raw_label[]"]');
+                var input = tr.querySelector('[name="product_key[]"]');
+                if (!input) return;
+                var raw = hidden ? String(hidden.value || '').trim() : '';
+                var name = input.value.trim();
+                var unmatched = raw !== '' && normKey(raw) === normKey(name);
+                tr.classList.toggle('pa-unmatched', unmatched);
+                if (raw === '') {
+                    input.removeAttribute('title');
+                } else if (unmatched) {
+                    input.title = 'Libellé scan non reconnu — choisissez le vrai produit';
+                } else {
+                    input.title = 'Libellé facture : ' + raw;
+                }
+            }
+
+            // Remplit une ligne (picker ou import) : nom, qté, montant.
+            // rawLabel (scan) : libellé FACTURE d'origine, conservé en
+            // champ caché — si le nom est corrigé, l'appellation
+            // « libellé → nom court » sera retenue à l'enregistrement.
+            // vat (scan) : taux de TVA de la ligne lu sur la facture
+            // (mixte) — posé sur le sélecteur « TVA » de la ligne.
+            function fillRow(tr, name, qty, amount, rawLabel, vat) {
+                tr.querySelector('[name="product_key[]"]').value = name;
+                tr.querySelector('[name="quantity[]"]').value = String(qty || 1);
+                tr.querySelector('[name="total_amount[]"]').value = amount || '';
+                var hidden = tr.querySelector('[name="raw_label[]"]');
+                if (hidden) hidden.value = rawLabel || '';
+                refreshScanMark(tr);
+                if (vat !== undefined) setLineVat(tr, vat);
+                updateRow(tr);
+                checkDup(tr);
+                updateTotals();
+            }
+
+            // La grille contient-elle déjà une saisie (produit ou montant) ?
+            // (scan : demande confirmation avant d'écraser la saisie en cours)
+            function gridHasContent() {
+                return rows().some(function (tr) {
+                    if (tr.querySelector('[name="product_key[]"]').value.trim() !== '') return true;
+                    var a = parseAmount(tr.querySelector('[name="total_amount[]"]').value);
+                    return isFinite(a) && a > 0;
+                });
+            }
+
+            // Réinitialise la grille à une seule ligne vide (mêmes gestes
+            // que le bouton « × » sur la dernière ligne).
+            function resetGridRows() {
+                var all = rows();
+                for (var i = all.length - 1; i > 0; i--) all[i].remove();
+                var tr = all[0];
+                tr.querySelectorAll('input[type="text"], input[type="number"]').forEach(function (el) {
+                    el.value = el.name === 'quantity[]' ? '1' : '';
+                });
+                clearRawLabel(tr);
+                var cb = tr.querySelector('.line-no-stock');
+                if (cb) cb.checked = false;
+                setLineVat(tr, null);
+                var warn = tr.querySelector('.pa-warn');
+                if (warn) { warn.textContent = ''; warn.hidden = true; }
+                var hint = tr.querySelector('.line-unit');
+                if (hint) { hint.textContent = ''; hint.hidden = true; }
+            }
+
+            // ── Sélecteur de produits connus : tape, flèches, Entrée ──
+            var searchInput = document.getElementById('pa-search');
+            var resultList = document.getElementById('pa-results');
+            var activeAt = -1;
+            if (searchInput && resultList) {
+                function inOrderKeys() {
+                    var set = {};
+                    Array.prototype.forEach.call(rows(), function (tr) {
+                        var v = tr.querySelector('[name="product_key[]"]').value.trim();
+                        if (v !== '') set[normKey(v)] = true;
+                    });
+                    return set;
+                }
+
+                function renderResults() {
+                    var q = normKey(searchInput.value);
+                    var inOrder = inOrderKeys();
+                    var matches = [];
+                    Array.prototype.forEach.call(pickerKeys, function (name) {
+                        if (q === '' || normKey(name).indexOf(q) !== -1) matches.push(name);
+                    });
+                    var html = '';
+                    var shown = matches.slice(0, 8);
+                    Array.prototype.forEach.call(shown, function (name) {
+                        html += '<li class="combobox-option" data-name="' + esc(name) + '">' +
+                            (inOrder[normKey(name)] ? '✓ ' : '') + esc(name) +
+                            (inOrder[normKey(name)] ? ' <small class="muted">déjà dans la commande</small>' : '') +
+                            '</li>';
+                    });
+                    if (searchInput.value.trim() !== '' && normKey(searchInput.value) !== '' && !inOrder[normKey(searchInput.value)]) {
+                        var known = matches.some(function (n) { return normKey(n) === normKey(searchInput.value); });
+                        if (!known) {
+                            html += '<li class="combobox-option combobox-new" data-name="' + esc(searchInput.value.trim()) + '">+ Nouveau produit : « ' + esc(searchInput.value.trim()) + ' »</li>';
+                        }
+                    }
+                    resultList.innerHTML = html;
+                    activeAt = shown.length > 0 ? 0 : (resultList.children.length > 0 ? 0 : -1);
+                    highlight();
+                    resultList.hidden = resultList.children.length === 0;
+                }
+
+                function highlight() {
+                    Array.prototype.forEach.call(resultList.children, function (li, i) {
+                        li.classList.toggle('is-active', i === activeAt);
+                    });
+                }
+
+                function applyAt(i) {
+                    var li = resultList.children[i];
+                    if (!li) return;
+                    var name = li.getAttribute('data-name');
+                    var tr = firstEmptyRow() || (rows().length < MAX_LINES ? addLine(false) : null);
+                    if (!tr) return;
+                    fillRow(tr, name, 1, '');
+                    searchInput.value = '';
+                    resultList.hidden = true;
+                    focusField(tr, 'quantity[]');
+                }
+
+                searchInput.addEventListener('input', renderResults);
+                searchInput.addEventListener('focus', renderResults);
+                searchInput.addEventListener('keydown', function (ev) {
+                    if (ev.key === 'ArrowDown') { ev.preventDefault(); if (activeAt < resultList.children.length - 1) activeAt++; highlight(); }
+                    else if (ev.key === 'ArrowUp') { ev.preventDefault(); if (activeAt > 0) activeAt--; highlight(); }
+                    else if (ev.key === 'Enter') { ev.preventDefault(); applyAt(activeAt); }
+                    else if (ev.key === 'Escape') { resultList.hidden = true; }
+                });
+                searchInput.addEventListener('blur', function () {
+                    window.setTimeout(function () { resultList.hidden = true; }, 150);
+                });
+                resultList.addEventListener('mousedown', function (ev) {
+                    var li = ev.target.closest('.combobox-option');
+                    if (!li) return;
+                    ev.preventDefault();
+                    applyAt(Array.prototype.indexOf.call(resultList.children, li));
+                });
+            }
+
+            // ── Coller la commande : comptage en direct, puis import ──
+            // (analyse déléguée au helper partagé H.parsePasteLine)
+
+            var pasteArea = document.getElementById('purchase-paste');
+            var pasteApply = document.getElementById('purchase-paste-apply');
+            var pasteStatus = document.getElementById('purchase-paste-status');
+            if (pasteArea && pasteApply) {
+                pasteArea.addEventListener('input', function () {
+                    var n = 0;
+                    Array.prototype.forEach.call(pasteArea.value.split(/\r?\n/), function (line) {
+                        if (String(line).trim() !== '' && parsePasteLine(String(line).trim())) n++;
+                    });
+                    pasteStatus.textContent = pasteArea.value.trim() === ''
+                        ? ''
+                        : n + ' ligne' + (n > 1 ? 's' : '') + ' détectée' + (n > 1 ? 's' : '') + ' — clique « Importer ».';
+                });
+
+                pasteApply.addEventListener('click', function () {
+                    var count = 0;
+                    Array.prototype.forEach.call(pasteArea.value.split(/\r?\n/), function (line) {
+                        if (String(line).trim() === '') return;
+                        var entry = parsePasteLine(String(line).trim());
+                        if (!entry) return;
+
+                        // Remplit d'abord les lignes vides existantes.
+                        var tr = firstEmptyRow();
+                        if (!tr && rows().length < MAX_LINES) tr = addLine(false);
+                        if (!tr) return;
+
+                        fillRow(tr, entry.name, entry.qty, entry.amount);
+                        count++;
+                    });
+                    refreshIdx(); refreshDups(); updateTotals();
+                    pasteStatus.textContent = count > 0
+                        ? count + ' ligne' + (count > 1 ? 's' : '') + ' importée' + (count > 1 ? 's' : '') + ' — vérifie puis enregistre.'
+                        : 'Rien à importer : une ligne par produit, « Nom ; Qté ; Montant ».';
+                    if (count > 0) pasteArea.value = '';
+                });
+                var pasteClear = document.getElementById('purchase-paste-clear');
+                if (pasteClear) {
+                    pasteClear.addEventListener('click', function () {
+                        pasteArea.value = '';
+                        pasteStatus.textContent = '';
+                        pasteArea.focus();
+                    });
+                }
+            }
+
+            // ── Scanner une facture : OCR serveur puis analyse ──
+            // Requêtes via les helpers partagés H.scanUpload /
+            // H.scanParseText ; préremplissage via H.applyInvoiceState
+            // (pur, testé) + le même mécanisme de grille que le collage
+            // (firstEmptyRow + fillRow). Jeton CSRF : champ `_csrf` du
+            // formulaire (csrf_field()), accepté aussi en en-tête par
+            // Csrf::checkRequest.
+            var scanRoot = document.querySelector('[data-purchase-scan]');
+            if (scanRoot) {
+                var scanToggle = document.getElementById('purchase-scan-toggle');
+                var scanPanel = document.getElementById('purchase-scan-panel');
+                var scanFile = document.getElementById('purchase-scan-file');
+                var scanExtract = document.getElementById('purchase-scan-extract');
+                var scanText = document.getElementById('purchase-scan-text');
+                var scanAnalyze = document.getElementById('purchase-scan-analyze');
+                var scanStatus = document.getElementById('purchase-scan-status');
+                var scanWarnings = document.getElementById('purchase-scan-warnings');
+                var scanUrl = scanRoot.getAttribute('data-scan-url') || '';
+                var csrfInput = form.querySelector('input[name="_csrf"]');
+                var supplierEl = document.getElementById('supplier');
+                var invoiceNumberEl = document.getElementById('invoice_number');
+                var purchasedAtEl = document.getElementById('purchased_at');
+
+                function scanSetStatus(msg) { scanStatus.textContent = msg; }
+
+                // Warnings serveur : liste à puces remplie via
+                // textContent uniquement (jamais innerHTML).
+                function scanSetWarnings(list) {
+                    scanWarnings.textContent = '';
+                    if (!list || !list.length) { scanWarnings.hidden = true; return; }
+                    Array.prototype.forEach.call(list, function (w) {
+                        var li = document.createElement('li');
+                        li.textContent = String(w == null ? '' : w);
+                        scanWarnings.appendChild(li);
+                    });
+                    scanWarnings.hidden = false;
+                }
+
+                function scanBusy(busy) {
+                    scanExtract.disabled = busy;
+                    scanAnalyze.disabled = busy;
+                }
+
+                function scanFail(err) {
+                    scanSetStatus(err && err.message ? err.message : 'Erreur réseau : l\u2019analyse de la facture a échoué.');
+                }
+
+                function scanToken() { return csrfInput ? csrfInput.value : ''; }
+
+                // Préremplit le formulaire depuis une facture analysée :
+                // en-tête (fournisseur, n°, date, TVA, base HT/TTC) puis
+                // grille. Ne touche qu'aux valeurs des champs existants.
+                function applyInvoice(invoice) {
+                    var st = H.applyInvoiceState({
+                        supplier: supplierEl ? supplierEl.value : '',
+                        invoice_number: invoiceNumberEl ? invoiceNumberEl.value : '',
+                        purchased_at: purchasedAtEl ? purchasedAtEl.value : '',
+                        vat_rate: rateEl.value,
+                        amount_basis: basis(),
+                        rows: []
+                    }, invoice);
+                    var rowsData = st.rows;
+
+                    var proceed = function () {
+                        if (supplierEl) supplierEl.value = st.supplier;
+                        if (invoiceNumberEl) invoiceNumberEl.value = st.invoice_number;
+                        if (purchasedAtEl && st.purchased_at !== '') purchasedAtEl.value = st.purchased_at;
+                        if (st.vat_rate !== null) {
+                            Array.prototype.forEach.call(rateEl.options, function (opt) {
+                                if (parseFloat(opt.value) === parseFloat(st.vat_rate)) rateEl.value = opt.value;
+                            });
+                        }
+                        if (st.amount_basis !== basis()) {
+                            Array.prototype.forEach.call(basisInputs, function (input) {
+                                input.checked = input.value === st.amount_basis;
+                            });
+                        }
+
+                        if (rowsData.length === 0) {
+                            recalcAll();
+                            scanSetStatus('Aucune ligne reconnue — vérifiez/corrigez le texte puis ré-analysez.');
+                            return;
+                        }
+
+                        resetGridRows();
+                        Array.prototype.forEach.call(rowsData, function (r) {
+                            var tr = firstEmptyRow() || (rows().length < MAX_LINES ? addLine(false) : null);
+                            if (!tr) return;
+                            // Libellé facture d'origine TOUJOURS conservé
+                            // (reconnu comme non reconnu) : info-bulle de
+                            // contrôle, liseré orange sur les lignes non
+                            // reconnues (refreshScanMark) et exclusion de la
+                            // création de fiche côté serveur pour ces clés.
+                            fillRow(tr, r.key, r.qty, r.total, r.raw_label || r.key, r.vat_rate);
+                            // Champ notes par ligne : absent de la grille
+                            // actuelle, câblé seulement s'il existe un jour.
+                            var notesInput = tr.querySelector('[name="notes[]"]');
+                            if (notesInput && r.notes) notesInput.value = r.notes;
+                        });
+                        // Mêmes mises à jour d'UI que l'import du collage :
+                        // numérotation, doublons, totaux, indices /unité
+                        // (recalcAll reflète aussi le taux et la base posés
+                        // ci-dessus, posés sans événement « change »).
+                        refreshIdx(); refreshDups(); recalcAll();
+                        scanSetStatus(rowsData.length + ' ligne' + (rowsData.length > 1 ? 's' : '') + ' préremplie' + (rowsData.length > 1 ? 's' : '') + ' — vérifiez puis enregistrez.');
+                    };
+
+                    // Grille déjà remplie : confirmation avant remplacement —
+                    // modale unifiée (window.aeicConfirm), repli window.confirm
+                    // si confirm.js n'est pas chargé.
+                    if (rowsData.length > 0 && gridHasContent()) {
+                        var msg = 'La grille contient déjà des lignes : les remplacer par l\u2019analyse de la facture ?';
+                        var go = window.aeicConfirm ? window.aeicConfirm(msg) : Promise.resolve(window.confirm(msg));
+                        go.then(function (ok) {
+                            if (!ok) {
+                                scanSetStatus('Préremplissage annulé — la grille n\u2019a pas été modifiée.');
+                                return;
+                            }
+                            proceed();
+                        });
+                        return;
+                    }
+
+                    proceed();
+                }
+
+                scanToggle.addEventListener('click', function () {
+                    var open = scanPanel.hidden;
+                    scanPanel.hidden = !open;
+                    scanToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+                    if (open) scanFile.focus();
+                });
+
+                scanExtract.addEventListener('click', function () {
+                    var file = scanFile.files && scanFile.files[0];
+                    if (!file) {
+                        scanSetStatus('Choisissez d\u2019abord un fichier (photo ou PDF de la facture).');
+                        return;
+                    }
+                    if (file.size > 10 * 1024 * 1024) {
+                        scanSetStatus('Fichier trop lourd (10 Mo maximum) : photographiez ou compressez la facture.');
+                        return;
+                    }
+                    scanBusy(true);
+                    scanSetWarnings(null);
+                    scanSetStatus('Extraction du texte en cours…');
+                    H.scanUpload(file, scanToken(), scanUrl).then(function (json) {
+                        scanBusy(false);
+                        scanText.value = String(json.text == null ? '' : json.text);
+                        // Justificatif conservé par le serveur : il sera
+                        // joint aux achats enregistrés (photo du livre).
+                        var rcpt = document.getElementById('purchase-receipt-path');
+                        if (rcpt) rcpt.value = String(json.receipt_path == null ? '' : json.receipt_path);
+                        scanSetWarnings(json.invoice && Array.isArray(json.invoice.warnings) ? json.invoice.warnings : null);
+                        scanSetStatus('Texte extrait : vérifiez/corrigez-le puis cliquez « Analyser le texte et préremplir ».');
+                    }, function (err) {
+                        scanBusy(false);
+                        scanFail(err);
+                    });
+                });
+
+                scanAnalyze.addEventListener('click', function () {
+                    var text = scanText.value.trim();
+                    if (text === '') {
+                        scanSetStatus('Aucun texte à analyser : extrayez-le d\u2019abord (ou collez-le) dans la zone ci-dessus.');
+                        return;
+                    }
+                    scanBusy(true);
+                    scanSetStatus('Analyse du texte en cours…');
+                    H.scanParseText(text, scanToken(), scanUrl).then(function (json) {
+                        scanBusy(false);
+                        scanSetWarnings(json.invoice && Array.isArray(json.invoice.warnings) ? json.invoice.warnings : null);
+                        applyInvoice(json.invoice);
+                    }, function (err) {
+                        scanBusy(false);
+                        scanFail(err);
+                    });
+                });
+            }
+
+            // Grille prête : quelques lignes vides pour saisir direct.
+            addLines(START_LINES);
+            addBtn.addEventListener('click', function () { addLine(true); });
+            if (add5Btn) add5Btn.addEventListener('click', function () { addLines(5); });
+            Array.prototype.forEach.call(basisInputs, function (input) {
+                input.addEventListener('change', recalcAll);
+            });
+            rateEl.addEventListener('change', recalcAll);
+            updateTotals();
+
+            // Ctrl+Entrée : enregistrer sans aller chercher le bouton
+            // tout en bas d'une longue commande.
+            form.addEventListener('keydown', function (ev) {
+                if ((ev.ctrlKey || ev.metaKey) && ev.key === 'Enter') {
+                    ev.preventDefault();
+                    var submit = document.getElementById('pa-submit');
+                    if (submit) submit.click();
+                }
+            });
+
+            // Cases non cochées non postées + lignes supprimées : on
+            // renumérote no_stock[i] dans l'ordre des lignes juste avant
+            // l'envoi, pour rester aligné avec product_key[i]. Même
+            // principe pour la TVA par ligne : poster vat_rate[] fait
+            // passer $_POST['vat_rate'] en TABLEAU (le taux d'en-tête
+            // scalaire est perdu) — chaque cellule vide « défaut » est
+            // donc résolue vers le taux d'en-tête AVANT l'envoi, pour
+            // que chaque ligne porte un taux explicite aligné sur
+            // product_key[i] (jamais « déjà TTC » par accident).
+            form.addEventListener('submit', function () {
+                var all = rows();
+                Array.prototype.forEach.call(all, function (tr, i) {
+                    var cb = tr.querySelector('.line-no-stock');
+                    if (cb) cb.name = 'no_stock[' + i + ']';
+                    var sel = tr.querySelector('.line-vat');
+                    if (sel && sel.value === '') sel.value = rateEl.value;
+                });
+            });
+        })();
+        </script>
+    </section>
+    </div><!-- /volet « Facture » -->
+
+    <!-- ── Volet B « Frais divers » : le formulaire de dépense
+         factorisé (ex-onglet « Saisir une dépense » du livre et de la
+         page Dépenses). POST /admin/compta/depenses/save → expenses
+         UNIQUEMENT. compta-saisie.js est déjà chargé par le volet A
+         ci-dessus (requis par les scripts du scan de la partielle). -->
+    <div data-volet-pane="frais" hidden>
+        <section class="card surface glass">
+            <h2 class="card-title">Ajouter une dépense (frais divers)</h2>
+            <p class="muted">Une charge <strong>sans produits</strong> : matériel, événements, frais bancaires, divers. Les factures fournisseurs avec des lignes de produits (Metro…) se saisissent dans le volet « Facture ».</p>
+            <?php
+            // Retour d'enregistrement : la page unifiée, onglet Saisir,
+            // volet B rouvert (le JS ci-dessus lit ?volet=frais).
+            $expenseReturnTo = '/admin/compta/achats?tab=saisie&volet=frais';
+            require AEIC_VIEWS . '/admin/compta/_expense_form.php';
+            ?>
+        </section>
+    </div><!-- /volet « Frais divers » -->
+
+    <script>
+    // Bascule explicite entre les deux volets : un seul visible à la
+    // fois. ?volet=frais dans l'URL ouvre directement le volet B
+    // (renvoi depuis la page Dépenses, retour d'enregistrement).
+    (function () {
+        var paneRoot = document.querySelector('.compta-tabpane[data-pane="saisie"]');
+        var bar = paneRoot ? paneRoot.querySelector('[data-volet-tabs]') : null;
+        if (!bar) return;
+        var btns = bar.querySelectorAll('[data-volet-btn]');
+        var panes = paneRoot.querySelectorAll('[data-volet-pane]');
+
+        function activate(name) {
+            var found = false;
+            Array.prototype.forEach.call(btns, function (b) {
+                var on = b.getAttribute('data-volet-btn') === name;
+                b.classList.toggle('is-active', on);
+                b.setAttribute('aria-pressed', on ? 'true' : 'false');
+                if (on) found = true;
+            });
+            if (!found) { activate(btns[0].getAttribute('data-volet-btn')); return; }
+            Array.prototype.forEach.call(panes, function (p) {
+                p.hidden = p.getAttribute('data-volet-pane') !== name;
+            });
+        }
+
+        Array.prototype.forEach.call(btns, function (b) {
+            b.addEventListener('click', function () { activate(b.getAttribute('data-volet-btn')); });
+        });
+
+        var initial = new URLSearchParams(window.location.search).get('volet');
+        if (initial) activate(initial);
+    })();
+    </script>
+</div>
+
+<!-- ==================== Onglet : TVA payée ==================== -->
+<div class="compta-tabpane" data-pane="tva" hidden>
+    <div class="compta-kpis">
+        <div class="card surface glass kpi">
+            <p class="kpi-label">TVA payée (achats)</p>
+            <p class="kpi-value"><?= e(formatPrice($stats['vat'])) ?></p>
+            <p class="kpi-sub">sur la période sélectionnée</p>
+        </div>
+        <div class="card surface glass kpi">
+            <p class="kpi-label">Achats TTC</p>
+            <p class="kpi-value"><?= e(formatPrice($stats['ttc'])) ?></p>
+            <p class="kpi-sub">dont <?= e(formatPrice($stats['ht'])) ?> HT</p>
+        </div>
+    </div>
+
+    <div class="card surface glass table-wrap">
+        <h2 class="card-title">TVA payée par taux</h2>
+        <p class="muted">Décomposition HT / TVA / TTC des achats de la période, groupés par taux de TVA. Les lignes « déjà TTC » (saisies historiques sans décomposition) sont listées à part.</p>
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Taux</th>
+                    <th class="th-num">Lignes</th>
+                    <th class="th-num">Total HT</th>
+                    <th class="th-num">TVA</th>
+                    <th class="th-num">Total TTC</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php foreach ($vatRows as $v): ?>
+                    <tr>
+                        <td>
+                            <?php if ($v['rate'] === null): ?>
+                                <span class="badge badge-muted">Déjà TTC (sans décomposition)</span>
+                            <?php else: ?>
+                                <span class="badge badge-warning"><?= e(formatFrenchPercent((float) $v['rate'])) ?></span>
+                            <?php endif; ?>
+                        </td>
+                        <td class="num"><?= (int) $v['lines'] ?></td>
+                        <td class="num"><?= e(formatPrice($v['ht'], 3)) ?></td>
+                        <td class="num"><strong><?= e(formatPrice($v['vat'], 3)) ?></strong></td>
+                        <td class="num"><strong><?= e(formatPrice($v['ttc'], 3)) ?></strong></td>
+                    </tr>
+                <?php endforeach; ?>
+                <?php if ($vatRows === []): ?>
+                    <tr><td colspan="5" class="muted">Aucun achat sur la période sélectionnée.</td></tr>
+                <?php endif; ?>
+            </tbody>
+            <?php if ($vatRows !== []): ?>
+                <tfoot>
+                    <tr>
+                        <th>Total période</th>
+                        <th class="num"><?= (int) $stats['lines'] ?></th>
+                        <th class="num"><?= e(formatPrice($stats['ht'], 3)) ?></th>
+                        <th class="num"><?= e(formatPrice($stats['vat'], 3)) ?></th>
+                        <th class="num"><?= e(formatPrice($stats['ttc'], 3)) ?></th>
+                    </tr>
+                </tfoot>
+            <?php endif; ?>
+        </table>
+    </div>
+</div>
+
+<!-- ==================== Onglet : Journal ==================== -->
+<style>
+    /* Ligne de scan dont la clé EST le libellé OCR brut (produit non
+       reconnu dans le catalogue) : contour orange jusqu'au choix du
+       vrai produit — sinon l'enregistrement créerait une fiche au nom
+       long. Sobre : un liseré sur le champ produit, rien d'autre. */
+    .pa-unmatched .pa-prod input[type="text"] {
+        border: 2px solid #e8a33d;
+        background: rgba(232, 163, 61, 0.08);
+    }
+
+    /* Regroupement visuel par facture (jour + fournisseur + n° normalisé) :
+       en-tête de groupe avec total, nombre de lignes et justificatif(s),
+       puis les lignes détaillées inchangées. Deux factures distinctes le
+       même jour chez le même fournisseur = deux groupes. */
+    .pj-group-head td { background: rgba(255, 255, 255, 0.045); }
+    .pj-group-line {
+        display: flex; flex-wrap: wrap; gap: 0.45rem 0.9rem;
+        align-items: center; font-size: 0.86rem;
+    }
+    .pj-group-total { font-weight: 800; }
+    .pj-receipt-thumbs { display: flex; gap: 0.3rem; align-items: center; }
+    .pj-receipt-thumbs img {
+        height: 36px; border-radius: 6px; display: block;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+    }
+    .pj-group-edit summary {
+        display: inline-block; cursor: pointer; list-style: none;
+        padding: 0.2rem 0.6rem; border-radius: 999px;
+        border: 1px solid var(--border, rgba(255,255,255,0.12));
+        background: rgba(255, 255, 255, 0.04);
+        font-size: 0.76rem; font-weight: 800; color: var(--foreground, inherit);
+    }
+    .pj-group-edit summary::-webkit-details-marker { display: none; }
+    .pj-group-edit[open] summary { margin-bottom: 0.45rem; }
+    .pj-group-form {
+        display: flex; flex-wrap: wrap; gap: 0.45rem; align-items: flex-end;
+        padding: 0.6rem 0.7rem;
+        border: 1px dashed rgba(255, 255, 255, 0.2); border-radius: 10px;
+        background: rgba(255, 255, 255, 0.03);
+    }
+    .pj-group-form label {
+        display: grid; gap: 0.2rem;
+        font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em;
+        color: var(--muted, #8892a6);
+    }
+    .pj-group-form input {
+        padding: 0.35rem 0.5rem; border: 1px solid var(--border, rgba(255,255,255,0.15));
+        border-radius: 8px; background: rgba(255, 255, 255, 0.05); color: var(--foreground, inherit);
+        font-size: 0.82rem; min-width: 0;
+    }
+    /* Case « ne pas corriger le stock » des formulaires de suppression
+       (groupe et ligne) : sobre, alignée sur le bouton voisin. */
+    .pj-keep-stock {
+        display: inline-flex; gap: 0.35rem; align-items: center;
+        font-size: 0.76rem; font-weight: 600; cursor: pointer;
+        color: var(--muted, #8892a6);
+    }
+    .pj-keep-stock input { margin: 0; accent-color: var(--primary, currentColor); }
+</style>
+<div class="compta-tabpane" data-pane="journal" hidden>
+    <div class="card surface glass table-wrap">
+        <h2 class="card-title">Derniers achats</h2>
+        <p class="muted">Achats de la période sélectionnée (200 lignes max), regroupés par facture (jour + fournisseur + n° de facture).</p>
+        <!-- Filtre rapide (lot 4B) : masque les lignes ne correspondant
+             pas ; les en-têtes de facture se cachent quand plus aucune
+             ligne du groupe n'est visible. Aucun formulaire n'est touché. -->
+        <div class="table-tools">
+            <input type="search" class="tt-filter" data-table-filter="#purchases-journal"
+                   aria-label="Filtrer les lignes d'achat" placeholder="Filtrer le journal…">
+            <span class="tt-count muted" data-table-count="#purchases-journal" aria-live="polite"></span>
+        </div>
+        <table class="table" id="purchases-journal" data-table data-table-nosort>
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Produit</th>
+                    <th class="th-num">Qté</th>
+                    <th class="th-num">Coût unit. HT</th>
+                    <th class="th-num">Total HT</th>
+                    <th class="th-num">Total TTC</th>
+                    <th>TVA</th>
+                    <th>Fournisseur</th>
+                    <th>Facture</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php
+                // Regroupement CÔTÉ VUE (aucun changement contrôleur/modèle) :
+                // même clé que le livre comptable — jour + fournisseur + n° de
+                // facture normalisé (minuscules, espaces bornes retirés).
+                $pjGroups = [];
+                foreach ($rows as $r) {
+                    $key = (string) $r['purchased_at']
+                        . '|' . trim((string) ($r['supplier'] ?? ''))
+                        . '|' . strtolower(trim((string) ($r['invoice_number'] ?? '')));
+                    if (!isset($pjGroups[$key])) {
+                        $pjGroups[$key] = ['lines' => [], 'total' => 0.0, 'receipts' => []];
+                    }
+                    $pjGroups[$key]['lines'][] = $r;
+                    $pjGroups[$key]['total'] += (float) $r['total_ttc'];
+                    $pjRcpt = trim((string) ($r['receipt_path'] ?? ''));
+                    if ($pjRcpt !== '' && !in_array($pjRcpt, $pjGroups[$key]['receipts'], true)) {
+                        $pjGroups[$key]['receipts'][] = $pjRcpt;
+                    }
+                }
+                ?>
+                <?php foreach ($pjGroups as $g): ?>
+                    <?php
+                    $pjFirst = $g['lines'][0];
+                    $pjSupplier = trim((string) ($pjFirst['supplier'] ?? ''));
+                    $pjInvoice = trim((string) ($pjFirst['invoice_number'] ?? ''));
+                    // Ids des lignes du groupe : suppression / édition
+                    // d'en-tête GROUPÉES (routes /achats/group/*).
+                    $pjIds = implode(',', array_map(static fn (array $r): string => (string) $r['id'], $g['lines']));
+                    ?>
+                    <tr class="pj-group-head tt-static">
+                        <td colspan="10">
+                            <div class="pj-group-line">
+                                <strong><?= e(formatDate((string) $pjFirst['purchased_at'])) ?></strong>
+                                <span><?= e($pjSupplier !== '' ? $pjSupplier : '—') ?></span>
+                                <span class="muted">Facture : <?= e($pjInvoice !== '' ? $pjInvoice : '—') ?></span>
+                                <span class="muted"><?= count($g['lines']) ?> ligne(s)</span>
+                                <span class="pj-group-total"><?= e(formatPrice($g['total'], 3)) ?></span>
+                                <?php if ($g['receipts'] !== []): ?>
+                                    <span class="pj-receipt-thumbs">
+                                        <?php foreach ($g['receipts'] as $pjRcpt): ?>
+                                            <a href="<?= e(asset($pjRcpt)) ?>" target="_blank" rel="noopener" title="Voir le justificatif">
+                                                <img src="<?= e(asset($pjRcpt)) ?>" alt="Justificatif de la facture">
+                                            </a>
+                                        <?php endforeach; ?>
+                                    </span>
+                                <?php else: ?>
+                                    <span class="muted">Aucun justificatif</span>
+                                <?php endif; ?>
+                                <details class="pj-group-edit">
+                                    <summary>Modifier en-tête / Ajouter une preuve</summary>
+                                    <!-- Édition groupée (POST /achats/group/update) :
+                                          appliquée à TOUTES les lignes du groupe ;
+                                          le stock n'est pas touché. Joindre un
+                                          fichier ici = ajouter/remplacer le ticket
+                                          (METRO…) de toute la course. -->
+                                    <form class="pj-group-form" method="post" action="<?= e(url('/admin/compta/achats/group/update')) ?>" enctype="multipart/form-data">
+                                        <?= csrf_field() ?>
+                                        <input type="hidden" name="ids" value="<?= e($pjIds) ?>">
+                                        <label>Date <input type="date" name="purchased_at" value="<?= e((string) $pjFirst['purchased_at']) ?>" required></label>
+                                        <label>Fournisseur <input type="text" name="supplier" maxlength="255" value="<?= e($pjSupplier) ?>"></label>
+                                        <label>N° de facture <input type="text" name="invoice_number" maxlength="255" value="<?= e($pjInvoice) ?>"></label>
+                                        <label>Preuve (PDF/JPG/PNG/WEBP · 5 Mo max) <input type="file" name="receipt" accept=".pdf,.jpg,.jpeg,.png,.webp"></label>
+                                        <button type="submit" class="btn btn-primary btn-sm">Enregistrer</button>
+                                    </form>
+                                </details>
+                                <form method="post" action="<?= e(url('/admin/compta/achats/group/delete')) ?>" data-confirm="Supprimer ces <?= count($g['lines']) ?> lignes d'achat ? Le stock ne sera corrigé que si la case “ne pas corriger le stock” est décochée." data-preserve-scroll>
+                                    <?= csrf_field() ?>
+                                    <input type="hidden" name="ids" value="<?= e($pjIds) ?>">
+                                    <label class="pj-keep-stock"><input type="checkbox" name="keep_stock" value="1"> Ne pas corriger le stock (les quantités restent telles quelles)</label>
+                                    <button type="submit" class="btn btn-danger btn-sm">Supprimer tout le groupe</button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    <?php foreach ($g['lines'] as $r): ?>
+                        <?php $hasVat = $r['vat_rate'] !== null; ?>
+                        <tr>
+                            <td><?= e(formatDate((string) $r['purchased_at'])) ?></td>
+                            <td><strong><?= e((string) $r['product_key']) ?></strong><?php if (!empty($r['no_stock'])): ?> <small class="muted">· hors stock</small><?php endif; ?></td>
+                            <td class="num"><?= (int) $r['quantity'] ?></td>
+                            <td class="num"><?= e(formatPrice((float) $r['unit_cost'], 3)) ?></td>
+                            <td class="num">
+                                <?php if (($r['total_ht'] ?? null) !== null): ?>
+                                    <?= e(formatPrice((float) $r['total_ht'], 3)) ?>
+                                <?php else: ?>
+                                    <span class="muted">—</span>
+                                <?php endif; ?>
+                            </td>
+                            <td class="num"><strong><?= e(formatPrice((float) $r['total_ttc'], 3)) ?></strong></td>
+                            <td>
+                                <?php if ($hasVat): ?>
+                                    <span class="badge badge-warning"><?= e(formatFrenchPercent((float) $r['vat_rate'])) ?></span>
+                                <?php else: ?>
+                                    <span class="badge badge-muted">Déjà TTC</span>
+                                <?php endif; ?>
+                            </td>
+                            <td><?= e((string) ($r['supplier'] ?? '—')) ?></td>
+                            <td><?= e(trim((string) ($r['invoice_number'] ?? '')) !== '' ? (string) $r['invoice_number'] : '—') ?></td>
+                            <td class="row-actions">
+                                <form method="post" action="<?= e(url('/admin/compta/achats/' . rawurlencode((string) $r['id']) . '/delete')) ?>"
+                                      data-confirm="Supprimer cet achat ? Le stock ne sera corrigé que si la case “ne pas corriger le stock” est décochée." data-preserve-scroll>
+                                    <?= csrf_field() ?>
+                                    <label class="pj-keep-stock"><input type="checkbox" name="keep_stock" value="1"> Ne pas corriger le stock (les quantités restent telles quelles)</label>
+                                    <button type="submit" class="btn btn-danger btn-sm" aria-label="Supprimer">Supprimer</button>
+                                </form>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                <?php endforeach; ?>
+                <?php if ($rows === []): ?>
+                    <tr><td colspan="10" class="muted">Aucun achat sur la période sélectionnée.</td></tr>
+                <?php endif; ?>
+            </tbody>
+            <?php if ($rows !== []): ?>
+                <tfoot>
+                    <tr>
+                        <th colspan="2">Total période</th>
+                        <th class="num"><?= (int) $stats['qty'] ?></th>
+                        <th></th>
+                        <th class="num"><?= e(formatPrice($stats['ht'], 3)) ?></th>
+                        <th class="num"><?= e(formatPrice($stats['ttc'], 3)) ?></th>
+                        <th class="num muted">dont TVA <?= e(formatPrice($stats['vat'], 3)) ?></th>
+                        <th colspan="3"></th>
+                    </tr>
+                </tfoot>
+            <?php endif; ?>
+        </table>
+    </div>
+</div>
+
+<script>
+// Onglets compta : bascule côté client, mémorisée dans l'URL (?tab=…).
+// Ouvert aussi aux liens internes (data-goto-tab).
+(function () {
+    var bar = document.querySelector('[data-compta-tabs]');
+    if (!bar) return;
+    var tabs = bar.querySelectorAll('.compta-tab');
+    var panes = document.querySelectorAll('.compta-tabpane[data-pane]');
+
+    function activate(name, push) {
+        var found = false;
+        Array.prototype.forEach.call(tabs, function (t) {
+            var on = t.getAttribute('data-tab') === name;
+            t.classList.toggle('is-active', on);
+            if (on) found = true;
+        });
+        if (!found) name = tabs[0].getAttribute('data-tab');
+        Array.prototype.forEach.call(panes, function (p) {
+            var on = p.getAttribute('data-pane') === name;
+            p.classList.toggle('is-active', on);
+            p.hidden = !on;
+        });
+        if (push && window.history && window.history.replaceState) {
+            var u = new URL(window.location.href);
+            if (name === tabs[0].getAttribute('data-tab')) u.searchParams.delete('tab');
+            else u.searchParams.set('tab', name);
+            window.history.replaceState(null, '', u.toString());
+        }
+    }
+
+    Array.prototype.forEach.call(tabs, function (t) {
+        t.addEventListener('click', function () { activate(t.getAttribute('data-tab'), true); });
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-goto-tab]'), function (el) {
+        el.addEventListener('click', function () { activate(el.getAttribute('data-goto-tab'), true); });
+    });
+
+    var initial = new URLSearchParams(window.location.search).get('tab');
+    if (initial) activate(initial, false);
+})();
+</script>

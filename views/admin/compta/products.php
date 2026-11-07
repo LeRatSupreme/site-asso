@@ -1,0 +1,187 @@
+<?php
+
+declare(strict_types=1);
+
+/**
+ * @var list<array<string,mixed>> $rows
+ * @var array{preset:string,from:?string,to:?string} $period
+ * @var array<string,string> $periodOptions
+ */
+?>
+<div class="compta-head">
+    <div class="compta-head-row">
+        <div>
+            <p class="eyebrow">Comptabilité</p>
+            <h1 class="page-title">Bénéfice par produit</h1>
+            <p class="muted">Analyse chaque produit : quantité, chiffre d'affaires, coût et bénéfice réel. Regroupé par catégorie, avec recherche et tri.</p>
+        </div>
+        <?php require AEIC_VIEWS . '/admin/compta/_period_bar.php'; ?>
+    </div>
+</div>
+
+<div class="costs-toolbar">
+    <div class="search-box">
+        <input type="text" id="pk-search" placeholder="Rechercher un produit…" autocomplete="off">
+    </div>
+    <select id="pk-cat" aria-label="Filtrer par catégorie">
+        <option value="">Toutes les catégories</option>
+    </select>
+    <select id="pk-sort" aria-label="Trier par">
+        <option value="product">Produit (A→Z)</option>
+        <option value="product-desc">Produit (Z→A)</option>
+        <option value="qty-desc">Quantité ↓</option>
+        <option value="qty-asc">Quantité ↑</option>
+        <option value="ca-desc">Chiffre d'affaires ↓</option>
+        <option value="profit-desc">Bénéfice ↓</option>
+        <option value="margin-desc">Marge % ↓</option>
+    </select>
+    <!-- Choix des colonnes (lot 4B) : partagé par toutes les tables du
+         regroupement (même schéma), mémorisé d'une visite à l'autre. -->
+    <details class="tt-cols" data-table-cols=".prod-table">
+        <summary>Colonnes</summary>
+    </details>
+    <span class="costs-count muted" id="pk-count"></span>
+</div>
+
+<div id="pk-list">
+<?php
+    // Regroupement par catégorie.
+    $byCat = [];
+    foreach ($rows as $r) {
+        $cat = (string) ($r['category'] ?? 'Non classé');
+        $byCat[$cat][] = $r;
+    }
+    ksort($byCat);
+?>
+<?php foreach ($byCat as $catName => $catRows): ?>
+    <section class="cost-group" data-cat="<?= e(strtolower((string) $catName)) ?>">
+        <h2 class="cost-group-title"><?= e($catName) ?> <span class="muted">(<?= count($catRows) ?>)</span></h2>
+        <div class="card surface glass table-wrap">
+            <table class="table prod-table" data-table
+                   data-cols-visible="produit,qte,prix_moyen,ca,benefice,marge">
+                <thead>
+                    <tr>
+                        <th data-col="produit" data-col-fixed>Produit</th>
+                        <th class="th-num" data-col="qte">Qté</th>
+                        <th class="th-num" data-col="prix_moyen">Prix moy.</th>
+                        <th class="th-num" data-col="ca">CA</th>
+                        <th class="th-num" data-col="cout_unit">Coût unit.</th>
+                        <th class="th-num" data-col="benefice">Bénéfice</th>
+                        <th class="th-num" data-col="marge">Marge</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($catRows as $r): ?>
+                        <tr
+                            data-product="<?= e(strtolower((string) $r['product_key'])) ?>"
+                            data-cat="<?= e(strtolower((string) $catName)) ?>"
+                            data-qty="<?= (float) $r['qty'] ?>"
+                            data-ca="<?= (float) $r['ca'] ?>"
+                            data-profit="<?= (float) $r['profit'] ?>"
+                            data-margin="<?= (float) $r['margin'] ?>">
+                            <td><strong><?= e((string) $r['product_key']) ?></strong></td>
+                            <td class="num"><?= e((string) $r['qty']) ?></td>
+                            <td class="num"><?= e(formatPrice($r['avg_price'] ?? 0)) ?></td>
+                            <td class="num"><?= e(formatPrice((float) $r['ca'])) ?></td>
+                            <td class="num"><?= e(formatPrice($r['cost_price'] ?? 0, 3)) ?></td>
+                            <td class="num <?= (float) $r['profit'] >= 0 ? 'is-positive' : 'is-negative' ?>"><?= e(formatPrice((float) $r['profit'])) ?></td>
+                            <td class="num"><?= e(number_format((float) $r['margin'], 1, ',', ' ')) ?> %</td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    </section>
+<?php endforeach; ?>
+
+<?php if ($rows === []): ?>
+    <div class="empty-state card surface glass">
+        <p class="muted">Aucune vente sur cette période.</p>
+    </div>
+<?php endif; ?>
+</div>
+
+<script>
+(function () {
+    var search = document.getElementById('pk-search');
+    var catSel = document.getElementById('pk-cat');
+    var sortSel = document.getElementById('pk-sort');
+    var countEl = document.getElementById('pk-count');
+    var groups = Array.prototype.slice.call(document.querySelectorAll('#pk-list .cost-group'));
+    var allRows = Array.prototype.slice.call(document.querySelectorAll('#pk-list tr[data-product]'));
+    var total = allRows.length;
+    if (!search) return;
+
+    // Remplit le filtre catégorie avec les catégories présentes.
+    var cats = {};
+    allRows.forEach(function (tr) { cats[tr.getAttribute('data-cat')] = true; });
+    Object.keys(cats).sort().forEach(function (c) {
+        var opt = document.createElement('option');
+        opt.value = c;
+        opt.textContent = c;
+        catSel.appendChild(opt);
+    });
+
+    function norm(s) { return String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim(); }
+
+    function sortRows(rows) {
+        var sort = sortSel.value;
+        rows.sort(function (a, b) {
+            switch (sort) {
+                case 'product-desc': return b.getAttribute('data-product').localeCompare(a.getAttribute('data-product'));
+                case 'qty-asc':      return parseFloat(a.getAttribute('data-qty')) - parseFloat(b.getAttribute('data-qty'));
+                case 'qty-desc':     return parseFloat(b.getAttribute('data-qty')) - parseFloat(a.getAttribute('data-qty'));
+                case 'ca-desc':      return parseFloat(b.getAttribute('data-ca')) - parseFloat(a.getAttribute('data-ca'));
+                case 'profit-desc':  return parseFloat(b.getAttribute('data-profit')) - parseFloat(a.getAttribute('data-profit'));
+                case 'margin-desc':  return parseFloat(b.getAttribute('data-margin')) - parseFloat(a.getAttribute('data-margin'));
+                default:             return a.getAttribute('data-product').localeCompare(b.getAttribute('data-product'));
+            }
+        });
+        return rows;
+    }
+
+    function apply() {
+        var q = norm(search.value);
+        var cat = catSel.value;
+        var shown = 0;
+
+        groups.forEach(function (group) {
+            var tbody = group.querySelector('tbody');
+            var groupRows = Array.prototype.slice.call(group.querySelectorAll('tr[data-product]'));
+            var visibleInGroup = [];
+
+            groupRows.forEach(function (tr) {
+                var okSearch = q === '' || norm(tr.getAttribute('data-product')).indexOf(q) !== -1;
+                var okCat = cat === '' || tr.getAttribute('data-cat') === cat;
+                var visible = okSearch && okCat;
+                tr.style.display = visible ? '' : 'none';
+                if (visible) visibleInGroup.push(tr);
+            });
+
+            // Tri des lignes visibles de ce groupe, réinjectées dans le tbody.
+            sortRows(visibleInGroup);
+            var frag = document.createDocumentFragment();
+            visibleInGroup.forEach(function (tr) { frag.appendChild(tr); });
+            // Lignes masquées remises après (pour ne pas les perdre).
+            groupRows.filter(function (tr) { return visibleInGroup.indexOf(tr) === -1; }).forEach(function (tr) { frag.appendChild(tr); });
+            if (tbody) tbody.appendChild(frag);
+
+            group.style.display = visibleInGroup.length > 0 ? '' : 'none';
+            shown += visibleInGroup.length;
+        });
+
+        countEl.textContent = shown + ' / ' + total + ' produit' + (total > 1 ? 's' : '');
+    }
+
+    search.addEventListener('input', apply);
+    catSel.addEventListener('change', apply);
+    sortSel.addEventListener('change', apply);
+    apply();
+})();
+</script>
+
+<!-- Boîte à outils tableaux (lot 4B) : tri par en-têtes + choix des
+     colonnes (le filtre et le compteur de la barre ci-dessus restent
+     les outils de référence de la page). -->
+<script src="<?= e(rootAssetVersioned('/assets/js/table-tools.js')) ?>" defer></script>
+

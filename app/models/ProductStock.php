@@ -1,0 +1,88 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Models;
+
+/**
+ * Stocks de référence (table `product_stocks`).
+ *
+ * Plus aucune saisie manuelle : la table suit le stock au fil des
+ * mouvements — un comptage d'inventaire fixe la référence
+ * (InventoryCount::record), chaque achat l'augmente (Purchase::create)
+ * et chaque perte la diminue (Loss::create). L'analyse Réappro affiche
+ * directement le stock THÉORIQUE de l'inventaire.
+ */
+final class ProductStock extends Model
+{
+    protected static string $table = 'product_stocks';
+
+    /**
+     * Tous les stocks saisis, indexés par product_key.
+     *
+     * @return array<string,int>
+     */
+    public static function allMap(): array
+    {
+        try {
+            $rows = self::pdo()
+                ->query('SELECT product_key, stock FROM product_stocks')
+                ->fetchAll();
+        } catch (\Throwable) {
+            return [];
+        }
+
+        $map = [];
+        foreach ($rows as $r) {
+            $map[(string) $r['product_key']] = (int) $r['stock'];
+        }
+
+        return $map;
+    }
+
+    /**
+     * Stock saisi pour un product_key donné (null si non défini).
+     */
+    public static function get(string $productKey): ?int
+    {
+        try {
+            $stmt = self::pdo()->prepare('SELECT stock FROM product_stocks WHERE product_key = ?');
+            $stmt->execute([$productKey]);
+            $row = $stmt->fetch();
+
+            return $row === false ? null : (int) $row['stock'];
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    /**
+     * Enregistre (upsert) le stock d'un product_key.
+     */
+    public static function set(string $productKey, int $stock): void
+    {
+        $stmt = self::pdo()->prepare(
+            'INSERT INTO product_stocks (product_key, stock, updated_at)
+             VALUES (?, ?, NOW())
+             ON DUPLICATE KEY UPDATE stock = VALUES(stock), updated_at = NOW()'
+        );
+        $stmt->execute([$productKey, max(0, $stock)]);
+    }
+
+    /**
+     * Ajuste le stock d'un product_key d'un delta donné.
+     *
+     * Utilisé par les mouvements physiques : achat (+qty), perte (−qty).
+     * Ainsi la référence de stock (affichée par le réappro) suit le stock
+     * théorique de l'inventaire au fil des mouvements.
+     */
+    public static function adjust(string $productKey, int $delta): void
+    {
+        if ($delta === 0) {
+            return;
+        }
+
+        $current = self::get($productKey) ?? 0;
+        self::set($productKey, $current + $delta);
+    }
+}

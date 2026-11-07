@@ -1,0 +1,749 @@
+'use strict';
+
+/**
+ * Tests de la logique pure de la grille de saisie d'achats
+ * (public/assets/js/compta-saisie.js) — exécuté avec Node.js :
+ *
+ *     node tests/js/compta-saisie.test.js
+ *
+ * Pont PHPUnit : tests/Unit/PurchaseGridJsTest.php (code 0 = succès).
+ * Aucune dépendance : le module 'assert' natif suffit.
+ */
+
+const assert = require('assert');
+const H = require('../../public/assets/js/compta-saisie.js');
+
+let passed = 0;
+const failures = [];
+
+/** Mini-harnais : chaque cas doit passer sans lever. */
+function t(name, fn) {
+    try {
+        fn();
+        passed++;
+    } catch (e) {
+        failures.push('  ✗ ' + name + ' : ' + (e && e.message ? e.message : e));
+    }
+}
+
+/* ------------------------------------------------------------------ *
+ * normKey — miroir JS de StockPublic::normalizeKey (anti-doublons)
+ * ------------------------------------------------------------------ */
+
+t('normKey : casse, accents et espaces supprimés', function () {
+    assert.strictEqual(H.normKey('Red Bull'), 'redbull');
+    assert.strictEqual(H.normKey('  Crème Fraîche  '), 'cremefraiche');
+    assert.strictEqual(H.normKey('Oasis Pomme Cassis Framboise'), 'oasispommecassisframboise');
+});
+
+t('normKey : séparateurs _ - . ( ) convergents', function () {
+    assert.strictEqual(H.normKey('Bueno_white'), 'buenowhite');
+    assert.strictEqual(H.normKey('Coca-Cherry'), 'cocacherry');
+    assert.strictEqual(H.normKey('red.bull'), 'redbull');
+    assert.strictEqual(H.normKey('Perrier (33cl)'), 'perrier33cl');
+    assert.strictEqual(H.normKey('Bueno white'), 'buenowhite');
+    assert.strictEqual(H.normKey('Bueno_white'), H.normKey('Bueno white'), '« Bueno_white » et « Bueno white » désignent le même produit.');
+    assert.strictEqual(H.normKey('Redbull Peach'), H.normKey('red-bull peach'), 'Variantes d’écriture d’un même produit.');
+});
+
+t('normKey : « & » et apostrophes sont conservés (limite assumée)', function () {
+    // C’est exactement la classe de bug MMS : « m&ms » ≠ « MMS » en clé
+    // normalisée — le Mapping libellés doit les rattacher explicitement.
+    assert.strictEqual(H.normKey('M&Ms'), 'm&ms');
+    assert.notStrictEqual(H.normKey('M&Ms'), H.normKey('MMS'));
+});
+
+t('normKey : vide et null', function () {
+    assert.strictEqual(H.normKey(''), '');
+    assert.strictEqual(H.normKey(null), '');
+    assert.strictEqual(H.normKey(undefined), '');
+    assert.strictEqual(H.normKey('   '), '');
+});
+
+/* ------------------------------------------------------------------ *
+ * parseAmount — montant à la française
+ * ------------------------------------------------------------------ */
+
+t('parseAmount : virgule décimale et espaces de milliers', function () {
+    assert.strictEqual(H.parseAmount('18,60'), 18.6);
+    assert.strictEqual(H.parseAmount('1 234,56'), 1234.56);
+    assert.strictEqual(H.parseAmount('1234.56'), 1234.56);
+    assert.strictEqual(H.parseAmount(' 22,113 '), 22.113);
+});
+
+t('parseAmount : entrées invalides -> NaN', function () {
+    assert.ok(Number.isNaN(H.parseAmount('abc')));
+    assert.ok(Number.isNaN(H.parseAmount('')));
+    assert.ok(Number.isNaN(H.parseAmount(null)));
+    assert.ok(Number.isNaN(H.parseAmount('12,3,4')));
+});
+
+/* ------------------------------------------------------------------ *
+ * splitVat — décomposition HT/TTC selon la base et le taux
+ * ------------------------------------------------------------------ */
+
+t('splitVat : base HT, la TVA est ajoutée', function () {
+    assert.deepStrictEqual(H.splitVat(18.6, 20, 'ht'), { ht: 18.6, ttc: 18.6 * 1.2 });
+    assert.deepStrictEqual(H.splitVat(100, 5.5, 'ht'), { ht: 100, ttc: 105.5 });
+});
+
+t('splitVat : base TTC, la TVA est déduite', function () {
+    assert.deepStrictEqual(H.splitVat(105.5, 5.5, 'ttc'), { ht: 100, ttc: 105.5 });
+    const s = H.splitVat(22.32, 20, 'ttc');
+    assert.ok(Math.abs(s.ht - 18.6) < 1e-9, '22,32 € TTC / 1,20 = 18,60 € HT');
+});
+
+t('splitVat : taux 0 % ou invalide -> HT = TTC', function () {
+    assert.deepStrictEqual(H.splitVat(50, 0, 'ht'), { ht: 50, ttc: 50 });
+    assert.deepStrictEqual(H.splitVat(50, 0, 'ttc'), { ht: 50, ttc: 50 });
+    assert.deepStrictEqual(H.splitVat(50, NaN, 'ht'), { ht: 50, ttc: 50 });
+});
+
+/* ------------------------------------------------------------------ *
+ * unitHint — libellé « ≈ HT · TTC € /u »
+ * ------------------------------------------------------------------ */
+
+t('unitHint : hint complet pour 18,60 € les 24', function () {
+    assert.strictEqual(H.unitHint(18.6, 24, 5.5, 'ht'),
+        '≈ 0,775 · 0,818 € TTC /u');
+});
+
+t('unitHint : vide si montant ou quantité inexploitable', function () {
+    assert.strictEqual(H.unitHint(0, 24, 5.5, 'ht'), '');
+    assert.strictEqual(H.unitHint(NaN, 24, 5.5, 'ht'), '');
+    assert.strictEqual(H.unitHint(18.6, 0, 5.5, 'ht'), '');
+    assert.strictEqual(H.unitHint(18.6, -3, 5.5, 'ht'), '');
+    assert.strictEqual(H.unitHint(18.6, NaN, 5.5, 'ht'), '');
+});
+
+/* ------------------------------------------------------------------ *
+ * parsePasteLine — collage « Nom ; Qté ; Montant »
+ * ------------------------------------------------------------------ */
+
+t('parsePasteLine : Nom ; Qté ; Montant', function () {
+    assert.deepStrictEqual(H.parsePasteLine('Coca 33cl ; 24 ; 18,60'),
+        { name: 'Coca 33cl', qty: 24, amount: '18,60' });
+});
+
+t('parsePasteLine : tabulations Excel', function () {
+    assert.deepStrictEqual(H.parsePasteLine('Fanta Orange 33cl\t24\t15,20'),
+        { name: 'Fanta Orange 33cl', qty: 24, amount: '15,20' });
+});
+
+t('parsePasteLine : deux parties — montant repéré à sa virgule', function () {
+    assert.deepStrictEqual(H.parsePasteLine('Bonbons ; 10,45'),
+        { name: 'Bonbons', qty: 1, amount: '10,45' });
+});
+
+t('parsePasteLine : deux parties — entier court = quantité', function () {
+    assert.deepStrictEqual(H.parsePasteLine('Coca ; 24'),
+        { name: 'Coca', qty: 24, amount: '' });
+});
+
+t('parsePasteLine : nom seul -> Qté 1, montant vide', function () {
+    assert.deepStrictEqual(H.parsePasteLine('Coca'),
+        { name: 'Coca', qty: 1, amount: '' });
+});
+
+t('parsePasteLine : espaces et bornes tolérés', function () {
+    assert.deepStrictEqual(H.parsePasteLine('  Eau ; 96 ; 14,88  '),
+        { name: 'Eau', qty: 96, amount: '14,88' });
+});
+
+t('parsePasteLine : lignes inutilisables -> null', function () {
+    assert.strictEqual(H.parsePasteLine(''), null);
+    assert.strictEqual(H.parsePasteLine('   '), null);
+    assert.strictEqual(H.parsePasteLine(null), null);
+    assert.strictEqual(H.parsePasteLine('; 24 ; 18,60'), null, 'Sans nom de produit : refusé.');
+});
+
+/* ------------------------------------------------------------------ *
+ * findDuplicateLine — doublon dans la commande en cours
+ * ------------------------------------------------------------------ */
+
+t('findDuplicateLine : aucun doublon -> -1', function () {
+    assert.strictEqual(H.findDuplicateLine(['Coca', 'Fanta', 'Perrier'], 2), -1);
+});
+
+t('findDuplicateLine : même produit à une écriture différente détecté', function () {
+    assert.strictEqual(H.findDuplicateLine(['Red Bull', 'Fanta', 'red bull'], 2), 1,
+        '« red bull » ligne 3 duplique « Red Bull » ligne 1.');
+});
+
+t('findDuplicateLine : premier doublon retenu en 1-based', function () {
+    assert.strictEqual(H.findDuplicateLine(['Coca', 'coca ', 'COCA'], 2), 1);
+    assert.strictEqual(H.findDuplicateLine(['Coca', 'coca ', 'COCA'], 1), 1);
+});
+
+t('findDuplicateLine : ligne vide ou sans nom ignorée', function () {
+    assert.strictEqual(H.findDuplicateLine(['', '  ', ''], 2), -1, 'Les lignes vides ne se dupliquent pas.');
+    assert.strictEqual(H.findDuplicateLine(['', 'Fanta', ''], 2), -1);
+});
+
+t('findDuplicateLine : limite documentée M&M’s', function () {
+    // Scénario réel MMS : « M&M’s » et « MMS » ne convergent PAS vers la
+    // même clé normalisée (le « & » est conservé) — c’est le rôle du
+    // Mapping libellés de les rattacher, pas celui de l’anti-doublon.
+    assert.strictEqual(H.findDuplicateLine(['M&M’s', 'MMS'], 1), -1);
+    assert.strictEqual(H.findDuplicateLine(['MMS', 'MMS'], 1), 1);
+});
+
+/* ------------------------------------------------------------------ *
+ * invoiceToRows — facture scannée -> lignes de la grille
+ * ------------------------------------------------------------------ */
+
+t('invoiceToRows : facture METRO à 3 lignes -> format du collage', function () {
+    const invoice = {
+        supplier: 'METRO',
+        invoice_number: '3007 02 0090',
+        purchased_at: '2026-10-02',
+        vat_rate: 5.5,
+        amount_basis: 'ht',
+        total_ht: 250.46,
+        total_ttc: 264.24,
+        lines: [
+            { label: 'MINUTE MAID POMME 1L', ean: '5449000000099', article: '2040110',
+              unit_price: 0.72, units: 24, total: 17.28, notes: 'EAN 5449000000099 · art. 2040110' },
+            { label: 'COCA COLA 33CL', ean: '5449000000996', article: '2040041',
+              unit_price: 0.45, units: 24, total: 10.8, notes: 'EAN 5449000000996 · art. 2040041' },
+            { label: 'EAU MINERALE 50CL', ean: '3057640257546', article: '2040999',
+              unit_price: 0.2, units: 48, total: 9.6 }
+        ],
+        warnings: ['Taux de TVA non trouvé — 5,5 % appliqué.']
+    };
+    assert.deepStrictEqual(H.invoiceToRows(invoice), [
+        { key: 'MINUTE MAID POMME 1L', raw_label: 'MINUTE MAID POMME 1L', matched: false, qty: 24, total: '17,28', notes: 'EAN 5449000000099 · art. 2040110', vat_rate: null },
+        { key: 'COCA COLA 33CL', raw_label: 'COCA COLA 33CL', matched: false, qty: 24, total: '10,80', notes: 'EAN 5449000000996 · art. 2040041', vat_rate: null },
+        { key: 'EAU MINERALE 50CL', raw_label: 'EAU MINERALE 50CL', matched: false, qty: 48, total: '9,60', notes: 'EAN 3057640257546 · art. 2040999', vat_rate: null }
+    ], 'Sans champ notes, « EAN … · art. … » est reconstitué depuis ean/article ; sans taux par ligne, vat_rate est null ; sans reconnaissance, la clé EST le libellé brut (matched=false, libellé conservé en raw_label).');
+});
+
+t('invoiceToRows : sans lignes (ou lines absente) -> []', function () {
+    assert.deepStrictEqual(H.invoiceToRows({ supplier: 'METRO', lines: [] }), []);
+    assert.deepStrictEqual(H.invoiceToRows({ supplier: 'METRO' }), []);
+    assert.deepStrictEqual(H.invoiceToRows(null), []);
+});
+
+t('invoiceToRows : lignes sans libellé ignorées, qté et montant assainis', function () {
+    assert.deepStrictEqual(H.invoiceToRows({ lines: [
+        { units: 5, total: 12.3 },
+        { label: 'Bonbons', units: 0, total: 0 },
+        { label: 'Chips', units: '6', total: '8,90' }
+    ] }), [
+        { key: 'Bonbons', raw_label: 'Bonbons', matched: false, qty: 1, total: '', notes: '', vat_rate: null },
+        { key: 'Chips', raw_label: 'Chips', matched: false, qty: 6, total: '8,90', notes: '', vat_rate: null }
+    ], 'Qté < 1 -> 1 ; total nul/invalide -> chaîne vide ; libellé manquant -> ligne ignorée.');
+});
+
+t('invoiceToRows : taux par ligne (line.vat_rate) canonisé, sinon null', function () {
+    const rows = H.invoiceToRows({ lines: [
+        { label: 'Soda', units: 2, total: 3, vat_rate: 20 },
+        { label: 'Pain', units: 1, total: 1.2, vat_rate: '5,5' },
+        { label: 'Sac', units: 1, total: 0.1 },
+        { label: 'Presse', units: 1, total: 2, vat_rate: 'abc' }
+    ] });
+    assert.deepStrictEqual(rows.map(function (r) { return r.vat_rate; }),
+        ['20', '5.5', null, null],
+        'Taux de la ligne canonisé (« 5,5 » -> « 5.5 ») ; absent ou invalide -> null (héritera de l\u2019en-tête).');
+});
+
+t('invoiceToRows : produit reconnu (line.product) prioritaire, libellé brut TOUJOURS conservé', function () {
+    const rows = H.invoiceToRows({ lines: [
+        // Produit reconnu par le serveur dans le catalogue (fiches +
+        // alias) : c'est lui, la clé d'achat/stock ; le libellé OCR
+        // reste en raw_label et ouvre les notes.
+        { label: 'RED BULL WHITE BOITE 25CL', product: 'Red Bull Blanche', units: 24, total: 29.58, vat_rate: 5.5 },
+        // Reconnu identique au libellé : aucune substitution, la clé
+        // EST le libellé (matched=false) — mais le libellé d'origine
+        // reste mémorisé.
+        { label: 'KitKat', product: 'KitKat', units: 36, total: 19.99 },
+        // Inconnu (product null) : libellé OCR brut comme clé de départ.
+        { label: 'TETE DE MORT 400 GRS', product: null, units: 1, total: 5.6, ean: '3215470516952' }
+    ] });
+    assert.deepStrictEqual(rows[0], {
+        key: 'Red Bull Blanche', raw_label: 'RED BULL WHITE BOITE 25CL', matched: true, qty: 24, total: '29,58',
+        notes: 'libellé facture : RED BULL WHITE BOITE 25CL', vat_rate: '5.5'
+    }, 'Clé = produit reconnu ; raw_label + note « libellé facture » conservés pour contrôle ; matched=true.');
+    assert.deepStrictEqual(rows[1], {
+        key: 'KitKat', raw_label: 'KitKat', matched: false, qty: 36, total: '19,99', notes: '', vat_rate: null
+    }, 'Produit == libellé : pas de note superflue, mais raw_label conservé (le serveur n\'y créera pas de fiche).');
+    assert.deepStrictEqual(rows[2], {
+        key: 'TETE DE MORT 400 GRS', raw_label: 'TETE DE MORT 400 GRS', matched: false, qty: 1, total: '5,60',
+        notes: 'EAN 3215470516952', vat_rate: null
+    }, 'Sans reconnaissance : libellé OCR comme clé de départ, matched=false.');
+});
+
+/* ------------------------------------------------------------------ *
+ * applyInvoiceState — fusion pure facture -> état du formulaire
+ * ------------------------------------------------------------------ */
+
+t('applyInvoiceState : la facture remplit en-tête et lignes', function () {
+    const st = H.applyInvoiceState({
+        supplier: '', invoice_number: '', purchased_at: '2026-10-08',
+        vat_rate: '5.5', amount_basis: 'ht', rows: []
+    }, {
+        supplier: 'METRO', invoice_number: '3007 02 0090', purchased_at: '2026-10-02',
+        vat_rate: 5.5, amount_basis: 'ht',
+        lines: [{ label: 'Coca 33cl', units: 24, total: 10.8 }]
+    });
+    assert.strictEqual(st.supplier, 'METRO');
+    assert.strictEqual(st.invoice_number, '3007 02 0090');
+    assert.strictEqual(st.purchased_at, '2026-10-02');
+    assert.strictEqual(st.vat_rate, '5.5', 'Taux canonisé en chaîne pour le select.');
+    assert.strictEqual(st.amount_basis, 'ht');
+    assert.deepStrictEqual(st.rows, [{ key: 'Coca 33cl', raw_label: 'Coca 33cl', matched: false, qty: 24, total: '10,80', notes: '', vat_rate: null }]);
+});
+
+t('applyInvoiceState : champs null -> état courant conservé', function () {
+    const st = H.applyInvoiceState({
+        supplier: 'Metro CASH', invoice_number: 'A1', purchased_at: '2026-10-01',
+        vat_rate: '20', amount_basis: 'ttc', rows: []
+    }, { supplier: null, invoice_number: null, purchased_at: null, vat_rate: null, lines: [] });
+    assert.strictEqual(st.supplier, 'Metro CASH');
+    assert.strictEqual(st.invoice_number, 'A1');
+    assert.strictEqual(st.purchased_at, '2026-10-01');
+    assert.strictEqual(st.vat_rate, '20');
+    assert.strictEqual(st.amount_basis, 'ttc');
+    assert.deepStrictEqual(st.rows, []);
+});
+
+t('applyInvoiceState : date ou taux invalides ignorés', function () {
+    const st = H.applyInvoiceState(null, {
+        purchased_at: '02/10/2026', vat_rate: 'abc', supplier: 'METRO', lines: []
+    });
+    assert.strictEqual(st.purchased_at, '', 'Seul le format aaaa-mm-jj est accepté (input[type=date]).');
+    assert.strictEqual(st.vat_rate, null);
+    assert.strictEqual(st.supplier, 'METRO');
+});
+
+t('applyInvoiceState : taux à la française « 5,5 » canonisé', function () {
+    const st = H.applyInvoiceState({}, { vat_rate: '5,5', lines: [] });
+    assert.strictEqual(st.vat_rate, '5.5');
+});
+
+/* ------------------------------------------------------------------ *
+ * applyInvoiceToExpense — ticket scanné -> formulaire de dépense
+ * (préremplissage non destructif)
+ * ------------------------------------------------------------------ */
+
+/** État « formulaire de dépense vide » (sélecteur TVA sur Aucune). */
+function emptyExpenseState() {
+    return {
+        spent_at: '', label: '', amount: '', basis: 'ttc',
+        vat_rate: '', vat_amount: '', invoice_number: ''
+    };
+}
+
+t('applyInvoiceToExpense : formulaire vide -> tout est prérempli (base TTC)', function () {
+    const res = H.applyInvoiceToExpense(emptyExpenseState(), {
+        supplier: 'Leroy Merlin', invoice_number: '159-10007284',
+        purchased_at: '2026-08-31', amount_basis: 'ttc',
+        vat_rate: 20, total_ht: 31.07, total_ttc: 37.24,
+        vat_rates: [], lines: []
+    });
+    assert.strictEqual(res.spent_at, '2026-08-31');
+    assert.strictEqual(res.label, 'Leroy Merlin');
+    assert.strictEqual(res.amount, '37,24', 'Base TTC : le montant vient du total_ttc, au format français.');
+    assert.strictEqual(res.basis, 'ttc');
+    assert.strictEqual(res.vat_rate, '20', 'Taux canonisé en chaîne pour le select.');
+    assert.strictEqual(res.vat_amount, '', 'Taux unique : pas de vat_amount.');
+    assert.strictEqual(res.invoice_number, '159-10007284');
+    assert.strictEqual(res.filled, true);
+    assert.deepStrictEqual(res.skipped, []);
+});
+
+t('applyInvoiceToExpense : base HT -> montant repris de total_ht', function () {
+    const res = H.applyInvoiceToExpense(emptyExpenseState(), {
+        supplier: 'METRO', purchased_at: '2026-08-31', amount_basis: 'ht',
+        vat_rate: 5.5, total_ht: 250.46, total_ttc: 264.24, lines: []
+    });
+    assert.strictEqual(res.amount, '250,46');
+    assert.strictEqual(res.basis, 'ht');
+    assert.strictEqual(res.vat_rate, '5.5');
+    assert.strictEqual(res.amount_source, 'ht', 'La source du montant est explicitée.');
+});
+
+t('applyInvoiceToExpense : totaux non lus -> montant = somme des lignes (source lines)', function () {
+    const res = H.applyInvoiceToExpense(emptyExpenseState(), {
+        supplier: 'METRO', purchased_at: '2026-09-18', amount_basis: null,
+        vat_rate: null, total_ht: null, total_ttc: null,
+        lines: [
+            { label: 'RED BULL BOITE 25CL', total: 24.98 },
+            { label: 'AGITATEUR BOIS 11CM', total: '3,47' },
+            { label: 'Ligne sans montant', total: null }
+        ]
+    });
+    assert.strictEqual(res.amount, '28,45', 'Σ des montants de lignes (nombre ou chaîne française).');
+    assert.strictEqual(res.amount_source, 'lines', 'Estimation signalée : à vérifier avant enregistrement.');
+    assert.strictEqual(res.basis, 'ht', 'Les montants de lignes d\u2019une facture sont HT.');
+});
+
+t('applyInvoiceToExpense : totaux ni lignes -> montant vide, pas de fausse source', function () {
+    const res = H.applyInvoiceToExpense(emptyExpenseState(), {
+        supplier: 'METRO', purchased_at: '2026-09-18', amount_basis: null,
+        total_ht: null, total_ttc: null, lines: [{ label: 'X', total: null }]
+    });
+    assert.strictEqual(res.amount, '');
+    assert.strictEqual(res.amount_source, '');
+});
+
+t('applyInvoiceToExpense : champs déjà remplis -> conservés et signalés dans skipped', function () {
+    const res = H.applyInvoiceToExpense({
+        spent_at: '2026-10-08', label: 'Ma dépense', amount: '30',
+        basis: 'ttc', vat_rate: '5.5', vat_amount: '', invoice_number: 'REF'
+    }, {
+        supplier: 'METRO', invoice_number: '159-10007284',
+        purchased_at: '2026-08-31', amount_basis: 'ttc',
+        vat_rate: 20, total_ht: 31.07, total_ttc: 37.24, lines: []
+    });
+    assert.strictEqual(res.spent_at, '2026-10-08', 'Rien n\u2019est écrasé.');
+    assert.strictEqual(res.label, 'Ma dépense');
+    assert.strictEqual(res.amount, '30');
+    assert.strictEqual(res.vat_rate, '5.5');
+    assert.strictEqual(res.invoice_number, 'REF');
+    assert.strictEqual(res.filled, false, 'Aucun champ vide à remplir.');
+    assert.deepStrictEqual(
+        res.skipped.map(function (s) { return s.field; }).sort(),
+        ['amount', 'invoice_number', 'label', 'spent_at', 'vat_rate']
+    );
+    assert.ok(res.skipped.every(function (s) {
+        return typeof s.reason === 'string' && s.reason.indexOf('déjà renseigné') !== -1;
+    }), 'Chaque champ écarté porte sa raison (avec la valeur du ticket).');
+});
+
+t('applyInvoiceToExpense : multi-taux (vat_rate null) -> vat_amount = somme des TVA', function () {
+    const res = H.applyInvoiceToExpense(emptyExpenseState(), {
+        supplier: 'METRO', purchased_at: '2026-08-31', amount_basis: 'ttc',
+        vat_rate: null, total_ht: 100, total_ttc: 125.5,
+        vat_rates: [
+            { letter: 'A', rate: 5.5, base_ht: 50, vat: 2.75, total_ttc: 52.75 },
+            { letter: 'B', rate: 20, base_ht: 50, vat: 10, total_ttc: 60 }
+        ],
+        lines: []
+    });
+    assert.strictEqual(res.vat_rate, null, 'Multi-taux : pas de taux unique.');
+    assert.strictEqual(res.vat_amount, '12,75', 'Somme des TVA détaillées, 2 décimales, virgule française.');
+    assert.strictEqual(res.amount, '125,50');
+    assert.strictEqual(res.filled, true);
+});
+
+t('applyInvoiceToExpense : multi-taux mais vat_amount déjà saisi -> conservé + skipped', function () {
+    const res = H.applyInvoiceToExpense({
+        spent_at: '', label: '', amount: '', basis: 'ttc',
+        vat_rate: '', vat_amount: '12,70', invoice_number: ''
+    }, {
+        supplier: 'METRO', amount_basis: 'ttc', vat_rate: null,
+        total_ttc: 125.5,
+        vat_rates: [
+            { letter: 'A', rate: 5.5, vat: 2.75 },
+            { letter: 'B', rate: 20, vat: 10 }
+        ],
+        lines: []
+    });
+    assert.strictEqual(res.vat_amount, '12,70');
+    assert.deepStrictEqual(
+        res.skipped.map(function (s) { return s.field; }),
+        ['vat_amount']
+    );
+});
+
+t('applyInvoiceToExpense : ticket null/vide -> état intact, rien de rempli', function () {
+    const state = {
+        spent_at: '2026-10-01', label: 'Verrou x4', amount: '36,60',
+        basis: 'ttc', vat_rate: '20', vat_amount: '', invoice_number: 'A1'
+    };
+    const resNull = H.applyInvoiceToExpense(state, null);
+    assert.deepStrictEqual(
+        [resNull.spent_at, resNull.label, resNull.amount, resNull.basis,
+         resNull.vat_rate, resNull.vat_amount, resNull.invoice_number],
+        ['2026-10-01', 'Verrou x4', '36,60', 'ttc', '20', '', 'A1'],
+        'Facture absente : chaque champ garde sa valeur courante.'
+    );
+    assert.strictEqual(resNull.filled, false);
+    assert.deepStrictEqual(resNull.skipped, []);
+    const resEmpty = H.applyInvoiceToExpense(emptyExpenseState(), { lines: [] });
+    assert.strictEqual(resEmpty.filled, false, 'Facture sans données exploitables : rien n\u2019est prérempli.');
+});
+
+t('applyInvoiceToExpense : date mal formée ou montants absents ignorés', function () {
+    const res = H.applyInvoiceToExpense(emptyExpenseState(), {
+        supplier: 'METRO', purchased_at: '31/08/2026',
+        amount_basis: 'ttc', total_ttc: null, total_ht: null, lines: []
+    });
+    assert.strictEqual(res.spent_at, '', 'Seul aaaa-mm-jj est accepté (input[type=date]).');
+    assert.strictEqual(res.amount, '', 'Pas de total exploitable : le montant reste vide.');
+    assert.strictEqual(res.label, 'METRO');
+});
+
+/* ------------------------------------------------------------------ *
+ * serializeExpenseNotes / expenseNotesFromInvoice — détail produits
+ * -> champ notes
+ * ------------------------------------------------------------------ */
+
+t('serializeExpenseNotes : format exact « Détail tickets : … »', function () {
+    assert.strictEqual(
+        H.serializeExpenseNotes([
+            { key: 'RED BULL', qty: 24, total: '59,16' },
+            { key: 'NUTELLA', qty: 3, total: '8,07' }
+        ]),
+        'Détail tickets : 24 × RED BULL (59,16 €) · 3 × NUTELLA (8,07 €)'
+    );
+});
+
+t('serializeExpenseNotes : total au format nombre -> normalisé en français', function () {
+    assert.strictEqual(
+        H.serializeExpenseNotes([{ key: 'Café', qty: 2, total: 7.2 }]),
+        'Détail tickets : 2 × Café (7,20 €)'
+    );
+});
+
+t('serializeExpenseNotes : lignes sans nom ignorées, total absent sans parenthèses', function () {
+    assert.strictEqual(H.serializeExpenseNotes([]), '');
+    assert.strictEqual(H.serializeExpenseNotes(null), '');
+    assert.strictEqual(
+        H.serializeExpenseNotes([
+            { key: '', qty: 2, total: '5,00' },
+            { key: 'Stylo', qty: 2, total: '' },
+            { key: '  ', qty: 1, total: 3 }
+        ]),
+        'Détail tickets : 2 × Stylo',
+        'Sans libellé -> ignorée ; sans total -> ligne nue ; qty < 1 -> 1.'
+    );
+});
+
+t('expenseNotesFromInvoice : compose invoiceToRows + serializeExpenseNotes', function () {
+    const invoice = {
+        supplier: 'METRO',
+        lines: [
+            { label: 'RED BULL', units: 24, total: 59.16 },
+            { label: 'NUTELLA', units: 3, total: 8.07 },
+            { label: '', units: 2, total: 4 }
+        ]
+    };
+    assert.strictEqual(
+        H.expenseNotesFromInvoice(invoice),
+        'Détail tickets : 24 × RED BULL (59,16 €) · 3 × NUTELLA (8,07 €)'
+    );
+    assert.strictEqual(H.expenseNotesFromInvoice(null), '');
+    assert.strictEqual(H.expenseNotesFromInvoice({ lines: [] }), '');
+});
+
+/* ------------------------------------------------------------------ *
+ * buildPurchaseBulkPayload — SUPPRIMÉ (fusion « Saisir une dépense » ×
+ * « Achats ») : le câblage scan→save-bulk du livre comptable a été
+ * retiré (livre en lecture stricte, kiosque dépense seule). Le helper
+ * ne doit plus être exposé : plus aucun POST d'achats ne peut être
+ * construit depuis un scan de dépense.
+ * ------------------------------------------------------------------ */
+
+t('buildPurchaseBulkPayload : helper retiré du module (fusion saisie × achats)', function () {
+    assert.strictEqual(H.buildPurchaseBulkPayload, undefined,
+        'Le payload save-bulk ne doit plus exister : les achats en lot se saisissent uniquement sur la page unifiée /admin/compta/achats.');
+});
+
+t('applyInvoiceToExpense : toujours exposé (volet « Frais divers » de la page unifiée)', function () {
+    assert.strictEqual(typeof H.applyInvoiceToExpense, 'function',
+        'Le préremplissage de DÉPENSE reste utilisé par le volet B et le kiosque.');
+    assert.strictEqual(typeof H.serializeExpenseNotes, 'function');
+    assert.strictEqual(typeof H.scanUpload, 'function');
+});
+
+/* ------------------------------------------------------------------ *
+ * downscaleImageSpec — spécification PURE de la compression photo
+ * (canvas côté navigateur : au-delà de 3000 px de côté long OU de
+ * 4 Mo, JPEG qualité 0,9 — le bench réel a validé l'OCR à ~2900 px)
+ * ------------------------------------------------------------------ */
+
+t('downscaleImageSpec : photo au-dessus de la limite -> recompression', function () {
+    const spec = H.downscaleImageSpec(5 * 1024 * 1024, 4000, 3000);
+    assert.strictEqual(spec.skip, false, '4000 px de large : il faut recompresser.');
+    assert.strictEqual(spec.maxSide, 3000);
+    assert.strictEqual(spec.quality, 0.9);
+    assert.strictEqual(spec.mime, 'image/jpeg');
+    assert.strictEqual(spec.targetW, 3000, 'Côté long ramené à 3000 px.');
+    assert.strictEqual(spec.targetH, 2250, 'Proportions conservées (3000 × 0,75).');
+    assert.strictEqual(spec.fileSize, 5 * 1024 * 1024, 'Poids d\u2019origine conservé (informatif).');
+});
+
+t('downscaleImageSpec : portrait — le côté long est la HAUTEUR', function () {
+    const spec = H.downscaleImageSpec(4e6, 3024, 4032);
+    assert.strictEqual(spec.skip, false);
+    assert.strictEqual(spec.targetW, 2250);
+    assert.strictEqual(spec.targetH, 3000);
+});
+
+t('downscaleImageSpec : photo nette mais trop LOURDE -> réencodage sans redimensionnement', function () {
+    const spec = H.downscaleImageSpec(5 * 1024 * 1024, 2000, 1500);
+    assert.strictEqual(spec.skip, false, '2,5× le poids visé : recompression nécessaire (erreur 1 sinon).');
+    assert.strictEqual(spec.targetW, 2000, 'Dimensions conservées (côté long sous 3000 px).');
+    assert.strictEqual(spec.targetH, 1500);
+    assert.strictEqual(spec.quality, 0.9);
+});
+
+t('downscaleImageSpec : photo déjà sous la limite -> fichier original', function () {
+    const spec = H.downscaleImageSpec(800000, 2200, 1650);
+    assert.strictEqual(spec.skip, true, 'Sous 3000 px ET sous 4 Mo : pas de recompression.');
+    assert.strictEqual(spec.targetW, 2200, 'Dimensions d\u2019origine intactes.');
+    assert.strictEqual(spec.targetH, 1650);
+});
+
+t('downscaleImageSpec : vraie photo de téléphone (2880 px, ~2 Mo) -> fichier original', function () {
+    const spec = H.downscaleImageSpec(2.2 * 1024 * 1024, 2160, 2880);
+    assert.strictEqual(spec.skip, true, 'Le bench réel a validé ces photos telles quelles.');
+    assert.strictEqual(spec.targetW, 2160);
+    assert.strictEqual(spec.targetH, 2880);
+});
+
+t('downscaleImageSpec : petites dimensions -> fichier original', function () {
+    const spec = H.downscaleImageSpec(120000, 800, 600);
+    assert.strictEqual(spec.skip, true);
+    assert.strictEqual(spec.targetW, 800);
+    assert.strictEqual(spec.targetH, 600);
+});
+
+t('downscaleImageSpec : dimensions illisibles -> fichier original (prudence)', function () {
+    for (const dims of [[0, 0], [4000, 0], [0, 3000], [NaN, NaN]]) {
+        const spec = H.downscaleImageSpec(1000, dims[0], dims[1]);
+        assert.strictEqual(spec.skip, true, 'Dimensions ' + dims + ' : jamais de perte.');
+        assert.strictEqual(spec.targetW, Number.isFinite(dims[0]) && dims[0] > 0 ? dims[0] : 0);
+    }
+});
+
+t('downscaleImageSpec : taille de fichier inexploitable -> 0, sans crash', function () {
+    assert.strictEqual(H.downscaleImageSpec(undefined, 4000, 3000).fileSize, 0);
+    assert.strictEqual(H.downscaleImageSpec('abc', 4000, 3000).fileSize, 0);
+    assert.strictEqual(H.downscaleImageSpec('4096', 4000, 3000).fileSize, 4096, 'Chaîne numérique acceptée.');
+});
+
+t('downscaleImageSpec : gros dépassement arrondi au pixel près', function () {
+    // 12000 × 16000 (scan haute définition) -> 2250 × 3000
+    const spec = H.downscaleImageSpec(9e6, 12000, 16000);
+    assert.strictEqual(spec.skip, false);
+    assert.strictEqual(spec.targetW, 2250);
+    assert.strictEqual(spec.targetH, 3000);
+    assert.ok(Math.max(spec.targetW, spec.targetH) <= 3000, 'Jamais au-dessus de la limite après arrondi.');
+});
+
+/* ------------------------------------------------------------------ *
+ * scanUpload / scanParseText — CSRF OPTIONNEL (POST kiosque sans
+ * session : null = ni champ _csrf, ni en-tête X-CSRF-Token ; le jeton
+ * admin de l'URL EST l'authentification). fetch et FormData sont
+ * stubbés : les assertions tournent dans le harnais Node.
+ * ------------------------------------------------------------------ */
+
+/** Tests asynchrones (promesses) : exécutés après les tests synchrones. */
+const asyncTests = [];
+
+/** Mini-harnais asynchrone : même convention d'échec que t(). */
+function ta(name, fn) {
+    asyncTests.push({ name: name, fn: fn });
+}
+
+/** FormData factice : enregistre les champs appended (k, v, nom de fichier). */
+function FakeFormData() { this.fields = []; }
+FakeFormData.prototype.append = function (k, v) { this.fields.push([k, v, arguments[2]]); };
+
+/** fetch factice : capture (url, init), répond {ok:true, json:{ok:true}}. */
+function stubFetch(captured) {
+    return function (url, init) {
+        captured.url = url;
+        captured.init = init;
+        return Promise.resolve({
+            ok: true,
+            json: function () { return Promise.resolve({ ok: true, invoice: null }); }
+        });
+    };
+}
+
+/** Installe les stubs, rend leur restauration (finally). */
+function withStubs(captured, fn) {
+    const origFetch = global.fetch;
+    const origFormData = global.FormData;
+    global.fetch = stubFetch(captured);
+    global.FormData = FakeFormData;
+    return Promise.resolve().then(fn).finally(function () {
+        global.fetch = origFetch;
+        global.FormData = origFormData;
+    });
+}
+
+function fieldNames(fd) {
+    return fd.fields.map(function (f) { return f[0]; });
+}
+
+ta('scanUpload : csrf null -> ni champ _csrf ni en-tête X-CSRF-Token', function () {
+    const captured = {};
+    return withStubs(captured, function () {
+        return H.scanUpload({ name: 'ticket.jpg' }, null, '/kiosque/admin/ledger/scan/TOKEN').then(function () {
+            const headers = captured.init.headers || {};
+            assert.ok(!Object.prototype.hasOwnProperty.call(headers, 'X-CSRF-Token'),
+                'Pas d\u2019en-tête X-CSRF-Token sans CSRF (kiosque).');
+            assert.deepStrictEqual(fieldNames(captured.init.body), ['file'],
+                'Seul le fichier part : PAS de champ _csrf.');
+            assert.strictEqual(captured.url, '/kiosque/admin/ledger/scan/TOKEN',
+                'L\u2019endpoint passé est utilisé tel quel.');
+            assert.strictEqual(captured.init.method, 'POST');
+        });
+    });
+});
+
+ta('scanUpload : PDF parti tel quel (ni recompression ni renommage .jpg)', function () {
+    const captured = {};
+    const pdf = { name: 'scan.pdf', type: 'application/pdf' };
+    return withStubs(captured, function () {
+        return H.scanUpload(pdf, 'TOK', '/admin/compta/depenses/scan').then(function () {
+            const fileField = captured.init.body.fields.filter(function (f) { return f[0] === 'file'; })[0];
+            assert.ok(fileField, 'Le champ file part bien.');
+            assert.strictEqual(fileField[1], pdf, 'Le PDF original est envoyé intact (pas de canvas).');
+            assert.strictEqual(fileField[2], 'scan.pdf',
+                'Le nom garde son extension .pdf : le contrôle extension/MIME du serveur reste cohérent.');
+        });
+    });
+});
+
+ta('scanUpload : csrf fourni -> champ _csrf ET en-tête X-CSRF-Token (admin inchangé)', function () {
+    const captured = {};
+    return withStubs(captured, function () {
+        return H.scanUpload({ name: 'ticket.jpg' }, 'TOK', '/admin/compta/depenses/scan').then(function () {
+            const headers = captured.init.headers || {};
+            assert.strictEqual(headers['X-CSRF-Token'], 'TOK', 'En-tête présent côté admin.');
+            assert.deepStrictEqual(fieldNames(captured.init.body), ['file', '_csrf'],
+                'Le champ _csrf part avec la valeur du formulaire.');
+        });
+    });
+});
+
+ta('scanParseText : csrf null -> texte seul, sans trace de CSRF', function () {
+    const captured = {};
+    return withStubs(captured, function () {
+        return H.scanParseText('METRO\n2 x Coca', null, '/kiosque/admin/ledger/scan/TOKEN').then(function () {
+            const headers = captured.init.headers || {};
+            assert.ok(!Object.prototype.hasOwnProperty.call(headers, 'X-CSRF-Token'));
+            assert.deepStrictEqual(fieldNames(captured.init.body), ['text']);
+            assert.strictEqual(captured.init.body.fields[0][1], 'METRO\n2 x Coca');
+        });
+    });
+});
+
+/* ------------------------------------------------------------------ */
+
+/* Exécution SÉQUENTIELLE des tests asynchrones : les stubs globaux
+ * (fetch/FormData) d'un test ne doivent jamais chevaucher ceux d'un
+ * autre (une exécution en parallèle ferait gagner le dernier stub). */
+asyncTests.reduce(function (chain, c) {
+    return chain.then(function () {
+        return Promise.resolve().then(c.fn).then(
+            function () { passed++; },
+            function (e) {
+                failures.push('  ✗ ' + c.name + ' : ' + (e && e.message ? e.message : e));
+            }
+        );
+    });
+}, Promise.resolve()).then(function () {
+    if (failures.length > 0) {
+        console.error('JS ÉCHEC : ' + failures.length + ' test(s) en échec, ' + passed + ' OK');
+        console.error(failures.join('\n'));
+        process.exit(1);
+    }
+    console.log('JS OK : ' + passed + ' tests de la grille de saisie.');
+});

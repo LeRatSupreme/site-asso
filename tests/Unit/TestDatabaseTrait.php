@@ -1,0 +1,126 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Tests\Unit;
+
+use PDO;
+use PDOException;
+use RuntimeException;
+
+require_once __DIR__ . '/../support/db_guard.php';
+
+/**
+ * Trait de connexion à la base de test `aeic_test` pour les tests de modèles.
+ *
+ * Renvoie null (au lieu de lever) si la base n'est pas joignable, afin que
+ * les tests puissent être marqués "skipped" plutôt qu'en erreur.
+ *
+ * GARDE ANTI-PRODUCTION (incident TRUNCATE du 26/10/2026) : connect()
+ * refuse, AVANT toute connexion, un DB_NAME autre que `aeic_test` —
+ * p. ex. hérité d'un shell qui aurait sourcé config.env (DB_NAME=aeic).
+ */
+trait TestDatabaseTrait
+{
+    /**
+     * Tente de se connecter à la base de test. Retourne null si impossible.
+     *
+     * @throws RuntimeException si DB_NAME résolu n'est pas `aeic_test`
+     */
+    protected function connect(): ?PDO
+    {
+        $host = getenv('DB_HOST') ?: '127.0.0.1';
+        $name = getenv('DB_NAME') ?: 'aeic_test';
+        $user = getenv('DB_USER') ?: 'aeic';
+        $pass = getenv('DB_PASS') ?: '';
+
+        // Garde anti-production : refus AVANT toute tentative de connexion.
+        aeic_tests_assert_test_database($name);
+        try {
+            $pdo = new PDO(
+                sprintf('mysql:host=%s;dbname=%s;charset=utf8mb4', $host, $name),
+                $user,
+                $pass,
+                [
+                    PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+                    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+                    PDO::ATTR_EMULATE_PREPARES   => false,
+                ]
+            );
+        } catch (PDOException) {
+            return null;
+        }
+
+        // Force la timezone MySQL sur UTC (cohérence avec database.php).
+        try {
+            $pdo->exec("SET time_zone = '+00:00'");
+        } catch (PDOException) {
+            // certains environnements n'ont pas les tables tz : non bloquant.
+        }
+
+        return $pdo;
+    }
+
+    /**
+     * Vide (TRUNCATE) les tables données dans une transaction, en respectant
+     * les contraintes de clé étrangère.
+     *
+     * Ceinture et bretelles : re-vérifie le nom de la base RÉELLEMENT
+     * connectée avant le moindre TRUNCATE (la garde de connect() a déjà
+     * filtré, mais reset() est l'opération destructive — jamais sur autre
+     * chose que `aeic_test`).
+     *
+     * @param list<string> $tables
+     */
+    protected function reset(PDO $pdo, array $tables): void
+    {
+        $current = $pdo->query('SELECT DATABASE()')->fetchColumn();
+        aeic_tests_assert_test_database((string) $current);
+
+        $pdo->exec('SET FOREIGN_KEY_CHECKS = 0');
+        foreach ($tables as $table) {
+            $pdo->exec('TRUNCATE TABLE `' . $table . '`');
+        }
+        $pdo->exec('SET FOREIGN_KEY_CHECKS = 1');
+    }
+
+    /**
+     * Applique (best effort) la migration anti-réimport / dédoublonnage
+     * (database/migrations/2026_import_dedup.sql) sur la base de test.
+     *
+     * Chaque statement est indépendant : une erreur (colonne ou index déjà
+     * présent) est ignorée, la migration est donc ré-idempotente en pratique.
+     */
+    protected function applyImportDedupMigration(PDO $pdo): void
+    {
+        $statements = [
+            "UPDATE sales SET description = '' WHERE description IS NULL",
+            "ALTER TABLE sales MODIFY description VARCHAR(255) NOT NULL DEFAULT ''",
+            'ALTER TABLE import_batches ADD COLUMN file_hash CHAR(64) NULL AFTER filename',
+            'ALTER TABLE import_batches ADD UNIQUE KEY uniq_import_hash (file_hash)',
+        ];
+        foreach ($statements as $sql) {
+            try {
+                $pdo->exec($sql);
+            } catch (PDOException) {
+                // Déjà appliqué : non bloquant.
+            }
+        }
+    }
+
+    /**
+     * Applique (best effort) la migration du kind d'alias
+     * (database/migrations/2026_alias_kind.sql) sur la base de test :
+     * 'label' (alias produit) vs 'appellation' (libellé long facture).
+     */
+    protected function applyAliasKindMigration(PDO $pdo): void
+    {
+        try {
+            $pdo->exec(
+                "ALTER TABLE product_aliases ADD COLUMN kind VARCHAR(20) NOT NULL DEFAULT 'label' AFTER category"
+            );
+        } catch (PDOException) {
+            // Déjà appliqué : non bloquant.
+        }
+    }
+}

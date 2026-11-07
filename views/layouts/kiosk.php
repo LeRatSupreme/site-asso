@@ -1,0 +1,355 @@
+<?php
+
+declare(strict_types=1);
+
+/**
+ * Layout « kiosque » : coquille minimale pour les accès par lien secret
+ * (ex. Réapprovisionnement sur le téléphone).
+ *
+ * Contrairement au layout admin, il n'affiche AUCUNE navigation : pas de
+ * sidebar, pas de menu, pas de déconnexion, pas de lien vers le site.
+ * Seul le contenu de la vue est rendu — rien d'autre n'est visible ni
+ * accessible depuis un lien kiosque.
+ *
+ * @var string $content
+ * @var string $title
+ */
+
+use App\Models\Setting;
+
+$siteName = Setting::get('site_name', 'AEIC');
+?>
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title><?= e($title ?? 'Consultation') ?> — <?= e($siteName) ?></title>
+    <meta name="robots" content="noindex, nofollow">
+    <link rel="icon" href="<?= e(asset('img/favicon.svg')) ?>" type="image/svg+xml">
+    <link rel="stylesheet" href="<?= e(assetVersioned('css/base.css')) ?>">
+    <link rel="stylesheet" href="<?= e(rootAssetVersioned('/css/admin.css')) ?>">
+    <link rel="stylesheet" href="<?= e(rootAssetVersioned('/css/payments.css')) ?>">
+    <!-- Toujours chargée : les pages kiosque sont des pages compta. -->
+    <link rel="stylesheet" href="<?= e(rootAssetVersioned('/css/compta.css')) ?>">
+    <!-- Widget assistant (bulle chat bas-droite) : mêmes styles que le site
+         public. assistant.js détecte body.kiosk-body (voir <body> ci-dessous)
+         et adapte l'endpoint au contexte kiosque. -->
+    <link rel="stylesheet" href="<?= e(assetVersioned('css/assistant.css')) ?>">
+</head>
+<body class="admin-body kiosk-body">
+    <?php
+    // Bouton retour flottant : présent sur toutes les pages kiosque SAUF
+    // les hubs eux-mêmes. Le hub de retour dépend du jeton de l'URL
+    // (jeton admin → hub admin, jeton membres → hub membres) : chaque
+    // espace boucle sur lui-même.
+    $krBackUrl = null;
+    $krUri = (string) (parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/');
+    $krAdmin = trim((string) Setting::get('admin_kiosk_token', ''));
+    $krMember = trim((string) Setting::get('reappro_kiosk_token', ''));
+    if (preg_match('#^/kiosque/(comptage/(caisse|inventaire|jour|jour-membre)|admin/(periode|semaine|mois|analytics|ledger|caisse/depot|caisse/prise|president)|liste|reappro)/([^/]+)$#', $krUri, $krM)) {
+        $krTok = trim($krM[4]);
+        if ($krAdmin !== '' && hash_equals($krAdmin, $krTok)) {
+            $krBackUrl = url('/kiosque/admin/' . $krTok);
+        } elseif ($krMember !== '' && hash_equals($krMember, $krTok)) {
+            $krBackUrl = url('/kiosque/comptage/' . $krTok);
+        } else {
+            // Kiosque personnalisé : retour vers son propre hub.
+            try {
+                $krCustom = \App\Models\Kiosque::findByToken($krTok);
+            } catch (\Throwable) {
+                $krCustom = null; // table absente (migration non passée) : pas de bouton custom
+            }
+            if ($krCustom !== null) {
+                $krBackUrl = url('/kiosque/hub/' . $krTok);
+            }
+        }
+    }
+    ?>
+    <?php if ($krBackUrl !== null): ?>
+    <style>
+        .kr-back {
+            position: fixed; top: 12px; left: 12px; z-index: 60;
+            display: inline-flex; align-items: center; gap: 0.35rem;
+            padding: 0.7rem 1.05rem; border-radius: 999px;
+            border: 2px solid var(--primary, #48bdd3);
+            background: rgba(10, 22, 38, 0.92);
+            color: var(--primary, #48bdd3); font-size: 0.85rem; font-weight: 800;
+            text-decoration: none; user-select: none;
+            backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+        }
+        .kr-back:hover { background: var(--primary, #48bdd3); color: #062033; }
+    </style>
+    <a class="kr-back" href="<?= e($krBackUrl) ?>">← Retour</a>
+    <?php endif; ?>
+
+    <!-- Pastille profil : qui est connecté sur ce kiosque (identité stockée
+         sur l'appareil, envoyée avec chaque enregistrement pour la trace). -->
+    <button type="button" id="kWhoBtn" class="kwho" aria-label="Indiquer qui tu es">?</button>
+
+    <div id="kWhoModal" class="kwho-modal" hidden>
+        <div class="kwho-card" role="dialog" aria-modal="true" aria-labelledby="kWhoTitle">
+            <h2 id="kWhoTitle" class="kwho-title">Qui fais le comptage ?</h2>
+            <p class="kwho-sub">Obligatoire pour enregistrer : ton nom sera attaché à chaque modification.</p>
+            <label class="kwho-field"><span>Prénom (obligatoire)</span>
+                <input type="text" id="kWhoPrenom" autocomplete="given-name" maxlength="60"></label>
+            <label class="kwho-field"><span>Nom (obligatoire)</span>
+                <input type="text" id="kWhoNom" autocomplete="family-name" maxlength="60"></label>
+            <label class="kwho-field"><span>Rôle (obligatoire — ex. vice-trésorier)</span>
+                <input type="text" id="kWhoAlias" maxlength="60" placeholder="vice-trésorier, président…"></label>
+            <p class="kwho-error" id="kWhoError" aria-live="polite" hidden>Prénom, nom et rôle sont obligatoires pour enregistrer.</p>
+            <div class="kwho-actions">
+                <button type="button" class="btn btn-primary btn-sm" id="kWhoSave">Enregistrer</button>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        .kwho {
+            position: fixed; top: 10px; right: 12px; z-index: 60;
+            width: 44px; height: 44px; border-radius: 50%;
+            border: 2px solid var(--primary, #48bdd3);
+            background: rgba(72, 189, 211, 0.14);
+            color: var(--primary, #48bdd3); font-weight: 900; font-size: 1rem;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent;
+        }
+        .kwho-modal {
+            /* 8600 : au-dessus du widget assistant (bulle/panneau à 8500
+               dans assistant.css) — cette fenêtre aria-modal doit rester
+               l'élément le plus haut tant qu'elle est ouverte. La bulle
+               fermée (bas-droite) ne recouvre ni le bouton retour
+               (haut-gauche) ni la pastille profil (haut-droite). */
+            position: fixed; inset: 0; z-index: 8600;
+            background: rgba(4, 10, 20, 0.72);
+            display: flex; align-items: center; justify-content: center; padding: 1rem;
+        }
+        .kwho-modal[hidden] { display: none; }
+        .kwho-card {
+            width: 100%; max-width: 340px; padding: 1.2rem 1.2rem 1rem;
+            background: #0e2036; border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px; box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+        }
+        .kwho-title { margin: 0 0 0.2rem; font-size: 1.15rem; font-weight: 900; }
+        .kwho-sub { margin: 0 0 0.9rem; font-size: 0.82rem; color: var(--muted, #8892a6); }
+        .kwho-field { display: block; margin-bottom: 0.7rem; }
+        .kwho-field span {
+            display: block; font-size: 0.75rem; font-weight: 700;
+            color: var(--muted, #8892a6); margin-bottom: 0.25rem; text-transform: uppercase; letter-spacing: 0.05em;
+        }
+        .kwho-field input {
+            width: 100%; padding: 0.6rem 0.7rem;
+            border: 1px solid var(--border, rgba(255,255,255,0.15));
+            border-radius: 10px; background: rgba(255, 255, 255, 0.05);
+            color: var(--foreground, inherit); font-size: 1rem; font-weight: 600;
+        }
+        .kwho-error { margin: 0 0 0.6rem; font-size: 0.8rem; color: #ff8f8f; }
+        .kwho-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 0.4rem; }
+        .kwho-actions .btn { min-height: 44px; }
+    </style>
+
+    <script>
+    (function () {
+        'use strict';
+        var KEY = 'aeic_kiosque_who';
+        var btn = document.getElementById('kWhoBtn');
+        var modal = document.getElementById('kWhoModal');
+        var prenom = document.getElementById('kWhoPrenom');
+        var nom = document.getElementById('kWhoNom');
+        var alias = document.getElementById('kWhoAlias');
+        var err = document.getElementById('kWhoError');
+
+        function read() {
+            try { return JSON.parse(localStorage.getItem(KEY) || 'null') || null; }
+            catch (e) { return null; }
+        }
+        function complete(w) {
+            return !!(w && (w.prenom || '').trim() !== '' && (w.nom || '').trim() !== '' && (w.alias || '').trim() !== '');
+        }
+        function label(w) {
+            if (!complete(w)) return '';
+            var base = ((w.prenom || '') + ' ' + (w.nom || '')).trim();
+            return base + ' (' + (w.alias || '').trim() + ')';
+        }
+        function initials(w) {
+            if (!w) return '?';
+            var s = ((w.prenom || '').charAt(0) + (w.nom || '').charAt(0)).trim();
+            return (s === '' ? (w.alias || '?').charAt(0) : s).toUpperCase();
+        }
+        /* Champs cachés d'identité injectés dans chaque formulaire : envoyés
+           avec chaque enregistrement (comptage caisse, inventaire, pause). */
+        function syncForms() {
+            var w = read() || {};
+            var v = label(w);
+            Array.prototype.forEach.call(document.querySelectorAll('form'), function (f) {
+                [['who', v], ['who_prenom', w.prenom || ''], ['who_nom', w.nom || ''], ['who_alias', w.alias || '']]
+                    .forEach(function (pair) {
+                        var input = f.querySelector('input[name="' + pair[0] + '"]');
+                        if (!input) {
+                            input = document.createElement('input');
+                            input.type = 'hidden';
+                            input.name = pair[0];
+                            f.appendChild(input);
+                        }
+                        input.value = pair[1];
+                    });
+            });
+        }
+        function render() {
+            var w = read();
+            btn.textContent = initials(w);
+            syncForms();
+        }
+        function open() {
+            var w = read() || {};
+            prenom.value = w.prenom || '';
+            nom.value = w.nom || '';
+            alias.value = w.alias || '';
+            err.hidden = true;
+            modal.hidden = false;
+            /* Focus initial : premier champ vide (ou le prénom si tout est vide). */
+            try {
+                var first = [prenom, nom, alias].filter(function (f) { return f.value.trim() === ''; })[0];
+                (first || prenom).focus();
+            } catch (e) {}
+        }
+        /* Piège de focus Tab : la boucle reste dans la fenêtre (champs puis
+           bouton Enregistrer) tant qu'elle est ouverte. Échap ferme quand
+           l'identité est complète (le bouton de fermeture n'existe pas :
+           la fenêtre n'est fermable qu'en s'identifiant). */
+        modal.addEventListener('keydown', function (e) {
+            if (e.key === 'Tab' && !modal.hidden) {
+                var focusables = [prenom, nom, alias, document.getElementById('kWhoSave')]
+                    .filter(function (el) { return el && !el.disabled; });
+                var first = focusables[0];
+                var last = focusables[focusables.length - 1];
+                if (e.shiftKey && document.activeElement === first) {
+                    e.preventDefault();
+                    last.focus();
+                } else if (!e.shiftKey && document.activeElement === last) {
+                    e.preventDefault();
+                    first.focus();
+                }
+            }
+        });
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' && !modal.hidden && complete(read())) {
+                modal.hidden = true;
+                btn.focus();
+            }
+        }, true);
+        /* Fermable uniquement une fois l'identité complète. */
+        function close() { if (complete(read())) modal.hidden = true; }
+        function save() {
+            var w = {
+                prenom: prenom.value.trim(),
+                nom: nom.value.trim(),
+                alias: alias.value.trim()
+            };
+            if (!complete(w)) {
+                err.hidden = false;
+                return;
+            }
+            localStorage.setItem(KEY, JSON.stringify(w));
+            close();
+            render();
+            document.dispatchEvent(new CustomEvent('kiosque-who-saved'));
+        }
+
+        btn.addEventListener('click', open);
+        document.getElementById('kWhoSave').addEventListener('click', save);
+        modal.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter' && e.target.tagName === 'INPUT') { e.preventDefault(); save(); }
+        });
+
+        /* Toute soumission de formulaire est bloquée tant que l'identité
+           complète (prénom, nom, rôle) n'est pas renseignée. */
+        document.addEventListener('submit', function (e) {
+            if (!complete(read())) {
+                e.preventDefault();
+                e.stopPropagation();
+                open();
+                return;
+            }
+            syncForms();
+        }, true);
+
+        /* API pour les vues (autosave, boutons pause) : refuser d'écrire
+           sans identité. */
+        window.KiosqueWho = {
+            ok: function () { return complete(read()); },
+            open: open,
+            fields: function () {
+                var w = read() || {};
+                return {
+                    who: label(w),
+                    who_prenom: (w.prenom || '').trim(),
+                    who_nom: (w.nom || '').trim(),
+                    who_alias: (w.alias || '').trim()
+                };
+            }
+        };
+
+        /* Les formulaires sont plus bas dans le DOM : on se synchronise au
+           chargement. Identité incomplète = la fenêtre s'ouvre d'office. */
+        var needWho = !complete(read());
+        document.addEventListener('DOMContentLoaded', function () {
+            render();
+            if (needWho) open();
+        });
+        document.addEventListener('submit', syncForms, true);
+    })();
+    </script>
+
+    <main class="admin-main" style="max-width: 1100px; margin: 0 auto; padding: 1.1rem 1rem 2.5rem;">
+        <?php require AEIC_VIEWS . '/partials/flash_messages.php'; ?>
+        <div class="admin-content">
+            <?= $content ?>
+        </div>
+        <p class="card-meta" style="text-align: center; margin-top: 1.75rem;">
+            <?= e($siteName) ?> — accès limité à cette page
+        </p>
+    </main>
+
+    <!-- Assistant AEIC : même widget que le site public (bulle + panneau
+         bas-droite, rendu textContent uniquement, compteur 500, Échap).
+         assistant.js détecte body.kiosk-body et poste vers
+         /kiosque/assistant/ask/{jeton} SANS _csrf : le jeton secret de
+         l'URL EST l'authentification (POST /kiosque/* affranchis de CSRF
+         par le routeur). Mêmes réponses JSON que le widget public. -->
+    <button type="button" class="assistant-bubble" id="assistant-bubble"
+            aria-label="Ouvrir le chat assistant" aria-expanded="false" aria-controls="assistant-panel"
+            title="Assistant AEIC">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+    </button>
+
+    <div class="assistant-panel" id="assistant-panel" role="dialog" aria-label="Chat assistant AEIC" hidden>
+        <div class="assistant-head">
+            <div class="assistant-head-info">
+                <span class="assistant-head-title">Assistant AEIC</span>
+            </div>
+            <button type="button" class="assistant-icon-btn" id="assistant-clear"
+                    aria-label="Effacer la conversation" title="Effacer la conversation">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            </button>
+            <button type="button" class="assistant-icon-btn" id="assistant-close"
+                    aria-label="Fermer le chat assistant" title="Fermer le chat assistant">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+            </button>
+        </div>
+        <div class="assistant-log" id="assistant-log" role="log" aria-live="polite" aria-label="Messages de la conversation"></div>
+        <form class="assistant-form" id="assistant-form">
+            <textarea class="assistant-input" id="assistant-input" rows="1" maxlength="500"
+                      placeholder="Pose ta question…" aria-label="Ta question" autocomplete="off"></textarea>
+            <button type="submit" class="assistant-send" id="assistant-send" aria-label="Envoyer" title="Envoyer">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m22 2-7 20-4-9-9-4z"/><path d="M22 2 11 13"/></svg>
+            </button>
+        </form>
+        <div class="assistant-foot">
+            <span class="assistant-count" id="assistant-count">0 / 500</span>
+        </div>
+    </div>
+    <script src="<?= e(assetVersioned('js/assistant.js')) ?>" defer></script>
+</body>
+</html>

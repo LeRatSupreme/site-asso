@@ -1,0 +1,107 @@
+# AEIC — Routage front controller (PHP)
+# Toute requête qui ne correspond pas à un fichier/dossier existant est
+# envoyée vers index.php (le routeur PHP s'occupe du reste).
+
+Options -Indexes
+DirectoryIndex index.php
+
+# -------------------------------------------------------------------
+#  HTTPS forcé (sauf développement local : localhost / 127.0.0.1)
+# -------------------------------------------------------------------
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteCond %{HTTPS} off
+    RewriteCond %{HTTP_HOST} !^localhost(:[0-9]+)?$
+    RewriteCond %{HTTP_HOST} !^127\.0\.0\.1(:[0-9]+)?$
+    RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+</IfModule>
+
+# -------------------------------------------------------------------
+#  Blocage des fichiers sensibles (dotfiles, config, dump, archive...).
+#  Ne touche ni robots.txt ni manifest.json ni sw.js (non matchés).
+# -------------------------------------------------------------------
+<FilesMatch "^\.|^(config\.env|composer\.json|composer\.lock|phpunit\.xml)$|\.(env|log|sql|csv|tgz|zip|bak|md)$">
+    Require all denied
+</FilesMatch>
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Ne pas réécrire les fichiers réels (CSS, JS, images, favicon...)
+    RewriteCond %{REQUEST_FILENAME} -f [OR]
+    RewriteCond %{REQUEST_FILENAME} -d
+    RewriteRule ^ - [L]
+
+    # Tout le reste -> index.php
+    RewriteRule ^ index.php [L]
+</IfModule>
+
+<IfModule !mod_rewrite.c>
+    # Secours si mod_rewrite indisponible
+    ErrorDocument 404 /index.php
+</IfModule>
+
+# -------------------------------------------------------------------
+#  Compression (gzip / brotli)
+# -------------------------------------------------------------------
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html text/plain text/css text/xml
+    AddOutputFilterByType DEFLATE application/javascript application/json
+    AddOutputFilterByType DEFLATE image/svg+xml application/xml
+</IfModule>
+<IfModule mod_brotli.c>
+    AddOutputFilterByType BROTLI_COMPRESS text/html text/plain text/css text/xml
+    AddOutputFilterByType BROTLI_COMPRESS application/javascript application/json
+    AddOutputFilterByType BROTLI_COMPRESS image/svg+xml
+</IfModule>
+
+# -------------------------------------------------------------------
+#  Cache des assets statiques (1 an, versionné par nom de fichier)
+# -------------------------------------------------------------------
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresByType text/css "access plus 1 year"
+    ExpiresByType application/javascript "access plus 1 year"
+    ExpiresByType image/jpeg "access plus 1 year"
+    ExpiresByType image/png "access plus 1 year"
+    ExpiresByType image/gif "access plus 1 year"
+    ExpiresByType image/webp "access plus 1 year"
+    ExpiresByType image/svg+xml "access plus 1 year"
+    ExpiresByType text/html "access plus 0 seconds"
+</IfModule>
+<IfModule mod_headers.c>
+    <FilesMatch "\.(css|js|svg|png|jpe?g|gif|webp)$">
+        Header set Cache-Control "public, max-age=31536000, immutable"
+    </FilesMatch>
+</IfModule>
+
+# -------------------------------------------------------------------
+#  En-têtes de sécurité de base
+# -------------------------------------------------------------------
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-Frame-Options "SAMEORIGIN"
+    Header always set Referrer-Policy "no-referrer"
+    Header always set Permissions-Policy "geolocation=(), microphone=(), camera=()"
+    <FilesMatch "\.(txt|xml)$">
+        Header set X-Robots-Tag "noindex"
+    </FilesMatch>
+</IfModule>
+
+# -------------------------------------------------------------------
+#  PWA : manifest et service worker
+# -------------------------------------------------------------------
+<IfModule mod_mime.c>
+    AddType application/manifest+json .webmanifest
+</IfModule>
+<Files "manifest.json">
+    <IfModule mod_headers.c>
+        Header set Content-Type "application/manifest+json; charset=utf-8"
+    </IfModule>
+</Files>
+<Files "sw.js">
+    <IfModule mod_headers.c>
+        Header set Service-Worker-Allowed "/"
+        Header set Cache-Control "no-cache"
+    </IfModule>
+</Files>
