@@ -251,6 +251,10 @@ function aeic_register_routes(Router $router): void
     $router->get('/admin/pages/{slug}', [AdminPageController::class, 'form']);
     $router->post('/admin/pages/save', [AdminPageController::class, 'save']);
     $router->post('/admin/pages/preview', [AdminPageController::class, 'preview']);
+    // Ordre des pages CMS (drag & drop de la liste admin) : corps JSON
+    // {ids:[…]} ou champ ids[] — réponse JSON minimale {ok:true} (contrat
+    // partagé avec le JS de la liste, tri par Page::ORDER_BY).
+    $router->post('/admin/pages/reorder', [AdminPageController::class, 'reorder']);
     $router->post('/admin/pages/{slug}/delete', [AdminPageController::class, 'delete']);
 
     $router->get('/admin/sondages', [AdminPollController::class, 'index']);

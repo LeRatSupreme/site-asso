@@ -338,9 +338,11 @@ final class SeoController extends Controller
         }
         unset($u);
 
-        // Pages CMS publiées.
+        // Pages CMS publiées (ordre canonique : position du drag & drop
+        // admin, puis titre — Page::published, même ordre que la liste
+        // admin au lieu du SELECT * brut du Model de base).
         if ($dbUp && self::$dbProbe === null) {
-            foreach (self::step('pages_cms', $raisons, static fn (): array => Page::all()) as $pg) {
+            foreach (self::step('pages_cms', $raisons, static fn (): array => Page::published()) as $pg) {
                 if (!empty($pg['is_published']) && !empty($pg['slug'])) {
                     $slug = (string) $pg['slug'];
                     // Les pages CMS qui doublonnent une page statique

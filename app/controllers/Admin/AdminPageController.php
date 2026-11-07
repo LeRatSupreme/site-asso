@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Controllers\Admin;
 
+use App\Core\Auth;
 use App\Core\Permissions;
 use App\Models\Page;
 
@@ -101,5 +102,49 @@ final class AdminPageController extends AdminBaseController
         }
 
         redirect(url('/admin/pages'));
+    }
+
+    /**
+     * AJAX : réordonne les pages CMS (drag & drop de la liste admin,
+     * même mécanique que l'ordre de la sidebar).
+     *
+     * Corps JSON {"ids": ["page_b", "page_a", …]} — la liste COMPLÈTE des
+     * ids dans l'ordre souhaité — ou le même champ encodé en formulaire
+     * classique (ids[]=page_b&ids[]=page_a). Réponse minimale {ok:true} ;
+     * erreurs 400/403 en JSON, jamais de HTML pour ce endpoint.
+     *
+     * Garde : même accès que les autres actions pages ci-dessus
+     * (guardModule(CONTENT)) — répliquée ici en réponse JSON, car la
+     * garde standard redirige ou rend du HTML. CSRF : vérifié en amont
+     * par le routeur pour tout POST /admin/* (Csrf::checkRequest, header
+     * X-CSRF-Token ou champ _csrf).
+     */
+    public function reorder(): void
+    {
+        $role = Auth::check() ? Auth::role() : null;
+        $moduleOk = Permissions::userHasExtraPage(Permissions::MODULE_CONTENT)
+            ? in_array($role, Permissions::adminRoles(), true)
+            : in_array($role, Permissions::rolesForModule(Permissions::MODULE_CONTENT), true);
+
+        if (!$moduleOk) {
+            $this->json(['ok' => false, 'error' => 'Accès refusé.'], 403);
+        }
+
+        // JSON body (fetch) ou formulaire classique ($_POST) : même
+        // contrat que les check-in événements.
+        $corps = json_decode((string) file_get_contents('php://input'), true);
+        if (!is_array($corps)) {
+            $corps = $_POST;
+        }
+
+        $ids = $corps['ids'] ?? null;
+        if (!is_array($ids) || $ids === []) {
+            $this->json(['ok' => false, 'error' => 'Payload « ids » manquant ou invalide.'], 400);
+        }
+
+        $n = Page::reorder($ids);
+
+        $this->audit('page.reorder', 'page', null, ['count' => $n]);
+        $this->json(['ok' => true]);
     }
 }
