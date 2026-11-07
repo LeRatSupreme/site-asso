@@ -15,6 +15,19 @@ final class AuditLog extends Model
     protected static string $table = 'audit_logs';
 
     /**
+     * Catégories du filtre « Catégorie » du journal (/admin/audit) :
+     * préfixe d'action => libellé. « Connexions » regroupe toutes les
+     * actions « auth.* » (auth.login, auth.logout, auth.login_failed).
+     * Un seul point d'assemblage : contrôleur, vue et filtres SQL
+     * dérivent tous de cette map.
+     *
+     * @var array<string,string>
+     */
+    public const CATEGORIES = [
+        'auth' => 'Connexions',
+    ];
+
+    /**
      * Une entrée du journal par identifiant (null si absente) — sert à
      * relire l'archive pré-fusion d'une fusion auto pour la restauration
      * (T1MergeArchive::restaurer). Tolérante sans base.
@@ -93,10 +106,12 @@ final class AuditLog extends Model
      * Recherche filtrée pour la page « Journal d'audit » (/admin/audit).
      *
      * Filtres (tous optionnels, clés absentes ou vides = non filtré) :
-     *  - « user_id » : identifiant exact (menu déroulant d'utilisateurs) ;
-     *  - « action »  : action exacte (menu déroulant d'actions connues) ;
-     *  - « from »    : date « YYYY-MM-DD » (inclusive, 00:00:00) ;
-     *  - « to »      : date « YYYY-MM-DD » (inclusive, 23:59:59).
+     *  - « user_id »   : identifiant exact (menu déroulant d'utilisateurs) ;
+     *  - « action »    : action exacte (menu déroulant d'actions connues) ;
+     *  - « categorie » : préfixe d'action connu de CATEGORIES (ex. « auth »
+     *                    = catégorie « Connexions ») ;
+     *  - « from »      : date « YYYY-MM-DD » (inclusive, 00:00:00) ;
+     *  - « to »        : date « YYYY-MM-DD » (inclusive, 23:59:59).
      *
      * Requête entièrement paramétrée (aucune valeur concaténée) ; seuls
      * LIMIT/OFFSET sont interpolés, après cast en entier. Ordre : du plus
@@ -337,6 +352,15 @@ final class AuditLog extends Model
         if ($action !== '') {
             $conds[] = 'a.action = ?';
             $params[] = $action;
+        }
+
+        // Catégorie = préfixe d'action connu (CATEGORIES) : « Connexions »
+        // sélectionne toutes les actions « auth.* ». Un préfixe inconnu
+        // est ignoré (le filtre reste déclaratif, jamais une LIKE libre).
+        $categorie = trim((string) ($filters['categorie'] ?? ''));
+        if (isset(self::CATEGORIES[$categorie])) {
+            $conds[] = 'a.action LIKE ?';
+            $params[] = $categorie . '.%';
         }
 
         $from = trim((string) ($filters['from'] ?? ''));

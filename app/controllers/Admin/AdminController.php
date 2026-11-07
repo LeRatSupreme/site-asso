@@ -116,7 +116,7 @@ final class AdminController extends AdminBaseController
     /**
      * Page « Journal d'audit » : garde identique à l'ancienne carte du
      * tableau de bord (Fondateur/ADMIN), filtres GET (utilisateur, action,
-     * période), pagination de 50 entrées, export CSV.
+     * catégorie, période), pagination de 50 entrées, export CSV.
      *
      * Nom d'action « auditPage » (et non « audit ») : la méthode protégée
      * audit() du contrôleur de base est déjà prise (journalisation).
@@ -126,10 +126,11 @@ final class AdminController extends AdminBaseController
         $user = $this->guard();
 
         $filters = [
-            'user_id' => trim((string) ($_GET['user_id'] ?? '')),
-            'action'  => trim((string) ($_GET['action'] ?? '')),
-            'from'    => trim((string) ($_GET['from'] ?? '')),
-            'to'      => trim((string) ($_GET['to'] ?? '')),
+            'user_id'   => trim((string) ($_GET['user_id'] ?? '')),
+            'action'    => trim((string) ($_GET['action'] ?? '')),
+            'categorie' => trim((string) ($_GET['categorie'] ?? '')),
+            'from'      => trim((string) ($_GET['from'] ?? '')),
+            'to'        => trim((string) ($_GET['to'] ?? '')),
         ];
 
         if (($_GET['export'] ?? '') === 'csv') {
@@ -152,8 +153,11 @@ final class AdminController extends AdminBaseController
             'filters' => $filters,
             // Menu « Qui » : les comptes du bureau (la garde de la page
             // limite déjà la consultation au Fondateur/ADMIN).
-            'users'   => User::allForAdmin(),
-            'actions' => AuditLog::distinctActions(),
+            'users'      => User::allForAdmin(),
+            'actions'    => AuditLog::distinctActions(),
+            // Menu « Catégorie » : préfixes d'action -> libellés (une
+            // seule source : AuditLog::CATEGORIES).
+            'categories' => AuditLog::CATEGORIES,
         ]);
     }
 

@@ -10,6 +10,7 @@ use App\Core\Middleware;
 use App\Core\Mailer;
 use App\Core\RateLimiter;
 use App\Core\Validator;
+use App\Models\AuditLog;
 use App\Models\Consent;
 use App\Models\PasswordReset;
 use App\Models\Setting;
@@ -246,6 +247,7 @@ final class AuthController extends Controller
             password_verify($password, self::DUMMY_HASH);
             $limiter->hit($ipKey);
             $limiter->hit($userKey);
+            self::logLoginFailed($email, 'compte inconnu');
             $this->setFlash('error', 'Identifiants incorrects.');
             redirect(url('/login'));
         }
@@ -253,6 +255,7 @@ final class AuthController extends Controller
         if (!password_verify($password, (string) $user['password'])) {
             $limiter->hit($ipKey);
             $limiter->hit($userKey);
+            self::logLoginFailed($email, 'mot de passe incorrect');
             $this->setFlash('error', 'Identifiants incorrects.');
             redirect(url('/login'));
         }
@@ -261,6 +264,7 @@ final class AuthController extends Controller
         if ((int) $user['is_active'] !== 1) {
             $limiter->hit($ipKey);
             $limiter->hit($userKey);
+            self::logLoginFailed($email, 'compte désactivé');
             $this->setFlash('error', 'Ce compte est désactivé. Contactez l\'AEIC.');
             redirect(url('/login'));
         }
@@ -269,6 +273,7 @@ final class AuthController extends Controller
         if ($user['email_verified_at'] === null) {
             $limiter->hit($ipKey);
             $limiter->hit($userKey);
+            self::logLoginFailed($email, 'e-mail non confirmé');
             $this->setFlash('error', sprintf(
                 'Tu dois confirmer ton adresse e-mail avant de te connecter. Vérifie ta boîte mail (et tes spams), '
                 . 'ou demande un nouvel e-mail de confirmation : %s',
@@ -302,6 +307,13 @@ final class AuthController extends Controller
         // Sans 2FA : connexion directe (l'obligation 2FA est vérifiée plus loin).
         Auth::login((string) $user['id'], (string) $user['role']);
 
+        // Journal d'audit : QUI s'est connecté et QUAND (IP capturée par
+        // AuditLog::log). Le flux 2FA journalise de son côté après son
+        // étape de vérification.
+        AuditLog::log('auth.login', (string) $user['id'], null, null, [
+            'moyen' => 'formulaire',
+        ]);
+
         $callback = (string) ($_POST['callbackUrl'] ?? '');
         $target = $this->safeCallback($callback);
 
@@ -327,6 +339,14 @@ final class AuthController extends Controller
         if (!hash_equals(csrf_token(), $token)) {
             // Token absent/invalide : pas de déconnexion, retour à l'accueil.
             redirect(url('/'));
+        }
+
+        // Journal d'audit avant la destruction de la session (l'ID n'y
+        // serait plus lisible). Un visiteur non connecté qui passerait un
+        // token valide ne produit PAS d'événement (rien à tracer).
+        $userId = Auth::id();
+        if ($userId !== null) {
+            AuditLog::log('auth.logout', $userId);
         }
 
         Auth::logout();
@@ -506,6 +526,24 @@ final class AuthController extends Controller
 
         $this->setFlash('success', 'Votre mot de passe a été réinitialisé. Vous pouvez vous connecter.');
         redirect(url('/login'));
+    }
+
+    /**
+     * Journalise une tentative de connexion ÉCHOUÉE (journal d'audit,
+     * catégorie « Connexions »).
+     *
+     * Une entrée par TENTATIVE validée (jamais par simple requête : le refus
+     * du RateLimiter, avant toute vérification, ne journalise rien). Sans
+     * user_id : un pseudo tenté n'est pas une identité vérifiée — l'e-mail
+     * saisi et le motif vont dans details, l'IP est capturée par
+     * AuditLog::log (client_ip()).
+     */
+    private static function logLoginFailed(string $email, string $motif): void
+    {
+        AuditLog::log('auth.login_failed', null, null, null, [
+            'email' => mb_strimwidth(User::normalizeEmail($email), 0, 120, '…'),
+            'motif' => $motif,
+        ]);
     }
 
     /**

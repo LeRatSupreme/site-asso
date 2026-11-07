@@ -14,17 +14,19 @@ declare(strict_types=1);
  * @var int $total
  * @var int $page
  * @var int $pages
- * @var array{user_id:string, action:string, from:string, to:string} $filters
+ * @var array{user_id:string, action:string, categorie:string, from:string, to:string} $filters
  * @var list<array<string,mixed>> $users
  * @var list<string> $actions
+ * @var array<string,string> $categories
  */
 
 // Requête de pagination conservant les filtres actifs.
 $baseQuery = array_filter([
-    'user_id' => $filters['user_id'],
-    'action'  => $filters['action'],
-    'from'    => $filters['from'],
-    'to'      => $filters['to'],
+    'user_id'   => $filters['user_id'],
+    'action'    => $filters['action'],
+    'categorie' => $filters['categorie'],
+    'from'      => $filters['from'],
+    'to'        => $filters['to'],
 ], static fn($v): bool => $v !== null && $v !== '');
 
 $prevQuery = http_build_query(array_merge($baseQuery, ['page' => max(1, $page - 1)]));
@@ -37,6 +39,15 @@ $exportQuery = http_build_query(array_merge($baseQuery, ['export' => 'csv']));
         <?php foreach ($users as $u): ?>
             <option value="<?= e((string) $u['id']) ?>" <?= $filters['user_id'] === (string) $u['id'] ? 'selected' : '' ?>>
                 <?= e(trim((string) ($u['prenom'] ?? '') . ' ' . (string) ($u['nom'] ?? '')) . ' — ' . (string) ($u['email'] ?? '')) ?>
+            </option>
+        <?php endforeach; ?>
+    </select>
+
+    <select name="categorie" aria-label="Catégorie">
+        <option value="">Toutes les catégories</option>
+        <?php foreach ($categories as $prefixe => $label): ?>
+            <option value="<?= e((string) $prefixe) ?>" <?= $filters['categorie'] === (string) $prefixe ? 'selected' : '' ?>>
+                <?= e($label) ?>
             </option>
         <?php endforeach; ?>
     </select>
@@ -62,6 +73,7 @@ $exportQuery = http_build_query(array_merge($baseQuery, ['export' => 'csv']));
                 <th>Date</th>
                 <th>Qui</th>
                 <th>Action</th>
+                <th>IP</th>
                 <th>Détails</th>
             </tr>
         </thead>
@@ -81,6 +93,7 @@ $exportQuery = http_build_query(array_merge($baseQuery, ['export' => 'csv']));
                     <td><?= e(formatDateTime((string) $r['created_at'])) ?></td>
                     <td><?= e($qui) ?></td>
                     <td><code><?= e((string) $r['action']) ?></code></td>
+                    <td class="muted"><?= e((string) ($r['ip_address'] ?? '')) ?></td>
                     <td class="muted">
                         <?php if (is_array($decoded)): ?>
                             <?php foreach ($decoded as $k => $v): ?>
@@ -98,7 +111,7 @@ $exportQuery = http_build_query(array_merge($baseQuery, ['export' => 'csv']));
                 </tr>
             <?php endforeach; ?>
             <?php if ($rows === []): ?>
-                <tr><td colspan="4" class="muted">Aucune action enregistrée pour ces filtres.</td></tr>
+                <tr><td colspan="5" class="muted">Aucune action enregistrée pour ces filtres.</td></tr>
             <?php endif; ?>
         </tbody>
     </table>

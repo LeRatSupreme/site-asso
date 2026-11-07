@@ -82,6 +82,14 @@ final class TwoFactorController extends Controller
             $limiter->clear($ipKey);
             unset($_SESSION['_2fa_pending']);
             Auth::login((string) $pending['user_id'], (string) $pending['role']);
+
+            // Journal d'audit : connexion aboutie APRÈS l'étape 2FA (sans
+            // ceci, les comptes à 2FA — dont les rôles sensibles — seraient
+            // invisibles du journal « Connexions »).
+            \App\Models\AuditLog::log('auth.login', (string) $pending['user_id'], null, null, [
+                'moyen' => 'formulaire + 2FA',
+            ]);
+
             $this->setFlash('success', 'Connexion réussie.');
             redirect(url('/'));
         }
@@ -90,6 +98,14 @@ final class TwoFactorController extends Controller
         $pending['attempts'] = $attempts + 1;
         $_SESSION['_2fa_pending'] = $pending;
         $limiter->hit($ipKey);
+
+        // Journal d'audit : une entrée par tentative de code (même règle que
+        // les mots de passe incorrects — sans user_id, le compte visé étant
+        // identifié à l'étape précédente va dans details).
+        \App\Models\AuditLog::log('auth.login_failed', null, null, null, [
+            'compte' => (string) $pending['user_id'],
+            'motif'  => 'code 2FA invalide',
+        ]);
 
         if ($pending['attempts'] >= self::MAX_ATTEMPTS) {
             unset($_SESSION['_2fa_pending']);
