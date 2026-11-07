@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Core\Auth;
 use App\Core\Permissions;
+use App\Models\TeamMember;
 
 /**
  * @var list<array<string,mixed>> $users
@@ -19,6 +20,30 @@ $roleIcons = [
     'JEUX'          => '',
     'ELEVE'         => '',
 ];
+
+// --- Avatars de la colonne « Nom » ----------------------------------
+// Il n'existe AUCUN lien users ↔ team_members en base (ni FK, ni slug) :
+// le seul rapprochement possible est le nom (prénom + nom), normalisé
+// casse + accents + espaces — en base réelle : « Thibault␣ Frappart »
+// (espace final), « Léa MARTEL » vs « Lea Martel ». Même normalisation
+// que le filtre de recherche JS (norm() en bas de page). Dégradation
+// douce : aucun membre trouvé → initiales, sans lien.
+// (Rendu de l'avatar lui-même : partial partagé _avatar.php, comme la
+// page publique /team.)
+$userAvatarKey = static function (string $prenom, string $nom): string {
+    $key = mb_strtolower(trim($prenom . ' ' . $nom));
+    $nfd = normalizer_normalize($key, \Normalizer::NFD);
+    if (is_string($nfd)) {
+        $key = $nfd;
+    }
+    $key = preg_replace('~\p{Mn}+~u', '', $key) ?? $key;
+
+    return trim((string) preg_replace('~\s+~u', ' ', $key));
+};
+$userTeamByKey = [];
+foreach (TeamMember::allForAdmin() as $teamRow) {
+    $userTeamByKey[$userAvatarKey((string) $teamRow['prenom'], (string) $teamRow['nom'])] = $teamRow;
+}
 ?>
 <!-- Barre de filtres horizontale -->
 <div class="user-filters">
@@ -64,30 +89,60 @@ $roleIcons = [
                 } elseif (!$viewerIsFondateur && ($isFondateurRow || $isTresorierRow)) {
                     $selectLock = 'disabled title="Réservé au Fondateur"';
                 }
+                // Avatar de la colonne « Nom » : photo du TeamMember
+                // correspondant (page équipe) sinon initiales ; lien vers la
+                // fiche publique /team#<id> quand le membre y est affiché
+                // (actif). Même onglet : c'est une simple consultation.
+                $teamMatch = $userTeamByKey[
+                    $userAvatarKey((string) ($u['prenom'] ?? ''), (string) ($u['nom'] ?? ''))
+                ] ?? null;
+                $userProfileUrl = ($teamMatch !== null && (int) ($teamMatch['is_active'] ?? 0) === 1)
+                    ? url('/team') . '#' . rawurlencode((string) $teamMatch['id'])
+                    : '';
+                $avatarName  = trim(($u['prenom'] ?? '') . ' ' . ($u['nom'] ?? ''));
+                $avatarPhoto = (string) ($teamMatch['photo'] ?? '');
                 ?>
                 <tr<?= $isSelf ? ' class="row-self"' : '' ?>
                     data-name="<?= e(strtolower(trim(($u['prenom'] ?? '') . ' ' . ($u['nom'] ?? '') . ' ' . ($u['email'] ?? '')))) ?>"
                     data-role="<?= e($roleKey) ?>"
                     data-status="<?= $isActive ? 'active' : 'inactive' ?>">
                     <td>
-                        <?php if ($selectLock === '' && !$isFondateurRow): ?>
-                            <!-- Édition inline du nom (users.prenom + users.nom) :
-                                 mêmes verrous que le select de rôle. -->
-                            <form method="post" action="<?= e(url('/admin/users/' . rawurlencode((string) $u['id']) . '/name')) ?>" class="inline-form name-form">
-                                <?= csrf_field() ?>
-                                <input type="text" name="prenom" value="<?= e((string) ($u['prenom'] ?? '')) ?>" required maxlength="255"
-                                       class="name-edit name-prenom" autocomplete="off"
-                                       title="Prénom — modifier puis cliquer ailleurs (ou Entrée) pour enregistrer"
-                                       onchange="this.form.submit()">
-                                <input type="text" name="nom" value="<?= e((string) ($u['nom'] ?? '')) ?>" required maxlength="255"
-                                       class="name-edit name-nom" autocomplete="off"
-                                       title="Nom — modifier puis cliquer ailleurs (ou Entrée) pour enregistrer"
-                                       onchange="this.form.submit()">
-                            </form>
-                        <?php else: ?>
-                            <strong><?= e(trim(($u['prenom'] ?? '') . ' ' . ($u['nom'] ?? ''))) ?></strong>
-                        <?php endif; ?>
-                        <?= $isSelf ? '<span class="badge badge-info">vous</span>' : '' ?>
+                        <div class="user-cell">
+                            <?php if ($userProfileUrl !== ''): ?>
+                                <a class="user-avatar-link" href="<?= e($userProfileUrl) ?>"
+                                   title="Voir la fiche publique de <?= e($avatarName) ?> sur /team">
+                                    <?php require AEIC_VIEWS . '/partials/_avatar.php'; ?>
+                                </a>
+                            <?php else: ?>
+                                <span class="user-avatar-nolink" aria-hidden="true">
+                                    <?php require AEIC_VIEWS . '/partials/_avatar.php'; ?>
+                                </span>
+                            <?php endif; ?>
+                            <div class="user-name">
+                                <?php if ($selectLock === '' && !$isFondateurRow): ?>
+                                    <!-- Édition inline du nom (users.prenom + users.nom) :
+                                         mêmes verrous que le select de rôle. -->
+                                    <form method="post" action="<?= e(url('/admin/users/' . rawurlencode((string) $u['id']) . '/name')) ?>" class="inline-form name-form">
+                                        <?= csrf_field() ?>
+                                        <input type="text" name="prenom" value="<?= e((string) ($u['prenom'] ?? '')) ?>" required maxlength="255"
+                                               class="name-edit name-prenom" autocomplete="off"
+                                               title="Prénom — modifier puis cliquer ailleurs (ou Entrée) pour enregistrer"
+                                               onchange="this.form.submit()">
+                                        <input type="text" name="nom" value="<?= e((string) ($u['nom'] ?? '')) ?>" required maxlength="255"
+                                               class="name-edit name-nom" autocomplete="off"
+                                               title="Nom — modifier puis cliquer ailleurs (ou Entrée) pour enregistrer"
+                                               onchange="this.form.submit()">
+                                    </form>
+                                <?php else: ?>
+                                    <?php if ($userProfileUrl !== ''): ?>
+                                        <a class="user-name-link" href="<?= e($userProfileUrl) ?>" title="Voir la fiche publique de <?= e($avatarName) ?> sur /team"><strong><?= e(trim(($u['prenom'] ?? '') . ' ' . ($u['nom'] ?? ''))) ?></strong></a>
+                                    <?php else: ?>
+                                        <strong><?= e(trim(($u['prenom'] ?? '') . ' ' . ($u['nom'] ?? ''))) ?></strong>
+                                    <?php endif; ?>
+                                <?php endif; ?>
+                                <?= $isSelf ? '<span class="badge badge-info">vous</span>' : '' ?>
+                            </div>
+                        </div>
                     </td>
                     <td><?= e($u['email'] ?? '') ?></td>
                     <td>
@@ -376,6 +431,34 @@ $roleIcons = [
 .name-prenom { width: 9ch; min-width: 7ch; }
 .name-nom { width: 12ch; min-width: 8ch; }
 .role-select { cursor: pointer; max-width: 11ch; }
+
+/* Colonne « Nom » : avatar rond (photo team_members sinon initiales,
+   même rendu que la page /team — classes .team-avatar/.team-initial
+   de base.css) + lien vers la fiche publique du membre. */
+.user-cell { display: flex; align-items: center; gap: 0.55rem; min-width: 0; }
+.user-name { min-width: 0; }
+.user-avatar-link, .user-avatar-nolink {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;  /* cible tactile ≥ 44px (mobile) — l'avatar fait 42px */
+    height: 44px;
+    border-radius: 50%;
+}
+.user-avatar-link { text-decoration: none; }
+.user-avatar-link:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.user-cell .team-avatar {
+    width: 42px; height: 42px; /* compact — la page /team garde ses 96/104px */
+    margin: 0; /* annule le « margin: 0 auto » de base.css, inutile en flex */
+    box-shadow: 0 0 0 1px var(--border); /* liseré discret */
+    transition: box-shadow 0.12s ease;
+}
+.user-cell .team-initial { font-size: 1.02rem; } /* 2rem de base déborderait */
+.user-avatar-link:hover .team-avatar,
+.user-avatar-link:focus-visible .team-avatar { box-shadow: 0 0 0 2px var(--primary); }
+.user-name-link { color: inherit; text-decoration: none; }
+.user-name-link:hover, .user-name-link:focus-visible { text-decoration: underline; }
 
 @media (max-width: 700px) {
     .table-users th:nth-child(6), .table-users td:nth-child(6) { display: none; } /* Inscription */

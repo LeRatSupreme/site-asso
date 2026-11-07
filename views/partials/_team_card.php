@@ -19,19 +19,17 @@ $role     = tc((string) ($member['role'] ?? ''));
 $pole     = tc((string) ($member['pole'] ?? ''));
 $bio      = tc((string) ($member['bio'] ?? ''));
 $photo    = (string) ($member['photo'] ?? '');
+// Ancre individuelle (id team_members) : cible des liens vers la fiche
+// publique du membre (ex. liste admin /admin/users → /team#tm_…).
 ?>
-<article class="team-card card surface glass card-hover">
-    <div class="team-avatar">
-        <?php if ($photo !== ''): ?>
-            <img src="<?= e(is_absolute_url($photo) ? $photo : asset('img/' . ltrim($photo, '/'))) ?>"
-                 alt="<?= e($fullName) ?>"
-                 loading="lazy" width="96" height="96">
-        <?php else: ?>
-            <span class="team-initial" aria-hidden="true">
-                <?= e(initial($fullName)) ?>
-            </span>
-        <?php endif; ?>
-    </div>
+<article id="<?= e((string) ($member['id'] ?? '')) ?>" class="team-card card surface glass card-hover">
+    <?php
+    // Avatar (photo sinon initiales) : rendu mutualisé dans le partial
+    // _avatar.php avec la liste admin des membres.
+    $avatarName  = $fullName;
+    $avatarPhoto = $photo;
+    require AEIC_VIEWS . '/partials/_avatar.php';
+    ?>
     <h3 class="card-title"><?= e($fullName) ?></h3>
     <?php if ($role !== ''): ?>
         <p class="team-role"><?= e($role) ?></p>
