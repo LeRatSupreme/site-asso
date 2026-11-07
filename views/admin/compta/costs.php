@@ -25,35 +25,84 @@ declare(strict_types=1);
 // lot suivi dont l'écart (stock théorique − net des achats suivis) est
 // non nul — unités manquantes (vol, casse, vente non déclarée) ou stock
 // excédentaire (achat non saisi, quantité erronée).
-$costEcarts = [];
+// Les écarts sont déjà calculés (CostLotStock::ecarts) : ici, simple
+// totalisation + tri (magnitude absolue décroissante, puis alphabétique).
+$costEcartRows = [];
+$ecSumExc = 0;  // Σ écarts positifs (unités excédentaires)
+$ecSumManq = 0; // Σ écarts négatifs, en valeur absolue (unités manquantes)
 foreach ($costStock as $k => $sd) {
     $ec = $sd['ecart'] ?? null;
-    if ($ec !== null && (int) $ec !== 0) {
-        $costEcarts[(string) $k] = (int) $ec;
+    if ($ec === null || (int) $ec === 0) {
+        continue;
     }
+    $ec = (int) $ec;
+    if ($ec > 0) {
+        $ecSumExc += $ec;
+    } else {
+        $ecSumManq += abs($ec);
+    }
+    $costEcartRows[] = ['key' => (string) $k, 'ec' => $ec];
 }
+usort($costEcartRows, static function (array $a, array $b): int {
+    return abs($b['ec']) <=> abs($a['ec']) ?: strcasecmp($a['key'], $b['key']);
+});
 ?>
-<?php if ($costEcarts !== []): ?>
+<?php if ($costEcartRows !== []): ?>
+<style>
+    /* Encart écarts : tableau dense (padding .table par défaut trop aéré pour 20+ lignes). */
+    #cost-ecarts .table { font-size: 0.85rem; }
+    #cost-ecarts .table th,
+    #cost-ecarts .table td { padding: 0.35rem 0.6rem; }
+    #cost-ecarts .ec-num { font-variant-numeric: tabular-nums; font-weight: 700; }
+    #cost-ecarts .ec-num, #cost-ecarts .ec-lecture { white-space: nowrap; }
+    #cost-ecarts .ec-lecture { color: var(--muted); }
+    #cost-ecarts .ec-howto { display: inline-block; margin-left: 8px; }
+    #cost-ecarts .ec-howto summary { cursor: pointer; }
+</style>
 <section class="card surface glass" id="cost-ecarts" style="margin:0 0 24px;border-left:4px solid var(--danger,#ef4444);">
-    <h2 class="card-title">Écarts stock / coûts — vol ou casse possible ?</h2>
-    <p class="muted" style="font-size:0.85rem;margin:0 0 10px;">
-        Écart = stock théorique − (achats suivis − ventes − pertes depuis le 1er lot suivi).
-        Négatif → il manque des unités par rapport au prévu (vol, casse, vente non déclarée) ;
-        positif → stock excédentaire (achat non saisi ou quantité erronée).
-        Indicatif : les lots sans quantité saisie ne sont pas comptés.
-    </p>
-    <ul style="margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px;">
-        <?php foreach ($costEcarts as $k => $ec): ?>
-            <li>
-                <a href="#cost-<?= e($k) ?>"><strong><?= e($k) ?></strong></a>
-                <span class="muted">:</span>
-                <span class="badge <?= $ec < 0 ? 'badge-danger' : 'badge-warning' ?>">
-                    <?php if ($ec < 0): ?>Écart stock : −<?= abs($ec) ?> unités manquantes (vol, casse, vente non déclarée ?)
-                    <?php else: ?>Stock excédentaire : +<?= (int) $ec ?> (achat non saisi ou quantité erronée ?)<?php endif; ?>
-                </span>
-            </li>
-        <?php endforeach; ?>
-    </ul>
+    <h2 class="card-title" style="margin-bottom:8px;">Écarts stock / coûts — vol ou casse possible ?</h2>
+    <div class="muted" style="font-size:0.85rem;margin:0 0 8px;">
+        <strong><?= count($costEcartRows) ?></strong> produit<?= count($costEcartRows) > 1 ? 's' : '' ?> —
+        Σ excédents <span class="badge badge-warning ec-num">+<?= $ecSumExc ?></span>
+        / Σ manquants <span class="badge badge-danger ec-num">−<?= $ecSumManq ?></span>
+        <details class="ec-howto">
+            <summary>Comment lire ce tableau ?</summary>
+            <p style="font-size:0.85rem;margin:6px 0 0;max-width:75ch;">
+                Écart = stock théorique − (achats suivis − ventes − pertes depuis le 1er lot suivi).
+                <span class="badge badge-danger">−N</span> il manque N unités par rapport au prévu (vol, casse, vente non déclarée ?) ;
+                <span class="badge badge-warning">+N</span> stock excédentaire (achat non saisi ou quantité erronée ?).
+                Indicatif : les lots sans quantité saisie ne sont pas comptés.
+            </p>
+        </details>
+    </div>
+    <div class="table-wrap">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Produit</th>
+                    <th style="text-align:right;">Écart</th>
+                    <th>Lecture</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php foreach ($costEcartRows as $row): $ecKey = $row['key']; $ec = $row['ec']; ?>
+                    <tr>
+                        <td><a href="#cost-<?= e($ecKey) ?>"><strong><?= e($ecKey) ?></strong></a></td>
+                        <td style="text-align:right;">
+                            <span class="badge <?= $ec < 0 ? 'badge-danger' : 'badge-warning' ?> ec-num">
+                                <?= $ec < 0 ? '−' . abs($ec) : '+' . $ec ?>
+                            </span>
+                        </td>
+                        <td>
+                            <span class="ec-lecture" title="<?= $ec < 0 ? 'Vol, casse ou vente non déclarée ?' : 'Achat non saisi ou quantité erronée ?' ?>">
+                                <?= $ec < 0 ? '▼ manquants' : '▲ excédent' ?>
+                            </span>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+            </tbody>
+        </table>
+    </div>
 </section>
 <?php endif; ?>
 
