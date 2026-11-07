@@ -15,34 +15,35 @@ declare(strict_types=1);
  */
 ?>
 <header class="page-hero">
+    <div class="ae-dots dot-grid" aria-hidden="true"></div>
     <div class="container">
-        <span class="eyebrow">Jeu d'arcade</span>
+        <span class="ae-pill"><span class="ae-pill-dot" aria-hidden="true"></span>Arcade · 3 terrains · 3 vitesses</span>
         <h1 class="page-title">Snake</h1>
-        <p class="page-lead">Mange un maximum de fruits sans te mordre&nbsp;! Murs, portails ou obstacles&nbsp;: à toi de choisir ton terrain.</p>
+        <p class="page-lead">Mange un maximum de fruits sans te mordre&nbsp;! Murs, portail ou obstacles&nbsp;: à toi de choisir ton terrain.</p>
     </div>
 </header>
 
 <section class="section">
     <div class="container game-zone">
 
-        <a class="btn btn-outline btn-sm" style="display:inline-block;margin-bottom:1.25rem;text-decoration:none;" href="<?= e(url('/jeux')) ?>">← Retour aux jeux</a>
+        <p class="back-link"><a href="<?= e(url('/jeux')) ?>">← Tous les jeux</a></p>
 
         <!-- Réglages façon Google Snake -->
         <div class="snake-settings">
             <div class="snake-setting-row">
                 <span class="snake-setting-label">Terrain</span>
                 <div class="snake-pills" id="pills-mode">
-                    <button type="button" class="snake-pill" data-mode="murs">🧱 Murs</button>
-                    <button type="button" class="snake-pill" data-mode="portail">🌀 Portail</button>
-                    <button type="button" class="snake-pill" data-mode="obstacles">🚧 Obstacles</button>
+                    <button type="button" class="snake-pill" data-mode="murs">Murs</button>
+                    <button type="button" class="snake-pill" data-mode="portail">Portail</button>
+                    <button type="button" class="snake-pill" data-mode="obstacles">Obstacles</button>
                 </div>
             </div>
             <div class="snake-setting-row">
                 <span class="snake-setting-label">Vitesse</span>
                 <div class="snake-pills" id="pills-speed">
-                    <button type="button" class="snake-pill" data-speed="lent">🐌 Lent</button>
-                    <button type="button" class="snake-pill" data-speed="normal">🐍 Normal</button>
-                    <button type="button" class="snake-pill" data-speed="rapide">⚡ Rapide</button>
+                    <button type="button" class="snake-pill" data-speed="lent">Lent</button>
+                    <button type="button" class="snake-pill" data-speed="normal">Normal</button>
+                    <button type="button" class="snake-pill" data-speed="rapide">Rapide</button>
                 </div>
             </div>
             <div class="snake-setting-row">
@@ -68,7 +69,7 @@ declare(strict_types=1);
                 </div>
                 <div class="game-stat">
                     <span class="game-stat-label">Record</span>
-                    <span class="game-stat-value" id="s-best">—</span>
+                    <span class="game-stat-value game-stat-value-muted" id="s-best">—</span>
                 </div>
             </div>
             <div class="game-controls">
@@ -89,102 +90,160 @@ declare(strict_types=1);
         </div>
 
         <!-- Contrôles tactiles -->
-        <div class="snake-pad" id="s-pad" aria-hidden="true">
-            <button type="button" data-dir="up" class="snake-pad-btn">▲</button>
+        <div class="snake-pad" id="s-pad">
+            <button type="button" data-dir="up" class="snake-pad-btn" aria-label="Diriger vers le haut">
+                <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M12 6l7 10H5z" fill="currentColor"/></svg>
+            </button>
             <div class="snake-pad-row">
-                <button type="button" data-dir="left" class="snake-pad-btn">◀</button>
-                <button type="button" data-dir="down" class="snake-pad-btn">▼</button>
-                <button type="button" data-dir="right" class="snake-pad-btn">▶</button>
+                <button type="button" data-dir="left" class="snake-pad-btn" aria-label="Diriger vers la gauche">
+                    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M6 12l10-7v14z" fill="currentColor"/></svg>
+                </button>
+                <button type="button" data-dir="down" class="snake-pad-btn" aria-label="Diriger vers le bas">
+                    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M12 18L5 8h14z" fill="currentColor"/></svg>
+                </button>
+                <button type="button" data-dir="right" class="snake-pad-btn" aria-label="Diriger vers la droite">
+                    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M18 12L8 19V5z" fill="currentColor"/></svg>
+                </button>
             </div>
         </div>
 
-        <p class="snake-help">Espace ou P&nbsp;: pause · Les records sont sauvegardés par terrain, vitesse et nombre de fruits.</p>
+        <p class="snake-help">Espace ou P&nbsp;: pause · Fruits dorés&nbsp;: 5 points, mais ils disparaissent vite. Les records sont sauvegardés par terrain, vitesse et nombre de fruits.</p>
     </div>
 </section>
 
 <style>
+/* ============ Snake — habillage charte AEIC ============
+   Console sobre dans la palette du site : cadre net, liseré fin,
+   pilules teal, ombres discrètes (sobriété). */
 .game-zone { max-width: 760px; }
 
 /* Réglages */
 .snake-settings {
-    background: rgba(255,255,255,0.03);
-    border: 1px solid var(--border-strong);
-    border-radius: 0.75rem;
-    padding: 0.9rem 1rem;
-    margin-bottom: 1.5rem;
-    display: flex; flex-direction: column; gap: 0.65rem;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 0.85rem 1rem;
+    margin-bottom: 1.25rem;
+    display: flex; flex-direction: column; gap: 0.6rem;
 }
-.snake-setting-row { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
+.snake-setting-row { display: flex; align-items: center; gap: 0.85rem; flex-wrap: wrap; }
 .snake-setting-label {
-    font-size: 0.72rem; font-weight: 800; color: var(--muted);
-    text-transform: uppercase; letter-spacing: 0.06em; min-width: 64px;
+    font-size: 0.65rem; font-weight: 700; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.18em; min-width: 64px;
 }
-.snake-pills { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+.snake-pills { display: flex; gap: 0.45rem; flex-wrap: wrap; }
 .snake-pill {
-    padding: 0.35rem 0.8rem;
+    display: inline-flex; align-items: center; justify-content: center;
+    min-height: 44px;
+    padding: 0.35rem 0.95rem;
     border-radius: 999px;
     cursor: pointer;
-    border: 2px solid var(--border-strong);
-    background: rgba(255,255,255,0.02);
+    border: 1px solid var(--border-strong);
+    background: transparent;
     color: var(--muted);
-    font-weight: 700;
-    font-size: 0.78rem;
-    transition: all 0.15s;
+    font-weight: 800;
+    font-size: 0.8rem;
+    letter-spacing: 0.02em;
+    transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
 }
-.snake-pill.active {
-    background: var(--primary);
-    color: #0a1628;
-    border-color: var(--primary);
-}
+.snake-pill:hover:not(.active) { border-color: var(--primary); color: var(--foreground); }
+.snake-pill:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.snake-pill.active { background: var(--primary); color: var(--primary-foreground); border-color: var(--primary); }
 
-/* Barre de jeu */
+/* Barre de score : bandeau unique, séparateurs fins, chiffres tabulaires. */
 .game-bar {
-    display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
-    gap: 1rem; margin-bottom: 1.25rem;
+    display: flex; flex-wrap: wrap; align-items: stretch; justify-content: space-between;
+    gap: 0.5rem 1rem; margin-bottom: 1.5rem;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 0.7rem 1rem;
 }
-.game-stats { display: flex; gap: 0.75rem; flex-wrap: wrap; }
+.game-stats { display: flex; gap: 0; flex-wrap: wrap; align-items: stretch; min-width: 0; }
 .game-stat {
-    background: rgba(255,255,255,0.03); border: 1px solid var(--border);
-    border-radius: 10px; padding: 0.5rem 0.85rem; text-align: center; min-width: 72px;
+    display: flex; flex-direction: column; justify-content: center; gap: 0.2rem;
+    padding: 0.2rem 1.1rem; text-align: center; min-width: 0;
 }
-.game-stat-label { display: block; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); font-weight: 700; }
-.game-stat-value { display: block; font-size: 1.25rem; font-weight: 800; color: var(--primary); }
-.game-controls { display: flex; gap: 0.5rem; align-items: center; }
+.game-stat + .game-stat { border-left: 1px solid var(--border); }
+.game-stat-label {
+    display: block; font-size: 0.62rem; text-transform: uppercase;
+    letter-spacing: 0.18em; color: var(--muted); font-weight: 700;
+}
+.game-stat-value {
+    display: block; font-size: 1.35rem; font-weight: 900; color: var(--primary);
+    font-variant-numeric: tabular-nums; letter-spacing: -0.02em; line-height: 1.15;
+    overflow-wrap: anywhere;
+}
+.game-stat-value-muted { color: var(--muted); }
+.game-controls { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
 
-/* Plateau agrandi */
-.snake-wrap { position: relative; max-width: 620px; margin: 0 auto; }
+/* Plateau : console nette autour du canvas du jeu. */
+.snake-wrap {
+    position: relative; max-width: 640px; margin: 0 auto;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border);
+    border-radius: calc(var(--radius) + 8px);
+    padding: 10px;
+}
 #s-canvas {
-    display: block; width: 100%; height: auto; border-radius: 16px;
-    background: rgba(255,255,255,0.03);
-    border: 2px solid var(--border);
+    display: block; width: 100%; height: auto;
+    border-radius: var(--radius);
+    background: #0c1728; /* raccord avec le fond dessiné par le jeu */
+    border: 1px solid var(--border-strong);
     touch-action: none;
-    box-shadow: 0 14px 44px rgba(0,0,0,0.35);
 }
 
+/* Écrans accueil / pause / fin : carte charte, pas d'alerte navigateur. */
 .snake-overlay {
     position: absolute; inset: 0; display: grid; place-items: center;
-    background: rgba(5, 12, 24, 0.72); backdrop-filter: blur(3px);
-    border-radius: 16px; animation: sFade 0.25s;
+    background: rgba(10, 22, 40, 0.78);
+    border-radius: calc(var(--radius) + 8px);
+    animation: sFade 0.25s ease;
 }
 .snake-overlay[hidden] { display: none; }
-.snake-overlay-card { text-align: center; padding: 1.5rem; }
-.snake-overlay-card h2 {
-    font-size: 1.7rem; font-weight: 900; color: var(--primary); margin: 0 0 0.5rem;
+.snake-overlay-card {
+    text-align: center; padding: 1.5rem;
+    background: var(--card); border: 1px solid var(--border-strong);
+    border-radius: var(--radius-lg);
+    max-width: min(400px, calc(100% - 2rem));
+    box-shadow: 0 24px 60px rgba(2, 8, 20, 0.45);
 }
-.snake-overlay-card p { color: var(--muted); margin: 0 0 1.1rem; line-height: 1.65; }
+.snake-overlay-card h2 {
+    font-size: 1.5rem; font-weight: 900; color: var(--primary);
+    text-transform: uppercase; letter-spacing: -0.04em; margin: 0 0 0.5rem;
+}
+.snake-overlay-card p { color: var(--muted); margin: 0 0 1.1rem; line-height: 1.65; overflow-wrap: anywhere; }
 @keyframes sFade { from { opacity: 0; } }
 
+/* Pad tactile : boutons larges (≥ 44 px), pictos vectoriels du site. */
 .snake-pad { display: none; margin: 1.25rem auto 0; width: max-content; text-align: center; }
 .snake-pad-row { display: flex; gap: 0.5rem; justify-content: center; margin-top: 0.5rem; }
 .snake-pad-btn {
-    width: 60px; height: 60px; border-radius: 14px; font-size: 1.15rem;
-    border: 1px solid var(--border-strong); background: rgba(255,255,255,0.05);
+    width: 64px; height: 64px;
+    display: inline-flex; align-items: center; justify-content: center;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-strong);
+    background: rgba(255, 255, 255, 0.04);
     color: var(--foreground); cursor: pointer;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
 }
-.snake-pad-btn:active { background: var(--primary); color: #0a1628; }
+.snake-pad-btn:active { background: var(--primary); color: var(--primary-foreground); border-color: var(--primary); }
+.snake-pad-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 @media (pointer: coarse) { .snake-pad { display: block; } }
 
-.snake-help { text-align: center; color: var(--muted); font-size: 0.85rem; margin-top: 1.25rem; }
+[data-theme="light"] .snake-settings,
+[data-theme="light"] .game-bar,
+[data-theme="light"] .snake-wrap,
+[data-theme="light"] .snake-pad-btn { background: #ffffff; }
+[data-theme="light"] .snake-settings,
+[data-theme="light"] .game-bar,
+[data-theme="light"] .snake-wrap { box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04); }
+[data-theme="light"] .snake-pad-btn { box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05); }
+
+.snake-help { text-align: center; color: var(--muted); font-size: 0.85rem; margin-top: 1.25rem; overflow-wrap: anywhere; }
+
+@media (prefers-reduced-motion: reduce) { .snake-overlay { animation: none; } }
 </style>
 
 <script>

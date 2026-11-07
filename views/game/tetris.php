@@ -12,8 +12,9 @@ declare(strict_types=1);
  */
 ?>
 <header class="page-hero">
+    <div class="ae-dots dot-grid" aria-hidden="true"></div>
     <div class="container">
-        <span class="eyebrow">Jeu d'arcade</span>
+        <span class="ae-pill"><span class="ae-pill-dot" aria-hidden="true"></span>Arcade · Mode marathon</span>
         <h1 class="page-title">Tetris</h1>
         <p class="page-lead">Empile les pièces, complète les lignes et va le plus loin possible&nbsp;!</p>
     </div>
@@ -22,7 +23,7 @@ declare(strict_types=1);
 <section class="section">
     <div class="container game-zone">
 
-        <a class="btn btn-outline btn-sm" style="display:inline-block;margin-bottom:1.25rem;text-decoration:none;" href="<?= e(url('/jeux')) ?>">← Retour aux jeux</a>
+        <p class="back-link"><a href="<?= e(url('/jeux')) ?>">← Tous les jeux</a></p>
 
         <!-- Barre de jeu -->
         <div class="game-bar">
@@ -41,7 +42,7 @@ declare(strict_types=1);
                 </div>
                 <div class="game-stat">
                     <span class="game-stat-label">Record</span>
-                    <span class="game-stat-value" id="t-best">—</span>
+                    <span class="game-stat-value game-stat-value-muted" id="t-best">—</span>
                 </div>
             </div>
             <div class="game-controls">
@@ -78,14 +79,26 @@ declare(strict_types=1);
         <!-- Contrôles tactiles -->
         <div class="tetris-pad" id="t-pad" aria-label="Contrôles tactiles">
             <div class="tetris-pad-row">
-                <button type="button" data-act="left" class="tetris-pad-btn" aria-label="Déplacer à gauche">◀</button>
-                <button type="button" data-act="rotate" class="tetris-pad-btn tetris-pad-btn-rot" aria-label="Tourner">⟳</button>
-                <button type="button" data-act="right" class="tetris-pad-btn" aria-label="Déplacer à droite">▶</button>
+                <button type="button" data-act="left" class="tetris-pad-btn" aria-label="Déplacer à gauche">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 5.5 8 12l6.5 6.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+                <button type="button" data-act="rotate" class="tetris-pad-btn tetris-pad-btn-rot" aria-label="Tourner">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M23 4v6h-6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+                <button type="button" data-act="right" class="tetris-pad-btn" aria-label="Déplacer à droite">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 5.5 16 12l-6.5 6.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
             </div>
             <div class="tetris-pad-row">
-                <button type="button" data-act="down" class="tetris-pad-btn" aria-label="Descendre">▼</button>
-                <button type="button" data-act="drop" class="tetris-pad-btn" aria-label="Chute instantanée">⤓</button>
-                <button type="button" data-act="hold" class="tetris-pad-btn tetris-pad-btn-hold" aria-label="Mettre en réserve">⇄</button>
+                <button type="button" data-act="down" class="tetris-pad-btn" aria-label="Descendre">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+                <button type="button" data-act="drop" class="tetris-pad-btn" aria-label="Chute instantanée">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v10" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 9l5 5 5-5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 20h14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>
+                </button>
+                <button type="button" data-act="hold" class="tetris-pad-btn tetris-pad-btn-hold" aria-label="Mettre en réserve">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 1l4 4-4 4" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 11V9a4 4 0 0 1 4-4h14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 23l-4-4 4-4" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 13v2a4 4 0 0 1-4 4H3" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
             </div>
         </div>
 
@@ -94,64 +107,121 @@ declare(strict_types=1);
 </section>
 
 <style>
+/* ============ Tetris — habillage charte AEIC ============
+   Même langage « console » que le Snake : cadre net, cartes surface,
+   typo du site, ombres discrètes. */
 .game-zone { max-width: 720px; }
 
+/* Barre de score : bandeau unique, séparateurs fins, chiffres tabulaires. */
 .game-bar {
-    display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
-    gap: 1rem; margin-bottom: 1.5rem;
+    display: flex; flex-wrap: wrap; align-items: stretch; justify-content: space-between;
+    gap: 0.5rem 1rem; margin-bottom: 1.5rem;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 0.7rem 1rem;
 }
-.game-stats { display: flex; gap: 0.75rem; flex-wrap: wrap; }
+.game-stats { display: flex; gap: 0; flex-wrap: wrap; align-items: stretch; min-width: 0; }
 .game-stat {
-    background: rgba(255,255,255,0.03); border: 1px solid var(--border);
-    border-radius: 10px; padding: 0.5rem 0.85rem; text-align: center; min-width: 70px;
+    display: flex; flex-direction: column; justify-content: center; gap: 0.2rem;
+    padding: 0.2rem 1.1rem; text-align: center; min-width: 0;
 }
-.game-stat-label { display: block; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); font-weight: 700; }
-.game-stat-value { display: block; font-size: 1.2rem; font-weight: 800; color: var(--primary); }
-.game-controls { display: flex; gap: 0.5rem; align-items: center; }
+.game-stat + .game-stat { border-left: 1px solid var(--border); }
+.game-stat-label {
+    display: block; font-size: 0.62rem; text-transform: uppercase;
+    letter-spacing: 0.18em; color: var(--muted); font-weight: 700;
+}
+.game-stat-value {
+    display: block; font-size: 1.3rem; font-weight: 900; color: var(--primary);
+    font-variant-numeric: tabular-nums; letter-spacing: -0.02em; line-height: 1.15;
+    overflow-wrap: anywhere;
+}
+.game-stat-value-muted { color: var(--muted); }
+.game-controls { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
 
 .tetris-layout { display: flex; gap: 1.25rem; justify-content: center; align-items: flex-start; }
-.tetris-wrap { position: relative; margin: 0 auto; }
+
+/* Plateau : console nette autour du canvas du jeu. */
+.tetris-wrap {
+    position: relative; margin: 0 auto;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border);
+    border-radius: calc(var(--radius) + 8px);
+    padding: 10px;
+}
 #t-canvas {
-    display: block; width: min(360px, 88vw); height: auto; border-radius: 14px;
-    border: 2px solid var(--border);
+    display: block; width: min(360px, 88vw); height: auto;
+    border-radius: var(--radius);
+    background: #0b1626; /* raccord avec le fond de grille dessiné par le jeu */
+    border: 1px solid var(--border-strong);
     touch-action: none;
-    box-shadow: 0 14px 44px rgba(0,0,0,0.35);
 }
 
+/* Écrans accueil / pause / fin : carte charte, pas d'alerte navigateur. */
 .tetris-overlay {
     position: absolute; inset: 0; display: grid; place-items: center;
-    background: rgba(5, 12, 24, 0.72); backdrop-filter: blur(3px);
-    border-radius: 14px; animation: tFade 0.25s;
+    background: rgba(10, 22, 40, 0.78);
+    border-radius: calc(var(--radius) + 8px);
+    animation: tFade 0.25s ease;
 }
 .tetris-overlay[hidden] { display: none; }
-.tetris-overlay-card { text-align: center; padding: 1rem; }
-.tetris-overlay-card h2 { font-size: 1.6rem; font-weight: 900; color: var(--primary); margin: 0 0 0.5rem; }
-.tetris-overlay-card p { color: var(--muted); margin: 0 0 1rem; line-height: 1.6; font-size: 0.88rem; }
+.tetris-overlay-card {
+    text-align: center; padding: 1rem;
+    background: var(--card); border: 1px solid var(--border-strong);
+    border-radius: var(--radius-lg);
+    max-width: min(340px, calc(100% - 2rem));
+    box-shadow: 0 24px 60px rgba(2, 8, 20, 0.45);
+}
+.tetris-overlay-card h2 {
+    font-size: 1.4rem; font-weight: 900; color: var(--primary);
+    text-transform: uppercase; letter-spacing: -0.04em; margin: 0 0 0.5rem;
+}
+.tetris-overlay-card p { color: var(--muted); margin: 0 0 1rem; line-height: 1.6; font-size: 0.88rem; overflow-wrap: anywhere; }
 @keyframes tFade { from { opacity: 0; } }
 
+/* Panneau latéral : cartes surface, labels façon statistiques du site. */
 .tetris-side { display: flex; flex-direction: column; gap: 1rem; }
 .tetris-mini {
-    background: rgba(255,255,255,0.03); border: 1px solid var(--border);
-    border-radius: 12px; padding: 0.6rem; text-align: center;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 0.75rem 0.9rem; text-align: center; min-width: 0;
 }
-.tetris-mini-label { display: block; font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); font-weight: 800; margin-bottom: 0.35rem; }
+.tetris-mini-label {
+    display: block; font-size: 0.62rem; text-transform: uppercase;
+    letter-spacing: 0.18em; color: var(--muted); font-weight: 700; margin-bottom: 0.45rem;
+}
 .tetris-mini canvas { display: block; margin: 0 auto; width: 84px; height: 84px; }
 
+/* Pad tactile : boutons larges (≥ 44 px), pictos vectoriels du site. */
 .tetris-pad { display: none; margin: 1rem auto 0; width: max-content; user-select: none; -webkit-user-select: none; }
 .tetris-pad.is-touch { display: block; }
 .tetris-pad-row { display: flex; gap: 0.6rem; justify-content: center; margin-bottom: 0.6rem; }
 .tetris-pad-btn {
-    width: 66px; height: 58px; border-radius: 14px; font-size: 1.25rem; font-weight: 800;
-    border: 1px solid var(--border-strong); background: rgba(255,255,255,0.05);
+    min-width: 64px; height: 58px;
+    display: inline-flex; align-items: center; justify-content: center;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-strong);
+    background: rgba(255, 255, 255, 0.04);
     color: var(--foreground); cursor: pointer;
     touch-action: none; -webkit-tap-highlight-color: transparent;
 }
-.tetris-pad-btn:active { background: var(--primary); color: #0a1628; }
-.tetris-pad-btn-rot { background: rgba(72, 189, 211, 0.16); border-color: rgba(72, 189, 211, 0.5); }
-.tetris-pad-btn-hold { background: rgba(245, 197, 24, 0.12); border-color: rgba(245, 197, 24, 0.45); }
+.tetris-pad-btn svg { width: 22px; height: 22px; }
+.tetris-pad-btn:active { background: var(--primary); color: var(--primary-foreground); border-color: var(--primary); }
+.tetris-pad-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.tetris-pad-btn-rot { color: var(--primary); border-color: rgba(58, 155, 184, 0.45); }
+.tetris-pad-btn-hold { color: var(--accent-warning); border-color: rgba(212, 148, 26, 0.4); }
 @media (pointer: coarse) { .tetris-pad { display: block; } }
 
-.tetris-help { text-align: center; color: var(--muted); font-size: 0.85rem; margin-top: 1.25rem; }
+[data-theme="light"] .game-bar,
+[data-theme="light"] .tetris-wrap,
+[data-theme="light"] .tetris-mini,
+[data-theme="light"] .tetris-pad-btn { background: #ffffff; }
+[data-theme="light"] .game-bar,
+[data-theme="light"] .tetris-wrap,
+[data-theme="light"] .tetris-mini { box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04); }
+
+.tetris-help { text-align: center; color: var(--muted); font-size: 0.85rem; margin-top: 1.25rem; overflow-wrap: anywhere; }
 
 /* Mobile : plateau centré, panneau Suivante/Réserve en ligne sous le plateau. */
 @media (max-width: 560px) {
@@ -164,6 +234,8 @@ declare(strict_types=1);
     .tetris-mini canvas { width: 60px; height: 60px; }
     .tetris-overlay-card p { font-size: 0.8rem; }
 }
+
+@media (prefers-reduced-motion: reduce) { .tetris-overlay { animation: none; } }
 </style>
 
 <script>

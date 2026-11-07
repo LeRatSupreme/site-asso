@@ -12,17 +12,18 @@ declare(strict_types=1);
  */
 ?>
 <header class="page-hero">
+    <div class="ae-dots dot-grid" aria-hidden="true"></div>
     <div class="container">
-        <span class="eyebrow">Jeu de mémoire</span>
+        <span class="ae-pill"><span class="ae-pill-dot" aria-hidden="true"></span>Cafétéria · 7 tailles de grille</span>
         <h1 class="page-title">Memory Cafétéria</h1>
-        <p class="page-lead">Retrouve les paires de produits le plus vite possible !</p>
+        <p class="page-lead">Retrouve les paires de produits le plus vite possible&nbsp;!</p>
     </div>
 </header>
 
 <section class="section">
     <div class="container game-zone">
 
-        <a class="btn btn-outline btn-sm" style="display:inline-block;margin-bottom:1.25rem;text-decoration:none;" href="<?= e(url('/jeux')) ?>">← Retour aux jeux</a>
+        <p class="back-link"><a href="<?= e(url('/jeux')) ?>">← Tous les jeux</a></p>
 
         <!-- Taille de grille : ligne dédiée au-dessus du plateau -->
         <div class="memory-sizes">
@@ -55,7 +56,7 @@ declare(strict_types=1);
                 </div>
                 <div class="game-stat">
                     <span class="game-stat-label">Record</span>
-                    <span class="game-stat-value" id="g-best">—</span>
+                    <span class="game-stat-value game-stat-value-muted" id="g-best">—</span>
                 </div>
             </div>
             <div class="game-controls">
@@ -78,63 +79,76 @@ declare(strict_types=1);
 </section>
 
 <style>
+/* ============ Memory cafétéria — habillage charte AEIC ============
+   Réutilise les verbes graphiques du site : pilules teal, trame de
+   points (dot-grid), monogramme « AE », typo Inter 900 uppercase. */
 .game-zone { max-width: 900px; }
 
-/* Ligne dédiée au choix de la taille */
+/* Choix de la taille */
 .memory-sizes {
-    display: flex; align-items: center; gap: 0.7rem; flex-wrap: wrap;
-    background: rgba(255,255,255,0.03);
-    border: 1px solid var(--border-strong);
-    border-radius: 0.75rem;
-    padding: 0.7rem 1rem;
+    display: flex; align-items: center; gap: 0.85rem; flex-wrap: wrap;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 0.75rem 1rem;
     margin-bottom: 1.25rem;
 }
 .memory-sizes-label {
-    font-size: 0.72rem; font-weight: 800; color: var(--muted);
-    text-transform: uppercase; letter-spacing: 0.06em;
+    font-size: 0.65rem; font-weight: 700; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.18em;
 }
-.memory-pills { display: flex; gap: 0.4rem; flex-wrap: wrap; }
-
-.game-bar {
-    display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
-    gap: 1rem; margin-bottom: 1.5rem;
-}
-.game-stats { display: flex; gap: 0.75rem; flex-wrap: wrap; }
-.game-stat {
-    background: rgba(255,255,255,0.03); border: 1px solid var(--border);
-    border-radius: 10px; padding: 0.5rem 0.85rem; text-align: center; min-width: 70px;
-}
-.game-stat-label { display: block; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); font-weight: 700; }
-.game-stat-value { display: block; font-size: 1.2rem; font-weight: 800; color: var(--primary); }
-.game-controls { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
-
-.memory-pills { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+.memory-pills { display: flex; gap: 0.45rem; flex-wrap: wrap; }
 .memory-pill {
-    padding: 0.35rem 0.7rem;
+    display: inline-flex; align-items: center; justify-content: center;
+    min-height: 44px;
+    padding: 0.35rem 0.95rem;
     border-radius: 999px;
     cursor: pointer;
-    border: 2px solid var(--border-strong);
-    background: rgba(255,255,255,0.02);
+    border: 1px solid var(--border-strong);
+    background: transparent;
     color: var(--muted);
-    font-weight: 700;
-    font-size: 0.78rem;
-    transition: all 0.15s;
-}
-.memory-pill.active {
-    background: var(--primary);
-    color: #0a1628;
-    border-color: var(--primary);
+    font-weight: 800;
+    font-size: 0.8rem;
+    letter-spacing: 0.02em;
+    transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
 }
 .memory-pill:hover:not(.active) { border-color: var(--primary); color: var(--foreground); }
+.memory-pill:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.memory-pill.active { background: var(--primary); color: var(--primary-foreground); border-color: var(--primary); }
 
-.game-board {
-    display: grid; gap: 0.5rem; perspective: 800px;
-    justify-content: center;
+/* Barre de score : bandeau unique, séparateurs fins, chiffres tabulaires. */
+.game-bar {
+    display: flex; flex-wrap: wrap; align-items: stretch; justify-content: space-between;
+    gap: 0.5rem 1rem; margin-bottom: 1.5rem;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 0.7rem 1rem;
 }
+.game-stats { display: flex; gap: 0; flex-wrap: wrap; align-items: stretch; min-width: 0; }
+.game-stat {
+    display: flex; flex-direction: column; justify-content: center; gap: 0.2rem;
+    padding: 0.2rem 1.1rem; text-align: center; min-width: 0;
+}
+.game-stat + .game-stat { border-left: 1px solid var(--border); }
+.game-stat-label {
+    display: block; font-size: 0.62rem; text-transform: uppercase;
+    letter-spacing: 0.18em; color: var(--muted); font-weight: 700;
+}
+.game-stat-value {
+    display: block; font-size: 1.3rem; font-weight: 900; color: var(--primary);
+    font-variant-numeric: tabular-nums; letter-spacing: -0.02em; line-height: 1.15;
+    overflow-wrap: anywhere;
+}
+.game-stat-value-muted { color: var(--muted); }
+.game-controls { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+
+/* Plateau */
+.game-board { display: grid; gap: 0.5rem; perspective: 900px; justify-content: center; }
 
 .g-card {
     aspect-ratio: 1; position: relative; cursor: pointer;
-    transform-style: preserve-3d; transition: transform 0.4s cubic-bezier(0.4,0,0.2,1);
+    transform-style: preserve-3d; transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .g-card.is-flipped { transform: rotateY(180deg); }
 .g-card.is-matched { cursor: default; }
@@ -145,38 +159,73 @@ declare(strict_types=1);
     font-size: inherit;
     backface-visibility: hidden; -webkit-backface-visibility: hidden;
 }
+
+/* Dos de carte : monogramme AE de l'asso sur trame de points —
+   la signature graphique du site, à toutes les tailles de grille. */
 .g-front {
-    background: linear-gradient(135deg, rgba(72,189,211,0.15), rgba(97,80,170,0.15));
-    border: 2px solid rgba(72,189,211,0.2);
-    font-size: 1.2rem; color: rgba(255,255,255,0.3); font-weight: 900;
+    color: transparent; /* le « ? » injecté par le jeu reste présent, masqué */
+    background-color: rgba(58, 155, 184, 0.13);
+    background-image: radial-gradient(circle, rgba(58, 155, 184, 0.3) 1px, transparent 1.4px);
+    background-size: 25% 25%;
+    border: 2px solid rgba(58, 155, 184, 0.38);
+    box-shadow: inset 0 0 0 3px rgba(58, 155, 184, 0.07);
 }
-.g-card:hover .g-front { border-color: var(--primary); }
+.g-front::after {
+    content: "AE";
+    font-size: 0.5em;
+    font-weight: 900;
+    letter-spacing: -0.04em;
+    color: rgba(58, 155, 184, 0.62);
+}
+.g-card:not(.is-flipped):not(.is-matched):hover .g-front { border-color: var(--primary); }
+
+/* Face produit */
 .g-back {
-    background: var(--card, #0f1e35); border: 2px solid var(--border);
+    background: var(--card);
+    border: 2px solid var(--border-strong);
     transform: rotateY(180deg);
 }
 .g-card.is-matched .g-back {
-    border-color: var(--accent-success, #2d9a5f);
-    background: rgba(45,154,95,0.1);
-    box-shadow: 0 0 12px rgba(45,154,95,0.2);
+    border-color: var(--accent-success);
+    background: rgba(45, 154, 95, 0.12);
 }
 
+[data-theme="light"] .memory-sizes,
+[data-theme="light"] .game-bar { background: #ffffff; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04); }
+[data-theme="light"] .g-front {
+    background-color: rgba(45, 122, 148, 0.07);
+    background-image: radial-gradient(circle, rgba(45, 122, 148, 0.28) 1px, transparent 1.4px);
+    border-color: rgba(45, 122, 148, 0.35);
+    box-shadow: inset 0 0 0 3px rgba(45, 122, 148, 0.05);
+}
+[data-theme="light"] .g-front::after { color: rgba(45, 122, 148, 0.55); }
+
+/* Écran de victoire : carte charte, pas d'alerte navigateur. */
 .game-win {
     position: fixed; inset: 0; z-index: 9000;
-    background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);
-    display: grid; place-items: center; animation: fadeIn 0.3s;
+    background: rgba(10, 22, 40, 0.82);
+    display: grid; place-items: center; animation: gFadeIn 0.25s ease;
 }
 .game-win[hidden] { display: none; }
 .game-win-card {
-    background: var(--card); border: 1px solid var(--border);
-    border-radius: 20px; padding: 2.5rem; text-align: center;
-    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
-    animation: pop 0.4s cubic-bezier(0.34,1.56,0.64,1);
+    background: var(--card); border: 1px solid var(--border-strong);
+    border-radius: var(--radius-lg); padding: 2.5rem; text-align: center;
+    box-shadow: 0 24px 60px rgba(2, 8, 20, 0.5);
+    animation: gPop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+    max-width: min(420px, calc(100vw - 2rem));
 }
-.game-win-card h2 { font-size: 1.8rem; font-weight: 900; color: var(--primary); margin: 0 0 0.5rem; }
-.game-win-card p { font-size: 1rem; color: var(--muted); margin: 0 0 1.25rem; }
-@keyframes fadeIn { from { opacity: 0; } }
-@keyframes pop { from { transform: scale(0.8); opacity: 0; } }
+.game-win-card h2 {
+    font-size: 1.6rem; font-weight: 900; color: var(--primary);
+    text-transform: uppercase; letter-spacing: -0.04em; margin: 0 0 0.5rem;
+}
+.game-win-card p { font-size: 1rem; color: var(--muted); margin: 0 0 1.25rem; overflow-wrap: anywhere; }
+@keyframes gFadeIn { from { opacity: 0; } }
+@keyframes gPop { from { transform: scale(0.9); opacity: 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+    .g-card { transition-duration: 0.01s; }
+    .game-win, .game-win-card { animation: none; }
+}
 </style>
 
 <script>

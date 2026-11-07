@@ -77,14 +77,14 @@ $userPseudo = ($user !== null && !empty($user['pseudo'])) ? (string) $user['pseu
     <div class="container">
 
         <?php if ($user === null): ?>
-            <div class="surface card ae-panel gm-notice" style="margin-bottom:1.75rem; align-items:flex-start;">
-                <p style="margin:0;">Tu joues en <strong>mode démo</strong>. <a href="<?= e(url('/login?callbackUrl=' . rawurlencode('/jeux'))) ?>">Connecte-toi</a> pour sauvegarder tes parties, suivre ta série de victoires et apparaître dans le classement.</p>
+            <div class="surface card ae-panel gm-notice">
+                <p class="gm-notice-text">Tu joues en <strong>mode démo</strong>. <a href="<?= e(url('/login?callbackUrl=' . rawurlencode('/jeux'))) ?>">Connecte-toi</a> pour sauvegarder tes parties, suivre ta série de victoires et apparaître dans le classement.</p>
             </div>
         <?php endif; ?>
 
         <?php if ($user !== null && $stats !== null): ?>
             <h2 class="section-title gm-h2 ae-reveal">Tes statistiques</h2>
-            <div class="grid grid-2 gm-stats" style="margin-bottom:2.5rem;">
+            <div class="grid grid-2 gm-stats gm-section">
                 <?php foreach (['fr' => 'FR', 'en' => 'EN'] as $code => $label):
                     $s = $stats[$code]; ?>
                     <div class="surface card ae-panel ae-reveal">
@@ -114,28 +114,24 @@ $userPseudo = ($user !== null && !empty($user['pseudo'])) ? (string) $user['pseu
 
         <?php if ($user !== null && $userPseudo === null): ?>
             <!-- Demande de pseudo -->
-            <div class="surface card ae-panel" id="pseudo-prompt" style="margin-bottom:1.75rem; align-items:flex-start;">
-                <div style="display:flex; gap:0.75rem; align-items:flex-start; width:100%;">
-                    <div style="flex:1;">
-                        <p style="margin:0 0 0.5rem; font-weight:700;">Choisis ton pseudo de joueur</p>
-                        <p style="margin:0 0 0.75rem; color:var(--muted); font-size:0.9rem;">Ton pseudo apparaîtra dans le classement ci-dessous. 3 à 20 caractères (lettres, chiffres, espaces, - _ .).</p>
-                        <div class="pseudo-edit-row">
-                            <input type="text" id="pseudo-input" class="pseudo-input" maxlength="20" placeholder="ex : MotusMaster" autocomplete="off" value="<?= e($userPseudo ?? '') ?>" />
-                            <button type="button" class="btn btn-primary btn-sm" id="pseudo-save">Enregistrer</button>
-                        </div>
-                        <p id="pseudo-msg" class="pseudo-msg"></p>
-                    </div>
+            <div class="surface card ae-panel gm-pseudo" id="pseudo-prompt">
+                <p class="gm-pseudo-title">Choisis ton pseudo de joueur</p>
+                <p class="gm-pseudo-hint">Ton pseudo apparaîtra dans le classement ci-dessous. 3 à 20 caractères (lettres, chiffres, espaces, - _ .).</p>
+                <div class="pseudo-edit-row">
+                    <input type="text" id="pseudo-input" class="pseudo-input" maxlength="20" placeholder="ex : MotusMaster" autocomplete="off" value="<?= e($userPseudo ?? '') ?>" />
+                    <button type="button" class="btn btn-primary btn-sm" id="pseudo-save">Enregistrer</button>
                 </div>
+                <p id="pseudo-msg" class="pseudo-msg"></p>
             </div>
         <?php elseif ($user !== null && $userPseudo !== null): ?>
             <!-- Pseudo existant + bouton modifier -->
-            <div class="surface card ae-panel" id="pseudo-display" style="margin-bottom:1.75rem; flex-direction:row; align-items:center; gap:0.75rem; flex-wrap:wrap;">
-                <span style="color:var(--muted);">Ton pseudo&nbsp;:</span>
-                <strong id="pseudo-current" style="color:var(--primary);"><?= e($userPseudo) ?></strong>
-                <button type="button" class="btn btn-outline btn-sm" id="pseudo-edit-btn" style="margin-left:auto;">Modifier</button>
+            <div class="surface card ae-panel gm-pseudo gm-pseudo-row" id="pseudo-display">
+                <span class="gm-pseudo-label">Ton pseudo&nbsp;:</span>
+                <strong class="gm-pseudo-value" id="pseudo-current"><?= e($userPseudo) ?></strong>
+                <button type="button" class="btn btn-outline btn-sm gm-pseudo-edit-btn" id="pseudo-edit-btn">Modifier</button>
             </div>
             <!-- Formulaire de modification (caché par défaut) -->
-            <div class="surface card" id="pseudo-edit" style="display:none; margin-bottom:1.75rem; flex-direction:column; gap:0.5rem; align-items:stretch;">
+            <div class="surface card gm-pseudo gm-pseudo-edit" id="pseudo-edit">
                 <div class="pseudo-edit-row">
                     <input type="text" id="pseudo-input" class="pseudo-input" maxlength="20" autocomplete="off" value="<?= e($userPseudo) ?>" />
                     <button type="button" class="btn btn-primary btn-sm" id="pseudo-save">Enregistrer</button>
@@ -148,16 +144,16 @@ $userPseudo = ($user !== null && !empty($user['pseudo'])) ? (string) $user['pseu
         <!-- ===================== CLASSEMENT (tout le monde) ===================== -->
         <h2 class="section-title gm-h2 ae-reveal">Classement</h2>
         <?php if ($leaderboard === []): ?>
-            <div class="surface card" style="text-align:center; padding:2rem; color:var(--muted); margin-bottom:2.5rem;">
-                <p style="margin:0 0 0.5rem;">Aucune partie enregistrée pour le moment.</p>
-                <p style="margin:0;"><a class="btn btn-primary btn-sm" href="<?= e(url('/jeux/wordle?mode=daily')) ?>">Jouer au Wordle quotidien →</a></p>
+            <div class="surface card gm-empty ae-reveal">
+                <p>Aucune partie enregistrée pour le moment.</p>
+                <p><a class="btn btn-primary btn-sm" href="<?= e(url('/jeux/wordle?mode=daily')) ?>">Jouer au Wordle quotidien →</a></p>
             </div>
         <?php else: ?>
-            <div class="table-wrap surface ae-panel ae-reveal" style="padding:0.5rem 0.5rem 0; margin-bottom:2.5rem; overflow-x:auto;">
+            <div class="table-wrap surface ae-panel gm-lb ae-reveal">
                 <table class="lb-table">
                     <thead>
                         <tr>
-                            <th class="num" style="width:3rem;">#</th>
+                            <th class="num lb-rank-col">#</th>
                             <th>Joueur</th>
                             <th class="num">Série</th>
                             <th class="num">Record</th>
@@ -177,11 +173,11 @@ $userPseudo = ($user !== null && !empty($user['pseudo'])) ? (string) $user['pseu
                                     <div class="lb-user-cell">
                                         <span class="lb-avatar" aria-hidden="true"><?= e(mb_strtoupper(mb_substr((string) $row['displayName'], 0, 1) ?: '?')) ?></span>
                                         <span class="lb-user-name"><?= e($row['displayName']) ?></span>
-                                        <?php if ($isCurrent): ?> <span class="badge badge-info" style="margin-left:0.3rem;">Toi</span><?php endif; ?>
+                                        <?php if ($isCurrent): ?> <span class="badge badge-info lb-you">Toi</span><?php endif; ?>
                                     </div>
                                 </td>
                                 <td class="num">
-                                    <strong style="color:var(--primary); font-size:1.05rem;"><?= $streak ?> jour<?= $streak > 1 ? 's' : '' ?></strong>
+                                    <strong class="lb-streak"><?= $streak ?> jour<?= $streak > 1 ? 's' : '' ?></strong>
                                 </td>
                                 <td class="num"><?= (int) ($row['maxStreak'] ?? 0) ?></td>
                                 <td class="num"><?= (int) ($row['played'] ?? 0) ?></td>
@@ -249,16 +245,23 @@ $userPseudo = ($user !== null && !empty($user['pseudo'])) ? (string) $user['pseu
 </section>
 
 <style>
-/* ============ Jeux — spécifique ============ */
+/* ============ Zone jeux — habillage charte AEIC ============
+   Les titres reprennent la typo du site (900, uppercase, resserrée),
+   les tickets gardent l'idée « carte perforée » mais dans la palette
+   teal / violet de l'association. */
 .gm-h2 {
-    font-size: 1.35rem;
+    font-size: clamp(1.35rem, 2.6vw, 1.8rem);
     margin: 0 0 1.1rem;
-    letter-spacing: -0.02em;
+    line-height: 1;
 }
+.gm-section { margin-bottom: 2.5rem; }
+.gm-notice { margin-bottom: 1.75rem; align-items: flex-start; }
+.gm-notice-text { margin: 0; overflow-wrap: anywhere; }
 
-/* Statistiques joueur : chiffres en couleur pleine (sobriété, lot 6F) */
+/* Statistiques joueur : chiffres tabulaires (pas de tremblement). */
 .gm-stats .gm-stat {
     font-size: 1.9rem;
+    font-variant-numeric: tabular-nums;
 }
 .gm-stats-grid {
     display: grid;
@@ -269,7 +272,67 @@ $userPseudo = ($user !== null && !empty($user['pseudo'])) ? (string) $user['pseu
     .gm-stats-grid { grid-template-columns: repeat(2, 1fr); }
 }
 
-/* Jeux en cartes « tickets » (même modèle que la page association) */
+/* Blocs pseudo (définition / affichage / édition). */
+.gm-pseudo { margin-bottom: 1.75rem; }
+.gm-pseudo-title { margin: 0 0 0.4rem; font-weight: 700; }
+.gm-pseudo-hint { margin: 0 0 0.75rem; color: var(--muted); font-size: 0.9rem; overflow-wrap: anywhere; }
+.gm-pseudo-row { flex-direction: row; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
+.gm-pseudo-label { color: var(--muted); }
+.gm-pseudo-value { color: var(--primary); overflow-wrap: anywhere; }
+.gm-pseudo-edit-btn { margin-left: auto; }
+#pseudo-edit { display: none; flex-direction: column; gap: 0.5rem; align-items: stretch; }
+.pseudo-edit-row { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+.pseudo-input {
+    flex: 1; min-width: 200px; min-height: 44px;
+    padding: 0.6rem 0.85rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-strong);
+    background: var(--input-bg);
+    color: var(--foreground); font-size: 1rem;
+}
+.pseudo-input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(58, 155, 184, 0.18); }
+[data-theme="light"] .pseudo-input:focus { box-shadow: 0 0 0 3px rgba(45, 122, 148, 0.15); }
+.pseudo-msg { margin: 0.5rem 0 0; font-size: 0.85rem; min-height: 1.1rem; overflow-wrap: anywhere; }
+
+/* Classement */
+.gm-empty {
+    text-align: center; padding: 2rem; color: var(--muted);
+    margin-bottom: 2.5rem; gap: 0.75rem; align-items: center;
+}
+.gm-empty p { margin: 0; }
+.gm-lb { padding: 0.5rem 0.5rem 0; margin-bottom: 2.5rem; overflow-x: auto; }
+.lb-table { width: 100%; border-collapse: collapse; }
+.lb-table th, .lb-table td { padding: 0.7rem 0.6rem; text-align: left; border-bottom: 1px solid var(--border); }
+.lb-rank-col { width: 3rem; }
+.lb-table th {
+    color: var(--muted); text-transform: uppercase;
+    letter-spacing: 0.18em; font-size: 0.62rem; font-weight: 700;
+}
+.lb-table td.num { text-align: center; font-variant-numeric: tabular-nums; }
+.lb-rank { font-weight: 900; font-size: 1.05rem; }
+.lb-rank.gold { color: var(--accent-warning); }
+.lb-rank.silver { color: #9aa7b8; }
+.lb-rank.bronze { color: #c98a4b; }
+.lb-avatar {
+    width: 34px; height: 34px; border-radius: 50%;
+    display: inline-grid; place-items: center; flex: 0 0 auto;
+    background: rgba(58, 155, 184, 0.16);
+    border: 1px solid rgba(58, 155, 184, 0.35);
+    color: var(--primary); font-weight: 900; font-size: 0.85rem;
+}
+[data-theme="light"] .lb-avatar { background: rgba(45, 122, 148, 0.1); }
+.lb-user-cell { display: flex; align-items: center; gap: 0.6rem; min-width: 0; }
+.lb-user-name { font-weight: 700; overflow-wrap: anywhere; }
+.lb-you { margin-left: 0.35rem; }
+.badge-info { background: rgba(58, 155, 184, 0.16); color: #7fd0e4; }
+[data-theme="light"] .badge-info { background: rgba(14, 116, 144, 0.1); color: #0e7490; }
+.lb-streak { color: var(--primary); font-size: 1.05rem; font-variant-numeric: tabular-nums; }
+.lb-row.is-current { background: rgba(58, 155, 184, 0.1); }
+.lb-row.is-current td { border-bottom-color: rgba(58, 155, 184, 0.25); }
+.lb-row.is-current td:first-child { border-left: 3px solid var(--primary); }
+
+/* Jeux en cartes « tickets » : tampon monogramme + perforation,
+   palette teal / violet de l'association. */
 .gm-tickets {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
@@ -278,56 +341,67 @@ $userPseudo = ($user !== null && !empty($user['pseudo'])) ? (string) $user['pseu
 .gm-ticket {
     display: flex;
     align-items: stretch;
+    min-width: 0;
     border-radius: 18px;
     border: 1px solid var(--border);
     background: rgba(255, 255, 255, 0.03);
     overflow: hidden;
     text-decoration: none;
     color: inherit;
-    transition: transform 0.22s ease, border-color 0.22s ease, box-shadow 0.22s ease;
+    transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
 }
 .gm-ticket:hover {
-    transform: translateY(-4px);
-    border-color: rgba(72, 189, 211, 0.35);
-    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+    transform: translateY(-3px);
+    border-color: rgba(58, 155, 184, 0.45);
+    box-shadow: 0 14px 34px rgba(2, 8, 20, 0.4);
 }
+.gm-ticket:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+[data-theme="light"] .gm-ticket { background: #ffffff; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04); }
+[data-theme="light"] .gm-ticket:hover { box-shadow: 0 12px 26px rgba(15, 23, 42, 0.12); }
 .gm-stub {
-    flex: 0 0 76px;
+    flex: 0 0 72px;
     display: grid;
     place-items: center;
-    font-size: 2rem;
+    font-size: 1.7rem;
+    font-weight: 900;
     line-height: 1;
-    background: rgba(58, 155, 184, 0.18);
-    border-right: 2px dashed rgba(255, 255, 255, 0.14);
-    transition: font-size 0.25s ease;
+    letter-spacing: -0.04em;
+    text-transform: uppercase;
+    color: var(--primary);
+    background: rgba(58, 155, 184, 0.12);
+    border-right: 1px dashed rgba(255, 255, 255, 0.16);
 }
-[data-theme="light"] .gm-stub { border-right-color: rgba(15, 23, 42, 0.14); }
-.gm-ticket:hover .gm-stub { font-size: 2.4rem; }
-.gm-ticket-violet .gm-stub { background: rgba(139, 122, 224, 0.16); }
-.gm-ticket-muted { opacity: 0.65; }
-.gm-ticket-muted .gm-stub { background: rgba(255, 255, 255, 0.04); }
-.gm-ticket-muted:hover { transform: none; box-shadow: none; border-color: var(--border); }
-.gm-ticket-muted:hover .gm-stub { font-size: 2rem; }
+[data-theme="light"] .gm-stub {
+    background: rgba(45, 122, 148, 0.08);
+    border-right-color: rgba(15, 23, 42, 0.16);
+}
+.gm-ticket:hover .gm-stub { color: #5fc9de; }
+.gm-ticket-violet .gm-stub {
+    background: rgba(74, 61, 143, 0.3);
+    color: #c4b8f0;
+}
+[data-theme="light"] .gm-ticket-violet .gm-stub { background: rgba(97, 80, 170, 0.1); color: #4a3d8a; }
 .gm-body {
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
-    padding: 1.15rem 1.25rem;
+    padding: 1.1rem 1.2rem;
     min-width: 0;
 }
 .gm-title {
-    font-size: 1.1rem;
+    font-size: 1.05rem;
     font-weight: 900;
-    text-transform: none;
-    letter-spacing: -0.01em;
+    letter-spacing: -0.02em;
     color: var(--foreground);
-    line-height: 1.2;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
 }
 .gm-ticket:hover .gm-title { color: var(--primary); }
 .gm-desc {
     font-size: 0.87rem;
     color: var(--muted);
     line-height: 1.6;
+    overflow-wrap: anywhere;
 }
 .gm-cta {
     margin-top: auto;
@@ -339,35 +413,6 @@ $userPseudo = ($user !== null && !empty($user['pseudo'])) ? (string) $user['pseu
 @media (max-width: 980px) {
     .gm-tickets { grid-template-columns: 1fr; }
 }
-
-/* Classement : retouches */
-.lb-table { width:100%; border-collapse:collapse; }
-.lb-table th, .lb-table td { padding:0.7rem 0.6rem; text-align:left; border-bottom:1px solid var(--border); }
-.lb-table th { color:var(--muted); text-transform:uppercase; letter-spacing:0.08em; font-size:0.72rem; font-weight:800; }
-.lb-table td.num { text-align:center; }
-.lb-rank { font-weight:900; font-size:1.05rem; }
-.lb-rank.gold { color:#f5c518; }
-.lb-rank.silver { color:#c0c5ce; }
-.lb-rank.bronze { color:#cd7f32; }
-.lb-avatar {
-    width:34px; height:34px; border-radius:50%;
-    display:inline-grid; place-items:center; flex:0 0 auto;
-    background:var(--secondary);
-    color:#fff; font-weight:900; font-size:0.85rem;
-}
-.lb-user-cell { display:flex; align-items:center; gap:0.6rem; }
-.lb-user-name { font-weight:700; }
-.lb-row.is-current { background: rgba(72,189,211,0.12); }
-.lb-row.is-current td { border-bottom-color: rgba(72,189,211,0.25); }
-.lb-row.is-current td:first-child { border-left:3px solid var(--primary); }
-.pseudo-edit-row { display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center; }
-.pseudo-input {
-    flex:1; min-width:200px; padding:0.6rem 0.8rem; border-radius:0.5rem;
-    border:2px solid var(--border-strong); background:rgba(255,255,255,0.04);
-    color:var(--foreground); font-size:1rem;
-}
-.pseudo-input:focus { outline:none; border-color:var(--primary); }
-.pseudo-msg { margin:0.5rem 0 0; font-size:0.85rem; min-height:1.1rem; }
 </style>
 
 <script>
