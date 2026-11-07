@@ -20,7 +20,9 @@ use App\Models\AssistantQuestionPreparee;
  *   POST /admin/agent/prepare-all  → « Tout préparer » : la MÊME
  *                                    logique appliquée à tous les
  *                                    groupes préparables du journal
- *                                    (aucun contournement du filtrage)
+ *                                    NON déjà couverts par une
+ *                                    préparation existante (aucun
+ *                                    contournement du filtrage)
  *   POST /admin/agent/toggle       → active/désactive une question
  *   POST /admin/agent/deplacer     → réordonne ( Monter / Descendre )
  *   POST /admin/agent/supprimer    → supprime une question préparée
@@ -82,16 +84,22 @@ final class AdminAgentController extends AdminBaseController
         $groupes = $this->agreger();
         $totalLignes = array_sum(array_column($groupes, 'frequence'));
 
-        // MÊME verdict que la boucle « Tout préparer » : celui attaché
-        // par agreger() (verdict preparable() par groupe) — jamais un
-        // recalcul divergent ; le contrôleur reste l'unique point
-        // d'assemblage de cette donnée.
+        $preparees = AssistantQuestionPreparee::toutes();
+
+        // MÊME verdict que la boucle « Tout préparer » : celui attaché par
+        // agreger() (verdict preparable() par groupe), MOINS les questions
+        // DÉJÀ couvertes par une préparation existante (question_norm,
+        // re-normalisé par le point d'assemblage unique
+        // AgentQuestions::normaliser) — le compteur est un rappel « à
+        // préparer », il ne doit jamais ressusciter une question déjà
+        // préparée ; jamais de recalcul divergent : le contrôleur reste
+        // l'unique point d'assemblage de cette donnée.
+        $dejaPreparees = self::normsCouverts($preparees);
         $nbPreparables = count(array_filter(
             $groupes,
-            static fn (array $g): bool => $g['preparable']['ok'] === true
+            static fn (array $g): bool => $g['preparable']['ok'] === true && !isset($dejaPreparees[$g['norm']])
         ));
 
-        $preparees = AssistantQuestionPreparee::toutes();
         foreach ($preparees as $i => $p) {
             $routage = AgentQuestions::routageValide((string) ($p['routage_json'] ?? ''));
             $preparees[$i]['dates_relatives'] = $routage !== null && AgentQuestions::routageADatesRelatives($routage);
@@ -155,11 +163,13 @@ final class AdminAgentController extends AdminBaseController
     }
 
     /**
-     * « Tout préparer » : applique à TOUS les groupes de l'agrégat la
-     * même logique que prepare() (via preparerGroupe — verdict
-     * preparable() recontrôlé pour CHAQUE groupe, aucun contournement
-     * du filtrage : non préparable ou sans routage → ignoré) ; flash
-     * résumé + UN SEUL audit pour tout le batch.
+     * « Tout préparer » : applique à tous les groupes de l'agrégat NON
+     * déjà couverts par une préparation existante la même logique que
+     * prepare() (via preparerGroupe — verdict preparable() recontrôlé
+     * pour CHAQUE groupe, aucun contournement du filtrage : non
+     * préparable ou sans routage → ignoré) ; flash résumé + UN SEUL
+     * audit pour tout le batch. Cohérence stricte avec le compteur du
+     * bouton (MÊME règle de couverture) : N affiché = N préparées.
      */
     public function prepareAll(): void
     {
@@ -168,7 +178,15 @@ final class AdminAgentController extends AdminBaseController
         $preparees = 0;
         $ignorees = 0;
         $motifs = [];
+        $dejaPreparees = self::normsCouverts(AssistantQuestionPreparee::toutes());
         foreach ($this->agreger() as $groupe) {
+            // Déjà couverte (préparation existante, active ou non) → ni
+            // re-upsert ni ré-activation silencieuse : le « Préparer »
+            // unitaire reste LA voie du rafraîchissement TTL.
+            if (isset($dejaPreparees[$groupe['norm']])) {
+                continue;
+            }
+
             $motif = $this->preparerGroupe($groupe, (string) $groupe['affichee']);
             if ($motif === null) {
                 $preparees++;
@@ -255,6 +273,33 @@ final class AdminAgentController extends AdminBaseController
         }
 
         return null;
+    }
+
+    /**
+     * Norms des questions DÉJÀ couvertes par une préparation existante
+     * (assistant_questions_preparees). La correspondance journal ↔
+     * préparées passe par la MÊME normalisation que le runtime
+     * (AgentQuestions::normaliser → PublicAssistant::normaliserTexte,
+     * idempotente sur un norm déjà canonique — jamais de
+     * strtolower ad hoc). Une entrée existante couvre son groupe, active OU non :
+     * une question volontairement désactivée ne doit pas être
+     * ré-activée par un rappel « à préparer ».
+     *
+     * @param list<array<string,mixed>> $preparees Lignes de AssistantQuestionPreparee::toutes()
+     *
+     * @return array<string,true> norm couvert → true
+     */
+    private static function normsCouverts(array $preparees): array
+    {
+        $norms = [];
+        foreach ($preparees as $p) {
+            $norm = AgentQuestions::normaliser((string) ($p['question_norm'] ?? ''));
+            if ($norm !== '') {
+                $norms[$norm] = true;
+            }
+        }
+
+        return $norms;
     }
 
     /** Message flash exact du « Préparer » unitaire pour un motif d'échec. */
